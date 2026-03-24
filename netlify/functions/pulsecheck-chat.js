@@ -22,7 +22,7 @@ const VALID_ROUTING = new Set([
 const VALID_PROTOCOL_CLASSES = new Set(['regulation', 'priming', 'recovery', 'none']);
 const VALID_CONFIDENCE = new Set(['high', 'medium', 'low']);
 const VALID_READINESS = new Set(['green', 'yellow', 'red']);
-const MUTABLE_ASSIGNMENT_STATUSES = new Set(['assigned', 'viewed']);
+const MUTABLE_ASSIGNMENT_STATUSES = new Set(['assigned']);
 
 // Escalation Tier enum values
 const EscalationTier = {
@@ -1055,6 +1055,7 @@ exports.handler = async (event, context) => {
                 || '',
               sourceStateSnapshotId: currentStateSnapshot.id,
               sourceDate: currentStateSnapshot.sourceDate || new Date().toISOString().split('T')[0],
+              timezone: priorAssignment?.timezone,
               progress: athleteMentalProgress,
             });
 

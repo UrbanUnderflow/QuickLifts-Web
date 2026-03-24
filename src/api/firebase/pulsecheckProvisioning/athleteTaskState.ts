@@ -43,7 +43,7 @@ export function getCompletedBaselineEvidence(progress?: AthleteMentalProgress | 
   source: PulseCheckBaselineCompletionSource;
   completedAt: number | null;
 } {
-  if (!progress || progress.assessmentNeeded) {
+  if (!progress) {
     return { complete: false, source: null, completedAt: null };
   }
 

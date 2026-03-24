@@ -492,6 +492,7 @@ exports.handler = async (event) => {
         sourceStateSnapshotId: workingSnapshot.id,
         sourceCandidateSetId: filteredCandidateSet.id,
         sourceDate,
+        timezone: existingAssignment?.timezone,
         progress: syncedProgress,
         candidateSet: filteredCandidateSet,
         plannerDecision,
@@ -515,6 +516,7 @@ exports.handler = async (event) => {
           || '',
         sourceStateSnapshotId: workingSnapshot.id,
         sourceDate,
+        timezone: existingAssignment?.timezone,
         progress: syncedProgress,
       });
     }

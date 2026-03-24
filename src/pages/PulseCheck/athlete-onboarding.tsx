@@ -4,29 +4,102 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
+  ArrowDownToLine,
   CheckCircle2,
   ChevronRight,
   ClipboardCheck,
+  FileText,
   Loader2,
   ShieldCheck,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import type {
   PulseCheckOrganization,
   PulseCheckPilot,
+  PulseCheckRequiredConsentDocument,
   PulseCheckResearchConsentStatus,
   PulseCheckTeam,
   PulseCheckTeamMembership,
 } from '../../api/firebase/pulsecheckProvisioning/types';
 import { userService } from '../../api/firebase/user';
 import { useUser, useUserLoading } from '../../hooks/useUser';
+import { renderHtmlToPdf } from '../../utils/pdf';
 
 const CONSENT_VERSION = 'pulsecheck-product-consent-v1';
 const RESEARCH_CONSENT_VERSION = 'pulsecheck-research-consent-v1';
 const BASELINE_PATHWAY_ID = 'pulsecheck-core-baseline-v1';
 const MEMBERSHIP_RETRY_ATTEMPTS = 6;
 const MEMBERSHIP_RETRY_DELAY_MS = 500;
+
+const normalizeParagraphs = (value: string) =>
+  value
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+
+const previewAgreementBody = (value: string) => {
+  const firstParagraph = normalizeParagraphs(value)[0] || '';
+  if (firstParagraph.length <= 140) {
+    return firstParagraph;
+  }
+  return `${firstParagraph.slice(0, 137).trimEnd()}...`;
+};
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const slugifyFilename = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    || 'pulsecheck-agreement';
+
+const buildAgreementPdfHtml = (input: {
+  consent: PulseCheckRequiredConsentDocument;
+  teamName?: string;
+  organizationName?: string;
+}) => {
+  const paragraphs = normalizeParagraphs(input.consent.body)
+    .map(
+      (paragraph) =>
+        `<p style="margin:0 0 16px;color:#1f2937;font:400 15px/1.7 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">${escapeHtml(paragraph)}</p>`
+    )
+    .join('');
+
+  const contextLine = [input.teamName, input.organizationName].filter(Boolean).join(' • ');
+
+  return `
+    <div style="padding:48px 52px;background:#ffffff;color:#111827;">
+      <div style="margin-bottom:28px;">
+        <div style="font:700 11px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;letter-spacing:0.18em;text-transform:uppercase;color:#6b7280;margin-bottom:12px;">
+          PulseCheck Agreement
+        </div>
+        <h1 style="margin:0 0 10px;font:800 30px/1.1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827;">
+          ${escapeHtml(input.consent.title)}
+        </h1>
+        ${
+          contextLine
+            ? `<p style="margin:0;color:#4b5563;font:500 14px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">${escapeHtml(contextLine)}</p>`
+            : ''
+        }
+      </div>
+      <div style="border-top:1px solid #e5e7eb;padding-top:24px;">
+        ${paragraphs}
+      </div>
+      <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:16px;color:#6b7280;font:400 12px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+        Saved from PulseCheck so you can keep a copy for your records.
+      </div>
+    </div>
+  `;
+};
 
 // ─── Floating Orb ────────────────────────────────────────────────────────────
 const FloatingOrb: React.FC<{
@@ -163,7 +236,10 @@ export default function PulseCheckAthleteOnboardingPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [consentAccepted, setConsentAccepted] = useState(false);
+  const [completedConsentIds, setCompletedConsentIds] = useState<string[]>([]);
   const [researchConsentStatus, setResearchConsentStatus] = useState<PulseCheckResearchConsentStatus>('not-required');
+  const [activeConsent, setActiveConsent] = useState<PulseCheckRequiredConsentDocument | null>(null);
+  const [downloadingConsentId, setDownloadingConsentId] = useState<string | null>(null);
   const [progressHydrated, setProgressHydrated] = useState(false);
 
   useEffect(() => {
@@ -208,6 +284,10 @@ export default function PulseCheckAthleteOnboardingPage() {
             || ''
         );
         setConsentAccepted(Boolean(nextMembership?.athleteOnboarding?.productConsentAccepted));
+        const requiredConsentIds = new Set((nextMembership?.athleteOnboarding?.requiredConsents || []).map((consent) => consent.id));
+        setCompletedConsentIds(
+          (nextMembership?.athleteOnboarding?.completedConsentIds || []).filter((consentId) => requiredConsentIds.has(consentId))
+        );
         setResearchConsentStatus(
           (nextMembership?.athleteOnboarding?.researchConsentStatus as PulseCheckResearchConsentStatus | undefined)
             || (nextPilot?.studyMode === 'research' ? 'pending' : 'not-required')
@@ -215,7 +295,7 @@ export default function PulseCheckAthleteOnboardingPage() {
         setProgressHydrated(true);
       } catch (error) {
         console.error('[PulseCheck athlete onboarding] Failed to load context:', error);
-        if (active) setMessage({ type: 'error', text: 'Failed to load athlete onboarding.' });
+        if (active) setMessage({ type: 'error', text: 'We could not load your team access right now.' });
       } finally {
         if (active) setLoading(false);
       }
@@ -225,6 +305,8 @@ export default function PulseCheckAthleteOnboardingPage() {
 
   const requiresResearchConsent = pilot?.studyMode === 'research';
   const hasPilotEnrollment = Boolean(membership?.athleteOnboarding?.targetPilotId);
+  const requiredConsents = membership?.athleteOnboarding?.requiredConsents || [];
+  const requiredConsentsComplete = requiredConsents.every((consent) => completedConsentIds.includes(consent.id));
 
   useEffect(() => {
     if (!progressHydrated || !membership || saving || membership.onboardingStatus === 'complete') return;
@@ -233,11 +315,11 @@ export default function PulseCheckAthleteOnboardingPage() {
     const researchChoiceMade = !requiresResearchConsent || researchConsentStatus === 'accepted' || researchConsentStatus === 'declined';
     const entryOnboardingStep = !trimmedName
       ? 'name'
-      : !consentAccepted
+      : !consentAccepted || !requiredConsentsComplete
         ? 'consent'
-        : researchChoiceMade
-          ? 'starting-point'
-          : 'consent';
+        : !researchChoiceMade
+          ? 'research-consent'
+          : 'starting-point';
 
     const timeout = window.setTimeout(() => {
       pulseCheckProvisioningService.saveAthleteOnboardingProgress({
@@ -245,6 +327,7 @@ export default function PulseCheckAthleteOnboardingPage() {
         entryOnboardingStep,
         entryOnboardingName: trimmedName,
         productConsentAccepted: consentAccepted,
+        completedConsentIds,
         researchConsentStatus: requiresResearchConsent ? researchConsentStatus : undefined,
       }).catch((error) => {
         console.error('[PulseCheck athlete onboarding] Failed to sync onboarding progress:', error);
@@ -252,13 +335,61 @@ export default function PulseCheckAthleteOnboardingPage() {
     }, 250);
 
     return () => window.clearTimeout(timeout);
-  }, [consentAccepted, displayName, membership, progressHydrated, requiresResearchConsent, researchConsentStatus, saving]);
+  }, [
+    completedConsentIds,
+    consentAccepted,
+    displayName,
+    membership,
+    progressHydrated,
+    requiredConsentsComplete,
+    requiresResearchConsent,
+    researchConsentStatus,
+    saving,
+  ]);
+
+  const toggleCompletedConsent = (consentId: string) => {
+    setCompletedConsentIds((currentIds) =>
+      currentIds.includes(consentId)
+        ? currentIds.filter((id) => id !== consentId)
+        : [...currentIds, consentId]
+    );
+  };
+
+  const handleDownloadConsentPdf = async (consent: PulseCheckRequiredConsentDocument) => {
+    try {
+      setDownloadingConsentId(consent.id);
+      const pdfBlob = await renderHtmlToPdf(
+        buildAgreementPdfHtml({
+          consent,
+          teamName: team?.displayName,
+          organizationName: organization?.displayName,
+        })
+      );
+      const downloadUrl = window.URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `${slugifyFilename(consent.title)}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('[PulseCheck athlete onboarding] Failed to download agreement PDF:', error);
+      setMessage({ type: 'error', text: 'We could not download that agreement right now.' });
+    } finally {
+      setDownloadingConsentId(null);
+    }
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!currentUser || !membership) return;
     if (!displayName.trim()) { setMessage({ type: 'error', text: 'Tell us what name you would like us to use.' }); return; }
     if (!consentAccepted) { setMessage({ type: 'error', text: 'Please agree before continuing.' }); return; }
+    if (!requiredConsentsComplete) {
+      setMessage({ type: 'error', text: 'Read each agreement and check the boxes before you continue.' });
+      return;
+    }
     if (requiresResearchConsent && researchConsentStatus !== 'accepted' && researchConsentStatus !== 'declined') {
       setMessage({ type: 'error', text: 'Choose whether you want to participate in the research portion before continuing.' });
       return;
@@ -280,13 +411,14 @@ export default function PulseCheckAthleteOnboardingPage() {
         teamMembershipId: membership.id,
         consentVersion: CONSENT_VERSION,
         baselinePathwayId: BASELINE_PATHWAY_ID,
+        completedConsentIds,
         researchConsentStatus: requiresResearchConsent ? researchConsentStatus : 'not-required',
         researchConsentVersion:
           requiresResearchConsent && (researchConsentStatus === 'accepted' || researchConsentStatus === 'declined')
             ? RESEARCH_CONSENT_VERSION
             : '',
       });
-      setMessage({ type: 'success', text: 'Athlete onboarding complete. Your starting baseline is ready.' });
+      setMessage({ type: 'success', text: 'You are set. Your team access is ready.' });
       router.push(`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`);
     } catch (error) {
       console.error('[PulseCheck athlete onboarding] Failed to save onboarding:', error);
@@ -314,11 +446,10 @@ export default function PulseCheckAthleteOnboardingPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#05070c] px-4 text-white">
         <div className="w-full max-w-xl rounded-[28px] border border-white/10 bg-zinc-900/60 p-8 text-center backdrop-blur-xl">
-          <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Athlete Onboarding</p>
+          <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Getting You Ready</p>
           <h1 className="mt-3 text-2xl font-semibold text-white">We are still attaching your team access</h1>
           <p className="mt-4 text-sm leading-7 text-zinc-400">
-            Your invite was accepted, but the athlete membership has not loaded yet. Give it another moment and refresh if this page
-            does not update on its own.
+            Your invite was accepted, but your team access has not loaded yet. Give it another moment and refresh if this page does not update on its own.
           </p>
           {message ? (
             <p className={`mt-4 text-sm ${message.type === 'error' ? 'text-red-300' : 'text-[#E0FE10]'}`}>
@@ -385,7 +516,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                   transition={{ delay: 0.3 }}
                   className="text-xs uppercase tracking-[0.22em] text-zinc-500 mb-2"
                 >
-                  Athlete Onboarding
+                  Your Coach Invited You
                 </motion.p>
                 <motion.h1
                   initial={{ opacity: 0, y: 12 }}
@@ -393,7 +524,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                   transition={{ delay: 0.35 }}
                   className="text-3xl font-bold tracking-tight text-white"
                 >
-                  Enter{' '}
+                  Join{' '}
                   <span
                     className="bg-clip-text text-transparent"
                     style={{ backgroundImage: 'linear-gradient(90deg, #E0FE10, #84DFC1)' }}
@@ -405,11 +536,10 @@ export default function PulseCheckAthleteOnboardingPage() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                className="mt-3 text-sm leading-7 text-zinc-400"
-              >
-                You are joining {team?.displayName || 'your team'}. This step confirms your name, gets your consent,
-                and gets your starting point ready so PulseCheck can personalize what comes next
-                {organization?.displayName ? ` for ${organization.displayName}` : ''}.
+                  className="mt-3 text-sm leading-7 text-zinc-400"
+                >
+                  This takes a few minutes. Confirm your name, read the agreements attached to your team, and keep going.
+                  {organization?.displayName ? ` Your access is being set up inside ${organization.displayName}.` : ''}
                 </motion.p>
               </div>
 
@@ -429,7 +559,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                     {membership?.athleteOnboarding?.targetPilotName && (
                       <> inside <span className="font-medium text-white">{membership.athleteOnboarding.targetPilotName}</span></>
                     )}
-                    . We will keep that group attached to your training as you finish setup.
+                    . We will keep that group attached to your training after you finish here.
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -442,10 +572,10 @@ export default function PulseCheckAthleteOnboardingPage() {
                 className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 text-sm text-zinc-400 leading-relaxed"
               >
                 {requiresResearchConsent
-                  ? `Your invite is attached to ${pilot?.name || 'a research pilot'}. You can still use PulseCheck even if you decline research participation, but we need your choice before continuing.`
+                  ? `Your team is part of ${pilot?.name || 'a research program'}. You can still use PulseCheck if you say no to research. We just need your choice before you continue.`
                   : hasPilotEnrollment
-                    ? 'Your invite already includes a pilot or cohort assignment. For now, just finish setup and we will take you to your starting baseline.'
-                    : 'Right now, we are just getting you set up so you can begin with a clear starting point.'}
+                    ? 'Your team access is already attached. Read the agreements below, say yes to anything required, and keep going.'
+                    : 'Read through this, make your choices, and you will be ready to start with your team.'}
               </motion.div>
 
               {/* Step indicators */}
@@ -455,7 +585,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                 transition={{ delay: 0.6 }}
                 className="flex items-center gap-3 pt-2"
               >
-                {['Name', 'Consent', ...(requiresResearchConsent ? ['Research'] : []), 'Starting Point'].map((step, i, steps) => (
+                {['Name', 'Agreements', ...(requiresResearchConsent ? ['Research'] : []), 'Ready'].map((step, i, steps) => (
                   <React.Fragment key={step}>
                     <div className="flex items-center gap-1.5">
                       <div
@@ -506,7 +636,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                   transition={{ delay: 0.35 }}
                   className="block space-y-2"
                 >
-                  <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Your Name</span>
+                  <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">What Should We Call You?</span>
                   <input
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
@@ -514,7 +644,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                     style={{ boxShadow: 'none' }}
                     onFocus={(e) => { e.target.style.boxShadow = '0 0 0 3px rgba(224,254,16,0.12)'; }}
                     onBlur={(e) => { e.target.style.boxShadow = 'none'; }}
-                    placeholder="Enter your name"
+                    placeholder="Your name"
                   />
                 </motion.label>
 
@@ -526,8 +656,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                   delay={0.45}
                 >
                   <p className="text-sm leading-7 text-zinc-400 mb-4">
-                    Before we personalize anything, we need your permission to set up PulseCheck for your team.
-                    This step is just for getting started with the product.
+                    Before we set anything up, we need your okay to get PulseCheck ready for your team.
                   </p>
                   <GlowCheckbox
                     checked={consentAccepted}
@@ -536,16 +665,73 @@ export default function PulseCheckAthleteOnboardingPage() {
                   />
                 </SectionCard>
 
+                <SectionCard
+                  icon={<FileText className="h-4 w-4 text-[#84DFC1]" />}
+                  title="Required Agreements"
+                  accentColor="#84DFC1"
+                  delay={0.48}
+                >
+                  <p className="text-sm leading-7 text-zinc-400 mb-4">
+                    Read these before you continue. We need your yes on each one before you can use this program.
+                  </p>
+
+                  <div className="space-y-3">
+                    {requiredConsents.length > 0 ? requiredConsents.map((consent) => {
+                      const isAccepted = completedConsentIds.includes(consent.id);
+                      return (
+                        <div
+                          key={consent.id}
+                          className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 backdrop-blur-sm"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <p className="text-base font-semibold text-white">{consent.title}</p>
+                              <p className="mt-2 text-sm leading-7 text-zinc-400">
+                                {previewAgreementBody(consent.body)}
+                              </p>
+                            </div>
+                            {isAccepted ? (
+                              <div className="rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#E0FE10]">
+                                Agreed
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <button
+                              type="button"
+                              onClick={() => setActiveConsent(consent)}
+                              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+                            >
+                              <FileText className="h-4 w-4" />
+                              Read agreement
+                            </button>
+
+                            <GlowCheckbox
+                              checked={isAccepted}
+                              onChange={() => toggleCompletedConsent(consent.id)}
+                              label="I have read this and I agree."
+                            />
+                          </div>
+                        </div>
+                      );
+                    }) : (
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-zinc-400">
+                        There are no extra agreements for this team right now.
+                      </div>
+                    )}
+                  </div>
+                </SectionCard>
+
                 {requiresResearchConsent ? (
                   <SectionCard
                     icon={<CheckCircle2 className="h-4 w-4 text-[#8B5CF6]" />}
-                    title="Research Participation"
+                    title="Research Choice"
                     accentColor="#8B5CF6"
                     delay={0.5}
                   >
                     <p className="text-sm leading-7 text-zinc-400 mb-4">
-                      {pilot?.name || 'This pilot'} is configured as a research study. You can continue using PulseCheck either way, but we
-                      need to record whether you want your activity included in the research dataset.
+                      {pilot?.name || 'This program'} includes a research option. You can keep using PulseCheck either way. We just need your answer before you continue.
                     </p>
                     <div className="grid gap-3">
                       <button
@@ -557,7 +743,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                             : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-[#8B5CF6]/30'
                         }`}
                       >
-                        I agree to participate in the research portion of this pilot.
+                        I want my activity included in the research study.
                       </button>
                       <button
                         type="button"
@@ -568,7 +754,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                             : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-white/20'
                         }`}
                       >
-                        I want product access, but I do not want to participate in the research dataset.
+                        I want to use PulseCheck, but I do not want my activity included in the study.
                       </button>
                     </div>
                   </SectionCard>
@@ -577,19 +763,12 @@ export default function PulseCheckAthleteOnboardingPage() {
                 {/* Baseline Path */}
                 <SectionCard
                   icon={<Sparkles className="h-4 w-4 text-[#3B82F6]" />}
-                  title="Your Starting Point"
+                  title="What Happens Next"
                   accentColor="#3B82F6"
                   delay={0.55}
                 >
                   <p className="text-sm leading-7 text-zinc-400">
-                    After this, you will be ready for{' '}
-                    <span
-                      className="font-semibold bg-clip-text text-transparent"
-                      style={{ backgroundImage: 'linear-gradient(90deg, #E0FE10, #84DFC1)' }}
-                    >
-                      PulseCheck Core Baseline
-                    </span>
-                    . It gives us a starting point so Nora and your team can personalize your training from here.
+                    After this, you will be ready for your first read. It helps Nora understand where you are right now before your team starts building from there.
                   </p>
                 </SectionCard>
               </div>
@@ -615,7 +794,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                     ? <Loader2 className="relative h-4 w-4 animate-spin" />
                     : <CheckCircle2 className="relative h-4 w-4" />
                   }
-                  <span className="relative">{saving ? 'Completing…' : 'Complete Athlete Onboarding'}</span>
+                  <span className="relative">{saving ? 'Saving…' : 'Continue'}</span>
                 </button>
 
                 {/* Secondary */}
@@ -632,6 +811,81 @@ export default function PulseCheckAthleteOnboardingPage() {
 
         </section>
       </main>
+
+      <AnimatePresence>
+        {activeConsent ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-8 backdrop-blur-md"
+            onClick={() => setActiveConsent(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.98 }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              className="relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#090d14]/95 shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="border-b border-white/10 px-6 py-5 sm:px-7">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Agreement</p>
+                    <h2 className="mt-2 text-2xl font-bold tracking-tight text-white">{activeConsent.title}</h2>
+                    <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400">
+                      Take your time here. You can download a PDF if you want a copy for your records.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveConsent(null)}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-400 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+                    aria-label="Close agreement"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-6 py-6 sm:px-7">
+                <div className="space-y-4">
+                  {normalizeParagraphs(activeConsent.body).map((paragraph, index) => (
+                    <p key={`${activeConsent.id}-${index}`} className="text-sm leading-8 text-zinc-300">
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 border-t border-white/10 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadConsentPdf(activeConsent)}
+                  disabled={downloadingConsentId === activeConsent.id}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {downloadingConsentId === activeConsent.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowDownToLine className="h-4 w-4" />
+                  )}
+                  <span>{downloadingConsentId === activeConsent.id ? 'Preparing PDF…' : 'Download PDF'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveConsent(null)}
+                  className="inline-flex items-center justify-center rounded-2xl bg-[#E0FE10] px-5 py-3 text-sm font-semibold text-black transition hover:shadow-[0_0_24px_rgba(224,254,16,0.35)]"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

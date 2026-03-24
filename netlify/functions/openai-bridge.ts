@@ -14,6 +14,22 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   default: { maxTokens: 1000, modelPattern: /gpt-4o|gpt-4|gpt-3.5/i }
 };
 
+const getHeader = (headers: Record<string, string | undefined> | undefined, headerName: string): string | undefined => {
+  if (!headers) return undefined;
+
+  const directMatch = headers[headerName];
+  if (directMatch) return directMatch;
+
+  const normalizedHeaderName = headerName.toLowerCase();
+  const matchedKey = Object.keys(headers).find((key) => key.toLowerCase() === normalizedHeaderName);
+  return matchedKey ? headers[matchedKey] : undefined;
+};
+
+const resolveOpenAIApiKey = (): string | null => {
+  const configuredKey = process.env.OPENAI_API_KEY?.trim() || process.env.OPEN_AI_SECRET_KEY?.trim();
+  return configuredKey || null;
+};
+
 const verifyAuth = async (authHeader: string | undefined): Promise<string | null> => {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
   try {
@@ -40,7 +56,7 @@ export const handler: Handler = async (event) => {
   }
 
   // 1. Verify Authentication Layer
-  const uid = await verifyAuth(event.headers.authorization);
+  const uid = await verifyAuth(getHeader(event.headers, 'authorization'));
   if (!uid) {
     return {
       statusCode: 401,
@@ -55,7 +71,17 @@ export const handler: Handler = async (event) => {
   const openApiPath = pathMatch ? pathMatch[1] : '/v1/chat/completions';
   const openApiUrl = `https://api.openai.com${openApiPath}`;
 
-  const featureId = event.headers['openai-organization'] || 'default';
+  const featureId = getHeader(event.headers, 'openai-organization') || 'default';
+  const providerApiKey = resolveOpenAIApiKey();
+
+  if (!providerApiKey) {
+    console.error('[openai-bridge] Missing provider API key. Configure OPENAI_API_KEY or OPEN_AI_SECRET_KEY.');
+    return {
+      statusCode: 500,
+      headers: corsHeaders,
+      body: JSON.stringify({ error: 'OpenAI bridge misconfigured: missing OPENAI_API_KEY or OPEN_AI_SECRET_KEY' })
+    };
+  }
   
   let parsedBody: any;
   if (event.httpMethod === 'POST') {
@@ -76,8 +102,12 @@ export const handler: Handler = async (event) => {
 
       // Automatically cap maximum output tokens to prevent runaway quota abuse
       const maxTokensBound = process.env.OPENAI_MAX_TOKENS ? parseInt(process.env.OPENAI_MAX_TOKENS) : 4000;
-      if (!parsedBody.max_tokens || parsedBody.max_tokens > maxTokensBound) {
-        parsedBody.max_tokens = maxTokensBound;
+      const effectiveTokenCap = Math.min(featureConfig.maxTokens, Number.isFinite(maxTokensBound) ? maxTokensBound : 4000);
+
+      if (typeof parsedBody.max_completion_tokens === 'number') {
+        parsedBody.max_completion_tokens = Math.min(parsedBody.max_completion_tokens, effectiveTokenCap);
+      } else if (!parsedBody.max_tokens || parsedBody.max_tokens > effectiveTokenCap) {
+        parsedBody.max_tokens = effectiveTokenCap;
       }
 
     } catch (e) {
@@ -94,8 +124,8 @@ export const handler: Handler = async (event) => {
     const fetchOptions: RequestInit = {
       method: event.httpMethod,
       headers: {
-        'Content-Type': event.headers['content-type'] || 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+        'Content-Type': getHeader(event.headers, 'content-type') || 'application/json',
+        'Authorization': `Bearer ${providerApiKey}`
       }
     };
 

@@ -682,6 +682,10 @@ function humanizeAssignmentLabel(value?: string | null) {
   return value.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 async function preparePulseCheckApp(page: Page, section: 'today' | 'nora') {
   await page.goto(`/PulseCheck?web=1&section=${section}`, { waitUntil: 'domcontentloaded' });
   await waitForStableAppFrame(page);
@@ -956,6 +960,7 @@ test.describe('PulseCheck athlete journey', () => {
       writeDebugStep(actors.namespace, 'test1:launch-clicked');
       await expect(actors.athletePage).toHaveURL(/\/mental-training/i, { timeout: 20_000 });
       writeDebugStep(actors.namespace, 'test1:mental-training-open');
+      await expect(actors.athletePage.getByText(new RegExp(assignmentLabel, 'i'))).toBeVisible({ timeout: 20_000 });
 
       await expect.poll(async () => {
         const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
@@ -972,9 +977,143 @@ test.describe('PulseCheck athlete journey', () => {
       expect(completedState?.latestCompletion?.sessionSummary?.athleteHeadline).toBeTruthy();
       expect(completedState?.latestCompletion?.sessionSummary?.nextActionLabel).toBeTruthy();
 
+      await actors.athletePage.reload({ waitUntil: 'domcontentloaded' });
+      await waitForStableAppFrame(actors.athletePage);
+      await expect(actors.athletePage.getByText(new RegExp(completedState.latestCompletion.sessionSummary.athleteHeadline, 'i'))).toBeVisible({ timeout: 20_000 });
+
+      await actors.athletePage.goto('/mental-training', { waitUntil: 'domcontentloaded' });
+      writeDebugStep(actors.namespace, 'test1:mental-training-reopened');
+      await waitForStableAppFrame(actors.athletePage);
+      await expect(actors.athletePage.getByText(new RegExp(assignmentLabel, 'i'))).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByText(new RegExp(completedState.latestCompletion.sessionSummary.athleteHeadline, 'i'))).toBeVisible({ timeout: 20_000 });
+
       await preparePulseCheckApp(actors.athletePage, 'today');
       writeDebugStep(actors.namespace, 'test1:today-reopened');
       await expect(actors.athletePage.getByText(new RegExp(completedState.latestCompletion.sessionSummary.athleteHeadline, 'i'))).toBeVisible({ timeout: 20_000 });
+    } finally {
+      await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
+      await actors.coachContext.close().catch(() => null);
+      await actors.athleteContext.close().catch(() => null);
+    }
+  });
+
+  test('authored training plans stay aligned across home, Nora, mental training, and coach review replacement', async ({ browser, page }) => {
+    test.setTimeout(240_000);
+    test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
+    test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
+
+    const actors = await provisionJourneyActors(browser, page);
+    const adminIdentity = await getAuthenticatedIdentity(page);
+
+    if (!adminIdentity?.uid || !adminIdentity.email) {
+      throw new Error('Unable to resolve the authenticated admin identity.');
+    }
+
+    try {
+      await seedAthleteJourneyFixture(page, {
+        namespace: actors.namespace,
+        adminIdentity,
+        coachIdentity: actors.coachIdentity,
+        coachEmail: actors.coachEmail,
+        athleteIdentity: actors.athleteIdentity,
+        athleteEmail: actors.athleteEmail,
+      });
+      writeDebugStep(actors.namespace, 'test-authoring:fixture-seeded');
+
+      await preparePulseCheckApp(actors.athletePage, 'today');
+      await expect(actors.athletePage.getByRole('heading', { name: /Where is your head at today\?/i })).toBeVisible({ timeout: 20_000 });
+      await actors.athletePage.getByRole('button', { name: /Solid/i }).click();
+      writeDebugStep(actors.namespace, 'test-authoring:readiness-clicked');
+
+      await expect.poll(async () => {
+        const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+        return Boolean(
+          state?.latestAssignment?.trainingPlanId
+          && state?.latestAssignment?.trainingPlanStepId
+          && state?.latestTrainingPlan?.id
+          && state?.latestCandidateSet?.planDrivenCandidateId
+        );
+      }, { timeout: 30_000 }).toBe(true);
+
+      const authoredState = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+      expect(authoredState?.latestAssignment?.trainingPlanId).toBeTruthy();
+      expect(authoredState?.latestAssignment?.trainingPlanStepId).toBeTruthy();
+      expect(authoredState?.latestCandidateSet?.planDrivenCandidateId).toBeTruthy();
+      expect(
+        authoredState?.recentTrainingPlanEvents?.some((event: Record<string, any>) => event.eventType === 'training_plan_authored')
+      ).toBe(true);
+      expect(
+        authoredState?.recentTrainingPlanEvents?.some((event: Record<string, any>) => event.eventType === 'training_plan_step_authored')
+      ).toBe(true);
+
+      const initialPlanId = authoredState?.latestTrainingPlan?.id;
+      const initialPlanTitle = authoredState?.latestTrainingPlan?.title || 'Plan';
+      const assignmentLabel = humanizeAssignmentLabel(
+        authoredState?.latestAssignment?.simSpecId
+        || authoredState?.latestAssignment?.legacyExerciseId
+        || authoredState?.latestAssignment?.protocolLabel
+        || authoredState?.latestAssignment?.sessionType
+      );
+
+      await actors.athletePage.goto(teamWorkspacePath(actors.workspaceContext), { waitUntil: 'domcontentloaded' });
+      await waitForStableAppFrame(actors.athletePage);
+      writeDebugStep(actors.namespace, 'test-authoring:workspace-open');
+      await expect(actors.athletePage.getByText(/Today's Nora Task/i)).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByText(new RegExp(escapeRegExp(assignmentLabel), 'i')).first()).toBeVisible({ timeout: 20_000 });
+
+      await preparePulseCheckApp(actors.athletePage, 'nora');
+      writeDebugStep(actors.namespace, 'test-authoring:nora-open');
+      await expect(actors.athletePage.getByText(/Today's Nora Task/i)).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByRole('heading', { name: new RegExp(escapeRegExp(assignmentLabel), 'i') })).toBeVisible({ timeout: 20_000 });
+
+      const launchMentalTrainingLink = actors.athletePage.getByRole('link', { name: /Start today'?s task/i });
+      const openNoraTaskButton = actors.athletePage.getByRole('button', { name: /Open today'?s task/i });
+      if (await launchMentalTrainingLink.isVisible().catch(() => false)) {
+        await launchMentalTrainingLink.click();
+      } else {
+        await openNoraTaskButton.click();
+      }
+      writeDebugStep(actors.namespace, 'test-authoring:mental-training-launch');
+      await expect(actors.athletePage).toHaveURL(/\/mental-training/i, { timeout: 20_000 });
+      await expect(actors.athletePage.getByText(new RegExp(escapeRegExp(assignmentLabel), 'i')).first()).toBeVisible({ timeout: 20_000 });
+
+      await actors.coachPage.goto('/coach/mentalGames?tab=athletes', { waitUntil: 'domcontentloaded' });
+      await waitForStableAppFrame(actors.coachPage);
+      writeDebugStep(actors.namespace, 'test-authoring:coach-athletes-open');
+      const athleteCard = actors.coachPage
+        .locator('div')
+        .filter({ hasText: new RegExp(escapeRegExp(actors.athleteName), 'i') })
+        .filter({ has: actors.coachPage.getByRole('button', { name: /Review Plan/i }) })
+        .first();
+      await expect(athleteCard).toBeVisible({ timeout: 20_000 });
+      await athleteCard.getByRole('button', { name: /Review Plan/i }).click();
+      await expect(actors.coachPage.getByText(/Coach primary plan review/i)).toBeVisible({ timeout: 20_000 });
+      await expect(actors.coachPage.getByRole('heading', { name: new RegExp(escapeRegExp(initialPlanTitle), 'i') })).toBeVisible({ timeout: 20_000 });
+
+      await actors.coachPage.getByPlaceholder('REBUILD').fill('REBUILD');
+      await actors.coachPage.getByRole('button', { name: /Replace primary plan/i }).click();
+      writeDebugStep(actors.namespace, 'test-authoring:coach-plan-replaced');
+      await expect(actors.coachPage.getByText(/Primary plan replaced and superseded successfully/i)).toBeVisible({ timeout: 30_000 });
+
+      await expect.poll(async () => {
+        const refreshedState = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+        return Boolean(
+          refreshedState?.latestTrainingPlan?.id
+          && refreshedState.latestTrainingPlan.id !== initialPlanId
+          && refreshedState.trainingPlans?.some((plan: Record<string, any>) => plan.status === 'superseded')
+          && refreshedState.recentTrainingPlanEvents?.some((event: Record<string, any>) => event.eventType === 'training_plan_superseded')
+        );
+      }, { timeout: 30_000 }).toBe(true);
+
+      const refreshedState = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+      expect(refreshedState?.latestTrainingPlan?.id).not.toBe(initialPlanId);
+      expect(refreshedState?.trainingPlans?.filter((plan: Record<string, any>) => plan.status === 'superseded').length || 0).toBeGreaterThan(0);
+      expect(
+        refreshedState?.recentTrainingPlanEvents?.some((event: Record<string, any>) => event.eventType === 'training_plan_superseded')
+      ).toBe(true);
+      expect(
+        refreshedState?.recentTrainingPlanEvents?.some((event: Record<string, any>) => event.eventType === 'training_plan_authored')
+      ).toBe(true);
     } finally {
       await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
       await actors.coachContext.close().catch(() => null);

@@ -15,6 +15,7 @@ import {
   PulseCheckDailyAssignmentActionType,
   PulseCheckAssignmentEventRecordResult,
   PulseCheckDailyAssignmentStatus,
+  type PulseCheckDailyTaskCompletionSummary,
   type PulseCheckProtocolPracticeSession,
   RecordPulseCheckAssignmentEventInput,
   PulseCheckStateSnapshot,
@@ -27,6 +28,14 @@ const DAILY_ASSIGNMENTS_COLLECTION = PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION;
 const ATHLETE_PROGRESS_COLLECTION = 'athlete-mental-progress';
 
 const buildDailyAssignmentId = (athleteId: string, sourceDate: string) => `${athleteId}_${sourceDate}`;
+
+const resolveLocalTimezone = () => {
+  try {
+    return typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 const rolePriority = (membership: PulseCheckTeamMembership) => {
   switch (membership.role) {
@@ -379,6 +388,10 @@ export const assignmentOrchestratorService = {
     });
 
     const now = Date.now();
+    const executionPattern =
+      snapshot?.recommendedRouting === 'protocol_then_sim' || snapshot?.recommendedRouting === 'sim_then_protocol'
+        ? snapshot.recommendedRouting
+        : 'single';
     const nextAssignment: PulseCheckDailyAssignment = {
       id: assignmentId,
       lineageId: existing?.lineageId || assignmentId,
@@ -391,9 +404,15 @@ export const assignmentOrchestratorService = {
       sourceCheckInId,
       sourceStateSnapshotId,
       sourceDate,
+      timezone: resolveLocalTimezone(),
+      sourceDateMode: 'athlete_local_day',
       assignedBy: 'nora',
+      materializedAt: now,
+      materializedBy: 'nora_runtime',
+      isPrimaryForDate: true,
       status: actionType === 'defer' ? PulseCheckDailyAssignmentStatus.Deferred : PulseCheckDailyAssignmentStatus.Assigned,
       actionType,
+      executionPattern,
       simSpecId: publishedExercise?.simSpecId,
       legacyExerciseId: publishedExercise?.id,
       simFamilyLabel: publishedExercise?.variantSource?.family || resolveSimFamilyLabel(publishedExercise?.simSpecId, publishedExercise?.name),
@@ -406,6 +425,15 @@ export const assignmentOrchestratorService = {
         actionType,
         fallbackRationale: progress.activeProgram.rationale,
       }),
+      phaseProgress:
+        executionPattern === 'single'
+          ? undefined
+          : {
+              currentPhaseIndex: 1,
+              totalPhases: 2,
+              currentPhaseLabel: executionPattern === 'protocol_then_sim' ? 'Protocol' : 'Sim',
+              phaseLabels: executionPattern === 'protocol_then_sim' ? ['Protocol', 'Sim'] : ['Sim', 'Protocol'],
+            },
       readinessScore,
       readinessBand: toReadinessBand(readinessScore),
       escalationTier: 0,
@@ -444,8 +472,36 @@ export const assignmentOrchestratorService = {
     await recordAssignmentEvent({ assignmentId: id, eventType: 'started' });
   },
 
-  async markCompleted(id: string): Promise<void> {
-    await recordAssignmentEvent({ assignmentId: id, eventType: 'completed' });
+  async markPaused(id: string, reason?: string): Promise<void> {
+    await recordAssignmentEvent({
+      assignmentId: id,
+      eventType: 'paused',
+      reason,
+    });
+  },
+
+  async markResumed(id: string, reason?: string): Promise<void> {
+    await recordAssignmentEvent({
+      assignmentId: id,
+      eventType: 'resumed',
+      reason,
+    });
+  },
+
+  async markCompleted(id: string, completionSummary?: PulseCheckDailyTaskCompletionSummary): Promise<void> {
+    await recordAssignmentEvent({
+      assignmentId: id,
+      eventType: 'completed',
+      metadata: completionSummary ? { completionSummary } : undefined,
+    });
+  },
+
+  async markExpired(id: string, reason?: string): Promise<void> {
+    await recordAssignmentEvent({
+      assignmentId: id,
+      eventType: 'expired',
+      reason,
+    });
   },
 
   async saveProtocolPracticeSession(id: string, session: PulseCheckProtocolPracticeSession): Promise<void> {

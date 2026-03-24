@@ -28,6 +28,7 @@ import {
   PULSECHECK_PROTOCOLS_COLLECTION,
   PULSECHECK_PROTOCOL_RESPONSIVENESS_PROFILES_COLLECTION,
   PULSECHECK_STATE_SNAPSHOTS_COLLECTION,
+  PULSECHECK_TRAINING_PLANS_COLLECTION,
   RECOMMENDATION_PROJECTIONS_SUBCOLLECTION,
   SIM_CHECKINS_ROOT,
   SIM_COMPLETIONS_ROOT,
@@ -40,6 +41,9 @@ import { completionService } from './completionService';
 import { simModuleLibraryService } from './exerciseLibraryService';
 import { protocolRegistryService } from './protocolRegistryService';
 import { stateSnapshotService } from './stateSnapshotService';
+import { trainingPlanAuthoringService } from './trainingPlanAuthoringService';
+import trainingPlanAuthoringShared from './trainingPlanAuthoringShared';
+import { trainingPlanService } from './trainingPlanService';
 import {
   BiggestChallenge,
   CheckInType,
@@ -69,6 +73,13 @@ const PULSECHECK_PILOT_HYPOTHESES_COLLECTION = 'pulsecheck-pilot-hypotheses';
 const PULSECHECK_PILOT_RESEARCH_READOUTS_COLLECTION = 'pulsecheck-pilot-research-readouts';
 const PULSECHECK_LEGACY_MIGRATIONS_COLLECTION = 'pulsecheck-legacy-roster-migrations';
 const REFERRAL_CODE_LOOKUP_COLLECTION = 'referralCodeLookup';
+const {
+  resolveNextDuePlanStep,
+  syncTrainingPlanProgression,
+} = trainingPlanAuthoringShared as unknown as {
+  resolveNextDuePlanStep: (plan: Record<string, any>) => Record<string, any> | null;
+  syncTrainingPlanProgression: (plan: Record<string, any>) => Record<string, any>;
+};
 
 function slugify(value: string) {
   return value
@@ -105,10 +116,394 @@ function normalizeTag(value: unknown) {
     : '';
 }
 
+function humanizeRuntimeLabel(value: unknown) {
+  return typeof value === 'string' && value.trim()
+    ? value.trim().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
+    : '';
+}
+
 function intersectsTags(left: string[], right: string[]) {
   if (!left.length || !right.length) return false;
   const rightSet = new Set(right.map((value) => normalizeTag(value)).filter(Boolean));
   return left.some((value) => rightSet.has(normalizeTag(value)));
+}
+
+function sortEventsByFreshness(left: Record<string, any>, right: Record<string, any>) {
+  return Number(right.eventAt || right.updatedAt || right.createdAt || 0) - Number(left.eventAt || left.updatedAt || left.createdAt || 0);
+}
+
+function sortPlansByFreshness(left: Record<string, any>, right: Record<string, any>) {
+  if (Boolean(left.isPrimary) !== Boolean(right.isPrimary)) {
+    return left.isPrimary ? -1 : 1;
+  }
+
+  return Number(right.updatedAt || right.createdAt || 0) - Number(left.updatedAt || left.createdAt || 0);
+}
+
+function resolveHarnessPlanStepEventType(eventType: string) {
+  switch (eventType) {
+    case 'started':
+    case 'viewed':
+    case 'paused':
+    case 'resumed':
+      return 'plan_step_activated';
+    case 'completed':
+      return 'plan_step_completed';
+    case 'overridden':
+    case 'deferred':
+    case 'expired':
+      return 'plan_step_overridden';
+    default:
+      return null;
+  }
+}
+
+function resolveHarnessActorType(assignment: Record<string, any>, input: {
+  eventType: string;
+  actorUserId?: string;
+}) {
+  if (!input.actorUserId) {
+    return 'system';
+  }
+
+  if (input.actorUserId === assignment.athleteId) {
+    return 'athlete';
+  }
+
+  if (input.eventType === 'overridden' || input.eventType === 'deferred') {
+    return 'coach';
+  }
+
+  return 'staff';
+}
+
+function buildHarnessPhaseProgress(executionPattern?: string | null) {
+  if (!executionPattern || executionPattern === 'single') {
+    return null;
+  }
+
+  return {
+    currentPhaseIndex: 1,
+    totalPhases: 2,
+    currentPhaseLabel: executionPattern === 'protocol_then_sim' ? 'Protocol' : 'Sim',
+    phaseLabels: executionPattern === 'protocol_then_sim' ? ['Protocol', 'Sim'] : ['Sim', 'Protocol'],
+  };
+}
+
+function findTrainingPlanStepIndex(plan: Record<string, any>, assignment: Record<string, any>) {
+  const steps = Array.isArray(plan?.steps) ? plan.steps : [];
+
+  if (typeof assignment?.trainingPlanStepIndex === 'number') {
+    const index = steps.findIndex((step) => Number(step?.stepIndex) === Number(assignment.trainingPlanStepIndex));
+    if (index >= 0) {
+      return index;
+    }
+  }
+
+  if (assignment?.trainingPlanStepId) {
+    return steps.findIndex((step) => step?.id === assignment.trainingPlanStepId);
+  }
+
+  return -1;
+}
+
+async function resolveHarnessPlanDrivenCandidate(input: {
+  athleteId: string;
+  sourceDate: string;
+  primaryPlan: Record<string, any> | null;
+  protocolRecords: Array<Record<string, any>>;
+}) {
+  const { athleteId, sourceDate, primaryPlan, protocolRecords } = input;
+  if (!primaryPlan || primaryPlan.status === 'completed' || primaryPlan.status === 'superseded') {
+    return null;
+  }
+
+  const step = resolveNextDuePlanStep(primaryPlan);
+  if (!step) {
+    return null;
+  }
+
+  const liveProtocol = step.protocolId
+    ? protocolRecords.find((record) => record.id === step.protocolId)
+    : null;
+  const liveSim = step.simSpecId
+    ? (
+        await simModuleLibraryService.getPublishedBySimSpecId(step.simSpecId).catch(() => null)
+      )
+      || (
+        await simModuleLibraryService.getPublishedById(step.simSpecId).catch(() => null)
+      )
+      || (
+        await simModuleLibraryService.getBySimSpecId(step.simSpecId).catch(() => null)
+      )
+      || (
+        await simModuleLibraryService.getById(step.simSpecId).catch(() => null)
+      )
+    : null;
+  const isTrial =
+    primaryPlan.planType === 'assessment'
+    || /reassessment|probe/i.test(String(step.stepLabel || ''))
+    || String(step.archetypeStepKey || '').includes('reassessment');
+
+  return {
+    id: `${athleteId}_${sourceDate}_${primaryPlan.id}_${step.id}`,
+    type: isTrial ? 'trial' : step.actionType === 'protocol' ? 'protocol' : 'sim',
+    label:
+      step.stepLabel
+      || liveProtocol?.label
+      || liveSim?.name
+      || humanizeRuntimeLabel(step.exerciseId)
+      || 'Authored plan step',
+    actionType: step.actionType || 'sim',
+    rationale: `Authored plan step ${step.stepIndex} is the default next-due rep for this athlete.`,
+    legacyExerciseId: liveProtocol?.legacyExerciseId || liveSim?.id || null,
+    protocolId: step.protocolId || null,
+    protocolLabel: liveProtocol?.label || null,
+    protocolClass: step.protocolClass || liveProtocol?.protocolClass || null,
+    protocolCategory: liveProtocol?.category || null,
+    protocolResponseFamily: liveProtocol?.responseFamily || null,
+    protocolDeliveryMode: liveProtocol?.deliveryMode || null,
+    simSpecId: step.simSpecId || liveSim?.simSpecId || null,
+    durationSeconds: step.plannedDurationSeconds || liveProtocol?.durationSeconds || null,
+    executionPattern: step.executionPattern || 'single',
+    trainingPlanId: primaryPlan.id,
+    trainingPlanStepId: step.id,
+    trainingPlanStepIndex: step.stepIndex,
+    trainingPlanStepLabel: step.stepLabel || null,
+  };
+}
+
+async function syncHarnessPlanWithAssignment(input: {
+  plan: Record<string, any>;
+  assignment: Record<string, any>;
+  eventAt: number;
+}) {
+  const { plan, assignment, eventAt } = input;
+  const stepIndex = findTrainingPlanStepIndex(plan, assignment);
+  if (stepIndex < 0) {
+    return plan;
+  }
+
+  const steps = Array.isArray(plan.steps) ? plan.steps.map((step) => ({ ...step })) : [];
+  const targetStep = {
+    ...steps[stepIndex],
+    stepStatus: assignment.actionType === 'defer' ? 'deferred' : 'active_today',
+    linkedDailyTaskId: assignment.id,
+    linkedDailyTaskSourceDate: assignment.sourceDate || steps[stepIndex]?.linkedDailyTaskSourceDate,
+    dueSourceDate: steps[stepIndex]?.dueSourceDate || assignment.sourceDate,
+    timezone: assignment.timezone || steps[stepIndex]?.timezone,
+    startedAt: steps[stepIndex]?.startedAt || eventAt,
+  };
+
+  steps[stepIndex] = targetStep;
+
+  const nextPlan = syncTrainingPlanProgression({
+    ...plan,
+    status: assignment.actionType === 'defer' ? 'paused' : 'active',
+    pausedAt: assignment.actionType === 'defer' ? eventAt : (plan.pausedAt || null),
+    resumedAt: assignment.actionType === 'defer' ? (plan.resumedAt || null) : (plan.status === 'paused' ? eventAt : (plan.resumedAt || null)),
+    sourceDailyTaskId: assignment.id,
+    sourceDate: plan.sourceDate || assignment.sourceDate,
+    timezone: plan.timezone || assignment.timezone,
+    sourceStateSnapshotId: assignment.sourceStateSnapshotId || plan.sourceStateSnapshotId || null,
+    currentStepIndex: typeof targetStep.stepIndex === 'number' ? targetStep.stepIndex : plan.currentStepIndex,
+    nextDueStepIndex: typeof targetStep.stepIndex === 'number' ? targetStep.stepIndex : plan.nextDueStepIndex,
+    steps,
+    updatedAt: eventAt,
+  });
+
+  await trainingPlanService.save(nextPlan as any);
+  return nextPlan;
+}
+
+async function writeHarnessTrainingPlanEvent(
+  db: Firestore,
+  payload: Record<string, any>
+) {
+  const eventAt = Number(payload.eventAt || Date.now());
+  const eventId = `${payload.assignmentId || 'training-plan'}_${payload.eventType}_${eventAt}_${Math.random().toString(36).slice(2, 8)}`;
+
+  await setDoc(
+    doc(db, PULSECHECK_ASSIGNMENT_EVENTS_COLLECTION, eventId),
+    sanitizeFirestoreValue({
+      ...payload,
+      createdAt: payload.createdAt || eventAt,
+    }),
+    { merge: true }
+  );
+
+  return eventId;
+}
+
+async function applyHarnessTrainingPlanEventSideEffects(
+  db: Firestore,
+  input: {
+    assignment: Record<string, any>;
+    nextAssignment: Record<string, any>;
+    eventType: string;
+    actorType: string;
+    actorUserId: string;
+    reason?: string;
+    eventAt: number;
+    assignmentEventId: string;
+  }
+) {
+  const sideEffectEventType = resolveHarnessPlanStepEventType(input.eventType);
+  if (!sideEffectEventType || !input.assignment.trainingPlanId) {
+    return null;
+  }
+
+  const plan = await trainingPlanService.getById(input.assignment.trainingPlanId);
+  if (!plan) {
+    return null;
+  }
+
+  const stepIndex = findTrainingPlanStepIndex(plan as Record<string, any>, input.assignment);
+  if (stepIndex < 0) {
+    return null;
+  }
+
+  const steps = Array.isArray(plan.steps) ? plan.steps.map((entry) => ({ ...entry })) : [];
+  const currentStep = { ...steps[stepIndex] };
+  const nextStep = { ...currentStep };
+  const nextPlanBase: Record<string, any> = { ...(plan as Record<string, any>), steps };
+  const lifecycleEvents: string[] = [];
+  const completionSummary =
+    input.nextAssignment?.completionSummary
+    || input.assignment?.completionSummary
+    || null;
+
+  switch (input.eventType) {
+    case 'viewed':
+    case 'started':
+      if (!['completed', 'overridden', 'skipped'].includes(String(currentStep.stepStatus || ''))) {
+        nextStep.stepStatus = 'active_today';
+        nextStep.linkedDailyTaskId = input.assignment.id;
+        nextStep.linkedDailyTaskSourceDate = input.assignment.sourceDate || undefined;
+        nextStep.startedAt = currentStep.startedAt || input.eventAt;
+      }
+      break;
+    case 'paused':
+      nextPlanBase.status = 'paused';
+      nextPlanBase.pausedAt = input.eventAt;
+      if (!['completed', 'overridden', 'skipped'].includes(String(currentStep.stepStatus || ''))) {
+        nextStep.stepStatus = 'active_today';
+        nextStep.linkedDailyTaskId = input.assignment.id;
+        nextStep.linkedDailyTaskSourceDate = input.assignment.sourceDate || undefined;
+        nextStep.startedAt = currentStep.startedAt || input.eventAt;
+      }
+      lifecycleEvents.push('training_plan_paused');
+      break;
+    case 'resumed':
+      nextPlanBase.status = 'active';
+      nextPlanBase.resumedAt = input.eventAt;
+      if (!['completed', 'overridden', 'skipped'].includes(String(currentStep.stepStatus || ''))) {
+        nextStep.stepStatus = 'active_today';
+        nextStep.linkedDailyTaskId = input.assignment.id;
+        nextStep.linkedDailyTaskSourceDate = input.assignment.sourceDate || undefined;
+        nextStep.startedAt = currentStep.startedAt || input.eventAt;
+      }
+      lifecycleEvents.push('training_plan_resumed');
+      break;
+    case 'completed':
+      nextStep.stepStatus = 'completed';
+      nextStep.linkedDailyTaskId = input.assignment.id;
+      nextStep.linkedDailyTaskSourceDate = input.assignment.sourceDate || undefined;
+      nextStep.completedAt = currentStep.completedAt || input.eventAt;
+      nextStep.resultSummary = completionSummary || currentStep.resultSummary || undefined;
+      nextPlanBase.latestResultSummary =
+        completionSummary?.noraTakeaway
+        || completionSummary?.athleteHeadline
+        || input.reason
+        || currentStep.stepLabel
+        || null;
+      nextPlanBase.latestResultAt = input.eventAt;
+      break;
+    case 'deferred':
+    case 'overridden':
+    case 'expired':
+      nextStep.stepStatus = input.eventType === 'deferred' ? 'deferred' : 'overridden';
+      nextStep.linkedDailyTaskId = input.assignment.id;
+      nextStep.linkedDailyTaskSourceDate = input.assignment.sourceDate || undefined;
+      nextStep.overrideReason = input.reason || currentStep.overrideReason || 'Assignment adjusted.';
+      nextPlanBase.latestResultSummary = nextStep.overrideReason;
+      nextPlanBase.latestResultAt = input.eventAt;
+      break;
+    default:
+      break;
+  }
+
+  steps[stepIndex] = nextStep;
+  const normalizedPlan = syncTrainingPlanProgression({
+    ...nextPlanBase,
+    steps,
+    sourceDailyTaskId: nextPlanBase.sourceDailyTaskId || input.assignment.id,
+    sourceDate: nextPlanBase.sourceDate || input.assignment.sourceDate,
+    timezone: nextPlanBase.timezone || input.assignment.timezone,
+    updatedAt: input.eventAt,
+  });
+
+  if (normalizedPlan.status === 'completed' && plan.status !== 'completed') {
+    lifecycleEvents.push('training_plan_completed');
+  }
+
+  await trainingPlanService.save(normalizedPlan as any);
+
+  await writeHarnessTrainingPlanEvent(db, {
+    assignmentId: input.assignment.id,
+    athleteId: input.assignment.athleteId || '',
+    teamId: input.assignment.teamId || '',
+    sourceDate: input.assignment.sourceDate || '',
+    trainingPlanId: input.assignment.trainingPlanId,
+    trainingPlanStepId: input.assignment.trainingPlanStepId || null,
+    trainingPlanStepIndex: typeof input.assignment.trainingPlanStepIndex === 'number' ? input.assignment.trainingPlanStepIndex : null,
+    eventType: sideEffectEventType,
+    actorType: input.actorType,
+    actorUserId: input.actorUserId,
+    eventAt: input.eventAt,
+    executionPattern: input.assignment.executionPattern || null,
+    phaseProgress: input.assignment.phaseProgress || null,
+    completionSummary: completionSummary || null,
+    metadata: {
+      relatedAssignmentEventId: input.assignmentEventId,
+      relatedAssignmentEventType: input.eventType,
+      planStatusBefore: plan.status || null,
+      planStatusAfter: normalizedPlan.status || null,
+      planStepBefore: currentStep.stepStatus || null,
+      planStepAfter: nextStep.stepStatus || null,
+      planStepLabel: currentStep.stepLabel || input.assignment.trainingPlanStepLabel || null,
+      linkedDailyTaskId: input.assignment.id,
+      linkedDailyTaskSourceDate: input.assignment.sourceDate || null,
+      reason: input.reason || null,
+    },
+  });
+
+  for (const lifecycleEventType of lifecycleEvents) {
+    await writeHarnessTrainingPlanEvent(db, {
+      assignmentId: input.assignment.id,
+      athleteId: input.assignment.athleteId || '',
+      teamId: input.assignment.teamId || '',
+      sourceDate: input.assignment.sourceDate || '',
+      trainingPlanId: input.assignment.trainingPlanId,
+      trainingPlanStepId: input.assignment.trainingPlanStepId || null,
+      trainingPlanStepIndex: typeof input.assignment.trainingPlanStepIndex === 'number' ? input.assignment.trainingPlanStepIndex : null,
+      eventType: lifecycleEventType,
+      actorType: input.actorType,
+      actorUserId: input.actorUserId,
+      eventAt: input.eventAt,
+      metadata: {
+        relatedAssignmentEventId: input.assignmentEventId,
+        relatedAssignmentEventType: input.eventType,
+        planStatusBefore: plan.status || null,
+        planStatusAfter: normalizedPlan.status || null,
+        linkedDailyTaskId: input.assignment.id,
+        linkedDailyTaskSourceDate: input.assignment.sourceDate || null,
+        reason: input.reason || null,
+      },
+    });
+  }
+
+  return normalizedPlan;
 }
 
 function buildLegacyRosterFixtureIds(namespace: string) {
@@ -1620,7 +2015,9 @@ async function cleanupPulseCheckAthleteJourneyFixture(
     deleteNestedDocsByParent(db, SIM_COMPLETIONS_ROOT, input.athleteUserId, 'completions'),
     deleteQueryDocs(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, 'athleteId', input.athleteUserId),
     deleteQueryDocs(db, PULSECHECK_ASSIGNMENT_CANDIDATE_SETS_COLLECTION, 'athleteId', input.athleteUserId),
+    deleteQueryDocs(db, PULSECHECK_ASSIGNMENT_EVENTS_COLLECTION, 'athleteId', input.athleteUserId),
     deleteQueryDocs(db, PULSECHECK_STATE_SNAPSHOTS_COLLECTION, 'athleteId', input.athleteUserId),
+    deleteQueryDocs(db, PULSECHECK_TRAINING_PLANS_COLLECTION, 'athleteId', input.athleteUserId),
     deleteQueryDocs(db, COACH_NOTIFICATIONS_COLLECTION, 'coachId', input.coachUserId),
   ]);
 
@@ -1655,12 +2052,14 @@ async function inspectPulseCheckAthleteJourneyState(
     coachUserId: string;
   }
 ) {
-  const [progressSnap, latestAssignment, latestCompletion, latestCheckIns, coachNotificationsSnap] = await Promise.all([
+  const [progressSnap, latestAssignment, latestCompletion, latestCheckIns, coachNotificationsSnap, trainingPlansSnap, assignmentEventsSnap] = await Promise.all([
     getDoc(doc(db, ATHLETE_MENTAL_PROGRESS_COLLECTION, input.athleteUserId)),
     assignmentOrchestratorService.getLatestForAthlete(input.athleteUserId),
     completionService.getLatestCompletion(input.athleteUserId),
     completionService.getCheckIns(input.athleteUserId, 3),
     getDocs(query(collection(db, COACH_NOTIFICATIONS_COLLECTION), where('coachId', '==', input.coachUserId))),
+    getDocs(query(collection(db, PULSECHECK_TRAINING_PLANS_COLLECTION), where('athleteId', '==', input.athleteUserId))),
+    getDocs(query(collection(db, PULSECHECK_ASSIGNMENT_EVENTS_COLLECTION), where('athleteId', '==', input.athleteUserId))),
   ]);
 
   const [stateSnapshotSnap, candidateSetSnap, responsivenessProfileSnap] = await Promise.all([
@@ -1676,6 +2075,17 @@ async function inspectPulseCheckAthleteJourneyState(
   const coachNotifications = coachNotificationsSnap.docs
     .map((entry) => ({ id: entry.id, ...(entry.data() as Record<string, any>) }) as Record<string, any> & { id: string })
     .sort((left, right) => (Number(right.createdAt) || 0) - (Number(left.createdAt) || 0));
+  const trainingPlans = trainingPlansSnap.docs
+    .map((entry) => ({ id: entry.id, ...(entry.data() as Record<string, any>) }) as Record<string, any> & { id: string })
+    .sort(sortPlansByFreshness);
+  const assignmentEvents = assignmentEventsSnap.docs
+    .map((entry) => ({ id: entry.id, ...(entry.data() as Record<string, any>) }) as Record<string, any> & { id: string })
+    .sort(sortEventsByFreshness);
+  const trainingPlanEvents = assignmentEvents.filter((event) =>
+    Boolean(event.trainingPlanId)
+    || String(event.eventType || '').startsWith('training_plan_')
+    || String(event.eventType || '').startsWith('plan_step_')
+  );
 
   return {
     athleteProgress: progressSnap.exists() ? { id: progressSnap.id, ...progressSnap.data() } : null,
@@ -1683,6 +2093,10 @@ async function inspectPulseCheckAthleteJourneyState(
     latestStateSnapshot: stateSnapshotSnap.exists() ? { id: stateSnapshotSnap.id, ...stateSnapshotSnap.data() } : null,
     latestCandidateSet: candidateSetSnap.exists() ? { id: candidateSetSnap.id, ...candidateSetSnap.data() } : null,
     responsivenessProfile: responsivenessProfileSnap.exists() ? { id: responsivenessProfileSnap.id, ...responsivenessProfileSnap.data() } : null,
+    trainingPlans,
+    latestTrainingPlan: trainingPlans.find((plan) => plan.isPrimary) || trainingPlans[0] || null,
+    recentTrainingPlanEvents: trainingPlanEvents.slice(0, 12),
+    recentAssignmentEvents: assignmentEvents.slice(0, 12),
     latestCompletion,
     recentCheckIns: latestCheckIns,
     coachNotifications,
@@ -1919,7 +2333,7 @@ async function submitPulseCheckCheckInViaHarness(
       ? await simModuleLibraryService.getBySimSpecId(progress.activeProgram.recommendedSimId)
       : null);
 
-  const simCandidate = resolvedExercise
+  const simCandidate: Record<string, any> | null = resolvedExercise
     ? {
         id: `${athleteId}_${sourceDate}_${resolvedExercise.id}`,
         type: 'sim',
@@ -1933,10 +2347,37 @@ async function submitPulseCheckCheckInViaHarness(
     : null;
 
   const candidateSetId = `${athleteId}_${sourceDate}_candidates`;
-  const candidates = [
-    ...eligibleProtocolCandidates.map(({ __score, ...candidate }) => candidate),
-    ...(simCandidate ? [simCandidate] : []),
-  ];
+  const authoringResult = await trainingPlanAuthoringService.maybeAuthorPrimaryPlan({
+    athleteId,
+    profile: progress?.taxonomyProfile || null,
+    hasBaselineAssessment: Boolean(progress?.baselineAssessment),
+    activeProgram: progress?.activeProgram || null,
+    snapshot,
+    sourceDate,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    sourceStateSnapshotId: snapshot.id,
+    sourceProfileSnapshotId: progress?.profileVersion || null,
+    now,
+  }).catch((error) => {
+    console.warn('[PulseE2E] training-plan authoring fallback failed during local check-in harness:', error);
+    return null;
+  });
+  const primaryPlan =
+    authoringResult?.plan
+    || (await trainingPlanService.getPrimaryForAthlete(athleteId).catch(() => null));
+  const planDrivenCandidate = await resolveHarnessPlanDrivenCandidate({
+    athleteId,
+    sourceDate,
+    primaryPlan: primaryPlan as Record<string, any> | null,
+    protocolRecords: allProtocolRecords,
+  });
+  const candidates: Array<Record<string, any>> = [
+    ...(planDrivenCandidate ? [planDrivenCandidate] : []),
+    ...eligibleProtocolCandidates
+      .map(({ __score, ...candidate }) => candidate)
+      .filter((candidate) => !planDrivenCandidate || candidate.id !== planDrivenCandidate.id),
+    ...(simCandidate && (!planDrivenCandidate || simCandidate.id !== planDrivenCandidate.id) ? [simCandidate] : []),
+  ] as Array<Record<string, any>>;
   const inventoryGaps =
     protocolClass && eligibleProtocolCandidates.length === 0
       ? [`No live ${protocolClass} protocol remains eligible for this check-in.`]
@@ -1948,10 +2389,14 @@ async function submitPulseCheckCheckInViaHarness(
       athleteId,
       sourceDate,
       sourceStateSnapshotId: snapshot.id,
+      trainingPlanId: primaryPlan?.id || null,
+      trainingPlanStepId: planDrivenCandidate?.trainingPlanStepId || null,
+      trainingPlanStepIndex: planDrivenCandidate?.trainingPlanStepIndex || null,
+      planDrivenCandidateId: planDrivenCandidate?.id || null,
       candidates,
       candidateIds: candidates.map((candidate) => candidate.id),
       candidateClassHints: uniqueStrings(candidates.map((candidate) => candidate.type)),
-      constraintReasons: [],
+      constraintReasons: planDrivenCandidate ? ['The authored training plan supplied the next-due candidate.'] : [],
       inventoryGaps,
       plannerEligible: true,
       createdAt: now,
@@ -1974,10 +2419,14 @@ async function submitPulseCheckCheckInViaHarness(
         athleteId,
         sourceDate,
         sourceStateSnapshotId: snapshot.id,
+        trainingPlanId: primaryPlan?.id || null,
+        trainingPlanStepId: planDrivenCandidate?.trainingPlanStepId || null,
+        trainingPlanStepIndex: planDrivenCandidate?.trainingPlanStepIndex || null,
+        planDrivenCandidateId: planDrivenCandidate?.id || null,
         candidates,
         candidateIds: candidates.map((candidate) => candidate.id),
         candidateClassHints: uniqueStrings(candidates.map((candidate) => candidate.type)),
-        constraintReasons: [],
+        constraintReasons: planDrivenCandidate ? ['The authored training plan supplied the next-due candidate.'] : [],
         inventoryGaps,
         plannerEligible: true,
         createdAt: now,
@@ -1988,28 +2437,86 @@ async function submitPulseCheckCheckInViaHarness(
   }
 
   if (assignment) {
+    const selectedCandidate = (planDrivenCandidate || candidates[0] || null) as Record<string, any> | null;
     const shouldKeepAssignmentLive = assignment.status === PulseCheckDailyAssignmentStatus.Deferred && Boolean(resolvedExercise);
-    await updateDoc(doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, assignment.id), {
-      sourceCandidateSetId: candidateSetId,
-      plannerAudit: sanitizeFirestoreValue({
-        rankedCandidates: candidates.map((candidate, index) => ({
-          ...candidate,
-          rank: index + 1,
-        })),
+    const nextStatus =
+      selectedCandidate
+        ? (selectedCandidate.actionType === 'defer'
+            ? PulseCheckDailyAssignmentStatus.Deferred
+            : PulseCheckDailyAssignmentStatus.Assigned)
+        : (shouldKeepAssignmentLive ? PulseCheckDailyAssignmentStatus.Assigned : assignment.status);
+    const nextActionType =
+      selectedCandidate?.actionType
+      || (shouldKeepAssignmentLive ? (snapshot.recommendedRouting === 'protocol_then_sim' ? 'lighter_sim' : 'sim') : assignment.actionType);
+    const nextExecutionPattern = selectedCandidate?.executionPattern || assignment.executionPattern || 'single';
+    const nextDurationSeconds =
+      selectedCandidate?.durationSeconds
+      || progress?.activeProgram?.durationSeconds
+      || (resolvedExercise?.durationMinutes ? resolvedExercise.durationMinutes * 60 : null);
+
+    await setDoc(
+      doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, assignment.id),
+      sanitizeFirestoreValue({
+        sourceCandidateSetId: candidateSetId,
+        plannerAudit: {
+          rankedCandidates: candidates.map((candidate, index) => ({
+            ...candidate,
+            rank: index + 1,
+          })),
+        },
+        chosenCandidateId: selectedCandidate?.id || null,
+        chosenCandidateType: selectedCandidate?.type || null,
+        status: nextStatus,
+        actionType: nextActionType,
+        executionPattern: nextExecutionPattern,
+        phaseProgress: buildHarnessPhaseProgress(nextExecutionPattern),
+        rationale: selectedCandidate?.rationale || assignment.rationale || null,
+        plannerSummary: selectedCandidate?.rationale || assignment.plannerSummary || null,
+        plannerConfidence: 'medium',
+        decisionSource: 'fallback_rules',
+        legacyExerciseId:
+          selectedCandidate?.legacyExerciseId
+          || (shouldKeepAssignmentLive ? resolvedExercise?.id || null : assignment.legacyExerciseId || null),
+        simSpecId:
+          selectedCandidate?.simSpecId
+          || (shouldKeepAssignmentLive ? resolvedExercise?.simSpecId || null : assignment.simSpecId || null),
+        simFamilyLabel:
+          selectedCandidate?.simSpecId
+            ? humanizeRuntimeLabel(selectedCandidate.simSpecId)
+            : (selectedCandidate?.legacyExerciseId
+              ? humanizeRuntimeLabel(selectedCandidate.legacyExerciseId)
+              : assignment.simFamilyLabel || null),
+        simVariantLabel:
+          selectedCandidate?.label
+          || (resolvedExercise?.name && shouldKeepAssignmentLive ? resolvedExercise.name : assignment.simVariantLabel || null),
+        protocolId: selectedCandidate?.protocolId || null,
+        protocolLabel: selectedCandidate?.protocolLabel || null,
+        protocolClass: selectedCandidate?.protocolClass || null,
+        protocolCategory: selectedCandidate?.protocolCategory || null,
+        protocolResponseFamily: selectedCandidate?.protocolResponseFamily || null,
+        protocolDeliveryMode: selectedCandidate?.protocolDeliveryMode || null,
+        durationSeconds: nextDurationSeconds,
+        trainingPlanId: selectedCandidate?.trainingPlanId || null,
+        trainingPlanStepId: selectedCandidate?.trainingPlanStepId || null,
+        trainingPlanStepIndex: selectedCandidate?.trainingPlanStepIndex || null,
+        trainingPlanStepLabel: selectedCandidate?.trainingPlanStepLabel || selectedCandidate?.label || null,
+        trainingPlanIsPrimary: Boolean(selectedCandidate?.trainingPlanId),
+        updatedAt: Date.now(),
       }),
-      ...(shouldKeepAssignmentLive
-        ? {
-            status: PulseCheckDailyAssignmentStatus.Assigned,
-            actionType: snapshot.recommendedRouting === 'protocol_then_sim' ? 'lighter_sim' : 'sim',
-            ...(resolvedExercise?.id ? { legacyExerciseId: resolvedExercise.id } : {}),
-            ...(resolvedExercise?.simSpecId ? { simSpecId: resolvedExercise.simSpecId } : {}),
-            ...(progress?.activeProgram?.durationSeconds || resolvedExercise?.durationMinutes
-              ? { durationSeconds: progress?.activeProgram?.durationSeconds || (resolvedExercise?.durationMinutes || 0) * 60 }
-              : {}),
-          }
-        : {}),
-      updatedAt: Date.now(),
-    });
+      { merge: true }
+    );
+
+    if (primaryPlan && selectedCandidate?.trainingPlanId) {
+      const refreshedAssignmentSnap = await getDoc(doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, assignment.id));
+      const refreshedAssignment = refreshedAssignmentSnap.exists()
+        ? ({ id: refreshedAssignmentSnap.id, ...refreshedAssignmentSnap.data() } as Record<string, any>)
+        : { ...assignment, trainingPlanId: selectedCandidate.trainingPlanId };
+      await syncHarnessPlanWithAssignment({
+        plan: primaryPlan as Record<string, any>,
+        assignment: refreshedAssignment,
+        eventAt: Date.now(),
+      });
+    }
 
     if (Array.isArray(input.protocolRuntimeOverrides)) {
       await setDoc(
@@ -2018,10 +2525,14 @@ async function submitPulseCheckCheckInViaHarness(
           athleteId,
           sourceDate,
           sourceStateSnapshotId: snapshot.id,
+          trainingPlanId: primaryPlan?.id || null,
+          trainingPlanStepId: planDrivenCandidate?.trainingPlanStepId || null,
+          trainingPlanStepIndex: planDrivenCandidate?.trainingPlanStepIndex || null,
+          planDrivenCandidateId: planDrivenCandidate?.id || null,
           candidates,
           candidateIds: candidates.map((candidate) => candidate.id),
           candidateClassHints: uniqueStrings(candidates.map((candidate) => candidate.type)),
-          constraintReasons: [],
+          constraintReasons: planDrivenCandidate ? ['The authored training plan supplied the next-due candidate.'] : [],
           inventoryGaps,
           plannerEligible: true,
           createdAt: now,
@@ -2044,10 +2555,14 @@ async function submitPulseCheckCheckInViaHarness(
       athleteId,
       sourceDate,
       sourceStateSnapshotId: snapshot.id,
+      trainingPlanId: primaryPlan?.id || null,
+      trainingPlanStepId: planDrivenCandidate?.trainingPlanStepId || null,
+      trainingPlanStepIndex: planDrivenCandidate?.trainingPlanStepIndex || null,
+      planDrivenCandidateId: planDrivenCandidate?.id || null,
       candidates,
       candidateIds: candidates.map((candidate) => candidate.id),
       candidateClassHints: uniqueStrings(candidates.map((candidate) => candidate.type)),
-      constraintReasons: [],
+      constraintReasons: planDrivenCandidate ? ['The authored training plan supplied the next-due candidate.'] : [],
       inventoryGaps,
       plannerEligible: true,
       createdAt: now,
@@ -2077,6 +2592,8 @@ async function recordPulseCheckAssignmentEventViaHarness(
   const eventMetadata = sanitizeFirestoreValue(
     input.reason || input.metadata ? { reason: input.reason, ...(input.metadata || {}) } : undefined
   );
+  const actorUserId = input.actorUserId || 'local-e2e-harness';
+  const actorType = resolveHarnessActorType(assignment as Record<string, any>, input);
   const status =
     input.eventType === 'completed'
       ? PulseCheckDailyAssignmentStatus.Completed
@@ -2098,8 +2615,8 @@ async function recordPulseCheckAssignmentEventViaHarness(
       teamId: assignment.teamId,
       sourceDate: assignment.sourceDate,
       eventType: input.eventType,
-      actorType: input.actorUserId ? 'coach' : 'system',
-      actorUserId: input.actorUserId || 'local-e2e-harness',
+      actorType,
+      actorUserId,
       eventAt: now,
       metadata: eventMetadata,
       createdAt: now,
@@ -2109,13 +2626,16 @@ async function recordPulseCheckAssignmentEventViaHarness(
 
   await setDoc(
     doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, assignment.id),
-    {
+    sanitizeFirestoreValue({
       status,
       updatedAt: now,
+      ...(input.eventType === 'completed' && input.metadata?.completionSummary
+        ? { completionSummary: input.metadata.completionSummary }
+        : {}),
       ...(input.eventType === 'completed' ? { completedAt: now } : {}),
       ...(input.eventType === 'started' ? { startedAt: now } : {}),
       ...(input.eventType === 'viewed' ? { viewedAt: now } : {}),
-    },
+    }),
     { merge: true }
   );
 
@@ -2123,12 +2643,23 @@ async function recordPulseCheckAssignmentEventViaHarness(
   const updatedAssignment = updatedAssignmentSnap.exists()
     ? pulseCheckDailyAssignmentFromFirestore(updatedAssignmentSnap.id, updatedAssignmentSnap.data() as Record<string, any>)
     : assignment;
+  const updatedPlan = await applyHarnessTrainingPlanEventSideEffects(db, {
+    assignment: assignment as unknown as Record<string, any>,
+    nextAssignment: updatedAssignment as unknown as Record<string, any>,
+    eventType: input.eventType,
+    actorType,
+    actorUserId,
+    reason: input.reason,
+    eventAt: now,
+    assignmentEventId: eventId,
+  });
   const snapshot = assignment.sourceStateSnapshotId
     ? await stateSnapshotService.getById(assignment.sourceStateSnapshotId)
     : null;
 
   return {
     assignment: updatedAssignment,
+    trainingPlan: updatedPlan,
     event: {
       id: eventId,
       assignmentId: assignment.id,
@@ -2136,8 +2667,8 @@ async function recordPulseCheckAssignmentEventViaHarness(
       teamId: assignment.teamId,
       sourceDate: assignment.sourceDate,
       eventType: input.eventType,
-      actorType: input.actorUserId ? 'coach' : 'system',
-      actorUserId: input.actorUserId || 'local-e2e-harness',
+      actorType,
+      actorUserId,
       eventAt: now,
       metadata: eventMetadata,
       createdAt: now,
@@ -2439,38 +2970,16 @@ async function recordPulseCheckJourneyCompletion(
     },
     { merge: true }
   );
-
-  const completionEventId = `${input.dailyAssignmentId}_completed_${now}`;
-
-  await setDoc(
-    doc(db, PULSECHECK_ASSIGNMENT_EVENTS_COLLECTION, completionEventId),
-    {
-      assignmentId: input.dailyAssignmentId,
-      athleteId: input.athleteUserId,
-      teamId: assignment?.teamId || '',
-      sourceDate: assignment?.sourceDate || new Date().toISOString().split('T')[0],
-      eventType: 'completed',
-      actorType: 'system',
-      actorUserId: input.athleteUserId,
-      eventAt: now,
-      metadata: {
-        exerciseId: fallbackExerciseId,
-        exerciseName: fallbackExerciseName,
-      },
-      createdAt: now,
+  const completionEvent = await recordPulseCheckAssignmentEventViaHarness(db, {
+    assignmentId: input.dailyAssignmentId,
+    eventType: 'completed',
+    metadata: {
+      exerciseId: fallbackExerciseId,
+      exerciseName: fallbackExerciseName,
+      completionSummary: sessionSummary,
     },
-    { merge: true }
-  );
-
-  await setDoc(
-    doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, input.dailyAssignmentId),
-    {
-      status: 'completed',
-      completedAt: now,
-      updatedAt: now,
-    },
-    { merge: true }
-  );
+  });
+  const completionEventId = completionEvent.event.id;
 
   const profileSnap = await getDoc(doc(db, PULSECHECK_PROTOCOL_RESPONSIVENESS_PROFILES_COLLECTION, input.athleteUserId));
   const existingProfile = profileSnap.exists() ? (profileSnap.data() as Record<string, any>) : {};

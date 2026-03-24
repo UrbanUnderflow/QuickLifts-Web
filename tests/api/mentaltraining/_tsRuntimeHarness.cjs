@@ -45,12 +45,16 @@ function compileMentalTrainingRuntime() {
     '--target', 'es2020',
     '--moduleResolution', 'node',
     '--esModuleInterop',
+    '--allowJs',
     '--skipLibCheck',
     '--pretty', 'false',
     '--outDir', outDir,
     path.join(repoRoot, 'src/api/firebase/mentaltraining/simBuild.ts'),
     path.join(repoRoot, 'src/api/firebase/mentaltraining/variantRegistryService.ts'),
     path.join(repoRoot, 'src/api/firebase/mentaltraining/protocolPracticeConversationService.ts'),
+    path.join(repoRoot, 'src/api/firebase/mentaltraining/dailyTaskTrainingPlanReadModelService.ts'),
+    path.join(repoRoot, 'src/api/firebase/mentaltraining/trainingPlanAuthoringShared.js'),
+    path.join(repoRoot, 'src/api/firebase/mentaltraining/trainingPlanAuthoringService.ts'),
     path.join(repoRoot, 'src/pages/api/mentaltraining/evaluate-protocol-practice.ts'),
   ];
 
@@ -62,25 +66,50 @@ function compileMentalTrainingRuntime() {
   const simBuildPath = findFileRecursive(outDir, 'simBuild.js');
   const variantRegistryPath = findFileRecursive(outDir, 'variantRegistryService.js');
   const protocolPracticeServicePath = findFileRecursive(outDir, 'protocolPracticeConversationService.js');
+  const dailyTaskTrainingPlanReadModelPath = findFileRecursive(outDir, 'dailyTaskTrainingPlanReadModelService.js');
+  const trainingPlanAuthoringSharedPath = findFileRecursive(outDir, 'trainingPlanAuthoringShared.js');
+  const trainingPlanAuthoringServicePath = findFileRecursive(outDir, 'trainingPlanAuthoringService.js');
   const protocolPracticeEvaluatorPath = findFileRecursive(outDir, 'evaluate-protocol-practice.js');
 
-  if ((!simBuildPath || !variantRegistryPath || !protocolPracticeServicePath || !protocolPracticeEvaluatorPath) && result.status !== 0) {
+  if ((!simBuildPath || !variantRegistryPath || !protocolPracticeServicePath || !dailyTaskTrainingPlanReadModelPath || !trainingPlanAuthoringSharedPath || !trainingPlanAuthoringServicePath || !protocolPracticeEvaluatorPath) && result.status !== 0) {
     throw new Error(`Failed to compile mental training runtime:\n${result.stderr || result.stdout || 'Unknown tsc failure'}`);
   }
 
-  if (!simBuildPath || !variantRegistryPath || !protocolPracticeServicePath || !protocolPracticeEvaluatorPath) {
+  if (!simBuildPath || !variantRegistryPath || !protocolPracticeServicePath || !dailyTaskTrainingPlanReadModelPath || !trainingPlanAuthoringSharedPath || !trainingPlanAuthoringServicePath || !protocolPracticeEvaluatorPath) {
     throw new Error('Compiled runtime files were not emitted to the temp directory.');
   }
+
+  const compiledMentalTrainingDir = path.dirname(trainingPlanAuthoringServicePath);
+  fs.copyFileSync(
+    path.join(repoRoot, 'src/api/firebase/mentaltraining/pulsecheckProtocolRegistry.json'),
+    path.join(compiledMentalTrainingDir, 'pulsecheckProtocolRegistry.json')
+  );
 
   compiledRuntimeCache = {
     outDir,
     simBuildPath,
     variantRegistryPath,
     protocolPracticeServicePath,
+    dailyTaskTrainingPlanReadModelPath,
+    trainingPlanAuthoringSharedPath,
+    trainingPlanAuthoringServicePath,
     protocolPracticeEvaluatorPath,
   };
 
   return compiledRuntimeCache;
+}
+
+function clearCompiledRuntimeCache() {
+  if (!compiledRuntimeCache) {
+    return;
+  }
+
+  const { outDir } = compiledRuntimeCache;
+  for (const cacheKey of Object.keys(require.cache)) {
+    if (cacheKey.startsWith(outDir)) {
+      delete require.cache[cacheKey];
+    }
+  }
 }
 
 function withModuleMocks(mocks, loadFn) {
@@ -151,9 +180,38 @@ function createFirestoreMock(initialCollections = {}) {
     return { __type: 'doc', path: [...pathParts], id: pathParts.at(-1) };
   }
 
+  function makeWhereClause(field, operator, value) {
+    return { __type: 'where', field, operator, value };
+  }
+
+  function applyQueryClauses(docs, clauses = []) {
+    return clauses.reduce((accumulator, clause) => {
+      if (!clause) {
+        return accumulator;
+      }
+
+      if (clause.__type === 'where') {
+        return accumulator.filter((doc) => {
+          const value = doc.data()?.[clause.field];
+          switch (clause.operator) {
+            case '==':
+              return value === clause.value;
+            default:
+              throw new Error(`Unsupported where operator in mock: ${clause.operator}`);
+          }
+        });
+      }
+
+      return accumulator;
+    }, docs);
+  }
+
   const firestoreModule = {
     collection(db, ...pathParts) {
       return makeCollectionRef(pathParts);
+    },
+    where(field, operator, value) {
+      return makeWhereClause(field, operator, value);
     },
     doc(firstArg, ...pathParts) {
       if (firstArg && Array.isArray(firstArg.path)) {
@@ -178,11 +236,15 @@ function createFirestoreMock(initialCollections = {}) {
         ref: makeDocRef([...pathParts, id]),
         data: () => clone(data),
       }));
+      const whereClauses = Array.isArray(ref.clauses)
+        ? ref.clauses.filter((clause) => clause && clause.__type === 'where')
+        : [];
       const orderClauses = Array.isArray(ref.clauses)
         ? ref.clauses.filter((clause) => clause && clause.__type === 'orderBy')
         : [];
+      const filteredDocs = applyQueryClauses(docs, whereClauses);
       if (orderClauses.length > 0) {
-        docs.sort((left, right) => {
+        filteredDocs.sort((left, right) => {
           for (const clause of orderClauses) {
             const leftValue = left.data()?.[clause.field];
             const rightValue = right.data()?.[clause.field];
@@ -193,7 +255,7 @@ function createFirestoreMock(initialCollections = {}) {
           return 0;
         });
       }
-      return { docs };
+      return { docs: filteredDocs };
     },
     async getDoc(ref) {
       const data = getDocData(ref.path);
@@ -201,6 +263,15 @@ function createFirestoreMock(initialCollections = {}) {
         exists: () => data !== undefined,
         data: () => clone(data),
       };
+    },
+    async setDoc(ref, data, options) {
+      setDocData(ref.path, data, Boolean(options && options.merge));
+    },
+    async addDoc(ref, data) {
+      autoIdCounter += 1;
+      const docRef = makeDocRef([...ref.path, `auto-${autoIdCounter}`]);
+      setDocData(docRef.path, data, false);
+      return docRef;
     },
     async deleteDoc(ref) {
       deleteDocData(ref.path);
@@ -243,12 +314,14 @@ function createFirestoreMock(initialCollections = {}) {
 
 function loadSimBuildRuntime() {
   const { simBuildPath } = compileMentalTrainingRuntime();
+  clearCompiledRuntimeCache();
   delete require.cache[simBuildPath];
   return require(simBuildPath);
 }
 
 function loadVariantRegistryRuntime(firestoreMock) {
   const { variantRegistryPath } = compileMentalTrainingRuntime();
+  clearCompiledRuntimeCache();
   delete require.cache[variantRegistryPath];
 
   return withModuleMocks({
@@ -259,6 +332,7 @@ function loadVariantRegistryRuntime(firestoreMock) {
 
 function loadProtocolPracticeRuntime(mocks = {}) {
   const { protocolPracticeServicePath, protocolPracticeEvaluatorPath } = compileMentalTrainingRuntime();
+  clearCompiledRuntimeCache();
   delete require.cache[protocolPracticeServicePath];
   delete require.cache[protocolPracticeEvaluatorPath];
 
@@ -268,9 +342,35 @@ function loadProtocolPracticeRuntime(mocks = {}) {
   }));
 }
 
+function loadDailyTaskTrainingPlanRuntime(mocks = {}) {
+  compiledRuntimeCache = null;
+  const { dailyTaskTrainingPlanReadModelPath } = compileMentalTrainingRuntime();
+  clearCompiledRuntimeCache();
+  delete require.cache[dailyTaskTrainingPlanReadModelPath];
+
+  return withModuleMocks(mocks, () => ({
+    service: require(dailyTaskTrainingPlanReadModelPath),
+  }));
+}
+
+function loadTrainingPlanAuthoringRuntime(mocks = {}) {
+  compiledRuntimeCache = null;
+  const { trainingPlanAuthoringServicePath, trainingPlanAuthoringSharedPath } = compileMentalTrainingRuntime();
+  clearCompiledRuntimeCache();
+  delete require.cache[trainingPlanAuthoringServicePath];
+  delete require.cache[trainingPlanAuthoringSharedPath];
+
+  return withModuleMocks(mocks, () => ({
+    service: require(trainingPlanAuthoringServicePath),
+    shared: require(trainingPlanAuthoringSharedPath),
+  }));
+}
+
 module.exports = {
   createFirestoreMock,
   loadSimBuildRuntime,
   loadVariantRegistryRuntime,
   loadProtocolPracticeRuntime,
+  loadDailyTaskTrainingPlanRuntime,
+  loadTrainingPlanAuthoringRuntime,
 };

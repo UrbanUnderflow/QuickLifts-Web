@@ -8,6 +8,7 @@ export const SIM_CURRICULUM_ASSIGNMENTS_COLLECTION = 'mental-curriculum-assignme
 export const PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION = 'pulsecheck-daily-assignments' as const;
 export const PULSECHECK_ASSIGNMENT_REVISIONS_SUBCOLLECTION = 'revisions' as const;
 export const PULSECHECK_ASSIGNMENT_EVENTS_COLLECTION = 'pulsecheck-assignment-events' as const;
+export const PULSECHECK_TRAINING_PLANS_COLLECTION = 'pulsecheck-training-plans' as const;
 export const PULSECHECK_CONVERSATION_SIGNAL_EVENTS_COLLECTION = 'conversation-derived-signal-events' as const;
 export const PULSECHECK_STATE_SNAPSHOTS_COLLECTION = 'state-snapshots' as const;
 export const PULSECHECK_ASSIGNMENT_CANDIDATE_SETS_COLLECTION = 'pulsecheck-assignment-candidate-sets' as const;

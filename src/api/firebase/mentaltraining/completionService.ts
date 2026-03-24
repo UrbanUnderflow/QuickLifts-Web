@@ -27,6 +27,7 @@ import {
   ExerciseCategory,
   Achievement,
   SessionProgramUpdateSummary,
+  type PulseCheckDailyTaskCompletionSummary,
   completionFromFirestore,
   completionToFirestore,
   streakFromFirestore,
@@ -42,11 +43,31 @@ import {
 import { assignmentService } from './assignmentService';
 import { athleteProgressService } from './athleteProgressService';
 import { assignmentOrchestratorService } from './assignmentOrchestratorService';
+import { trainingPlanAuthoringService } from './trainingPlanAuthoringService';
 import type { ProgramPrescription } from './taxonomy';
 
 const COMPLETIONS_ROOT = SIM_COMPLETIONS_ROOT;
 const STREAKS_COLLECTION = SIM_STREAKS_COLLECTION;
 const CHECKINS_ROOT = SIM_CHECKINS_ROOT;
+
+function resolveLocalTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+function resolveLocalSourceDate(timestamp = Date.now(), timezone = resolveLocalTimezone()): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  return formatter.format(new Date(timestamp));
+}
 
 function humanizeRuntimeLabel(value?: string | null): string {
   if (!value) return '';
@@ -61,6 +82,50 @@ function describeProgram(program?: ProgramPrescription | null): string {
     humanizeRuntimeLabel(program.sessionType) ||
     'next task'
   );
+}
+
+function buildDailyTaskCompletionSummary({
+  completion,
+  sessionSummary,
+}: {
+  completion: Omit<ExerciseCompletion, 'id'>;
+  sessionSummary: SessionProgramUpdateSummary;
+}): PulseCheckDailyTaskCompletionSummary {
+  const primaryMetricValue = Math.max(1, Math.round((completion.durationSeconds || 60) / 60));
+  const moodDelta = typeof completion.preExerciseMood === 'number' && typeof completion.postExerciseMood === 'number'
+    ? completion.postExerciseMood - completion.preExerciseMood
+    : undefined;
+
+  return {
+    primaryMetric: {
+      key: 'duration',
+      label: 'Duration',
+      value: primaryMetricValue,
+      unit: 'min',
+    },
+    secondaryMetrics: [
+      typeof moodDelta === 'number'
+        ? {
+            key: 'mood_delta',
+            label: 'Mood shift',
+            value: moodDelta,
+            unit: 'pts',
+            trend: moodDelta > 0 ? 'up' : moodDelta < 0 ? 'down' : 'flat',
+          }
+        : undefined,
+      typeof completion.difficultyRating === 'number'
+        ? {
+            key: 'difficulty',
+            label: 'Difficulty',
+            value: completion.difficultyRating,
+          }
+        : undefined,
+    ].filter(Boolean) as PulseCheckDailyTaskCompletionSummary['secondaryMetrics'],
+    noraTakeaway: sessionSummary.athleteHeadline || sessionSummary.athleteBody,
+    followUpPrompt: sessionSummary.nextRationale || sessionSummary.nextActionLabel || undefined,
+    durationSeconds: completion.durationSeconds,
+    resultNotes: completion.notes || undefined,
+  };
 }
 
 function formatMoodDelta(preExerciseMood?: number, postExerciseMood?: number): {
@@ -218,10 +283,6 @@ export const completionService = {
       await assignmentService.markCompleted(assignmentId);
     }
 
-    if (dailyAssignmentId) {
-      await assignmentOrchestratorService.markCompleted(dailyAssignmentId);
-    }
-
     // Update streak
     await this.updateStreak(userId, exerciseCategory, durationSeconds);
 
@@ -234,10 +295,26 @@ export const completionService = {
       previousProgram: priorProgress?.activeProgram,
       nextProgram: refreshedProgress?.activeProgram,
     });
+    const completionSummary = buildDailyTaskCompletionSummary({
+      completion,
+      sessionSummary,
+    });
 
     await updateDoc(docRef, {
       sessionSummary: sanitizeFirestoreValue(sessionSummary),
     });
+
+    if (dailyAssignmentId) {
+      await assignmentOrchestratorService.markCompleted(dailyAssignmentId, completionSummary);
+      await trainingPlanAuthoringService.maybeAuthorPrimaryPlan({
+        athleteId: userId,
+        profile: refreshedProgress?.taxonomyProfile,
+        hasBaselineAssessment: Boolean(refreshedProgress?.baselineAssessment),
+        activeProgram: refreshedProgress?.activeProgram,
+        sourceDate: resolveLocalSourceDate(now),
+        timezone: resolveLocalTimezone(),
+      });
+    }
 
     return {
       id: docRef.id,

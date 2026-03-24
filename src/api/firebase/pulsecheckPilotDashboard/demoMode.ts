@@ -1265,6 +1265,69 @@ export const pilotDashboardDemoMode = {
     writeStore(store);
   },
 
+  deleteInviteLink(inviteId: string): void {
+    const store = readStore();
+    store.inviteLinks = store.inviteLinks.filter((invite) => invite.id !== normalizeString(inviteId));
+    writeStore(store);
+  },
+
+  assignAthleteToCohort(input: {
+    athleteId: string;
+    cohortId?: string;
+    actorUserId?: string;
+    actorEmail?: string;
+  }): void {
+    const store = readStore();
+    const athleteId = normalizeString(input.athleteId);
+    const cohortId = normalizeString(input.cohortId);
+    const cohort = cohortId ? store.cohorts.find((entry) => entry.id === cohortId) || null : null;
+
+    if (cohortId && !cohort) {
+      throw new Error('The selected cohort could not be found in demo mode.');
+    }
+
+    const athleteIndex = store.athletes.findIndex((entry) => entry.summary.athleteId === athleteId);
+    if (athleteIndex < 0) {
+      throw new Error('Could not find that athlete in the demo pilot.');
+    }
+
+    const now = Date.now();
+    const entry = store.athletes[athleteIndex];
+    const nextTeamMembership = {
+      ...entry.summary.teamMembership,
+      athleteOnboarding: {
+        ...(entry.summary.teamMembership?.athleteOnboarding || {}),
+        targetCohortId: cohortId,
+        targetCohortName: cohort?.name || '',
+      },
+      updatedAt: asTimestamp(now),
+    } as PulseCheckTeamMembership;
+    const nextPilotEnrollment = {
+      ...entry.summary.pilotEnrollment,
+      cohortId,
+      updatedAt: asTimestamp(now),
+    } as PulseCheckPilotEnrollment;
+
+    const nextSummary = {
+      ...entry.summary,
+      cohort,
+      teamMembership: nextTeamMembership,
+      pilotEnrollment: nextPilotEnrollment,
+    };
+    const nextAthleteDetail = {
+      ...entry.athleteDetail,
+      cohort,
+      teamMembership: nextTeamMembership,
+      pilotEnrollment: nextPilotEnrollment,
+    };
+
+    store.athletes[athleteIndex] = {
+      summary: nextSummary,
+      athleteDetail: nextAthleteDetail,
+    };
+    writeStore(store);
+  },
+
   generatePilotResearchReadout(input: { frame: Record<string, any>; options: PilotResearchReadoutGenerationInput }): { readoutId: string } {
     const store = readStore();
     const now = Date.now();

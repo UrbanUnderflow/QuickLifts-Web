@@ -54,6 +54,8 @@ import SharedLinkPreviewStrategyTab from "../../components/admin/system-overview
 import PulseCheckRuntimeArchitectureTab from "../../components/admin/system-overview/PulseCheckRuntimeArchitectureTab";
 import PulseCheckStateSignalLayerTab from "../../components/admin/system-overview/PulseCheckStateSignalLayerTab";
 import PulseCheckCheckInSignalLayerIntegrationSpecTab from "../../components/admin/system-overview/PulseCheckCheckInSignalLayerIntegrationSpecTab";
+import PulseCheckDailyTaskTrainingPlanAlignmentSpecTab from "../../components/admin/system-overview/PulseCheckDailyTaskTrainingPlanAlignmentSpecTab";
+import PulseCheckTrainingPlanAuthoringSpecTab from "../../components/admin/system-overview/PulseCheckTrainingPlanAuthoringSpecTab";
 import PulseCheckHealthChatArchitectureTab from "../../components/admin/system-overview/PulseCheckHealthChatArchitectureTab";
 import PulseCheckAthleteHealthContextSnapshotSpecTab from "../../components/admin/system-overview/PulseCheckAthleteHealthContextSnapshotSpecTab";
 import PulseCheckHealthContextSourceRecordSpecTab from "../../components/admin/system-overview/PulseCheckHealthContextSourceRecordSpecTab";
@@ -93,6 +95,10 @@ import PulseCheckPermissionsVisibilityModelTab from "../../components/admin/syst
 import PulseCheckCoachDashboardInformationArchitectureTab from "../../components/admin/system-overview/PulseCheckCoachDashboardInformationArchitectureTab";
 import PulseCheckProfileArchitectureTab from "../../components/admin/system-overview/PulseCheckProfileArchitectureTab";
 import PulseCheckProfileSnapshotExportSpecTab from "../../components/admin/system-overview/PulseCheckProfileSnapshotExportSpecTab";
+import QuickLiftsProfileHealthSystemTab, {
+  QuickLiftsProfileHealthSnapshotContractTab,
+  QuickLiftsProfileHealthStorySpecTab,
+} from "../../components/admin/system-overview/QuickLiftsProfileHealthSystemTab";
 import PulseCheckVisionProImmersiveTestsTab from "../../components/admin/system-overview/PulseCheckVisionProImmersiveTestsTab";
 import PulseSystemDesignLanguageTab from "../../components/admin/system-overview/PulseSystemDesignLanguageTab";
 import AuntEdnaIntegrationStrategyTab from "../../components/admin/system-overview/AuntEdnaIntegrationStrategyTab";
@@ -140,6 +146,9 @@ const SYSTEM_TABS: SystemTab[] = [
       "executive-summary",
       "ecosystem-map",
       "product-handbooks",
+      "quicklifts-profile-health-system",
+      "quicklifts-profile-health-story-spec",
+      "quicklifts-profile-health-snapshot-contract",
       "pulse-club-activation-architecture",
       "smart-routes-v1-architecture",
       "shared-link-preview-strategy",
@@ -183,6 +192,8 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-runtime-architecture",
       "pulsecheck-state-signal-layer",
       "pulsecheck-checkin-signal-layer-integration-spec",
+      "pulsecheck-daily-task-training-plan-alignment-spec",
+      "pulsecheck-training-plan-authoring-spec",
       "pulsecheck-health-chat-architecture",
       "pulsecheck-athlete-health-context-snapshot-spec",
       "pulsecheck-health-context-source-record-spec",
@@ -1278,6 +1289,12 @@ const SystemOverviewPage: React.FC = () => {
       case "pulsecheck-checkin-signal-layer-integration-spec":
         return <PulseCheckCheckInSignalLayerIntegrationSpecTab />;
 
+      case "pulsecheck-daily-task-training-plan-alignment-spec":
+        return <PulseCheckDailyTaskTrainingPlanAlignmentSpecTab />;
+
+      case "pulsecheck-training-plan-authoring-spec":
+        return <PulseCheckTrainingPlanAuthoringSpecTab />;
+
       case "pulsecheck-health-chat-architecture":
         return <PulseCheckHealthChatArchitectureTab />;
 
@@ -1394,6 +1411,15 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-profile-snapshot-export-spec":
         return <PulseCheckProfileSnapshotExportSpecTab />;
+
+      case "quicklifts-profile-health-system":
+        return <QuickLiftsProfileHealthSystemTab />;
+
+      case "quicklifts-profile-health-story-spec":
+        return <QuickLiftsProfileHealthStorySpecTab />;
+
+      case "quicklifts-profile-health-snapshot-contract":
+        return <QuickLiftsProfileHealthSnapshotContractTab />;
 
       case "pulsecheck-vision-pro-immersive-tests":
         return <PulseCheckVisionProImmersiveTestsTab />;

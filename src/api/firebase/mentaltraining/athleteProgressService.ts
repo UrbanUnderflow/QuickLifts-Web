@@ -30,6 +30,7 @@ import { bootstrapTaxonomyProfile, deriveTaxonomyProfile, prescribeNextSession }
 import type { SimSessionRecord } from './taxonomy';
 import { TaxonomyModifier } from './taxonomy';
 import { profileSnapshotService } from './profileSnapshotService';
+import { trainingPlanAuthoringService } from './trainingPlanAuthoringService';
 const profileSnapshotRuntime = require('./profileSnapshotRuntime');
 
 const COLLECTION = 'athlete-mental-progress';
@@ -37,6 +38,25 @@ const PROFILE_VERSION: string = profileSnapshotRuntime.PROFILE_VERSION;
 
 function humanizeTaxonomyLabel(value: string): string {
   return value.split('_').join(' ');
+}
+
+function resolveLocalTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+function resolveLocalSourceDate(timestamp = Date.now(), timezone = resolveLocalTimezone()): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  return formatter.format(new Date(timestamp));
 }
 
 // ============================================================================
@@ -204,6 +224,14 @@ export const athleteProgressService = {
         sourceEventId: `baseline_assessment:${athleteId}:${fullAssessment.completedAt}`,
       })
     );
+    await trainingPlanAuthoringService.maybeAuthorPrimaryPlan({
+      athleteId,
+      profile: updatedProgress.taxonomyProfile,
+      hasBaselineAssessment: true,
+      activeProgram: updatedProgress.activeProgram,
+      sourceDate: resolveLocalSourceDate(now),
+      timezone: resolveLocalTimezone(),
+    });
     return updatedProgress;
   },
 
@@ -382,7 +410,16 @@ export const athleteProgressService = {
     };
 
     await updateDoc(doc(db, COLLECTION, athleteId), sanitizeFirestoreValue(updates));
-    return { ...progress, ...updates };
+    const nextProgress = { ...progress, ...updates };
+    await trainingPlanAuthoringService.maybeAuthorPrimaryPlan({
+      athleteId,
+      profile: nextProgress.taxonomyProfile,
+      hasBaselineAssessment: Boolean(nextProgress.baselineAssessment),
+      activeProgram: nextProgress.activeProgram,
+      sourceDate: resolveLocalSourceDate(now),
+      timezone: resolveLocalTimezone(),
+    });
+    return nextProgress;
   },
 
   /**

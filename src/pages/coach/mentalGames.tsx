@@ -82,6 +82,7 @@ import {
   RecommendationCard,
   CurriculumProgressCard,
 } from '../../components/mentaltraining';
+import { CoachPrimaryPlanReviewModal } from '../../components/coach/CoachPrimaryPlanReviewModal';
 import { TrialType } from '../../api/firebase/mentaltraining/taxonomy';
 
 interface AthleteWithProgress {
@@ -489,6 +490,7 @@ const CoachMentalTraining: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | undefined>();
+  const [selectedPrimaryPlanAthleteId, setSelectedPrimaryPlanAthleteId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('recommendations');
   const [playingExercise, setPlayingExercise] = useState<SimModule | null>(null);
   const [queueingVisionProKey, setQueueingVisionProKey] = useState<string | null>(null);
@@ -1050,6 +1052,10 @@ const CoachMentalTraining: React.FC = () => {
     setShowAssignModal(true);
   };
 
+  const handleReviewPrimaryPlan = useCallback((athleteId: string) => {
+    setSelectedPrimaryPlanAthleteId(athleteId);
+  }, []);
+
   const openManualAssignmentForAthlete = useCallback((athleteId: string) => {
     setSelectedAthleteId(athleteId);
     setShowAssignModal(true);
@@ -1559,13 +1565,22 @@ const CoachMentalTraining: React.FC = () => {
                     </div>
 
                     {/* Actions */}
-                    <button
-                      onClick={() => handleAssignToAthlete(athlete.id)}
-                      disabled={athleteNeedsBaseline(athlete)}
-                      className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black font-medium hover:bg-[#c8e40e] transition-colors disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
-                    >
-                      {athleteNeedsBaseline(athlete) ? 'Baseline Locked' : 'Assign'}
-                    </button>
+                    <div className="flex flex-col gap-2 shrink-0">
+                      <button
+                        onClick={() => handleReviewPrimaryPlan(athlete.id)}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-zinc-700 bg-zinc-900/70 text-zinc-200 font-medium hover:border-[#E0FE10]/40 hover:text-[#E0FE10] transition-colors"
+                      >
+                        <Eye className="w-4 h-4" />
+                        Review Plan
+                      </button>
+                      <button
+                        onClick={() => handleAssignToAthlete(athlete.id)}
+                        disabled={athleteNeedsBaseline(athlete)}
+                        className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black font-medium hover:bg-[#c8e40e] transition-colors disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                      >
+                        {athleteNeedsBaseline(athlete) ? 'Baseline Locked' : 'Assign'}
+                      </button>
+                    </div>
                   </motion.div>
                 ))}
               </div>
@@ -2499,6 +2514,24 @@ const CoachMentalTraining: React.FC = () => {
               console.error('Failed to refresh Nora daily assignments after manual assign:', err)
             );
           }
+        }}
+      />
+
+      <CoachPrimaryPlanReviewModal
+        isOpen={selectedPrimaryPlanAthleteId !== null}
+        athlete={selectedPrimaryPlanAthleteId ? athletes.find((athlete) => athlete.id === selectedPrimaryPlanAthleteId) || null : null}
+        coachId={coachProfile?.id || currentUser?.id || ''}
+        coachName={currentUser?.displayName || currentUser?.username}
+        onClose={() => setSelectedPrimaryPlanAthleteId(null)}
+        onPlanChanged={(result) => {
+          showToast({
+            message:
+              result.action === 'superseded'
+                ? 'Primary plan replaced and superseded successfully.'
+                : result.action === 'authored'
+                  ? 'Primary plan authored successfully.'
+                  : 'No new primary plan was authored.',
+          });
         }}
       />
 
