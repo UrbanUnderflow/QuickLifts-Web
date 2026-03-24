@@ -11,6 +11,63 @@ Use this document when you want another machine to:
 
 This document intentionally lists secret names, env keys, and verification commands, but it does not contain actual secret values.
 
+## Fastest Cross-Machine Handoff
+
+If the new machine does not already have GCP access or local env configured, use the encrypted setup bundle flow first.
+
+On the source machine:
+
+```bash
+export SETUP_BUNDLE_PASSPHRASE='<ask-owner-for-passphrase>'
+npm run machine:setup:export
+```
+
+That writes an encrypted bundle to:
+
+```bash
+.setup/local-machine-setup.bundle.enc.json
+```
+
+Move that encrypted file to the new machine using a secure transfer method such as:
+
+- `scp`
+- AirDrop
+- a private cloud drive/folder you control
+- a password manager secure document
+
+Do not commit the bundle into the repo, paste it into markdown, or embed it inside `systemOverview.tsx`.
+
+On the destination machine:
+
+```bash
+export SETUP_BUNDLE_PASSPHRASE='<ask-owner-for-passphrase>'
+npm run machine:setup:import
+npm run test:e2e:bootstrap:check
+npm run test:e2e:auth
+source .playwright/bootstrap.env
+```
+
+The passphrase should not be stored in the repo, docs, or bundle metadata.
+The receiving agent should ask the human operator for the passphrase at setup time.
+
+What the encrypted bundle can carry:
+
+- local `.env.local` values that are present on the source machine
+- a resolved `PLAYWRIGHT_BOOTSTRAP_JSON` payload so the new machine does not need initial Secret Manager access just to get started
+- optional Google application credentials content when `GOOGLE_APPLICATION_CREDENTIALS` points to a readable file on the source machine
+
+Do not commit `.setup/` or `.local-secrets/`. They are local-only and gitignored.
+
+### Current Bundle Location On The Source Machine
+
+If the bundle has already been generated on the source machine, the default path is:
+
+```bash
+.setup/local-machine-setup.bundle.enc.json
+```
+
+That path is the handoff artifact the destination machine should receive first.
+
 ## Core Principle
 
 Do not copy these between machines:
@@ -215,6 +272,8 @@ These files are safe to generate locally and should stay local:
 
 - `.playwright/admin-storage-state.json`
 - `.playwright/bootstrap.env`
+- `.setup/local-machine-setup.bundle.enc.json`
+- `.local-secrets/google-application-credentials.json`
 
 These are generated from real credentials and bootstrap config on the current machine.
 
@@ -230,5 +289,5 @@ Use these together:
 ## Copy/Paste Prompt For Another Machine
 
 ```text
-Set up QuickLifts-Web on this machine using docs/testing/local-machine-setup.md and the Playwright Testing Strategy doc in System Overview. Make sure the machine has the local Firebase public env, Google Cloud Secret Manager access for PLAYWRIGHT_E2E_ADMIN_BOOTSTRAP, and working Firebase Admin credentials. Run node env-check.js, then npm run test:e2e:bootstrap:check, then npm run test:e2e:auth, source .playwright/bootstrap.env if it exists, and finish with a safe Playwright smoke run. Do not copy local storage-state files from another machine. If anything fails, report exactly which env key, IAM role, secret, or credential is missing.
+Set up QuickLifts-Web on this machine using docs/testing/local-machine-setup.md and the Playwright Testing Strategy doc in System Overview. If this machine is brand new, first request the encrypted setup bundle and ask the human operator for the setup-bundle passphrase. Do not assume the passphrase is stored anywhere in the repo or docs. Import the bundle, run node env-check.js, then npm run test:e2e:bootstrap:check, then npm run test:e2e:auth, source .playwright/bootstrap.env if it exists, and finish with a safe Playwright smoke run. If anything fails, report exactly which env key, IAM role, secret, credential, or passphrase step is missing.
 ```

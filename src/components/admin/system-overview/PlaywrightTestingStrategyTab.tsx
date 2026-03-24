@@ -12,6 +12,8 @@ const POSITION_ROWS = [
 const COMMAND_ROWS = [
   ['Install browser', '`npm run test:e2e:install`', 'Installs Chromium for Playwright.'],
   ['Check machine bootstrap readiness', '`npm run test:e2e:bootstrap:check`', 'Verifies local dev Firebase env, Secret Manager access, bootstrap payload validity, and Firebase custom-token minting before attempting auth capture.'],
+  ['Export encrypted machine setup bundle', '`npm run machine:setup:export`', 'Packages the current machine setup into an encrypted local bundle so a new machine can import the required env/bootstrap state.'],
+  ['Import encrypted machine setup bundle', '`npm run machine:setup:import`', 'Decrypts a transferred setup bundle, writes `.env.local`, restores any embedded credential file, and prepares the machine for the bootstrap check.'],
   ['Capture admin auth state', '`npm run test:e2e:auth`', 'Default behavior opens a browser for manual admin login; when Secret Manager bootstrap env is present it mints a fresh admin session automatically and saves `.playwright/admin-storage-state.json`.'],
   ['Grant dev admin from saved auth', '`npm run test:e2e:grant-admin`', 'Utility for local/dev admin bootstrap when needed.'],
   ['Run read-only smoke coverage', '`npm run test:e2e:smoke`', 'Runs only tests tagged `@smoke`, keeping the default pass on route/render validation without mutation paths.'],
@@ -177,13 +179,27 @@ const PlaywrightTestingStrategyTab: React.FC = () => {
             accent="blue"
             body={
               <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
-                {`export GOOGLE_SECRET_MANAGER_PROJECT_ID=<gcp-project-id>
-export PLAYWRIGHT_BOOTSTRAP_SECRET_NAME=PLAYWRIGHT_E2E_ADMIN_BOOTSTRAP
-npm run test:e2e:install
+                {`# First ask the owner for the bundle passphrase
+export SETUP_BUNDLE_PASSPHRASE=<ask-owner-for-passphrase>
+npm run machine:setup:import
 npm run test:e2e:bootstrap:check
 npm run test:e2e:auth
 source .playwright/bootstrap.env
 npm run test:e2e:smoke`}
+              </pre>
+            }
+          />
+          <InfoCard
+            title="Exact Import Prompt"
+            accent="purple"
+            body={
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
+                {`# First ask the owner for the bundle passphrase
+export SETUP_BUNDLE_PASSPHRASE=<ask-owner-for-passphrase>
+npm run machine:setup:import
+npm run test:e2e:bootstrap:check
+npm run test:e2e:auth
+source .playwright/bootstrap.env`}
               </pre>
             }
           />
@@ -196,14 +212,25 @@ npm run test:e2e:smoke`}
               '`npm run test:e2e:auth` now mints a fresh Firebase custom-token session from the bootstrap config and writes `.playwright/admin-storage-state.json` locally.',
               'If org/team ids are included in the secret, the command also writes `.playwright/bootstrap.env` so the machine can source consistent suite env vars.',
               'Use `docs/testing/local-machine-setup.md` as the central handoff runbook for another machine.',
+              'When a brand-new machine has none of the starting credentials, use the encrypted setup bundle export/import flow first.',
+              'Keep the encrypted setup bundle local at `.setup/local-machine-setup.bundle.enc.json`; do not commit it or embed it in handbook source files.',
             ]} />}
+          />
+          <InfoCard
+            title="Bundle Path"
+            accent="green"
+            body={
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
+                {`.setup/local-machine-setup.bundle.enc.json`}
+              </pre>
+            }
           />
           <InfoCard
             title="Copy/Paste Setup Prompt"
             accent="purple"
             body={
               <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
-                {`Set up Playwright E2E for this repo on this machine using the Secret Manager bootstrap flow already built into the project. Work in QuickLifts-Web. Verify Playwright browsers are installed, confirm the machine can read Google Cloud Secret Manager, export GOOGLE_SECRET_MANAGER_PROJECT_ID and PLAYWRIGHT_BOOTSTRAP_SECRET_NAME if they are missing, run npm run test:e2e:auth, source .playwright/bootstrap.env if it exists, then run a safe smoke pass. Do not copy a storage-state file from another machine. If the bootstrap secret is missing, tell me the exact JSON shape to create.`}
+                {`Set up Playwright E2E for this repo on this machine using docs/testing/local-machine-setup.md. If this machine is brand new, ask the source machine for the encrypted bundle at .setup/local-machine-setup.bundle.enc.json and ask the human operator for the passphrase before importing it. Do not assume the passphrase is stored anywhere in the repo or docs. Then run npm run machine:setup:import, npm run test:e2e:bootstrap:check, npm run test:e2e:auth, source .playwright/bootstrap.env if it exists, and finish with a safe smoke run. Do not copy a storage-state file from another machine. If access fails, report exactly which credential, IAM role, env key, secret, passphrase step, or imported file is missing.`}
               </pre>
             }
           />
@@ -269,7 +296,7 @@ npm run test:e2e:smoke -- tests/e2e/pulsecheck-onboarding-workspace.spec.ts`}
             accent="red"
             body={
               <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
-                {`Use docs/testing/local-machine-setup.md and the Playwright Testing Strategy doc in System Overview, especially the "Cross-Machine Bootstrap" and "GCP Access Setup" sections. Set up Google Cloud access for this machine with application-default credentials, verify the machine can read the Playwright bootstrap secret from Secret Manager, export GOOGLE_SECRET_MANAGER_PROJECT_ID and PLAYWRIGHT_BOOTSTRAP_SECRET_NAME, run npm run test:e2e:bootstrap:check, then npm run test:e2e:auth, source .playwright/bootstrap.env if it exists, and finish with a safe smoke run. If access fails, report exactly which credential, IAM role, env key, or secret is missing.`}
+                {`Use docs/testing/local-machine-setup.md and the Playwright Testing Strategy doc in System Overview, especially the "Cross-Machine Bootstrap" and "GCP Access Setup" sections. If this machine does not already have the local env and GCP bootstrap prerequisites, import the encrypted setup bundle first with npm run machine:setup:import. Then run npm run test:e2e:bootstrap:check, then npm run test:e2e:auth, source .playwright/bootstrap.env if it exists, and finish with a safe smoke run. If access fails, report exactly which credential, IAM role, env key, secret, or imported file is missing.`}
               </pre>
             }
           />

@@ -87,6 +87,8 @@
     "test:e2e:auth": "node scripts/save-playwright-admin-storage-state.cjs",
     "test:e2e:bootstrap:check": "node scripts/check-playwright-bootstrap.cjs",
     "test:e2e:grant-admin": "node scripts/grant-dev-admin-from-playwright-state.cjs",
+    "machine:setup:export": "node scripts/export-local-machine-setup.cjs",
+    "machine:setup:import": "node scripts/import-local-machine-setup.cjs",
     "test:group-meet": "node --test tests/api/group-meet/*.test.cjs",
     "test:pulsecheck:repair": "node --test tests/api/pulsecheck/repair-daily-assignment.test.cjs",
     "test:pulsecheck:runtime": "node --test tests/api/pulsecheck/submit-pulsecheck-checkin.runtime.test.cjs",

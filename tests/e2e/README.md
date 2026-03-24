@@ -67,6 +67,21 @@ After that, `npm run test:e2e` will automatically reuse the saved state.
 Do not copy `.playwright/admin-storage-state.json` between machines.
 Instead, store a small bootstrap JSON secret in Google Cloud Secret Manager and let this repo mint a fresh local session on each machine.
 
+If the destination machine does not already have GCP access, use the encrypted machine-setup bundle first:
+
+```bash
+# On the source machine
+export SETUP_BUNDLE_PASSPHRASE=<ask-owner-for-passphrase>
+npm run machine:setup:export
+
+# On the destination machine
+export SETUP_BUNDLE_PASSPHRASE=<ask-owner-for-passphrase>
+npm run machine:setup:import
+npm run test:e2e:bootstrap:check
+```
+
+Do not store the passphrase in the repo or docs. The receiving agent should ask the human operator for it during setup.
+
 Recommended secret payload:
 
 ```json

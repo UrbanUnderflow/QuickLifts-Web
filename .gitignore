@@ -34,3 +34,7 @@ serviceAccountKey.json
 playwright-report/
 test-results/
 .playwright/
+
+# Local machine handoff bundles and imported credentials
+.setup/
+.local-secrets/
