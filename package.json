@@ -85,6 +85,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install chromium",
     "test:e2e:auth": "node scripts/save-playwright-admin-storage-state.cjs",
+    "test:e2e:bootstrap:check": "node scripts/check-playwright-bootstrap.cjs",
     "test:e2e:grant-admin": "node scripts/grant-dev-admin-from-playwright-state.cjs",
     "test:group-meet": "node --test tests/api/group-meet/*.test.cjs",
     "test:pulsecheck:repair": "node --test tests/api/pulsecheck/repair-daily-assignment.test.cjs",

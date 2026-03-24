@@ -62,12 +62,55 @@ Then:
 
 After that, `npm run test:e2e` will automatically reuse the saved state.
 
+## Cross-machine bootstrap with Google Cloud Secret Manager
+
+Do not copy `.playwright/admin-storage-state.json` between machines.
+Instead, store a small bootstrap JSON secret in Google Cloud Secret Manager and let this repo mint a fresh local session on each machine.
+
+Recommended secret payload:
+
+```json
+{
+  "adminEmail": "admin@example.com",
+  "nextPath": "/admin/systemOverview#variant-registry",
+  "pulseCheckOrganizationId": "<org-id>",
+  "pulseCheckTeamId": "<team-id>",
+  "namespace": "e2e-pulsecheck"
+}
+```
+
+Then on the new machine:
+
+```bash
+export GOOGLE_SECRET_MANAGER_PROJECT_ID=<gcp-project-id>
+export PLAYWRIGHT_BOOTSTRAP_SECRET_NAME=PLAYWRIGHT_E2E_ADMIN_BOOTSTRAP
+npm run test:e2e:install
+npm run test:e2e:bootstrap:check
+npm run test:e2e:auth
+source .playwright/bootstrap.env
+```
+
+Notes:
+
+- `npm run test:e2e:bootstrap:check` is the quickest way to verify the machine has the required env, Secret Manager access, bootstrap payload, and Firebase custom-token minting ability.
+- `npm run test:e2e:auth` now supports Secret Manager bootstrap automatically when `PLAYWRIGHT_BOOTSTRAP_SECRET_NAME` is set.
+- The command still writes `.playwright/admin-storage-state.json` locally because Playwright needs a local storage-state file for reuse.
+- If the bootstrap secret includes org/team ids and namespace values, the command also writes `.playwright/bootstrap.env`.
+- The machine still needs Google Cloud access to read the secret. Prefer application-default credentials; only fall back to `GCP_SECRET_MANAGER_SERVICE_ACCOUNT_JSON` when necessary.
+- The broader handoff runbook now lives at `docs/testing/local-machine-setup.md`.
+
 ## Authenticated smoke run
 
 Provide one of:
 
 - `PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json`
 - `PLAYWRIGHT_REMOTE_LOGIN_TOKEN=<custom-token>`
+
+If you used the Secret Manager bootstrap flow above, the easiest path is:
+
+```bash
+source .playwright/bootstrap.env
+```
 
 Then run:
 
