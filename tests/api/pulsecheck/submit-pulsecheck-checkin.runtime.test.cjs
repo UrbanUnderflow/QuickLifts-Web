@@ -8,7 +8,7 @@ const configPath = path.join(repoRoot, 'netlify/functions/config/firebase.js');
 const profileRuntimePath = path.join(repoRoot, 'src/api/firebase/mentaltraining/profileSnapshotRuntime.js');
 const protocolRegistryRuntimePath = path.join(repoRoot, 'src/api/firebase/mentaltraining/protocolRegistryRuntime.js');
 
-function loadRuntimeHelpers() {
+function loadRuntimeHelpers({ profileRuntimeMock = {} } = {}) {
   delete require.cache[submitPath];
   delete require.cache[configPath];
   delete require.cache[profileRuntimePath];
@@ -35,7 +35,7 @@ function loadRuntimeHelpers() {
     id: profileRuntimePath,
     filename: profileRuntimePath,
     loaded: true,
-    exports: {},
+    exports: profileRuntimeMock,
   };
 
   require.cache[protocolRegistryRuntimePath] = {
@@ -51,31 +51,142 @@ function loadRuntimeHelpers() {
   return require(submitPath).runtimeHelpers;
 }
 
-function createFirestoreDb({ snapshot, existingAssignment = null }) {
+function loadSubmitModule({ db, decodedUid = 'athlete-1', profileRuntimeMock = {} }) {
+  delete require.cache[submitPath];
+  delete require.cache[configPath];
+  delete require.cache[profileRuntimePath];
+  delete require.cache[protocolRegistryRuntimePath];
+
+  const firestoreFn = () => db;
+  firestoreFn.FieldValue = {
+    serverTimestamp: () => 'server-timestamp',
+  };
+
+  require.cache[configPath] = {
+    id: configPath,
+    filename: configPath,
+    loaded: true,
+    exports: {
+      initializeFirebaseAdmin: () => {},
+      getFirebaseAdminApp: () => ({}),
+      admin: {
+        auth: () => ({
+          verifyIdToken: async () => ({ uid: decodedUid }),
+        }),
+        firestore: firestoreFn,
+      },
+      headers: {},
+    },
+  };
+
+  require.cache[profileRuntimePath] = {
+    id: profileRuntimePath,
+    filename: profileRuntimePath,
+    loaded: true,
+    exports: profileRuntimeMock,
+  };
+
+  require.cache[protocolRegistryRuntimePath] = {
+    id: protocolRegistryRuntimePath,
+    filename: protocolRegistryRuntimePath,
+    loaded: true,
+    exports: {
+      normalizeProtocolRecord: (record) => record,
+      listPulseCheckProtocolSeedRecords: () => [],
+    },
+  };
+
+  return require(submitPath);
+}
+
+function parseBody(response) {
+  assert.equal(response.statusCode, 200);
+  return JSON.parse(response.body);
+}
+
+function createFirestoreDb({ snapshot, existingAssignment = null, trainingPlans = [], snapshotOverrides = {} }) {
   const writes = {
     snapshots: [],
     assignments: [],
     revisions: [],
     progress: [],
+    trainingPlans: [],
+    checkIns: [],
+    assignmentEvents: [],
+    responsivenessProfiles: [],
   };
 
-  const emptyQueryResult = { docs: [] };
+  const emptyQueryResult = { docs: [], empty: true };
+  const trainingPlanStore = new Map((trainingPlans || []).map((plan) => [plan.id, plan]));
+  const assignmentStore = new Map();
+  if (existingAssignment) {
+    assignmentStore.set(existingAssignment.id, existingAssignment);
+  }
 
   return {
     writes,
+    batch() {
+      const operations = [];
+      return {
+        set(ref, data, options) {
+          operations.push({ type: 'set', ref, data, merge: Boolean(options && options.merge) });
+        },
+        delete(ref) {
+          operations.push({ type: 'delete', ref });
+        },
+        async commit() {
+          for (const operation of operations) {
+            if (operation.type === 'set') {
+              await operation.ref.set(operation.data, operation.merge ? { merge: true } : undefined);
+            } else if (operation.type === 'delete' && typeof operation.ref.delete === 'function') {
+              await operation.ref.delete();
+            }
+          }
+        },
+      };
+    },
     collection(name) {
       if (name === 'state-snapshots') {
         return {
           doc(id) {
             return {
               async get() {
-                if (id === snapshot.id) {
-                  return { exists: true, id, data: () => snapshot };
+                const writeSnapshot = writes.snapshots.find((entry) => entry.id === id)?.data;
+                const storedSnapshot = writeSnapshot || (id === snapshot.id ? snapshot : undefined) || snapshotOverrides[id];
+                if (storedSnapshot) {
+                  return { exists: true, id, data: () => storedSnapshot };
                 }
                 return { exists: false, id, data: () => undefined };
               },
               async set(data) {
                 writes.snapshots.push({ id, data });
+              },
+            };
+          },
+          where(field, operator, value) {
+            assert.equal(field, 'athleteId');
+            assert.equal(operator, '==');
+            const docs = [];
+            const primarySnapshot = snapshot?.athleteId === value ? [{ id: snapshot.id, data: snapshot }] : [];
+            const overrideSnapshots = Object.entries(snapshotOverrides || {})
+              .filter(([, data]) => data?.athleteId === value)
+              .map(([id, data]) => ({ id, data }));
+            const writtenSnapshots = writes.snapshots
+              .filter((entry) => entry.data?.athleteId === value)
+              .map((entry) => ({ id: entry.id, data: entry.data }));
+
+            primarySnapshot
+              .concat(overrideSnapshots)
+              .concat(writtenSnapshots)
+              .forEach((entry) => {
+                if (!docs.some((existing) => existing.id === entry.id)) {
+                  docs.push({ id: entry.id, data: () => entry.data });
+                }
+              });
+
+            return {
+              async get() {
+                return { empty: docs.length === 0, docs };
               },
             };
           },
@@ -87,12 +198,14 @@ function createFirestoreDb({ snapshot, existingAssignment = null }) {
           doc(id) {
             return {
               async get() {
-                if (existingAssignment && id === `${snapshot.athleteId}_${snapshot.sourceDate}`) {
-                  return { exists: true, id, data: () => existingAssignment };
+                const storedAssignment = assignmentStore.get(id);
+                if (storedAssignment) {
+                  return { exists: true, id, data: () => storedAssignment };
                 }
                 return { exists: false, id, data: () => undefined };
               },
               async set(data) {
+                assignmentStore.set(id, data);
                 writes.assignments.push({ id, data });
               },
               collection(childName) {
@@ -103,6 +216,173 @@ function createFirestoreDb({ snapshot, existingAssignment = null }) {
                       async set(data) {
                         writes.revisions.push({ revisionId, data });
                       },
+                    };
+                  },
+                };
+              },
+            };
+          },
+          where(field, operator, value) {
+            assert.equal(field, 'athleteId');
+            assert.equal(operator, '==');
+            const docs = Array.from(assignmentStore.entries())
+              .filter(([, assignment]) => assignment?.athleteId === value)
+              .map(([id, assignment]) => ({ id, data: () => assignment }));
+            return {
+              async get() {
+                return { empty: docs.length === 0, docs };
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-training-plans') {
+        return {
+          doc(id) {
+            return {
+              async get() {
+                const storedPlan = trainingPlanStore.get(id);
+                if (!storedPlan) {
+                  return { exists: false, id, data: () => undefined };
+                }
+                return { exists: true, id, data: () => storedPlan };
+              },
+              async set(data) {
+                const nextPlan = { ...(trainingPlanStore.get(id) || {}), ...data };
+                trainingPlanStore.set(id, nextPlan);
+                writes.trainingPlans.push({ id, data: nextPlan });
+              },
+            };
+          },
+          where(field, operator, value) {
+            assert.equal(field, 'athleteId');
+            assert.equal(operator, '==');
+            const plans = Array.from(trainingPlanStore.entries())
+              .filter(([, plan]) => plan.athleteId === value)
+              .map(([id, plan]) => ({ id, ...plan }));
+            return {
+              async get() {
+                return {
+                  docs: plans.map((plan) => ({ id: plan.id, data: () => plan })),
+                  empty: plans.length === 0,
+                };
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-assignment-events') {
+        return {
+          doc(id = `event-${writes.assignmentEvents.length + 1}`) {
+            return {
+              id,
+              async set(data) {
+                writes.assignmentEvents.push({ id, data });
+              },
+            };
+          },
+          where() {
+            return {
+              async get() {
+                return emptyQueryResult;
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-protocol-responsiveness-profiles') {
+        return {
+          doc(id) {
+            return {
+              async get() {
+                return { exists: false, id, data: () => undefined };
+              },
+              async set(data) {
+                writes.responsivenessProfiles.push({ id, data });
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-assignment-candidate-sets') {
+        return {
+          doc(id) {
+            return {
+              async set(data) {
+                writes.candidateSets = writes.candidateSets || [];
+                writes.candidateSets.push({ id, data });
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-protocols' || name === 'sim-modules') {
+        return {
+          async get() {
+            return emptyQueryResult;
+          },
+          doc(id) {
+            return {
+              async set() {
+                return undefined;
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'mental-check-ins') {
+        return {
+          doc(id) {
+            return {
+              collection(childName) {
+                assert.equal(childName, 'check-ins');
+                return {
+                  orderBy() {
+                    return this;
+                  },
+                  limit() {
+                    return this;
+                  },
+                  async get() {
+                    return {
+                      docs: [],
+                      empty: true,
+                    };
+                  },
+                  async add(data) {
+                    writes.checkIns.push({ userId: id, data });
+                    return { id: `check-in-${writes.checkIns.length}` };
+                  },
+                };
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'sim-sessions') {
+        return {
+          doc(id) {
+            return {
+              collection(childName) {
+                assert.equal(childName, 'sessions');
+                return {
+                  orderBy() {
+                    return this;
+                  },
+                  limit() {
+                    return this;
+                  },
+                  async get() {
+                    return {
+                      docs: [],
+                      empty: true,
                     };
                   },
                 };
@@ -135,8 +415,20 @@ function createFirestoreDb({ snapshot, existingAssignment = null }) {
         return {
           doc(id) {
             return {
+              async get() {
+                return { exists: false, id, data: () => undefined };
+              },
               async set(data) {
                 writes.progress.push({ id, data });
+              },
+              collection(childName) {
+                assert.equal(childName, 'check-ins');
+                return {
+                  async add(data) {
+                    writes.checkIns.push({ userId: id, data });
+                    return { id: `progress-check-in-${writes.checkIns.length}` };
+                  },
+                };
               },
             };
           },
@@ -194,7 +486,7 @@ function createResponsivenessDb() {
   };
 }
 
-function createMaterializationDb({ snapshot, simModules = [], protocols = [] }) {
+function createMaterializationDb({ snapshot, simModules = [], protocols = [], trainingPlans = [] }) {
   const writes = {
     snapshots: [],
     assignments: [],
@@ -202,9 +494,12 @@ function createMaterializationDb({ snapshot, simModules = [], protocols = [] }) 
     progress: [],
     responsivenessProfiles: [],
     candidateSets: [],
+    trainingPlans: [],
   };
 
   const emptyQueryResult = { empty: true, docs: [] };
+  const trainingPlanStore = new Map((trainingPlans || []).map((plan) => [plan.id, plan]));
+  const assignmentStore = new Map();
 
   function toDoc(id, data) {
     return {
@@ -268,9 +563,14 @@ function createMaterializationDb({ snapshot, simModules = [], protocols = [] }) 
           doc(id) {
             return {
               async get() {
+                const storedAssignment = assignmentStore.get(id);
+                if (storedAssignment) {
+                  return { exists: true, id, data: () => storedAssignment };
+                }
                 return { exists: false, id, data: () => undefined };
               },
               async set(data) {
+                assignmentStore.set(id, data);
                 writes.assignments.push({ id, data });
               },
               collection(childName) {
@@ -290,9 +590,51 @@ function createMaterializationDb({ snapshot, simModules = [], protocols = [] }) 
           where(field, operator, value) {
             assert.equal(field, 'athleteId');
             assert.equal(operator, '==');
+            const docs = Array.from(assignmentStore.entries())
+              .filter(([, assignment]) => assignment.athleteId === value)
+              .map(([id, assignment]) => toDoc(id, assignment));
             return {
               async get() {
-                return { empty: true, docs: [] };
+                return {
+                  empty: docs.length === 0,
+                  docs,
+                };
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-training-plans') {
+        return {
+          doc(id) {
+            return {
+              async get() {
+                const storedPlan = trainingPlanStore.get(id);
+                if (!storedPlan) {
+                  return { exists: false, id, data: () => undefined };
+                }
+                return { exists: true, id, data: () => storedPlan };
+              },
+              async set(data) {
+                const nextPlan = { ...(trainingPlanStore.get(id) || {}), ...data };
+                trainingPlanStore.set(id, nextPlan);
+                writes.trainingPlans.push({ id, data: nextPlan });
+              },
+            };
+          },
+          where(field, operator, value) {
+            assert.equal(field, 'athleteId');
+            assert.equal(operator, '==');
+            const plans = Array.from(trainingPlanStore.entries())
+              .filter(([, plan]) => plan.athleteId === value)
+              .map(([id, plan]) => ({ id, ...plan }));
+            return {
+              async get() {
+                return {
+                  empty: plans.length === 0,
+                  docs: plans.map((plan) => toDoc(plan.id, plan)),
+                };
               },
             };
           },
@@ -301,6 +643,15 @@ function createMaterializationDb({ snapshot, simModules = [], protocols = [] }) 
 
       if (name === 'pulsecheck-assignment-events') {
         return {
+          doc(id = `event-${writes.assignmentEvents?.length || 0}`) {
+            return {
+              id,
+              async set(data) {
+                writes.assignmentEvents = writes.assignmentEvents || [];
+                writes.assignmentEvents.push({ id, data });
+              },
+            };
+          },
           where(field, operator, value) {
             assert.equal(field, 'athleteId');
             assert.equal(operator, '==');
@@ -559,7 +910,7 @@ test('orchestratePostCheckIn falls back to a bounded sim when AI defers despite 
   assert.equal(assignment.legacyExerciseId, 'focus-noise-gate');
 });
 
-test('orchestratePostCheckIn replaces a stale deferred assignment when the planner selects a protocol candidate', async () => {
+test('orchestratePostCheckIn preserves a deferred assignment because deferred tasks are not mutable', async () => {
   const runtimeHelpers = loadRuntimeHelpers();
   const snapshot = {
     id: 'athlete-1_2026-03-20',
@@ -656,14 +1007,10 @@ test('orchestratePostCheckIn replaces a stale deferred assignment when the plann
   });
 
   assert.ok(assignment);
-  assert.equal(assignment.actionType, 'protocol');
-  assert.equal(assignment.status, 'assigned');
-  assert.equal(assignment.protocolId, 'protocol-perfect-execution-replay');
-  assert.equal(assignment.chosenCandidateId, 'athlete-1_2026-03-20_protocol-perfect-execution-replay');
-  assert.equal(db.writes.assignments.length, 1);
-  assert.equal(db.writes.revisions.length, 1);
-  assert.equal(db.writes.revisions[0].data.status, 'deferred');
-  assert.equal(db.writes.revisions[0].data.actionType, 'defer');
+  assert.equal(assignment.actionType, 'defer');
+  assert.equal(assignment.status, 'deferred');
+  assert.equal(db.writes.assignments.length, 0);
+  assert.equal(db.writes.revisions.length, 0);
 });
 
 test('rematerializeAssignmentFromSnapshot falls back to the bounded sim when the AI planner defers', async () => {
@@ -1336,4 +1683,426 @@ test('orchestratePostCheckIn can materialize a protocol alternative from a defer
   assert.equal(assignment.status, 'assigned');
   assert.equal(assignment.protocolLabel, 'Visualization Primer');
   assert.equal(assignment.legacyExerciseId, 'visualization-primer');
+});
+
+test('orchestratePostCheckIn materializes into an existing training plan step and carries plan metadata', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+  const snapshot = {
+    id: 'athlete-1_2026-03-20',
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-20',
+    sourceCheckInId: 'checkin-1',
+    overallReadiness: 'yellow',
+    confidence: 'medium',
+    recommendedRouting: 'sim_only',
+    readinessScore: 61,
+    supportFlag: false,
+  };
+  const assignmentId = `${snapshot.athleteId}_${snapshot.sourceDate}`;
+  const planStepId = 'training-plan-1_step_0001';
+  const trainingPlan = {
+    id: 'training-plan-1',
+    athleteId: 'athlete-1',
+    title: 'Steady Focus Build',
+    goal: 'Hold steady focus without forcing pace.',
+    planType: 'sim_focused',
+    status: 'active',
+    isPrimary: true,
+    progressMode: 'sessions',
+    targetCount: 5,
+    completedCount: 1,
+    steps: [
+      {
+        id: planStepId,
+        stepIndex: 1,
+        stepLabel: 'Endurance Lock',
+        stepStatus: 'planned',
+        actionType: 'sim',
+        exerciseId: 'endurance_lock',
+        linkedDailyTaskId: assignmentId,
+        linkedDailyTaskSourceDate: snapshot.sourceDate,
+        dueSourceDate: snapshot.sourceDate,
+        timezone: 'America/New_York',
+      },
+    ],
+    assignedBy: 'nora',
+    sourceDate: snapshot.sourceDate,
+    timezone: 'America/New_York',
+    createdAt: 1742420000000,
+    updatedAt: 1742420000000,
+  };
+  const db = createFirestoreDb({
+    snapshot,
+    trainingPlans: [trainingPlan],
+  });
+
+  const assignment = await runtimeHelpers.orchestratePostCheckIn({
+    db,
+    athleteId: 'athlete-1',
+    sourceCheckInId: 'checkin-1',
+    sourceStateSnapshotId: snapshot.id,
+    sourceCandidateSetId: 'candidate-set-1',
+    sourceDate: snapshot.sourceDate,
+    timezone: 'America/New_York',
+    progress: {
+      coachId: null,
+      activeProgram: {
+        recommendedSimId: 'endurance_lock',
+        recommendedLegacyExerciseId: 'focus-endurance-lock',
+        sessionType: 'training_rep',
+        durationMode: 'standard_rep',
+        durationSeconds: 480,
+        rationale: 'Keep the rep steady and build from there.',
+      },
+      taxonomyProfile: {
+        modifierScores: {
+          readiness: 61,
+        },
+      },
+    },
+    candidateSet: {
+      id: 'candidate-set-1',
+      candidates: [
+        {
+          id: 'athlete-1_2026-03-20_endurance-lock',
+          type: 'sim',
+          label: 'Endurance Lock',
+          actionType: 'sim',
+          rationale: 'Plan-backed steady-focus rep.',
+          simSpecId: 'endurance_lock',
+          legacyExerciseId: 'focus-endurance-lock',
+          sessionType: 'training_rep',
+          durationMode: 'standard_rep',
+          durationSeconds: 480,
+        },
+      ],
+      plannerEligible: true,
+    },
+    plannerDecision: {
+      decisionSource: 'ai',
+      selectedCandidateId: 'athlete-1_2026-03-20_endurance-lock',
+      selectedCandidateType: 'sim',
+      actionType: 'sim',
+      confidence: 'medium',
+      rationaleSummary: 'Use the existing focus build step.',
+      supportFlag: false,
+    },
+    liveProtocolRegistry: [],
+    liveSimRegistry: [],
+  });
+
+  assert.ok(assignment);
+  assert.equal(assignment.trainingPlanId, trainingPlan.id);
+  assert.equal(typeof assignment.trainingPlanStepId, 'string');
+  assert.equal(assignment.trainingPlanStepId.startsWith(trainingPlan.id), true);
+  assert.equal(typeof assignment.trainingPlanStepIndex, 'number');
+  assert.equal(assignment.trainingPlanStepLabel.length > 0, true);
+  assert.equal(assignment.trainingPlanIsPrimary, true);
+  assert.equal(assignment.timezone, 'America/New_York');
+  assert.equal(db.writes.trainingPlans.length > 0, true);
+  assert.equal(db.writes.trainingPlans[0].data.steps.some((step) => step.stepStatus === 'active_today'), true);
+  assert.equal(db.writes.trainingPlans[0].data.steps.some((step) => step.linkedDailyTaskId === assignmentId), true);
+});
+
+test('orchestratePostCheckIn does not rematerialize when coachFrozen blocks the assignment', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+  const snapshot = {
+    id: 'athlete-1_2026-03-21',
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-21',
+    sourceCheckInId: 'checkin-2',
+    overallReadiness: 'green',
+    confidence: 'medium',
+    recommendedRouting: 'sim_only',
+    readinessScore: 74,
+    supportFlag: false,
+  };
+  const existingAssignment = {
+    id: `${snapshot.athleteId}_${snapshot.sourceDate}`,
+    lineageId: `${snapshot.athleteId}_${snapshot.sourceDate}`,
+    revision: 1,
+    athleteId: 'athlete-1',
+    teamId: 'team-1',
+    teamMembershipId: 'membership-1',
+    sourceCheckInId: 'checkin-1',
+    sourceStateSnapshotId: 'athlete-1_2026-03-20',
+    sourceCandidateSetId: 'candidate-set-previous',
+    sourceDate: snapshot.sourceDate,
+    timezone: 'America/New_York',
+    status: 'assigned',
+    actionType: 'sim',
+    executionLock: {
+      coachFrozen: true,
+      lockedAt: 1742420000000,
+      lockedBy: 'coach-1',
+      lockedByRole: 'coach',
+      lockReason: 'Coach held today steady.',
+    },
+    createdAt: 1742420000000,
+    updatedAt: 1742420000000,
+  };
+  const db = createFirestoreDb({
+    snapshot,
+    existingAssignment,
+  });
+
+  const assignment = await runtimeHelpers.orchestratePostCheckIn({
+    db,
+    athleteId: 'athlete-1',
+    sourceCheckInId: 'checkin-2',
+    sourceStateSnapshotId: snapshot.id,
+    sourceCandidateSetId: 'candidate-set-2',
+    sourceDate: snapshot.sourceDate,
+    timezone: 'America/New_York',
+    progress: {
+      coachId: null,
+      activeProgram: {
+        recommendedSimId: 'noise_gate',
+        recommendedLegacyExerciseId: 'focus-noise-gate',
+        sessionType: 'training_rep',
+        durationMode: 'standard_rep',
+        durationSeconds: 480,
+      },
+      taxonomyProfile: {
+        modifierScores: {
+          readiness: 74,
+        },
+      },
+    },
+    candidateSet: {
+      id: 'candidate-set-2',
+      candidates: [],
+      plannerEligible: false,
+    },
+    plannerDecision: null,
+    liveProtocolRegistry: [],
+    liveSimRegistry: [],
+  });
+
+  assert.equal(assignment.id, existingAssignment.id);
+  assert.equal(db.writes.assignments.length, 0);
+});
+
+test('handler materializes against the athlete-local day before 4am and preserves timezone on the assignment', async () => {
+  const originalNow = Date.now;
+  const fixedNow = new Date('2026-03-20T03:30:00-04:00').getTime();
+  Date.now = () => fixedNow;
+
+  try {
+    const db = createFirestoreDb({
+      snapshot: {
+        id: 'athlete-1_2026-03-19',
+        athleteId: 'athlete-1',
+        sourceDate: '2026-03-19',
+        sourceCheckInId: 'checkin-rollover',
+        overallReadiness: 'yellow',
+        confidence: 'medium',
+        recommendedRouting: 'sim_only',
+        recommendedProtocolClass: 'none',
+        stateDimensions: {
+          activation: 58,
+          focusReadiness: 52,
+          emotionalLoad: 44,
+          cognitiveFatigue: 40,
+        },
+      },
+    });
+
+    const { handler } = loadSubmitModule({
+      db,
+      decodedUid: 'athlete-1',
+      profileRuntimeMock: {
+        PROFILE_VERSION: 'test-v1',
+        buildInitialAthleteProgress: (athleteId) => ({ athleteId }),
+        buildTaxonomyCheckInState: ({ readinessScore, moodWord }) => ({
+          readinessScore,
+          moodWord,
+        }),
+        deriveTaxonomyProfile: () => ({
+          modifierScores: {
+            readiness: 61,
+          },
+        }),
+        prescribeNextSession: () => ({
+          recommendedSimId: 'endurance_lock',
+          recommendedLegacyExerciseId: 'focus-endurance-lock',
+          sessionType: 'training_rep',
+          durationMode: 'standard_rep',
+          durationSeconds: 480,
+        }),
+      },
+    });
+
+    const response = parseBody(await handler({
+      httpMethod: 'POST',
+      headers: { authorization: 'Bearer token' },
+      body: JSON.stringify({
+        readinessScore: 4,
+        moodWord: 'okay',
+        timezone: 'America/New_York',
+      }),
+    }));
+
+    assert.equal(response.stateSnapshot.sourceDate, '2026-03-19');
+    assert.equal(response.dailyAssignment.sourceDate, '2026-03-19');
+    assert.equal(response.dailyAssignment.timezone, 'America/New_York');
+    assert.equal(db.writes.assignments[0].data.sourceDate, '2026-03-19');
+    assert.equal(db.writes.assignments[0].data.timezone, 'America/New_York');
+    assert.equal(db.writes.checkIns[0].data.date, '2026-03-19');
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test('handler materializes against the athlete-local day after 4am using the current timezone day', async () => {
+  const originalNow = Date.now;
+  const fixedNow = new Date('2026-03-20T05:15:00-04:00').getTime();
+  Date.now = () => fixedNow;
+
+  try {
+    const db = createFirestoreDb({
+      snapshot: {
+        id: 'athlete-1_2026-03-20',
+        athleteId: 'athlete-1',
+        sourceDate: '2026-03-20',
+        sourceCheckInId: 'checkin-rollover',
+        overallReadiness: 'yellow',
+        confidence: 'medium',
+        recommendedRouting: 'sim_only',
+        recommendedProtocolClass: 'none',
+        stateDimensions: {
+          activation: 58,
+          focusReadiness: 52,
+          emotionalLoad: 44,
+          cognitiveFatigue: 40,
+        },
+      },
+    });
+
+    const { handler } = loadSubmitModule({
+      db,
+      decodedUid: 'athlete-1',
+      profileRuntimeMock: {
+        PROFILE_VERSION: 'test-v1',
+        buildInitialAthleteProgress: (athleteId) => ({ athleteId }),
+        buildTaxonomyCheckInState: ({ readinessScore, moodWord }) => ({
+          readinessScore,
+          moodWord,
+        }),
+        deriveTaxonomyProfile: () => ({
+          modifierScores: {
+            readiness: 61,
+          },
+        }),
+        prescribeNextSession: () => ({
+          recommendedSimId: 'endurance_lock',
+          recommendedLegacyExerciseId: 'focus-endurance-lock',
+          sessionType: 'training_rep',
+          durationMode: 'standard_rep',
+          durationSeconds: 480,
+        }),
+      },
+    });
+
+    const response = parseBody(await handler({
+      httpMethod: 'POST',
+      headers: { authorization: 'Bearer token' },
+      body: JSON.stringify({
+        readinessScore: 4,
+        moodWord: 'okay',
+        timezone: 'America/New_York',
+      }),
+    }));
+
+    assert.equal(response.stateSnapshot.sourceDate, '2026-03-20');
+    assert.equal(response.dailyAssignment.sourceDate, '2026-03-20');
+    assert.equal(response.dailyAssignment.timezone, 'America/New_York');
+    assert.equal(db.writes.assignments[0].data.sourceDate, '2026-03-20');
+    assert.equal(db.writes.assignments[0].data.timezone, 'America/New_York');
+    assert.equal(db.writes.checkIns[0].data.date, '2026-03-20');
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test('orchestratePostCheckIn preserves an existing completed assignment instead of rematerializing it', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+  const snapshot = {
+    id: 'athlete-1_2026-03-20',
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-20',
+    sourceCheckInId: 'checkin-2',
+    overallReadiness: 'green',
+    confidence: 'medium',
+    recommendedRouting: 'sim_only',
+    readinessScore: 74,
+    supportFlag: false,
+  };
+  const existingAssignment = {
+    id: `${snapshot.athleteId}_${snapshot.sourceDate}`,
+    lineageId: `${snapshot.athleteId}_${snapshot.sourceDate}`,
+    revision: 1,
+    athleteId: 'athlete-1',
+    teamId: 'team-1',
+    teamMembershipId: 'membership-1',
+    sourceCheckInId: 'checkin-1',
+    sourceStateSnapshotId: 'athlete-1_2026-03-19',
+    sourceCandidateSetId: 'candidate-set-previous',
+    sourceDate: snapshot.sourceDate,
+    timezone: 'America/New_York',
+    status: 'completed',
+    actionType: 'sim',
+    completionSummary: {
+      primaryMetric: {
+        key: 'focus_hold',
+        label: 'Focus Hold',
+        value: 84,
+        unit: '%',
+      },
+      noraTakeaway: 'Already finished.',
+    },
+    createdAt: 1742420000000,
+    updatedAt: 1742420600000,
+  };
+  const db = createFirestoreDb({
+    snapshot,
+    existingAssignment,
+  });
+
+  const assignment = await runtimeHelpers.orchestratePostCheckIn({
+    db,
+    athleteId: 'athlete-1',
+    sourceCheckInId: 'checkin-2',
+    sourceStateSnapshotId: snapshot.id,
+    sourceCandidateSetId: 'candidate-set-2',
+    sourceDate: snapshot.sourceDate,
+    timezone: 'America/New_York',
+    progress: {
+      coachId: null,
+      activeProgram: {
+        recommendedSimId: 'noise_gate',
+        recommendedLegacyExerciseId: 'focus-noise-gate',
+        sessionType: 'training_rep',
+        durationMode: 'standard_rep',
+        durationSeconds: 480,
+      },
+      taxonomyProfile: {
+        modifierScores: {
+          readiness: 74,
+        },
+      },
+    },
+    candidateSet: {
+      id: 'candidate-set-2',
+      candidates: [],
+      plannerEligible: false,
+    },
+    plannerDecision: null,
+    liveProtocolRegistry: [],
+    liveSimRegistry: [],
+  });
+
+  assert.equal(assignment.id, existingAssignment.id);
+  assert.equal(assignment.status, 'completed');
+  assert.equal(db.writes.assignments.length, 0);
 });

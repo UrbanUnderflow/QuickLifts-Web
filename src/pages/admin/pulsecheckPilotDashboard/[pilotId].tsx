@@ -99,6 +99,28 @@ const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 const formatAverage = (value: number) => value.toFixed(1);
 const toScopedPercent = (numerator: number, denominator: number) => (denominator > 0 ? (numerator / denominator) * 100 : 0);
 const normalizeInvitePreviewValue = (value: string) => value.replace(/\r\n/g, '\n').trim();
+const inviteStatusLabel = (status: PulseCheckInviteLink['status']) => {
+  switch (status) {
+    case 'redeemed':
+      return 'Redeemed';
+    case 'revoked':
+      return 'Deactivated';
+    case 'active':
+    default:
+      return 'Active';
+  }
+};
+const inviteStatusClassName = (status: PulseCheckInviteLink['status']) => {
+  switch (status) {
+    case 'redeemed':
+      return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100';
+    case 'revoked':
+      return 'border-rose-400/20 bg-rose-400/10 text-rose-100';
+    case 'active':
+    default:
+      return 'border-cyan-400/20 bg-cyan-400/10 text-cyan-100';
+  }
+};
 const normalizeRequiredConsentDraft = (consent: PulseCheckRequiredConsentDocument, index: number): PulseCheckRequiredConsentDocument => ({
   id: consent.id.trim() || `consent-${index + 1}`,
   title: consent.title.trim(),
@@ -283,6 +305,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [pageMessage, setPageMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
   const [cohortFilter, setCohortFilter] = useState('');
+  const [inviteCohortId, setInviteCohortId] = useState('');
+  const [athleteCohortDrafts, setAthleteCohortDrafts] = useState<Record<string, string>>({});
   const [editingHypotheses, setEditingHypotheses] = useState<Record<string, PulseCheckPilotHypothesis>>({});
   const [inviteConfigDraft, setInviteConfigDraft] = useState<PulseCheckPilotInviteConfig | null>(null);
   const [requiredConsentDrafts, setRequiredConsentDrafts] = useState<PulseCheckRequiredConsentDocument[]>([]);
@@ -296,7 +320,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [seedingDefaults, setSeedingDefaults] = useState(false);
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
+  const [deletingInviteId, setDeletingInviteId] = useState<string | null>(null);
   const [unenrollingAthleteId, setUnenrollingAthleteId] = useState<string | null>(null);
+  const [savingAthleteCohortId, setSavingAthleteCohortId] = useState<string | null>(null);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [demoModeEnabled, setDemoModeEnabled] = useState(false);
   const [generatingResearchReadout, setGeneratingResearchReadout] = useState(false);
@@ -341,6 +367,15 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         if (!current) return '';
         return nextDetail?.cohorts.some((cohort) => cohort.id === current) ? current : '';
       });
+      setInviteCohortId((current) => {
+        if (!current) return '';
+        return nextDetail?.cohorts.some((cohort) => cohort.id === current) ? current : '';
+      });
+      setAthleteCohortDrafts(
+        Object.fromEntries(
+          (nextDetail?.athletes || []).map((athlete) => [athlete.athleteId, athlete.pilotEnrollment.cohortId || ''])
+        )
+      );
       const hypothesisMap = Object.fromEntries((nextDetail?.hypotheses || []).map((hypothesis) => [hypothesis.id, cloneHypothesis(hypothesis)]));
       setEditingHypotheses(hypothesisMap);
       setInviteConfigDraft(nextDetail?.inviteConfig || null);
@@ -451,6 +486,13 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const selectedCohort = useMemo(
     () => availableCohorts.find((cohort) => cohort.id === cohortFilter) || null,
     [availableCohorts, cohortFilter]
+  );
+
+  const inviteScopeCohorts = detail?.cohorts || [];
+
+  const selectedInviteCohort = useMemo(
+    () => inviteScopeCohorts.find((cohort) => cohort.id === inviteCohortId) || null,
+    [inviteCohortId, inviteScopeCohorts]
   );
 
   useEffect(() => {
@@ -612,25 +654,55 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     return `H${nextNumericCode}`;
   }, [detail?.hypotheses]);
 
-  const scopedActiveInvites = useMemo(() => {
+  const scopedInvites = useMemo(() => {
     if (!detail) return [] as PulseCheckInviteLink[];
     return inviteLinks.filter((invite) => {
-      if (invite.status !== 'active') return false;
       if (invite.inviteType !== 'team-access') return false;
       if (invite.teamMembershipRole !== 'athlete') return false;
       if ((invite.pilotId || '') !== detail.pilot.id) return false;
-      if (selectedCohort) {
-        return (invite.cohortId || '') === selectedCohort.id;
+      if (selectedInviteCohort) {
+        return (invite.cohortId || '') === selectedInviteCohort.id;
       }
       return !(invite.cohortId || '');
     });
-  }, [detail, inviteLinks, selectedCohort]);
+  }, [detail, inviteLinks, selectedInviteCohort]);
 
-  const scopedInvite = scopedActiveInvites?.[0] || null;
+  const scopedActiveInvites = useMemo(
+    () => scopedInvites.filter((invite) => invite.status === 'active'),
+    [scopedInvites]
+  );
+  const scopedRedeemedInvites = useMemo(
+    () => scopedInvites.filter((invite) => invite.status === 'redeemed'),
+    [scopedInvites]
+  );
+  const scopedRevokedInvites = useMemo(
+    () => scopedInvites.filter((invite) => invite.status === 'revoked'),
+    [scopedInvites]
+  );
+
+  const scopedInvite = scopedActiveInvites?.[0] || scopedInvites?.[0] || null;
   const scopedInviteDiagnostic = useMemo(
     () => analyzePulseCheckInviteOneLink(scopedInvite?.activationUrl || ''),
     [scopedInvite?.activationUrl]
   );
+  const scopedInviteSummary = useMemo(() => {
+    if (!scopedInvites.length) {
+      return 'No invite links exist for this scope yet.';
+    }
+
+    const segments: string[] = [];
+    if (scopedActiveInvites.length > 0) {
+      segments.push(`${scopedActiveInvites.length} active`);
+    }
+    if (scopedRedeemedInvites.length > 0) {
+      segments.push(`${scopedRedeemedInvites.length} redeemed`);
+    }
+    if (scopedRevokedInvites.length > 0) {
+      segments.push(`${scopedRevokedInvites.length} deactivated`);
+    }
+
+    return `${segments.join(', ')} invite link${scopedInvites.length === 1 ? '' : 's'} currently visible for this scope.`;
+  }, [scopedActiveInvites.length, scopedInvites.length, scopedRedeemedInvites.length, scopedRevokedInvites.length]);
 
   const inviteConfigSource = useMemo(() => {
     if (!detail) {
@@ -895,21 +967,21 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     try {
       if (demoModeEnabled) {
         const createdInvite = pulseCheckPilotDashboardService.createDemoInviteLink({
-            pilotId: detail.pilot.id,
-            pilotName: detail.pilot.name,
-            cohortId: selectedCohort?.id || '',
-            cohortName: selectedCohort?.name || '',
-            createdByUserId: currentUser?.id || '',
-            createdByEmail: currentUser?.email || '',
-          });
+          pilotId: detail.pilot.id,
+          pilotName: detail.pilot.name,
+          cohortId: selectedInviteCohort?.id || '',
+          cohortName: selectedInviteCohort?.name || '',
+          createdByUserId: currentUser?.id || '',
+          createdByEmail: currentUser?.email || '',
+        });
         setInviteLinks(pulseCheckPilotDashboardService.listDemoInviteLinks());
         if (createdInvite?.activationUrl) {
           await navigator.clipboard.writeText(createdInvite.activationUrl);
         }
         setPageMessage({
           type: 'success',
-          text: selectedCohort
-            ? `Pilot share link for ${selectedCohort.name} was created and copied.`
+          text: selectedInviteCohort
+            ? `Pilot share link for ${selectedInviteCohort.name} was created and copied.`
             : 'Pilot athlete share link was created and copied.',
         });
         return;
@@ -922,8 +994,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         revokeExistingMatchingLinks: false,
         pilotId: detail.pilot.id,
         pilotName: detail.pilot.name,
-        cohortId: selectedCohort?.id || '',
-        cohortName: selectedCohort?.name || '',
+        cohortId: selectedInviteCohort?.id || '',
+        cohortName: selectedInviteCohort?.name || '',
         createdByUserId: currentUser?.id || '',
         createdByEmail: currentUser?.email || '',
       });
@@ -937,8 +1009,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
       setPageMessage({
         type: 'success',
-        text: selectedCohort
-          ? `Pilot share link for ${selectedCohort.name} was created and copied.`
+        text: selectedInviteCohort
+          ? `Pilot share link for ${selectedInviteCohort.name} was created and copied.`
           : 'Pilot athlete share link was created and copied.',
       });
     } catch (inviteError) {
@@ -977,6 +1049,38 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
+  const handleDeletePilotInviteLink = async (invite: PulseCheckInviteLink) => {
+    const confirmed = window.confirm(
+      invite.status === 'redeemed'
+        ? 'Delete this redeemed invite link from the dashboard? This only removes the record from admin view.'
+        : 'Delete this deactivated invite link from the dashboard? This only removes the record from admin view.'
+    );
+    if (!confirmed) return;
+
+    setDeletingInviteId(invite.id);
+    setPageMessage(null);
+    try {
+      if (demoModeEnabled) {
+        pulseCheckPilotDashboardService.deleteDemoInviteLink(invite.id);
+        setInviteLinks(pulseCheckPilotDashboardService.listDemoInviteLinks());
+      } else {
+        await pulseCheckProvisioningService.deleteInviteLink(invite.id);
+        const refreshedInviteLinks = await pulseCheckProvisioningService.listTeamInviteLinks(detail?.team.id || '');
+        setInviteLinks(refreshedInviteLinks);
+      }
+
+      setPageMessage({
+        type: 'success',
+        text: invite.status === 'redeemed' ? 'Redeemed invite link deleted.' : 'Deactivated invite link deleted.',
+      });
+    } catch (deleteError) {
+      console.error('[PulseCheckPilotDashboard] Failed to delete pilot invite link:', deleteError);
+      setPageMessage({ type: 'error', text: 'Failed to delete pilot invite link.' });
+    } finally {
+      setDeletingInviteId(null);
+    }
+  };
+
   const handleUnenrollAthlete = async (athlete: PilotDashboardDetail['athletes'][number]) => {
     if (!detail) return;
 
@@ -1009,6 +1113,49 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       setPageMessage({ type: 'error', text: unenrollError?.message || 'Failed to unenroll athlete from this pilot.' });
     } finally {
       setUnenrollingAthleteId(null);
+    }
+  };
+
+  const handleSaveAthleteCohort = async (athlete: PilotDashboardDetail['athletes'][number]) => {
+    if (!detail) return;
+
+    const nextCohortId = athleteCohortDrafts[athlete.athleteId] ?? athlete.pilotEnrollment.cohortId ?? '';
+    const currentCohortId = athlete.pilotEnrollment.cohortId || '';
+    if (nextCohortId === currentCohortId) return;
+
+    setSavingAthleteCohortId(athlete.athleteId);
+    setPageMessage(null);
+    try {
+      if (demoModeEnabled) {
+        pulseCheckPilotDashboardService.assignDemoAthleteToCohort({
+          athleteId: athlete.athleteId,
+          cohortId: nextCohortId,
+          actorUserId: currentUser?.id || '',
+          actorEmail: currentUser?.email || '',
+        });
+      } else {
+        await pulseCheckProvisioningService.assignAthleteToPilotCohort({
+          pilotId: detail.pilot.id,
+          athleteId: athlete.athleteId,
+          cohortId: nextCohortId,
+          actorUserId: currentUser?.id || '',
+          actorEmail: currentUser?.email || '',
+        });
+      }
+
+      await load('refresh');
+      const cohortName = detail.cohorts.find((cohort) => cohort.id === nextCohortId)?.name || '';
+      setPageMessage({
+        type: 'success',
+        text: cohortName
+          ? `${athlete.displayName} is now assigned to ${cohortName}.`
+          : `${athlete.displayName} was moved out of a cohort and is now unassigned.`,
+      });
+    } catch (assignmentError: any) {
+      console.error('[PulseCheckPilotDashboard] Failed to update athlete cohort assignment:', assignmentError);
+      setPageMessage({ type: 'error', text: assignmentError?.message || 'Failed to update athlete cohort assignment.' });
+    } finally {
+      setSavingAthleteCohortId(null);
     }
   };
 
@@ -1409,7 +1556,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         <h2 className="text-lg font-semibold">Pilot Athlete Invite</h2>
                         <p className="mt-1 text-sm text-zinc-400">
                           Generate the PulseCheck athlete share link used in provisioning, but scoped directly to this pilot
-                          {selectedCohort ? ` and ${selectedCohort.name}.` : '.'}
+                          {selectedInviteCohort ? ` and ${selectedInviteCohort.name}.` : '.'}
                         </p>
                         <p className="mt-3 text-sm text-zinc-300">
                           Existing Pulse athletes should sign in and get attached to the pilot without replaying onboarding. New athletes should create an account and follow the mobile setup walkthrough.
@@ -1431,16 +1578,33 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                     </div>
 
                     <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-300">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Invite Scope</div>
-                      <div className="mt-2">
-                        {selectedCohort
-                          ? `Athletes joining through this link will enter ${detail.pilot.name} and land directly in ${selectedCohort.name}.`
-                          : `Athletes joining through this link will enter ${detail.pilot.name}. Apply a cohort filter first if you want a cohort-specific invite.`}
+                      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,320px),1fr] lg:items-start">
+                        <label className="space-y-2">
+                          <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Link cohort assignment</span>
+                          <select
+                            value={inviteCohortId}
+                            onChange={(event) => setInviteCohortId(event.target.value)}
+                            className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                          >
+                            <option value="">Whole pilot (no cohort)</option>
+                            {inviteScopeCohorts.map((cohort) => (
+                              <option key={cohort.id} value={cohort.id}>
+                                {cohort.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Invite Scope</div>
+                          <div className="mt-2">
+                            {selectedInviteCohort
+                              ? `Athletes joining through this link will enter ${detail.pilot.name} and land directly in ${selectedInviteCohort.name}.`
+                              : `Athletes joining through this link will enter ${detail.pilot.name} without a cohort assignment.`}
+                          </div>
+                        </div>
                       </div>
                       <div className="mt-3 text-xs text-zinc-500">
-                        {scopedActiveInvites.length > 0
-                          ? `${scopedActiveInvites.length} active invite link${scopedActiveInvites.length === 1 ? '' : 's'} currently available for this scope.`
-                          : 'No active invite links exist for this scope yet.'}
+                        {scopedInviteSummary}
                       </div>
                     </div>
 
@@ -1481,15 +1645,18 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       </div>
                     ) : null}
 
-                    {scopedActiveInvites.length > 0 ? (
+                    {scopedInvites.length > 0 ? (
                       <div className="mt-4 space-y-3">
-                        {scopedActiveInvites.map((invite, index) => (
+                        {scopedInvites.map((invite, index) => (
                           <div key={invite.id} className="rounded-2xl border border-white/5 bg-black/20 p-4">
                             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100">
-                                    {index === 0 ? 'Latest link' : `Link ${scopedActiveInvites.length - index}`}
+                                    {index === 0 ? 'Latest link' : `Link ${scopedInvites.length - index}`}
+                                  </span>
+                                  <span className={`rounded-full px-3 py-1 text-[11px] ${inviteStatusClassName(invite.status)}`}>
+                                    {inviteStatusLabel(invite.status)}
                                   </span>
                                   <span className={`rounded-full px-3 py-1 text-[11px] ${
                                     isPulseCheckInviteOneLink(invite.activationUrl)
@@ -1501,8 +1668,18 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                   <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">
                                     Created {formatTimeValue(invite.createdAt)}
                                   </span>
+                                  {invite.status === 'redeemed' && invite.redeemedAt ? (
+                                    <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                                      Redeemed {formatTimeValue(invite.redeemedAt)}
+                                    </span>
+                                  ) : null}
                                 </div>
                                 <div className="mt-3 break-all text-xs text-cyan-100">{invite.activationUrl}</div>
+                                {invite.status === 'redeemed' && invite.redeemedByEmail ? (
+                                  <div className="mt-2 text-xs text-zinc-400">
+                                    Redeemed by {invite.redeemedByEmail}
+                                  </div>
+                                ) : null}
                               </div>
                               <div className="flex flex-wrap gap-2">
                                 <button
@@ -1526,14 +1703,25 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                   <ExternalLink className="h-4 w-4" />
                                   Open
                                 </a>
-                                <button
-                                  onClick={() => void handleRevokePilotInviteLink(invite)}
-                                  disabled={revokingInviteId === invite.id}
-                                  className="inline-flex items-center gap-2 rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                  {revokingInviteId === invite.id ? 'Deactivating...' : 'Deactivate'}
-                                </button>
+                                {invite.status === 'active' ? (
+                                  <button
+                                    onClick={() => void handleRevokePilotInviteLink(invite)}
+                                    disabled={revokingInviteId === invite.id}
+                                    className="inline-flex items-center gap-2 rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    {revokingInviteId === invite.id ? 'Deactivating...' : 'Deactivate'}
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => void handleDeletePilotInviteLink(invite)}
+                                    disabled={deletingInviteId === invite.id}
+                                    className="inline-flex items-center gap-2 rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    {deletingInviteId === invite.id ? 'Deleting...' : 'Delete'}
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1949,7 +2137,28 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                   <div className="font-medium text-white">{athlete.displayName}</div>
                                   <div className="text-xs text-zinc-500">{athlete.email || athlete.athleteId}</div>
                                 </td>
-                                <td className="px-3 py-3 text-zinc-300">{athlete.cohort?.name || 'No cohort'}</td>
+                                <td className="px-3 py-3 text-zinc-300">
+                                  <div className="space-y-3">
+                                    <div>{athlete.cohort?.name || 'No cohort'}</div>
+                                    <select
+                                      value={athleteCohortDrafts[athlete.athleteId] ?? athlete.pilotEnrollment.cohortId ?? ''}
+                                      onChange={(event) =>
+                                        setAthleteCohortDrafts((current) => ({
+                                          ...current,
+                                          [athlete.athleteId]: event.target.value,
+                                        }))
+                                      }
+                                      className="w-full min-w-[180px] rounded-2xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-sm text-white"
+                                    >
+                                      <option value="">No cohort</option>
+                                      {detail.cohorts.map((cohort) => (
+                                        <option key={cohort.id} value={cohort.id}>
+                                          {cohort.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </td>
                                 <td className="px-3 py-3 text-zinc-300">{athlete.engineSummary.evidenceRecordCount}</td>
                                 <td className="px-3 py-3 text-zinc-300">{athlete.engineSummary.patternModelCount}</td>
                                 <td className="px-3 py-3 text-zinc-300">{athlete.engineSummary.recommendationProjectionCount}</td>
@@ -1963,6 +2172,18 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                     >
                                       Open athlete
                                     </Link>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleSaveAthleteCohort(athlete)}
+                                      disabled={
+                                        savingAthleteCohortId === athlete.athleteId ||
+                                        (athleteCohortDrafts[athlete.athleteId] ?? athlete.pilotEnrollment.cohortId ?? '') ===
+                                          (athlete.pilotEnrollment.cohortId || '')
+                                      }
+                                      className="text-emerald-200 transition hover:text-emerald-100 disabled:cursor-not-allowed disabled:text-zinc-500"
+                                    >
+                                      {savingAthleteCohortId === athlete.athleteId ? 'Saving cohort...' : 'Save cohort'}
+                                    </button>
                                     <button
                                       type="button"
                                       onClick={() => void handleUnenrollAthlete(athlete)}

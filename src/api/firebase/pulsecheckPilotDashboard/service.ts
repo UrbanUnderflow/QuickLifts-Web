@@ -164,6 +164,17 @@ const resolvePilotEffectiveStatus = (pilot: PulseCheckPilot): PulseCheckPilot['s
 
 const isActivePilotDashboardScope = (pilot: PulseCheckPilot) => resolvePilotEffectiveStatus(pilot) === 'active';
 
+const isPilotOperationallyActive = (
+  pilot: PulseCheckPilot,
+  cohorts: PulseCheckPilotCohort[] = [],
+  enrollments: PulseCheckPilotEnrollment[] = []
+) => {
+  if (isActivePilotDashboardScope(pilot)) return true;
+  if (enrollments.some((enrollment) => enrollment.status === 'active')) return true;
+  if (cohorts.some((cohort) => cohort.status === 'active')) return true;
+  return false;
+};
+
 const toHypothesis = (id: string, data: Record<string, any>): PulseCheckPilotHypothesis => ({
   id,
   pilotId: normalizeString(data.pilotId),
@@ -693,6 +704,19 @@ export const pulseCheckPilotDashboardService = {
     return pilotDashboardDemoMode.revokeInviteLink(inviteId);
   },
 
+  deleteDemoInviteLink(inviteId: string) {
+    return pilotDashboardDemoMode.deleteInviteLink(inviteId);
+  },
+
+  assignDemoAthleteToCohort(input: {
+    athleteId: string;
+    cohortId?: string;
+    actorUserId?: string;
+    actorEmail?: string;
+  }) {
+    return pilotDashboardDemoMode.assignAthleteToCohort(input);
+  },
+
   async listPilotHypotheses(pilotId: string): Promise<PulseCheckPilotHypothesis[]> {
     if (pilotDashboardDemoMode.isEnabled()) {
       return pilotDashboardDemoMode.getPilotDashboardDetail(pilotId)?.hypotheses || [];
@@ -992,15 +1016,17 @@ export const pulseCheckPilotDashboardService = {
       hypothesesByPilot.set(hypothesis.pilotId, current);
     });
 
+    const metadataActivePilotCount = pilots.filter((pilot) => isActivePilotDashboardScope(pilot)).length;
     const baseEntries = pilots
-      .filter((pilot) => isActivePilotDashboardScope(pilot))
       .map((pilot) => {
+        const pilotCohorts = cohortsByPilot.get(pilot.id) || [];
+        const pilotEnrollments = enrollmentsByPilot.get(pilot.id) || [];
+        if (!isPilotOperationallyActive(pilot, pilotCohorts, pilotEnrollments)) return null;
+
         const organization = organizationMap.get(pilot.organizationId);
         const team = teamMap.get(pilot.teamId);
         if (!organization || !team) return null;
 
-        const pilotCohorts = cohortsByPilot.get(pilot.id) || [];
-        const pilotEnrollments = enrollmentsByPilot.get(pilot.id) || [];
         const pilotHypotheses = hypothesesByPilot.get(pilot.id) || [];
         const activeEnrollments = pilotEnrollments.filter((enrollment) => enrollment.status === 'active');
         const hypothesisSummary = buildHypothesisSummary(pilotHypotheses);
@@ -1025,6 +1051,19 @@ export const pulseCheckPilotDashboardService = {
         };
       })
       .filter(Boolean) as Array<PilotDashboardDirectoryEntry & { _activeEnrollments: PulseCheckPilotEnrollment[] }>;
+
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      console.info('[PilotDashboard] Directory source counts', {
+        organizations: organizations.length,
+        teams: teams.length,
+        pilots: pilots.length,
+        metadataActivePilots: metadataActivePilotCount,
+        operationallyActivePilots: pilots.filter((pilot) =>
+          isPilotOperationallyActive(pilot, cohortsByPilot.get(pilot.id) || [], enrollmentsByPilot.get(pilot.id) || [])
+        ).length,
+        entriesAfterJoin: baseEntries.length,
+      });
+    }
 
     const enrichedEntries = await Promise.all(
       baseEntries.map(async (entry) => {
@@ -1051,7 +1090,7 @@ export const pulseCheckPilotDashboardService = {
       return pilotDashboardDemoMode.getPilotDashboardDetail(pilotId);
     }
     const pilot = await pulseCheckProvisioningService.getPilot(pilotId);
-    if (!pilot || !isActivePilotDashboardScope(pilot)) return null;
+    if (!pilot) return null;
 
     const [organization, team, cohorts, enrollments, teamMemberships, hypotheses] = await Promise.all([
       pulseCheckProvisioningService.getOrganization(pilot.organizationId),
@@ -1065,6 +1104,7 @@ export const pulseCheckPilotDashboardService = {
     if (!organization || !team) return null;
 
     const pilotCohorts = cohorts.filter((cohort) => cohort.pilotId === pilot.id);
+    if (!isPilotOperationallyActive(pilot, pilotCohorts, enrollments)) return null;
     const cohortMap = new Map(pilotCohorts.map((cohort) => [cohort.id, cohort]));
     const teamMembershipMap = new Map(teamMemberships.map((membership) => [membership.userId, membership]));
     const activeEnrollments = enrollments.filter((enrollment) => enrollment.status === 'active');
@@ -1141,7 +1181,7 @@ export const pulseCheckPilotDashboardService = {
       return pilotDashboardDemoMode.getPilotAthleteDetail(pilotId, athleteId);
     }
     const pilot = await pulseCheckProvisioningService.getPilot(pilotId);
-    if (!pilot || !isActivePilotDashboardScope(pilot)) return null;
+    if (!pilot) return null;
 
     const [organization, team, enrollment, cohorts, teamMemberships, engineSummary] = await Promise.all([
       pulseCheckProvisioningService.getOrganization(pilot.organizationId),
@@ -1152,10 +1192,12 @@ export const pulseCheckPilotDashboardService = {
       loadEngineSummaryForAthlete(athleteId),
     ]);
 
+    const pilotCohorts = cohorts.filter((entry) => entry.pilotId === pilotId);
+    if (!isPilotOperationallyActive(pilot, pilotCohorts, enrollment ? [enrollment] : [])) return null;
     if (!organization || !team || !enrollment || enrollment.status !== 'active') return null;
 
     const teamMembership = teamMemberships.find((membership) => membership.userId === athleteId) || null;
-    const cohort = cohorts.find((entry) => entry.pilotId === pilotId && entry.id === enrollment.cohortId) || null;
+    const cohort = pilotCohorts.find((entry) => entry.id === enrollment.cohortId) || null;
     const timelineItems = await loadAthleteTimelineItems(athleteId);
     const snapshotQuery = query(
       collection(db, ATHLETE_MENTAL_PROGRESS_COLLECTION, athleteId, PROFILE_SNAPSHOTS_SUBCOLLECTION),

@@ -475,6 +475,7 @@ export interface CompletePulseCheckAthleteOnboardingInput {
   teamMembershipId: string;
   consentVersion: string;
   baselinePathwayId: string;
+  completedConsentIds?: string[];
   researchConsentStatus?: PulseCheckResearchConsentStatus;
   researchConsentVersion?: string;
 }
@@ -484,6 +485,7 @@ export interface SavePulseCheckAthleteOnboardingProgressInput {
   entryOnboardingStep: PulseCheckAthleteEntryOnboardingStep;
   entryOnboardingName?: string;
   productConsentAccepted?: boolean;
+  completedConsentIds?: string[];
   researchConsentStatus?: PulseCheckResearchConsentStatus;
 }
 

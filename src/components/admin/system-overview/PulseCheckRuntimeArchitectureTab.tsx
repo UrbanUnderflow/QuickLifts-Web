@@ -1,9 +1,11 @@
 import React from 'react';
-import { Activity, AlertTriangle, ArrowRightLeft, Clock3, Cpu, GitBranch, ShieldAlert, Users, FileText, Radar, ClipboardCheck, TimerReset, Flag, Bot, TestTube2, Waypoints, ShieldCheck } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowRightLeft, Clock3, Cpu, GitBranch, ShieldAlert, Users, FileText, Radar, ClipboardCheck, TimerReset, Flag, Bot, TestTube2, Waypoints, ShieldCheck, Layers, BookOpen } from 'lucide-react';
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
 import ArtifactPageLibrary, { ArtifactPageEntry } from './ArtifactPageLibrary';
 import PulseCheckStateSignalLayerTab from './PulseCheckStateSignalLayerTab';
 import PulseCheckCheckInSignalLayerIntegrationSpecTab from './PulseCheckCheckInSignalLayerIntegrationSpecTab';
+import PulseCheckDailyTaskTrainingPlanAlignmentSpecTab from './PulseCheckDailyTaskTrainingPlanAlignmentSpecTab';
+import PulseCheckTrainingPlanAuthoringSpecTab from './PulseCheckTrainingPlanAuthoringSpecTab';
 import PulseCheckStateSnapshotFreshnessPolicyTab from './PulseCheckStateSnapshotFreshnessPolicyTab';
 import PulseCheckPerformanceStateFlagDefinitionsTab from './PulseCheckPerformanceStateFlagDefinitionsTab';
 import PulseCheckNoraAssignmentRulesTab from './PulseCheckNoraAssignmentRulesTab';
@@ -289,6 +291,22 @@ const RUNTIME_STACK_PAGES: ArtifactPageEntry[] = [
     icon: ClipboardCheck,
     accent: '#22c55e',
     render: () => <PulseCheckCheckInSignalLayerIntegrationSpecTab />,
+  },
+  {
+    id: 'daily-task-training-plan-alignment',
+    label: 'Daily Task + Training Plan Alignment',
+    subtitle: 'Surface-coherence contract for DailyTask, TrainingPlan, lifecycle, and event truth.',
+    icon: Layers,
+    accent: '#8b5cf6',
+    render: () => <PulseCheckDailyTaskTrainingPlanAlignmentSpecTab />,
+  },
+  {
+    id: 'training-plan-authoring',
+    label: 'Training Plan Authoring Spec',
+    subtitle: 'How Nora authors longer-horizon blocks, archetypes, and step sequences.',
+    icon: BookOpen,
+    accent: '#38bdf8',
+    render: () => <PulseCheckTrainingPlanAuthoringSpecTab />,
   },
   {
     id: 'freshness-policy',

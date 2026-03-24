@@ -1,6 +1,7 @@
 const { initializeFirebaseAdmin, getFirebaseAdminApp, admin, headers } = require('./config/firebase');
 const profileSnapshotRuntime = require('../../src/api/firebase/mentaltraining/profileSnapshotRuntime.js');
 const protocolRegistryRuntime = require('../../src/api/firebase/mentaltraining/protocolRegistryRuntime.js');
+const trainingPlanAuthoringShared = require('../../src/api/firebase/mentaltraining/trainingPlanAuthoringShared.js');
 
 const RESPONSE_HEADERS = {
   ...headers,
@@ -15,6 +16,7 @@ const ASSIGNMENT_EVENTS_COLLECTION = 'pulsecheck-assignment-events';
 const ASSIGNMENT_REVISIONS_SUBCOLLECTION = 'revisions';
 const SNAPSHOTS_COLLECTION = 'state-snapshots';
 const ASSIGNMENT_CANDIDATE_SETS_COLLECTION = 'pulsecheck-assignment-candidate-sets';
+const TRAINING_PLANS_COLLECTION = 'pulsecheck-training-plans';
 const PROTOCOLS_COLLECTION = 'pulsecheck-protocols';
 const PROTOCOL_RESPONSIVENESS_COLLECTION = 'pulsecheck-protocol-responsiveness-profiles';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
@@ -22,6 +24,8 @@ const SIM_MODULES_COLLECTION = 'sim-modules';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CURRENT_RESPONSIVENESS_WINDOW_DAYS = 21;
 const DEGRADED_RESPONSIVENESS_WINDOW_DAYS = 45;
+const SOURCE_DATE_ROLLOVER_HOUR = 4;
+const PRIMARY_TRAINING_PLAN_ID_SUFFIX = 'primary-plan';
 
 const VALID_ROUTING = new Set([
   'protocol_only',
@@ -42,6 +46,14 @@ const VALID_PRIMARY_FACTORS = new Set([
   'cognitive_fatigue',
   'mixed',
 ]);
+
+const {
+  buildProgramPrescriptionId,
+  buildTrainingPlan,
+  resolveNextDuePlanStep,
+  resolvePlanAuthoringTrigger,
+  syncTrainingPlanProgression,
+} = trainingPlanAuthoringShared;
 
 function clamp(value, min = 0, max = 100) {
   return Math.max(min, Math.min(max, Math.round(value)));
@@ -76,6 +88,759 @@ function normalizeTag(value) {
   return typeof value === 'string'
     ? value.trim().toLowerCase().replace(/[\s-]+/g, '_')
     : '';
+}
+
+function normalizeTimezone(value) {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: value.trim() }).format(new Date());
+    return value.trim();
+  } catch (error) {
+    return undefined;
+  }
+}
+
+function formatSourceDateFromParts({ year, month, day }) {
+  return [
+    String(year).padStart(4, '0'),
+    String(month).padStart(2, '0'),
+    String(day).padStart(2, '0'),
+  ].join('-');
+}
+
+function shiftSourceDate(sourceDate, deltaDays) {
+  if (!isValidSourceDate(sourceDate) || !Number.isFinite(deltaDays)) {
+    return sourceDate;
+  }
+
+  const [year, month, day] = sourceDate.split('-').map((segment) => Number(segment));
+  const shifted = new Date(Date.UTC(year, month - 1, day + deltaDays));
+  return shifted.toISOString().slice(0, 10);
+}
+
+function resolveTimezoneDateParts(timestampMs, timezone) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone || 'UTC',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = formatter.formatToParts(new Date(timestampMs));
+  const partMap = parts.reduce((accumulator, part) => {
+    accumulator[part.type] = part.value;
+    return accumulator;
+  }, {});
+
+  return {
+    year: Number(partMap.year || 0),
+    month: Number(partMap.month || 1),
+    day: Number(partMap.day || 1),
+    hour: Number(partMap.hour || 0),
+    minute: Number(partMap.minute || 0),
+    second: Number(partMap.second || 0),
+  };
+}
+
+function resolveOperationalDay({
+  explicitSourceDate,
+  timezone,
+  now = Date.now(),
+}) {
+  const normalizedTimezone = normalizeTimezone(timezone) || 'UTC';
+
+  if (isValidSourceDate(explicitSourceDate)) {
+    return {
+      sourceDate: explicitSourceDate,
+      timezone: normalizedTimezone,
+    };
+  }
+
+  const localParts = resolveTimezoneDateParts(now, normalizedTimezone);
+  let sourceDate = formatSourceDateFromParts(localParts);
+  if (localParts.hour < SOURCE_DATE_ROLLOVER_HOUR) {
+    sourceDate = shiftSourceDate(sourceDate, -1);
+  }
+
+  return {
+    sourceDate,
+    timezone: normalizedTimezone,
+  };
+}
+
+function buildPrimaryTrainingPlanId(athleteId) {
+  return `${athleteId}_${PRIMARY_TRAINING_PLAN_ID_SUFFIX}`;
+}
+
+function isAssignmentMutableForAutomaticRematerialization(assignment) {
+  if (!assignment) return false;
+  return String(assignment.status || '') === 'assigned' && !Boolean(assignment.executionLock?.coachFrozen);
+}
+
+function shouldExpireAtRollover(assignment) {
+  if (!assignment || !isValidSourceDate(assignment.sourceDate)) return false;
+  return ['assigned', 'viewed', 'paused'].includes(String(assignment.status || ''));
+}
+
+async function expireAssignmentsBeforeSourceDate({
+  db,
+  athleteId,
+  sourceDate,
+  expiredAt,
+}) {
+  if (!athleteId || !isValidSourceDate(sourceDate)) return [];
+
+  const assignmentsSnap = await db.collection(DAILY_ASSIGNMENTS_COLLECTION).where('athleteId', '==', athleteId).get();
+  const staleAssignments = assignmentsSnap.docs
+    .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+    .filter((assignment) => assignment.sourceDate < sourceDate && shouldExpireAtRollover(assignment));
+
+  if (!staleAssignments.length) return [];
+
+  const batch = db.batch();
+  staleAssignments.forEach((assignment) => {
+    batch.set(
+      db.collection(DAILY_ASSIGNMENTS_COLLECTION).doc(assignment.id),
+      {
+        status: 'expired',
+        expiredAt,
+        updatedAt: expiredAt,
+      },
+      { merge: true }
+    );
+  });
+  await batch.commit();
+  return staleAssignments.map((assignment) => assignment.id);
+}
+
+function resolveTrainingPlanType({ selectedCandidate, executionPattern }) {
+  if (executionPattern === 'protocol_then_sim' || executionPattern === 'sim_then_protocol') return 'mixed';
+  if (selectedCandidate?.type === 'protocol') return 'protocol_focused';
+  if (selectedCandidate?.type === 'trial') return 'assessment';
+  return 'sim_focused';
+}
+
+function resolveTrainingPlanPresentation({ activeProgram, selectedCandidate, executionPattern }) {
+  const primarySkill = Array.isArray(activeProgram?.targetSkills) && activeProgram.targetSkills.length
+    ? titleizeRuntimeLabel(activeProgram.targetSkills[0])
+    : '';
+  const fallbackLabel = titleizeRuntimeLabel(
+    selectedCandidate?.label
+    || selectedCandidate?.protocolLabel
+    || selectedCandidate?.simSpecId
+    || selectedCandidate?.legacyExerciseId
+    || activeProgram?.sessionType
+    || 'mental training'
+  );
+
+  return {
+    title: primarySkill ? `${primarySkill} Build` : `${fallbackLabel || 'Mental Training'} Plan`,
+    goal: activeProgram?.rationale || selectedCandidate?.rationale || `Build ${humanizeRuntimeLabel(primarySkill || fallbackLabel || 'mental training')}.`,
+    planType: resolveTrainingPlanType({ selectedCandidate, executionPattern }),
+    primaryMetric: primarySkill || fallbackLabel || null,
+  };
+}
+
+function resolvePlanStepExerciseId({ selectedCandidate, activeProgram, actionType }) {
+  return (
+    selectedCandidate?.protocolId
+    || selectedCandidate?.simSpecId
+    || selectedCandidate?.legacyExerciseId
+    || activeProgram?.recommendedSimId
+    || activeProgram?.recommendedLegacyExerciseId
+    || activeProgram?.sessionType
+    || actionType
+  );
+}
+
+function resolvePlanStepLabel({
+  stepIndex,
+  selectedCandidate,
+  activeProgram,
+  actionType,
+}) {
+  const label = titleizeRuntimeLabel(
+    selectedCandidate?.label
+    || selectedCandidate?.protocolLabel
+    || selectedCandidate?.simSpecId
+    || selectedCandidate?.legacyExerciseId
+    || activeProgram?.recommendedSimId
+    || activeProgram?.recommendedLegacyExerciseId
+    || activeProgram?.sessionType
+    || actionType
+  );
+
+  return label ? `Session ${stepIndex}: ${label}` : `Session ${stepIndex}`;
+}
+
+function nextPlanStepIndex(steps = []) {
+  return steps.reduce((maximum, step) => Math.max(maximum, Number(step?.stepIndex || 0)), 0) + 1;
+}
+
+function clonePlanSteps(steps = []) {
+  return steps.map((step) => ({ ...step }));
+}
+
+function pickPrimaryTrainingPlan(plans = []) {
+  const sorted = [...(Array.isArray(plans) ? plans : [])].sort(
+    (left, right) => Number(right?.updatedAt || right?.createdAt || 0) - Number(left?.updatedAt || left?.createdAt || 0)
+  );
+
+  return (
+    sorted.find((plan) => plan?.isPrimary && (plan?.status === 'active' || plan?.status === 'paused'))
+    || sorted.find((plan) => plan?.isPrimary)
+    || null
+  );
+}
+
+function buildTrainingPlanEventRecord({
+  eventType,
+  plan,
+  actorType = 'system',
+  actorUserId = 'pulsecheck-plan-authoring',
+  eventAt,
+  reason,
+  step,
+  metadata,
+}) {
+  return stripUndefinedDeep({
+    assignmentId: plan?.sourceDailyTaskId || `plan:${plan?.id || 'unknown'}`,
+    athleteId: plan?.athleteId || '',
+    teamId: '',
+    sourceDate: plan?.sourceDate || '',
+    eventType,
+    actorType,
+    actorUserId,
+    eventAt,
+    trainingPlanId: plan?.id || null,
+    trainingPlanStepId: step?.id || null,
+    trainingPlanStepIndex: typeof step?.stepIndex === 'number' ? step.stepIndex : null,
+    executionPattern: step?.executionPattern || null,
+    metadata: {
+      reason: reason || null,
+      authoringTrigger: plan?.authoringTrigger || null,
+      authoringArchetype: plan?.archetypeId || null,
+      planType: plan?.planType || null,
+      fallbackReason: plan?.inventoryFallbackReason || null,
+      targetSkills: plan?.targetSkills || [],
+      sourceStateSnapshotId: plan?.sourceStateSnapshotId || null,
+      sourceProfileSnapshotId: plan?.sourceProfileSnapshotId || null,
+      sourceProgramPrescriptionId: plan?.sourceProgramPrescriptionId || null,
+      authoringRulesVersion: plan?.authoringRulesVersion || null,
+      archetypeVersion: plan?.archetypeVersion || null,
+      ...metadata,
+    },
+    createdAt: eventAt,
+  });
+}
+
+async function writeTrainingPlanEvents(db, events = []) {
+  const entries = (Array.isArray(events) ? events : []).filter(Boolean);
+  if (!entries.length) return;
+
+  const batch = db.batch();
+  entries.forEach((entry) => {
+    batch.set(db.collection(ASSIGNMENT_EVENTS_COLLECTION).doc(), entry);
+  });
+  await batch.commit();
+}
+
+async function writeTrainingPlanAuthoringFailureEvent({
+  db,
+  athleteId,
+  sourceDate,
+  trigger,
+  reason,
+  error,
+  eventAt,
+  actorType = 'system',
+  actorUserId = 'pulsecheck-plan-authoring',
+}) {
+  await writeTrainingPlanEvents(db, [
+    stripUndefinedDeep({
+      assignmentId: `plan-authoring:${athleteId}:${sourceDate}`,
+      athleteId,
+      teamId: '',
+      sourceDate,
+      eventType: 'training_plan_authoring_failed',
+      actorType,
+      actorUserId,
+      eventAt,
+      metadata: {
+        reason: reason || null,
+        authoringTrigger: trigger || null,
+        errorMessage: error?.message || String(error || ''),
+      },
+      createdAt: eventAt,
+    }),
+  ]);
+}
+
+async function ensurePrimaryTrainingPlan({
+  db,
+  athleteId,
+  coachId,
+  sourceDate,
+  timezone,
+  sourceStateSnapshotId,
+  progress,
+  snapshot,
+  activeProgram,
+  liveProtocolRegistry,
+  liveSimRegistry,
+  now,
+}) {
+  const [plansSnap, assignmentsSnap] = await Promise.all([
+    db.collection(TRAINING_PLANS_COLLECTION).where('athleteId', '==', athleteId).get(),
+    db.collection(DAILY_ASSIGNMENTS_COLLECTION).where('athleteId', '==', athleteId).get(),
+  ]);
+
+  const allPlans = plansSnap.docs
+    .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+    .sort((left, right) => Number(right.updatedAt || right.createdAt || 0) - Number(left.updatedAt || left.createdAt || 0));
+  const recentAssignments = assignmentsSnap.docs
+    .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+    .sort((left, right) => {
+      const bySourceDate = compareSourceDateDesc(left.sourceDate, right.sourceDate);
+      if (bySourceDate !== 0) return bySourceDate;
+      return Number(right.updatedAt || right.createdAt || 0) - Number(left.updatedAt || left.createdAt || 0);
+    })
+    .slice(0, 8);
+
+  let primaryPlan = pickPrimaryTrainingPlan(allPlans);
+  const authoringDecision = resolvePlanAuthoringTrigger({
+    primaryPlan,
+    recentPlans: allPlans,
+    profile: progress?.taxonomyProfile,
+    activeProgram,
+    snapshot,
+    recentAssignments,
+    hasBaselineAssessment: Boolean(progress?.baselineAssessment),
+  });
+
+  if (!authoringDecision.shouldAuthor || !authoringDecision.trigger) {
+    return {
+      primaryPlan,
+      recentAssignments,
+      allPlans,
+      authoringDecision,
+      authoredPlan: null,
+      supersededPlan: null,
+    };
+  }
+
+  let authoredPlan;
+  try {
+    authoredPlan = buildTrainingPlan({
+      athleteId,
+      assignedBy: 'nora',
+      coachId,
+      trigger: authoringDecision.trigger,
+      profile: progress?.taxonomyProfile,
+      activeProgram,
+      snapshot,
+      sourceDate,
+      timezone,
+      sourceStateSnapshotId,
+      sourceProgramPrescriptionId: buildProgramPrescriptionId(athleteId, activeProgram) || undefined,
+      sourceProgramGeneratedAt: activeProgram?.generatedAt,
+      exploratoryWindowRepCount: authoringDecision.exploratoryWindowRepCount,
+      lowConfidence: authoringDecision.lowConfidence,
+      recentPlans: allPlans,
+      liveProtocolRegistry,
+      liveSimRegistry,
+      now,
+    });
+  } catch (error) {
+    await writeTrainingPlanAuthoringFailureEvent({
+      db,
+      athleteId,
+      sourceDate,
+      trigger: authoringDecision.trigger,
+      reason: authoringDecision.reason,
+      error,
+      eventAt: now,
+    }).catch((eventError) => {
+      console.error('[submit-pulsecheck-checkin] Failed to write training-plan authoring failure event:', eventError);
+    });
+    throw error;
+  }
+
+  let supersededPlan = null;
+  const batch = db.batch();
+  if (primaryPlan && primaryPlan.id !== authoredPlan.id) {
+    const supersededStatus = primaryPlan.status === 'completed' ? 'completed' : 'superseded';
+    supersededPlan = syncTrainingPlanProgression({
+      ...primaryPlan,
+      status: supersededStatus,
+      isPrimary: false,
+      supersededByPlanId: authoredPlan.id,
+      supersededReason: authoringDecision.reason,
+      updatedAt: now,
+    });
+    batch.set(
+      db.collection(TRAINING_PLANS_COLLECTION).doc(primaryPlan.id),
+      stripUndefinedDeep(supersededPlan),
+      { merge: true }
+    );
+  }
+
+  allPlans
+    .filter((plan) => plan.id !== authoredPlan.id && plan.id !== primaryPlan?.id && plan.isPrimary)
+    .forEach((plan) => {
+      batch.set(
+        db.collection(TRAINING_PLANS_COLLECTION).doc(plan.id),
+        {
+          isPrimary: false,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    });
+
+  batch.set(
+    db.collection(TRAINING_PLANS_COLLECTION).doc(authoredPlan.id),
+    stripUndefinedDeep(authoredPlan),
+    { merge: true }
+  );
+  await batch.commit();
+
+  await writeTrainingPlanEvents(db, [
+    buildTrainingPlanEventRecord({
+      eventType: 'training_plan_authored',
+      plan: authoredPlan,
+      eventAt: now,
+      reason: authoringDecision.reason,
+    }),
+    ...authoredPlan.steps.map((step) =>
+      buildTrainingPlanEventRecord({
+        eventType: 'training_plan_step_authored',
+        plan: authoredPlan,
+        step,
+        eventAt: now,
+        reason: authoringDecision.reason,
+        metadata: {
+          stepLabel: step.stepLabel,
+          stepStatus: step.stepStatus,
+          actionType: step.actionType,
+          exerciseId: step.exerciseId,
+        },
+      })
+    ),
+    supersededPlan
+      ? buildTrainingPlanEventRecord({
+          eventType: 'training_plan_superseded',
+          plan: supersededPlan,
+          eventAt: now,
+          reason: authoringDecision.reason,
+          metadata: {
+            supersededByPlanId: authoredPlan.id,
+          },
+        })
+      : null,
+  ]).catch((error) => {
+    console.error('[submit-pulsecheck-checkin] Failed to write training-plan authoring events:', error);
+  });
+
+  primaryPlan = authoredPlan;
+  return {
+    primaryPlan,
+    recentAssignments,
+    allPlans,
+    authoringDecision,
+    authoredPlan,
+    supersededPlan,
+  };
+}
+
+function resolvePlanDrivenCandidateType(plan, step) {
+  if (plan?.planType === 'assessment' || step?.archetypeStepKey?.includes('reassessment') || /reassessment|probe/i.test(step?.stepLabel || '')) {
+    return 'trial';
+  }
+
+  return step?.actionType === 'protocol' ? 'protocol' : 'sim';
+}
+
+function buildPlanDrivenCandidate({
+  athleteId,
+  sourceDate,
+  primaryPlan,
+  liveProtocolRegistry,
+  liveSimRegistry,
+}) {
+  if (!primaryPlan || primaryPlan.status === 'completed' || primaryPlan.status === 'superseded') {
+    return null;
+  }
+
+  const step = resolveNextDuePlanStep(primaryPlan);
+  if (!step) return null;
+
+  const liveProtocol = step.protocolId
+    ? (Array.isArray(liveProtocolRegistry) ? liveProtocolRegistry.find((record) => record.id === step.protocolId) : null)
+    : null;
+  const liveSim = step.simSpecId
+    ? (Array.isArray(liveSimRegistry)
+      ? liveSimRegistry.find((record) => record.simSpecId === step.simSpecId || record.id === step.simSpecId)
+      : null)
+    : null;
+
+  return {
+    id: `${athleteId}_${sourceDate}_${primaryPlan.id}_${step.id}`,
+    type: resolvePlanDrivenCandidateType(primaryPlan, step),
+    label: step.stepLabel || liveProtocol?.label || liveSim?.name || humanizeRuntimeLabel(step.exerciseId),
+    actionType: step.actionType || 'sim',
+    rationale: `Primary training plan step ${step.stepIndex} directs today's work before any state-based override is considered.`,
+    legacyExerciseId: liveProtocol?.legacyExerciseId || liveSim?.id || undefined,
+    protocolId: step.protocolId || undefined,
+    protocolFamilyId: liveProtocol?.familyId,
+    protocolVariantId: liveProtocol?.variantId,
+    protocolVariantLabel: liveProtocol?.variantLabel,
+    protocolVariantVersion: liveProtocol?.variantVersion,
+    protocolPublishedAt: liveProtocol?.publishedAt,
+    protocolPublishedRevisionId: liveProtocol?.publishedRevisionId,
+    protocolLabel: liveProtocol?.label,
+    protocolClass: step.protocolClass || liveProtocol?.protocolClass,
+    protocolCategory: liveProtocol?.category,
+    protocolResponseFamily: liveProtocol?.responseFamily,
+    protocolDeliveryMode: liveProtocol?.deliveryMode,
+    simSpecId: step.simSpecId || undefined,
+    durationSeconds: step.plannedDurationSeconds || liveProtocol?.durationSeconds || undefined,
+    executionPattern: step.executionPattern || 'single',
+    trainingPlanId: primaryPlan.id,
+    trainingPlanStepId: step.id,
+    trainingPlanStepIndex: step.stepIndex,
+  };
+}
+
+function candidateMatchesPlanStep(step, selectedCandidate, actionType, executionPattern) {
+  if (!step) return false;
+
+  const candidateActionType = actionType || selectedCandidate?.actionType || 'sim';
+  const candidateExecutionPattern = selectedCandidate?.executionPattern || executionPattern || 'single';
+  const candidateProtocolId = selectedCandidate?.protocolId || null;
+  const candidateSimSpecId = selectedCandidate?.simSpecId || null;
+
+  return (
+    String(step.actionType || 'sim') === String(candidateActionType || 'sim')
+    && String(step.executionPattern || 'single') === String(candidateExecutionPattern || 'single')
+    && String(step.protocolId || '') === String(candidateProtocolId || '')
+    && String(step.simSpecId || '') === String(candidateSimSpecId || '')
+  );
+}
+
+async function resolvePlanBackedAssignment({
+  db,
+  athleteId,
+  coachId,
+  sourceDate,
+  timezone,
+  sourceStateSnapshotId,
+  assignmentId,
+  existingAssignment,
+  progress,
+  snapshot,
+  activeProgram,
+  selectedCandidate,
+  actionType,
+  executionPattern,
+  lineageChanged,
+  primaryPlan: seededPrimaryPlan,
+  now,
+}) {
+  let primaryPlan = seededPrimaryPlan;
+
+  if (!primaryPlan) {
+    const ensuredPlan = await ensurePrimaryTrainingPlan({
+      db,
+      athleteId,
+      coachId,
+      sourceDate,
+      timezone,
+      sourceStateSnapshotId,
+      progress,
+      snapshot,
+      activeProgram,
+      liveProtocolRegistry: [],
+      liveSimRegistry: [],
+      now,
+    });
+    primaryPlan = ensuredPlan.primaryPlan;
+  }
+
+  if (!primaryPlan) {
+    return null;
+  }
+
+  const planId = primaryPlan.id;
+  const steps = clonePlanSteps(primaryPlan.steps || []);
+  const existingStep = existingAssignment?.trainingPlanStepId
+    ? steps.find((step) => step.id === existingAssignment.trainingPlanStepId)
+    : steps.find((step) => step.linkedDailyTaskSourceDate === sourceDate && step.linkedDailyTaskId === assignmentId);
+  const plannedStep = steps.find((step) => Number(step.stepIndex || 0) === Number(primaryPlan.nextDueStepIndex || primaryPlan.currentStepIndex || 0))
+    || steps.find((step) => step.stepStatus === 'planned')
+    || null;
+
+  let overrideMetadata;
+  let isPlanOverride = false;
+  let activeStep = existingStep || plannedStep;
+
+  if (existingStep && lineageChanged && activeStep && existingStep.id !== activeStep.id) {
+    isPlanOverride = true;
+    overrideMetadata = {
+      overrideType: 'state_based_adjustment',
+      overriddenBy: 'nora_runtime',
+      overriddenByRole: 'system',
+      overrideReason: `Same-day state rematerialization replaced ${existingStep.stepLabel || 'the planned step'}.`,
+      originalAssignmentId: assignmentId,
+      originalActionType: existingAssignment?.actionType,
+      originalTrainingPlanId: planId,
+      originalPlanStepId: existingStep.id,
+      originalPlanStepIndex: existingStep.stepIndex,
+    };
+    const existingIndex = steps.findIndex((step) => step.id === existingStep.id);
+    if (existingIndex >= 0) {
+      steps.splice(existingIndex, 1, {
+        ...existingStep,
+        stepStatus: 'overridden',
+        overrideReason: overrideMetadata.overrideReason,
+      });
+    }
+  } else if (existingStep && lineageChanged) {
+    isPlanOverride = true;
+    overrideMetadata = {
+      overrideType: 'state_based_adjustment',
+      overriddenBy: 'nora_runtime',
+      overriddenByRole: 'system',
+      overrideReason: `Same-day state rematerialization updated ${existingStep.stepLabel || 'the planned step'}.`,
+      originalAssignmentId: assignmentId,
+      originalActionType: existingAssignment?.actionType,
+      originalTrainingPlanId: planId,
+      originalPlanStepId: existingStep.id,
+      originalPlanStepIndex: existingStep.stepIndex,
+    };
+  }
+
+  const selectedCandidateDiffersFromPlannedStep =
+    !existingStep
+    && plannedStep
+    && !candidateMatchesPlanStep(plannedStep, selectedCandidate, actionType, executionPattern);
+
+  if (selectedCandidateDiffersFromPlannedStep) {
+    isPlanOverride = true;
+    overrideMetadata = {
+      overrideType: 'state_based_adjustment',
+      overriddenBy: 'nora_runtime',
+      overriddenByRole: 'system',
+      overrideReason: `Today's state selection replaced ${plannedStep.stepLabel || 'the planned step'}.`,
+      originalAssignmentId: assignmentId,
+      originalActionType: plannedStep.actionType,
+      originalTrainingPlanId: planId,
+      originalPlanStepId: plannedStep.id,
+      originalPlanStepIndex: plannedStep.stepIndex,
+    };
+
+    const plannedIndex = steps.findIndex((step) => step.id === plannedStep.id);
+    if (plannedIndex >= 0) {
+      steps.splice(plannedIndex, 1, {
+        ...plannedStep,
+        stepStatus: 'overridden',
+        overrideReason: overrideMetadata.overrideReason,
+      });
+    }
+    activeStep = null;
+  }
+
+  if (!activeStep) {
+    const stepIndex = nextPlanStepIndex(steps);
+    activeStep = {
+      id: `${planId}_step_${String(stepIndex).padStart(4, '0')}`,
+      stepIndex,
+      stepLabel: resolvePlanStepLabel({
+        stepIndex,
+        selectedCandidate,
+        activeProgram,
+        actionType,
+      }),
+      stepStatus: 'planned',
+      actionType,
+      exerciseId: resolvePlanStepExerciseId({ selectedCandidate, activeProgram, actionType }),
+      simSpecId: selectedCandidate?.simSpecId || activeProgram?.recommendedSimId || null,
+      protocolId: selectedCandidate?.protocolId || null,
+      executionPattern,
+      targetSkills: activeProgram?.targetSkills || [],
+      dueSourceDate: sourceDate,
+      timezone,
+      plannedDurationSeconds: selectedCandidate?.durationSeconds || activeProgram?.durationSeconds || null,
+    };
+    steps.push(activeStep);
+  }
+
+  const resolvedStep = {
+    ...activeStep,
+    stepLabel: activeStep.stepLabel || resolvePlanStepLabel({
+      stepIndex: activeStep.stepIndex,
+      selectedCandidate,
+      activeProgram,
+      actionType,
+    }),
+    stepStatus: actionType === 'defer' ? 'deferred' : 'active_today',
+    actionType,
+    exerciseId: resolvePlanStepExerciseId({ selectedCandidate, activeProgram, actionType }),
+    simSpecId: selectedCandidate?.simSpecId || activeStep.simSpecId || activeProgram?.recommendedSimId || null,
+    protocolId: selectedCandidate?.protocolId || activeStep.protocolId || null,
+    executionPattern: activeStep.executionPattern || executionPattern || 'single',
+    targetSkills: activeStep.targetSkills || activeProgram?.targetSkills || [],
+    linkedDailyTaskId: assignmentId,
+    linkedDailyTaskSourceDate: sourceDate,
+    dueSourceDate: activeStep.dueSourceDate || sourceDate,
+    timezone: activeStep.timezone || timezone,
+    plannedDurationSeconds: selectedCandidate?.durationSeconds || activeProgram?.durationSeconds || activeStep.plannedDurationSeconds || null,
+  };
+
+  const nextSteps = steps
+    .map((step) => {
+      if (step.id === resolvedStep.id) {
+        return resolvedStep;
+      }
+      if (step.stepStatus === 'active_today') {
+        return {
+          ...step,
+          stepStatus: 'planned',
+        };
+      }
+      return step;
+    })
+    .sort((left, right) => Number(left.stepIndex || 0) - Number(right.stepIndex || 0));
+
+  const nextPlan = syncTrainingPlanProgression({
+    ...primaryPlan,
+    status: 'active',
+    isPrimary: true,
+    steps: nextSteps,
+    sourceStateSnapshotId: sourceStateSnapshotId || primaryPlan.sourceStateSnapshotId || null,
+    sourceDailyTaskId: assignmentId,
+    sourceDate: primaryPlan.sourceDate || sourceDate,
+    timezone: primaryPlan.timezone || timezone,
+    currentStepIndex: resolvedStep.stepIndex,
+    nextDueStepIndex: resolvedStep.stepIndex,
+    resumedAt: primaryPlan.status === 'paused' ? now : (primaryPlan.resumedAt || null),
+    updatedAt: now,
+  });
+
+  await db.collection(TRAINING_PLANS_COLLECTION).doc(planId).set(stripUndefinedDeep(nextPlan), { merge: true });
+
+  return {
+    trainingPlanId: planId,
+    trainingPlanStepId: resolvedStep?.id,
+    trainingPlanStepIndex: resolvedStep?.stepIndex,
+    trainingPlanStepLabel: resolvedStep?.stepLabel,
+    trainingPlanIsPrimary: true,
+    isPlanOverride: isPlanOverride || Boolean(existingAssignment?.isPlanOverride),
+    overrideMetadata: overrideMetadata || existingAssignment?.overrideMetadata,
+  };
 }
 
 function derivePublishedRevisionId(protocolId, publishedAt) {
@@ -1355,12 +2120,34 @@ function buildProtocolCandidates({ snapshot, liveProtocolRegistry, responsivenes
   };
 }
 
-function buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress, liveProtocolRegistry, liveSimRegistry, responsivenessProfile }) {
+function buildAssignmentCandidateSet({
+  athleteId,
+  sourceDate,
+  snapshot,
+  progress,
+  liveProtocolRegistry,
+  liveSimRegistry,
+  responsivenessProfile,
+  primaryPlan,
+}) {
   const id = buildCandidateSetId(athleteId, sourceDate);
   const candidates = [];
   const constraintReasons = [];
   const inventoryGaps = [];
   const activeProgram = resolveActiveProgramContext({ snapshot, progress });
+  const planDrivenCandidate = buildPlanDrivenCandidate({
+    athleteId,
+    sourceDate,
+    primaryPlan,
+    liveProtocolRegistry,
+    liveSimRegistry,
+  });
+
+  if (planDrivenCandidate) {
+    candidates.push(planDrivenCandidate);
+    constraintReasons.push('The authored training plan supplied the default next-due candidate.');
+  }
+
   const wantsProtocol = (snapshot.candidateClassHints || []).includes('protocol')
     || snapshot.recommendedRouting === 'protocol_only'
     || snapshot.recommendedRouting === 'protocol_then_sim'
@@ -1370,7 +2157,11 @@ function buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress
   if (wantsProtocol) {
     const protocolResult = buildProtocolCandidates({ snapshot, liveProtocolRegistry, responsivenessProfile });
     if (protocolResult.candidates.length) {
-      candidates.push(...protocolResult.candidates);
+      protocolResult.candidates.forEach((candidate) => {
+        if (!candidates.some((existing) => existing.id === candidate.id)) {
+          candidates.push(candidate);
+        }
+      });
     } else if (protocolResult.inventoryGap) {
       inventoryGaps.push(protocolResult.inventoryGap);
     }
@@ -1381,7 +2172,7 @@ function buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress
   if (publishedSimResolution.simModule) {
     const simModule = publishedSimResolution.simModule;
     const isTrial = activeProgram.sessionType === 'reassessment';
-    candidates.push({
+    const simCandidate = {
       id: `${athleteId}_${sourceDate}_${simModule.simSpecId || simModule.id}`,
       type: isTrial ? 'trial' : 'sim',
       label: simModule.name || humanizeRuntimeLabel(
@@ -1406,7 +2197,11 @@ function buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress
       sessionType: activeProgram.sessionType,
       durationMode: activeProgram.durationMode,
       durationSeconds: activeProgram.durationSeconds,
-    });
+    };
+
+    if (!candidates.some((candidate) => candidate.id === simCandidate.id)) {
+      candidates.push(simCandidate);
+    }
   } else if (publishedSimResolution.inventoryGap) {
     inventoryGaps.push(publishedSimResolution.inventoryGap);
   } else {
@@ -1427,6 +2222,10 @@ function buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress
     athleteId,
     sourceDate,
     sourceStateSnapshotId: snapshot.id,
+    trainingPlanId: primaryPlan?.id || null,
+    trainingPlanStepId: planDrivenCandidate?.trainingPlanStepId || null,
+    trainingPlanStepIndex: planDrivenCandidate?.trainingPlanStepIndex || null,
+    planDrivenCandidateId: planDrivenCandidate?.id || null,
     candidates,
     candidateIds: candidates.map((candidate) => candidate.id),
     candidateClassHints,
@@ -1439,8 +2238,21 @@ function buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress
 }
 
 function buildFallbackPlannerDecision({ snapshot, candidateSet }) {
+  const planCandidate = candidateSet.candidates.find((candidate) => candidate.id === candidateSet.planDrivenCandidateId);
   const protocolCandidate = candidateSet.candidates.find((candidate) => candidate.type === 'protocol');
   const simCandidate = candidateSet.candidates.find((candidate) => candidate.type === 'sim' || candidate.type === 'trial');
+
+  if (planCandidate) {
+    return {
+      decisionSource: 'fallback_rules',
+      selectedCandidateId: planCandidate.id,
+      selectedCandidateType: planCandidate.type,
+      actionType: planCandidate.actionType,
+      confidence: snapshot.confidence,
+      rationaleSummary: `Fallback planner honored the authored training plan step: ${planCandidate.label}.`,
+      supportFlag: Boolean(snapshot.supportFlag),
+    };
+  }
 
   if ((snapshot.overallReadiness === 'red' || snapshot.recommendedRouting === 'protocol_only') && protocolCandidate) {
     return {
@@ -1500,6 +2312,7 @@ async function planAssignmentWithAI({ snapshot, candidateSet, progress, responsi
         'Return only valid JSON.',
         'You must choose only from the provided candidate ids or defer.',
         'Never invent a new exercise, protocol, or candidate id.',
+        'If a primary training-plan candidate is present, treat it as the default unless the state evidence clearly justifies overriding it.',
         'Treat protocol responsiveness as a ranking input inside the current state posture, not as permission to ignore a strong current-state signal.',
         'Allowed actionType values: sim, lighter_sim, protocol, defer.',
         'Allowed confidence values: high, medium, low.',
@@ -1509,6 +2322,14 @@ async function planAssignmentWithAI({ snapshot, candidateSet, progress, responsi
         stateSnapshot: snapshot,
         candidateSet,
         activeProgram: resolveActiveProgramContext({ snapshot, progress }),
+        activeTrainingPlan: candidateSet?.trainingPlanId
+          ? {
+              trainingPlanId: candidateSet.trainingPlanId,
+              trainingPlanStepId: candidateSet.trainingPlanStepId || null,
+              trainingPlanStepIndex: candidateSet.trainingPlanStepIndex || null,
+              preferredCandidateId: candidateSet.planDrivenCandidateId || null,
+            }
+          : null,
         protocolResponsivenessProfile: responsivenessProfile || null,
       },
     });
@@ -1862,11 +2683,17 @@ function assignmentLineageChanged(existing, nextAssignment) {
 
   const comparableKeys = [
     'actionType',
+    'executionPattern',
     'chosenCandidateId',
     'chosenCandidateType',
     'simSpecId',
+    'simFamilyLabel',
+    'simVariantLabel',
     'legacyExerciseId',
     'protocolId',
+    'protocolFamilyId',
+    'protocolVariantId',
+    'protocolVariantLabel',
     'protocolPublishedRevisionId',
     'protocolLabel',
     'protocolClass',
@@ -1919,6 +2746,117 @@ async function archiveAssignmentRevision({
   }), { merge: true });
 }
 
+function summarizeAssignmentForSystemEvent(assignment) {
+  if (!assignment) return null;
+
+  return stripUndefinedDeep({
+    id: assignment.id,
+    status: assignment.status || null,
+    actionType: assignment.actionType || null,
+    chosenCandidateId: assignment.chosenCandidateId || null,
+    sourceStateSnapshotId: assignment.sourceStateSnapshotId || null,
+    rationale: assignment.rationale || null,
+    plannerSummary: assignment.plannerSummary || null,
+    trainingPlanId: assignment.trainingPlanId || null,
+    trainingPlanStepId: assignment.trainingPlanStepId || null,
+    trainingPlanStepIndex: typeof assignment.trainingPlanStepIndex === 'number' ? assignment.trainingPlanStepIndex : null,
+    executionPattern: assignment.executionPattern || null,
+    phaseProgress: assignment.phaseProgress || null,
+    materializedBy: assignment.materializedBy || null,
+    updatedAt: assignment.updatedAt || null,
+  });
+}
+
+async function recordDailyTaskMaterializationEvents({
+  db,
+  assignment,
+  existing,
+  lineageChanged,
+  eventAt,
+}) {
+  if (!assignment || (!lineageChanged && existing)) {
+    return null;
+  }
+
+  const batch = db.batch();
+  const materializedEventRef = db.collection(ASSIGNMENT_EVENTS_COLLECTION).doc();
+  const materializedEvent = stripUndefinedDeep({
+    assignmentId: assignment.id,
+    athleteId: assignment.athleteId || '',
+    teamId: assignment.teamId || '',
+    sourceDate: assignment.sourceDate || '',
+    eventType: 'daily_task_materialized',
+    actorType: 'system',
+    actorUserId: 'nora_runtime',
+    eventAt,
+    trainingPlanId: assignment.trainingPlanId || null,
+    trainingPlanStepId: assignment.trainingPlanStepId || null,
+    trainingPlanStepIndex: typeof assignment.trainingPlanStepIndex === 'number' ? assignment.trainingPlanStepIndex : null,
+    executionPattern: assignment.executionPattern || null,
+    phaseProgress: assignment.phaseProgress || null,
+    executionLock: assignment.executionLock || null,
+    completionSummary: assignment.completionSummary || null,
+    metadata: {
+      materializedBy: assignment.materializedBy || 'nora_runtime',
+      lineageId: assignment.lineageId || assignment.id,
+      revision: assignment.revision || 1,
+      previousRevision: assignment.previousRevision || null,
+      sourceCheckInId: assignment.sourceCheckInId || null,
+      sourceStateSnapshotId: assignment.sourceStateSnapshotId || null,
+      sourceCandidateSetId: assignment.sourceCandidateSetId || null,
+      isPrimaryForDate: assignment.isPrimaryForDate !== false,
+      isPlanOverride: Boolean(assignment.isPlanOverride),
+      overrideMetadata: assignment.overrideMetadata || null,
+      assignmentSummary: summarizeAssignmentForSystemEvent(assignment),
+    },
+    createdAt: eventAt,
+  });
+  batch.set(materializedEventRef, materializedEvent);
+
+  let supersededEventRef = null;
+  if (existing && lineageChanged) {
+    supersededEventRef = db.collection(ASSIGNMENT_EVENTS_COLLECTION).doc();
+    const supersededEvent = stripUndefinedDeep({
+      assignmentId: assignment.id,
+      athleteId: assignment.athleteId || '',
+      teamId: assignment.teamId || '',
+      sourceDate: assignment.sourceDate || '',
+      eventType: 'daily_task_superseded',
+      actorType: 'system',
+      actorUserId: 'nora_runtime',
+      eventAt,
+      trainingPlanId: existing.trainingPlanId || assignment.trainingPlanId || null,
+      trainingPlanStepId: existing.trainingPlanStepId || null,
+      trainingPlanStepIndex: typeof existing.trainingPlanStepIndex === 'number' ? existing.trainingPlanStepIndex : null,
+      executionPattern: existing.executionPattern || null,
+      phaseProgress: existing.phaseProgress || null,
+      executionLock: existing.executionLock || null,
+      completionSummary: existing.completionSummary || null,
+      metadata: {
+        lineageId: existing.lineageId || assignment.lineageId || assignment.id,
+        previousRevision: existing.revision || null,
+        nextRevision: assignment.revision || null,
+        supersededByDailyTaskId: assignment.id,
+        supersededReason:
+          assignment.overrideMetadata?.overrideReason
+          || assignment.rationale
+          || 'Same-day state rematerialization superseded the prior task state.',
+        previousAssignmentSummary: summarizeAssignmentForSystemEvent(existing),
+        nextAssignmentSummary: summarizeAssignmentForSystemEvent(assignment),
+      },
+      createdAt: eventAt,
+    });
+    batch.set(supersededEventRef, supersededEvent);
+  }
+
+  await batch.commit();
+
+  return {
+    materializedEventId: materializedEventRef.id,
+    supersededEventId: supersededEventRef?.id || null,
+  };
+}
+
 async function orchestratePostCheckIn({
   db,
   athleteId,
@@ -1926,11 +2864,13 @@ async function orchestratePostCheckIn({
   sourceStateSnapshotId,
   sourceCandidateSetId,
   sourceDate,
+  timezone,
   progress,
   candidateSet,
   plannerDecision,
   liveProtocolRegistry,
   liveSimRegistry,
+  primaryPlan,
 }) {
   const snapshot =
     (sourceStateSnapshotId ? await getSnapshotById(db, sourceStateSnapshotId) : null) ||
@@ -1970,12 +2910,7 @@ async function orchestratePostCheckIn({
   const existingSnap = await assignmentRef.get();
   const existing = existingSnap.exists ? { id: existingSnap.id, ...existingSnap.data() } : null;
 
-  const existingStatus = String(existing?.status || '');
-  const existingIsDeferred =
-    existingStatus === 'deferred'
-    || String(existing?.actionType || '') === 'defer';
-
-  if (existing && !existingIsDeferred && !['assigned', 'viewed'].includes(existingStatus)) {
+  if (existing && !isAssignmentMutableForAutomaticRematerialization(existing)) {
     await attachExecutionLink(db, sourceStateSnapshotId, assignmentId);
     return existing;
   }
@@ -1987,8 +2922,8 @@ async function orchestratePostCheckIn({
       ? (activeProgram.sessionType === 'recovery_rep' || activeProgram.sessionType === 'probe' ? 'lighter_sim' : 'sim')
       : undefined;
   const validatedPlannerDecision = validatePlannerDecision({
-    decision: plannerDecision || buildFallbackPlannerDecision({ snapshot, candidateSet: candidateSet || buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress, liveProtocolRegistry, liveSimRegistry, responsivenessProfile: null }) }),
-    candidateSet: candidateSet || buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress, liveProtocolRegistry, liveSimRegistry, responsivenessProfile: null }),
+    decision: plannerDecision || buildFallbackPlannerDecision({ snapshot, candidateSet: candidateSet || buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress, liveProtocolRegistry, liveSimRegistry, responsivenessProfile: null, primaryPlan }) }),
+    candidateSet: candidateSet || buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress, liveProtocolRegistry, liveSimRegistry, responsivenessProfile: null, primaryPlan }),
     snapshot,
   });
   const selectedCandidate = validatedPlannerDecision.selectedCandidate;
@@ -2019,7 +2954,12 @@ async function orchestratePostCheckIn({
   });
 
   const now = Date.now();
+  const executionPattern = selectedCandidate?.executionPattern
+    || (snapshot?.recommendedRouting === 'protocol_then_sim' || snapshot?.recommendedRouting === 'sim_then_protocol'
+      ? snapshot.recommendedRouting
+      : 'single');
   const baselineRevision = typeof existing?.revision === 'number' ? existing.revision : 1;
+  const materializationTimezone = existing?.timezone || timezone || 'UTC';
   const draftAssignment = {
     id: assignmentId,
     lineageId: existing?.lineageId || assignmentId,
@@ -2032,9 +2972,15 @@ async function orchestratePostCheckIn({
     sourceStateSnapshotId,
     sourceCandidateSetId,
     sourceDate,
+    timezone: materializationTimezone,
+    sourceDateMode: 'athlete_local_day',
     assignedBy: 'nora',
+    materializedAt: existing?.materializedAt || now,
+    materializedBy: existing?.materializedBy || 'nora_runtime',
+    isPrimaryForDate: true,
     status: actionType === 'defer' ? 'deferred' : (existing?.status || 'assigned'),
     actionType,
+    executionPattern,
     chosenCandidateId: selectedCandidate?.id,
     chosenCandidateType: selectedCandidate?.type,
     simSpecId: selectedCandidate?.simSpecId,
@@ -2075,12 +3021,40 @@ async function orchestratePostCheckIn({
     escalationTier: existing?.escalationTier ?? 0,
     supportFlag: plannerOutput.supportFlag ?? existing?.supportFlag ?? snapshot?.supportFlag ?? false,
     programSnapshot: activeProgram || undefined,
+    phaseProgress:
+      executionPattern === 'single'
+        ? undefined
+        : {
+            currentPhaseIndex: 1,
+            totalPhases: 2,
+            currentPhaseLabel: executionPattern === 'protocol_then_sim' ? 'Protocol' : 'Sim',
+            phaseLabels: executionPattern === 'protocol_then_sim' ? ['Protocol', 'Sim'] : ['Sim', 'Protocol'],
+          },
     coachNotifiedAt: existing?.coachNotifiedAt,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
   };
 
   const lineageChanged = assignmentLineageChanged(existing, draftAssignment);
+  const planMetadata = await resolvePlanBackedAssignment({
+    db,
+    athleteId,
+    coachId,
+    sourceDate,
+    timezone: materializationTimezone,
+    sourceStateSnapshotId,
+    assignmentId,
+    existingAssignment: existing,
+    progress,
+    snapshot,
+    activeProgram,
+    selectedCandidate,
+    actionType,
+    executionPattern,
+    lineageChanged,
+    primaryPlan,
+    now,
+  });
   const nextRevision = existing ? (lineageChanged ? baselineRevision + 1 : baselineRevision) : 1;
   if (existing && lineageChanged) {
     await archiveAssignmentRevision({
@@ -2094,6 +3068,7 @@ async function orchestratePostCheckIn({
 
   const assignment = {
     ...draftAssignment,
+    ...(planMetadata || {}),
     revision: nextRevision,
     previousRevision: existing && lineageChanged ? baselineRevision : existing?.previousRevision,
     status:
@@ -2107,6 +3082,13 @@ async function orchestratePostCheckIn({
   };
 
   await assignmentRef.set(stripUndefinedDeep(assignment), { merge: true });
+  await recordDailyTaskMaterializationEvents({
+    db,
+    assignment,
+    existing,
+    lineageChanged,
+    eventAt: now,
+  });
   await attachExecutionLink(db, sourceStateSnapshotId, assignmentId);
   console.info('[submit-pulsecheck-checkin] Daily assignment persisted', {
     assignmentId,
@@ -2127,6 +3109,7 @@ async function rematerializeAssignmentFromSnapshot({
   sourceCheckInId,
   sourceStateSnapshotId,
   sourceDate,
+  timezone,
   progress,
 }) {
   const snapshot =
@@ -2149,6 +3132,20 @@ async function rematerializeAssignmentFromSnapshot({
     athleteId,
     protocolRegistry: liveProtocolRegistry,
   });
+  const ensuredPlan = await ensurePrimaryTrainingPlan({
+    db,
+    athleteId,
+    coachId: progress?.coachId,
+    sourceDate,
+    timezone,
+    sourceStateSnapshotId: snapshot.id,
+    progress,
+    snapshot,
+    activeProgram: resolveActiveProgramContext({ snapshot, progress }),
+    liveProtocolRegistry,
+    liveSimRegistry,
+    now: Date.now(),
+  });
   const candidateSet = buildAssignmentCandidateSet({
     athleteId,
     sourceDate,
@@ -2157,6 +3154,7 @@ async function rematerializeAssignmentFromSnapshot({
     liveProtocolRegistry,
     liveSimRegistry,
     responsivenessProfile,
+    primaryPlan: ensuredPlan.primaryPlan,
   });
   await db.collection(ASSIGNMENT_CANDIDATE_SETS_COLLECTION).doc(candidateSet.id).set(stripUndefinedDeep(candidateSet), { merge: true });
 
@@ -2174,11 +3172,13 @@ async function rematerializeAssignmentFromSnapshot({
     sourceStateSnapshotId: snapshot.id,
     sourceCandidateSetId: candidateSet.id,
     sourceDate,
+    timezone,
     progress,
     candidateSet,
     plannerDecision,
     liveProtocolRegistry,
     liveSimRegistry,
+    primaryPlan: ensuredPlan.primaryPlan,
   });
 
   return {
@@ -2227,13 +3227,16 @@ exports.handler = async (event) => {
       };
     }
 
-    const sourceDate = isValidSourceDate(body.sourceDate)
-      ? body.sourceDate
-      : new Date().toISOString().split('T')[0];
+    const { sourceDate, timezone } = resolveOperationalDay({
+      explicitSourceDate: body.sourceDate,
+      timezone: body.timezone,
+      now: Date.now(),
+    });
 
     console.info('[submit-pulsecheck-checkin] Received check-in submission', {
       userId,
       sourceDate,
+      timezone,
       readinessScore,
       type: body.type || 'morning',
     });
@@ -2259,6 +3262,7 @@ exports.handler = async (event) => {
       sleepQuality: typeof body.sleepQuality === 'number' ? body.sleepQuality : undefined,
       notes: typeof body.notes === 'string' ? body.notes : undefined,
       taxonomyState,
+      timezone,
       createdAt: now,
       date: sourceDate,
     };
@@ -2297,6 +3301,12 @@ exports.handler = async (event) => {
       progress: syncedProgress,
     });
     await db.collection(SNAPSHOTS_COLLECTION).doc(stateSnapshot.id).set(stripUndefinedDeep(stateSnapshot), { merge: true });
+    await expireAssignmentsBeforeSourceDate({
+      db,
+      athleteId: userId,
+      sourceDate,
+      expiredAt: now,
+    });
 
     const {
       candidateSet,
@@ -2307,6 +3317,7 @@ exports.handler = async (event) => {
       sourceCheckInId: persistedCheckIn.id,
       sourceStateSnapshotId: stateSnapshot.id,
       sourceDate,
+      timezone,
       progress: syncedProgress,
     });
 

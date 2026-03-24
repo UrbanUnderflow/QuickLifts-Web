@@ -28,6 +28,9 @@ export * from './simBuild';
 
 // Curriculum Services
 export { curriculumAssignmentService } from './curriculumAssignmentService';
+export { trainingPlanService } from './trainingPlanService';
+export { trainingPlanAuthoringService } from './trainingPlanAuthoringService';
+export { dailyTaskTrainingPlanReadModelService } from './dailyTaskTrainingPlanReadModelService';
 export { athleteProgressService } from './athleteProgressService';
 export { recommendationService } from './recommendationService';
 export { assignmentOrchestratorService } from './assignmentOrchestratorService';

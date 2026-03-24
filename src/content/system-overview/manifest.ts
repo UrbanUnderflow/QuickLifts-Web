@@ -9,11 +9,14 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Pulse architecture, products, data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-03-20',
+  lastUpdated: '2026-03-23',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
     { id: 'product-handbooks', label: 'Product Handbooks', description: 'Feature-by-feature inventory for each product surface.' },
+    { id: 'quicklifts-profile-health-system', label: 'QuickLifts Profile Health', description: 'Parent artifact for the story-led QuickLifts profile health surface and the shared snapshot contract underneath it.' },
+    { id: 'quicklifts-profile-health-story-spec', label: 'Profile Health Story Spec', description: 'Product and UX contract for integrating Health Data Stories into the QuickLifts profile.', parentSectionId: 'quicklifts-profile-health-system' },
+    { id: 'quicklifts-profile-health-snapshot-contract', label: 'Profile Health Snapshot Contract', description: 'Runtime contract for the versioned ProfileHealthSnapshot read model, freshness rules, invalidation, and modal alignment.', parentSectionId: 'quicklifts-profile-health-system' },
     { id: 'pulse-club-activation-architecture', label: 'Club Activation Architecture', description: 'Generic creator-club operating model for onboarding, introductions, and member pairing.' },
     { id: 'smart-routes-v1-architecture', label: 'Smart Routes v1 Architecture', description: 'First-pass routing recommendation stack, ownership boundaries, API contract, and AI role for Pulse Community.' },
     { id: 'shared-link-preview-strategy', label: 'Shared Link Preview Strategy', description: 'Fallback metadata, branded default image, and crawler-safe preview rules for shared Pulse pages.' },
@@ -50,6 +53,8 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-runtime-architecture', label: 'Runtime Stack', description: 'Parent artifact for the PulseCheck runtime operating model, state logic, assignment rules, escalation bridges, and QA posture.' },
     { id: 'pulsecheck-state-signal-layer', label: 'State Signal Layer', description: 'Operational state inference, confidence bands, freshness rules, and routing outputs for Nora.', parentSectionId: 'pulsecheck-runtime-architecture' },
     { id: 'pulsecheck-checkin-signal-layer-integration-spec', label: 'Check-In Integration Spec', description: 'AI-native contract between readiness check-in, enriched state snapshots, bounded assignment candidate sets, Nora chat context, and daily task materialization.', parentSectionId: 'pulsecheck-runtime-architecture' },
+    { id: 'pulsecheck-daily-task-training-plan-alignment-spec', label: 'Daily Task + Training Plan Alignment', description: 'Runtime surface-coherence contract for DailyTask, TrainingPlan, PlanStep, date-bound execution truth, and athlete-facing consistency across Home, Mental Training, and Nora chat.', parentSectionId: 'pulsecheck-runtime-architecture' },
+    { id: 'pulsecheck-training-plan-authoring-spec', label: 'Training Plan Authoring Spec', description: 'Runtime contract for how Nora authors longer-horizon mental-training blocks, chooses plan types, persists provenance, and feeds daily materialization.', parentSectionId: 'pulsecheck-runtime-architecture' },
     { id: 'pulsecheck-health-chat-architecture', label: 'Health Context Pipeline', description: 'Parent artifact for how PulseCheck should ingest, normalize, and use shared QuickLifts, HealthKit, Apple Watch, Oura, and self-reported athlete context.' },
     { id: 'pulsecheck-athlete-health-context-snapshot-spec', label: 'Athlete Context Snapshot Spec', description: 'Canonical contract for the normalized AthleteHealthContextSnapshot that all ingestion lanes should target before native HealthKit or Oura pipes are built.', parentSectionId: 'pulsecheck-health-chat-architecture' },
     { id: 'pulsecheck-health-context-source-record-spec', label: 'Health Context Source Record Spec', description: 'Canonical adapter-target contract for the normalized source-record layer that feeds athlete-context snapshot assembly.', parentSectionId: 'pulsecheck-health-chat-architecture' },
@@ -101,6 +106,9 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Added the QuickLifts Profile Health handbook artifact, pairing the story-led profile product spec with the ProfileHealthSnapshot runtime contract so profile hero, proof cards, and Health Data Story drill-down share one documented system truth.',
+      'Added the Daily Task + Training Plan Alignment Spec to the PulseCheck runtime stack, locking the canonical DailyTask / TrainingPlan / PlanStep model, lifecycle rules, date-boundary behavior, event contract, and surface-coherence requirements across Home, Mental Training, and Nora chat.',
+      'Added the Training Plan Authoring Spec to the PulseCheck runtime stack, defining how Nora authors longer-horizon mental-training blocks, chooses plan types and archetypes, persists provenance, and advances plan pointers over time.',
       'Added a pilot-scoped Correlation Engine dashboard stack, including the pilot dashboard, KPI addendum, and pilot ops runbook, and clarified that active-pilot monitoring is rooted in Pilot and PilotEnrollment rather than whole-team analytics.',
       'Added a Pilot Research Readout Implementation Spec to the Correlation Engine pilot stack, defining the AI-assisted interpretation tab, readiness gates, claim-discipline rules, frozen evidence frame, and human-review workflow for pilot-level research summaries.',
       'Reorganized the PulseCheck handbook around artifact-level libraries so Health Context Pipeline, Protocol System, Runtime Stack, Profile System, Onboarding & Access, and Device & Wearable Integrations now hold their related docs internally instead of exposing long sibling runs in the sidebar.',

@@ -2,9 +2,12 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../../lib/firebase-admin';
 import { getFirebaseAdminApp } from '../../../../lib/firebase-admin';
 import { mergePulseCheckRequiredConsents } from '../../../../api/firebase/pulsecheckProvisioning/types';
+import {
+  resolvePilotEnrollmentStatus,
+  resolveTeamMembershipOnboardingStatus,
+} from '../../../../api/firebase/pulsecheckProvisioning/accessState';
 import type {
   PulseCheckRequiredConsentDocument,
-  PulseCheckPilotEnrollmentStatus,
   PulseCheckPilotStudyMode,
   PulseCheckResearchConsentStatus,
   PulseCheckTeamMembershipRole,
@@ -219,6 +222,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               pilotRequiredConsents
             )
           : null;
+      const nextMembershipOnboardingStatus = resolveTeamMembershipOnboardingStatus({
+        role: teamMembershipRole,
+        athleteOnboarding: nextAthleteOnboarding,
+        studyMode: pilotStudyMode || null,
+      });
+      const nextPilotEnrollmentStatus = resolvePilotEnrollmentStatus({
+        athleteOnboarding: nextAthleteOnboarding,
+        studyMode: pilotStudyMode || null,
+      });
 
       if (teamMembershipRole === 'team-admin') {
         transaction.set(
@@ -260,7 +272,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           rosterVisibilityScope: teamMembershipRole === 'athlete' ? 'none' : 'team',
           allowedAthleteIds: [],
           athleteOnboarding: nextAthleteOnboarding,
-          onboardingStatus: teamMembershipRole === 'athlete' ? 'pending-consent' : 'pending-profile',
+          onboardingStatus: nextMembershipOnboardingStatus,
           grantedByInviteToken: token,
           grantedAt: now,
           createdAt: now,
@@ -281,7 +293,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             teamMembershipId: teamMembershipRef.id,
             studyMode: pilotStudyMode || 'operational',
             enrollmentMode: nextAthleteOnboarding.enrollmentMode === 'research' ? 'research' : 'pilot',
-            status: (existingPilotEnrollment.status as PulseCheckPilotEnrollmentStatus) || 'pending-consent',
+            status: nextPilotEnrollmentStatus,
             productConsentAccepted: Boolean(existingPilotEnrollment.productConsentAccepted),
             productConsentAcceptedAt: existingPilotEnrollment.productConsentAcceptedAt || null,
             productConsentVersion: normalizeString(existingPilotEnrollment.productConsentVersion),

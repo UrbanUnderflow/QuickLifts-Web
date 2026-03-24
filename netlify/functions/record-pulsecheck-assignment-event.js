@@ -1,5 +1,6 @@
 const { initializeFirebaseAdmin, getFirebaseAdminApp, admin, headers } = require('./config/firebase');
 const { runtimeHelpers: pulseCheckSubmissionRuntime } = require('./submit-pulsecheck-checkin');
+const { syncTrainingPlanProgression } = require('../../src/api/firebase/mentaltraining/trainingPlanAuthoringShared.js');
 
 const RESPONSE_HEADERS = {
   ...headers,
@@ -9,11 +10,12 @@ const RESPONSE_HEADERS = {
 
 const DAILY_ASSIGNMENTS_COLLECTION = 'pulsecheck-daily-assignments';
 const ASSIGNMENT_EVENTS_COLLECTION = 'pulsecheck-assignment-events';
+const TRAINING_PLANS_COLLECTION = 'pulsecheck-training-plans';
 const SNAPSHOTS_COLLECTION = 'state-snapshots';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 
 const STAFF_ROLES = new Set(['team-admin', 'coach', 'performance-staff', 'support-staff', 'clinician']);
-const TERMINAL_STATUSES = new Set(['completed', 'overridden', 'deferred', 'superseded']);
+const TERMINAL_STATUSES = new Set(['completed', 'overridden', 'deferred', 'superseded', 'expired']);
 
 async function verifyAuth(event, adminApp) {
   const authHeader = event.headers?.authorization || event.headers?.Authorization;
@@ -102,12 +104,18 @@ function buildRefreshNote({ assignment, eventType, reason }) {
   switch (eventType) {
     case 'started':
       return `Execution refresh: the athlete started ${actionText}.${reasonText}`;
+    case 'paused':
+      return `Execution refresh: the athlete paused ${actionText}.${reasonText}`;
+    case 'resumed':
+      return `Execution refresh: the athlete resumed ${actionText}.${reasonText}`;
     case 'completed':
       return `Execution refresh: the athlete completed ${actionText}.${reasonText}`;
     case 'deferred':
       return `Execution refresh: the assignment was deferred.${reasonText}`;
     case 'overridden':
       return `Execution refresh: the assignment was coach-adjusted.${reasonText}`;
+    case 'expired':
+      return `Execution refresh: the assignment expired.${reasonText}`;
     default:
       return `Execution refresh: ${eventType} for ${actionText}.${reasonText}`;
   }
@@ -138,8 +146,41 @@ function summarizeAssignmentForEvent(assignment, executionTruthOwner) {
     supportFlag: typeof assignment.supportFlag === 'boolean' ? assignment.supportFlag : null,
     decisionSource: assignment.decisionSource || null,
     executionTruthOwner: executionTruthOwner || 'nora',
+    trainingPlanId: assignment.trainingPlanId || null,
+    trainingPlanStepIndex: typeof assignment.trainingPlanStepIndex === 'number' ? assignment.trainingPlanStepIndex : null,
+    trainingPlanStepId: assignment.trainingPlanStepId || null,
+    executionPattern: assignment.executionPattern || null,
+    phaseProgress: assignment.phaseProgress || null,
+    executionLock: assignment.executionLock || null,
+    completionSummary: assignment.completionSummary || null,
     updatedAt: assignment.updatedAt || null,
   });
+}
+
+function resolveTrainingPlanStepIndex(assignment) {
+  if (typeof assignment?.trainingPlanStepIndex === 'number') {
+    return assignment.trainingPlanStepIndex;
+  }
+
+  return null;
+}
+
+function resolvePlanStepEventType(eventType) {
+  switch (eventType) {
+    case 'started':
+    case 'viewed':
+    case 'paused':
+    case 'resumed':
+      return 'plan_step_activated';
+    case 'completed':
+      return 'plan_step_completed';
+    case 'overridden':
+    case 'deferred':
+    case 'expired':
+      return 'plan_step_overridden';
+    default:
+      return null;
+  }
 }
 
 function resolveExecutionTruthOwner({ assignment, eventType, actorType }) {
@@ -155,7 +196,7 @@ function resolveExecutionTruthOwner({ assignment, eventType, actorType }) {
 }
 
 function refreshSnapshotFromAssignmentEvent({ snapshot, assignment, eventType, eventId, eventAt, reason }) {
-  if (!snapshot || !eventType || eventType === 'viewed') {
+  if (!snapshot || !eventType || eventType === 'viewed' || eventType === 'paused' || eventType === 'resumed') {
     return null;
   }
 
@@ -245,7 +286,7 @@ function refreshSnapshotFromAssignmentEvent({ snapshot, assignment, eventType, e
 }
 
 async function maybeRefreshStateSnapshot({ db, assignment, eventType, eventId, eventAt, reason }) {
-  if (!['started', 'completed', 'deferred', 'overridden'].includes(eventType)) {
+  if (!['started', 'completed', 'deferred', 'overridden', 'expired'].includes(eventType)) {
     return null;
   }
 
@@ -279,7 +320,7 @@ async function maybeRefreshStateSnapshot({ db, assignment, eventType, eventId, e
 }
 
 async function maybeRefreshResponsivenessProfile({ db, assignment, eventType }) {
-  if (!['started', 'completed', 'deferred', 'overridden'].includes(eventType)) {
+  if (!['started', 'completed', 'deferred', 'overridden', 'expired'].includes(eventType)) {
     return null;
   }
 
@@ -289,6 +330,266 @@ async function maybeRefreshResponsivenessProfile({ db, assignment, eventType }) 
     athleteId: assignment.athleteId,
     protocolRegistry: liveProtocolRegistry,
   });
+}
+
+async function maybeApplyPlanStepSideEffects({
+  db,
+  assignment,
+  nextAssignment,
+  eventType,
+  actorType,
+  actorUserId,
+  eventAt,
+  reason,
+  assignmentEventId,
+}) {
+  const sideEffectEventType = resolvePlanStepEventType(eventType);
+  if (!sideEffectEventType || !assignment?.trainingPlanId) {
+    return null;
+  }
+
+  const planRef = db.collection(TRAINING_PLANS_COLLECTION).doc(assignment.trainingPlanId);
+  const planSnap = await planRef.get();
+  if (!planSnap.exists) {
+    return null;
+  }
+
+  const plan = { id: planSnap.id, ...(planSnap.data() || {}) };
+  const steps = Array.isArray(plan.steps) ? plan.steps.map((entry) => ({ ...entry })) : [];
+  if (!steps.length) {
+    return null;
+  }
+
+  const candidateIndex = resolveTrainingPlanStepIndex(assignment);
+  const resolvedIndex =
+    candidateIndex !== null
+      ? steps.findIndex((entry) => Number(entry.stepIndex) === Number(candidateIndex))
+      : steps.findIndex((entry) => entry.id === assignment.trainingPlanStepId);
+
+  if (resolvedIndex < 0 || resolvedIndex >= steps.length) {
+    return null;
+  }
+
+  const currentStep = steps[resolvedIndex] || {};
+  const nextStep = { ...currentStep };
+  const nextPlan = {
+    ...plan,
+    steps,
+  };
+
+  let shouldWritePlan = false;
+  let shouldWritePlanEvent = false;
+  const lifecycleEvents = [];
+  const executionTruthOwner = resolveExecutionTruthOwner({ assignment: nextAssignment, actorType, eventType });
+  const assignmentSummary = summarizeAssignmentForEvent(nextAssignment || assignment, executionTruthOwner);
+  const completionSummary = nextAssignment?.completionSummary || assignment.completionSummary || null;
+  const resolvedPlanStepIndex = Number(currentStep.stepIndex || candidateIndex || 0) || null;
+
+  switch (eventType) {
+    case 'viewed':
+    case 'started':
+      if (!['completed', 'overridden', 'skipped'].includes(String(currentStep.stepStatus || ''))) {
+        if (currentStep.stepStatus !== 'active_today') {
+          nextStep.stepStatus = 'active_today';
+          nextStep.linkedDailyTaskId = assignment.id;
+          nextStep.linkedDailyTaskSourceDate = assignment.sourceDate || undefined;
+          nextStep.startedAt = currentStep.startedAt || eventAt;
+          shouldWritePlan = true;
+          shouldWritePlanEvent = true;
+        }
+      }
+      break;
+    case 'paused':
+      if (nextPlan.status !== 'paused') {
+        nextPlan.status = 'paused';
+        nextPlan.pausedAt = eventAt;
+        shouldWritePlan = true;
+        lifecycleEvents.push('training_plan_paused');
+      }
+      if (!['completed', 'overridden', 'skipped'].includes(String(currentStep.stepStatus || '')) && currentStep.stepStatus !== 'active_today') {
+        nextStep.stepStatus = 'active_today';
+        nextStep.linkedDailyTaskId = assignment.id;
+        nextStep.linkedDailyTaskSourceDate = assignment.sourceDate || undefined;
+        nextStep.startedAt = currentStep.startedAt || eventAt;
+        shouldWritePlan = true;
+      }
+      shouldWritePlanEvent = true;
+      break;
+    case 'resumed':
+      if (nextPlan.status === 'paused') {
+        nextPlan.status = 'active';
+        nextPlan.resumedAt = eventAt;
+        shouldWritePlan = true;
+        lifecycleEvents.push('training_plan_resumed');
+      }
+      if (!['completed', 'overridden', 'skipped'].includes(String(currentStep.stepStatus || '')) && currentStep.stepStatus !== 'active_today') {
+        nextStep.stepStatus = 'active_today';
+        nextStep.linkedDailyTaskId = assignment.id;
+        nextStep.linkedDailyTaskSourceDate = assignment.sourceDate || undefined;
+        nextStep.startedAt = currentStep.startedAt || eventAt;
+        shouldWritePlan = true;
+      }
+      shouldWritePlanEvent = true;
+      break;
+    case 'completed':
+      if (currentStep.stepStatus !== 'completed') {
+        nextStep.stepStatus = 'completed';
+        nextStep.linkedDailyTaskId = assignment.id;
+        nextStep.linkedDailyTaskSourceDate = assignment.sourceDate || undefined;
+        nextStep.completedAt = currentStep.completedAt || eventAt;
+        nextStep.resultSummary = completionSummary || currentStep.resultSummary || undefined;
+        nextPlan.completedCount = Math.max(Number(plan.completedCount || 0) + 1, Number(plan.completedCount || 0));
+        nextPlan.latestResultSummary =
+          completionSummary?.noraTakeaway
+          || assignmentSummary?.completionSummary?.noraTakeaway
+          || assignmentSummary?.rationale
+          || reason
+          || currentStep.resultSummary?.noraTakeaway
+          || currentStep.stepLabel
+          || null;
+        nextPlan.latestResultAt = eventAt;
+        nextPlan.nextDueStepIndex = (Number(nextStep.stepIndex || resolvedPlanStepIndex || 0) || 0) + 1;
+        if (typeof nextPlan.targetCount === 'number' && nextPlan.completedCount >= nextPlan.targetCount) {
+          nextPlan.status = 'completed';
+        }
+        shouldWritePlan = true;
+        shouldWritePlanEvent = true;
+      }
+      break;
+    case 'overridden':
+    case 'deferred':
+    case 'expired':
+      if (currentStep.stepStatus !== 'overridden') {
+        nextStep.stepStatus = eventType === 'deferred' ? 'deferred' : 'overridden';
+        nextStep.linkedDailyTaskId = assignment.id;
+        nextStep.linkedDailyTaskSourceDate = assignment.sourceDate || undefined;
+        nextStep.overrideReason = reason || assignment.overrideReason || currentStep.overrideReason || 'Assignment adjusted.';
+        nextStep.resultSummary = currentStep.resultSummary || undefined;
+        nextPlan.latestResultSummary = nextStep.overrideReason;
+        nextPlan.latestResultAt = eventAt;
+        shouldWritePlan = true;
+        shouldWritePlanEvent = true;
+      }
+      break;
+    default:
+      break;
+  }
+
+  if (!shouldWritePlanEvent && !lifecycleEvents.length) {
+    return null;
+  }
+
+  steps[resolvedIndex] = stripUndefinedDeep(nextStep);
+  nextPlan.steps = steps;
+
+  if (!nextPlan.sourceDailyTaskId) {
+    nextPlan.sourceDailyTaskId = assignment.id;
+  }
+
+  if (!nextPlan.sourceDate) {
+    nextPlan.sourceDate = assignment.sourceDate || undefined;
+  }
+
+  if (assignment.timezone && !nextPlan.timezone) {
+    nextPlan.timezone = assignment.timezone;
+  }
+
+  const normalizedPlan = syncTrainingPlanProgression(nextPlan);
+  if (normalizedPlan.status === 'completed' && plan.status !== 'completed') {
+    lifecycleEvents.push('training_plan_completed');
+  }
+
+  if (shouldWritePlan) {
+    await planRef.set(
+      stripUndefinedDeep({
+        ...normalizedPlan,
+        steps: normalizedPlan.steps,
+      }),
+      { merge: true }
+    );
+  }
+
+  let planEvent = null;
+  let planEventRef = null;
+  if (shouldWritePlanEvent) {
+    planEventRef = db.collection(ASSIGNMENT_EVENTS_COLLECTION).doc();
+    planEvent = stripUndefinedDeep({
+      assignmentId: assignment.id,
+      athleteId: assignment.athleteId || '',
+      teamId: assignment.teamId || '',
+      sourceDate: assignment.sourceDate || '',
+      trainingPlanId: assignment.trainingPlanId,
+      trainingPlanStepId: assignment.trainingPlanStepId || null,
+      trainingPlanStepIndex: resolvedPlanStepIndex,
+      eventType: sideEffectEventType,
+      actorType,
+      actorUserId,
+      eventAt,
+      executionPattern: assignment.executionPattern || null,
+      phaseProgress: assignment.phaseProgress || null,
+      executionLock: assignment.executionLock || null,
+      completionSummary: completionSummary || null,
+      metadata: {
+        relatedAssignmentEventId: assignmentEventId,
+        relatedAssignmentEventType: eventType,
+        planStatusBefore: plan.status || null,
+        planStatusAfter: normalizedPlan.status || plan.status || null,
+        planStepBefore: currentStep.stepStatus || null,
+        planStepAfter: nextStep.stepStatus || null,
+        planStepLabel: currentStep.stepLabel || assignment.trainingPlanStepLabel || null,
+        trainingPlanStepId: assignment.trainingPlanStepId || null,
+        trainingPlanStepIndex: resolvedPlanStepIndex,
+        linkedDailyTaskId: assignment.id,
+        linkedDailyTaskSourceDate: assignment.sourceDate || null,
+        executionTruthOwner,
+        assignmentSummary,
+        completionSummary,
+        reason: reason || null,
+      },
+      createdAt: eventAt,
+    });
+    await planEventRef.set(planEvent);
+  }
+
+  for (const lifecycleEventType of lifecycleEvents) {
+    const lifecycleEventRef = db.collection(ASSIGNMENT_EVENTS_COLLECTION).doc();
+    await lifecycleEventRef.set(
+      stripUndefinedDeep({
+        assignmentId: assignment.id,
+        athleteId: assignment.athleteId || '',
+        teamId: assignment.teamId || '',
+        sourceDate: assignment.sourceDate || '',
+        trainingPlanId: assignment.trainingPlanId,
+        trainingPlanStepId: assignment.trainingPlanStepId || null,
+        trainingPlanStepIndex: resolvedPlanStepIndex,
+        eventType: lifecycleEventType,
+        actorType,
+        actorUserId,
+        eventAt,
+        metadata: {
+          relatedAssignmentEventId: assignmentEventId,
+          relatedAssignmentEventType: eventType,
+          planStatusBefore: plan.status || null,
+          planStatusAfter: normalizedPlan.status || null,
+          linkedDailyTaskId: assignment.id,
+          linkedDailyTaskSourceDate: assignment.sourceDate || null,
+          reason: reason || null,
+        },
+        createdAt: eventAt,
+      })
+    );
+  }
+
+  return {
+    plan: normalizedPlan,
+    step: nextStep,
+    event: planEvent && planEventRef
+      ? {
+          id: planEventRef.id,
+          ...planEvent,
+        }
+      : null,
+  };
 }
 
 function buildAssignmentUpdates(existing, eventType, actorUserId, reason, eventAt) {
@@ -304,6 +605,20 @@ function buildAssignmentUpdates(existing, eventType, actorUserId, reason, eventA
       return {
         status: 'started',
         startedAt: existing.startedAt || eventAt,
+        updatedAt: eventAt,
+      };
+    case 'paused':
+      if (TERMINAL_STATUSES.has(existing.status)) return null;
+      return {
+        status: 'paused',
+        pausedAt: existing.pausedAt || eventAt,
+        updatedAt: eventAt,
+      };
+    case 'resumed':
+      if (TERMINAL_STATUSES.has(existing.status)) return null;
+      return {
+        status: existing.status === 'paused' ? 'started' : existing.status || 'started',
+        resumedAt: eventAt,
         updatedAt: eventAt,
       };
     case 'completed':
@@ -328,6 +643,13 @@ function buildAssignmentUpdates(existing, eventType, actorUserId, reason, eventA
         status: 'deferred',
         overriddenBy: actorUserId,
         overrideReason: reason || existing.overrideReason || 'Assignment deferred.',
+        updatedAt: eventAt,
+      };
+    case 'expired':
+      if (TERMINAL_STATUSES.has(existing.status)) return null;
+      return {
+        status: 'expired',
+        expiredAt: eventAt,
         updatedAt: eventAt,
       };
     default:
@@ -355,7 +677,12 @@ async function resolveRequesterRole(db, assignment, requesterId) {
 
 async function assertAuthorized(db, assignment, eventType, requesterId) {
   const requesterRole = await resolveRequesterRole(db, assignment, requesterId);
-  const athleteEvent = eventType === 'viewed' || eventType === 'started' || eventType === 'completed';
+  const athleteEvent =
+    eventType === 'viewed'
+    || eventType === 'started'
+    || eventType === 'paused'
+    || eventType === 'resumed'
+    || eventType === 'completed';
 
   if (athleteEvent) {
     if (requesterId !== assignment.athleteId) {
@@ -372,7 +699,7 @@ async function assertAuthorized(db, assignment, eventType, requesterId) {
 }
 
 function resolveActorType({ eventType, requesterRole, assignment, requesterId }) {
-  if (eventType === 'viewed' || eventType === 'started' || eventType === 'completed') {
+  if (eventType === 'viewed' || eventType === 'started' || eventType === 'paused' || eventType === 'resumed' || eventType === 'completed') {
     return requesterId === assignment.athleteId ? 'athlete' : 'system';
   }
   if (requesterRole === 'coach') return 'coach';
@@ -412,8 +739,8 @@ exports.handler = async (event) => {
       throw createError(400, 'assignmentId is required.');
     }
 
-    if (!['viewed', 'started', 'completed', 'deferred', 'overridden'].includes(eventType)) {
-      throw createError(400, 'eventType must be one of viewed, started, completed, deferred, or overridden.');
+    if (!['viewed', 'started', 'paused', 'resumed', 'completed', 'deferred', 'overridden', 'expired'].includes(eventType)) {
+      throw createError(400, 'eventType must be one of viewed, started, paused, resumed, completed, deferred, overridden, or expired.');
     }
 
     if (actorUserId !== decodedToken.uid) {
@@ -430,6 +757,15 @@ exports.handler = async (event) => {
     const requesterRole = await assertAuthorized(db, assignment, eventType, decodedToken.uid);
     const eventAt = Date.now();
     const updates = buildAssignmentUpdates(assignment, eventType, actorUserId, reason, eventAt);
+    if (updates && eventType === 'completed' && metadata?.completionSummary) {
+      updates.completionSummary = metadata.completionSummary;
+    }
+    if (updates && metadata?.executionLock) {
+      updates.executionLock = {
+        ...(assignment.executionLock || {}),
+        ...metadata.executionLock,
+      };
+    }
     const nextAssignment = updates ? { ...assignment, ...updates } : assignment;
     const actorType = resolveActorType({ eventType, requesterRole, assignment, requesterId: decodedToken.uid });
     const previousExecutionTruthOwner = resolveExecutionTruthOwner({ assignment, actorType, eventType: 'viewed' });
@@ -449,6 +785,13 @@ exports.handler = async (event) => {
       actorType,
       actorUserId,
       eventAt,
+      trainingPlanId: assignment.trainingPlanId || null,
+      trainingPlanStepId: assignment.trainingPlanStepId || null,
+      trainingPlanStepIndex: typeof assignment.trainingPlanStepIndex === 'number' ? assignment.trainingPlanStepIndex : null,
+      executionPattern: assignment.executionPattern || null,
+      phaseProgress: assignment.phaseProgress || null,
+      executionLock: nextAssignment.executionLock || assignment.executionLock || null,
+      completionSummary: nextAssignment.completionSummary || assignment.completionSummary || null,
       metadata: {
         ...(metadata || {}),
         ...(reason ? { reason } : {}),
@@ -458,6 +801,11 @@ exports.handler = async (event) => {
         nextAssignmentSummary: summarizeAssignmentForEvent(nextAssignment, nextExecutionTruthOwner),
         previousExecutionTruthOwner,
         nextExecutionTruthOwner,
+        trainingPlanId: assignment.trainingPlanId || null,
+        trainingPlanStepIndex: typeof assignment.trainingPlanStepIndex === 'number' ? assignment.trainingPlanStepIndex : null,
+        trainingPlanStepId: assignment.trainingPlanStepId || null,
+        executionPattern: assignment.executionPattern || null,
+        phaseProgress: assignment.phaseProgress || null,
       },
       createdAt: eventAt,
     };
@@ -475,6 +823,20 @@ exports.handler = async (event) => {
       assignment: nextAssignment,
       eventType,
     });
+    const planSideEffect = await maybeApplyPlanStepSideEffects({
+      db,
+      assignment,
+      nextAssignment,
+      eventType,
+      actorType,
+      actorUserId,
+      eventAt,
+      reason,
+      assignmentEventId: eventRef.id,
+    }).catch((error) => {
+      console.warn('[record-pulsecheck-assignment-event] Plan-step side effect failed:', error);
+      return null;
+    });
 
     return {
       statusCode: 200,
@@ -487,6 +849,7 @@ exports.handler = async (event) => {
         },
         stateSnapshot: refreshedStateSnapshot,
         responsivenessProfile,
+        planSideEffect,
       }),
     };
   } catch (error) {

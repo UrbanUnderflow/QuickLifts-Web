@@ -413,6 +413,7 @@ export interface MentalCheckIn {
   suggestedExerciseId?: string;
   exerciseCompleted?: boolean;
   taxonomyState?: TaxonomyCheckInState;
+  timezone?: string;
 
   createdAt: number;
   date: string; // YYYY-MM-DD for grouping
@@ -429,6 +430,7 @@ export interface SubmitPulseCheckCheckInInput {
   notes?: string;
   taxonomyState?: TaxonomyCheckInState;
   sourceDate?: string;
+  timezone?: string;
 }
 
 // ============================================================================
@@ -697,14 +699,36 @@ export enum PulseCheckDailyAssignmentStatus {
   Assigned = 'assigned',
   Viewed = 'viewed',
   Started = 'started',
+  Paused = 'paused',
   Completed = 'completed',
   Overridden = 'overridden',
   Deferred = 'deferred',
   Superseded = 'superseded',
+  Expired = 'expired',
 }
 
 export type PulseCheckDailyAssignmentActionType = 'sim' | 'lighter_sim' | 'protocol' | 'defer';
-export type PulseCheckAssignmentEventType = 'viewed' | 'started' | 'completed' | 'deferred' | 'overridden';
+export type PulseCheckAssignmentEventType =
+  | 'daily_task_materialized'
+  | 'daily_task_superseded'
+  | 'training_plan_authored'
+  | 'training_plan_superseded'
+  | 'training_plan_completed'
+  | 'training_plan_paused'
+  | 'training_plan_resumed'
+  | 'training_plan_authoring_failed'
+  | 'training_plan_step_authored'
+  | 'viewed'
+  | 'started'
+  | 'paused'
+  | 'resumed'
+  | 'completed'
+  | 'deferred'
+  | 'overridden'
+  | 'expired'
+  | 'plan_step_activated'
+  | 'plan_step_completed'
+  | 'plan_step_overridden';
 export type PulseCheckAssignmentEventActorType = 'athlete' | 'coach' | 'staff' | 'system';
 export type PulseCheckStateConfidence = 'high' | 'medium' | 'low';
 export type PulseCheckStateFreshness = 'current' | 'degraded' | 'refresh_required';
@@ -1028,6 +1052,10 @@ export interface PulseCheckAssignmentCandidate {
   responsivenessFreshness?: PulseCheckStateFreshness;
   responsivenessSummary?: string;
   responsivenessStateFit?: string[];
+  executionPattern?: PulseCheckDailyTaskExecutionPattern;
+  trainingPlanId?: string | null;
+  trainingPlanStepId?: string | null;
+  trainingPlanStepIndex?: number | null;
   sessionType?: SessionType;
   durationMode?: DurationMode;
   durationSeconds?: number;
@@ -1038,6 +1066,10 @@ export interface PulseCheckAssignmentCandidateSet {
   athleteId: string;
   sourceDate: string;
   sourceStateSnapshotId: string;
+  trainingPlanId?: string | null;
+  trainingPlanStepId?: string | null;
+  trainingPlanStepIndex?: number | null;
+  planDrivenCandidateId?: string | null;
   candidates: PulseCheckAssignmentCandidate[];
   candidateIds: string[];
   candidateClassHints: PulseCheckAssignmentCandidateType[];
@@ -1158,6 +1190,147 @@ export interface PulseCheckProtocolPracticeSession {
   scorecard?: PulseCheckProtocolPracticeScorecard;
 }
 
+export type PulseCheckDailyTaskMaterializedBy = 'nora_runtime' | 'coach_manual' | 'system_scheduled';
+export type PulseCheckDailyTaskSourceDateMode = 'athlete_local_day' | 'calendar_day' | 'manual_override';
+export type PulseCheckDailyTaskExecutionPattern = 'single' | 'protocol_then_sim' | 'sim_then_protocol';
+export type PulseCheckTrainingPlanStatus = 'active' | 'paused' | 'completed' | 'superseded';
+export type PulseCheckTrainingPlanType = 'sim_focused' | 'protocol_focused' | 'mixed' | 'assessment';
+export type PulseCheckTrainingPlanProgressMode = 'days' | 'sessions' | 'open_ended';
+export type PulseCheckTrainingPlanAssignedBy = 'nora' | 'coach' | 'system';
+export type PulseCheckTrainingPlanAuthoringTrigger =
+  | 'baseline_complete'
+  | 'exploratory_window_complete'
+  | 'plan_completed'
+  | 'significant_profile_change'
+  | 'coach_manual';
+export type PulseCheckPlanStepStatus = 'planned' | 'active_today' | 'completed' | 'deferred' | 'overridden' | 'skipped' | 'superseded';
+
+export interface PulseCheckMetricSummary {
+  key: string;
+  label: string;
+  value: string | number;
+  unit?: string;
+  detail?: string;
+  trend?: 'up' | 'down' | 'flat' | 'mixed';
+}
+
+export interface PulseCheckDailyTaskPhaseProgress {
+  currentPhaseIndex: number;
+  totalPhases: number;
+  currentPhaseLabel?: string;
+  phaseLabels?: string[];
+}
+
+export interface PulseCheckDailyTaskCompletionSummary {
+  primaryMetric?: PulseCheckMetricSummary;
+  secondaryMetrics?: PulseCheckMetricSummary[];
+  noraTakeaway?: string;
+  followUpPrompt?: string;
+  durationSeconds?: number;
+  phaseProgress?: PulseCheckDailyTaskPhaseProgress;
+  resultNotes?: string;
+}
+
+export interface PulseCheckDailyTaskOverrideMetadata {
+  overrideType?: 'state_based_adjustment' | 'coach_manual' | 'inventory_gap' | 'safety' | 'program_update';
+  overriddenBy?: string;
+  overriddenByRole?: PulseCheckAssignmentEventActorType;
+  overrideReason?: string;
+  originalAssignmentId?: string;
+  originalActionType?: PulseCheckDailyAssignmentActionType;
+  originalTrainingPlanId?: string;
+  originalPlanStepId?: string;
+  originalPlanStepIndex?: number;
+}
+
+export interface PulseCheckDailyTaskExecutionLock {
+  coachFrozen?: boolean; // Execution-lock metadata lives on the task record, not the plan record.
+  lockedAt?: number;
+  lockedBy?: string;
+  lockedByRole?: PulseCheckAssignmentEventActorType;
+  lockReason?: string;
+}
+
+export interface PulseCheckPlanStepResultSummary {
+  primaryMetric?: PulseCheckMetricSummary;
+  secondaryMetrics?: PulseCheckMetricSummary[];
+  noraTakeaway?: string;
+  followUpPrompt?: string;
+  completedAt?: number;
+}
+
+export interface PulseCheckPlanStep {
+  id: string;
+  stepIndex: number;
+  stepLabel: string;
+  stepStatus: PulseCheckPlanStepStatus;
+  actionType: PulseCheckDailyAssignmentActionType;
+  exerciseId: string;
+  simSpecId?: string;
+  protocolId?: string;
+  protocolClass?: PulseCheckProtocolClass;
+  executionPattern?: PulseCheckDailyTaskExecutionPattern;
+  targetSkills?: TaxonomySkill[];
+  archetypeStepKey?: string;
+  linkedDailyTaskId?: string;
+  linkedDailyTaskSourceDate?: string;
+  overrideReason?: string;
+  resultSummary?: PulseCheckPlanStepResultSummary;
+  plannedDurationSeconds?: number;
+  startedAt?: number;
+  completedAt?: number;
+  skippedAt?: number;
+  dueSourceDate?: string;
+  timezone?: string;
+}
+
+export interface PulseCheckTrainingPlan {
+  id: string;
+  athleteId: string;
+  title: string;
+  goal: string;
+  planType: PulseCheckTrainingPlanType;
+  status: PulseCheckTrainingPlanStatus;
+  isPrimary: boolean; // Exactly one active plan per athlete should be primary.
+  progressMode: PulseCheckTrainingPlanProgressMode;
+  targetCount: number | null;
+  completedCount: number;
+  steps: PulseCheckPlanStep[];
+  assignedBy: PulseCheckTrainingPlanAssignedBy;
+  coachId?: string;
+  targetSkills?: TaxonomySkill[];
+  authoringTrigger?: PulseCheckTrainingPlanAuthoringTrigger;
+  authoringFocusSkill?: TaxonomySkill | null;
+  archetypeId?: string | null;
+  archetypeVersion?: string | null;
+  authoringRulesVersion?: string | null;
+  sourceStateSnapshotId?: string;
+  sourceProfileSnapshotId?: string | null;
+  sourceProgramPrescriptionId?: string | null;
+  sourceProgramGeneratedAt?: number | null;
+  sourceDailyTaskId?: string;
+  primaryPlanId?: string; // Secondary coach work can point back to the primary plan it accompanies.
+  sourceDate?: string;
+  timezone?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  cadence?: string | null;
+  primaryPlanMetric?: string | null;
+  latestResultSummary?: string | null;
+  latestResultAt?: number | null;
+  nextDueStepIndex?: number | null;
+  currentStepIndex?: number | null;
+  lastCompletedStepIndex?: number | null;
+  exploratoryWindowRepCount?: number | null;
+  inventoryFallbackReason?: string | null;
+  supersededByPlanId?: string | null;
+  supersededReason?: string | null;
+  pausedAt?: number | null;
+  resumedAt?: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface PulseCheckStateSnapshot {
   id: string;
   athleteId: string;
@@ -1200,9 +1373,15 @@ export interface PulseCheckDailyAssignment {
   sourceStateSnapshotId?: string;
   sourceCandidateSetId?: string;
   sourceDate: string; // YYYY-MM-DD
+  timezone?: string;
+  sourceDateMode?: PulseCheckDailyTaskSourceDateMode;
   assignedBy: 'nora';
+  materializedAt?: number;
+  materializedBy?: PulseCheckDailyTaskMaterializedBy;
+  isPrimaryForDate?: boolean;
   status: PulseCheckDailyAssignmentStatus;
   actionType: PulseCheckDailyAssignmentActionType;
+  executionPattern?: PulseCheckDailyTaskExecutionPattern;
   chosenCandidateId?: string;
   chosenCandidateType?: PulseCheckAssignmentCandidateType;
   simSpecId?: string;
@@ -1235,6 +1414,21 @@ export interface PulseCheckDailyAssignment {
   supportFlag?: boolean;
   programSnapshot?: ProgramPrescription;
   protocolPracticeSession?: PulseCheckProtocolPracticeSession;
+  trainingPlanId?: string;
+  trainingPlanStepId?: string;
+  trainingPlanStepIndex?: number;
+  trainingPlanStepLabel?: string;
+  trainingPlanIsPrimary?: boolean;
+  isPlanOverride?: boolean;
+  overrideMetadata?: PulseCheckDailyTaskOverrideMetadata;
+  supersededByDailyTaskId?: string;
+  supersededReason?: string;
+  executionLock?: PulseCheckDailyTaskExecutionLock;
+  phaseProgress?: PulseCheckDailyTaskPhaseProgress;
+  completionSummary?: PulseCheckDailyTaskCompletionSummary;
+  pausedAt?: number;
+  resumedAt?: number;
+  expiredAt?: number;
   coachNotifiedAt?: number;
   startedAt?: number;
   completedAt?: number;
@@ -1245,6 +1439,10 @@ export interface PulseCheckDailyAssignment {
   createdAt: number;
   updatedAt: number;
 }
+
+export type DailyTask = PulseCheckDailyAssignment;
+export type TrainingPlan = PulseCheckTrainingPlan;
+export type PlanStep = PulseCheckPlanStep;
 
 export interface PulseCheckCheckInSubmissionResult {
   checkIn: MentalCheckIn;
@@ -1271,6 +1469,13 @@ export interface PulseCheckAssignmentEvent {
   actorType: PulseCheckAssignmentEventActorType;
   actorUserId: string;
   eventAt: number;
+  trainingPlanId?: string;
+  trainingPlanStepId?: string;
+  trainingPlanStepIndex?: number;
+  executionPattern?: PulseCheckDailyTaskExecutionPattern;
+  phaseProgress?: PulseCheckDailyTaskPhaseProgress;
+  executionLock?: PulseCheckDailyTaskExecutionLock;
+  completionSummary?: PulseCheckDailyTaskCompletionSummary;
   metadata?: Record<string, unknown>;
   createdAt: number;
 }
@@ -1279,6 +1484,11 @@ export interface PulseCheckAssignmentEventRecordResult {
   assignment: PulseCheckDailyAssignment;
   event: PulseCheckAssignmentEvent;
   stateSnapshot?: PulseCheckStateSnapshot | null;
+  planSideEffect?: {
+    plan: PulseCheckTrainingPlan;
+    step: PulseCheckPlanStep;
+    event: PulseCheckAssignmentEvent;
+  } | null;
 }
 
 export interface PulseCheckConversationDerivedSignalDelta {
@@ -1627,6 +1837,7 @@ export function checkInToFirestore(checkIn: MentalCheckIn): Record<string, any> 
   if (checkIn.suggestedExerciseId) data.suggestedExerciseId = checkIn.suggestedExerciseId;
   if (typeof checkIn.exerciseCompleted === 'boolean') data.exerciseCompleted = checkIn.exerciseCompleted;
   if (checkIn.taxonomyState) data.taxonomyState = sanitizeFirestoreValue(checkIn.taxonomyState);
+  if (checkIn.timezone) data.timezone = checkIn.timezone;
 
   return data;
 }
@@ -1645,6 +1856,7 @@ export function checkInFromFirestore(id: string, data: Record<string, any>): Men
     suggestedExerciseId: data.suggestedExerciseId,
     exerciseCompleted: data.exerciseCompleted,
     taxonomyState: data.taxonomyState,
+    timezone: data.timezone,
     createdAt: data.createdAt || Date.now(),
     date: data.date || new Date().toISOString().split('T')[0],
   };
@@ -1777,6 +1989,159 @@ export function curriculumAssignmentFromFirestore(id: string, data: Record<strin
   };
 }
 
+export function pulseCheckPlanStepToFirestore(step: PulseCheckPlanStep): Record<string, any> {
+  return stripUndefinedDeep({
+    id: step.id,
+    stepIndex: step.stepIndex,
+    stepLabel: step.stepLabel,
+    stepStatus: step.stepStatus,
+    actionType: step.actionType,
+    exerciseId: step.exerciseId,
+    simSpecId: step.simSpecId || null,
+    protocolId: step.protocolId || null,
+    protocolClass: step.protocolClass || null,
+    executionPattern: step.executionPattern || null,
+    targetSkills: Array.isArray(step.targetSkills) ? step.targetSkills : null,
+    archetypeStepKey: step.archetypeStepKey || null,
+    linkedDailyTaskId: step.linkedDailyTaskId || null,
+    linkedDailyTaskSourceDate: step.linkedDailyTaskSourceDate || null,
+    overrideReason: step.overrideReason || null,
+    resultSummary: step.resultSummary || null,
+    plannedDurationSeconds: step.plannedDurationSeconds || null,
+    startedAt: step.startedAt || null,
+    completedAt: step.completedAt || null,
+    skippedAt: step.skippedAt || null,
+    dueSourceDate: step.dueSourceDate || null,
+    timezone: step.timezone || null,
+  });
+}
+
+export function pulseCheckPlanStepFromFirestore(id: string, data: Record<string, any>): PulseCheckPlanStep {
+  return {
+    id: data.id || id,
+    stepIndex: typeof data.stepIndex === 'number' ? data.stepIndex : 0,
+    stepLabel: data.stepLabel || '',
+    stepStatus: data.stepStatus || 'planned',
+    actionType: data.actionType || 'sim',
+    exerciseId: data.exerciseId || '',
+    simSpecId: data.simSpecId || undefined,
+    protocolId: data.protocolId || undefined,
+    protocolClass: data.protocolClass || undefined,
+    executionPattern: data.executionPattern || undefined,
+    targetSkills: Array.isArray(data.targetSkills) ? data.targetSkills : undefined,
+    archetypeStepKey: data.archetypeStepKey || undefined,
+    linkedDailyTaskId: data.linkedDailyTaskId || undefined,
+    linkedDailyTaskSourceDate: data.linkedDailyTaskSourceDate || undefined,
+    overrideReason: data.overrideReason || undefined,
+    resultSummary: data.resultSummary || undefined,
+    plannedDurationSeconds: typeof data.plannedDurationSeconds === 'number' ? data.plannedDurationSeconds : undefined,
+    startedAt: typeof data.startedAt === 'number' ? data.startedAt : undefined,
+    completedAt: typeof data.completedAt === 'number' ? data.completedAt : undefined,
+    skippedAt: typeof data.skippedAt === 'number' ? data.skippedAt : undefined,
+    dueSourceDate: data.dueSourceDate || undefined,
+    timezone: data.timezone || undefined,
+  };
+}
+
+export function pulseCheckTrainingPlanToFirestore(plan: PulseCheckTrainingPlan): Record<string, any> {
+  return stripUndefinedDeep({
+    athleteId: plan.athleteId,
+    title: plan.title,
+    goal: plan.goal,
+    planType: plan.planType,
+    status: plan.status,
+    isPrimary: plan.isPrimary,
+    progressMode: plan.progressMode,
+    targetCount: plan.targetCount,
+    completedCount: plan.completedCount,
+    steps: Array.isArray(plan.steps) ? plan.steps.map((step) => pulseCheckPlanStepToFirestore(step)) : [],
+    assignedBy: plan.assignedBy,
+    coachId: plan.coachId || null,
+    targetSkills: Array.isArray(plan.targetSkills) ? plan.targetSkills : null,
+    authoringTrigger: plan.authoringTrigger || null,
+    authoringFocusSkill: plan.authoringFocusSkill || null,
+    archetypeId: plan.archetypeId || null,
+    archetypeVersion: plan.archetypeVersion || null,
+    authoringRulesVersion: plan.authoringRulesVersion || null,
+    sourceStateSnapshotId: plan.sourceStateSnapshotId || null,
+    sourceProfileSnapshotId: plan.sourceProfileSnapshotId || null,
+    sourceProgramPrescriptionId: plan.sourceProgramPrescriptionId || null,
+    sourceProgramGeneratedAt: plan.sourceProgramGeneratedAt || null,
+    sourceDailyTaskId: plan.sourceDailyTaskId || null,
+    primaryPlanId: plan.primaryPlanId || null,
+    sourceDate: plan.sourceDate || null,
+    timezone: plan.timezone || null,
+    startDate: plan.startDate || null,
+    endDate: plan.endDate || null,
+    cadence: plan.cadence || null,
+    primaryPlanMetric: plan.primaryPlanMetric || null,
+    latestResultSummary: plan.latestResultSummary || null,
+    latestResultAt: plan.latestResultAt || null,
+    nextDueStepIndex: plan.nextDueStepIndex || null,
+    currentStepIndex: plan.currentStepIndex || null,
+    lastCompletedStepIndex: plan.lastCompletedStepIndex || null,
+    exploratoryWindowRepCount: plan.exploratoryWindowRepCount || null,
+    inventoryFallbackReason: plan.inventoryFallbackReason || null,
+    supersededByPlanId: plan.supersededByPlanId || null,
+    supersededReason: plan.supersededReason || null,
+    pausedAt: plan.pausedAt || null,
+    resumedAt: plan.resumedAt || null,
+    createdAt: plan.createdAt,
+    updatedAt: plan.updatedAt,
+  });
+}
+
+export function pulseCheckTrainingPlanFromFirestore(id: string, data: Record<string, any>): PulseCheckTrainingPlan {
+  return {
+    id,
+    athleteId: data.athleteId || '',
+    title: data.title || '',
+    goal: data.goal || '',
+    planType: data.planType || 'mixed',
+    status: data.status || 'active',
+    isPrimary: data.isPrimary ?? true,
+    progressMode: data.progressMode || 'sessions',
+    targetCount: typeof data.targetCount === 'number' ? data.targetCount : null,
+    completedCount: typeof data.completedCount === 'number' ? data.completedCount : 0,
+    steps: Array.isArray(data.steps)
+      ? data.steps.map((entry: Record<string, any>, index: number) => pulseCheckPlanStepFromFirestore(entry?.id || `${id}_step_${index + 1}`, entry))
+      : [],
+    assignedBy: data.assignedBy || 'nora',
+    coachId: data.coachId || undefined,
+    targetSkills: Array.isArray(data.targetSkills) ? data.targetSkills : undefined,
+    authoringTrigger: data.authoringTrigger || undefined,
+    authoringFocusSkill: data.authoringFocusSkill || null,
+    archetypeId: data.archetypeId || null,
+    archetypeVersion: data.archetypeVersion || null,
+    authoringRulesVersion: data.authoringRulesVersion || null,
+    sourceStateSnapshotId: data.sourceStateSnapshotId || undefined,
+    sourceProfileSnapshotId: data.sourceProfileSnapshotId || null,
+    sourceProgramPrescriptionId: data.sourceProgramPrescriptionId || null,
+    sourceProgramGeneratedAt: typeof data.sourceProgramGeneratedAt === 'number' ? data.sourceProgramGeneratedAt : null,
+    sourceDailyTaskId: data.sourceDailyTaskId || undefined,
+    primaryPlanId: data.primaryPlanId || undefined,
+    sourceDate: data.sourceDate || undefined,
+    timezone: data.timezone || undefined,
+    startDate: data.startDate || null,
+    endDate: data.endDate || null,
+    cadence: data.cadence || null,
+    primaryPlanMetric: data.primaryPlanMetric || null,
+    latestResultSummary: data.latestResultSummary || null,
+    latestResultAt: typeof data.latestResultAt === 'number' ? data.latestResultAt : null,
+    nextDueStepIndex: typeof data.nextDueStepIndex === 'number' ? data.nextDueStepIndex : null,
+    currentStepIndex: typeof data.currentStepIndex === 'number' ? data.currentStepIndex : null,
+    lastCompletedStepIndex: typeof data.lastCompletedStepIndex === 'number' ? data.lastCompletedStepIndex : null,
+    exploratoryWindowRepCount: typeof data.exploratoryWindowRepCount === 'number' ? data.exploratoryWindowRepCount : null,
+    inventoryFallbackReason: data.inventoryFallbackReason || null,
+    supersededByPlanId: data.supersededByPlanId || null,
+    supersededReason: data.supersededReason || null,
+    pausedAt: typeof data.pausedAt === 'number' ? data.pausedAt : null,
+    resumedAt: typeof data.resumedAt === 'number' ? data.resumedAt : null,
+    createdAt: data.createdAt || Date.now(),
+    updatedAt: data.updatedAt || Date.now(),
+  };
+}
+
 export function pulseCheckDailyAssignmentToFirestore(
   assignment: PulseCheckDailyAssignment
 ): Record<string, any> {
@@ -1801,6 +2166,12 @@ export function pulseCheckDailyAssignmentToFirestore(
   if (assignment.sourceStateSnapshotId) data.sourceStateSnapshotId = assignment.sourceStateSnapshotId;
   if (assignment.simSpecId) data.simSpecId = assignment.simSpecId;
   if (assignment.legacyExerciseId) data.legacyExerciseId = assignment.legacyExerciseId;
+  if (assignment.timezone) data.timezone = assignment.timezone;
+  if (assignment.sourceDateMode) data.sourceDateMode = assignment.sourceDateMode;
+  if (typeof assignment.materializedAt === 'number') data.materializedAt = assignment.materializedAt;
+  if (assignment.materializedBy) data.materializedBy = assignment.materializedBy;
+  if (typeof assignment.isPrimaryForDate === 'boolean') data.isPrimaryForDate = assignment.isPrimaryForDate;
+  if (assignment.executionPattern) data.executionPattern = assignment.executionPattern;
   if (assignment.simFamilyLabel) data.simFamilyLabel = assignment.simFamilyLabel;
   if (assignment.simVariantLabel) data.simVariantLabel = assignment.simVariantLabel;
   if (assignment.protocolId) data.protocolId = assignment.protocolId;
@@ -1831,6 +2202,21 @@ export function pulseCheckDailyAssignmentToFirestore(
   if (typeof assignment.supportFlag === 'boolean') data.supportFlag = assignment.supportFlag;
   if (assignment.programSnapshot) data.programSnapshot = sanitizeFirestoreValue(assignment.programSnapshot);
   if (assignment.protocolPracticeSession) data.protocolPracticeSession = sanitizeFirestoreValue(assignment.protocolPracticeSession);
+  if (assignment.trainingPlanId) data.trainingPlanId = assignment.trainingPlanId;
+  if (assignment.trainingPlanStepId) data.trainingPlanStepId = assignment.trainingPlanStepId;
+  if (typeof assignment.trainingPlanStepIndex === 'number') data.trainingPlanStepIndex = assignment.trainingPlanStepIndex;
+  if (assignment.trainingPlanStepLabel) data.trainingPlanStepLabel = assignment.trainingPlanStepLabel;
+  if (typeof assignment.trainingPlanIsPrimary === 'boolean') data.trainingPlanIsPrimary = assignment.trainingPlanIsPrimary;
+  if (typeof assignment.isPlanOverride === 'boolean') data.isPlanOverride = assignment.isPlanOverride;
+  if (assignment.overrideMetadata) data.overrideMetadata = sanitizeFirestoreValue(assignment.overrideMetadata);
+  if (assignment.supersededByDailyTaskId) data.supersededByDailyTaskId = assignment.supersededByDailyTaskId;
+  if (assignment.supersededReason) data.supersededReason = assignment.supersededReason;
+  if (assignment.executionLock) data.executionLock = sanitizeFirestoreValue(assignment.executionLock);
+  if (assignment.phaseProgress) data.phaseProgress = sanitizeFirestoreValue(assignment.phaseProgress);
+  if (assignment.completionSummary) data.completionSummary = sanitizeFirestoreValue(assignment.completionSummary);
+  if (typeof assignment.pausedAt === 'number') data.pausedAt = assignment.pausedAt;
+  if (typeof assignment.resumedAt === 'number') data.resumedAt = assignment.resumedAt;
+  if (typeof assignment.expiredAt === 'number') data.expiredAt = assignment.expiredAt;
   if (typeof assignment.coachNotifiedAt === 'number') data.coachNotifiedAt = assignment.coachNotifiedAt;
   if (typeof assignment.startedAt === 'number') data.startedAt = assignment.startedAt;
   if (typeof assignment.completedAt === 'number') data.completedAt = assignment.completedAt;
@@ -1859,9 +2245,15 @@ export function pulseCheckDailyAssignmentFromFirestore(
     sourceStateSnapshotId: data.sourceStateSnapshotId,
     sourceCandidateSetId: data.sourceCandidateSetId,
     sourceDate: data.sourceDate || '',
+    timezone: data.timezone,
+    sourceDateMode: data.sourceDateMode || 'athlete_local_day',
     assignedBy: 'nora',
+    materializedAt: data.materializedAt || data.createdAt || Date.now(),
+    materializedBy: data.materializedBy || 'nora_runtime',
+    isPrimaryForDate: data.isPrimaryForDate ?? true,
     status: data.status || PulseCheckDailyAssignmentStatus.Assigned,
     actionType: data.actionType || 'sim',
+    executionPattern: data.executionPattern || 'single',
     chosenCandidateId: data.chosenCandidateId,
     chosenCandidateType: data.chosenCandidateType,
     simSpecId: data.simSpecId,
@@ -1894,6 +2286,21 @@ export function pulseCheckDailyAssignmentFromFirestore(
     supportFlag: data.supportFlag,
     programSnapshot: data.programSnapshot,
     protocolPracticeSession: data.protocolPracticeSession,
+    trainingPlanId: data.trainingPlanId,
+    trainingPlanStepId: data.trainingPlanStepId,
+    trainingPlanStepIndex: typeof data.trainingPlanStepIndex === 'number' ? data.trainingPlanStepIndex : undefined,
+    trainingPlanStepLabel: data.trainingPlanStepLabel,
+    trainingPlanIsPrimary: typeof data.trainingPlanIsPrimary === 'boolean' ? data.trainingPlanIsPrimary : undefined,
+    isPlanOverride: data.isPlanOverride,
+    overrideMetadata: data.overrideMetadata,
+    supersededByDailyTaskId: data.supersededByDailyTaskId,
+    supersededReason: data.supersededReason,
+    executionLock: data.executionLock,
+    phaseProgress: data.phaseProgress,
+    completionSummary: data.completionSummary,
+    pausedAt: typeof data.pausedAt === 'number' ? data.pausedAt : undefined,
+    resumedAt: typeof data.resumedAt === 'number' ? data.resumedAt : undefined,
+    expiredAt: typeof data.expiredAt === 'number' ? data.expiredAt : undefined,
     coachNotifiedAt: data.coachNotifiedAt,
     startedAt: data.startedAt,
     completedAt: data.completedAt,
