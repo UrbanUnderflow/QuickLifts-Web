@@ -56,7 +56,7 @@ const PARTNER_CHIPS = [
 ];
 
 const BRAND_TILES = [
-  { name: 'SoulCycle', type: 'image', src: '/soulcycle.png' as const, note: 'Community and brand activation experience' },
+  { name: 'SoulCycle', type: 'soulcycle', note: 'Community and brand activation experience' },
   { name: 'Rumbl', type: 'text', note: 'Fitness brand collaboration and market validation' },
 ];
 
@@ -490,10 +490,16 @@ const SceneBrands = () => (
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-zinc-500">Brand proof</p>
               <div className="mt-6 flex h-24 items-center justify-center rounded-3xl border border-white/10 bg-black/20">
-                {brand.type === 'image' ? (
-                  <img src={brand.src} alt={brand.name} className="max-h-12 w-auto object-contain" />
+                {brand.type === 'soulcycle' ? (
+                  <div className="flex h-full w-full items-center justify-center rounded-[22px] bg-[#F5E81A] px-4">
+                    <span className="text-center text-3xl font-black uppercase tracking-[0.22em] text-black md:text-4xl">
+                      SoulCycle
+                    </span>
+                  </div>
                 ) : (
-                  <span className="text-4xl font-black uppercase tracking-[0.3em] text-white">{brand.name}</span>
+                  <div className="flex h-full w-full items-center justify-center rounded-[22px] bg-[#B91C1C] px-4">
+                    <span className="text-4xl font-black uppercase tracking-[0.3em] text-white">{brand.name}</span>
+                  </div>
                 )}
               </div>
             </div>
@@ -821,13 +827,16 @@ const SceneClose = () => (
 
 const PulseIntelligenceLabsDeck: React.FC = () => {
   const [step, setStep] = useState(0);
+  const [hasAdvanced, setHasAdvanced] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const advance = useCallback(() => {
+    setHasAdvanced(true);
     setStep((prev) => Math.min(prev + 1, TOTAL_STEPS));
   }, []);
 
   const goBack = useCallback(() => {
+    setHasAdvanced(true);
     setStep((prev) => Math.max(prev - 1, 0));
   }, []);
 
@@ -950,6 +959,35 @@ const PulseIntelligenceLabsDeck: React.FC = () => {
           <div className="h-px w-10 bg-zinc-700" />
           <span>{TOTAL_STEPS + 1}</span>
         </div>
+
+        <AnimatePresence>
+          {!hasAdvanced && step === 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 12 }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+              className="pointer-events-none absolute bottom-20 left-1/2 z-30 -translate-x-1/2"
+            >
+              <motion.div
+                animate={{ y: [0, -6, 0], scale: [1, 1.02, 1] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                className="rounded-full border border-white/10 bg-black/45 px-4 py-2.5 backdrop-blur-md"
+              >
+                <div className="flex items-center gap-2">
+                  <motion.div
+                    animate={{ scale: [1, 1.2, 1], opacity: [0.65, 1, 0.65] }}
+                    transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+                    className="h-2.5 w-2.5 rounded-full bg-[#E0FE10]"
+                  />
+                  <span className="text-xs font-semibold uppercase tracking-[0.28em] text-zinc-200">
+                    Tap The Screen For Next Slide
+                  </span>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <main className="relative z-10 flex-1 overflow-hidden">
           <AnimatePresence mode="wait">
