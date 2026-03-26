@@ -407,6 +407,12 @@ const DataDeliveryLoopFlowchart: React.FC = () => {
 const formatContentForPdf = (content: string): string => {
   // Normalize line endings
   let result = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const escapeAttribute = (value: string) =>
+    String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
 
   // Handle code blocks first (triple backticks) - preserve them as-is
   const codeBlocks: string[] = [];
@@ -426,6 +432,14 @@ const formatContentForPdf = (content: string): string => {
 
   // Convert *italic* to <em>
   result = result.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+  // Convert markdown images to centered figure blocks
+  result = result.replace(/^!\[([^\]]*)\]\(([^)]+)\)$/gm, (_match, altText, rawSrc) => {
+    const src = String(rawSrc || '').trim().replace(/^<|>$/g, '');
+    const alt = escapeAttribute(altText || 'Document image');
+    const safeSrc = escapeAttribute(src);
+    return `<figure class="doc-image" style="margin:24px 0;text-align:center;"><img src="${safeSrc}" alt="${alt}" style="display:inline-block;width:100%;max-width:320px;max-height:420px;object-fit:cover;border-radius:16px;border:1px solid rgba(63,63,70,0.45);" /></figure>`;
+  });
 
   // Convert headers (must be done before other processing)
   result = result.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
@@ -502,7 +516,7 @@ const formatContentForPdf = (content: string): string => {
     }
 
     // Pass through headers and hr unchanged
-    if (trimmedLine.startsWith('<h') || trimmedLine === '<hr>') {
+    if (trimmedLine.startsWith('<h') || trimmedLine === '<hr>' || trimmedLine.startsWith('<figure')) {
       processedLines.push(trimmedLine);
       continue;
     }

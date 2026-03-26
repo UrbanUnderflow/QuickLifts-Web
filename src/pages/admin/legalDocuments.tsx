@@ -157,6 +157,58 @@ const DOCUMENT_TYPES = [
   { id: 'custom', label: 'Custom Document', icon: '✏️' },
 ];
 
+const AFROTECH_PROPOSAL_TITLE = 'AfroTech 2026 Speaker Submission';
+const AFROTECH_PROPOSAL_PROMPT = 'Manual import from afrotech_submission.pdf for webpage preview and sharing.';
+const AFROTECH_PROPOSAL_CONTENT = `## Talk Title
+**You Have Access to a Million-Dollar R&D Department and You're Not Using It**
+
+How I Used AI Research to Build a Cognitive Performance System Grounded in Peer-Reviewed Science
+
+## Submission Details
+**Speaker:** Tremaine Grant
+**Role:** Founder & CEO, Pulse Intelligence Labs
+**Format:** Solo Talk + Product Demo
+
+![Tremaine Grant headshot](https://fitwithpulse.ai/TremaineFounder.jpg)
+
+## Session Description
+Most professionals are sitting on what amounts to a million-dollar R&D department and treating it like a search engine.
+
+The way we were taught to do research has changed overnight, and the curricula have not caught up. The people who figure this out now - founders, operators, engineers, creators, and health innovators - are building a knowledge moat that will be very difficult to close.
+
+With the rise of agentic AI, builders now have access to ten PhD-level researchers working around the clock, able to go deep across disciplines simultaneously, surface literature they did not know existed, and synthesize it into something they can actually build from. The question is whether they know how to direct that infrastructure with rigor.
+
+Tremaine Grant, Founder and CEO of Pulse Intelligence Labs and former D1 Track and Field athlete at Florida State, will teach a transferable methodology for using AI as a research and product development engine, made concrete through how he used it to build Pulse Check, a cognitive performance training system grounded in peer-reviewed neuroscience and sport psychology research. Through a live walkthrough, attendees will see how rigorous research can move from literature into product thinking, system design, and real execution.
+
+Attendees will leave with a repeatable framework they can apply immediately, regardless of industry, technical background, or which tools they are using: how to scope the right research question, direct AI toward real depth, validate what it returns, and use those insights to shape strategy, products, content, and real-world experiences. They will leave with a clear method for moving from a question to credible research to informed action.
+
+## Slides / Visuals
+Yes - I will use the official AfroTech branded template.
+
+## Proposed Topic Area
+AI Edge - AI, quantum computing, edge innovation, and ethical tech futures
+
+## Why This Topic
+For generations, access to world-class research was not equally distributed, and our communities felt that gap. AI is changing that. My lens comes from a decade in clinical research and engineering, turning evidence into digital and physical products people can actually use.
+
+## Why I Am the Right Person to Lead This Session
+I spent years conducting clinical research at IQVIA and Clinical Inc alongside Pfizer, Eli Lilly, and Dexcom. I know how evidence gets built. I used that foundation and AI research tools to build a product now advancing toward clinical trials.
+
+## Speaker Bio
+Tremaine Grant is the Founder and CEO of Pulse Intelligence Labs, where he builds AI systems at the intersection of human performance, fitness, and cognitive science. A former D1 Track and Field athlete at Florida State University, longtime personal trainer, and more than 20 years of software engineering experience, he brings a unique mix of athletic experience, clinical research, and product development to his work.
+
+His clinical work spans research studies on Long Covid, Type 2 Diabetes, and Parkinson's disease, conducted through IQVIA and Clinical Inc in partnership with organizations including Pfizer, Eli Lilly, Medpace, and Dexcom. That foundation - understanding how evidence gets built and validated - is what shaped how he approaches product development today.
+
+His company's flagship products, Pulse and Pulse Check, represent a new category of performance technology where creator-first fitness experiences and AI-driven mental performance training converge.
+
+He is backed by LAUNCH, the fund behind early investments in Uber, Calm, Robinhood, and Superhuman, and advised by leaders including Marques Zak, CMO of the ACC, and DeRay Mckesson. His work has been featured on This Week in Startups with Jason Calacanis and the Global Startups podcast with Gary Fowler.
+
+## Supporting Links
+- https://www.linkedin.com/events/7430632106088726529/
+- https://www.linkedin.com/events/7435014754907336704/
+- https://www.youtube.com/watch?v=UdxPaU28IW8
+`;
+
 // Utility function to format Firestore Timestamps or Dates
 const formatDate = (date: Timestamp | Date | undefined): string => {
   if (!date) return 'N/A';
@@ -224,6 +276,9 @@ const LegalDocumentsAdmin: React.FC = () => {
   const [selectedType, setSelectedType] = useState('nda');
   const [selectedCompany, setSelectedCompany] = useState(COMPANIES[0].name);
   const [requiresSignatureChecked, setRequiresSignatureChecked] = useState<boolean>(SIGNATURE_REQUIRED_TYPES.includes('nda'));
+  const [creationMode, setCreationMode] = useState<'ai' | 'manual'>('ai');
+  const [manualTitle, setManualTitle] = useState('');
+  const [manualContent, setManualContent] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -428,6 +483,69 @@ const LegalDocumentsAdmin: React.FC = () => {
     }
   }, [selectedType]);
 
+  useEffect(() => {
+    if (selectedType === 'proposal' && !manualTitle.trim() && !manualContent.trim()) {
+      setCreationMode('manual');
+      setPrompt(AFROTECH_PROPOSAL_PROMPT);
+      setManualTitle(AFROTECH_PROPOSAL_TITLE);
+      setManualContent(AFROTECH_PROPOSAL_CONTENT);
+    }
+  }, [selectedType]);
+
+  const handleLoadAfroTechProposal = () => {
+    setSelectedType('proposal');
+    setCreationMode('manual');
+    setSelectedCompany('Pulse Intelligence Labs, Inc.');
+    setRequiresSignatureChecked(false);
+    setPrompt(AFROTECH_PROPOSAL_PROMPT);
+    setManualTitle(AFROTECH_PROPOSAL_TITLE);
+    setManualContent(AFROTECH_PROPOSAL_CONTENT);
+    setMessage({ type: 'info', text: 'AfroTech proposal loaded. Review it and click Create Document.' });
+  };
+
+  const handleCreateManualDocument = async () => {
+    const trimmedTitle = manualTitle.trim();
+    const trimmedContent = manualContent.trim();
+
+    if (!trimmedTitle) {
+      setMessage({ type: 'error', text: 'Please enter a document title' });
+      return;
+    }
+
+    if (!trimmedContent) {
+      setMessage({ type: 'error', text: 'Please paste document content' });
+      return;
+    }
+
+    setGenerating(true);
+    setMessage(null);
+
+    try {
+      const docType = DOCUMENT_TYPES.find(t => t.id === selectedType);
+      await addDoc(collection(db, 'legal-documents'), {
+        title: trimmedTitle,
+        prompt: prompt.trim() || `Manual ${docType?.label || 'document'} created in admin`,
+        content: trimmedContent,
+        documentType: selectedType,
+        companyName: selectedCompany,
+        requiresSignature: requiresSignatureChecked,
+        createdAt: Timestamp.now(),
+        status: 'completed',
+      });
+
+      setMessage({ type: 'success', text: 'Document created successfully!' });
+      setPrompt('');
+      setManualTitle('');
+      setManualContent('');
+      loadDocuments();
+    } catch (error) {
+      console.error('Error creating manual document:', error);
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to create document' });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   // Generate document using AI (or directly for invoice type)
   const handleGenerate = async () => {
     // For invoice type, validate invoice fields instead of prompt
@@ -442,6 +560,11 @@ const LegalDocumentsAdmin: React.FC = () => {
       }
       // Generate invoice directly without AI
       await handleGenerateInvoice();
+      return;
+    }
+
+    if (creationMode === 'manual') {
+      await handleCreateManualDocument();
       return;
     }
 
@@ -1396,6 +1519,12 @@ const LegalDocumentsAdmin: React.FC = () => {
   const formatContentForPdf = (content: string, isProject: boolean = false): string => {
     // Normalize line endings
     let result = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const escapeAttribute = (value: string) =>
+      String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 
     // First, extract and preserve code blocks (for ASCII diagrams)
     const codeBlocks: string[] = [];
@@ -1473,6 +1602,14 @@ const LegalDocumentsAdmin: React.FC = () => {
 
     // Convert *italic* to <em>
     result = result.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+    // Convert markdown images to centered figure blocks
+    result = result.replace(/^!\[([^\]]*)\]\(([^)]+)\)$/gm, (_match, altText, rawSrc) => {
+      const src = String(rawSrc || '').trim().replace(/^<|>$/g, '');
+      const alt = escapeAttribute(altText || 'Document image');
+      const safeSrc = escapeAttribute(src);
+      return `<figure class="doc-image" style="margin:24px 0;text-align:center;"><img src="${safeSrc}" alt="${alt}" style="display:inline-block;width:100%;max-width:320px;max-height:420px;object-fit:cover;border-radius:16px;border:1px solid #3f3f46;" /></figure>`;
+    });
 
     // Convert headers (must be done before other processing)
     result = result.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
@@ -1573,7 +1710,7 @@ const LegalDocumentsAdmin: React.FC = () => {
       }
 
       // Pass through headers and hr unchanged
-      if (trimmedLine.startsWith('<h') || trimmedLine === '<hr>') {
+      if (trimmedLine.startsWith('<h') || trimmedLine === '<hr>' || trimmedLine.startsWith('<figure')) {
         processedLines.push(trimmedLine);
         continue;
       }
@@ -2320,6 +2457,15 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
     setExpandedDoc(expandedDoc === docId ? null : docId);
   };
 
+  const isManualCreation = selectedType !== 'invoice' && creationMode === 'manual';
+  const isCreateDisabled = generating || (
+    selectedType === 'invoice'
+      ? !invoiceBillToName.trim()
+      : isManualCreation
+        ? !manualTitle.trim() || !manualContent.trim()
+        : !prompt.trim()
+  );
+
   return (
     <AdminRouteGuard>
       <Head>
@@ -2336,7 +2482,7 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                 Legal Document Generator
               </h1>
               <p className="text-zinc-400 mt-1">
-                Generate professional legal documents using AI
+                Generate with AI or manually add polished documents for preview and sharing
               </p>
             </div>
             <button
@@ -2382,7 +2528,10 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                 {DOCUMENT_TYPES.map(type => (
                   <button
                     key={type.id}
-                    onClick={() => setSelectedType(type.id)}
+                    onClick={() => {
+                      setSelectedType(type.id);
+                      setCreationMode(type.id === 'invoice' || type.id === 'proposal' ? 'manual' : 'ai');
+                    }}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${selectedType === type.id
                       ? 'bg-[#d7ff00] text-black font-medium'
                       : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
@@ -2423,6 +2572,39 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                 This company name will appear in the document header and footer.
               </p>
             </div>
+
+            {selectedType !== 'invoice' && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-zinc-400 mb-2">
+                  Creation Method
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCreationMode('ai')}
+                    className={`px-4 py-3 rounded-xl border text-sm font-medium transition-all ${creationMode === 'ai'
+                      ? 'bg-[#d7ff00] text-black border-[#d7ff00]'
+                      : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                      }`}
+                  >
+                    AI Draft
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreationMode('manual')}
+                    className={`px-4 py-3 rounded-xl border text-sm font-medium transition-all ${creationMode === 'manual'
+                      ? 'bg-[#d7ff00] text-black border-[#d7ff00]'
+                      : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                      }`}
+                  >
+                    Manual Content
+                  </button>
+                </div>
+                <p className="text-xs text-zinc-500 mt-2">
+                  Use manual mode when you already have approved copy you want to turn into a shareable legal-doc webpage.
+                </p>
+              </div>
+            )}
 
             {/* Signature Requirement Toggle — hidden for invoices */}
             {selectedType !== 'invoice' && (
@@ -2513,6 +2695,65 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                   </div>
                 </div>
               </div>
+            ) : creationMode === 'manual' ? (
+              <div className="space-y-4 mb-4">
+                {selectedType === 'proposal' && (
+                  <div className="p-4 bg-zinc-900/50 border border-zinc-700 rounded-xl">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-white">Quick import: AfroTech proposal</p>
+                        <p className="text-xs text-zinc-500 mt-1">
+                          Load the contents of `/Users/tremainegrant/Downloads/afrotech_submission.pdf` into this form.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleLoadAfroTechProposal}
+                        className="flex items-center justify-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        <Paperclip className="w-4 h-4" />
+                        Load Proposal
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-2">Document Title</label>
+                  <input
+                    type="text"
+                    value={manualTitle}
+                    onChange={(e) => setManualTitle(e.target.value)}
+                    placeholder="Enter the title shown in the document list and preview page..."
+                    className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#d7ff00] transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-2">
+                    Internal Notes <span className="text-zinc-500 font-normal">(optional)</span>
+                  </label>
+                  <textarea
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="Add a short note about where this content came from or how it should be used..."
+                    className="w-full h-24 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#d7ff00] transition-colors resize-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-2">Document Content</label>
+                  <textarea
+                    value={manualContent}
+                    onChange={(e) => setManualContent(e.target.value)}
+                    placeholder="Paste the final content you want rendered on the preview page..."
+                    className="w-full h-72 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#d7ff00] transition-colors resize-none font-mono text-sm"
+                  />
+                  <p className="text-xs text-zinc-500 mt-2">
+                    Markdown-style headings, bold text, lists, and links will render cleanly in the existing legal-doc preview.
+                  </p>
+                </div>
+              </div>
             ) : (
               <div className="mb-4">
                 <label className="block text-sm font-medium text-zinc-400 mb-2">Document Details &amp; Instructions</label>
@@ -2525,8 +2766,8 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
             <div className="mt-4">
               <button
                 onClick={handleGenerate}
-                disabled={generating || (selectedType === 'invoice' ? !invoiceBillToName.trim() : !prompt.trim())}
-                className={`flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 rounded-xl font-semibold transition-all ${generating || (selectedType === 'invoice' ? !invoiceBillToName.trim() : !prompt.trim())
+                disabled={isCreateDisabled}
+                className={`flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 rounded-xl font-semibold transition-all ${isCreateDisabled
                   ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
                   : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
                   }`}
@@ -2534,12 +2775,12 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                 {generating ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    {selectedType === 'invoice' ? 'Creating Invoice...' : 'Generating Document...'}
+                    {selectedType === 'invoice' ? 'Creating Invoice...' : creationMode === 'manual' ? 'Creating Document...' : 'Generating Document...'}
                   </>
                 ) : (
                   <>
-                    {selectedType === 'invoice' ? <span>🧾</span> : <Sparkles className="w-5 h-5" />}
-                    {selectedType === 'invoice' ? 'Create Invoice' : 'Generate Document'}
+                    {selectedType === 'invoice' ? <span>🧾</span> : creationMode === 'manual' ? <Paperclip className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+                    {selectedType === 'invoice' ? 'Create Invoice' : creationMode === 'manual' ? 'Create Document' : 'Generate Document'}
                   </>
                 )}
               </button>
