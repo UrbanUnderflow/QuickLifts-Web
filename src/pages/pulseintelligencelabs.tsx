@@ -829,6 +829,7 @@ const PulseIntelligenceLabsDeck: React.FC = () => {
   const [step, setStep] = useState(0);
   const [hasAdvanced, setHasAdvanced] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const lastAdvanceRef = useRef(0);
 
   const advance = useCallback(() => {
     setHasAdvanced(true);
@@ -860,6 +861,13 @@ const PulseIntelligenceLabsDeck: React.FC = () => {
   useEffect(() => {
     containerRef.current?.focus();
   }, []);
+
+  const handleAdvanceInteraction = useCallback(() => {
+    const now = Date.now();
+    if (now - lastAdvanceRef.current < 350) return;
+    lastAdvanceRef.current = now;
+    advance();
+  }, [advance]);
 
   const meta = STEP_META[step] || STEP_META[0];
 
@@ -907,7 +915,9 @@ const PulseIntelligenceLabsDeck: React.FC = () => {
       <div
         ref={containerRef}
         tabIndex={0}
-        onClick={advance}
+        onClick={handleAdvanceInteraction}
+        onPointerUp={handleAdvanceInteraction}
+        onTouchEnd={handleAdvanceInteraction}
         className="fixed inset-0 flex cursor-pointer select-none flex-col overflow-hidden bg-[#07080b] outline-none"
       >
         <div className="absolute left-0 right-0 top-0 z-30 h-1.5 bg-zinc-800">
@@ -944,6 +954,8 @@ const PulseIntelligenceLabsDeck: React.FC = () => {
                 e.stopPropagation();
                 goBack();
               }}
+              onPointerUp={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
               className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-700/60 bg-zinc-800/70 transition-colors hover:bg-zinc-700/70"
             >
               <ChevronLeft className="h-4 w-4 text-zinc-300" />

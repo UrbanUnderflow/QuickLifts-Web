@@ -1855,7 +1855,10 @@ const SystemOverviewPage: React.FC = () => {
                     New machine handoff lives in the Playwright docs and local setup runbook.
                   </p>
                   <p className="mt-1 text-xs text-emerald-50/80">
-                    Start with <code className="rounded bg-black/20 px-1.5 py-0.5 text-[11px] text-emerald-100">docs/testing/local-machine-setup.md</code>. Brand-new machines should import the encrypted setup bundle first, then run <code className="rounded bg-black/20 px-1.5 py-0.5 text-[11px] text-emerald-100">npm run test:e2e:bootstrap:check</code> before auth capture.
+                    Start with <code className="rounded bg-black/20 px-1.5 py-0.5 text-[11px] text-emerald-100">docs/testing/local-machine-setup.md</code>. Brand-new machines should first pull <code className="rounded bg-black/20 px-1.5 py-0.5 text-[11px] text-emerald-100">local-machine-setup.bundle.enc.json</code> from Google Drive, import the encrypted setup bundle, then run <code className="rounded bg-black/20 px-1.5 py-0.5 text-[11px] text-emerald-100">npm run test:e2e:bootstrap:check</code> before auth capture.
+                  </p>
+                  <p className="mt-2 text-xs text-emerald-50/80">
+                    Android release signing should also be part of local machine setup. The upload key <code className="rounded bg-black/20 px-1.5 py-0.5 text-[11px] text-emerald-100">pulse-release-key.jks</code> is stored in Google Drive as well. After downloading it locally, export <code className="rounded bg-black/20 px-1.5 py-0.5 text-[11px] text-emerald-100">PULSE_KEYSTORE_PATH</code>, <code className="rounded bg-black/20 px-1.5 py-0.5 text-[11px] text-emerald-100">PULSE_STORE_PASSWORD</code>, <code className="rounded bg-black/20 px-1.5 py-0.5 text-[11px] text-emerald-100">PULSE_KEY_ALIAS</code>, and <code className="rounded bg-black/20 px-1.5 py-0.5 text-[11px] text-emerald-100">PULSE_KEY_PASSWORD</code> before running <code className="rounded bg-black/20 px-1.5 py-0.5 text-[11px] text-emerald-100">./gradlew bundleProdRelease</code>.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
