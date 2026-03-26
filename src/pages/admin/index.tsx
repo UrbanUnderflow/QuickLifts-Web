@@ -108,6 +108,12 @@ const adminCardsData = [
     link: "/admin/coachInvites"
   },
   {
+    title: "Short Links",
+    description: "Create link shortening redirects like /go/trailer, edit destinations, and manage branded short links.",
+    icon: <LinkIcon className="w-5 h-5" />,
+    link: "/admin/shortLinks"
+  },
+  {
     title: "Subscriptions",
     description: "View subscription records, latest expiration, and sync history.",
     icon: <TrendingUp className="w-5 h-5" />,
