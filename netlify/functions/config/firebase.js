@@ -140,20 +140,28 @@ if (admin.apps.length === 0) {
   console.log(`[Firebase Admin] Initial setup with project: ${projectId}`);
   
   try {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        type: "service_account",
-        project_id: projectId,
-        private_key_id: privateKeyId,
-        private_key: privateKey,
-        client_email: clientEmail,
-        client_id: "111494077667496751062",
-        auth_uri: "https://accounts.google.com/o/oauth2/auth",
-        token_uri: "https://oauth2.googleapis.com/token",
-        auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-        client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${clientEmail.replace('@', '%40')}`
-      })
-    });
+    if (privateKey && clientEmail) {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          type: "service_account",
+          project_id: projectId,
+          private_key_id: privateKeyId,
+          private_key: privateKey,
+          client_email: clientEmail,
+          client_id: "111494077667496751062",
+          auth_uri: "https://accounts.google.com/o/oauth2/auth",
+          token_uri: "https://oauth2.googleapis.com/token",
+          auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+          client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${clientEmail.replace('@', '%40')}`
+        })
+      });
+    } else {
+      console.warn('[Firebase Admin] Initial setup credentials missing, using application default credentials.');
+      admin.initializeApp({
+        projectId,
+        credential: admin.credential.applicationDefault(),
+      });
+    }
   } catch (error) {
     console.error('[Firebase Admin] Initial setup error:', error);
     // Don't throw here, just log the error

@@ -3,7 +3,7 @@ import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, addDoc, getDocs, updateDoc, doc, getDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { Check, User, Mail, Loader2, Filter } from 'lucide-react';
+import { Check, User, Mail, Loader2, Filter, Search, ArrowUpDown } from 'lucide-react';
 import { convertFirestoreTimestamp, formatDate } from '../../utils/formatDate';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
@@ -19,6 +19,7 @@ type ProspectStatus =
   | 'rejected';
 
 type ProspectPriority = 'low' | 'medium' | 'high';
+type SortOption = 'recently-added' | 'followers-most' | 'followers-least';
 
 interface CreatorProspect {
   id?: string;
@@ -92,6 +93,37 @@ const priorities: { value: ProspectPriority; label: string }[] = [
   { value: 'high', label: 'High' }
 ];
 
+const sortOptions: { value: SortOption; label: string }[] = [
+  { value: 'recently-added', label: 'Recently added' },
+  { value: 'followers-most', label: 'Followers most' },
+  { value: 'followers-least', label: 'Followers least' }
+];
+
+const surfaceClassName = 'rounded-2xl border border-zinc-800 bg-[#1a1e24] shadow-[0_18px_60px_rgba(0,0,0,0.24)]';
+const inputClassName = 'w-full rounded-xl border border-zinc-700 bg-[#262a30] px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 transition focus:outline-none focus:border-[#d7ff00] focus:ring-2 focus:ring-[#d7ff00]/20';
+const textareaClassName = `${inputClassName} py-3`;
+const secondaryButtonClassName = 'inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-[#262a30] px-4 py-2.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-600 hover:bg-[#2c3138] disabled:cursor-not-allowed disabled:opacity-60';
+const primaryButtonClassName = 'inline-flex items-center justify-center gap-2 rounded-xl bg-[#d7ff00] px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-[#c5e600] disabled:cursor-not-allowed disabled:opacity-60';
+const accentButtonClassName = 'inline-flex items-center justify-center gap-2 rounded-xl border border-[#d7ff00]/30 bg-[#d7ff00]/10 px-4 py-2.5 text-sm font-medium text-[#d7ff00] transition hover:bg-[#d7ff00]/20 disabled:cursor-not-allowed disabled:opacity-60';
+const tableHeaderClassName = 'px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500';
+const tableCellClassName = 'px-4 py-4 align-top';
+const compactNumberFormatter = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+const tableColumnCount = 13;
+
+const getTimestampMs = (value: any) => {
+  try {
+    const date = convertFirestoreTimestamp(value as any);
+    return date instanceof Date ? date.valueOf() : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const getTotalFollowers = (prospect: CreatorProspect) =>
+  Object.values(prospect.followers || {}).reduce((sum, value) => sum + (typeof value === 'number' ? value : 0), 0);
+
+const formatFollowerCount = (value: number) => (value > 0 ? compactNumberFormatter.format(value) : '—');
+
 const CreatorProspectsPage: React.FC = () => {
   const LOG_PREFIX = '[CreatorProspects]';
   const [form, setForm] = useState<CreatorProspect>(emptyProspect);
@@ -102,6 +134,7 @@ const CreatorProspectsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProspectStatus | 'all'>('new');
   const [priorityFilter, setPriorityFilter] = useState<ProspectPriority | 'all'>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('recently-added');
   const currentUser = useSelector((s: RootState) => s.user.currentUser);
   const [detailOpen, setDetailOpen] = useState(false);
   const [editing, setEditing] = useState<CreatorProspect | null>(null);
@@ -312,7 +345,7 @@ const CreatorProspectsPage: React.FC = () => {
   };
 
   const filtered = useMemo(() => {
-    let rows = prospects;
+    let rows = [...prospects];
     if (statusFilter !== 'all') rows = rows.filter(r => r.status === statusFilter);
     if (priorityFilter !== 'all') rows = rows.filter(r => r.priority === priorityFilter);
     if (search.trim()) {
@@ -324,8 +357,21 @@ const CreatorProspectsPage: React.FC = () => {
         (r.niche || '').toLowerCase().includes(q)
       );
     }
+    rows.sort((a, b) => {
+      if (sortBy === 'followers-most') {
+        const followerDelta = getTotalFollowers(b) - getTotalFollowers(a);
+        if (followerDelta !== 0) return followerDelta;
+      }
+
+      if (sortBy === 'followers-least') {
+        const followerDelta = getTotalFollowers(a) - getTotalFollowers(b);
+        if (followerDelta !== 0) return followerDelta;
+      }
+
+      return getTimestampMs((b as any).createdAt || (b as any).updatedAt) - getTimestampMs((a as any).createdAt || (a as any).updatedAt);
+    });
     return rows;
-  }, [prospects, search, statusFilter, priorityFilter]);
+  }, [prospects, search, statusFilter, priorityFilter, sortBy]);
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { all: prospects.length };
@@ -581,200 +627,277 @@ const CreatorProspectsPage: React.FC = () => {
     setNotesOpen(false);
   };
 
+  const resetFilters = () => {
+    setSearch('');
+    setStatusFilter('new');
+    setPriorityFilter('all');
+    setSortBy('recently-added');
+  };
+
+  const hasToolbarChanges = search.trim() || statusFilter !== 'new' || priorityFilter !== 'all' || sortBy !== 'recently-added';
+
   return (
     <AdminRouteGuard>
       <Head>
         <title>Creator Prospects | Admin</title>
       </Head>
-      <div className="min-h-screen bg-black text-white">
-        <div className="max-w-7xl mx-auto px-4 py-10">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold">Creator Prospects</h1>
-            <p className="text-zinc-400">Manage inbound and outbound creator opportunities.</p>
-            <div className="mt-3 flex gap-2">
-              <button onClick={() => setBulkOpen(true)} className="px-3 py-1.5 rounded-md bg-blue-600/20 border border-blue-500/40 text-blue-300 hover:bg-blue-600/30 text-sm">Bulk Paste Import</button>
+      <div className="min-h-screen bg-[#111417] text-white">
+        <div className="w-full px-4 py-8 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
+          <div className="mb-8 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#d7ff00]/20 bg-[#d7ff00]/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-[#d7ff00]">
+                Creator pipeline
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Creator Prospects</h1>
+              <p className="mt-2 max-w-3xl text-sm text-zinc-400 sm:text-base">
+                Manage inbound and outbound creator opportunities with the same full-width admin treatment used across the rest of the dashboard.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button onClick={() => setBulkOpen(true)} className={accentButtonClassName}>Bulk Paste Import</button>
             </div>
           </div>
 
           {/* Quick Add Form */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-10">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2"><User className="w-5 h-5 text-[#E0FE10]" /> Add Prospect</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Display Name"
-                     value={form.displayName} onChange={e=>setForm({...form, displayName:e.target.value})} />
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="@handle"
-                     value={form.handle} onChange={e=>setForm({...form, handle:e.target.value})} />
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Email"
-                     value={form.email} onChange={e=>setForm({...form, email:e.target.value})} />
+          <div className={`${surfaceClassName} mb-8 p-6 lg:p-8`}>
+            <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div>
+                <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
+                  <User className="h-5 w-5 text-[#d7ff00]" />
+                  Add Prospect
+                </h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Capture a new creator record with contact details, audience size, and launch context.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-zinc-800 bg-[#111417] px-4 py-3 text-sm text-zinc-400">
+                New prospects save into the <span className="font-medium text-white">New</span> queue by default so outreach can move quickly.
+              </div>
+            </div>
 
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Niche (e.g., Fitness, Wellness)"
-                     value={form.niche} onChange={e=>setForm({...form, niche:e.target.value})} />
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Country"
-                     value={form.country} onChange={e=>setForm({...form, country:e.target.value})} />
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Ethnicity (optional)"
-                     value={form.ethnicity || ''} onChange={e=>setForm({...form, ethnicity:e.target.value})} />
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Lead Source"
-                     value={form.leadSource} onChange={e=>setForm({...form, leadSource:e.target.value})} />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <input className={inputClassName} placeholder="Display Name" value={form.displayName} onChange={e=>setForm({...form, displayName:e.target.value})} />
+              <input className={inputClassName} placeholder="@handle" value={form.handle} onChange={e=>setForm({...form, handle:e.target.value})} />
+              <input className={inputClassName} type="email" placeholder="Email" value={form.email} onChange={e=>setForm({...form, email:e.target.value})} />
+              <input className={inputClassName} placeholder="Lead Source" value={form.leadSource} onChange={e=>setForm({...form, leadSource:e.target.value})} />
 
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Modality (e.g., long form, shorts, streams)"
-                     value={form.modality || ''} onChange={e=>setForm({...form, modality:e.target.value})} />
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Followers: IG"
-                     value={form.followers.instagram || ''} onChange={e=>setForm({...form, followers:{...form.followers, instagram: Number(e.target.value) || undefined}})} />
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Followers: YT"
-                     value={form.followers.youtube || ''} onChange={e=>setForm({...form, followers:{...form.followers, youtube: Number(e.target.value) || undefined}})} />
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Followers: TikTok"
-                     value={form.followers.tiktok || ''} onChange={e=>setForm({...form, followers:{...form.followers, tiktok: Number(e.target.value) || undefined}})} />
+              <input className={inputClassName} placeholder="Niche (e.g. Fitness, Wellness)" value={form.niche} onChange={e=>setForm({...form, niche:e.target.value})} />
+              <input className={inputClassName} placeholder="Country" value={form.country} onChange={e=>setForm({...form, country:e.target.value})} />
+              <input className={inputClassName} placeholder="Ethnicity (optional)" value={form.ethnicity || ''} onChange={e=>setForm({...form, ethnicity:e.target.value})} />
+              <input className={inputClassName} placeholder="Modality (e.g. long form, shorts, streams)" value={form.modality || ''} onChange={e=>setForm({...form, modality:e.target.value})} />
 
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Engagement Rate (%)"
-                     value={form.engagement?.engagementRate || ''} onChange={e=>setForm({...form, engagement:{...form.engagement, engagementRate: Number(e.target.value) || undefined}})} />
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Avg Views"
-                     value={form.engagement?.avgViews || ''} onChange={e=>setForm({...form, engagement:{...form.engagement, avgViews: Number(e.target.value) || undefined}})} />
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Avg Likes"
-                     value={form.engagement?.avgLikes || ''} onChange={e=>setForm({...form, engagement:{...form.engagement, avgLikes: Number(e.target.value) || undefined}})} />
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Avg Comments"
-                     value={form.engagement?.avgComments || ''} onChange={e=>setForm({...form, engagement:{...form.engagement, avgComments: Number(e.target.value) || undefined}})} />
+              <input className={inputClassName} inputMode="numeric" placeholder="Followers: IG" value={form.followers.instagram || ''} onChange={e=>setForm({...form, followers:{...form.followers, instagram: Number(e.target.value) || undefined}})} />
+              <input className={inputClassName} inputMode="numeric" placeholder="Followers: YT" value={form.followers.youtube || ''} onChange={e=>setForm({...form, followers:{...form.followers, youtube: Number(e.target.value) || undefined}})} />
+              <input className={inputClassName} inputMode="numeric" placeholder="Followers: TikTok" value={form.followers.tiktok || ''} onChange={e=>setForm({...form, followers:{...form.followers, tiktok: Number(e.target.value) || undefined}})} />
+              <input className={inputClassName} inputMode="numeric" placeholder="Engagement Rate (%)" value={form.engagement?.engagementRate || ''} onChange={e=>setForm({...form, engagement:{...form.engagement, engagementRate: Number(e.target.value) || undefined}})} />
 
-              <input className="bg-zinc-800 rounded-lg px-3 py-2 md:col-span-2" placeholder="Past Challenge/Launch History"
-                     value={form.pastLaunchHistory || ''} onChange={e=>setForm({...form, pastLaunchHistory:e.target.value})} />
-
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Instagram URL"
-                     value={form.platforms.instagram || ''} onChange={e=>setForm({...form, platforms:{...form.platforms, instagram:e.target.value}})} />
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="YouTube URL"
-                     value={form.platforms.youtube || ''} onChange={e=>setForm({...form, platforms:{...form.platforms, youtube:e.target.value}})} />
-              <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="TikTok URL"
-                     value={form.platforms.tiktok || ''} onChange={e=>setForm({...form, platforms:{...form.platforms, tiktok:e.target.value}})} />
-
-              <select className="bg-zinc-800 rounded-lg px-3 py-2" value={form.priority} onChange={e=>setForm({...form, priority:e.target.value as ProspectPriority})}>
+              <input className={inputClassName} inputMode="numeric" placeholder="Avg Views" value={form.engagement?.avgViews || ''} onChange={e=>setForm({...form, engagement:{...form.engagement, avgViews: Number(e.target.value) || undefined}})} />
+              <input className={inputClassName} inputMode="numeric" placeholder="Avg Likes" value={form.engagement?.avgLikes || ''} onChange={e=>setForm({...form, engagement:{...form.engagement, avgLikes: Number(e.target.value) || undefined}})} />
+              <input className={inputClassName} inputMode="numeric" placeholder="Avg Comments" value={form.engagement?.avgComments || ''} onChange={e=>setForm({...form, engagement:{...form.engagement, avgComments: Number(e.target.value) || undefined}})} />
+              <select className={inputClassName} value={form.priority} onChange={e=>setForm({...form, priority:e.target.value as ProspectPriority})}>
                 {priorities.map(p=> <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
-              <select className="bg-zinc-800 rounded-lg px-3 py-2" value={form.status} onChange={e=>setForm({...form, status:e.target.value as ProspectStatus})}>
+
+              <input className={`${inputClassName} md:col-span-2`} placeholder="Past Challenge/Launch History" value={form.pastLaunchHistory || ''} onChange={e=>setForm({...form, pastLaunchHistory:e.target.value})} />
+              <input className={inputClassName} placeholder="Instagram URL" value={form.platforms.instagram || ''} onChange={e=>setForm({...form, platforms:{...form.platforms, instagram:e.target.value}})} />
+              <input className={inputClassName} placeholder="YouTube URL" value={form.platforms.youtube || ''} onChange={e=>setForm({...form, platforms:{...form.platforms, youtube:e.target.value}})} />
+              <input className={inputClassName} placeholder="TikTok URL" value={form.platforms.tiktok || ''} onChange={e=>setForm({...form, platforms:{...form.platforms, tiktok:e.target.value}})} />
+
+              <select className={inputClassName} value={form.status} onChange={e=>setForm({...form, status:e.target.value as ProspectStatus})}>
                 {statuses.map(s=> <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
-              <textarea
-                className="bg-zinc-800 rounded-lg px-3 py-3 md:col-span-3 h-32 resize-y"
-                placeholder="Notes"
-                value={form.notes}
-                onChange={e=>setForm({...form, notes:e.target.value})}
-                rows={5}
-              />
+              <textarea className={`${textareaClassName} md:col-span-2 xl:col-span-4 h-32 resize-y`} placeholder="Notes" value={form.notes} onChange={e=>setForm({...form, notes:e.target.value})} rows={5} />
             </div>
-            <div className="mt-4 flex justify-end">
-              <button onClick={saveProspect} disabled={saving} className="inline-flex items-center gap-2 bg-[#E0FE10] text-black font-semibold px-5 py-2 rounded-lg hover:bg-lime-400 disabled:opacity-50">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                <Check className="w-4 h-4" /> Save Prospect
+
+            <div className="mt-6 flex justify-end">
+              <button onClick={saveProspect} disabled={saving} className={primaryButtonClassName}>
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                <Check className="h-4 w-4" /> Save Prospect
               </button>
             </div>
           </div>
 
           {/* Filters and Status Tabs */}
-          <div className="flex flex-col gap-3 mb-4">
-            <div className="flex items-center gap-2 overflow-x-auto">
-              {(['all', ...statuses.map(s => s.value)] as Array<'all'|ProspectStatus>).map(s => (
-                <button
-                  key={s}
-                  onClick={() => setStatusFilter(s)}
-                  className={`px-3 py-1 rounded-full border text-sm whitespace-nowrap ${statusFilter===s ? 'bg-[#E0FE10] text-black border-[#E0FE10]' : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:bg-zinc-800'}`}
-                >
-                  {s === 'all' ? 'All' : statuses.find(x=>x.value===s)?.label} ({statusCounts[s] || 0})
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 text-zinc-400"><Filter className="w-4 h-4" />Filters</div>
-              <input placeholder="Search name, handle, email..." className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 flex-1 min-w-[240px]"
-                     value={search} onChange={e=>setSearch(e.target.value)} />
-              <select className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2" value={priorityFilter} onChange={e=>setPriorityFilter(e.target.value as any)}>
-                <option value="all">All Priorities</option>
-                {priorities.map(p=> <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
+          <div className={`${surfaceClassName} mb-6 p-5`}>
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                  {(['all', ...statuses.map(s => s.value)] as Array<'all'|ProspectStatus>).map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setStatusFilter(s)}
+                      className={`rounded-full border px-3.5 py-1.5 text-sm whitespace-nowrap transition ${statusFilter===s ? 'border-[#d7ff00] bg-[#d7ff00] text-black' : 'border-zinc-700 bg-[#262a30] text-zinc-300 hover:border-zinc-600 hover:bg-[#2c3138]'}`}
+                    >
+                      {s === 'all' ? 'All' : statuses.find(x=>x.value===s)?.label} ({statusCounts[s] || 0})
+                    </button>
+                  ))}
+                </div>
+                <div className="text-sm text-zinc-400">
+                  Showing <span className="font-semibold text-white">{filtered.length}</span> of <span className="font-semibold text-white">{prospects.length}</span> prospects
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_220px_240px_auto]">
+                <div>
+                  <div className="mb-2 flex items-center gap-2 text-sm font-medium text-zinc-300">
+                    <Filter className="h-4 w-4 text-zinc-500" />
+                    Filters
+                  </div>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                    <input
+                      placeholder="Search name, handle, email, niche..."
+                      className={`${inputClassName} pl-10`}
+                      value={search}
+                      onChange={e=>setSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-zinc-300">Priority</label>
+                  <select className={inputClassName} value={priorityFilter} onChange={e=>setPriorityFilter(e.target.value as ProspectPriority | 'all')}>
+                    <option value="all">All Priorities</option>
+                    {priorities.map(p=> <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-zinc-300">
+                    <ArrowUpDown className="h-4 w-4 text-zinc-500" />
+                    Sort by
+                  </label>
+                  <select className={inputClassName} value={sortBy} onChange={e=>setSortBy(e.target.value as SortOption)}>
+                    {sortOptions.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-end">
+                  <button onClick={resetFilters} disabled={!hasToolbarChanges} className={secondaryButtonClassName}>
+                    Reset filters
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Table */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-zinc-400 border-b border-zinc-800">
-                  <th className="text-left p-3">Creator</th>
-                  <th className="text-left p-3">Niche</th>
-                  <th className="text-left p-3">Country</th>
-                  <th className="text-left p-3">Ethnicity</th>
-                  <th className="text-left p-3">Platforms</th>
-                  <th className="text-left p-3">Priority</th>
-                  <th className="text-left p-3">Notes</th>
-                  <th className="text-left p-3">Created By</th>
-                  <th className="text-left p-3">Updated By</th>
-                  <th className="text-left p-3">Status</th>
-                  <th className="text-left p-3">Updated</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && (
-                  <tr><td className="p-4 text-zinc-400" colSpan={10}>Loading…</td></tr>
-                )}
-                {!loading && filtered.length === 0 && (
-                  <tr><td className="p-4 text-zinc-400" colSpan={10}>No prospects found.</td></tr>
-                )}
-                {!loading && filtered.map(row => {
-                  const updated = convertFirestoreTimestamp(row.updatedAt as any);
-                  const p = row.platforms || {};
-                  return (
-                    <tr key={row.id} className="border-b border-zinc-800 hover:bg-zinc-800/40">
-                      <td className="p-3">
-                        <div className="font-medium text-white">{row.displayName} <span className="text-zinc-400">{row.handle && `(${row.handle})`}</span></div>
-                        <div className="text-zinc-400 text-xs">{row.email}</div>
-                      </td>
-                  <td className="p-3 text-zinc-300">{row.niche} {row.modality ? `• ${row.modality}` : ''}</td>
-                      <td className="p-3 text-zinc-300">{row.country}</td>
-                      <td className="p-3 text-zinc-300">{row.ethnicity || '—'}</td>
-                      <td className="p-3 text-zinc-300">
-                        <div className="flex flex-wrap gap-2">
-                          {p.instagram && (
-                            <a className="px-2 py-1 text-xs rounded-full bg-pink-500/10 text-pink-400 border border-pink-500/30 hover:bg-pink-500/20" href={p.instagram} target="_blank" rel="noopener noreferrer">IG</a>
+          <div className={`${surfaceClassName} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="min-w-[1480px] w-full text-sm">
+                <thead className="bg-[#161a20]">
+                  <tr className="border-b border-zinc-800">
+                    <th className={tableHeaderClassName}>Creator</th>
+                    <th className={tableHeaderClassName}>Niche</th>
+                    <th className={tableHeaderClassName}>Country</th>
+                    <th className={tableHeaderClassName}>Ethnicity</th>
+                    <th className={tableHeaderClassName}>Platforms</th>
+                    <th className={tableHeaderClassName}>Followers</th>
+                    <th className={tableHeaderClassName}>Priority</th>
+                    <th className={tableHeaderClassName}>Notes</th>
+                    <th className={tableHeaderClassName}>Created By</th>
+                    <th className={tableHeaderClassName}>Updated By</th>
+                    <th className={tableHeaderClassName}>Status</th>
+                    <th className={tableHeaderClassName}>Updated</th>
+                    <th className={tableHeaderClassName}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading && (
+                    <tr><td className="px-4 py-10 text-center text-zinc-400" colSpan={tableColumnCount}>Loading…</td></tr>
+                  )}
+                  {!loading && filtered.length === 0 && (
+                    <tr><td className="px-4 py-10 text-center text-zinc-400" colSpan={tableColumnCount}>No prospects found.</td></tr>
+                  )}
+                  {!loading && filtered.map(row => {
+                    const updated = convertFirestoreTimestamp(row.updatedAt as any);
+                    const platforms = row.platforms || {};
+                    const followerTotal = getTotalFollowers(row);
+                    const followerBadges = [
+                      ['IG', row.followers?.instagram],
+                      ['YT', row.followers?.youtube],
+                      ['TT', row.followers?.tiktok],
+                      ['X', row.followers?.twitter]
+                    ].filter(([, value]) => typeof value === 'number' && value > 0) as Array<[string, number]>;
+
+                    return (
+                      <tr key={row.id} className="border-b border-zinc-800/80 transition-colors hover:bg-[#20252d]">
+                        <td className={tableCellClassName}>
+                          <div className="font-medium text-white">
+                            {row.displayName || 'Unnamed prospect'}{' '}
+                            <span className="text-zinc-400">{row.handle && `(${row.handle})`}</span>
+                          </div>
+                          <div className="mt-1 text-xs text-zinc-400">{row.email || 'No email added'}</div>
+                          {row.leadSource && <div className="mt-2 text-[11px] uppercase tracking-[0.14em] text-zinc-500">{row.leadSource}</div>}
+                        </td>
+                        <td className={`${tableCellClassName} text-zinc-300`}>
+                          {row.niche || '—'} {row.modality ? <span className="text-zinc-500">• {row.modality}</span> : null}
+                        </td>
+                        <td className={`${tableCellClassName} text-zinc-300`}>{row.country || '—'}</td>
+                        <td className={`${tableCellClassName} text-zinc-300`}>{row.ethnicity || '—'}</td>
+                        <td className={tableCellClassName}>
+                          <div className="flex flex-wrap gap-2">
+                            {platforms.instagram && (
+                              <a className="rounded-full border border-pink-500/30 bg-pink-500/10 px-2 py-1 text-xs text-pink-300 transition hover:bg-pink-500/20" href={platforms.instagram} target="_blank" rel="noopener noreferrer">IG</a>
+                            )}
+                            {platforms.youtube && (
+                              <a className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs text-red-300 transition hover:bg-red-500/20" href={platforms.youtube} target="_blank" rel="noopener noreferrer">YT</a>
+                            )}
+                            {platforms.tiktok && (
+                              <a className="rounded-full border border-white/20 bg-white/5 px-2 py-1 text-xs text-white transition hover:bg-white/10" href={platforms.tiktok} target="_blank" rel="noopener noreferrer">TT</a>
+                            )}
+                            {platforms.twitter && (
+                              <a className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-xs text-blue-300 transition hover:bg-blue-500/20" href={platforms.twitter} target="_blank" rel="noopener noreferrer">X</a>
+                            )}
+                            {!platforms.instagram && !platforms.youtube && !platforms.tiktok && !platforms.twitter && <span className="text-zinc-500">—</span>}
+                          </div>
+                        </td>
+                        <td className={tableCellClassName}>
+                          <div className="font-semibold text-white">{formatFollowerCount(followerTotal)}</div>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {followerBadges.length > 0 ? followerBadges.map(([label, value]) => (
+                              <span key={label} className="rounded-full border border-zinc-700 bg-[#262a30] px-2 py-1 text-[11px] text-zinc-300">
+                                {label} {formatFollowerCount(value)}
+                              </span>
+                            )) : <span className="text-xs text-zinc-500">No follower data</span>}
+                          </div>
+                        </td>
+                        <td className={tableCellClassName}>
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${row.priority === 'high' ? 'bg-red-500/10 text-red-300' : row.priority === 'low' ? 'bg-zinc-700 text-zinc-200' : 'bg-yellow-500/10 text-yellow-300'}`}>{row.priority}</span>
+                        </td>
+                        <td className={tableCellClassName}>
+                          {row.notes ? (
+                            <button onClick={() => openNotes(row)} className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-xs text-blue-300 transition hover:bg-blue-500/20">
+                              Has notes
+                            </button>
+                          ) : (
+                            <span className="text-xs text-zinc-500">—</span>
                           )}
-                          {p.youtube && (
-                            <a className="px-2 py-1 text-xs rounded-full bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20" href={p.youtube} target="_blank" rel="noopener noreferrer">YT</a>
-                          )}
-                          {p.tiktok && (
-                            <a className="px-2 py-1 text-xs rounded-full bg-white/5 text-white border border-white/20 hover:bg-white/10" href={p.tiktok} target="_blank" rel="noopener noreferrer">TT</a>
-                          )}
-                          {p.twitter && (
-                            <a className="px-2 py-1 text-xs rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20" href={p.twitter} target="_blank" rel="noopener noreferrer">X</a>
-                          )}
-                          {!p.instagram && !p.youtube && !p.tiktok && !p.twitter && '—'}
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <span className={`text-xs px-2 py-1 rounded-full ${row.priority === 'high' ? 'bg-red-500/10 text-red-400' : row.priority === 'low' ? 'bg-zinc-700 text-zinc-200' : 'bg-yellow-500/10 text-yellow-400'}`}>{row.priority}</span>
-                      </td>
-                      <td className="p-3 text-zinc-300">
-                        {row.notes ? (
-                          <button onClick={() => openNotes(row)} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20">Has notes</button>
-                        ) : (
-                          <span className="text-zinc-500 text-xs">—</span>
-                        )}
-                      </td>
-                      <td className="p-3 text-zinc-300">{row.createdBy || '—'}</td>
-                      <td className="p-3 text-zinc-300">{row.lastUpdatedBy || '—'}</td>
-                      <td className="p-3">
-                        <select className="bg-zinc-800 rounded-md px-2 py-1" value={row.status} onChange={e=>changeStatus(row, e.target.value as ProspectStatus)}>
-                          {statuses.map(s=> <option key={s.value} value={s.value}>{s.label}</option>)}
-                        </select>
-                      </td>
-                      <td className="p-3 text-zinc-400 flex items-center justify-between gap-2">
-                        <span>{formatDate(updated)}</span>
-                        <div className="flex gap-2">
-                          <button onClick={() => openDetail(row)} className="px-3 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700">View</button>
-                          <button onClick={() => openEmail(row)} className="px-3 py-1 rounded-md bg-blue-600/20 border border-blue-500/40 text-blue-300 hover:bg-blue-600/30 flex items-center gap-1">
-                            <Mail className="w-4 h-4" /> DM
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td className={`${tableCellClassName} text-zinc-300`}>{row.createdBy || '—'}</td>
+                        <td className={`${tableCellClassName} text-zinc-300`}>{row.lastUpdatedBy || '—'}</td>
+                        <td className={tableCellClassName}>
+                          <select className={`${inputClassName} min-w-[150px] py-2`} value={row.status} onChange={e=>changeStatus(row, e.target.value as ProspectStatus)}>
+                            {statuses.map(s=> <option key={s.value} value={s.value}>{s.label}</option>)}
+                          </select>
+                        </td>
+                        <td className={`${tableCellClassName} text-zinc-400`}>{formatDate(updated)}</td>
+                        <td className={tableCellClassName}>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => openDetail(row)} className={secondaryButtonClassName}>View</button>
+                            <button onClick={() => openEmail(row)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2.5 text-sm font-medium text-blue-300 transition hover:bg-blue-500/20">
+                              <Mail className="h-4 w-4" /> DM
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Detail/Edit Modal */}

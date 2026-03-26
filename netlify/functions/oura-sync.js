@@ -8,6 +8,11 @@ const {
   getOauthCredentials,
   verifyAuth,
 } = require('./oura-utils');
+const {
+  buildNoraBiometricBriefNotification,
+  resolveAthleteFirstName,
+  sendLoggedNoraPush,
+} = require('./pulsecheck-notification-utils');
 
 const OURA_TOKEN_URL = 'https://api.ouraring.com/oauth/token';
 const OURA_API_BASE_URL = 'https://api.ouraring.com/v2/usercollection';
@@ -734,6 +739,84 @@ function buildSnapshotArtifacts({
   return { snapshot, snapshotRevision, assemblyTrace };
 }
 
+async function maybeSendBiometricBriefReadyNotification({
+  userId,
+  timezone,
+  requestedDateKey,
+  observedDateKey,
+}) {
+  const todayDateKey = dateKeyInTimeZone(new Date(), timezone);
+  if (requestedDateKey !== todayDateKey) {
+    return { success: false, reason: 'not_current_day' };
+  }
+
+  const db = admin.firestore();
+  const userRef = db.collection('users').doc(userId);
+  const userSnap = await userRef.get();
+
+  if (!userSnap.exists) {
+    return { success: false, reason: 'user_not_found' };
+  }
+
+  const userData = userSnap.data() || {};
+  const fcmToken = typeof userData.fcmToken === 'string' ? userData.fcmToken.trim() : '';
+  if (!fcmToken) {
+    return { success: false, reason: 'missing_fcm_token' };
+  }
+
+  if (userData.mentalTrainingPreferences?.checkInNotificationsEnabled === false) {
+    return { success: false, reason: 'notifications_disabled' };
+  }
+
+  const lastSentSnapshotDateKey = userData.noraNotificationState?.biometricBriefReady?.lastSentSnapshotDateKey;
+  if (lastSentSnapshotDateKey === requestedDateKey) {
+    return { success: false, reason: 'already_sent_for_snapshot' };
+  }
+
+  const notification = buildNoraBiometricBriefNotification({
+    athleteName: resolveAthleteFirstName(userData),
+    snapshotDateKey: requestedDateKey,
+    observedDateKey,
+  });
+
+  const result = await sendLoggedNoraPush({
+    messaging: admin.messaging(),
+    db,
+    userId,
+    fcmToken,
+    title: notification.title,
+    body: notification.body,
+    subtitle: notification.subtitle,
+    data: notification.data,
+    notificationType: notification.notificationType,
+    functionName: 'netlify/oura-sync',
+    additionalContext: {
+      mode: 'oura-sync',
+      requestedDateKey,
+      observedDateKey,
+    },
+  });
+
+  if (!result.success) {
+    return { success: false, reason: 'send_failed', error: result.error || null };
+  }
+
+  await userRef.set(
+    {
+      noraNotificationState: {
+        biometricBriefReady: {
+          lastSentSnapshotDateKey: requestedDateKey,
+          lastObservedDateKey: observedDateKey,
+          lastSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      },
+    },
+    { merge: true }
+  );
+
+  return { success: true, reason: 'sent', messageId: result.messageId || null };
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: RESPONSE_HEADERS, body: '' };
@@ -876,6 +959,25 @@ exports.handler = async (event) => {
 
     await batch.commit();
 
+    let biometricBriefNotification = { success: false, reason: 'skipped' };
+    if (event.httpMethod === 'POST') {
+      try {
+        biometricBriefNotification = await maybeSendBiometricBriefReadyNotification({
+          userId,
+          timezone,
+          requestedDateKey,
+          observedDateKey: latestDateKey,
+        });
+      } catch (notificationError) {
+        console.warn('[oura-sync] Nora biometric brief notification failed (non-blocking):', notificationError);
+        biometricBriefNotification = {
+          success: false,
+          reason: 'send_failed',
+          error: notificationError?.message || 'Unknown error',
+        };
+      }
+    }
+
     const requestedSnapshot = snapshotArtifacts.find((artifacts) => artifacts.snapshot.snapshotDateKey === requestedDateKey)
       || snapshotArtifacts[0];
 
@@ -891,6 +993,7 @@ exports.handler = async (event) => {
         updatedSnapshotDateKeys: snapshotArtifacts.map((artifacts) => artifacts.snapshot.snapshotDateKey),
         sourceRecordIds: sourceRecordDocs.map((record) => record.id),
         sourcesUsed: requestedSnapshot?.snapshot.provenance.sourcesUsed || ['oura'],
+        biometricBriefNotification,
         detail: 'PulseCheck imported the latest Oura recovery context.',
         ...(includeDebug ? {
           debug: {

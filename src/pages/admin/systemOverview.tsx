@@ -96,6 +96,7 @@ import PulseCheckCoachDashboardInformationArchitectureTab from "../../components
 import PulseCheckProfileArchitectureTab from "../../components/admin/system-overview/PulseCheckProfileArchitectureTab";
 import PulseCheckProfileSnapshotExportSpecTab from "../../components/admin/system-overview/PulseCheckProfileSnapshotExportSpecTab";
 import QuickLiftsProfileHealthSystemTab, {
+  QuickLiftsProfileHealthEnergyMergeSpecTab,
   QuickLiftsProfileHealthSnapshotContractTab,
   QuickLiftsProfileHealthStorySpecTab,
 } from "../../components/admin/system-overview/QuickLiftsProfileHealthSystemTab";
@@ -149,6 +150,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "quicklifts-profile-health-system",
       "quicklifts-profile-health-story-spec",
       "quicklifts-profile-health-snapshot-contract",
+      "quicklifts-profile-health-energy-merge-spec",
       "pulse-club-activation-architecture",
       "smart-routes-v1-architecture",
       "shared-link-preview-strategy",
@@ -1421,6 +1423,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "quicklifts-profile-health-snapshot-contract":
         return <QuickLiftsProfileHealthSnapshotContractTab />;
+
+      case "quicklifts-profile-health-energy-merge-spec":
+        return <QuickLiftsProfileHealthEnergyMergeSpecTab />;
 
       case "pulsecheck-vision-pro-immersive-tests":
         return <PulseCheckVisionProImmersiveTestsTab />;

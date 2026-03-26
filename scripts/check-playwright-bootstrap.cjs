@@ -17,10 +17,14 @@ function printHeader(title) {
 function parseEnvValue(rawValue) {
   let value = rawValue.trim();
 
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
+  if (value.startsWith('"') && value.endsWith('"')) {
+    try {
+      const parsed = JSON.parse(value);
+      return typeof parsed === 'string' ? parsed.replace(/\\n/g, '\n') : String(parsed);
+    } catch (_error) {
+      value = value.slice(1, -1);
+    }
+  } else if (value.startsWith("'") && value.endsWith("'")) {
     value = value.slice(1, -1);
   }
 

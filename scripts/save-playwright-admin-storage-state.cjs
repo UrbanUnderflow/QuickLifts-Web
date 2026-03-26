@@ -5,12 +5,6 @@ const { chromium } = require('@playwright/test');
 const { GoogleAuth, JWT } = require('google-auth-library');
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
-const outputPath = process.env.PLAYWRIGHT_STORAGE_STATE
-  ? path.resolve(process.env.PLAYWRIGHT_STORAGE_STATE)
-  : path.resolve(process.cwd(), '.playwright/admin-storage-state.json');
-const remoteLoginToken = process.env.PLAYWRIGHT_REMOTE_LOGIN_TOKEN;
-const bootstrapSecretName = process.env.PLAYWRIGHT_BOOTSTRAP_SECRET_NAME || '';
-const bootstrapJson = process.env.PLAYWRIGHT_BOOTSTRAP_JSON || '';
 const bootstrapEnvPath = path.resolve(process.cwd(), '.playwright/bootstrap.env');
 const bootstrapDefaultNextPath = '/admin/systemOverview#variant-registry';
 const secretManagerScope = 'https://www.googleapis.com/auth/cloud-platform';
@@ -18,10 +12,14 @@ const secretManagerScope = 'https://www.googleapis.com/auth/cloud-platform';
 function parseEnvValue(rawValue) {
   let value = rawValue.trim();
 
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
+  if (value.startsWith('"') && value.endsWith('"')) {
+    try {
+      const parsed = JSON.parse(value);
+      return typeof parsed === 'string' ? parsed.replace(/\\n/g, '\n') : String(parsed);
+    } catch (_error) {
+      value = value.slice(1, -1);
+    }
+  } else if (value.startsWith("'") && value.endsWith("'")) {
     value = value.slice(1, -1);
   }
 
@@ -52,6 +50,13 @@ function loadEnvFile(filePath) {
 
 loadEnvFile(path.resolve(process.cwd(), '.env.local'));
 loadEnvFile(bootstrapEnvPath);
+
+const outputPath = process.env.PLAYWRIGHT_STORAGE_STATE
+  ? path.resolve(process.env.PLAYWRIGHT_STORAGE_STATE)
+  : path.resolve(process.cwd(), '.playwright/admin-storage-state.json');
+const remoteLoginToken = process.env.PLAYWRIGHT_REMOTE_LOGIN_TOKEN;
+const bootstrapSecretName = process.env.PLAYWRIGHT_BOOTSTRAP_SECRET_NAME || '';
+const bootstrapJson = process.env.PLAYWRIGHT_BOOTSTRAP_JSON || '';
 
 function ensureDir(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
