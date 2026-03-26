@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import PageHead from '../../components/PageHead';
 import ArticleAudioPlayer from '../../components/ArticleAudioPlayer';
+import { getFirestoreDocFallback } from '../../lib/server-firestore-fallback';
 
 // Known research article slugs (add new articles here)
 const RESEARCH_SLUGS = ['the-system'] as const;
@@ -166,8 +167,9 @@ And that's where my interests converge: health, performance, technology, and the
 The body was always the original operating system. We're just finally building the dashboard.
 `;
 
-export const getServerSideProps: GetServerSideProps = async ({ params }) => {
+export const getServerSideProps: GetServerSideProps = async ({ params, query }) => {
   const slug = params?.slug as string;
+  const forceDevFirebase = query.devFirebase === '1';
 
   if (!slug) {
     return { notFound: true };
@@ -195,38 +197,55 @@ export const getServerSideProps: GetServerSideProps = async ({ params }) => {
     const adminModule = await import('../../lib/firebase-admin');
     const admin = adminModule.default;
     const db = admin.firestore();
-    const docRef = db.collection('researchArticles').doc(slug);
-    const docSnap = await docRef.get();
+    let data: Record<string, any> | null = null;
 
-    if (!docSnap.exists) {
+    try {
+      const docSnap = await db.collection('researchArticles').doc(slug).get();
+      if (docSnap.exists) {
+        data = docSnap.data() || null;
+      }
+    } catch (error) {
+      console.warn('[research] Admin lookup failed, trying fallback client lookup:', error);
+    }
+
+    if (!data) {
+      data = await getFirestoreDocFallback('researchArticles', slug, forceDevFirebase);
+    }
+
+    if (!data) {
       return { notFound: true };
     }
 
-    const data = docSnap.data();
-
     // Only show published articles
-    if (data?.status !== 'published') {
+    if (data.status !== 'published') {
       return { notFound: true };
     }
 
     // Fetch author profile if available
     let authorTitle = '';
-    if (data?.author) {
+    if (data.author) {
       try {
-        const authorSlug = data.author.toLowerCase().replace(/\s+/g, '-');
+        const authorSlug = String(data.author).toLowerCase().replace(/\s+/g, '-');
         const authorDoc = await db.collection('authorProfiles').doc(authorSlug).get();
         if (authorDoc.exists) {
           authorTitle = authorDoc.data()?.title || '';
         }
       } catch (e) {
-        console.error('Error fetching author profile:', e);
+        console.warn('[research] Admin author lookup failed, trying fallback client lookup:', e);
+        try {
+          const authorSlug = String(data.author).toLowerCase().replace(/\s+/g, '-');
+          const authorDoc = await getFirestoreDocFallback('authorProfiles', authorSlug, forceDevFirebase);
+          authorTitle = String(authorDoc?.title || '');
+        } catch (fallbackError) {
+          console.error('Error fetching author profile:', fallbackError);
+        }
       }
     }
 
     // Serialize Firestore timestamps
     const articleData = {
       ...data,
-      slug: docSnap.id,
+      slug,
       authorTitle,
       createdAt: data?.createdAt?.toDate?.()?.toISOString() || null,
       updatedAt: data?.updatedAt?.toDate?.()?.toISOString() || null,
