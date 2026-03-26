@@ -83,6 +83,10 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/onboarding/set-password',
     // PulseCheck demo (public for stakeholder demos)
     '/pulsecheckdemo',
+    // Wunna Run demo (public for stakeholder demos)
+    '/wunnarundemo',
+    // Pulse Intelligence Labs deck (public for stakeholder demos)
+    '/pulseintelligencelabs',
     // AuntEdna demo (public for stakeholder demos)
     '/auntedna',
     // PulseCheck marketing landing (public)
