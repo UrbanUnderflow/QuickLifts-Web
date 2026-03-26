@@ -127,14 +127,15 @@ const CorporatePartnersPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Sort state
-  const [sortBy, setSortBy] = useState<string>('companyName');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [sortBy, setSortBy] = useState<string>('createdAt');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Search state
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Sort options
   const sortOptions = [
+    { value: 'createdAt', label: 'Date Added' },
     { value: 'companyName', label: 'Company Name' },
     { value: 'contactPerson', label: 'Contact Person' },
     { value: 'industry', label: 'Industry' },
@@ -1263,7 +1264,7 @@ const CorporatePartnersPage: React.FC = () => {
         const aNum = parseFloat(aValue?.toString() || '0');
         const bNum = parseFloat(bValue?.toString() || '0');
         comparison = aNum - bNum;
-      } else if (sortBy === 'lastContactDate' || sortBy === 'nextFollowUpDate') {
+      } else if (sortBy === 'createdAt' || sortBy === 'lastContactDate' || sortBy === 'nextFollowUpDate') {
         // Date comparison
         const aDate = aValue ? new Date(aValue) : new Date(0);
         const bDate = bValue ? new Date(bValue) : new Date(0);

@@ -1253,17 +1253,34 @@ const PulseCheckToAuntEdnaFlow: React.FC = () => {
 
 const EscalationExplainer: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
     const [visibleTiers, setVisibleTiers] = useState<number[]>([]);
-    const [showFlow, setShowFlow] = useState(false);
+    const [activeTier, setActiveTier] = useState(0);
     const [showCTA, setShowCTA] = useState(false);
 
     useEffect(() => {
-        const t0 = setTimeout(() => setShowFlow(true), 400);
-        const t1 = setTimeout(() => setVisibleTiers([0]), 1200);
-        const t2 = setTimeout(() => setVisibleTiers([0, 1]), 1900);
-        const t3 = setTimeout(() => setVisibleTiers([0, 1, 2]), 2600);
-        const t4 = setTimeout(() => setVisibleTiers([0, 1, 2, 3]), 3300);
-        const t5 = setTimeout(() => setShowCTA(true), 4500);
-        return () => { clearTimeout(t0); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); clearTimeout(t5); };
+        const t1 = setTimeout(() => {
+            setVisibleTiers([0]);
+            setActiveTier(0);
+        }, 700);
+        const t2 = setTimeout(() => {
+            setVisibleTiers([0, 1]);
+            setActiveTier(1);
+        }, 1400);
+        const t3 = setTimeout(() => {
+            setVisibleTiers([0, 1, 2]);
+            setActiveTier(2);
+        }, 2100);
+        const t4 = setTimeout(() => {
+            setVisibleTiers([0, 1, 2, 3]);
+            setActiveTier(3);
+        }, 2800);
+        const t5 = setTimeout(() => setShowCTA(true), 3600);
+        return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
+            clearTimeout(t3);
+            clearTimeout(t4);
+            clearTimeout(t5);
+        };
     }, []);
 
     const tiers = [
@@ -1279,6 +1296,10 @@ const EscalationExplainer: React.FC<{ onContinue: () => void }> = ({ onContinue 
             dot: 'bg-emerald-400',
             tag: 'No Action',
             tagColor: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
+            condition: 'Mild nerves or routine frustration with stable biometrics and no safety language.',
+            outcome: 'Pulse logs the moment, updates the trendline, and lets Nora keep coaching in flow.',
+            example: '"I am a little tight before the game, but I think I will settle in once warmups start."',
+            automation: ['Sentiment saved', 'Trendline updated', 'Conversation continues'],
         },
         {
             number: 1,
@@ -1292,6 +1313,10 @@ const EscalationExplainer: React.FC<{ onContinue: () => void }> = ({ onContinue 
             dot: 'bg-amber-400',
             tag: 'Staff Notice',
             tagColor: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+            condition: 'Anxiety or mood strain repeats across signals, but the athlete is still stable and coach-visible.',
+            outcome: 'Pulse compiles a staff briefing and sends a quiet notice to the selected support contact.',
+            example: '"I am trying to lock in, but I have been off all week and barely slept last night."',
+            automation: ['Coach briefing created', 'Sleep + HRV attached', 'Support staff notified'],
         },
         {
             number: 2,
@@ -1305,6 +1330,10 @@ const EscalationExplainer: React.FC<{ onContinue: () => void }> = ({ onContinue 
             dot: 'bg-orange-400',
             tag: 'Consent Required',
             tagColor: 'bg-orange-500/15 text-orange-400 border-orange-500/25',
+            condition: 'Elevated distress or functional drop suggests clinician support is warranted, but the athlete can still consent.',
+            outcome: 'Pulse pauses normal programming, opens the consent flow, and stages the handoff packet for AuntEdna.',
+            example: '"I do not feel like myself at all right now. I think I need more help than this chat can give me."',
+            automation: ['Consent modal opened', 'Clinical packet prepared', 'Coach visibility preserved'],
         },
         {
             number: 3,
@@ -1318,17 +1347,22 @@ const EscalationExplainer: React.FC<{ onContinue: () => void }> = ({ onContinue 
             dot: 'bg-red-400 animate-pulse',
             tag: 'Immediate',
             tagColor: 'bg-red-500/20 text-red-400 border-red-500/30 font-bold',
+            condition: 'Direct self-harm, hopelessness, or acute safety language crosses the hard escalation threshold.',
+            outcome: 'Pulse overrides consent, assembles the full case instantly, and routes a live alert into AuntEdna.',
+            example: '"Maybe everyone would be better off without me. I do not even want to be here today."',
+            automation: ['Immediate handoff', 'Clinician alerted', 'Audit trail stamped'],
         },
     ];
+
+    const activeTierData = tiers.find((tier) => tier.number === activeTier) ?? tiers[0];
 
     return (
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, x: -80 }}
-            className="max-w-4xl mx-auto px-6 py-8 h-full overflow-y-auto"
+            className="max-w-6xl mx-auto px-6 py-8 h-full overflow-y-auto"
         >
-            {/* Ambient background glows */}
             <div className="fixed inset-0 pointer-events-none overflow-hidden">
                 <motion.div
                     className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full"
@@ -1344,7 +1378,6 @@ const EscalationExplainer: React.FC<{ onContinue: () => void }> = ({ onContinue 
                 />
             </div>
 
-            {/* Header */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1355,106 +1388,176 @@ const EscalationExplainer: React.FC<{ onContinue: () => void }> = ({ onContinue 
                     Pulse Signal Architecture
                 </div>
                 <h2 className="text-2xl font-bold text-white leading-snug">
-                    How Pulse Knows When to Escalate
+                    Escalation tiers are the decision engine
                 </h2>
-                <p className="text-sm text-zinc-400 mt-2 leading-relaxed max-w-2xl">
-                    Behind every Nora conversation, a real-time classification engine monitors athlete signals across
-                    four escalation tiers — automatically deciding when to keep it internal and when to call in clinical support.
+                <p className="text-sm text-zinc-400 mt-2 leading-relaxed max-w-3xl">
+                    Hover or tap through the tiers to see the exact type of condition that triggers each level and the action Pulse runs in response.
                 </p>
             </motion.div>
 
-            {/* Data Flow Visualization */}
-            <AnimatePresence>
-                {showFlow && (
+            <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                    Escalation Tier System
+                </div>
+                <div className="text-[10px] text-zinc-600 uppercase tracking-[0.2em]">
+                    If X happens, Y action runs
+                </div>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr] mb-8 items-start">
+                <div className="space-y-3">
+                    {tiers.map((tier) => {
+                        const isVisible = visibleTiers.includes(tier.number);
+                        const isActive = tier.number === activeTier;
+
+                        return (
+                            <AnimatePresence key={tier.number}>
+                                {isVisible && (
+                                    <motion.button
+                                        type="button"
+                                        initial={{ opacity: 0, x: -30, filter: 'blur(8px)' }}
+                                        animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                                        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                                        onMouseEnter={() => setActiveTier(tier.number)}
+                                        onFocus={() => setActiveTier(tier.number)}
+                                        onClick={() => setActiveTier(tier.number)}
+                                        className={`group w-full text-left rounded-[26px] ${tier.bg} ${tier.border} border p-4 relative overflow-hidden transition-all ${isActive ? 'scale-[1.01] border-opacity-100 shadow-[0_0_30px_rgba(0,0,0,0.2)]' : 'hover:border-opacity-70 hover:bg-white/[0.04]'}`}
+                                    >
+                                        <div
+                                            className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[26px]"
+                                            style={{ backgroundColor: tier.color, boxShadow: `0 0 12px ${tier.color}` }}
+                                        />
+                                        <motion.div
+                                            className="absolute inset-0"
+                                            animate={{ opacity: isActive ? 0.12 : 0 }}
+                                            transition={{ duration: 0.25 }}
+                                            style={{ background: `radial-gradient(circle at 15% 50%, ${tier.glow} 0%, transparent 70%)` }}
+                                        />
+                                        <div className="relative flex items-start gap-4 pl-3">
+                                            <div className="flex-shrink-0 flex flex-col items-center gap-1 mt-0.5">
+                                                <div
+                                                    className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-black"
+                                                    style={{ backgroundColor: `${tier.color}20`, color: tier.color }}
+                                                >
+                                                    {tier.number}
+                                                </div>
+                                                <div className={`w-2 h-2 rounded-full ${tier.dot}`} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                    <span className="text-xs font-bold" style={{ color: tier.color }}>
+                                                        {tier.sublabel}
+                                                    </span>
+                                                    <span className="text-sm font-semibold text-white">
+                                                        {tier.label}
+                                                    </span>
+                                                    <span className={`ml-auto text-[9px] px-2 py-0.5 rounded-full border ${tier.tagColor}`}>
+                                                        {tier.tag}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-zinc-400 leading-relaxed">{tier.desc}</p>
+                                                <div className="mt-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600">
+                                                    <span>Preview rule path</span>
+                                                    <ChevronRight className={`w-3 h-3 transition-transform ${isActive ? 'translate-x-0.5' : ''}`} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </motion.button>
+                                )}
+                            </AnimatePresence>
+                        );
+                    })}
+                </div>
+
+                <AnimatePresence mode="wait">
                     <motion.div
-                        initial={{ opacity: 0, y: 30 }}
+                        key={activeTierData.number}
+                        initial={{ opacity: 0, y: 18 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.7 }}
-                        className="mb-8 rounded-2xl bg-zinc-900/60 border border-zinc-700/30 p-6 relative overflow-hidden"
+                        exit={{ opacity: 0, y: -18 }}
+                        transition={{ duration: 0.28 }}
+                        className="lg:sticky lg:top-6 rounded-[28px] border p-5 md:p-6 relative overflow-hidden"
+                        style={{
+                            borderColor: `${activeTierData.color}55`,
+                            background: `linear-gradient(145deg, ${activeTierData.color}14 0%, rgba(10,10,11,0.92) 32%, rgba(10,10,11,0.98) 100%)`,
+                            boxShadow: `0 0 40px ${activeTierData.color}12`,
+                        }}
                     >
-                        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/3 via-transparent to-red-500/3" />
-                        <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-6">
-                            Live Escalation Pipeline
-                        </div>
-                        <PulseCheckToAuntEdnaFlow />
-                        <div className="mt-4 pt-4 border-t border-zinc-800/60 grid grid-cols-3 gap-3 text-center">
-                            <div>
-                                <div className="text-xs text-zinc-500">Data Sources</div>
-                                <div className="text-[11px] text-zinc-300 mt-1">HRV · Sleep · Chat Sentiment · RHR</div>
+                        <div
+                            className="absolute inset-0 opacity-70"
+                            style={{ background: `radial-gradient(circle at 85% 15%, ${activeTierData.glow} 0%, transparent 35%)` }}
+                        />
+
+                        <div className="relative">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div
+                                    className="w-11 h-11 rounded-2xl flex items-center justify-center text-lg font-black"
+                                    style={{ backgroundColor: `${activeTierData.color}22`, color: activeTierData.color }}
+                                >
+                                    {activeTierData.number}
+                                </div>
+                                <div>
+                                    <div className="text-[10px] font-bold uppercase tracking-[0.28em]" style={{ color: activeTierData.color }}>
+                                        {activeTierData.sublabel}
+                                    </div>
+                                    <h3 className="text-xl font-bold text-white">{activeTierData.label}</h3>
+                                </div>
                             </div>
-                            <div>
-                                <div className="text-xs text-zinc-500">Classification</div>
-                                <div className="text-[11px] text-zinc-300 mt-1">GPT-4o · Real-time · 4-Tier System</div>
+
+                            <p className="text-sm text-zinc-300 leading-relaxed mb-5 max-w-xl">
+                                {activeTierData.desc}
+                            </p>
+
+                            <div className="grid gap-3 md:grid-cols-2 mb-4">
+                                <div className="rounded-2xl border border-white/6 bg-black/20 p-4">
+                                    <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.25em] mb-2">
+                                        If Pulse Detects
+                                    </div>
+                                    <p className="text-sm text-white leading-relaxed">
+                                        {activeTierData.condition}
+                                    </p>
+                                </div>
+                                <div className="rounded-2xl border border-white/6 bg-black/20 p-4">
+                                    <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.25em] mb-2">
+                                        Then Pulse Runs
+                                    </div>
+                                    <p className="text-sm text-white leading-relaxed">
+                                        {activeTierData.outcome}
+                                    </p>
+                                </div>
                             </div>
-                            <div>
-                                <div className="text-xs text-zinc-500">Handoff Protocol</div>
-                                <div className="text-[11px] text-zinc-300 mt-1">HIPAA-Compliant · Encrypted · Instant</div>
+
+                            <div className="grid gap-3 md:grid-cols-[1.05fr_0.95fr]">
+                                <div className="rounded-2xl border border-white/6 bg-zinc-950/60 p-4">
+                                    <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.25em] mb-2">
+                                        Example Condition
+                                    </div>
+                                    <p className="text-sm text-zinc-200 leading-relaxed">
+                                        {activeTierData.example}
+                                    </p>
+                                </div>
+                                <div className="rounded-2xl border border-white/6 bg-zinc-950/60 p-4">
+                                    <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.25em] mb-2">
+                                        Outcome Matrix
+                                    </div>
+                                    <div className="space-y-2">
+                                        {activeTierData.automation.map((item) => (
+                                            <div key={item} className="flex items-center gap-2">
+                                                <div
+                                                    className="w-1.5 h-1.5 rounded-full"
+                                                    style={{ backgroundColor: activeTierData.color }}
+                                                />
+                                                <span className="text-xs text-zinc-300">{item}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* Tier Cards */}
-            <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4">
-                Escalation Tier System
-            </div>
-            <div className="space-y-3 mb-8">
-                {tiers.map((tier, i) => (
-                    <AnimatePresence key={tier.number}>
-                        {visibleTiers.includes(tier.number) && (
-                            <motion.div
-                                initial={{ opacity: 0, x: -30, filter: 'blur(8px)' }}
-                                animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
-                                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                                className={`rounded-2xl ${tier.bg} ${tier.border} border p-4 relative overflow-hidden`}
-                            >
-                                {/* Glow edge */}
-                                <div
-                                    className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-2xl"
-                                    style={{ backgroundColor: tier.color, boxShadow: `0 0 12px ${tier.color}` }}
-                                />
-                                {tier.number === 3 && (
-                                    <motion.div
-                                        className="absolute inset-0 rounded-2xl"
-                                        animate={{ opacity: [0, 0.04, 0] }}
-                                        transition={{ duration: 2, repeat: Infinity }}
-                                        style={{ background: `radial-gradient(circle at 20% 50%, ${tier.glow} 0%, transparent 70%)` }}
-                                    />
-                                )}
-                                <div className="flex items-start gap-4 pl-3">
-                                    {/* Tier badge */}
-                                    <div className="flex-shrink-0 flex flex-col items-center gap-1 mt-0.5">
-                                        <div
-                                            className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-black"
-                                            style={{ backgroundColor: `${tier.color}20`, color: tier.color }}
-                                        >
-                                            {tier.number}
-                                        </div>
-                                        <div className={`w-2 h-2 rounded-full ${tier.dot}`} />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                                            <span className="text-xs font-bold" style={{ color: tier.color }}>
-                                                {tier.sublabel}
-                                            </span>
-                                            <span className="text-sm font-semibold text-white">
-                                                {tier.label}
-                                            </span>
-                                            <span className={`ml-auto text-[9px] px-2 py-0.5 rounded-full border ${tier.tagColor}`}>
-                                                {tier.tag}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-zinc-400 leading-relaxed">{tier.desc}</p>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                ))}
+                </AnimatePresence>
             </div>
 
-            {/* CTA — Continue to live Tier 3 example */}
             <AnimatePresence>
                 {showCTA && (
                     <motion.div
@@ -1469,7 +1572,7 @@ const EscalationExplainer: React.FC<{ onContinue: () => void }> = ({ onContinue 
                             </div>
                             <p className="text-sm text-zinc-300">
                                 K. Thompson triggered a <span className="text-red-400 font-semibold">Tier 3 — Mandatory Clinical</span> escalation at 6:50 AM.
-                                Watch what that looks like on the clinician's side.
+                                Now watch Pulse package the case and transfer it into AuntEdna.
                             </p>
                         </div>
                         <motion.button
@@ -1479,7 +1582,7 @@ const EscalationExplainer: React.FC<{ onContinue: () => void }> = ({ onContinue 
                             className="flex-shrink-0 px-5 py-2.5 rounded-xl text-sm font-bold text-black flex items-center gap-2"
                             style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)' }}
                         >
-                            See Clinical Alert
+                            See Clinical Handoff
                             <ChevronRight className="w-4 h-4" />
                         </motion.button>
                     </motion.div>
@@ -1506,6 +1609,79 @@ const CallTimer: React.FC = () => {
         <div className="text-sm text-green-400 font-medium">
             Connected • {mins}:{secs.toString().padStart(2, '0')}
         </div>
+    );
+};
+
+const ClinicalHandoffHeader: React.FC = () => {
+    const packetCards = [
+        { title: 'Conversation context', value: 'Flagged excerpts + last exchange', accent: '#E0FE10' },
+        { title: 'Biometric snapshot', value: 'HRV, sleep, RHR, stress markers', accent: '#10b981' },
+        { title: 'Risk routing', value: 'Tier 3 hard-threshold override', accent: '#f97316' },
+        { title: 'Destination', value: 'AuntEdna clinician alert + chart seed', accent: '#ef4444' },
+    ];
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="mb-6 rounded-[28px] border border-red-500/20 bg-zinc-900/60 p-5 md:p-6 relative overflow-hidden"
+        >
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-red-500/6" />
+            <div className="relative">
+                <div className="grid gap-5 xl:grid-cols-[0.88fr_1.12fr] items-start">
+                    <div>
+                        <div className="text-[10px] font-bold text-red-400 uppercase tracking-[0.28em] mb-2">
+                            Tier 3 Clinical Transfer
+                        </div>
+                        <h2 className="text-2xl font-bold text-white leading-tight">
+                            Pulse packages the case and pushes it into AuntEdna in real time
+                        </h2>
+                        <p className="text-sm text-zinc-400 mt-3 leading-relaxed max-w-md">
+                            This is the boundary crossing. The conversation context, biometrics, and escalation decision are encrypted, routed, and handed off to the clinician-side system instantly.
+                        </p>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        {packetCards.map((card, index) => (
+                            <motion.div
+                                key={card.title}
+                                initial={{ opacity: 0, y: 12 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.35, delay: index * 0.08 }}
+                                className="rounded-2xl border border-white/6 bg-black/20 p-4"
+                            >
+                                <div className="text-[10px] uppercase tracking-[0.24em] mb-2" style={{ color: card.accent }}>
+                                    {card.title}
+                                </div>
+                                <div className="text-sm text-zinc-200 leading-relaxed">{card.value}</div>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="mt-6 pt-5 border-t border-zinc-800/70">
+                    <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-5">
+                        Live Handoff Pipeline
+                    </div>
+                    <PulseCheckToAuntEdnaFlow />
+                    <div className="mt-5 grid gap-3 md:grid-cols-3 text-center">
+                        <div className="rounded-2xl border border-white/6 bg-black/20 px-3 py-3">
+                            <div className="text-[10px] text-zinc-500 uppercase tracking-widest">Transfer Mode</div>
+                            <div className="text-xs text-zinc-200 mt-1">Encrypted packet + clinician alert</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/6 bg-black/20 px-3 py-3">
+                            <div className="text-[10px] text-zinc-500 uppercase tracking-widest">Decision Layer</div>
+                            <div className="text-xs text-zinc-200 mt-1">GPT-4o routing + hard safety thresholds</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/6 bg-black/20 px-3 py-3">
+                            <div className="text-[10px] text-zinc-500 uppercase tracking-widest">Destination</div>
+                            <div className="text-xs text-zinc-200 mt-1">AuntEdna chart seed + immediate response path</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </motion.div>
     );
 };
 
@@ -1557,8 +1733,9 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="max-w-4xl mx-auto px-4 py-6"
+            className="max-w-6xl mx-auto px-4 py-6 h-full overflow-y-auto"
         >
+            <ClinicalHandoffHeader />
             <AnimatePresence mode="wait">
                 {/* ── PHASE 1: Clinician Phone Screen ── */}
                 {phase === 'phone' && (
@@ -4365,6 +4542,8 @@ const PulseCheckDemo: React.FC = () => {
                                             ? 'Coach Dashboard'
                                             : currentAct === 'act2b'
                                                 ? 'Escalation System'
+                                                : currentAct === 'act3'
+                                                    ? 'Clinical Handoff'
                                                 : ''}
                                 </p>
                             </div>

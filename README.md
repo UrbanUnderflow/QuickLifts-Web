@@ -31,7 +31,11 @@ npm run test:e2e
 
 `npm run dev` starts the Next app directly.
 
-`npm run dev:fast` starts the app through Netlify Dev and links the slim local functions setup used by this repo.
+`npm run dev:fast` starts the app through Netlify Dev in offline mode and links the slim local functions setup used by this repo.
+
+`npm run dev:fast:online` uses the same slim local functions setup but keeps Netlify API access enabled for cases where you specifically need remote project metadata.
+
+`npm run dev:full` starts Netlify Dev in offline mode with the full functions directory.
 
 ## Notes
 
