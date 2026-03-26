@@ -2465,6 +2465,16 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
         ? !manualTitle.trim() || !manualContent.trim()
         : !prompt.trim()
   );
+  const selectedTypeConfig = DOCUMENT_TYPES.find((type) => type.id === selectedType);
+  const completedDocumentsCount = documents.filter((document) => document.status === 'completed').length;
+  const signatureWorkflowCount = documents.filter((document) => requiresSignature(document)).length;
+  const proposalDocumentsCount = documents.filter((document) => document.documentType === 'proposal').length;
+  const afroTechProposalDocument = documents.find((document) =>
+    document.documentType === 'proposal' && (
+      document.title === AFROTECH_PROPOSAL_TITLE ||
+      document.content.includes("Million-Dollar R&D Department and You're Not Using It")
+    )
+  );
 
   return (
     <AdminRouteGuard>
@@ -2512,19 +2522,122 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
             </div>
           )}
 
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)] mb-8">
+            <div className="rounded-3xl border border-zinc-800 bg-gradient-to-br from-[#1a1e24] via-[#171b1f] to-zinc-950 p-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="max-w-2xl">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-[#d7ff00]/30 bg-[#d7ff00]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#d7ff00]">
+                    <Link2 className="h-3.5 w-3.5" />
+                    AfroTech Preset
+                  </div>
+                  <h2 className="mt-4 text-2xl font-semibold text-white">Your proposal is a preset until you create it.</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+                    That is why you do not see it in the generated list yet. Open the AfroTech preset, review the content, then click Create Document. After that it will appear below like every other shareable legal-doc page.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleLoadAfroTechProposal}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-[#d7ff00] px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-[#c5eb00]"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                    Open AfroTech Preset
+                  </button>
+                  {afroTechProposalDocument && (
+                    <button
+                      type="button"
+                      onClick={() => window.open(`/legal-doc/${afroTechProposalDocument.id}`, '_blank')}
+                      className="inline-flex items-center gap-2 rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+                    >
+                      <Eye className="h-4 w-4" />
+                      Open Saved Proposal
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                {afroTechProposalDocument ? (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{afroTechProposalDocument.title}</p>
+                      <p className="mt-1 text-xs text-zinc-400">
+                        Saved in Generated Documents on {formatDate(afroTechProposalDocument.createdAt)}.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status={afroTechProposalDocument.status} />
+                      <span className="rounded-full border border-green-800 bg-green-900/20 px-3 py-1 text-xs font-medium text-green-300">
+                        Ready to share
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-white">Not in the generated list yet</p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Selecting Proposal loads the content, but it only becomes a list item after you click Create Document.
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-amber-800 bg-amber-900/20 px-3 py-1 text-xs font-medium text-amber-300">
+                      Draft preset only
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+              <div className="rounded-3xl border border-zinc-800 bg-[#1a1e24] p-5">
+                <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Completed</p>
+                <p className="mt-3 text-3xl font-semibold text-white">{completedDocumentsCount}</p>
+                <p className="mt-2 text-sm text-zinc-400">Documents ready for preview, PDF export, and sharing.</p>
+              </div>
+              <div className="rounded-3xl border border-zinc-800 bg-[#1a1e24] p-5">
+                <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Signature Workflows</p>
+                <p className="mt-3 text-3xl font-semibold text-white">{signatureWorkflowCount}</p>
+                <p className="mt-2 text-sm text-zinc-400">Documents that can move through signer management and execution.</p>
+              </div>
+              <div className="rounded-3xl border border-zinc-800 bg-[#1a1e24] p-5">
+                <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Proposals</p>
+                <p className="mt-3 text-3xl font-semibold text-white">{proposalDocumentsCount}</p>
+                <p className="mt-2 text-sm text-zinc-400">Proposal pages currently saved inside the legal-docs workspace.</p>
+              </div>
+            </div>
+          </div>
+
           {/* Generation Form */}
-          <div className="bg-[#1a1e24] rounded-xl border border-zinc-800 p-6 mb-8">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-[#d7ff00]" />
-              Generate New Document
-            </h2>
+          <div className="mb-8 overflow-hidden rounded-3xl border border-zinc-800 bg-[#1a1e24]">
+            <div className="flex flex-col gap-3 border-b border-zinc-800 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
+                  <Sparkles className="w-5 h-5 text-[#d7ff00]" />
+                  Document Workspace
+                </h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Choose the document shape on the left, then work in the drafting panel on the right.
+                </p>
+              </div>
+              <div className="inline-flex items-center gap-2 self-start rounded-full border border-zinc-700 bg-zinc-900/70 px-3 py-1.5 text-xs font-medium text-zinc-300">
+                <span className="text-zinc-500">Active:</span>
+                <span className="text-white">{selectedTypeConfig?.label || 'Document'}</span>
+                <span className="text-zinc-600">•</span>
+                <span className="text-zinc-400">{creationMode === 'manual' ? 'Manual mode' : 'AI draft mode'}</span>
+              </div>
+            </div>
+
+            <div className="grid xl:grid-cols-[360px_minmax(0,1fr)]">
+              <div className="space-y-5 border-b border-zinc-800 bg-gradient-to-b from-zinc-900/70 to-[#161a1f] p-6 xl:border-b-0 xl:border-r">
 
             {/* Document Type Selection */}
-            <div className="mb-4">
+            <div>
               <label className="block text-sm font-medium text-zinc-400 mb-2">
                 Document Type
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {DOCUMENT_TYPES.map(type => (
                   <button
                     key={type.id}
@@ -2545,7 +2658,7 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
             </div>
 
             {/* Company Selector */}
-            <div className="mb-4">
+            <div>
               <label className="block text-sm font-medium text-zinc-400 mb-2">
                 Issuing Company
               </label>
@@ -2574,7 +2687,7 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
             </div>
 
             {selectedType !== 'invoice' && (
-              <div className="mb-4">
+              <div>
                 <label className="block text-sm font-medium text-zinc-400 mb-2">
                   Creation Method
                 </label>
@@ -2608,7 +2721,7 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
 
             {/* Signature Requirement Toggle — hidden for invoices */}
             {selectedType !== 'invoice' && (
-              <div className="mb-4 flex items-center justify-between gap-4 p-4 bg-zinc-900/50 rounded-xl border border-zinc-700">
+              <div className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-700 bg-zinc-900/50 p-4">
                 <div>
                   <p className="text-sm font-medium text-white">Requires signature</p>
                   <p className="text-xs text-zinc-500 mt-0.5">
@@ -2629,9 +2742,32 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
               </div>
             )}
 
+            <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Workflow Note</p>
+              <p className="mt-3 text-sm leading-6 text-zinc-400">
+                Generated Documents only shows saved items. Templates and presets stay here until you click {creationMode === 'manual' ? 'Create Document' : 'Generate Document'}.
+              </p>
+            </div>
+          </div>
+
+          <div className="p-6">
+            <div className="mb-5 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                {selectedType === 'invoice' ? 'Invoice builder' : creationMode === 'manual' ? 'Manual content workspace' : 'AI drafting workspace'}
+              </p>
+              <h3 className="mt-2 text-xl font-semibold text-white">{selectedTypeConfig?.label || 'Document'}</h3>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
+                {selectedType === 'invoice'
+                  ? 'Fill in billing details, line items, and memo fields. The invoice PDF and wire instructions are generated from structured data.'
+                  : creationMode === 'manual'
+                    ? 'Paste polished content, clean up formatting, and create a shareable page exactly as you want it to appear.'
+                    : 'Describe the document you need in plain language, then refine it with editing, audits, exhibits, and signing tools after generation.'}
+              </p>
+            </div>
+
             {/* Invoice Form or Prompt — conditional on document type */}
             {selectedType === 'invoice' ? (
-              <div className="space-y-4 mb-4">
+              <div className="space-y-4 mb-5">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-zinc-400 mb-1">Invoice #</label>
@@ -2696,13 +2832,13 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                 </div>
               </div>
             ) : creationMode === 'manual' ? (
-              <div className="space-y-4 mb-4">
+              <div className="space-y-4 mb-5">
                 {selectedType === 'proposal' && (
-                  <div className="p-4 bg-zinc-900/50 border border-zinc-700 rounded-xl">
+                  <div className="rounded-2xl border border-zinc-700 bg-gradient-to-r from-[#d7ff00]/10 via-zinc-900/80 to-zinc-900/40 p-4">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div>
-                        <p className="text-sm font-medium text-white">Quick import: AfroTech proposal</p>
-                        <p className="text-xs text-zinc-500 mt-1">
+                        <p className="text-sm font-medium text-white">AfroTech proposal preset</p>
+                        <p className="text-xs text-zinc-400 mt-1">
                           Load the contents of `/Users/tremainegrant/Downloads/afrotech_submission.pdf` into this form.
                         </p>
                       </div>
@@ -2755,7 +2891,7 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                 </div>
               </div>
             ) : (
-              <div className="mb-4">
+              <div className="mb-5">
                 <label className="block text-sm font-medium text-zinc-400 mb-2">Document Details &amp; Instructions</label>
                 <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the specifics of your document..." className="w-full h-40 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#d7ff00] transition-colors resize-none" />
                 <p className="text-xs text-zinc-500 mt-2">Be specific about parties involved, terms, duration, and any special clauses you need.</p>
@@ -2763,11 +2899,16 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
             )}
 
             {/* Generate Button */}
-            <div className="mt-4">
+            <div className="flex flex-col gap-3 border-t border-zinc-800 pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-zinc-500">
+                {selectedType === 'proposal'
+                  ? 'Tip: the AfroTech preset will not appear in Generated Documents until you create it.'
+                  : 'Everything you create here will show up below with preview, share, PDF, audit, and signing actions.'}
+              </p>
               <button
                 onClick={handleGenerate}
                 disabled={isCreateDisabled}
-                className={`flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 rounded-xl font-semibold transition-all ${isCreateDisabled
+                className={`flex items-center justify-center gap-2 w-full sm:w-auto rounded-2xl px-6 py-3 font-semibold transition-all ${isCreateDisabled
                   ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
                   : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
                   }`}
@@ -2786,10 +2927,12 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
               </button>
             </div>
           </div>
+        </div>
+          </div>
 
           {/* Documents Table */}
-          <div className="bg-[#1a1e24] rounded-xl border border-zinc-800 overflow-hidden">
-            <div className="p-4 border-b border-zinc-800">
+          <div className="rounded-3xl border border-zinc-800 bg-[#1a1e24]">
+            <div className="border-b border-zinc-800 p-5">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <Clock className="w-5 h-5 text-zinc-400" />
                 Generated Documents
@@ -2797,6 +2940,9 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                   {documents.length}
                 </span>
               </h2>
+              <p className="mt-2 text-sm text-zinc-500">
+                Saved documents live here after creation. Presets and drafts do not appear in this section until you create them.
+              </p>
             </div>
 
             {loading ? (
@@ -2810,18 +2956,19 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                 <p className="text-sm">Use the form above to generate your first document</p>
               </div>
             ) : (
-              <div className="divide-y divide-zinc-800">
+              <div className="space-y-4 p-4">
                 {documents.map((document) => {
                   const signingRequestsForDoc = getSigningRequestsForDocument(document);
                   const signingRequest = signingRequestsForDoc[0];
                   const needsSignature = requiresSignature(document);
+                  const promptPreview = (document.prompt || '').trim();
 
                   return (
-                    <div key={document.id} className="p-4 hover:bg-zinc-900/50 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
+                    <div key={document.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-[0_1px_0_rgba(255,255,255,0.02)] transition-colors hover:bg-zinc-900/80">
+                      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(340px,430px)] xl:items-start">
+                        <div className="min-w-0">
                           <div className="flex items-center gap-3 mb-1 flex-wrap">
-                            <h3 className="font-medium text-white truncate">
+                            <h3 className="text-lg font-semibold text-white break-words">
                               {document.title}
                             </h3>
                             <StatusBadge status={document.status} />
@@ -2838,7 +2985,7 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-zinc-500 flex-wrap">
+                          <div className="flex items-center gap-3 text-sm text-zinc-500 flex-wrap">
                             <span className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />
                               {formatDate(document.createdAt)}
@@ -2862,9 +3009,21 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                               </span>
                             )}
                           </div>
+
+                          {promptPreview && (
+                            <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Source / Prompt</p>
+                              <p className="mt-2 text-sm leading-6 text-zinc-400">
+                                {promptPreview.length > 220 ? `${promptPreview.slice(0, 220)}...` : promptPreview}
+                              </p>
+                            </div>
+                          )}
                         </div>
 
-                        <div className="flex items-center gap-2 ml-4 flex-wrap justify-end">
+                        <div className="space-y-3">
+                          <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Review &amp; Share</p>
+                            <div className="mt-3 flex flex-wrap gap-2">
                           {document.status === 'completed' && (
                             <>
                               <button
@@ -2872,7 +3031,14 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                                 className="flex items-center gap-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
                               >
                                 <Eye className="w-4 h-4" />
-                                Preview
+                                Open Preview
+                              </button>
+                              <button
+                                onClick={() => togglePreview(document.id)}
+                                className="flex items-center gap-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
+                              >
+                                <ChevronUp className={`w-4 h-4 transition-transform ${expandedDoc === document.id ? '' : 'rotate-180'}`} />
+                                {expandedDoc === document.id ? 'Hide Peek' : 'Quick Peek'}
                               </button>
                               <button
                                 onClick={() => openEditModal(document)}
@@ -2939,7 +3105,16 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                                   </button>
                                 </div>
                               ) : null}
+                            </>
+                          )}
+                            </div>
+                          </div>
 
+                          <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Output &amp; Cleanup</p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                          {document.status === 'completed' && (
+                            <>
                               <button
                                 onClick={() => handleShareDocument(document)}
                                 className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${copiedLinkId === document.id
@@ -2989,6 +3164,8 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                               <Trash2 className="w-4 h-4" />
                             )}
                           </button>
+                        </div>
+                          </div>
                         </div>
                       </div>
 
