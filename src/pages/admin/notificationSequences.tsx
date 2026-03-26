@@ -31,6 +31,7 @@ import {
 /* ─────────────────────────── Types ───────────────────────────── */
 
 type DeliveryMethod = 'fcm-remote' | 'local' | 'scheduled-function' | 'fcm-or-local';
+type ProductScope = 'pulse' | 'pulsecheck';
 
 type NotificationCategory =
     | 'onboarding'
@@ -54,6 +55,7 @@ type NotificationRow = {
     title: string;
     body: string;
     category: NotificationCategory;
+    productScope?: ProductScope;
     deliveryMethod: DeliveryMethod;
     /** Where the sending logic lives */
     source: string;
@@ -352,6 +354,60 @@ const NOTIFICATIONS: NotificationRow[] = [
         notes: 'Falls back to local notification if no FCM token.',
     },
 
+    // ── PulseCheck ────────────────────────────────────
+    {
+        id: 'pulsecheck-daily-reflection-local',
+        name: 'PulseCheck — Daily Reflection Reminder',
+        trigger: 'Locally scheduled on-device at the user preference time (default 8 PM local)',
+        title: 'Nora',
+        body: "Hey, how was your day? I'm ready when you are.",
+        category: 'mental-training',
+        productScope: 'pulsecheck',
+        deliveryMethod: 'local',
+        source: 'iOS — NotificationService.scheduleDailyReflectionReminder()',
+        dataKeys: ['type: DAILY_REFLECTION', 'prompt', 'assistantOpeningMessage', 'launchSubtitle'],
+        notes: 'Enabled during Nora onboarding and now seeded for athlete team onboarding as well.',
+    },
+    {
+        id: 'pulsecheck-wind-down-local',
+        name: 'PulseCheck — Wind-down Reminder',
+        trigger: 'Locally scheduled from recent HealthKit sleep patterns when notification delivery is authorized',
+        title: 'Nora',
+        body: 'Hey, you should be winding down in the next 30 minutes to get optimal sleep and recovery.',
+        category: 'mental-training',
+        productScope: 'pulsecheck',
+        deliveryMethod: 'local',
+        source: 'iOS — NotificationService.scheduleWindDownReminder()',
+        dataKeys: ['type: WIND_DOWN_REMINDER', 'prompt', 'assistantOpeningMessage', 'launchSubtitle'],
+        notes: 'Depends on HealthKit sleep data and local notification authorization.',
+    },
+    {
+        id: 'pulsecheck-biometric-brief-ready',
+        name: 'PulseCheck — Biometric Brief Ready',
+        trigger: 'Remote push when the latest recovery/biometric brief is prepared for the athlete',
+        title: 'Biometric brief ready',
+        body: 'Your latest brief is ready. Nora can walk you through it now.',
+        category: 'mental-training',
+        productScope: 'pulsecheck',
+        deliveryMethod: 'fcm-remote',
+        source: 'iOS + backend — Nora biometric brief push pipeline',
+        dataKeys: ['type: BIOMETRIC_BRIEF_READY', 'prompt', 'assistantOpeningMessage', 'launchSubtitle'],
+        notes: 'Opening the push routes into Nora with the latest biometric context.',
+    },
+    {
+        id: 'pulsecheck-daily-checkin-scheduled',
+        name: 'PulseCheck — Daily Check-in Push',
+        trigger: "Scheduled backend function runs hourly and targets users whose local hour matches dailyReflectionPreferences.hour",
+        title: 'PulseCheck daily check-in',
+        body: "Open today's web task and log how you're showing up.",
+        category: 'mental-training',
+        productScope: 'pulsecheck',
+        deliveryMethod: 'scheduled-function',
+        source: 'Firebase Functions — functions/dailyReflectionNotifications.js',
+        dataKeys: ['type: MENTAL_CHECKIN', 'prompt', 'checkInType', 'screen', 'webUrl'],
+        notes: 'Requires dailyReflectionPreferences.enabled=true and a valid users.fcmToken.',
+    },
+
     // ── Mental Training (Scheduled) ────────────────────
     {
         id: 'mental-checkin',
@@ -437,6 +493,11 @@ const DELIVERY_META: Record<DeliveryMethod, { label: string; color: string }> = 
     'fcm-or-local': { label: 'FCM → Local Fallback', color: 'bg-cyan-900/40 text-cyan-300 border-cyan-800' },
 };
 
+const PRODUCT_META: Record<ProductScope, { label: string; accent: string }> = {
+    pulse: { label: 'Pulse', accent: 'text-[#d7ff00]' },
+    pulsecheck: { label: 'PulseCheck', accent: 'text-cyan-300' },
+};
+
 const DEFAULT_TEMPLATE_VALUES: Record<string, string> = {
     dayOfWeek: 'Friday',
     challengeId: 'test-challenge',
@@ -486,6 +547,9 @@ const DEFAULT_TEMPLATE_VALUES: Record<string, string> = {
 
 const getNormalizedNotificationType = (notificationId: string) =>
     notificationId.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').toUpperCase();
+
+const getNotificationProductScope = (notification: NotificationRow): ProductScope =>
+    notification.productScope ?? 'pulse';
 
 const renderTemplate = (template: string, values: Record<string, string>) =>
     template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, rawKey) => values[rawKey.trim()] ?? `{{${rawKey.trim()}}}`);
@@ -543,6 +607,7 @@ const buildDataPayload = (notification: NotificationRow, user: TestTargetUser | 
 
 const NotificationSequencesAdmin: React.FC = () => {
     const [search, setSearch] = useState('');
+    const [productFilter, setProductFilter] = useState<ProductScope | 'all'>('all');
     const [categoryFilter, setCategoryFilter] = useState<NotificationCategory | 'all'>('all');
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [testNotification, setTestNotification] = useState<NotificationRow | null>(null);
@@ -554,12 +619,23 @@ const NotificationSequencesAdmin: React.FC = () => {
     const [testStatus, setTestStatus] = useState<TestStatus>(null);
 
     const categories = useMemo(() => {
-        const uniqueCats = Array.from(new Set(NOTIFICATIONS.map((n) => n.category)));
+        const scopedNotifications = NOTIFICATIONS.filter((notification) =>
+            productFilter === 'all' ? true : getNotificationProductScope(notification) === productFilter
+        );
+        const uniqueCats = Array.from(new Set(scopedNotifications.map((n) => n.category)));
         return uniqueCats.sort();
-    }, []);
+    }, [productFilter]);
+
+    const scopedNotifications = useMemo(
+        () =>
+            NOTIFICATIONS.filter((notification) =>
+                productFilter === 'all' ? true : getNotificationProductScope(notification) === productFilter
+            ),
+        [productFilter]
+    );
 
     const filtered = useMemo(() => {
-        let list = NOTIFICATIONS;
+        let list = scopedNotifications;
 
         if (categoryFilter !== 'all') {
             list = list.filter((n) => n.category === categoryFilter);
@@ -579,7 +655,13 @@ const NotificationSequencesAdmin: React.FC = () => {
         }
 
         return list;
-    }, [search, categoryFilter]);
+    }, [search, categoryFilter, scopedNotifications]);
+
+    React.useEffect(() => {
+        if (categoryFilter !== 'all' && !categories.includes(categoryFilter)) {
+            setCategoryFilter('all');
+        }
+    }, [categories, categoryFilter]);
 
     const toggleExpand = (id: string) => {
         setExpandedId((prev) => (prev === id ? null : id));
@@ -728,32 +810,56 @@ const NotificationSequencesAdmin: React.FC = () => {
                     <div className="flex flex-wrap gap-3 mb-6 mt-4">
                         <div className="px-4 py-2 rounded-xl bg-[#1a1e24] border border-zinc-800 text-sm">
                             <span className="text-zinc-400">Total:</span>{' '}
-                            <span className="text-white font-semibold">{NOTIFICATIONS.length}</span>
+                            <span className="text-white font-semibold">{scopedNotifications.length}</span>
                         </div>
                         <div className="px-4 py-2 rounded-xl bg-[#1a1e24] border border-zinc-800 text-sm">
                             <span className="text-zinc-400">FCM Remote:</span>{' '}
                             <span className="text-emerald-400 font-semibold">
-                                {NOTIFICATIONS.filter((n) => n.deliveryMethod === 'fcm-remote').length}
+                                {scopedNotifications.filter((n) => n.deliveryMethod === 'fcm-remote').length}
                             </span>
                         </div>
                         <div className="px-4 py-2 rounded-xl bg-[#1a1e24] border border-zinc-800 text-sm">
                             <span className="text-zinc-400">Local:</span>{' '}
                             <span className="text-amber-400 font-semibold">
-                                {NOTIFICATIONS.filter((n) => n.deliveryMethod === 'local').length}
+                                {scopedNotifications.filter((n) => n.deliveryMethod === 'local').length}
                             </span>
                         </div>
                         <div className="px-4 py-2 rounded-xl bg-[#1a1e24] border border-zinc-800 text-sm">
                             <span className="text-zinc-400">Scheduled:</span>{' '}
                             <span className="text-violet-400 font-semibold">
-                                {NOTIFICATIONS.filter((n) => n.deliveryMethod === 'scheduled-function').length}
+                                {scopedNotifications.filter((n) => n.deliveryMethod === 'scheduled-function').length}
                             </span>
                         </div>
                         <div className="px-4 py-2 rounded-xl bg-[#1a1e24] border border-zinc-800 text-sm">
                             <span className="text-zinc-400">FCM→Local:</span>{' '}
                             <span className="text-cyan-400 font-semibold">
-                                {NOTIFICATIONS.filter((n) => n.deliveryMethod === 'fcm-or-local').length}
+                                {scopedNotifications.filter((n) => n.deliveryMethod === 'fcm-or-local').length}
                             </span>
                         </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 mb-4">
+                        <button
+                            onClick={() => setProductFilter('all')}
+                            className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${productFilter === 'all'
+                                ? 'bg-[#d7ff00] text-black'
+                                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                                }`}
+                        >
+                            All Products
+                        </button>
+                        {(Object.entries(PRODUCT_META) as [ProductScope, typeof PRODUCT_META[ProductScope]][]).map(([scope, meta]) => (
+                            <button
+                                key={scope}
+                                onClick={() => setProductFilter(scope)}
+                                className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${productFilter === scope
+                                    ? 'bg-[#d7ff00] text-black'
+                                    : `bg-zinc-800 ${meta.accent} hover:bg-zinc-700`
+                                    }`}
+                            >
+                                {meta.label}
+                            </button>
+                        ))}
                     </div>
 
                     {/* ── Search + Filter ────────────────────────── */}
@@ -809,8 +915,8 @@ const NotificationSequencesAdmin: React.FC = () => {
                     {/* ── Results count ──────────────────────────── */}
                     <div className="text-sm text-zinc-400 mb-4">
                         Showing <span className="text-white font-medium">{filtered.length}</span> of{' '}
-                        <span className="text-white font-medium">{NOTIFICATIONS.length}</span> notification
-                        {NOTIFICATIONS.length === 1 ? '' : 's'}
+                        <span className="text-white font-medium">{scopedNotifications.length}</span> notification
+                        {scopedNotifications.length === 1 ? '' : 's'}
                     </div>
 
                     {/* ── Notification Cards ─────────────────────── */}

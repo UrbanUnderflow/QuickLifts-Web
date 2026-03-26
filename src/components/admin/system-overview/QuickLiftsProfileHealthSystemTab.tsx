@@ -112,6 +112,47 @@ const OURA_ROWS = [
   ['Coverage rule', 'Support `connected but no fresh payload` without fabricating Oura-backed cards.'],
 ];
 
+const ENERGY_SOURCE_ROWS = [
+  ['Apple Health / HealthKit', 'Direct active + basal energy plus day-level aggregation', 'Primary contributor in v1', 'Treat as the core day aggregate, but validate mirrored writes before allowing any additive overlay.'],
+  ['QuickLifts-native workouts', 'Session timing, calorie provenance, and unsynced gap-fill coverage', 'Contributing source only', 'Only approved workout families may overlay active calories before HealthKit catch-up.'],
+  ['Manual energy entries', 'Athlete-authored corrections for missing or wrong device data', 'Correction source', 'Time window present means `windowScoped`; no time window means `fullDay` correction intent in v1.'],
+  ['Estimator', 'BMR / historical / hybrid fallback decomposition', 'Fallback only', 'Use when direct coverage is weak, lower confidence, and explain the inference.'],
+  ['Oura', 'Agreement validation and future enrichment', 'Validator-only in v1', 'May improve confidence or expose discrepancies, but must not contribute calories in v1.'],
+];
+
+const ENERGY_SNAPSHOT_ROWS = [
+  ['Identity + timing', '`id`, `userId`, `snapshotDateKey`, `timezone`, `generatedAt`, `expiresAt`', 'All day windows and cache boundaries are anchored to the athlete-local timezone.'],
+  ['Resolved values', '`restingCalories`, `activeCalories`, `totalCalories`', 'Preserve `total = resting + active`, even if components require inferred decomposition with a confidence penalty.'],
+  ['Resolution provenance', '`primarySourceByMetric`, `resolutionLabel`, `contributingSources`, `validatingSources`', 'Persist the winner story without pretending `enhanced` is a raw source family.'],
+  ['Trust + state', '`confidence`, `freshness`, `coverage`, `discrepancyFlags`, `isProvisional`', 'Captures completeness, sync lag, duplicate-risk suppression, and rollout-safe UI hints.'],
+  ['Traceability', '`segments`, `diagnostics`', 'Segments keep raw source refs so operators can answer why a day resolved the way it did.'],
+];
+
+const ENERGY_RULE_ROWS = [
+  ['Resting / basal', 'Apple Health direct basal energy', 'Manual correction, then estimator', 'QuickLifts workouts do not author resting calories.'],
+  ['Active calories', 'Apple Health direct active energy', 'Approved QuickLifts gap fill, manual correction, estimator', 'Never stack QuickLifts overlays on top of mirrored Apple Health workout burn.'],
+  ['Total calories out', 'Derived from resolved resting + active', 'Trusted total proxy only when components are weak', 'Never sum multiple full-day totals from different systems.'],
+  ['Home surface', '`ResolvedEnergySnapshot.totalCalories`', 'N/A', 'Use a compact source label only in v1; keep detailed contributor composition out of Home.'],
+  ['Profile + nutrition surfaces', 'Same `ResolvedEnergySnapshot` object', 'N/A', 'Do not let Home, Profile, and net-energy views drift onto different calorie-out answers.'],
+];
+
+const ENERGY_ACCEPTANCE_ROWS = [
+  ['Clean Apple Health day', '`singleSource`, high confidence, no discrepancy flags.'],
+  ['Missing-watch manual correction', 'Manual calories apply only to the corrected window with no double counting.'],
+  ['QuickLifts workout before HealthKit catch-up', 'Pending-sync overlay fills the gap, then de-duplicates after HealthKit confirms it.'],
+  ['Mirrored Oura agreement', 'Apple Health stays primary, Oura validates only, and confidence rises.'],
+  ['Trusted total without component breakdown', 'Resolver preserves the total invariant through inferred components and logs diagnostics.'],
+  ['Historical recompute with incomplete data', 'Freshness can be acceptable while coverage still shows the day is incomplete.'],
+];
+
+const ENERGY_GUARDRAILS = [
+  'No direct Oura calorie contribution in v1; keep it validator-only behind the current gate.',
+  'No Home migration until the acceptance matrix passes for both today and historical dates.',
+  'No new parallel energy path; evolve `EnhancedEnergyDataService` into the canonical resolver.',
+  'No ungated QuickLifts active-calorie overlays; only approved workout families may participate.',
+  'Treat `EnergySourceRecordRef` as required for any non-inferred segment wherever the raw source record exists.',
+];
+
 const STORY_LOCKS = [
   'Lead with one descriptive state and short summary before raw metrics.',
   'Never imply a medical diagnosis or use clinical language in the profile story.',
@@ -295,6 +336,87 @@ export const QuickLiftsProfileHealthSnapshotContractTab: React.FC = () => {
   );
 };
 
+export const QuickLiftsProfileHealthEnergyMergeSpecTab: React.FC = () => {
+  return (
+    <div className="space-y-10">
+      <DocHeader
+        eyebrow="QuickLifts Runtime Contract"
+        title="Enhanced Energy Merge Spec"
+        version="Spec v1 | March 24, 2026"
+        summary="Canonical contract for resolving calories out across Apple Health, QuickLifts-native workouts, manual corrections, estimators, and Oura validation without double counting. This artifact locks the shared `ResolvedEnergySnapshot` model that Home, Profile, and nutrition views should all consume."
+        highlights={[
+          {
+            title: 'One Calories-Out Truth',
+            body: 'Home, Profile, and net-energy views should all read the same resolved output instead of mixing raw HealthKit totals on one surface and enriched values on another.',
+          },
+          {
+            title: 'Multiple Sources, No Double Count',
+            body: 'Segments, coverage, and mirrored-source suppression let QuickLifts enrich device data without stacking the same underlying workout twice.',
+          },
+          {
+            title: 'Conservative V1 Guardrails',
+            body: 'Oura stays validator-only, QuickLifts overlays require an explicit whitelist, and Home does not migrate until the acceptance matrix passes.',
+          },
+        ]}
+      />
+
+      <RuntimeAlignmentPanel
+        role="Authoritative engineering contract for how QuickLifts should resolve daily energy output across multiple sources while preserving provenance, coverage, and rollout-safe UI behavior."
+        sourceOfTruth="This page is authoritative for `ResolvedEnergySnapshot`, source precedence, segment provenance, coverage modeling, duplicate suppression, pending-sync behavior, and Home/Profile migration guardrails."
+        masterReference="Use the Profile Health Snapshot Contract when wiring the resolved calories-out result into broader profile narrative generation. Use this page when implementing the energy resolver itself."
+        relatedDocs={[
+          'ENHANCED_ENERGY_MERGE_SPEC.md',
+          'EnhancedEnergyDataService.swift',
+          'HealthDataSyncService.swift',
+          'HomePulseView.swift',
+          'ManualEntry.swift',
+        ]}
+      />
+
+      <SectionBlock icon={Layers} title="Source Families And Roles">
+        <DataTable columns={['Source', 'Best use', 'V1 role', 'Locked rule']} rows={ENERGY_SOURCE_ROWS} />
+        <CardGrid columns="md:grid-cols-2">
+          <InfoCard
+            title="Traceability Is Required"
+            accent="red"
+            body="`EnergySourceRecordRef` should be treated as required for any non-inferred segment wherever the underlying raw record exists. Missing refs in those cases are a traceability bug, not optional cleanup work."
+          />
+          <InfoCard
+            title="Mirrored Source Safety"
+            accent="amber"
+            body="When mirror certainty is low, suppress additive contribution and record diagnostics rather than risking duplicate calories on Home."
+          />
+        </CardGrid>
+      </SectionBlock>
+
+      <SectionBlock icon={Database} title="Resolved Snapshot Contract">
+        <DataTable columns={['Group', 'Locked fields', 'V1 meaning']} rows={ENERGY_SNAPSHOT_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={GitBranch} title="Resolution Rules And Guardrails">
+        <DataTable columns={['Lane', 'Primary owner', 'Fallback / contributor path', 'Locked v1 rule']} rows={ENERGY_RULE_ROWS} />
+        <InfoCard title="V1 Delivery Locks" accent="green" body={<BulletList items={ENERGY_GUARDRAILS} />} />
+      </SectionBlock>
+
+      <SectionBlock icon={RefreshCw} title="Acceptance Matrix And Migration Gate">
+        <DataTable columns={['Scenario', 'Expected outcome']} rows={ENERGY_ACCEPTANCE_ROWS} />
+        <CardGrid columns="md:grid-cols-2">
+          <InfoCard
+            title="Home Display Rule"
+            accent="blue"
+            body="Home should stay intentionally simple in v1: compact source label, provisional-state treatment when needed, and no detailed contributor composition."
+          />
+          <InfoCard
+            title="Coverage Drives Trust"
+            accent="purple"
+            body="Coverage is a first-class snapshot field because confidence, historical completeness, and rollout safety all depend on how much of the day is direct, corrected, inferred, or still missing."
+          />
+        </CardGrid>
+      </SectionBlock>
+    </div>
+  );
+};
+
 const PROFILE_HEALTH_PAGES: ArtifactPageEntry[] = [
   {
     id: 'profile-health-story-spec',
@@ -312,6 +434,14 @@ const PROFILE_HEALTH_PAGES: ArtifactPageEntry[] = [
     accent: '#38bdf8',
     render: () => <QuickLiftsProfileHealthSnapshotContractTab />,
   },
+  {
+    id: 'profile-health-energy-merge-spec',
+    label: 'Energy Merge Spec',
+    subtitle: 'Canonical calories-out resolution across Apple Health, QuickLifts, manual corrections, estimators, and Oura validation.',
+    icon: Activity,
+    accent: '#f97316',
+    render: () => <QuickLiftsProfileHealthEnergyMergeSpecTab />,
+  },
 ];
 
 const QuickLiftsProfileHealthSystemTab: React.FC = () => {
@@ -319,7 +449,7 @@ const QuickLiftsProfileHealthSystemTab: React.FC = () => {
     <ArtifactPageLibrary
       eyebrow="QuickLifts · Profile Health"
       title="Profile Health System Library"
-      summary="Paired handbook artifact for the QuickLifts story-led profile health surface and the shared `ProfileHealthSnapshot` runtime contract underneath it."
+      summary="Handbook library for the QuickLifts profile-health stack, including the story-led surface contract, the shared `ProfileHealthSnapshot` runtime model, and the canonical enhanced-energy resolution spec that keeps calories out consistent across Home and Profile."
       entries={PROFILE_HEALTH_PAGES}
     />
   );

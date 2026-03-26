@@ -35,11 +35,12 @@ if (isDev) {
 // Helper component to handle Mixpanel logic, since hooks can only be called inside components
 const MixpanelInitializer: React.FC = () => {
   const currentUser = useSelector((state: RootState) => state.user.currentUser);
+  const mixpanelToken = process.env.NEXT_PUBLIC_MIXPANEL_PROJECT_TOKEN;
+  const mixpanelEnabled = Boolean(mixpanelToken);
 
   // Initialize Mixpanel on mount
   useEffect(() => {
-    const mixpanelToken = process.env.NEXT_PUBLIC_MIXPANEL_PROJECT_TOKEN;
-    if (mixpanelToken) {
+    if (mixpanelEnabled && mixpanelToken) {
       mixpanel.init(mixpanelToken, {
         debug: process.env.NODE_ENV === 'development',
         track_pageview: true,
@@ -55,13 +56,17 @@ const MixpanelInitializer: React.FC = () => {
     } else {
       console.warn('[Mixpanel] Project token not found. Tracking disabled.');
     }
-  }, []);
+  }, [mixpanelEnabled, mixpanelToken]);
 
   // Identify user when available or changes
   useEffect(() => {
+    if (!mixpanelEnabled) {
+      return;
+    }
+
     if (currentUser?.id) {
       mixpanel.identify(currentUser.id);
-      mixpanel.people.set({
+      mixpanel.people?.set?.({
         $email: currentUser.email,
         $name: currentUser.displayName,
         username: currentUser.username,
@@ -71,7 +76,7 @@ const MixpanelInitializer: React.FC = () => {
     } else {
       console.log('[Mixpanel] No user identified.');
     }
-  }, [currentUser]);
+  }, [currentUser, mixpanelEnabled]);
 
   return null;
 };

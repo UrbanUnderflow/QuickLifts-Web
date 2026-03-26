@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const { dedupeRunSummaries } = require('./run-summary-dedupe');
 
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
@@ -237,6 +238,8 @@ exports.handler = async (event) => {
                     });
                 });
             }
+
+            runs = dedupeRunSummaries(runs);
 
             // Calculate metrics based on runs
             const totalDistance = runs.reduce((sum, run) => sum + (run.distance || 0), 0);

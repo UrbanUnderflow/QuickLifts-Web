@@ -9,7 +9,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Pulse architecture, products, data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-03-23',
+  lastUpdated: '2026-03-24',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -17,6 +17,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'quicklifts-profile-health-system', label: 'QuickLifts Profile Health', description: 'Parent artifact for the story-led QuickLifts profile health surface and the shared snapshot contract underneath it.' },
     { id: 'quicklifts-profile-health-story-spec', label: 'Profile Health Story Spec', description: 'Product and UX contract for integrating Health Data Stories into the QuickLifts profile.', parentSectionId: 'quicklifts-profile-health-system' },
     { id: 'quicklifts-profile-health-snapshot-contract', label: 'Profile Health Snapshot Contract', description: 'Runtime contract for the versioned ProfileHealthSnapshot read model, freshness rules, invalidation, and modal alignment.', parentSectionId: 'quicklifts-profile-health-system' },
+    { id: 'quicklifts-profile-health-energy-merge-spec', label: 'Enhanced Energy Merge Spec', description: 'Canonical calories-out resolution contract for Apple Health, QuickLifts-native workouts, manual corrections, estimators, and Oura validation.', parentSectionId: 'quicklifts-profile-health-system' },
     { id: 'pulse-club-activation-architecture', label: 'Club Activation Architecture', description: 'Generic creator-club operating model for onboarding, introductions, and member pairing.' },
     { id: 'smart-routes-v1-architecture', label: 'Smart Routes v1 Architecture', description: 'First-pass routing recommendation stack, ownership boundaries, API contract, and AI role for Pulse Community.' },
     { id: 'shared-link-preview-strategy', label: 'Shared Link Preview Strategy', description: 'Fallback metadata, branded default image, and crawler-safe preview rules for shared Pulse pages.' },
@@ -106,6 +107,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Added the Enhanced Energy Merge Spec artifact to the QuickLifts profile-health handbook stack, locking `ResolvedEnergySnapshot`, source precedence, segment provenance, coverage, acceptance gates, and Home/Profile migration rules for calories out.',
       'Added the QuickLifts Profile Health handbook artifact, pairing the story-led profile product spec with the ProfileHealthSnapshot runtime contract so profile hero, proof cards, and Health Data Story drill-down share one documented system truth.',
       'Added the Daily Task + Training Plan Alignment Spec to the PulseCheck runtime stack, locking the canonical DailyTask / TrainingPlan / PlanStep model, lifecycle rules, date-boundary behavior, event contract, and surface-coherence requirements across Home, Mental Training, and Nora chat.',
       'Added the Training Plan Authoring Spec to the PulseCheck runtime stack, defining how Nora authors longer-horizon mental-training blocks, chooses plan types and archetypes, persists provenance, and advances plan pointers over time.',

@@ -340,9 +340,11 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [historyWindowStartFilter, setHistoryWindowStartFilter] = useState('');
   const [historyWindowEndFilter, setHistoryWindowEndFilter] = useState('');
   const copyFeedbackTimeoutRef = useRef<number | null>(null);
+  const loadRequestIdRef = useRef(0);
 
   const load = async (mode: 'initial' | 'refresh' = 'initial') => {
     if (!pilotId) return;
+    const requestId = ++loadRequestIdRef.current;
     if (mode === 'initial') setLoading(true);
     if (mode === 'refresh') setRefreshing(true);
     setError(null);
@@ -354,11 +356,13 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         return;
       }
       const nextDetail = await pulseCheckPilotDashboardService.getPilotDashboardDetail(pilotId);
+      if (requestId !== loadRequestIdRef.current) return;
       setDetail(nextDetail);
       if (nextDetail?.team.id) {
         const nextInviteLinks = pulseCheckPilotDashboardService.isDemoModeEnabled()
           ? pulseCheckPilotDashboardService.listDemoInviteLinks()
           : await pulseCheckProvisioningService.listTeamInviteLinks(nextDetail.team.id);
+        if (requestId !== loadRequestIdRef.current) return;
         setInviteLinks(nextInviteLinks);
       } else {
         setInviteLinks([]);
@@ -386,8 +390,10 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         return nextDetail.researchReadouts[0].id;
       });
     } catch (loadError: any) {
+      if (requestId !== loadRequestIdRef.current) return;
       setError(loadError?.message || 'Failed to load pilot dashboard.');
     } finally {
+      if (requestId !== loadRequestIdRef.current) return;
       setLoading(false);
       setRefreshing(false);
     }

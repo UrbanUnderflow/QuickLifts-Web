@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const { dedupeRunSummaries } = require('./run-summary-dedupe');
 
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
@@ -83,15 +84,21 @@ exports.handler = async (event) => {
       });
     });
 
-    console.log(`✅ Fetched ${runSummaries.length} run summaries for user ${userId}`);
+    const dedupedRunSummaries = dedupeRunSummaries(runSummaries).sort((left, right) => {
+      const leftTime = Number(left.completedAt || left.createdAt || left.startTime || 0);
+      const rightTime = Number(right.completedAt || right.createdAt || right.startTime || 0);
+      return rightTime - leftTime;
+    });
+
+    console.log(`✅ Fetched ${dedupedRunSummaries.length} run summaries for user ${userId}`);
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         success: true,
-        runSummaries,
-        count: runSummaries.length
+        runSummaries: dedupedRunSummaries,
+        count: dedupedRunSummaries.length
       })
     };
 

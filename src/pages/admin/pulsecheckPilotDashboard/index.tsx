@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import { Activity, ArrowRight, Building2, FlaskConical, Layers3, MonitorPlay, RefreshCcw, Users2 } from 'lucide-react';
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
@@ -18,18 +18,23 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [demoModeEnabled, setDemoModeEnabled] = useState(false);
+  const loadRequestIdRef = useRef(0);
 
   const load = async (mode: 'initial' | 'refresh' = 'initial') => {
+    const requestId = ++loadRequestIdRef.current;
     if (mode === 'initial') setLoading(true);
     if (mode === 'refresh') setRefreshing(true);
     setError(null);
     try {
       setDemoModeEnabled(pulseCheckPilotDashboardService.isDemoModeEnabled());
       const nextEntries = await pulseCheckPilotDashboardService.listActivePilotDirectory();
+      if (requestId !== loadRequestIdRef.current) return;
       setEntries(nextEntries);
     } catch (loadError: any) {
+      if (requestId !== loadRequestIdRef.current) return;
       setError(loadError?.message || 'Failed to load active pilots.');
     } finally {
+      if (requestId !== loadRequestIdRef.current) return;
       setLoading(false);
       setRefreshing(false);
     }
@@ -53,14 +58,6 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   const resetDemoModeData = () => {
     pulseCheckPilotDashboardService.resetDemoModeData();
     void load('refresh');
-  };
-
-  const openPilot = (pilotId: string) => {
-    if (!pilotId) return;
-    const target = `/admin/pulsecheckPilotDashboard/${encodeURIComponent(pilotId)}`;
-    if (typeof window !== 'undefined') {
-      window.location.assign(target);
-    }
   };
 
   const organizations = useMemo(
@@ -324,13 +321,12 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">{entry.organization.displayName}</p>
-                      <button
-                        type="button"
-                        onClick={() => openPilot(entry.pilot.id)}
+                      <a
+                        href={`/admin/pulsecheckPilotDashboard/${encodeURIComponent(entry.pilot.id)}`}
                         className="mt-2 inline-block text-left text-xl font-semibold text-white transition hover:text-cyan-200"
                       >
                         {entry.pilot.name}
-                      </button>
+                      </a>
                       <p className="mt-1 text-sm text-zinc-400">{entry.team.displayName}</p>
                     </div>
                     <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs uppercase tracking-wide text-cyan-200">
@@ -363,14 +359,13 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                       <Building2 className="h-4 w-4" />
                       Pilot-native dashboard
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => openPilot(entry.pilot.id)}
+                    <a
+                      href={`/admin/pulsecheckPilotDashboard/${encodeURIComponent(entry.pilot.id)}`}
                       className="inline-flex items-center gap-2 text-cyan-200 transition group-hover:translate-x-1 hover:text-cyan-100"
                     >
                       Open pilot
                       <ArrowRight className="h-4 w-4" />
-                    </button>
+                    </a>
                   </div>
                       </>
                     );

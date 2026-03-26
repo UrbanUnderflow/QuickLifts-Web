@@ -16,6 +16,23 @@ function ensureDir(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
+function parseEnvValue(rawValue) {
+  let value = rawValue.trim();
+
+  if (value.startsWith('"') && value.endsWith('"')) {
+    try {
+      const parsed = JSON.parse(value);
+      return typeof parsed === 'string' ? parsed.replace(/\\n/g, '\n') : String(parsed);
+    } catch (_error) {
+      value = value.slice(1, -1);
+    }
+  } else if (value.startsWith("'") && value.endsWith("'")) {
+    value = value.slice(1, -1);
+  }
+
+  return value.replace(/\\n/g, '\n');
+}
+
 function requirePassphrase() {
   const passphrase = process.env.SETUP_BUNDLE_PASSPHRASE || process.env.LOCAL_SETUP_BUNDLE_PASSPHRASE;
   if (!passphrase) {
@@ -55,15 +72,8 @@ function readExistingEnvFile(filePath) {
     if (separatorIndex <= 0) continue;
 
     const key = line.slice(0, separatorIndex).trim();
-    let value = line.slice(separatorIndex + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-
-    env[key] = value.replace(/\\n/g, '\n');
+    const value = parseEnvValue(line.slice(separatorIndex + 1));
+    env[key] = value;
   }
 
   return env;

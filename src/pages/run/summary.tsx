@@ -59,7 +59,9 @@ const RunSummaryPage: React.FC = () => {
       const updatedSummary = {
         ...summary.toDictionary(),
         workoutRating: selectedRating,
-        userId: currentUser.id
+        userId: currentUser.id,
+        sourceFamily: 'pulse_app',
+        sourceSessionId: summary.id
       };
 
       // Save to Firestore via API
