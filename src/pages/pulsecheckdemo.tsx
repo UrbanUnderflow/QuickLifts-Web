@@ -43,7 +43,7 @@ import {
 // TYPES
 // ─────────────────────────────────────────────────────────
 
-type DemoAct = 'intro' | 'act1' | 'act2' | 'act2b' | 'act3' | 'act4';
+type DemoAct = 'intro' | 'act1' | 'act2' | 'act2b' | 'act3' | 'act4' | 'act5';
 
 interface ScriptMessage {
     role: 'nora' | 'athlete' | 'system';
@@ -1685,6 +1685,44 @@ const ClinicalHandoffHeader: React.FC = () => {
     );
 };
 
+const ClinicalTransferStage: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
+    return (
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="max-w-6xl mx-auto px-4 py-6 h-full overflow-y-auto"
+        >
+            <ClinicalHandoffHeader />
+
+            <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, delay: 0.12 }}
+                className="rounded-2xl bg-gradient-to-br from-red-500/10 to-red-900/5 border border-red-500/25 p-5 flex items-center justify-between gap-4"
+            >
+                <div>
+                    <div className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-1">
+                        Next screen
+                    </div>
+                    <p className="text-sm text-zinc-300">
+                        The handoff is complete. Continue to the clinician device to see the AuntEdna alert arrive.
+                    </p>
+                </div>
+                <motion.button
+                    onClick={onContinue}
+                    whileHover={{ scale: 1.04 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="flex-shrink-0 px-5 py-2.5 rounded-xl text-sm font-bold text-black flex items-center gap-2"
+                    style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)' }}
+                >
+                    See Clinician Alert
+                    <ChevronRight className="w-4 h-4" />
+                </motion.button>
+            </motion.div>
+        </motion.div>
+    );
+};
+
 const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
     const [phase, setPhase] = useState<'phone' | 'clinicianView' | 'calling'>('phone');
     const [alertTapped, setAlertTapped] = useState(false);
@@ -1735,7 +1773,6 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
             animate={{ opacity: 1 }}
             className="max-w-6xl mx-auto px-4 py-6 h-full overflow-y-auto"
         >
-            <ClinicalHandoffHeader />
             <AnimatePresence mode="wait">
                 {/* ── PHASE 1: Clinician Phone Screen ── */}
                 {phase === 'phone' && (
@@ -4543,7 +4580,9 @@ const PulseCheckDemo: React.FC = () => {
                                             : currentAct === 'act2b'
                                                 ? 'Escalation System'
                                                 : currentAct === 'act3'
-                                                    ? 'Clinical Handoff'
+                                                    ? 'Clinical Transfer'
+                                                    : currentAct === 'act4'
+                                                        ? 'Clinician Alert'
                                                 : ''}
                                 </p>
                             </div>
@@ -4613,11 +4652,15 @@ const PulseCheckDemo: React.FC = () => {
 
                             {/* Act indicator pills */}
                             <div className="flex gap-1 ml-3">
-                                {(['act1', 'act2', 'act2b', 'act3'] as DemoAct[]).map((act) => (
+                                {(['act1', 'act2', 'act2b', 'act3', 'act4', 'act5'] as DemoAct[]).map((act) => (
                                     <div
                                         key={act}
                                         className={`w-2 h-2 rounded-full transition-all duration-500 ${act === currentAct
-                                            ? act === 'act2b' ? 'bg-purple-400 scale-125' : 'bg-[#E0FE10] scale-125'
+                                            ? act === 'act2b'
+                                                ? 'bg-purple-400 scale-125'
+                                                : act === 'act3' || act === 'act4'
+                                                    ? 'bg-red-400 scale-125'
+                                                    : 'bg-[#E0FE10] scale-125'
                                             : act < currentAct
                                                 ? 'bg-zinc-500'
                                                 : 'bg-zinc-700'
@@ -4999,13 +5042,24 @@ const PulseCheckDemo: React.FC = () => {
                                 animate={{ opacity: 1, x: 0 }}
                                 className="h-full overflow-y-auto"
                             >
-                                <ClinicalEscalation onContinue={() => setCurrentAct('act4')} />
+                                <ClinicalTransferStage onContinue={() => setCurrentAct('act4')} />
                             </motion.div>
                         )}
 
                         {currentAct === 'act4' && (
                             <motion.div
                                 key="act4"
+                                initial={{ opacity: 0, x: 100 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="h-full overflow-y-auto"
+                            >
+                                <ClinicalEscalation onContinue={() => setCurrentAct('act5')} />
+                            </motion.div>
+                        )}
+
+                        {currentAct === 'act5' && (
+                            <motion.div
+                                key="act5"
                                 initial={{ opacity: 0, x: 100 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 className="h-full overflow-y-auto"
