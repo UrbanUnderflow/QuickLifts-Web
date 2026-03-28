@@ -7,6 +7,7 @@ const {
   buildNoraPushMessage,
   normalizeStringMap,
   resolveAthleteFirstName,
+  resolvePulseCheckPushTarget,
 } = require('../pulsecheck-notification-utils');
 
 test('resolveAthleteFirstName prefers preferredName and falls back cleanly', () => {
@@ -14,6 +15,32 @@ test('resolveAthleteFirstName prefers preferredName and falls back cleanly', () 
   assert.equal(resolveAthleteFirstName({ displayName: 'Sam Carter' }), 'Sam');
   assert.equal(resolveAthleteFirstName({ username: 'athlete_sam' }), 'athlete_sam');
   assert.equal(resolveAthleteFirstName({}), '');
+});
+
+test('resolvePulseCheckPushTarget only allows explicitly Pulse Check-scoped tokens', () => {
+  assert.deepEqual(
+    resolvePulseCheckPushTarget({
+      pulseCheckFcmToken: 'pulsecheck_token',
+      pushTokenSourceApp: 'pulsecheck',
+    }),
+    {
+      token: 'pulsecheck_token',
+      eligible: true,
+      reason: 'eligible',
+    }
+  );
+
+  assert.deepEqual(
+    resolvePulseCheckPushTarget({
+      pulseCheckFcmToken: 'legacy_token',
+      pushTokenSourceApp: 'fitwithpulse',
+    }),
+    {
+      token: '',
+      eligible: false,
+      reason: 'pulsecheck_source_app_mismatch',
+    }
+  );
 });
 
 test('buildNoraBiometricBriefNotification creates Nora DM copy and routing payload', () => {

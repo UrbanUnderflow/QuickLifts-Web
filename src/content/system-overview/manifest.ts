@@ -21,6 +21,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulse-club-activation-architecture', label: 'Club Activation Architecture', description: 'Generic creator-club operating model for onboarding, introductions, and member pairing.' },
     { id: 'smart-routes-v1-architecture', label: 'Smart Routes v1 Architecture', description: 'First-pass routing recommendation stack, ownership boundaries, API contract, and AI role for Pulse Community.' },
     { id: 'shared-link-preview-strategy', label: 'Shared Link Preview Strategy', description: 'Fallback metadata, branded default image, and crawler-safe preview rules for shared Pulse pages.' },
+    { id: 'notification-systems-architecture', label: 'Notification Systems', description: 'Cross-product notification architecture covering Fit With Pulse, Pulse Check, token ownership, senders, sequences, and operational debugging.' },
     { id: 'backend-data', label: 'Backend and Data', description: 'Core services and canonical data collections.' },
     { id: 'infrastructure-secrets-stack', label: 'Infrastructure & Secrets Stack', description: 'Operational relationship between Netlify, Firebase, Google Cloud, Workspace, and secret storage policy.' },
     { id: 'firestore-index-registry', label: 'Firestore Index Registry', description: 'Shared source-of-truth registry and operating discipline for Firestore indexes across development and production.' },

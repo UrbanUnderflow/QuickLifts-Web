@@ -3,6 +3,7 @@ import Head from "next/head";
 import {
   Activity,
   AlertTriangle,
+  Bell,
   Brain,
   Check,
   Copy,
@@ -154,6 +155,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulse-club-activation-architecture",
       "smart-routes-v1-architecture",
       "shared-link-preview-strategy",
+      "notification-systems-architecture",
       "workout-share-cards",
       "backend-data",
       "infrastructure-secrets-stack",
@@ -191,6 +193,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "sim-family-specs",
       "athlete-journey",
       "coach-journey",
+      "notification-systems-architecture",
       "pulsecheck-runtime-architecture",
       "pulsecheck-state-signal-layer",
       "pulsecheck-checkin-signal-layer-integration-spec",
@@ -455,6 +458,21 @@ const SystemOverviewPage: React.FC = () => {
           case "end-to-end-flows":
             searchTerms.push(
               ...systemOverviewManifest.flows.map((flow) => flow.name),
+            );
+            break;
+          case "notification-systems-architecture":
+            searchTerms.push(
+              "notifications",
+              "push notifications",
+              "local notifications",
+              "FCM",
+              "APNS",
+              "notification sequences",
+              "Fit With Pulse",
+              "Pulse Check",
+              "pulseCheckFcmToken",
+              "fcmToken",
+              "pushTokenSourceApp",
             );
             break;
           case "ownership-release-matrix":
@@ -887,6 +905,296 @@ const SystemOverviewPage: React.FC = () => {
 
       case "shared-link-preview-strategy":
         return <SharedLinkPreviewStrategyTab />;
+
+      case "notification-systems-architecture":
+        return (
+          <div className="space-y-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold">Notification Systems</h2>
+                <p className="text-sm text-zinc-400 mt-1 max-w-3xl">
+                  Cross-product reference for how Fit With Pulse and Pulse Check
+                  notifications are scoped, stored, scheduled, sent, and
+                  debugged. This section documents the architecture; the
+                  notification sequence page is the living inventory of
+                  individual messages and launch behaviors.
+                </p>
+              </div>
+              <a
+                href="/admin/notificationSequences"
+                className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-sm text-cyan-100 hover:bg-cyan-400/15"
+              >
+                <Bell className="h-4 w-4" />
+                Open Notification Sequences
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <article className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-4 h-4 text-lime-300" />
+                  <h3 className="text-lg font-semibold">Fit With Pulse</h3>
+                </div>
+                <div className="space-y-3 text-sm text-zinc-300">
+                  <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                    <p className="text-xs uppercase tracking-wide text-zinc-500">
+                      Canonical Push Token
+                    </p>
+                    <p className="mt-1 font-mono text-cyan-200">users.fcmToken</p>
+                    <p className="mt-2 text-zinc-400">
+                      Legacy Pulse / Fit With Pulse mobile push lane. This field
+                      should continue to power Fit With Pulse notifications and
+                      should not be repurposed for Pulse Check.
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                    <p className="text-xs uppercase tracking-wide text-zinc-500">
+                      Typical Senders
+                    </p>
+                    <ul className="mt-2 list-disc pl-5 space-y-1 text-zinc-300">
+                      <li>Challenge, chat, referral, club, and workout notification functions.</li>
+                      <li>QuickLifts iOS direct send flows that still target the legacy Pulse ecosystem.</li>
+                      <li>Admin test tooling when the product scope is Pulse.</li>
+                    </ul>
+                  </div>
+                  <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                    <p className="text-xs uppercase tracking-wide text-zinc-500">
+                      User-Facing App Identity
+                    </p>
+                    <p className="mt-1 text-zinc-300">
+                      Notifications should surface under the Fit With Pulse /
+                      Pulse app install, because that token belongs to the
+                      legacy mobile client.
+                    </p>
+                  </div>
+                </div>
+              </article>
+
+              <article className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Brain className="w-4 h-4 text-violet-300" />
+                  <h3 className="text-lg font-semibold">Pulse Check</h3>
+                </div>
+                <div className="space-y-3 text-sm text-zinc-300">
+                  <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                    <p className="text-xs uppercase tracking-wide text-zinc-500">
+                      Canonical Push Token
+                    </p>
+                    <p className="mt-1 font-mono text-cyan-200">users.pulseCheckFcmToken</p>
+                    <p className="mt-2 text-zinc-400">
+                      Owned by the Pulse Check iOS app. Pulse Check writes this
+                      token together with{" "}
+                      <span className="font-mono text-zinc-300">
+                        pushTokenSourceApp = "pulsecheck"
+                      </span>{" "}
+                      and should only receive remote pushes through this lane.
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                    <p className="text-xs uppercase tracking-wide text-zinc-500">
+                      Typical Senders
+                    </p>
+                    <ul className="mt-2 list-disc pl-5 space-y-1 text-zinc-300">
+                      <li>Pulse Check remote push jobs in Netlify and Firebase functions.</li>
+                      <li>Oura-sync biometric-brief push pipeline.</li>
+                      <li>Daily reflection push scheduler and Pulse Check-scoped admin tests.</li>
+                    </ul>
+                  </div>
+                  <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3">
+                    <p className="text-xs uppercase tracking-wide text-emerald-300">
+                      Guardrail
+                    </p>
+                    <p className="mt-1 text-zinc-300">
+                      Pulse Check senders should require both the Pulse Check
+                      token field and the Pulse Check source marker so a stale
+                      or mis-scoped token cannot route a Nora notification to
+                      the wrong app.
+                    </p>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-amber-300" />
+                <h3 className="text-lg font-semibold">Token Ownership And Storage Rules</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
+                  <p className="text-xs uppercase tracking-wide text-zinc-500">Legacy Pulse Lane</p>
+                  <p className="mt-2 font-mono text-cyan-200">users.fcmToken</p>
+                  <p className="mt-2 text-zinc-400">
+                    Reserved for Fit With Pulse / legacy Pulse notifications.
+                  </p>
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
+                  <p className="text-xs uppercase tracking-wide text-zinc-500">Pulse Check Lane</p>
+                  <p className="mt-2 font-mono text-cyan-200">users.pulseCheckFcmToken</p>
+                  <p className="mt-2 text-zinc-400">
+                    Reserved for Pulse Check remote pushes and Pulse Check
+                    notification sequences.
+                  </p>
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
+                  <p className="text-xs uppercase tracking-wide text-zinc-500">Scope Marker</p>
+                  <p className="mt-2 font-mono text-cyan-200">users.pushTokenSourceApp</p>
+                  <p className="mt-2 text-zinc-400">
+                    Used as a defensive app-source assertion. Current Pulse
+                    Check value:{" "}
+                    <span className="font-mono text-zinc-300">pulsecheck</span>.
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-300">
+                <p className="font-semibold text-white">Canonical rule</p>
+                <p className="mt-2">
+                  Do not mirror Pulse Check tokens into{" "}
+                  <span className="font-mono">users.fcmToken</span>. Fit With
+                  Pulse and Pulse Check should each own their own FCM field, and
+                  senders must choose the field that matches the target product.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <article className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Server className="w-4 h-4 text-purple-300" />
+                  <h3 className="text-lg font-semibold">Delivery Lanes</h3>
+                </div>
+                <div className="space-y-3 text-sm">
+                  <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                    <p className="font-semibold text-white">Remote FCM / APNS</p>
+                    <p className="mt-1 text-zinc-400">
+                      Backend-triggered pushes for biometric brief ready, Pulse
+                      Check daily reflection, chat, rounds, club activity, and
+                      other server-owned events.
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                    <p className="font-semibold text-white">Local iOS Notifications</p>
+                    <p className="mt-1 text-zinc-400">
+                      Device-scheduled reminders owned by the app itself, such
+                      as Pulse Check onboarding reflection reminders and
+                      wind-down prompts.
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                    <p className="font-semibold text-white">Scheduled Backend Jobs</p>
+                    <p className="mt-1 text-zinc-400">
+                      Recurring functions that evaluate time windows and user
+                      state before sending, such as Pulse Check daily reflection
+                      scheduler jobs.
+                    </p>
+                  </div>
+                </div>
+              </article>
+
+              <article className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Share2 className="w-4 h-4 text-cyan-300" />
+                  <h3 className="text-lg font-semibold">How Notification Sequences Fit In</h3>
+                </div>
+                <div className="space-y-3 text-sm text-zinc-300">
+                  <p>
+                    The{" "}
+                    <a
+                      href="/admin/notificationSequences"
+                      className="text-cyan-300 hover:text-cyan-200 underline underline-offset-4"
+                    >
+                      Notification Sequences
+                    </a>{" "}
+                    page is the message inventory and launch map. It answers:
+                    what gets sent, when it gets sent, what payload keys are
+                    attached, and which screen should open.
+                  </p>
+                  <p>
+                    This handbook section is the infrastructure map. It answers:
+                    which product owns the token, which sender is allowed to use
+                    it, where the send logic lives, and how to debug a
+                    notification landing in the wrong app.
+                  </p>
+                  <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                    <p className="font-semibold text-white">Recommended usage</p>
+                    <ul className="mt-2 list-disc pl-5 space-y-1 text-zinc-300">
+                      <li>Use System Overview to understand architecture and ownership.</li>
+                      <li>Use Notification Sequences to verify specific copy, triggers, and deep-link behavior.</li>
+                      <li>Use admin notification testing only after confirming the correct product scope and token field.</li>
+                    </ul>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-300" />
+                <h3 className="text-lg font-semibold">Current Pulse Check Notification Path</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+                <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
+                  <p className="text-xs uppercase tracking-wide text-zinc-500">1. Client Registration</p>
+                  <p className="mt-2 text-zinc-300">
+                    Pulse Check receives an FCM token and writes{" "}
+                    <span className="font-mono">pulseCheckFcmToken</span> plus{" "}
+                    <span className="font-mono">pushTokenSourceApp</span>.
+                  </p>
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
+                  <p className="text-xs uppercase tracking-wide text-zinc-500">2. Backend Event</p>
+                  <p className="mt-2 text-zinc-300">
+                    Oura sync, reflection scheduler, or another Pulse Check
+                    sender decides that a Nora notification should fire.
+                  </p>
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
+                  <p className="text-xs uppercase tracking-wide text-zinc-500">3. Scope Validation</p>
+                  <p className="mt-2 text-zinc-300">
+                    Sender resolves the Pulse Check push target and rejects the
+                    send if the token or source marker is missing or mismatched.
+                  </p>
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
+                  <p className="text-xs uppercase tracking-wide text-zinc-500">4. Nora Launch</p>
+                  <p className="mt-2 text-zinc-300">
+                    Payload arrives under the Pulse Check app, then routes into
+                    Nora chat or the intended Pulse Check surface using the data
+                    keys defined in Notification Sequences.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-300" />
+                <h3 className="text-lg font-semibold">Debugging Checklist</h3>
+              </div>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 text-sm text-zinc-300">
+                <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
+                  <p className="font-semibold text-white">If a Pulse Check push lands under Fit With Pulse</p>
+                  <ul className="mt-2 list-disc pl-5 space-y-1">
+                    <li>Check the user doc for both token fields and confirm which one the sender used.</li>
+                    <li>Confirm the Pulse Check sender required the Pulse Check source marker.</li>
+                    <li>Open Pulse Check on device to refresh and re-save the latest token metadata.</li>
+                    <li>Verify the message came from a Pulse Check sender, not a legacy Pulse sender with similar copy.</li>
+                  </ul>
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
+                  <p className="font-semibold text-white">If a Pulse Check push does not send at all</p>
+                  <ul className="mt-2 list-disc pl-5 space-y-1">
+                    <li>Confirm the user has a non-empty <span className="font-mono">pulseCheckFcmToken</span>.</li>
+                    <li>Confirm <span className="font-mono">pushTokenSourceApp</span> is set to <span className="font-mono">pulsecheck</span>.</li>
+                    <li>Check product-scope selection in admin notification testing.</li>
+                    <li>Review notification logs and sender-specific failure reasons.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
 
       case "backend-data":
         return (

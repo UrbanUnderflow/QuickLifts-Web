@@ -53,6 +53,7 @@ type NotificationRow = {
     name: string;
     trigger: string;
     title: string;
+    subtitle?: string;
     body: string;
     category: NotificationCategory;
     productScope?: ProductScope;
@@ -64,6 +65,8 @@ type NotificationRow = {
     /** Related admin page link */
     adminLink?: string;
     adminLinkLabel?: string;
+    opensInto?: string;
+    tokenField?: string;
     notes?: string;
 };
 
@@ -73,6 +76,8 @@ type TestTargetUser = {
     displayName: string;
     email: string;
     hasFcmToken: boolean;
+    hasPulseFcmToken: boolean;
+    hasPulseCheckFcmToken: boolean;
     profileImageUrl?: string;
 };
 
@@ -360,39 +365,57 @@ const NOTIFICATIONS: NotificationRow[] = [
         name: 'PulseCheck — Daily Reflection Reminder',
         trigger: 'Locally scheduled on-device at the user preference time (default 8 PM local)',
         title: 'Nora',
+        subtitle: 'End-of-day check-in',
         body: "Hey, how was your day? I'm ready when you are.",
         category: 'mental-training',
         productScope: 'pulsecheck',
         deliveryMethod: 'local',
         source: 'iOS — NotificationService.scheduleDailyReflectionReminder()',
-        dataKeys: ['type: DAILY_REFLECTION', 'prompt', 'assistantOpeningMessage', 'launchSubtitle'],
-        notes: 'Enabled during Nora onboarding and now seeded for athlete team onboarding as well.',
+        dataKeys: ['type: DAILY_REFLECTION', 'route: nora_chat', 'prompt', 'assistantOpeningMessage', 'launchSubtitle'],
+        opensInto: 'Nora chat in the Pulse Check app',
+        tokenField: 'users.pulseCheckFcmToken',
+        notes: 'Enabled during Nora onboarding and seeded for athlete team onboarding. Tapping stays in Pulse Check and opens Nora chat.',
     },
     {
         id: 'pulsecheck-wind-down-local',
         name: 'PulseCheck — Wind-down Reminder',
         trigger: 'Locally scheduled from recent HealthKit sleep patterns when notification delivery is authorized',
         title: 'Nora',
+        subtitle: 'Wind-down check-in',
         body: 'Hey, you should be winding down in the next 30 minutes to get optimal sleep and recovery.',
         category: 'mental-training',
         productScope: 'pulsecheck',
         deliveryMethod: 'local',
         source: 'iOS — NotificationService.scheduleWindDownReminder()',
-        dataKeys: ['type: WIND_DOWN_REMINDER', 'prompt', 'assistantOpeningMessage', 'launchSubtitle'],
-        notes: 'Depends on HealthKit sleep data and local notification authorization.',
+        dataKeys: ['type: WIND_DOWN_REMINDER', 'route: nora_chat', 'prompt', 'assistantOpeningMessage', 'launchSubtitle'],
+        opensInto: 'Nora chat in the Pulse Check app',
+        tokenField: 'users.pulseCheckFcmToken',
+        notes: 'Depends on HealthKit sleep data and local notification authorization. Tapping opens Nora chat inside Pulse Check.',
     },
     {
         id: 'pulsecheck-biometric-brief-ready',
         name: 'PulseCheck — Biometric Brief Ready',
         trigger: 'Remote push when the latest recovery/biometric brief is prepared for the athlete',
-        title: 'Biometric brief ready',
-        body: 'Your latest brief is ready. Nora can walk you through it now.',
+        title: 'Nora',
+        subtitle: 'Biometric brief ready',
+        body: "Hey {{displayName}}, your biometric brief is ready. Let's talk about it.",
         category: 'mental-training',
         productScope: 'pulsecheck',
         deliveryMethod: 'fcm-remote',
         source: 'iOS + backend — Nora biometric brief push pipeline',
-        dataKeys: ['type: BIOMETRIC_BRIEF_READY', 'prompt', 'assistantOpeningMessage', 'launchSubtitle'],
-        notes: 'Opening the push routes into Nora with the latest biometric context.',
+        dataKeys: [
+            'type: BIOMETRIC_BRIEF_READY',
+            'route: nora_chat',
+            'dmKind: biometric_brief_ready',
+            'prompt',
+            'assistantOpeningMessage',
+            'launchSubtitle',
+            'snapshotDateKey',
+            'observedDateKey',
+        ],
+        opensInto: 'Nora chat in the Pulse Check app',
+        tokenField: 'users.pulseCheckFcmToken',
+        notes: 'This is a Pulse Check notification, not a Fit With Pulse one. Tapping should stay in Pulse Check and launch Nora chat with the biometric brief context.',
     },
     {
         id: 'pulsecheck-daily-checkin-scheduled',
@@ -405,7 +428,9 @@ const NOTIFICATIONS: NotificationRow[] = [
         deliveryMethod: 'scheduled-function',
         source: 'Firebase Functions — functions/dailyReflectionNotifications.js',
         dataKeys: ['type: MENTAL_CHECKIN', 'prompt', 'checkInType', 'screen', 'webUrl'],
-        notes: 'Requires dailyReflectionPreferences.enabled=true and a valid users.fcmToken.',
+        opensInto: 'PulseCheck web Today task',
+        tokenField: 'users.pulseCheckFcmToken',
+        notes: 'Requires dailyReflectionPreferences.enabled=true and a valid users.pulseCheckFcmToken. This is the only Pulse Check sequence here that intentionally opens the web task.',
     },
 
     // ── Mental Training (Scheduled) ────────────────────
@@ -543,6 +568,8 @@ const DEFAULT_TEMPLATE_VALUES: Record<string, string> = {
     ]),
     todayTopScorer: JSON.stringify({ username: 'leader_one', points: 110 }),
     todayTopRunner: JSON.stringify({ username: 'runner_one', distanceMiles: '4.10' }),
+    snapshotDateKey: '2026-03-28',
+    observedDateKey: '2026-03-28',
 };
 
 const getNormalizedNotificationType = (notificationId: string) =>
@@ -550,6 +577,41 @@ const getNormalizedNotificationType = (notificationId: string) =>
 
 const getNotificationProductScope = (notification: NotificationRow): ProductScope =>
     notification.productScope ?? 'pulse';
+
+const getNotificationTokenField = (notification: NotificationRow) =>
+    notification.tokenField ?? (getNotificationProductScope(notification) === 'pulsecheck' ? 'users.pulseCheckFcmToken' : 'users.fcmToken');
+
+const hasScopedPushToken = (user: TestTargetUser | null, notification: NotificationRow | null) => {
+    if (!user || !notification) return false;
+    return getNotificationProductScope(notification) === 'pulsecheck' ? user.hasPulseCheckFcmToken : user.hasPulseFcmToken;
+};
+
+const getScopedPushTokenLabel = (user: TestTargetUser | null, notification: NotificationRow | null) => {
+    if (!notification) return 'No push token on file';
+    const available = hasScopedPushToken(user, notification);
+    const scope = getNotificationProductScope(notification);
+
+    if (scope === 'pulsecheck') {
+        return available ? 'Pulse Check push token available' : 'No Pulse Check push token on file';
+    }
+
+    return available ? 'Pulse push token available' : 'No Pulse push token on file';
+};
+
+const getPreviewAppChrome = (notification: NotificationRow) => {
+    const scope = getNotificationProductScope(notification);
+    if (scope === 'pulsecheck') {
+        return {
+            label: 'Pulse Check',
+            badgeClassName: 'bg-cyan-400 text-slate-950',
+        };
+    }
+
+    return {
+        label: 'Pulse',
+        badgeClassName: 'bg-[#d7ff00] text-black',
+    };
+};
 
 const renderTemplate = (template: string, values: Record<string, string>) =>
     template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, rawKey) => values[rawKey.trim()] ?? `{{${rawKey.trim()}}}`);
@@ -748,6 +810,7 @@ const NotificationSequencesAdmin: React.FC = () => {
                     userId: selectedTestUser.id,
                     notificationId: testNotification.id,
                     notificationName: testNotification.name,
+                    productScope: getNotificationProductScope(testNotification),
                     title: `[TEST] ${renderTemplate(testNotification.title, templateValues)}`,
                     body: renderTemplate(testNotification.body, templateValues),
                     dataPayload: buildDataPayload(testNotification, selectedTestUser),
@@ -777,6 +840,11 @@ const NotificationSequencesAdmin: React.FC = () => {
         () => (testNotification ? getTemplateValues(testNotification, selectedTestUser) : null),
         [testNotification, selectedTestUser]
     );
+    const testPreviewChrome = useMemo(
+        () => (testNotification ? getPreviewAppChrome(testNotification) : null),
+        [testNotification]
+    );
+    const selectedUserHasScopedPushToken = testNotification ? hasScopedPushToken(selectedTestUser, testNotification) : false;
 
     return (
         <AdminRouteGuard>
@@ -925,6 +993,7 @@ const NotificationSequencesAdmin: React.FC = () => {
                             const catMeta = CATEGORY_META[n.category];
                             const delMeta = DELIVERY_META[n.deliveryMethod];
                             const isExpanded = expandedId === n.id;
+                            const previewChrome = getPreviewAppChrome(n);
 
                             return (
                                 <div
@@ -989,19 +1058,20 @@ const NotificationSequencesAdmin: React.FC = () => {
                                                 </div>
                                                 <div className="bg-zinc-950 rounded-lg p-3 border border-zinc-800">
                                                     <div className="flex items-center gap-2 mb-1">
-                                                        <div className="w-5 h-5 rounded bg-[#d7ff00] flex items-center justify-center">
+                                                        <div className={`w-5 h-5 rounded flex items-center justify-center ${previewChrome.badgeClassName}`}>
                                                             <span className="text-[8px] font-bold text-black">P</span>
                                                         </div>
-                                                        <span className="text-xs text-zinc-500 font-medium">Pulse</span>
+                                                        <span className="text-xs text-zinc-500 font-medium">{previewChrome.label}</span>
                                                         <span className="text-xs text-zinc-600 ml-auto">now</span>
                                                     </div>
                                                     <p className="text-white text-sm font-semibold">{n.title}</p>
+                                                    {n.subtitle && <p className="text-zinc-500 text-xs mt-0.5">{n.subtitle}</p>}
                                                     <p className="text-zinc-400 text-sm mt-0.5">{n.body}</p>
                                                 </div>
                                             </div>
 
                                             {/* Meta grid */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                                                 <div>
                                                     <span className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Trigger</span>
                                                     <p className="text-sm text-zinc-200 mt-1">{n.trigger}</p>
@@ -1009,6 +1079,16 @@ const NotificationSequencesAdmin: React.FC = () => {
                                                 <div>
                                                     <span className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Source</span>
                                                     <p className="text-sm text-zinc-200 mt-1 font-mono text-xs">{n.source}</p>
+                                                </div>
+                                                {n.opensInto && (
+                                                    <div>
+                                                        <span className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Opens</span>
+                                                        <p className="text-sm text-zinc-200 mt-1">{n.opensInto}</p>
+                                                    </div>
+                                                )}
+                                                <div>
+                                                    <span className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Token Field</span>
+                                                    <p className="text-sm text-zinc-200 mt-1 font-mono text-xs">{getNotificationTokenField(n)}</p>
                                                 </div>
                                             </div>
 
@@ -1152,7 +1232,8 @@ const NotificationSequencesAdmin: React.FC = () => {
                                         )}
                                     </div>
                                     <p className="text-xs text-zinc-500 mt-2">
-                                        Searches live users and only sends if the selected account has an FCM token.
+                                        Searches live users and only sends if the selected account has a valid token for{' '}
+                                        <span className="text-zinc-300">{testNotification ? getNotificationTokenField(testNotification) : 'this sequence'}</span>.
                                     </p>
                                 </div>
 
@@ -1182,12 +1263,12 @@ const NotificationSequencesAdmin: React.FC = () => {
                                         <div className="mt-3 text-xs">
                                             <span
                                                 className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border ${
-                                                    selectedTestUser.hasFcmToken
+                                                    selectedUserHasScopedPushToken
                                                         ? 'border-emerald-700 bg-emerald-900/30 text-emerald-300'
                                                         : 'border-red-800 bg-red-900/20 text-red-300'
                                                 }`}
                                             >
-                                                {selectedTestUser.hasFcmToken ? 'Push token available' : 'No push token on file'}
+                                                {getScopedPushTokenLabel(selectedTestUser, testNotification)}
                                             </span>
                                         </div>
                                     </div>
@@ -1221,12 +1302,12 @@ const NotificationSequencesAdmin: React.FC = () => {
                                                     </div>
                                                     <span
                                                         className={`text-[10px] font-medium px-2 py-1 rounded-full border ${
-                                                            user.hasFcmToken
+                                                            hasScopedPushToken(user, testNotification)
                                                                 ? 'border-emerald-800 bg-emerald-900/20 text-emerald-300'
                                                                 : 'border-zinc-700 bg-zinc-900 text-zinc-400'
                                                         }`}
                                                     >
-                                                        {user.hasFcmToken ? 'Push Ready' : 'No Token'}
+                                                        {hasScopedPushToken(user, testNotification) ? 'Push Ready' : 'No Token'}
                                                     </span>
                                                 </div>
                                             </button>
@@ -1268,15 +1349,20 @@ const NotificationSequencesAdmin: React.FC = () => {
                                     </div>
                                     <div className="bg-zinc-950 rounded-lg p-3 border border-zinc-800">
                                         <div className="flex items-center gap-2 mb-1">
-                                            <div className="w-5 h-5 rounded bg-[#d7ff00] flex items-center justify-center">
+                                            <div className={`w-5 h-5 rounded flex items-center justify-center ${testPreviewChrome?.badgeClassName ?? 'bg-[#d7ff00] text-black'}`}>
                                                 <span className="text-[8px] font-bold text-black">P</span>
                                             </div>
-                                            <span className="text-xs text-zinc-500 font-medium">Pulse</span>
+                                            <span className="text-xs text-zinc-500 font-medium">{testPreviewChrome?.label ?? 'Pulse'}</span>
                                             <span className="text-xs text-zinc-600 ml-auto">test</span>
                                         </div>
                                         <p className="text-white text-sm font-semibold">
                                             {testPreviewValues ? `[TEST] ${renderTemplate(testNotification.title, testPreviewValues)}` : testNotification.title}
                                         </p>
+                                        {testNotification.subtitle && (
+                                            <p className="text-zinc-500 text-xs mt-0.5">
+                                                {testPreviewValues ? renderTemplate(testNotification.subtitle, testPreviewValues) : testNotification.subtitle}
+                                            </p>
+                                        )}
                                         <p className="text-zinc-400 text-sm mt-0.5">
                                             {testPreviewValues ? renderTemplate(testNotification.body, testPreviewValues) : testNotification.body}
                                         </p>
@@ -1287,6 +1373,11 @@ const NotificationSequencesAdmin: React.FC = () => {
                                     <p>
                                         This sends a remote push test using the sequence template and sample payload values.
                                     </p>
+                                    {testNotification.opensInto && (
+                                        <p>
+                                            Expected open behavior: <span className="text-zinc-200">{testNotification.opensInto}</span>.
+                                        </p>
+                                    )}
                                     {testNotification.deliveryMethod === 'local' && (
                                         <p>
                                             This does not validate on-device local scheduling; it only verifies the content can be delivered as a push.
@@ -1298,9 +1389,9 @@ const NotificationSequencesAdmin: React.FC = () => {
                                     <button
                                         type="button"
                                         onClick={handleSendTest}
-                                        disabled={!selectedTestUser || !selectedTestUser.hasFcmToken || testSendLoading}
+                                        disabled={!selectedTestUser || !selectedUserHasScopedPushToken || testSendLoading}
                                         className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-                                            !selectedTestUser || !selectedTestUser.hasFcmToken || testSendLoading
+                                            !selectedTestUser || !selectedUserHasScopedPushToken || testSendLoading
                                                 ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
                                                 : 'bg-[#d7ff00] text-black hover:bg-[#c4ea00]'
                                         }`}

@@ -37,6 +37,31 @@ function getRandomPrompt() {
   return REFLECTION_PROMPTS[Math.floor(Math.random() * REFLECTION_PROMPTS.length)];
 }
 
+function resolvePulseCheckFcmToken(userData = {}) {
+  return typeof userData.pulseCheckFcmToken === 'string' ? userData.pulseCheckFcmToken.trim() : '';
+}
+
+function resolvePulseCheckPushTarget(userData = {}) {
+  const token = resolvePulseCheckFcmToken(userData);
+  if (!token) {
+    return { token: '', eligible: false, reason: 'missing_pulsecheck_fcm_token' };
+  }
+
+  const sourceApp = typeof userData.pushTokenSourceApp === 'string'
+    ? userData.pushTokenSourceApp.trim().toLowerCase()
+    : '';
+
+  if (sourceApp !== 'pulsecheck') {
+    return {
+      token: '',
+      eligible: false,
+      reason: sourceApp ? 'pulsecheck_source_app_mismatch' : 'missing_pulsecheck_source_app',
+    };
+  }
+
+  return { token, eligible: true, reason: 'eligible' };
+}
+
 /**
  * Send notification to a single user
  */
@@ -122,7 +147,8 @@ async function getUsersForCurrentHour() {
     const userData = doc.data();
     const prefs = userData.dailyReflectionPreferences;
     
-    if (!prefs || !userData.fcmToken) continue;
+    const pulseCheckPushTarget = resolvePulseCheckPushTarget(userData);
+    if (!prefs || !pulseCheckPushTarget.eligible) continue;
     
     const userTimezone = prefs.timezone || 'America/New_York';
     const preferredHour = prefs.hour ?? 20; // Default 8 PM
@@ -136,7 +162,7 @@ async function getUsersForCurrentHour() {
       if (userLocalHour === preferredHour) {
         usersToNotify.push({
           userId: doc.id,
-          fcmToken: userData.fcmToken,
+          fcmToken: pulseCheckPushTarget.token,
           userName: userData.displayName || userData.name || 'Athlete'
         });
       }
@@ -233,15 +259,15 @@ exports.sendTestReflectionNotification = require('firebase-functions').https.onR
     }
     
     const userData = userDoc.data();
-    const fcmToken = userData.fcmToken;
+    const pulseCheckPushTarget = resolvePulseCheckPushTarget(userData);
     
-    if (!fcmToken) {
-      res.status(400).json({ error: 'User has no FCM token' });
+    if (!pulseCheckPushTarget.eligible) {
+      res.status(400).json({ error: `User is not eligible for Pulse Check push: ${pulseCheckPushTarget.reason}` });
       return;
     }
     
     const prompt = getRandomPrompt();
-    const result = await sendReflectionNotification(userId, fcmToken, prompt);
+    const result = await sendReflectionNotification(userId, pulseCheckPushTarget.token, prompt);
     
     res.json(result);
   } catch (error) {
