@@ -20,6 +20,28 @@ function sanitizeName(value) {
   return value.trim();
 }
 
+function resolvePulseCheckFcmToken(userData = {}) {
+  return sanitizeName(userData.pulseCheckFcmToken);
+}
+
+function resolvePulseCheckPushTarget(userData = {}) {
+  const token = resolvePulseCheckFcmToken(userData);
+  if (!token) {
+    return { token: '', eligible: false, reason: 'missing_pulsecheck_fcm_token' };
+  }
+
+  const sourceApp = sanitizeName(userData.pushTokenSourceApp).toLowerCase();
+  if (sourceApp !== 'pulsecheck') {
+    return {
+      token: '',
+      eligible: false,
+      reason: sourceApp ? 'pulsecheck_source_app_mismatch' : 'missing_pulsecheck_source_app',
+    };
+  }
+
+  return { token, eligible: true, reason: 'eligible' };
+}
+
 function resolveAthleteFirstName(userData = {}) {
   const preferredName = sanitizeName(userData.preferredName);
   if (preferredName) return preferredName.split(/\s+/)[0];
@@ -264,5 +286,7 @@ module.exports = {
   buildNoraPushMessage,
   normalizeStringMap,
   resolveAthleteFirstName,
+  resolvePulseCheckFcmToken,
+  resolvePulseCheckPushTarget,
   sendLoggedNoraPush,
 };

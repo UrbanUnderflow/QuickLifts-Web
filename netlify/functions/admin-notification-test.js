@@ -32,13 +32,45 @@ function scoreUser(user, query) {
 
 function sanitizeUser(doc) {
   const data = doc.data() || {};
+  const pulseFcmToken = typeof data.fcmToken === 'string' ? data.fcmToken.trim() : '';
+  const pulseCheckFcmToken = typeof data.pulseCheckFcmToken === 'string' ? data.pulseCheckFcmToken.trim() : '';
   return {
     id: doc.id,
     username: data.username || '',
     displayName: data.displayName || '',
     email: data.email || '',
-    hasFcmToken: typeof data.fcmToken === 'string' && data.fcmToken.trim().length > 0,
+    hasFcmToken: pulseFcmToken.length > 0 || pulseCheckFcmToken.length > 0,
+    hasPulseFcmToken: pulseFcmToken.length > 0,
+    hasPulseCheckFcmToken: pulseCheckFcmToken.length > 0,
     profileImageUrl: data.profileImage?.profileImageURL || data.profileImage?.profileImageUrl || '',
+  };
+}
+
+function resolveScopedFcmToken(userData, productScope) {
+  const pulseFcmToken = typeof userData.fcmToken === 'string' ? userData.fcmToken.trim() : '';
+  const pulseCheckFcmToken = typeof userData.pulseCheckFcmToken === 'string' ? userData.pulseCheckFcmToken.trim() : '';
+  const pulseCheckSourceApp = typeof userData.pushTokenSourceApp === 'string'
+    ? userData.pushTokenSourceApp.trim().toLowerCase()
+    : '';
+
+  if (productScope === 'pulsecheck') {
+    if (!pulseCheckFcmToken) {
+      return { token: '', reason: 'missing_pulsecheck_fcm_token' };
+    }
+
+    if (pulseCheckSourceApp !== 'pulsecheck') {
+      return {
+        token: '',
+        reason: pulseCheckSourceApp ? 'pulsecheck_source_app_mismatch' : 'missing_pulsecheck_source_app',
+      };
+    }
+
+    return { token: pulseCheckFcmToken, reason: 'eligible' };
+  }
+
+  return {
+    token: pulseFcmToken,
+    reason: pulseFcmToken ? 'eligible' : 'missing_fcm_token',
   };
 }
 
@@ -186,6 +218,7 @@ async function handleSend(event) {
     dataPayload = {},
     notificationId,
     notificationName,
+    productScope = 'pulse',
   } = body;
 
   if (!userId || !title || !notificationBody) {
@@ -215,17 +248,24 @@ async function handleSend(event) {
   }
 
   const userData = userDoc.data() || {};
-  const fcmToken = typeof userData.fcmToken === 'string' ? userData.fcmToken.trim() : '';
-  if (!fcmToken) {
+  const scopedToken = resolveScopedFcmToken(userData, productScope);
+  if (!scopedToken.token) {
     return {
       statusCode: 400,
       headers: {
         ...headers,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ success: false, message: 'Selected user does not have a valid FCM token' }),
+      body: JSON.stringify({
+        success: false,
+        message:
+          productScope === 'pulsecheck'
+            ? `Selected user is not eligible for a Pulse Check push (${scopedToken.reason})`
+            : 'Selected user does not have a valid FCM token',
+      }),
     };
   }
+  const fcmToken = scopedToken.token;
 
   const notificationType = String(dataPayload.type || notificationId || 'ADMIN_NOTIFICATION_TEST');
   const result = await sendNotificationWithLogging({
@@ -239,6 +279,7 @@ async function handleSend(event) {
       mode: 'admin-test',
       userId: userDoc.id,
       username: userData.username || '',
+      productScope,
       notificationId: notificationId || '',
       notificationName: notificationName || '',
     },

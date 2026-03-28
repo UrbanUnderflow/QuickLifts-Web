@@ -11,6 +11,7 @@ const {
 const {
   buildNoraBiometricBriefNotification,
   resolveAthleteFirstName,
+  resolvePulseCheckPushTarget,
   sendLoggedNoraPush,
 } = require('./pulsecheck-notification-utils');
 
@@ -759,10 +760,11 @@ async function maybeSendBiometricBriefReadyNotification({
   }
 
   const userData = userSnap.data() || {};
-  const fcmToken = typeof userData.fcmToken === 'string' ? userData.fcmToken.trim() : '';
-  if (!fcmToken) {
-    return { success: false, reason: 'missing_fcm_token' };
+  const pushTarget = resolvePulseCheckPushTarget(userData);
+  if (!pushTarget.eligible) {
+    return { success: false, reason: pushTarget.reason };
   }
+  const fcmToken = pushTarget.token;
 
   if (userData.mentalTrainingPreferences?.checkInNotificationsEnabled === false) {
     return { success: false, reason: 'notifications_disabled' };

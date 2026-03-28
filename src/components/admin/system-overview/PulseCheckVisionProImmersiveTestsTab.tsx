@@ -641,12 +641,20 @@ const NOISE_GATE_NORTH_STAR_ROWS = [
   ['Design litmus test', 'One-second comprehension', 'Within one second, the athlete should understand where the real signal lives and what they must ignore.'],
 ];
 
+const NOISE_GATE_CONTRACT_LOCK_ROWS = [
+  ['Mechanism lock', 'Noise Gate remains a target-signal filtering family, not a freeform XR mini-game.', 'Vision Pro can deepen transfer fidelity, but it cannot change the family mechanic.'],
+  ['Final phase model', 'Acquire signal -> noise swell -> bait pressure -> commit window -> outcome -> score/reset.', 'This is the authored rep sequence the rebuild should match.'],
+  ['Athlete-facing task sentence', 'Hold the true lane, ignore noise, commit only when clean.', 'All onboarding, prompts, and live runtime language should resolve to this sentence.'],
+  ['Interaction rule', 'One decisive commit in the clean window.', 'The athlete should not spam through chaos or treat the rep like a tile-picker.'],
+];
+
 const NOISE_GATE_TASK_LOOP_ROWS = [
   ['1', 'Acquire the real lane', 'A single target channel ahead resolves in a clean, precious visual language. It reads as the thing to protect.'],
   ['2', 'Hold signal under noise', 'Distractors flood the side channels, audio field, and peripheral depth, but the athlete keeps attention on the live lane.'],
-  ['3', 'Commit when the lane is clean', 'A decisive action window appears only when the real signal is available. The athlete commits once, not constantly.'],
-  ['4', 'Read success or miss instantly', 'The environment should immediately communicate whether the athlete held the true signal or got baited by noise.'],
-  ['5', 'Reset into the next wave', 'The tunnel inhales, recomposes, and drops the athlete into the next pressure wave without menu interruption.'],
+  ['3', 'Survive bait pressure', 'Distractor channels become more seductive and mimic the signal without becoming the truth lane.'],
+  ['4', 'Commit only when clean', 'A decisive action window appears only when the real signal is available. The athlete commits once, not constantly.'],
+  ['5', 'Read success or miss instantly', 'The environment should immediately communicate whether the athlete held the true signal or got baited by noise.'],
+  ['6', 'Score and reset', 'The tunnel resolves the rep visibly, then either recomposes for the next wave or closes cleanly.'],
 ];
 
 const NOISE_GATE_VISUAL_ROWS = [
@@ -1384,6 +1392,19 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
                   </h4>
                   <div className="mt-4">
                     <DataTable columns={['Decision', 'Target', 'Why']} rows={NOISE_GATE_NORTH_STAR_ROWS} />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-green-500/20 bg-green-500/5 p-5">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <ShieldCheck className="h-4 w-4 text-green-400" />
+                    Contract Lock
+                  </h4>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+                    These three decisions are now locked for the Vision Pro rebuild: the family mechanic stays Noise Gate, the authored rep follows one fixed phase model, and the athlete-facing task instruction should resolve to one sentence everywhere.
+                  </p>
+                  <div className="mt-4">
+                    <DataTable columns={['Lock', 'Decision', 'Why']} rows={NOISE_GATE_CONTRACT_LOCK_ROWS} />
                   </div>
                 </div>
 
