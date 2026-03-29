@@ -1,6 +1,13 @@
 import type { Handler } from '@netlify/functions';
 import { getFirestore } from './utils/getServiceAccount';
-import { getBaseSiteUrl, toMillis } from './utils/emailSequenceHelpers';
+import {
+  buildEmailDedupeKey,
+  claimScheduledSequenceSend,
+  finalizeScheduledSequenceSend,
+  getBaseSiteUrl,
+  releaseScheduledSequenceSend,
+  toMillis,
+} from './utils/emailSequenceHelpers';
 
 const SEND_DELAY_MINUTES = 60;
 const WINDOW_LENGTH_MINUTES = 30;
@@ -156,8 +163,10 @@ export const handler: Handler = async () => {
   try {
     const db = await getFirestore();
     const nowMs = Date.now();
+    const runId = `irl-report-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
     const minEndSec = Math.floor((nowMs - (SEND_DELAY_MINUTES + WINDOW_LENGTH_MINUTES) * 60 * 1000) / 1000);
     const maxEndSec = Math.floor((nowMs - SEND_DELAY_MINUTES * 60 * 1000) / 1000);
+    const claimedDedupeKeys = new Set<string>();
 
     const querySnap = await db
       .collectionGroup('events')
@@ -188,6 +197,38 @@ export const handler: Handler = async () => {
       const eventTitle = toTrimmedString(eventData.title) || 'IRL Event';
       const clubId = toTrimmedString(eventData.clubId) || doc.ref.parent.parent?.id || '';
       const creatorId = toTrimmedString(eventData.creatorId);
+      const pendingField = 'emailSequenceState.irlEventAnalyticsReportPending';
+      const dedupeKey = buildEmailDedupeKey(['irl-event-analytics-report-v1', doc.id, creatorId || clubId || doc.id]);
+
+      if (claimedDedupeKeys.has(dedupeKey)) {
+        skipped++;
+        continue;
+      }
+
+      const claimed = await claimScheduledSequenceSend({
+        docRef: doc.ref,
+        pendingField,
+        completionFields: [
+          'emailSequenceState.irlEventAnalyticsReportSentAt',
+          'emailSequenceState.irlEventAnalyticsReportSkippedAt',
+        ],
+        dedupeKey,
+        runId,
+        nowMs,
+        metadata: {
+          sequence: 'irl-event-analytics-report-v1',
+          clubId: clubId || null,
+          eventId: doc.id,
+          userId: creatorId || null,
+        },
+      });
+
+      if (!claimed) {
+        skipped++;
+        continue;
+      }
+
+      claimedDedupeKeys.add(dedupeKey);
 
       try {
         const checkinsSnap = await doc.ref.collection('checkins').get();
@@ -216,12 +257,14 @@ export const handler: Handler = async () => {
           ? 'emailSequenceState.irlEventAnalyticsReportSkippedAt'
           : 'emailSequenceState.irlEventAnalyticsReportSentAt';
 
-        await doc.ref.set(
-          {
-            [stateField]: new Date(),
-          } as any,
-          { merge: true } as any
-        );
+        await finalizeScheduledSequenceSend({
+          docRef: doc.ref,
+          pendingField,
+          resultField: stateField,
+          dedupeKey,
+          runId,
+          markSent: !sendResult.skipped,
+        });
 
         if (sendResult.skipped) {
           skipped++;
@@ -229,6 +272,15 @@ export const handler: Handler = async () => {
           sent++;
         }
       } catch (error) {
+        claimedDedupeKeys.delete(dedupeKey);
+        await releaseScheduledSequenceSend({
+          docRef: doc.ref,
+          pendingField,
+          dedupeKey,
+          runId,
+        }).catch((releaseError) => {
+          console.warn('[schedule-irl-event-analytics-report-email] Failed to release claim:', doc.id, releaseError);
+        });
         console.warn('[schedule-irl-event-analytics-report-email] Failed for event:', doc.id, error);
       }
     }

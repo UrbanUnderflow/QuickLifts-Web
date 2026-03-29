@@ -1,4 +1,4 @@
-import { getFirestore } from './getServiceAccount';
+import { getFirestore, initAdmin } from './getServiceAccount';
 
 export type SequenceTemplate = {
   subject: string;
@@ -19,6 +19,17 @@ export type SequenceEmailSendResult = {
   skipped?: boolean;
   error?: string;
 };
+
+type LockState = {
+  runId?: string;
+  claimedAt?: any;
+  sentAt?: any;
+  messageId?: string;
+};
+
+const EMAIL_SEND_LOCK_COLLECTION = 'email-send-idempotency';
+const EMAIL_SEQUENCE_LOCK_COLLECTION = 'email-sequence-locks';
+const DEFAULT_EMAIL_LOCK_STALE_MS = 2 * 60 * 60 * 1000;
 
 function toText(value: any): string {
   if (value === null || value === undefined) return '';
@@ -49,6 +60,301 @@ function buildTemplateVarLookup(vars: Record<string, any>): Map<string, string> 
     map.set(toSnakeCase(key).toLowerCase(), v);
   }
   return map;
+}
+
+function normalizeDedupePart(value: any): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number' && Number.isFinite(value)) return String(Math.trunc(value));
+  if (typeof value === 'string') return value.trim().toLowerCase();
+  return String(value).trim().toLowerCase();
+}
+
+function getNestedValue(source: Record<string, any>, path: string): any {
+  if (!source || !path) return undefined;
+  return path.split('.').reduce<any>((acc, part) => (acc === null || acc === undefined ? undefined : acc[part]), source);
+}
+
+export function buildEmailDedupeKey(parts: any[]): string {
+  return parts.map(normalizeDedupePart).filter(Boolean).join('::');
+}
+
+async function claimGlobalLock(args: {
+  collectionName: string;
+  dedupeKey: string;
+  runId: string;
+  nowMs: number;
+  staleMs?: number;
+  metadata?: Record<string, any>;
+}): Promise<{ status: 'claimed' | 'already_sent' | 'in_progress'; messageId?: string }> {
+  const db = await getFirestore();
+  const lockRef = db.collection(args.collectionName).doc(args.dedupeKey);
+
+  return db.runTransaction(async (tx) => {
+    const snap = (await tx.get(lockRef)) as any;
+    const data = (snap.data() || {}) as LockState;
+
+    if (data.sentAt) {
+      return { status: 'already_sent' as const, messageId: data.messageId };
+    }
+
+    if (data.runId && data.runId !== args.runId) {
+      const claimedAtMs = toMillis(data.claimedAt);
+      const staleMs = args.staleMs ?? DEFAULT_EMAIL_LOCK_STALE_MS;
+      if (claimedAtMs !== null && args.nowMs - claimedAtMs < staleMs) {
+        return { status: 'in_progress' as const };
+      }
+    }
+
+    tx.set(
+      lockRef,
+      {
+        ...(args.metadata || {}),
+        dedupeKey: args.dedupeKey,
+        runId: args.runId,
+        claimedAt: new Date(args.nowMs),
+        updatedAt: new Date(args.nowMs),
+      } as any,
+      { merge: true } as any
+    );
+
+    return { status: 'claimed' as const };
+  });
+}
+
+async function finalizeGlobalLock(args: {
+  collectionName: string;
+  dedupeKey: string;
+  runId: string;
+  messageId?: string;
+  metadata?: Record<string, any>;
+}): Promise<void> {
+  const db = await getFirestore();
+  const FieldValue = initAdmin().firestore.FieldValue;
+  const lockRef = db.collection(args.collectionName).doc(args.dedupeKey);
+
+  await db.runTransaction(async (tx) => {
+    const snap = (await tx.get(lockRef)) as any;
+    const data = (snap.data() || {}) as LockState;
+
+    if (data.runId && data.runId !== args.runId) {
+      return;
+    }
+
+    tx.set(
+      lockRef,
+      {
+        ...(args.metadata || {}),
+        sentAt: new Date(),
+        messageId: args.messageId || data.messageId || null,
+        runId: FieldValue.delete(),
+        claimedAt: FieldValue.delete(),
+        updatedAt: new Date(),
+      } as any,
+      { merge: true } as any
+    );
+  });
+}
+
+async function releaseGlobalLock(args: {
+  collectionName: string;
+  dedupeKey: string;
+  runId: string;
+}): Promise<void> {
+  const db = await getFirestore();
+  const FieldValue = initAdmin().firestore.FieldValue;
+  const lockRef = db.collection(args.collectionName).doc(args.dedupeKey);
+
+  await db.runTransaction(async (tx) => {
+    const snap = (await tx.get(lockRef)) as any;
+    const data = (snap.data() || {}) as LockState;
+
+    if (!data.runId || data.runId !== args.runId || data.sentAt) {
+      return;
+    }
+
+    tx.set(
+      lockRef,
+      {
+        runId: FieldValue.delete(),
+        claimedAt: FieldValue.delete(),
+        updatedAt: new Date(),
+      } as any,
+      { merge: true } as any
+    );
+  });
+}
+
+export async function claimScheduledSequenceSend(args: {
+  docRef: any;
+  pendingField: string;
+  completionFields?: string[];
+  dedupeKey: string;
+  runId: string;
+  nowMs: number;
+  staleMs?: number;
+  metadata?: Record<string, any>;
+}): Promise<boolean> {
+  const db = await getFirestore();
+  const lockRef = db.collection(EMAIL_SEQUENCE_LOCK_COLLECTION).doc(args.dedupeKey);
+
+  return db.runTransaction(async (tx) => {
+    const docSnap = (await tx.get(args.docRef)) as any;
+    const lockSnap = (await tx.get(lockRef)) as any;
+
+    if (!docSnap.exists) return false;
+
+    const data = (docSnap.data() || {}) as Record<string, any>;
+    if ((args.completionFields || []).some((field) => getNestedValue(data, field))) {
+      return false;
+    }
+
+    const pendingClaim = getNestedValue(data, args.pendingField) as LockState | undefined;
+    const staleMs = args.staleMs ?? DEFAULT_EMAIL_LOCK_STALE_MS;
+    if (pendingClaim?.runId && pendingClaim.runId !== args.runId) {
+      const claimedAtMs = toMillis(pendingClaim.claimedAt);
+      if (claimedAtMs !== null && args.nowMs - claimedAtMs < staleMs) {
+        return false;
+      }
+    }
+
+    const lockData = (lockSnap.data() || {}) as LockState;
+    if (lockData.sentAt) {
+      return false;
+    }
+    if (lockData.runId && lockData.runId !== args.runId) {
+      const claimedAtMs = toMillis(lockData.claimedAt);
+      if (claimedAtMs !== null && args.nowMs - claimedAtMs < staleMs) {
+        return false;
+      }
+    }
+
+    tx.set(
+      args.docRef,
+      {
+        [args.pendingField]: {
+          runId: args.runId,
+          claimedAt: new Date(args.nowMs),
+          dedupeKey: args.dedupeKey,
+        },
+      } as any,
+      { merge: true } as any
+    );
+    tx.set(
+      lockRef,
+      {
+        ...(args.metadata || {}),
+        dedupeKey: args.dedupeKey,
+        runId: args.runId,
+        claimedAt: new Date(args.nowMs),
+        updatedAt: new Date(args.nowMs),
+      } as any,
+      { merge: true } as any
+    );
+
+    return true;
+  });
+}
+
+export async function finalizeScheduledSequenceSend(args: {
+  docRef: any;
+  pendingField: string;
+  resultField: string;
+  dedupeKey: string;
+  runId: string;
+  markSent: boolean;
+  updateFields?: Record<string, any>;
+}): Promise<void> {
+  const db = await getFirestore();
+  const FieldValue = initAdmin().firestore.FieldValue;
+  const lockRef = db.collection(EMAIL_SEQUENCE_LOCK_COLLECTION).doc(args.dedupeKey);
+
+  await db.runTransaction(async (tx) => {
+    const docSnap = (await tx.get(args.docRef)) as any;
+    const lockSnap = (await tx.get(lockRef)) as any;
+    if (!docSnap.exists) return;
+
+    const data = (docSnap.data() || {}) as Record<string, any>;
+    const pendingClaim = getNestedValue(data, args.pendingField) as LockState | undefined;
+    if (pendingClaim?.runId && pendingClaim.runId !== args.runId) {
+      return;
+    }
+
+    const lockData = (lockSnap.data() || {}) as LockState;
+    if (lockData.runId && lockData.runId !== args.runId) {
+      return;
+    }
+
+    tx.set(
+      args.docRef,
+      {
+        [args.resultField]: new Date(),
+        [args.pendingField]: FieldValue.delete(),
+        ...(args.updateFields || {}),
+      } as any,
+      { merge: true } as any
+    );
+
+    tx.set(
+      lockRef,
+      args.markSent
+        ? {
+            sentAt: new Date(),
+            runId: FieldValue.delete(),
+            claimedAt: FieldValue.delete(),
+            updatedAt: new Date(),
+          }
+        : {
+            runId: FieldValue.delete(),
+            claimedAt: FieldValue.delete(),
+            updatedAt: new Date(),
+          },
+      { merge: true } as any
+    );
+  });
+}
+
+export async function releaseScheduledSequenceSend(args: {
+  docRef: any;
+  pendingField: string;
+  dedupeKey: string;
+  runId: string;
+}): Promise<void> {
+  const db = await getFirestore();
+  const FieldValue = initAdmin().firestore.FieldValue;
+  const lockRef = db.collection(EMAIL_SEQUENCE_LOCK_COLLECTION).doc(args.dedupeKey);
+
+  await db.runTransaction(async (tx) => {
+    const docSnap = (await tx.get(args.docRef)) as any;
+    const lockSnap = (await tx.get(lockRef)) as any;
+    if (!docSnap.exists) return;
+
+    const data = (docSnap.data() || {}) as Record<string, any>;
+    const pendingClaim = getNestedValue(data, args.pendingField) as LockState | undefined;
+    if (!pendingClaim?.runId || pendingClaim.runId !== args.runId) {
+      return;
+    }
+
+    tx.set(
+      args.docRef,
+      {
+        [args.pendingField]: FieldValue.delete(),
+      } as any,
+      { merge: true } as any
+    );
+
+    const lockData = (lockSnap.data() || {}) as LockState;
+    if (lockData.runId && lockData.runId === args.runId && !lockData.sentAt) {
+      tx.set(
+        lockRef,
+        {
+          runId: FieldValue.delete(),
+          claimedAt: FieldValue.delete(),
+          updatedAt: new Date(),
+        } as any,
+        { merge: true } as any
+      );
+    }
+  });
 }
 
 export function applyTemplateVars(input: string, vars: Record<string, any>): string {
@@ -127,6 +433,8 @@ export async function sendBrevoTransactionalEmail(args: {
   htmlContent: string;
   tags?: string[];
   scheduledAt?: string;
+  idempotencyKey?: string;
+  idempotencyMetadata?: Record<string, any>;
 }): Promise<SequenceEmailSendResult> {
   const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
   if (!apiKey) {
@@ -139,6 +447,22 @@ export async function sendBrevoTransactionalEmail(args: {
 
   const senderEmail = process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
   const senderName = process.env.BREVO_SENDER_NAME || 'Pulse';
+  const nowMs = Date.now();
+  const runId = `brevo-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
+
+  if (args.idempotencyKey) {
+    const claimResult = await claimGlobalLock({
+      collectionName: EMAIL_SEND_LOCK_COLLECTION,
+      dedupeKey: args.idempotencyKey,
+      runId,
+      nowMs,
+      metadata: args.idempotencyMetadata,
+    });
+
+    if (claimResult.status === 'already_sent' || claimResult.status === 'in_progress') {
+      return { success: true, skipped: true, messageId: claimResult.messageId };
+    }
+  }
 
   const payload: Record<string, any> = {
     sender: { name: senderName, email: senderEmail },
@@ -168,6 +492,13 @@ export async function sendBrevoTransactionalEmail(args: {
 
   if (!resp.ok) {
     const errJson = await resp.json().catch(() => ({}));
+    if (args.idempotencyKey) {
+      await releaseGlobalLock({
+        collectionName: EMAIL_SEND_LOCK_COLLECTION,
+        dedupeKey: args.idempotencyKey,
+        runId,
+      }).catch(() => undefined);
+    }
     return {
       success: false,
       error: errJson?.message || `Brevo API error (${resp.status})`,
@@ -175,6 +506,15 @@ export async function sendBrevoTransactionalEmail(args: {
   }
 
   const data = await resp.json().catch(() => ({}));
+  if (args.idempotencyKey) {
+    await finalizeGlobalLock({
+      collectionName: EMAIL_SEND_LOCK_COLLECTION,
+      dedupeKey: args.idempotencyKey,
+      runId,
+      messageId: data?.messageId,
+      metadata: args.idempotencyMetadata,
+    }).catch(() => undefined);
+  }
   return { success: true, messageId: data?.messageId };
 }
 
@@ -232,4 +572,3 @@ export function toMillis(value: any): number | null {
 export function getBaseSiteUrl(): string {
   return (process.env.SITE_URL || process.env.URL || 'https://fitwithpulse.ai').replace(/\/$/, '');
 }
-

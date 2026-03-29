@@ -276,7 +276,7 @@ const handler = async (event) => {
             await fetch(process.env.SITE_URL ? `${process.env.SITE_URL}/.netlify/functions/send-coach-connection-email` : 'http://localhost:8888/.netlify/functions/send-coach-connection-email', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ coachEmail, coachName: coachDoc.data()?.displayName || coachDoc.data()?.username, athleteName }),
+              body: JSON.stringify({ coachEmail, coachName: coachDoc.data()?.displayName || coachDoc.data()?.username, coachUserId, athleteName, athleteId: userId }),
             }).catch(() => {});
           }
         } catch (emailErr) {

@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { getFirestore } from './utils/getServiceAccount';
+import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
 
 type SendResponse = {
   success: boolean;
@@ -195,10 +196,10 @@ function applyTemplateVars(input: string, vars: { firstName?: string; username?:
   const firstName = (vars.firstName || '').trim() || 'there';
   const username = (vars.username || '').trim();
   return input
-    .replaceAll('{{first_name}}', escapeHtml(firstName))
-    .replaceAll('{{firstName}}', escapeHtml(firstName))
-    .replaceAll('{{username}}', escapeHtml(username))
-    .replaceAll('{{user_name}}', escapeHtml(username));
+    .replace(/\{\{first_name\}\}/g, escapeHtml(firstName))
+    .replace(/\{\{firstName\}\}/g, escapeHtml(firstName))
+    .replace(/\{\{username\}\}/g, escapeHtml(username))
+    .replace(/\{\{user_name\}\}/g, escapeHtml(username));
 }
 
 export const handler: Handler = async (event) => {
@@ -262,50 +263,37 @@ export const handler: Handler = async (event) => {
     subject = applyTemplateVars(subject, { firstName, username });
     html = applyTemplateVars(html, { firstName, username });
 
-    const payload: any = {
-      sender: { name: senderName, email: senderEmail },
-      to: [{ email: toEmail, name: firstName || toEmail }],
+    const idempotencyKey = !isTest ? buildEmailDedupeKey(['welcome-v1', userId || toEmail]) : '';
+    const sendResult = await sendBrevoTransactionalEmail({
+      toEmail,
+      toName: firstName || toEmail,
       subject,
       htmlContent: html,
-      replyTo: { email: senderEmail, name: 'Pulse Team' },
-      // tracking on by default
       tags: ['user-welcome', isTest ? 'test' : null].filter(Boolean),
-    };
-
-    // Optional scheduling per Brevo API (ISO8601)
-    if (scheduledAt) {
-      const date = new Date(scheduledAt);
-      if (!isNaN(date.getTime())) {
-        payload.scheduledAt = date.toISOString();
-      }
-    }
-
-    const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'api-key': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
+      scheduledAt,
+      idempotencyKey,
+      idempotencyMetadata: idempotencyKey
+        ? {
+            sequence: 'welcome-v1',
+            userId: userId || null,
+            toEmail,
+          }
+        : undefined,
     });
 
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      return { statusCode: resp.status, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ success: false, error: err?.message || 'Brevo API error' } satisfies SendResponse) };
+    if (!sendResult.success) {
+      return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ success: false, error: sendResult.error || 'Brevo API error' } satisfies SendResponse) };
     }
 
-    const data = await resp.json().catch(() => ({}));
-
     // Mark sent on the user doc (best-effort)
-    if (userId && !isTest) {
+    if (userId && !isTest && !sendResult.skipped) {
       try {
         const db = await getFirestore();
         await db.collection('users').doc(userId).set(
           {
             welcomeEmailSentAt: new Date(),
             welcomeEmailProvider: 'brevo',
-            welcomeEmailMessageId: data?.messageId || null,
+            welcomeEmailMessageId: sendResult.messageId || null,
           },
           { merge: true } as any
         );
@@ -314,9 +302,8 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ success: true, messageId: data?.messageId } satisfies SendResponse) };
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ success: true, skipped: sendResult.skipped, messageId: sendResult.messageId } satisfies SendResponse) };
   } catch (e: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ success: false, error: e?.message || 'Internal error' } satisfies SendResponse) };
   }
 };
-

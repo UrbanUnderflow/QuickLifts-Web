@@ -800,7 +800,15 @@ async function maybeSendBiometricBriefReadyNotification({
   });
 
   if (!result.success) {
-    return { success: false, reason: 'send_failed', error: result.error || null };
+    return {
+      success: false,
+      reason: 'send_failed',
+      error: result.error || null,
+      errorCode: result.errorCode || null,
+      failureCategory: result.failureCategory || null,
+      needsConsoleConfig: result.needsConsoleConfig === true,
+      recommendedAction: result.recommendedAction || null,
+    };
   }
 
   await userRef.set(

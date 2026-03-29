@@ -22,28 +22,6 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-[[plugins]]
-  package = "netlify-plugin-inline-functions-env"
-  [plugins.inputs]
-    buildEvent = "onBuild"
-    include = [
-      "FIREBASE_SERVICE_ACCOUNT",
-      "FIREBASE_SERVICE_ACCOUNT_KEY",
-      "FIREBASE_SECRET_KEY",
-      "FIREBASE_CLIENT_EMAIL",
-      "FIREBASE_PROJECT_ID",
-      "FIREBASE_PRIVATE_KEY",
-      "FIREBASE_PRIVATE_KEY_1",
-      "FIREBASE_PRIVATE_KEY_2",
-      "FIREBASE_PRIVATE_KEY_3",
-      "FIREBASE_PRIVATE_KEY_4",
-      "DEV_FIREBASE_SERVICE_ACCOUNT",
-      "DEV_FIREBASE_SECRET_KEY",
-      "DEV_FIREBASE_CLIENT_EMAIL",
-      "DEV_FIREBASE_PROJECT_ID",
-      "NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID"
-    ]
-
 # Branded OG images (route through a normal URL so bot user agents aren't blocked by /.netlify/functions)
 # Keeps query params (title/subtitle) intact.
 [[redirects]]
@@ -88,6 +66,120 @@
 [[redirects]]
   from = "/api/audio/run-alerts"
   to = "/.netlify/functions/audio-run-alerts"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/admin/group-meet"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/admin/group-meet"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/admin/group-meet/*"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/admin/group-meet/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/admin/pulsecheck/pilot-research-readout/*"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/admin/pulsecheck/pilot-research-readout/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/admin/system-overview/share-links"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/admin/system-overview/share-links"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/admin/system-overview/share-links/*"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/admin/system-overview/share-links/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/agent/kickoff-mission"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/agent/kickoff-mission"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/backfill-badges"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/backfill-badges"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/group-meet/*"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/group-meet/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/invest/*"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/invest/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/migrate/fitness-seeker-leads"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/migrate/fitness-seeker-leads"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/outreach/*"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/outreach/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/pitch/*"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/pitch/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/pulsecheck/admin-activation/*"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/pulsecheck/admin-activation/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/pulsecheck/team-invite/*"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/pulsecheck/team-invite/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/reset-badges"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/reset-badges"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/review/*"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/review/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/shared/system-overview/*"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/shared/system-overview/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/surveys/notify-completed"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/surveys/notify-completed"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/wunna-run/*"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/wunna-run/:splat"
   status = 200
   force = true
 

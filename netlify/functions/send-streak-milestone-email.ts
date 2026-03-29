@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import {
+  buildEmailDedupeKey,
   getBaseSiteUrl,
   resolveRecipient,
   resolveSequenceTemplate,
@@ -137,6 +138,10 @@ export const handler: Handler = async (event) => {
       },
     });
 
+    const idempotencyKey = !isTest
+      ? buildEmailDedupeKey(['streak-milestone-v1', userId || recipient.toEmail, milestone])
+      : '';
+
     const sendResult = await sendBrevoTransactionalEmail({
       toEmail: recipient.toEmail,
       toName: recipient.toName,
@@ -144,6 +149,15 @@ export const handler: Handler = async (event) => {
       htmlContent: template.html,
       tags: ['streak-milestone', `milestone:${milestone}`, isTest ? 'test' : ''],
       scheduledAt,
+      idempotencyKey,
+      idempotencyMetadata: idempotencyKey
+        ? {
+            sequence: 'streak-milestone-v1',
+            userId: userId || null,
+            challengeId: challengeId || null,
+            milestone,
+          }
+        : undefined,
     });
 
     if (!sendResult.success) {
@@ -167,4 +181,3 @@ export const handler: Handler = async (event) => {
     };
   }
 };
-

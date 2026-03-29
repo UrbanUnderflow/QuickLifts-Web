@@ -120,7 +120,7 @@ exports.handler = async (event) => {
         await fetch(`${baseUrl}/.netlify/functions/send-coach-connection-email`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ coachEmail, coachName: coachDoc.data()?.displayName || coachDoc.data()?.username, athleteName }),
+          body: JSON.stringify({ coachEmail, coachName: coachDoc.data()?.displayName || coachDoc.data()?.username, coachUserId: resolvedCoachUserId, athleteName, athleteId }),
         });
         console.log('[notify-coach-connection] Email dispatch queued', { coachEmail });
       }
@@ -136,4 +136,3 @@ exports.handler = async (event) => {
     return { statusCode: 500, body: JSON.stringify({ message: 'Unexpected error' }) };
   }
 };
-

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import Head from 'next/head';
-import admin from '../../lib/firebase-admin';
 import { resolveShortLinkDestination } from '../../lib/shortLinks';
 
 type ShortLinkFallbackPageProps = {
@@ -91,6 +90,7 @@ export const getServerSideProps: GetServerSideProps<ShortLinkFallbackPageProps> 
   }
 
   try {
+    const admin = (await import('../../lib/firebase-admin')).default;
     const docRef = admin.firestore().collection('shortLinks').doc(slug);
     const docSnap = await docRef.get();
 

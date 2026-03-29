@@ -3,11 +3,10 @@ import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { createRequire } from 'module';
+import gifsicle from 'gifsicle';
+import firebaseConfig from './config/firebase.js';
 
-const require = createRequire(import.meta.url);
-const gifsicle = require('gifsicle');
-const { admin } = require('./config/firebase');
+const { admin } = firebaseConfig;
 const execAsync = promisify(exec);
 
 const db = admin.firestore();

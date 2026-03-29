@@ -5,23 +5,26 @@ import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentP
 const CURRENT_STATE_ROWS = [
   ['Next API shared helper', '`src/lib/firebase-admin.ts`', 'The helper resolves credentials correctly in code, but Netlify production `Next.js Server Handler` was observed not receiving the Firebase server env vars at all.'],
   ['Netlify dynamic helper', '`netlify/functions/config/firebase.js`', 'Now delegates to the shared registry and is the currently proven production-safe Firebase runtime on Netlify.'],
+  ['Bridged Next API runtime', '`netlify/functions/firebase-next-api.ts`', 'Executes original Firebase-backed Next API handlers on the validated Netlify function runtime while preserving the public `/api/*` URL shape.'],
   ['Netlify service-account helper', '`netlify/functions/utils/getServiceAccount.ts`', 'Compatibility wrapper for function flows that still need a typed helper surface; it now resolves through the shared core.'],
   ['Mitigated audio APIs', '`/api/vision-pro/reset-sounds` and `/api/audio/run-alerts`', 'Both public routes now redirect to Netlify functions, which restored Nora audio in production without changing the public API shape.'],
 ];
 
 const PRODUCTION_AUDIT_ROWS = [
   ['Confirmed live runtime behavior', '`Next.js Server Handler`', 'A live production request logged `hasSecretKey=false`, `hasClientEmail=false`, and `hasProjectId=false` for the Firebase envs.'],
-  ['Routes already mitigated', '`2` public audio APIs', '`/api/vision-pro/reset-sounds` and `/api/audio/run-alerts` now bypass the Next runtime and run as Netlify functions.'],
+  ['Routes now mitigated', '`36` Firebase-backed Next API routes', 'The current audit shows the entire discovered Firebase-backed Next API route set is now behind either dedicated Netlify-function redirects or the shared `firebase-next-api` bridge.'],
+  ['Dedicated public route cutovers', '`2` public audio APIs', '`/api/vision-pro/reset-sounds` and `/api/audio/run-alerts` now bypass the Next runtime and run as dedicated Netlify functions.'],
   ['Proxy risk now mitigated', '`/api/pulsecheck/functions/[name]`', 'The shared PulseCheck proxy previously loaded Netlify function modules inside Next. It now forwards supported calls to `/.netlify/functions/*` upstream instead.'],
-  ['Routes still at risk', '`36` Firebase-backed Next API routes', 'These still rely on the current Netlify Next runtime seeing Firebase env vars, which is unproven and likely broken on production.'],
+  ['Remaining credential-runtime risk', '`0` audited routes', 'The current audit no longer has Firebase-backed Next API routes still exposed to the raw Netlify Next runtime credential failure.'],
   ['Audit artifact', '`docs/firebase-next-api-runtime-audit.md`', 'Tracks the current route inventory, confirmed production finding, and migration order for the remaining Next API routes.'],
 ];
 
 const TARGET_COMPONENT_ROWS = [
   ['Canonical credential source', '`src/lib/server/firebase/credential-source.ts`', 'Normalizes env input and resolves the active Firebase Admin credential payload for prod or dev mode.'],
   ['Canonical app registry', '`src/lib/server/firebase/app-registry.ts`', 'Owns all `admin.initializeApp(...)` calls and returns stable named admin apps.'],
-  ['Next runtime adapter', '`src/lib/firebase-admin.ts`', 'Still the shared wrapper for Next code, but Netlify production should not be considered validated for Firebase-backed Next API routes without a runtime audit.'],
+  ['Next runtime adapter', '`src/lib/firebase-admin.ts`', 'Still the shared wrapper for Next code, but Firebase-backed production routes should flow through either the shared bridge or an explicit Netlify-function redirect.'],
   ['Netlify runtime adapter', '`netlify/functions/config/firebase.js`', 'Thin adapter for `netlify/functions/**`; this is the currently validated production surface for Firebase-backed APIs on Netlify.'],
+  ['Next bridge adapter', '`netlify/functions/firebase-next-api.ts`', 'Converts Netlify events into Next-style requests so existing Firebase-backed Next handlers can execute on the validated function runtime.'],
   ['Secret Manager bridge', '`src/lib/secretManager.ts`', 'Should reuse the same credential-source logic instead of reparsing Firebase env vars independently.'],
   ['Guardrail layer', 'CI grep / lint rule', 'Prevents any new route or function from reading raw Firebase credential env vars or calling `admin.initializeApp(...)` directly.'],
 ];
@@ -36,8 +39,9 @@ const ENV_CONTRACT_ROWS = [
 ];
 
 const RUNTIME_RULE_ROWS = [
-  ['Next API on current Netlify production', 'Treat as at-risk unless redirected or explicitly proven', 'The live `Next.js Server Handler` was observed missing all Firebase server env vars during a real production request.'],
+  ['Next API on current Netlify production', 'Do not expose Firebase-backed routes directly on the raw Next runtime', 'The live `Next.js Server Handler` was observed missing all Firebase server env vars during a real production request.'],
   ['Netlify production functions', 'Use shared resolver + shared app registry', 'This is the validated production runtime for Firebase-backed APIs on the current stack. Fail closed if no valid credential resolves.'],
+  ['Bridged Firebase Next APIs', 'Run through `firebase-next-api` or a dedicated function redirect', 'This preserves public route shape while keeping execution on the validated Netlify function runtime.'],
   ['Local development', 'Allow explicit dev-project service account first', 'If `DEV_FIREBASE_SERVICE_ACCOUNT` exists, it wins for forced-dev or local-dev Firebase work.'],
   ['PulseCheck request-scoped dev routing', 'Preserve current forced-dev logic', 'Continue honoring the current localhost / override-header behavior, but let the shared registry decide which named app to return.'],
   ['Future ADC path', 'Add only in the shared resolver', 'If Cloud Run or another Google-hosted runtime is introduced later, ADC should be layered in once, not per route.'],
@@ -46,10 +50,11 @@ const RUNTIME_RULE_ROWS = [
 const FILE_SCOPE_ROWS = [
   ['Mitigated public route', '`netlify/functions/vision-pro-reset-sounds.js`', 'Owns the production-safe Firebase-backed implementation behind `/api/vision-pro/reset-sounds`.'],
   ['Mitigated sibling route', '`netlify/functions/audio-run-alerts.js`', 'Owns the production-safe Firebase-backed implementation behind `/api/audio/run-alerts`.'],
+  ['Shared bridge route', '`netlify/functions/firebase-next-api.ts`', 'Covers the remaining Firebase-backed Next API families that need public `/api/*` continuity without raw Next-runtime execution.'],
   ['Current Next entrypoint', '`src/lib/firebase-admin.ts`', 'Becomes the only approved Firebase Admin import for Next API routes.'],
   ['Current Netlify entrypoint', '`netlify/functions/config/firebase.js`', 'Becomes the only approved Firebase Admin entrypoint for Netlify functions that need request-aware prod/dev switching.'],
   ['Migration utility', '`netlify/functions/utils/getServiceAccount.ts`', 'Should either delegate to the shared resolver or be retired after migration.'],
-  ['Route audit artifact', '`docs/firebase-next-api-runtime-audit.md`', 'Records the remaining Firebase-backed Next API routes that should be redirected or migrated off the current Netlify Next runtime.'],
+  ['Route audit artifact', '`docs/firebase-next-api-runtime-audit.md`', 'Records the fully mitigated route inventory, the bridge/redirect strategy, and the live probe expectations for ongoing verification.'],
 ];
 
 const PHASE_STEPS = [
@@ -70,7 +75,7 @@ const PHASE_STEPS = [
   },
   {
     title: 'Phase 3 - Next API standardization',
-    body: 'Audit all `src/pages/api/**` routes and decide which ones should be redirected to Netlify functions versus which ones warrant a deeper runtime/env solution for the Next handler.',
+    body: 'Audit all `src/pages/api/**` routes and move Firebase-backed families behind either the shared `firebase-next-api` bridge or dedicated Netlify-function redirects.',
     owner: 'Web platform',
   },
   {
@@ -89,7 +94,7 @@ const PHASE_DETAIL_ROWS = [
   ['0', 'Contract lock', 'Define canonical Netlify env vars, migration aliases, app naming, log fields, and fail-closed rules. Update handbook and operator docs before touching runtime code.', 'Spec approved, env contract written, migration rules explicit.'],
   ['1', 'Shared core', 'Create shared credential-source and app-registry modules. Refactor `src/lib/firebase-admin.ts`, `netlify/functions/config/firebase.js`, and `src/lib/secretManager.ts` to consume them.', 'One credential parser and one app registry exist; adapters are thin.'],
   ['2', 'Critical routes', 'Cut over `vision-pro/reset-sounds` and `audio/run-alerts` to Netlify functions behind redirects. Verify the public URLs still work and Nora audio loads live.', 'Reset Chamber and run-alert endpoints resolve credentials on the validated Netlify function runtime.'],
-  ['3', 'Next API audit', 'Search `src/pages/api/**` for Firebase-backed routes still running on the Netlify Next runtime. Redirect or migrate the highest-risk paths first.', 'At-risk Firebase-backed Next API routes are inventoried and shrinking.'],
+  ['3', 'Next API audit', 'Search `src/pages/api/**` for Firebase-backed routes still running on the Netlify Next runtime. Redirect them behind the shared bridge or dedicated functions.', 'Audited Firebase-backed Next API routes no longer execute directly on the raw Next runtime in production.'],
   ['4', 'Netlify audit', 'Search `netlify/functions/**` for direct Firebase Admin init. Migrate high-risk functions first, then the rest in batches.', 'Netlify functions use the adapter or an approved wrapper only.'],
   ['5', 'Guardrails', 'Add CI grep checks, runtime logging consistency, migration warnings for legacy env use, and remove obsolete helpers once usage reaches zero.', 'No new bypasses can land, and legacy paths have a removal plan.'],
 ];
@@ -110,7 +115,8 @@ const IMPLEMENTATION_TASK_ROWS = [
   ['Refactor Next adapter', 'Make `src/lib/firebase-admin.ts` a thin wrapper around the shared registry.'],
   ['Refactor Netlify adapter', 'Make `netlify/functions/config/firebase.js` call the shared registry while preserving forced-dev request behavior.'],
   ['Refactor Secret Manager bridge', 'Make `src/lib/secretManager.ts` consume the shared credential source instead of reparsing env vars.'],
-  ['Patch critical routes', 'Update `src/pages/api/vision-pro/reset-sounds.ts` and `src/pages/api/audio/run-alerts.ts` to import the shared adapter.'],
+  ['Patch critical routes', 'Update `src/pages/api/vision-pro/reset-sounds.ts` and `src/pages/api/audio/run-alerts.ts` to import the shared adapter and route them through dedicated Netlify functions.'],
+  ['Bridge route families', 'Keep Firebase-backed Next API families reachable via `/api/*` while redirecting them to `netlify/functions/firebase-next-api.ts`.'],
   ['Run codebase audit', 'Search for direct `firebase-admin` imports and inline `admin.initializeApp(...)` blocks in `src/pages/api/**` and `netlify/functions/**`.'],
   ['Add CI guardrails', 'Fail builds if direct Firebase env access or `admin.initializeApp(...)` appears outside approved modules.'],
   ['Document operator contract', 'Update handbook and setup docs with canonical env names, migration rules, and log expectations.'],
@@ -127,7 +133,7 @@ export default function FirebaseAdminCredentialArchitectureTab() {
         highlights={[
           {
             title: 'One Credential Contract',
-            body: 'Server code should converge on `FIREBASE_SERVICE_ACCOUNT` and `DEV_FIREBASE_SERVICE_ACCOUNT` as the canonical credential surfaces.',
+            body: 'Server code should converge on the shared compact Netlify contract (`FIREBASE_SECRET_KEY`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PROJECT_ID`) with optional service-account JSON support kept inside the resolver only.',
           },
           {
             title: 'One Parsing Layer',
@@ -136,6 +142,10 @@ export default function FirebaseAdminCredentialArchitectureTab() {
           {
             title: 'One App Registry',
             body: 'All `admin.initializeApp(...)` calls should live in one shared registry that owns named prod/dev app reuse.',
+          },
+          {
+            title: 'One Production Runtime',
+            body: 'Firebase-backed production APIs should execute on Netlify functions, either directly or through the shared `firebase-next-api` bridge.',
           },
         ]}
       />
@@ -163,18 +173,20 @@ export default function FirebaseAdminCredentialArchitectureTab() {
           <InfoCard
             title="Required Architectural Shift"
             accent="green"
-            body="Credential shape should remain an implementation detail of one shared resolver, and Firebase-backed public APIs on Netlify should prefer the validated function runtime behind `/api/*` redirects."
+            body="Credential shape should remain an implementation detail of one shared resolver, and Firebase-backed public APIs on Netlify should execute on the validated function runtime behind redirects or the shared bridge."
           />
         </CardGrid>
       </SectionBlock>
 
       <SectionBlock icon={AlertTriangle} title="Production Runtime Audit">
         <DataTable columns={['Finding', 'Surface', 'What We Know']} rows={PRODUCTION_AUDIT_ROWS} />
-        <BulletList
+      <BulletList
           items={[
             'The production-safe pattern is now proven live for the Nora audio endpoints.',
-            'The audit script `npm run audit:firebase-next-api` reports which Firebase-backed Next API routes are still unmitigated.',
-            'The route-by-route inventory and migration notes live in `docs/firebase-next-api-runtime-audit.md`.',
+            'The audit script `npm run audit:firebase-next-api` now reports zero remaining audited routes still exposed to the raw Netlify Next runtime.',
+            'The route-by-route inventory, bridge strategy, and live probe notes live in `docs/firebase-next-api-runtime-audit.md`.',
+            'Representative live smoke probes now exist in `npm run probe:firebase-next-api:live` to catch any return of the old credential failure signature.',
+            'The current production model no longer depends on inline env injection for Firebase-backed Next API routes; the bridge and dedicated Netlify functions are the deployment-safe path.',
           ]}
         />
       </SectionBlock>
@@ -205,12 +217,12 @@ export default function FirebaseAdminCredentialArchitectureTab() {
           <InfoCard
             title="Approved Entry Points"
             accent="blue"
-            body="Next API routes should import the Next adapter. Netlify functions should import the Netlify adapter. Shared core modules sit underneath both. Nothing else should initialize Firebase Admin."
+            body="Next API routes can keep their existing handler code, but Firebase-backed production traffic should reach them through the shared bridge or a dedicated Netlify-function redirect. Shared core modules sit underneath both."
           />
           <InfoCard
             title="Adapter Strategy"
             accent="amber"
-            body="Two runtime adapters are acceptable because Next and Netlify have different request shapes. Two credential parsers are not acceptable."
+            body="Two runtime adapters are acceptable because Next and Netlify have different request shapes. The bridge exists to keep the public API shape while still executing on the validated function runtime. Two credential parsers are not acceptable."
           />
         </CardGrid>
       </SectionBlock>

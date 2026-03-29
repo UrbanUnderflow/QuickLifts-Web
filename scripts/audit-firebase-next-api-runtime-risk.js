@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const API_ROOT = path.join(process.cwd(), 'src/pages/api');
-const NETLIFY_TOML = path.join(process.cwd(), 'netlify.toml');
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+const API_ROOT = path.join(PROJECT_ROOT, 'src/pages/api');
+const NETLIFY_TOML = path.join(PROJECT_ROOT, 'netlify.toml');
 const FILE_EXTENSIONS = new Set(['.js', '.ts', '.tsx', '.mjs', '.cjs']);
 const FIREBASE_NEXT_PATTERNS = [
   'lib/firebase-admin',
@@ -32,7 +33,7 @@ function walkDirectory(dirPath, results = []) {
 }
 
 function toRoute(filePath) {
-  const relativePath = path.relative(path.join(process.cwd(), 'src/pages'), filePath).split(path.sep).join('/');
+  const relativePath = path.relative(path.join(PROJECT_ROOT, 'src/pages'), filePath).split(path.sep).join('/');
   return `/${relativePath}`
     .replace(/\.(?:js|ts|tsx|mjs|cjs)$/, '')
     .replace(/\/index$/, '');
@@ -46,7 +47,8 @@ function collectFirebaseNextApiRoutes() {
   return walkDirectory(API_ROOT)
     .filter((filePath) => {
       const content = fs.readFileSync(filePath, 'utf8');
-      return FIREBASE_NEXT_PATTERNS.some((pattern) => content.includes(pattern));
+      return FIREBASE_NEXT_PATTERNS.some((pattern) => content.includes(pattern))
+        && /export\s+default\s+/m.test(content);
     })
     .map(toRoute)
     .sort();
@@ -82,16 +84,46 @@ function collectNetlifyFunctionRedirects() {
   return redirects;
 }
 
+function toConcreteRouteSample(route) {
+  return route.replace(/\[([^\]]+)\]/g, (_, paramName) => {
+    const normalized = String(paramName || 'sample')
+      .replace(/[^a-z0-9]+/gi, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase();
+    return normalized || 'sample';
+  });
+}
+
+function redirectPatternToRegex(pattern) {
+  const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const withWildcards = escaped
+    .replace(/:([A-Za-z0-9_]+)/g, '[^/]+')
+    .replace(/\\\*/g, '.*');
+  return new RegExp(`^${withWildcards}$`);
+}
+
+function findRedirectForRoute(route, redirects) {
+  const concreteRoute = toConcreteRouteSample(route);
+
+  for (const [from, target] of redirects.entries()) {
+    if (redirectPatternToRegex(from).test(concreteRoute)) {
+      return { route, target, redirectPattern: from };
+    }
+  }
+
+  return null;
+}
+
 function main() {
   const routes = collectFirebaseNextApiRoutes();
   const redirects = collectNetlifyFunctionRedirects();
 
   const mitigated = routes
-    .filter((route) => redirects.has(route))
-    .map((route) => ({ route, target: redirects.get(route) }));
+    .map((route) => findRedirectForRoute(route, redirects))
+    .filter(Boolean);
 
   const atRisk = routes
-    .filter((route) => !redirects.has(route))
+    .filter((route) => !findRedirectForRoute(route, redirects))
     .map((route) => ({ route }));
 
   const report = {
@@ -118,7 +150,7 @@ function main() {
     console.log('');
     console.log('[firebase-next-api-runtime-audit] Mitigated routes');
     for (const item of mitigated) {
-      console.log(`- ${item.route} -> ${item.target}`);
+      console.log(`- ${item.route} -> ${item.target} (${item.redirectPattern})`);
     }
   }
 

@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import {
+  buildEmailDedupeKey,
   getBaseSiteUrl,
   resolveRecipient,
   resolveSequenceTemplate,
@@ -16,7 +17,9 @@ type SendResponse = {
 type RequestBody = {
   coachEmail?: string;
   coachName?: string;
+  coachUserId?: string;
   athleteName?: string;
+  athleteId?: string;
   toEmail?: string;
   firstName?: string;
   isTest?: boolean;
@@ -79,7 +82,9 @@ export const handler: Handler = async (event) => {
     const {
       coachEmail,
       coachName,
+      coachUserId,
       athleteName = 'An athlete',
+      athleteId,
       toEmail,
       firstName,
       isTest,
@@ -127,6 +132,10 @@ export const handler: Handler = async (event) => {
       },
     });
 
+    const idempotencyKey = !isTest
+      ? buildEmailDedupeKey(['coach-connection-v1', coachUserId || recipient.toEmail, athleteId || athleteName])
+      : '';
+
     const sendResult = await sendBrevoTransactionalEmail({
       toEmail: recipient.toEmail,
       toName: recipient.toName,
@@ -134,6 +143,15 @@ export const handler: Handler = async (event) => {
       htmlContent: template.html,
       tags: ['coach-connection', isTest ? 'test' : ''],
       scheduledAt,
+      idempotencyKey,
+      idempotencyMetadata: idempotencyKey
+        ? {
+            sequence: 'coach-connection-v1',
+            coachUserId: coachUserId || null,
+            athleteId: athleteId || null,
+            toEmail: recipient.toEmail,
+          }
+        : undefined,
     });
 
     if (!sendResult.success) {
