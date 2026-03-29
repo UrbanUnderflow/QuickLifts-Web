@@ -27,8 +27,18 @@ type LockState = {
   messageId?: string;
 };
 
+type RecipientDailyState = {
+  sentCount?: number;
+  lastSentAt?: any;
+  lastSequence?: string;
+  lastMessageId?: string;
+  runId?: string;
+  claimedAt?: any;
+};
+
 const EMAIL_SEND_LOCK_COLLECTION = 'email-send-idempotency';
 const EMAIL_SEQUENCE_LOCK_COLLECTION = 'email-sequence-locks';
+const EMAIL_RECIPIENT_DAILY_COLLECTION = 'email-recipient-daily-limits';
 const DEFAULT_EMAIL_LOCK_STALE_MS = 2 * 60 * 60 * 1000;
 
 function toText(value: any): string {
@@ -76,6 +86,132 @@ function getNestedValue(source: Record<string, any>, path: string): any {
 
 export function buildEmailDedupeKey(parts: any[]): string {
   return parts.map(normalizeDedupePart).filter(Boolean).join('::');
+}
+
+function normalizeEmailAddress(email: string): string {
+  return String(email || '').trim().toLowerCase();
+}
+
+function getUtcDateKey(value?: string | Date | null): string {
+  const date = value ? new Date(value) : new Date();
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  const year = safeDate.getUTCFullYear();
+  const month = String(safeDate.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(safeDate.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+async function claimRecipientDailyQuota(args: {
+  toEmail: string;
+  runId: string;
+  nowMs: number;
+  dailyLimit: number;
+  scheduledAt?: string;
+  metadata?: Record<string, any>;
+}): Promise<{ status: 'claimed' | 'blocked' }> {
+  const db = await getFirestore();
+  const recipientKey = buildEmailDedupeKey([normalizeEmailAddress(args.toEmail), getUtcDateKey(args.scheduledAt)]);
+  const docRef = db.collection(EMAIL_RECIPIENT_DAILY_COLLECTION).doc(recipientKey);
+
+  return db.runTransaction(async (tx) => {
+    const snap = (await tx.get(docRef)) as any;
+    const data = (snap.data() || {}) as RecipientDailyState;
+    const sentCount = Number(data.sentCount || 0) || 0;
+
+    if (sentCount >= args.dailyLimit) {
+      return { status: 'blocked' as const };
+    }
+
+    if (data.runId && data.runId !== args.runId) {
+      const claimedAtMs = toMillis(data.claimedAt);
+      if (claimedAtMs !== null && args.nowMs - claimedAtMs < DEFAULT_EMAIL_LOCK_STALE_MS) {
+        return { status: 'blocked' as const };
+      }
+    }
+
+    tx.set(
+      docRef,
+      {
+        ...(args.metadata || {}),
+        recipient: normalizeEmailAddress(args.toEmail),
+        dayKey: getUtcDateKey(args.scheduledAt),
+        runId: args.runId,
+        claimedAt: new Date(args.nowMs),
+        updatedAt: new Date(args.nowMs),
+      } as any,
+      { merge: true } as any
+    );
+
+    return { status: 'claimed' as const };
+  });
+}
+
+async function finalizeRecipientDailyQuota(args: {
+  toEmail: string;
+  runId: string;
+  messageId?: string;
+  scheduledAt?: string;
+  metadata?: Record<string, any>;
+}): Promise<void> {
+  const db = await getFirestore();
+  const FieldValue = initAdmin().firestore.FieldValue;
+  const recipientKey = buildEmailDedupeKey([normalizeEmailAddress(args.toEmail), getUtcDateKey(args.scheduledAt)]);
+  const docRef = db.collection(EMAIL_RECIPIENT_DAILY_COLLECTION).doc(recipientKey);
+
+  await db.runTransaction(async (tx) => {
+    const snap = (await tx.get(docRef)) as any;
+    const data = (snap.data() || {}) as RecipientDailyState;
+
+    if (data.runId && data.runId !== args.runId) {
+      return;
+    }
+
+    tx.set(
+      docRef,
+      {
+        ...(args.metadata || {}),
+        recipient: normalizeEmailAddress(args.toEmail),
+        dayKey: getUtcDateKey(args.scheduledAt),
+        sentCount: (Number(data.sentCount || 0) || 0) + 1,
+        lastSentAt: new Date(),
+        lastMessageId: args.messageId || null,
+        runId: FieldValue.delete(),
+        claimedAt: FieldValue.delete(),
+        updatedAt: new Date(),
+      } as any,
+      { merge: true } as any
+    );
+  });
+}
+
+async function releaseRecipientDailyQuota(args: {
+  toEmail: string;
+  runId: string;
+  scheduledAt?: string;
+}): Promise<void> {
+  const db = await getFirestore();
+  const FieldValue = initAdmin().firestore.FieldValue;
+  const recipientKey = buildEmailDedupeKey([normalizeEmailAddress(args.toEmail), getUtcDateKey(args.scheduledAt)]);
+  const docRef = db.collection(EMAIL_RECIPIENT_DAILY_COLLECTION).doc(recipientKey);
+
+  await db.runTransaction(async (tx) => {
+    const snap = (await tx.get(docRef)) as any;
+    const data = (snap.data() || {}) as RecipientDailyState;
+
+    if (!data.runId || data.runId !== args.runId) {
+      return;
+    }
+
+    tx.set(
+      docRef,
+      {
+        runId: FieldValue.delete(),
+        claimedAt: FieldValue.delete(),
+        updatedAt: new Date(),
+      } as any,
+      { merge: true } as any
+    );
+  });
 }
 
 async function claimGlobalLock(args: {
@@ -435,6 +571,9 @@ export async function sendBrevoTransactionalEmail(args: {
   scheduledAt?: string;
   idempotencyKey?: string;
   idempotencyMetadata?: Record<string, any>;
+  bypassDailyRecipientLimit?: boolean;
+  dailyRecipientLimit?: number;
+  dailyRecipientMetadata?: Record<string, any>;
 }): Promise<SequenceEmailSendResult> {
   const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
   if (!apiKey) {
@@ -449,6 +588,8 @@ export async function sendBrevoTransactionalEmail(args: {
   const senderName = process.env.BREVO_SENDER_NAME || 'Pulse';
   const nowMs = Date.now();
   const runId = `brevo-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
+  const dailyRecipientLimit = Math.max(1, Number(args.dailyRecipientLimit || 1) || 1);
+  const dailyRecipientMetadata = args.dailyRecipientMetadata || args.idempotencyMetadata;
 
   if (args.idempotencyKey) {
     const claimResult = await claimGlobalLock({
@@ -461,6 +602,28 @@ export async function sendBrevoTransactionalEmail(args: {
 
     if (claimResult.status === 'already_sent' || claimResult.status === 'in_progress') {
       return { success: true, skipped: true, messageId: claimResult.messageId };
+    }
+  }
+
+  if (!args.bypassDailyRecipientLimit) {
+    const dailyQuotaResult = await claimRecipientDailyQuota({
+      toEmail: args.toEmail,
+      runId,
+      nowMs,
+      dailyLimit: dailyRecipientLimit,
+      scheduledAt: args.scheduledAt,
+      metadata: dailyRecipientMetadata,
+    });
+
+    if (dailyQuotaResult.status === 'blocked') {
+      if (args.idempotencyKey) {
+        await releaseGlobalLock({
+          collectionName: EMAIL_SEND_LOCK_COLLECTION,
+          dedupeKey: args.idempotencyKey,
+          runId,
+        }).catch(() => undefined);
+      }
+      return { success: true, skipped: true };
     }
   }
 
@@ -499,6 +662,13 @@ export async function sendBrevoTransactionalEmail(args: {
         runId,
       }).catch(() => undefined);
     }
+    if (!args.bypassDailyRecipientLimit) {
+      await releaseRecipientDailyQuota({
+        toEmail: args.toEmail,
+        runId,
+        scheduledAt: args.scheduledAt,
+      }).catch(() => undefined);
+    }
     return {
       success: false,
       error: errJson?.message || `Brevo API error (${resp.status})`,
@@ -513,6 +683,15 @@ export async function sendBrevoTransactionalEmail(args: {
       runId,
       messageId: data?.messageId,
       metadata: args.idempotencyMetadata,
+    }).catch(() => undefined);
+  }
+  if (!args.bypassDailyRecipientLimit) {
+    await finalizeRecipientDailyQuota({
+      toEmail: args.toEmail,
+      runId,
+      messageId: data?.messageId,
+      scheduledAt: args.scheduledAt,
+      metadata: dailyRecipientMetadata,
     }).catch(() => undefined);
   }
   return { success: true, messageId: data?.messageId };

@@ -174,6 +174,7 @@ async function sendSingleWinnerEmail(args: {
     idempotencyKey: !args.isTest
       ? buildEmailDedupeKey(['winner-notification-v1', args.challengeId || '', args.winner.userId || recipient.toEmail, rank])
       : '',
+    bypassDailyRecipientLimit: true,
     idempotencyMetadata: !args.isTest
       ? {
           sequence: 'winner-notification-v1',

@@ -150,6 +150,7 @@ export const handler: Handler = async (event) => {
       tags: ['approval', isTest ? 'test' : ''],
       scheduledAt,
       idempotencyKey,
+      bypassDailyRecipientLimit: true,
       idempotencyMetadata: idempotencyKey
         ? {
             sequence: 'approval-v1',

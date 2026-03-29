@@ -494,6 +494,10 @@ export const handler: Handler = async () => {
           subject,
           htmlContent,
           tags: ['protocol-monitoring-alert', ...alerts.map((alert) => alert.kind)],
+          bypassDailyRecipientLimit: true,
+          dailyRecipientMetadata: {
+            sequence: 'protocol-monitoring-alert',
+          },
         }).then((result) => ({ email, result }))
       )
     );

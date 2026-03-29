@@ -272,6 +272,7 @@ export const handler: Handler = async (event) => {
       tags: ['user-welcome', isTest ? 'test' : null].filter(Boolean),
       scheduledAt,
       idempotencyKey,
+      bypassDailyRecipientLimit: true,
       idempotencyMetadata: idempotencyKey
         ? {
             sequence: 'welcome-v1',
