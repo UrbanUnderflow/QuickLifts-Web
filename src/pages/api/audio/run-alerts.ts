@@ -1,5 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import admin from '../../../lib/firebase-admin';
+import firebaseAdminRegistry from '../../../lib/server/firebase/app-registry';
+
+const {
+  admin,
+  ensureDefaultFirebaseAdminApp,
+} = firebaseAdminRegistry as any;
 
 interface RunAlertCue {
   cueKey: string;
@@ -22,6 +27,13 @@ export default async function handler(
   }
 
   try {
+    ensureDefaultFirebaseAdminApp({
+      mode: 'prod',
+      runtime: 'next-api',
+      allowApplicationDefault: process.env.NODE_ENV !== 'production',
+      failClosed: process.env.NODE_ENV === 'production',
+    });
+
     const firestore = admin.firestore();
     const snapshot = await firestore
       .collection('sim-audio-assets')
@@ -34,7 +46,7 @@ export default async function handler(
 
     const cuesByTarget = new Map<string, RunAlertCue>();
 
-    snapshot.docs.forEach((document) => {
+    snapshot.docs.forEach((document: any) => {
       const data = document.data();
       const cue = {
         cueKey: data.cueKey as string,

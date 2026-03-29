@@ -23,7 +23,12 @@ function loadResetSoundsModule(adminMock) {
     compiled: compiledAudioRuntime,
     fileName: 'reset-sounds.js',
     mocks: {
-      '/lib/firebase-admin': adminMock,
+      '/server/firebase/app-registry': {
+        admin: adminMock,
+        ensureDefaultFirebaseAdminApp() {
+          return { name: '[DEFAULT]' };
+        },
+      },
     },
   });
 }
@@ -33,7 +38,12 @@ function loadRunAlertsModule(adminMock) {
     compiled: compiledAudioRuntime,
     fileName: 'run-alerts.js',
     mocks: {
-      '/lib/firebase-admin': adminMock,
+      '/server/firebase/app-registry': {
+        admin: adminMock,
+        ensureDefaultFirebaseAdminApp() {
+          return { name: '[DEFAULT]' };
+        },
+      },
     },
   });
 }
