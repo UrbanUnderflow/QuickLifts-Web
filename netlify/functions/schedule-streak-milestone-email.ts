@@ -63,6 +63,7 @@ function buildMilestoneDedupeKey(data: Record<string, any>, docId: string, miles
 
 async function claimMilestoneSend(args: {
   docRef: any;
+  userId?: string;
   milestone: number;
   runId: string;
   dedupeKey: string;
@@ -101,6 +102,40 @@ async function claimMilestoneSend(args: {
       const claimedAtMs = toMillis(lockData.claimedAt);
       const isFreshClaim = claimedAtMs !== null && args.nowMs - claimedAtMs < CLAIM_STALE_MS;
       if (isFreshClaim) {
+        return false;
+      }
+    }
+
+    if (args.userId) {
+      const siblingSnap = (await tx.get(
+        db.collection('user-challenge').where('userId', '==', args.userId).limit(50)
+      )) as any;
+
+      const siblingAlreadySent = siblingSnap.docs.find((candidate: any) => {
+        const candidateData = (candidate.data() || {}) as Record<string, any>;
+        const candidateState = (candidateData.emailSequenceState || {}) as Record<string, any>;
+        const candidateSent = ((candidateState.streakMilestonesSent || {}) as Record<string, any>) || {};
+        return candidate.id !== args.docRef.id && candidateSent[String(args.milestone)];
+      });
+
+      if (siblingAlreadySent) {
+        const siblingData = (siblingAlreadySent.data() || {}) as Record<string, any>;
+        const siblingState = (siblingData.emailSequenceState || {}) as Record<string, any>;
+        const siblingSent = ((siblingState.streakMilestonesSent || {}) as Record<string, any>) || {};
+
+        tx.set(
+          lockRef,
+          {
+            dedupeKey: args.dedupeKey,
+            milestone: args.milestone,
+            recoveredFromDocState: true,
+            sentAt: siblingSent[String(args.milestone)] || new Date(args.nowMs),
+            sourceDocId: siblingAlreadySent.id,
+            updatedAt: new Date(args.nowMs),
+          } as any,
+          { merge: true } as any
+        );
+
         return false;
       }
     }
@@ -338,6 +373,7 @@ export const handler: Handler = async () => {
 
       const claimed = await claimMilestoneSend({
         docRef: doc.ref,
+        userId: data.userId,
         milestone,
         runId,
         dedupeKey,
