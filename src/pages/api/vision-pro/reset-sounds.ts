@@ -1,5 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import admin from '../../../lib/firebase-admin';
+import firebaseAdminRegistry from '../../../lib/server/firebase/app-registry';
+
+const {
+  admin,
+  ensureDefaultFirebaseAdminApp,
+} = firebaseAdminRegistry as any;
 
 // ─── Response types ──────────────────────────────────────────────────────────
 
@@ -34,6 +39,13 @@ export default async function handler(
   }
 
   try {
+    ensureDefaultFirebaseAdminApp({
+      mode: 'prod',
+      runtime: 'next-api',
+      allowApplicationDefault: process.env.NODE_ENV !== 'production',
+      failClosed: process.env.NODE_ENV === 'production',
+    });
+
     const firestore = admin.firestore();
 
     const snapshot = await firestore
@@ -46,7 +58,7 @@ export default async function handler(
     }
 
     const cues: SoundCue[] = snapshot.docs
-      .map((doc) => {
+      .map((doc: any) => {
         const data = doc.data();
         return {
           cueKey: data.cueKey as string,
@@ -55,7 +67,7 @@ export default async function handler(
           updatedAt: (data.updatedAt as number) ?? 0,
         };
       })
-      .filter((c) => c.cueKey && c.downloadURL); // drop any malformed docs
+      .filter((c: SoundCue) => c.cueKey && c.downloadURL); // drop any malformed docs
 
     return res.status(200).json({ cues });
   } catch (err) {

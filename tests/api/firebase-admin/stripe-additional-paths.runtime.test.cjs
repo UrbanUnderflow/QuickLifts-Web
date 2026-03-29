@@ -513,3 +513,121 @@ test('initiate-unified-payout creates a payout and logs the payout record for a 
     }
   );
 });
+
+test('get-unified-earnings returns the merged creator and prize payout picture', async () => {
+  const firebaseMock = createFirestoreAdminMock({
+    collections: {
+      users: [
+        {
+          id: 'earn-user',
+          data: {
+            creator: {
+              stripeAccountId: 'acct_earn_1',
+              onboardingStatus: 'complete',
+            },
+            winner: {
+              onboardingStatus: 'complete',
+            },
+          },
+        },
+      ],
+    },
+  });
+
+  const Stripe = createStripeFactory(() => ({
+    accounts: {
+      async retrieve() {
+        return {
+          details_submitted: true,
+          requirements: {
+            currently_due: [],
+            disabled_reason: null,
+          },
+        };
+      },
+    },
+  }));
+
+  await withPatchedEnv(
+    {
+      STRIPE_SECRET_KEY: 'sk_live_123',
+    },
+    async () => {
+      const getEarningsPath = path.join(repoRoot, 'netlify/functions/get-earnings.js');
+      const getWinnerPrizeHistoryPath = path.join(repoRoot, 'netlify/functions/get-winner-prize-history.js');
+      delete require.cache[getEarningsPath];
+      delete require.cache[getWinnerPrizeHistoryPath];
+
+      require.cache[getEarningsPath] = {
+        id: getEarningsPath,
+        filename: getEarningsPath,
+        loaded: true,
+        exports: {
+          handler: async () => ({
+            statusCode: 200,
+            body: JSON.stringify({
+              success: true,
+              earnings: {
+                totalEarned: 400,
+                availableBalance: 250,
+                pendingPayout: 25,
+                roundsSold: 4,
+                recentSales: [{ id: 'sale-1', amount: 50 }],
+              },
+            }),
+          }),
+        },
+      };
+
+      require.cache[getWinnerPrizeHistoryPath] = {
+        id: getWinnerPrizeHistoryPath,
+        filename: getWinnerPrizeHistoryPath,
+        loaded: true,
+        exports: {
+          handler: async () => ({
+            statusCode: 200,
+            body: JSON.stringify({
+              success: true,
+              prizeRecords: [{ id: 'prize-1', amount: 5000 }],
+              summary: {
+                totalEarnings: 5000,
+                pendingAmount: 1000,
+                totalWins: 1,
+              },
+            }),
+          }),
+        },
+      };
+
+      const { handler } = loadJsModule('netlify/functions/get-unified-earnings.js', {
+        './config/firebase': {
+          db: firebaseMock.db,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+          },
+        },
+        stripe: Stripe,
+      });
+
+      try {
+        const response = await handler({
+          httpMethod: 'GET',
+          queryStringParameters: { userId: 'earn-user' },
+        });
+
+        assert.equal(response.statusCode, 200);
+        const body = JSON.parse(response.body);
+        assert.equal(body.success, true);
+        assert.equal(body.earnings.totalBalance, 250);
+        assert.equal(body.earnings.totalEarned, 450);
+        assert.equal(body.earnings.pendingPayout, 35);
+        assert.equal(body.earnings.creatorEarnings.availableBalance, 250);
+        assert.equal(body.earnings.prizeWinnings.totalEarned, 50);
+        assert.equal(body.earnings.canRequestPayout, true);
+      } finally {
+        delete require.cache[getEarningsPath];
+        delete require.cache[getWinnerPrizeHistoryPath];
+      }
+    }
+  );
+});
