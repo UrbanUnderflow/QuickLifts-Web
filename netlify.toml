@@ -22,6 +22,28 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+[[plugins]]
+  package = "netlify-plugin-inline-functions-env"
+  [plugins.inputs]
+    buildEvent = "onBuild"
+    include = [
+      "FIREBASE_SERVICE_ACCOUNT",
+      "FIREBASE_SERVICE_ACCOUNT_KEY",
+      "FIREBASE_SECRET_KEY",
+      "FIREBASE_CLIENT_EMAIL",
+      "FIREBASE_PROJECT_ID",
+      "FIREBASE_PRIVATE_KEY",
+      "FIREBASE_PRIVATE_KEY_1",
+      "FIREBASE_PRIVATE_KEY_2",
+      "FIREBASE_PRIVATE_KEY_3",
+      "FIREBASE_PRIVATE_KEY_4",
+      "DEV_FIREBASE_SERVICE_ACCOUNT",
+      "DEV_FIREBASE_SECRET_KEY",
+      "DEV_FIREBASE_CLIENT_EMAIL",
+      "DEV_FIREBASE_PROJECT_ID",
+      "NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID"
+    ]
+
 # Branded OG images (route through a normal URL so bot user agents aren't blocked by /.netlify/functions)
 # Keeps query params (title/subtitle) intact.
 [[redirects]]
