@@ -3,6 +3,7 @@ const {
   buildFirebaseAdminServiceAccount,
   resolveCredentialSourceSeverity,
   resolveFirebaseAdminCredential,
+  summarizeFirebaseAdminEnvPresence,
 } = require('./credential-source');
 
 const APP_NAMES = {
@@ -55,6 +56,15 @@ function logCredentialResolution({ runtime, appName, resolvedCredential }) {
     source,
     projectId: resolvedCredential?.projectId || null,
   });
+
+  if (source.endsWith(':unresolved')) {
+    logFn('[Firebase Admin] Credential env presence', {
+      runtime: runtime || 'unknown',
+      appName: appName || DEFAULT_APP_LABEL,
+      ...summarizeFirebaseAdminEnvPresence({ mode: resolvedCredential?.mode || 'prod' }),
+    });
+  }
+
   loggedCredentialWarnings.add(logKey);
 }
 
@@ -102,7 +112,7 @@ function initializeFirebaseAdminApp(options = {}) {
 
   if (failClosed) {
     throw new Error(
-      `Firebase Admin credentials unresolved for mode=${mode} runtime=${runtime}. Expected FIREBASE_SERVICE_ACCOUNT${mode === 'dev' ? ' or DEV_FIREBASE_SERVICE_ACCOUNT' : ''} or a supported legacy migration alias.`
+      `Firebase Admin credentials unresolved for mode=${mode} runtime=${runtime}. Checked canonical service-account envs and legacy Netlify aliases. See server logs for presence diagnostics.`
     );
   }
 

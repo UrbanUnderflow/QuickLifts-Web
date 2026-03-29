@@ -221,6 +221,36 @@ function resolveCredentialSourceSeverity(source) {
   return 'info';
 }
 
+function summarizeFirebaseAdminEnvPresence(options = {}) {
+  const mode = options.mode === 'dev' ? 'dev' : 'prod';
+  const sourcePrefix = mode === 'dev' ? 'DEV_FIREBASE' : 'FIREBASE';
+
+  const splitKeyParts = [1, 2, 3, 4].map((index) => `${sourcePrefix}_PRIVATE_KEY_${index}`);
+  const splitKeyPresence = splitKeyParts.map((envName) => Boolean(process.env[envName]));
+
+  return {
+    mode,
+    hasServiceAccount:
+      Boolean(process.env[mode === 'dev' ? 'DEV_FIREBASE_SERVICE_ACCOUNT' : 'FIREBASE_SERVICE_ACCOUNT']) ||
+      false,
+    hasServiceAccountKey: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_KEY),
+    hasSecretKey: Boolean(process.env[mode === 'dev' ? 'DEV_FIREBASE_SECRET_KEY' : 'FIREBASE_SECRET_KEY']),
+    hasPrivateKey: Boolean(process.env[mode === 'dev' ? 'DEV_FIREBASE_PRIVATE_KEY' : 'FIREBASE_PRIVATE_KEY']),
+    hasClientEmail: Boolean(process.env[mode === 'dev' ? 'DEV_FIREBASE_CLIENT_EMAIL' : 'FIREBASE_CLIENT_EMAIL']),
+    hasProjectId: Boolean(
+      process.env[
+        mode === 'dev'
+          ? 'DEV_FIREBASE_PROJECT_ID'
+          : process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true'
+            ? 'NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID'
+            : 'FIREBASE_PROJECT_ID'
+      ]
+    ),
+    splitKeyParts,
+    splitKeyPresence,
+  };
+}
+
 module.exports = {
   DEV_PROJECT_ID,
   PROD_CLIENT_EMAIL,
@@ -230,4 +260,5 @@ module.exports = {
   parseSerializedServiceAccount,
   resolveCredentialSourceSeverity,
   resolveFirebaseAdminCredential,
+  summarizeFirebaseAdminEnvPresence,
 };
