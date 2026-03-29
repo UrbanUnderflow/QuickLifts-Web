@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 
 const {
@@ -344,4 +345,17 @@ test('audio-run-alerts Netlify function dedupes bundle targets and keeps the new
       },
     ],
   });
+});
+
+test('netlify.toml keeps the public audio APIs routed to Netlify functions', () => {
+  const netlifyToml = fs.readFileSync(path.join(repoRoot, 'netlify.toml'), 'utf8');
+
+  assert.match(
+    netlifyToml,
+    /\[\[redirects\]\][\s\S]*from = "\/api\/vision-pro\/reset-sounds"[\s\S]*to = "\/\.netlify\/functions\/vision-pro-reset-sounds"/
+  );
+  assert.match(
+    netlifyToml,
+    /\[\[redirects\]\][\s\S]*from = "\/api\/audio\/run-alerts"[\s\S]*to = "\/\.netlify\/functions\/audio-run-alerts"/
+  );
 });
