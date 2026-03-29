@@ -1,5 +1,8 @@
 const admin = require('firebase-admin');
 
+const PULSECHECK_PROD_PROJECT_ID = 'quicklifts-dd3f1';
+const PULSECHECK_PROD_CLIENT_EMAIL = 'firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com';
+
 // Helper to determine if the request is from localhost (can be passed in when importing the module)
 const isDevMode = (request) => {
   if (!request) return false;
@@ -78,7 +81,7 @@ function initializeNamedAdminApp({ isDev }) {
 
   const projectId = isDev
     ? (process.env.DEV_FIREBASE_PROJECT_ID || 'quicklifts-dev-01')
-    : (process.env.FIREBASE_PROJECT_ID || 'quicklifts-db4f1');
+    : (process.env.FIREBASE_PROJECT_ID || PULSECHECK_PROD_PROJECT_ID);
   const privateKeyId = isDev
     ? process.env.DEV_FIREBASE_PRIVATE_KEY
     : process.env.FIREBASE_PRIVATE_KEY;
@@ -88,7 +91,7 @@ function initializeNamedAdminApp({ isDev }) {
   const privateKey = formatPrivateKey(rawPrivateKey);
   const clientEmail = isDev
     ? process.env.DEV_FIREBASE_CLIENT_EMAIL
-    : (process.env.FIREBASE_CLIENT_EMAIL || 'firebase-adminsdk-1qxb0@quicklifts-db4f1.iam.gserviceaccount.com');
+    : (process.env.FIREBASE_CLIENT_EMAIL || PULSECHECK_PROD_CLIENT_EMAIL);
 
   console.log(`[Firebase Admin] Initializing named app ${appName} for project ${projectId}`);
 
@@ -131,11 +134,11 @@ const initializeFirebaseAdmin = (request) => {
 // Initialize with default settings (will be overridden on first request)
 if (admin.apps.length === 0) {
   // Default to production credentials for initial setup
-  const projectId = process.env.FIREBASE_PROJECT_ID || "quicklifts-db4f1";
+  const projectId = process.env.FIREBASE_PROJECT_ID || PULSECHECK_PROD_PROJECT_ID;
   const privateKeyId = process.env.FIREBASE_PRIVATE_KEY;
   const rawPrivateKey = process.env.FIREBASE_SECRET_KEY || '';
   const privateKey = formatPrivateKey(rawPrivateKey);
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || "firebase-adminsdk-1qxb0@quicklifts-db4f1.iam.gserviceaccount.com";
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || PULSECHECK_PROD_CLIENT_EMAIL;
   
   console.log(`[Firebase Admin] Initial setup with project: ${projectId}`);
   
