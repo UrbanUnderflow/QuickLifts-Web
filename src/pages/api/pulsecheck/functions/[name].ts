@@ -1,33 +1,19 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-type NetlifyFunctionResponse = {
-  statusCode?: number;
-  headers?: Record<string, string>;
-  body?: string;
-  isBase64Encoded?: boolean;
-};
-
-type NetlifyFunctionModule = {
-  handler?: (event: Record<string, any>, context?: Record<string, any>) => Promise<NetlifyFunctionResponse> | NetlifyFunctionResponse;
-  default?: {
-    handler?: (event: Record<string, any>, context?: Record<string, any>) => Promise<NetlifyFunctionResponse> | NetlifyFunctionResponse;
-  };
-};
-
-const FUNCTION_LOADERS: Record<string, () => NetlifyFunctionModule> = {
-  'submit-pulsecheck-checkin': () => require('../../../../../netlify/functions/submit-pulsecheck-checkin.js'),
-  'repair-pulsecheck-daily-assignment': () => require('../../../../../netlify/functions/repair-pulsecheck-daily-assignment.js'),
-  'record-pulsecheck-assignment-event': () => require('../../../../../netlify/functions/record-pulsecheck-assignment-event.js'),
-  'tts-mental-step': () => require('../../../../../netlify/functions/tts-mental-step.ts'),
-  'pulsecheck-chat': () => require('../../../../../netlify/functions/pulsecheck-chat.js'),
-  'pulsecheck-escalation': () => require('../../../../../netlify/functions/pulsecheck-escalation.js'),
-  'oura-auth-start': () => require('../../../../../netlify/functions/oura-auth-start.js'),
-  'oura-callback': () => require('../../../../../netlify/functions/oura-callback.js'),
-  'oura-status': () => require('../../../../../netlify/functions/oura-status.js'),
-  'oura-disconnect': () => require('../../../../../netlify/functions/oura-disconnect.js'),
-  'oura-sync': () => require('../../../../../netlify/functions/oura-sync.js'),
-  'create-pulsecheck-oura-share': () => require('../../../../../netlify/functions/create-pulsecheck-oura-share.js'),
-};
+const SUPPORTED_FUNCTIONS = new Set([
+  'submit-pulsecheck-checkin',
+  'repair-pulsecheck-daily-assignment',
+  'record-pulsecheck-assignment-event',
+  'tts-mental-step',
+  'pulsecheck-chat',
+  'pulsecheck-escalation',
+  'oura-auth-start',
+  'oura-callback',
+  'oura-status',
+  'oura-disconnect',
+  'oura-sync',
+  'create-pulsecheck-oura-share',
+]);
 
 function normalizeQueryValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) {
@@ -35,33 +21,6 @@ function normalizeQueryValue(value: string | string[] | undefined) {
   }
 
   return value;
-}
-
-function buildNetlifyEvent(req: NextApiRequest) {
-  const normalizedQuery = Object.entries(req.query).reduce<Record<string, string>>((accumulator, [key, value]) => {
-    if (key === 'name') return accumulator;
-
-    const normalizedValue = normalizeQueryValue(value);
-    if (typeof normalizedValue === 'string') {
-      accumulator[key] = normalizedValue;
-    }
-
-    return accumulator;
-  }, {});
-
-  return {
-    httpMethod: req.method || 'GET',
-    headers: Object.fromEntries(Object.entries(req.headers).flatMap(([key, value]) => {
-      if (typeof value === 'undefined') return [];
-      return [[key, Array.isArray(value) ? value.join(',') : String(value)]];
-    })),
-    body: typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {}),
-    queryStringParameters: normalizedQuery,
-    pathParameters: {
-      name: normalizeQueryValue(req.query.name),
-    },
-    rawUrl: req.url,
-  };
 }
 
 function resolveSiteOrigin(req: NextApiRequest) {
@@ -77,7 +36,7 @@ function resolveSiteOrigin(req: NextApiRequest) {
   return `${protocol}://${host}`;
 }
 
-async function proxyNetlifyBinaryFunction(name: string, req: NextApiRequest, res: NextApiResponse) {
+async function proxyNetlifyFunction(name: string, req: NextApiRequest, res: NextApiResponse) {
   const targetURL = new URL(`/.netlify/functions/${name}`, resolveSiteOrigin(req));
 
   Object.entries(req.query).forEach(([key, value]) => {
@@ -121,35 +80,6 @@ async function proxyNetlifyBinaryFunction(name: string, req: NextApiRequest, res
   res.send(Buffer.from(arrayBuffer));
 }
 
-async function invokeNetlifyFunction(name: string, req: NextApiRequest) {
-  const loadModule = FUNCTION_LOADERS[name];
-  if (!loadModule) {
-    return {
-      statusCode: 404,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: `Unsupported PulseCheck function: ${name}` }),
-    } satisfies NetlifyFunctionResponse;
-  }
-
-  const loadedModule = loadModule();
-  const resolvedHandler =
-    typeof loadedModule?.handler === 'function'
-      ? loadedModule.handler
-      : typeof loadedModule?.default?.handler === 'function'
-        ? loadedModule.default.handler
-        : null;
-
-  if (!resolvedHandler) {
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: `PulseCheck function ${name} is missing a handler export.` }),
-    } satisfies NetlifyFunctionResponse;
-  }
-
-  return resolvedHandler(buildNetlifyEvent(req), {});
-}
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const requestedName = normalizeQueryValue(req.query.name);
   if (!requestedName) {
@@ -157,31 +87,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
+  if (!SUPPORTED_FUNCTIONS.has(requestedName)) {
+    res.status(404).json({ error: `Unsupported PulseCheck function: ${requestedName}` });
+    return;
+  }
+
   try {
-    if (requestedName === 'tts-mental-step') {
-      await proxyNetlifyBinaryFunction(requestedName, req, res);
-      return;
-    }
-
-    const functionResponse = await invokeNetlifyFunction(requestedName, req);
-    const statusCode = functionResponse?.statusCode || 200;
-
-    Object.entries(functionResponse?.headers || {}).forEach(([headerName, headerValue]) => {
-      if (typeof headerValue === 'string') {
-        res.setHeader(headerName, headerValue);
-      }
-    });
-
-    if (functionResponse?.isBase64Encoded && functionResponse.body) {
-      res.status(statusCode).send(Buffer.from(functionResponse.body, 'base64'));
-      return;
-    }
-
-    res.status(statusCode).send(functionResponse?.body || '');
+    await proxyNetlifyFunction(requestedName, req, res);
   } catch (error) {
-    console.error(`[PulseCheck local proxy] Failed to invoke ${requestedName}:`, error);
+    console.error(`[PulseCheck function proxy] Failed to proxy ${requestedName}:`, error);
     res.status(500).json({
-      error: error instanceof Error ? error.message : 'PulseCheck local proxy failed.',
+      error: error instanceof Error ? error.message : 'PulseCheck function proxy failed.',
     });
   }
 }
