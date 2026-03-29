@@ -1,4 +1,5 @@
 import { Handler, HandlerEvent, HandlerContext, schedule } from "@netlify/functions";
+import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
 
 /**
  * Netlify Scheduled Function: Send Weekly Review Check-in Email
@@ -7,7 +8,6 @@ import { Handler, HandlerEvent, HandlerContext, schedule } from "@netlify/functi
  * Sends an email asking the founder how the week went
  */
 
-const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = "hello@fitwithpulse.ai";
 const SENDER_NAME = "Pulse Review Bot";
 const FOUNDER_EMAIL = "tre@fitwithpulse.ai";
@@ -183,14 +183,6 @@ function getWeeklyCheckinEmailContent(weekNumber: number, monthName: string): st
 const sendWeeklyCheckin: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   console.log("📧 Weekly review check-in triggered");
   
-  if (!BREVO_API_KEY) {
-    console.error('Brevo API key (BREVO_MARKETING_KEY) is not set.');
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ success: false, error: 'Email service not configured' })
-    };
-  }
-
   try {
     const weekNumber = getWeekNumber();
     const monthName = getCurrentMonthName();
@@ -201,59 +193,53 @@ const sendWeeklyCheckin: Handler = async (event: HandlerEvent, context: HandlerC
 
     console.log(`📧 Sending weekly check-in email for Week ${weekNumber} of ${monthName} ${year}`);
 
-    const brevoPayload = {
+    const reviewWeekKey = `${year}-${String(new Date().getMonth() + 1).padStart(2, '0')}-W${weekNumber}`;
+    const sendResult = await sendBrevoTransactionalEmail({
+      toEmail: FOUNDER_EMAIL,
+      toName: FOUNDER_NAME,
+      subject,
+      htmlContent,
       sender: {
         name: SENDER_NAME,
         email: SENDER_EMAIL,
       },
-      to: [
-        {
-          email: FOUNDER_EMAIL,
-          name: FOUNDER_NAME,
-        },
-      ],
-      subject,
-      htmlContent,
       replyTo: {
         email: SENDER_EMAIL,
-        name: SENDER_NAME
+        name: SENDER_NAME,
       },
       headers: {
-        'X-Review-Week': `${year}-${String(new Date().getMonth() + 1).padStart(2, '0')}-W${weekNumber}`,
-        'X-Email-Type': 'weekly-review-checkin'
-      }
-    };
-
-    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "Accept": "application/json",
-        "api-key": BREVO_API_KEY,
-        "Content-Type": "application/json",
+        'X-Review-Week': reviewWeekKey,
+        'X-Email-Type': 'weekly-review-checkin',
       },
-      body: JSON.stringify(brevoPayload),
+      idempotencyKey: buildEmailDedupeKey(['weekly-review-checkin-v1', reviewWeekKey]),
+      idempotencyMetadata: {
+        sequence: 'weekly-review-checkin',
+        reviewWeekKey,
+      },
+      dailyRecipientMetadata: {
+        sequence: 'weekly-review-checkin',
+        reviewWeekKey,
+      },
     });
 
-    if (!response.ok) {
-      const errorBody = await response.json();
-      console.error("Brevo API Error:", response.status, errorBody);
+    if (!sendResult.success) {
+      console.error("Brevo API Error:", sendResult.error);
       return {
-        statusCode: response.status,
+        statusCode: 502,
         body: JSON.stringify({ 
           success: false,
-          error: `Failed to send email: ${errorBody.message || 'Unknown error'}`
+          error: `Failed to send email: ${sendResult.error || 'Unknown error'}`
         })
       };
     }
 
-    const responseData = await response.json();
-    console.log("📧 Weekly check-in email sent successfully:", responseData);
+    console.log("📧 Weekly check-in email sent successfully:", sendResult.messageId);
 
     return {
       statusCode: 200,
       body: JSON.stringify({
         success: true,
-        messageId: responseData.messageId,
+        messageId: sendResult.messageId,
         week: weekNumber,
         month: monthName
       })
@@ -275,4 +261,3 @@ const sendWeeklyCheckin: Handler = async (event: HandlerEvent, context: HandlerC
 // Cron: minute hour day-of-month month day-of-week
 // 0 14 * * 5 = At 14:00 (2pm UTC / 9am EST) on Friday
 export const handler = schedule("0 14 * * 5", sendWeeklyCheckin);
-

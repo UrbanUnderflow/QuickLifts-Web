@@ -11,7 +11,7 @@
  * - BREVO_SENDER_NAME (optional)
  * - SITE_URL (optional) e.g. https://fitwithpulse.ai
  */
-const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
+const { buildEmailDedupeKey, sendBrevoTransactionalEmail } = require('./sendBrevoTransactionalEmail');
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'no-reply@fitwithpulse.ai';
 const SENDER_NAME = process.env.BREVO_SENDER_NAME || 'Pulse';
 
@@ -106,10 +106,6 @@ function renderHtml({ coachName, athleteName, tier, dashboardUrl }) {
 }
 
 async function sendCoachEscalationEmail({ coachEmail, coachName, athleteName, tier, siteUrl }) {
-  if (!BREVO_API_KEY) {
-    console.warn('[sendCoachEscalationEmail] Brevo not configured (missing BREVO_MARKETING_KEY/BREVO_API_KEY)');
-    return { success: false, skipped: true, reason: 'brevo_not_configured' };
-  }
   if (!coachEmail) {
     return { success: false, skipped: true, reason: 'missing_coach_email' };
   }
@@ -128,34 +124,39 @@ async function sendCoachEscalationEmail({ coachEmail, coachName, athleteName, ti
 
   const htmlContent = renderHtml({ coachName, athleteName, tier, dashboardUrl });
 
-  const payload = {
-    sender: { name: SENDER_NAME, email: SENDER_EMAIL },
-    to: [{ email: coachEmail, name: coachName || 'Coach' }],
+  const sendResult = await sendBrevoTransactionalEmail({
+    toEmail: coachEmail,
+    toName: coachName || 'Coach',
     subject,
     htmlContent,
+    sender: { name: SENDER_NAME, email: SENDER_EMAIL },
     replyTo: { name: 'Pulse Team', email: SENDER_EMAIL },
     tags: ['coach-escalation', `tier-${tier}`].filter(Boolean),
-  };
-
-  const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      'api-key': BREVO_API_KEY,
+    idempotencyKey: buildEmailDedupeKey([
+      'coach-escalation-v1',
+      coachEmail,
+      athleteName,
+      tier,
+      new Date().toISOString().slice(0, 10),
+    ]),
+    idempotencyMetadata: {
+      sequence: 'coach-escalation',
+      coachEmail,
+      tier,
     },
-    body: JSON.stringify(payload),
+    dailyRecipientLimit: 5,
+    dailyRecipientMetadata: {
+      sequence: 'coach-escalation',
+      tier,
+    },
   });
 
-  if (!resp.ok) {
-    const errTxt = await resp.text().catch(() => '');
-    console.error('[sendCoachEscalationEmail] Brevo send failed:', resp.status, errTxt);
-    return { success: false, status: resp.status, error: errTxt || 'brevo_send_failed' };
+  if (!sendResult.success) {
+    console.error('[sendCoachEscalationEmail] Brevo send failed:', sendResult.error);
+    return { success: false, error: sendResult.error || 'brevo_send_failed' };
   }
 
-  const data = await resp.json().catch(() => ({}));
-  return { success: true, messageId: data?.messageId };
+  return { success: true, messageId: sendResult.messageId, skipped: sendResult.skipped };
 }
 
 module.exports = { sendCoachEscalationEmail };
-

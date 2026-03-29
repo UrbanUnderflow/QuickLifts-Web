@@ -1,17 +1,12 @@
 import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
+import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
 
-const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
 const SENDER_NAME = "Tremaine @ Pulse Intelligence Labs";
 
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
-  }
-
-  if (!BREVO_API_KEY) {
-    console.error("Brevo API key (BREVO_MARKETING_KEY) is not set.");
-    return { statusCode: 500, body: JSON.stringify({ message: "Email service configuration error." }) };
   }
 
   try {
@@ -229,42 +224,35 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       </html>
     `;
 
-    const brevoPayload = {
+    const sendResult = await sendBrevoTransactionalEmail({
+      toEmail: email,
+      toName: name || email,
+      subject,
+      htmlContent,
       sender: {
         name: SENDER_NAME,
         email: SENDER_EMAIL,
       },
-      to: [
-        {
-          email: email,
-          name: name || email,
-        },
-      ],
-      subject: subject,
-      htmlContent: htmlContent,
-    };
-
-    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "Accept": "application/json",
-        "api-key": BREVO_API_KEY,
-        "Content-Type": "application/json",
+      idempotencyKey: buildEmailDedupeKey(['investor-access-v1', email]),
+      idempotencyMetadata: {
+        sequence: 'investor-access',
+        email,
       },
-      body: JSON.stringify(brevoPayload),
+      bypassDailyRecipientLimit: true,
+      dailyRecipientMetadata: {
+        sequence: 'investor-access',
+      },
     });
 
-    if (!response.ok) {
-      const errorBody = await response.json();
-      console.error("Brevo API Error:", response.status, errorBody);
+    if (!sendResult.success) {
+      console.error("Brevo API Error:", sendResult.error);
       return { 
-        statusCode: response.status,
-        body: JSON.stringify({ message: "Failed to send email via Brevo.", details: errorBody })
+        statusCode: 502,
+        body: JSON.stringify({ message: "Failed to send email via Brevo.", details: sendResult.error })
       };
     }
-    
-    const responseData = await response.json();
-    console.log("Investor access email sent successfully via Brevo:", responseData);
+
+    console.log("Investor access email sent successfully via Brevo:", sendResult.messageId);
 
     return { statusCode: 200, body: JSON.stringify({ message: "Investor access email sent successfully." }) };
 
@@ -281,7 +269,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 };
 
 export { handler };
-
 
 
 

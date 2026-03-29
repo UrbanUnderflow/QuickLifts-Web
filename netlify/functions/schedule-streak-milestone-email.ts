@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
 import { getBaseSiteUrl, toMillis } from './utils/emailSequenceHelpers';
+import { buildStreakMilestoneDedupeKey, findSiblingSentStreakMilestone } from './utils/emailSafety';
 
 const STREAK_MILESTONES = [3, 7, 14, 30];
 const LOOKBACK_DAYS = 31;
@@ -49,16 +50,13 @@ function getNextMilestone(currentStreak: number, sentState: Record<string, any>)
   return Math.max(...candidates);
 }
 
-function normalizeKeyPart(value: any): string {
-  return typeof value === 'string' ? value.trim().toLowerCase() : '';
-}
-
 function buildMilestoneDedupeKey(data: Record<string, any>, docId: string, milestone: number): string {
-  const userId = normalizeKeyPart(data.userId);
-  const email = normalizeKeyPart(data.email);
-  const docKey = normalizeKeyPart(docId);
-
-  return [userId || email || docKey || 'unknown-user', String(milestone)].join('::');
+  return buildStreakMilestoneDedupeKey({
+    userId: data.userId,
+    email: data.email,
+    docId,
+    milestone,
+  });
 }
 
 async function claimMilestoneSend(args: {
@@ -111,26 +109,21 @@ async function claimMilestoneSend(args: {
         db.collection('user-challenge').where('userId', '==', args.userId).limit(50)
       )) as any;
 
-      const siblingAlreadySent = siblingSnap.docs.find((candidate: any) => {
-        const candidateData = (candidate.data() || {}) as Record<string, any>;
-        const candidateState = (candidateData.emailSequenceState || {}) as Record<string, any>;
-        const candidateSent = ((candidateState.streakMilestonesSent || {}) as Record<string, any>) || {};
-        return candidate.id !== args.docRef.id && candidateSent[String(args.milestone)];
+      const siblingAlreadySent = findSiblingSentStreakMilestone({
+        candidates: siblingSnap.docs,
+        currentDocId: args.docRef.id,
+        milestone: args.milestone,
       });
 
       if (siblingAlreadySent) {
-        const siblingData = (siblingAlreadySent.data() || {}) as Record<string, any>;
-        const siblingState = (siblingData.emailSequenceState || {}) as Record<string, any>;
-        const siblingSent = ((siblingState.streakMilestonesSent || {}) as Record<string, any>) || {};
-
         tx.set(
           lockRef,
           {
             dedupeKey: args.dedupeKey,
             milestone: args.milestone,
             recoveredFromDocState: true,
-            sentAt: siblingSent[String(args.milestone)] || new Date(args.nowMs),
-            sourceDocId: siblingAlreadySent.id,
+            sentAt: siblingAlreadySent.sentAt || new Date(args.nowMs),
+            sourceDocId: siblingAlreadySent.sourceDocId,
             updatedAt: new Date(args.nowMs),
           } as any,
           { merge: true } as any

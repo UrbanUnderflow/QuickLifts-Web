@@ -1,7 +1,7 @@
 // Function to send host validation email for prize distribution
 const { db, headers } = require('./config/firebase');
+const { buildEmailDedupeKey, sendBrevoTransactionalEmail } = require('./utils/sendBrevoTransactionalEmail');
 
-const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
 const SENDER_NAME = process.env.BREVO_SENDER_NAME || "Pulse Team";
 // Always use production URL for email links, even in development
@@ -38,17 +38,6 @@ const handler = async (event) => {
         body: JSON.stringify({
           success: false,
           error: 'Firebase database not available'
-        })
-      };
-    }
-
-    if (!BREVO_API_KEY) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({
-          success: false,
-          error: 'Email service not configured'
         })
       };
     }
@@ -453,34 +442,6 @@ const handler = async (event) => {
 
     // Send emails to all valid hosts
     const emailPromises = validHosts.map(async (host) => {
-      const brevoPayload = {
-        sender: {
-          name: SENDER_NAME,
-          email: SENDER_EMAIL,
-        },
-        to: [
-          {
-            email: host.email,
-            name: host.name,
-          },
-        ],
-        bcc: [ { email: 'info@fitwithpulse.ai', name: 'Pulse Info' } ],
-        subject: isRetryAttempt 
-          ? `🔄 RETRY: Prize Distribution Ready - ${challengeTitle}` 
-          : `🏆 Confirm Prize Distribution - ${challengeTitle}`,
-        htmlContent: htmlContent,
-        headers: {
-          'X-Prize-Assignment-ID': prizeAssignmentId,
-          'X-Challenge-ID': challengeId,
-          'X-Email-Type': 'host-validation',
-          'X-Host-ID': host.id
-        },
-        replyTo: {
-          email: SENDER_EMAIL,
-          name: SENDER_NAME
-        }
-      };
-
       console.log('[SendHostValidationEmail] Sending email to host:', {
         to: host.email,
         hostName: host.name,
@@ -489,26 +450,49 @@ const handler = async (event) => {
         prizeAmount
       });
 
-      // Send email via Brevo API
-      const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "api-key": BREVO_API_KEY,
-          "Content-Type": "application/json",
+      const sendResult = await sendBrevoTransactionalEmail({
+        toEmail: host.email,
+        toName: host.name,
+        subject: isRetryAttempt 
+          ? `🔄 RETRY: Prize Distribution Ready - ${challengeTitle}` 
+          : `🏆 Confirm Prize Distribution - ${challengeTitle}`,
+        htmlContent,
+        sender: {
+          name: SENDER_NAME,
+          email: SENDER_EMAIL,
         },
-        body: JSON.stringify(brevoPayload),
+        bcc: [{ email: 'info@fitwithpulse.ai', name: 'Pulse Info' }],
+        headers: {
+          'X-Prize-Assignment-ID': prizeAssignmentId,
+          'X-Challenge-ID': challengeId,
+          'X-Email-Type': 'host-validation',
+          'X-Host-ID': host.id,
+        },
+        replyTo: {
+          email: SENDER_EMAIL,
+          name: SENDER_NAME,
+        },
+        idempotencyKey: buildEmailDedupeKey(['host-validation-v1', prizeAssignmentId, host.id]),
+        idempotencyMetadata: {
+          sequence: 'host-validation',
+          prizeAssignmentId,
+          challengeId,
+          hostId: host.id,
+        },
+        dailyRecipientLimit: 2,
+        dailyRecipientMetadata: {
+          sequence: 'host-validation',
+          challengeId,
+        },
       });
 
-      if (!response.ok) {
-        const errorBody = await response.json();
-        console.error(`Brevo API Error for host ${host.id}:`, response.status, errorBody);
-        return { success: false, host: host.id, error: errorBody.message };
+      if (!sendResult.success) {
+        console.error(`Brevo API Error for host ${host.id}:`, sendResult.error);
+        return { success: false, host: host.id, error: sendResult.error };
       }
 
-      const responseData = await response.json();
-      console.log(`[SendHostValidationEmail] Email sent successfully to ${host.email}:`, responseData);
-      return { success: true, host: host.id, messageId: responseData.messageId };
+      console.log(`[SendHostValidationEmail] Email sent successfully to ${host.email}:`, sendResult.messageId);
+      return { success: true, host: host.id, messageId: sendResult.messageId };
     });
 
     const emailResults = await Promise.all(emailPromises);

@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebase-admin';
+import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from '../../../../netlify/functions/utils/emailSequenceHelpers';
 
 /**
  * Notify a survey owner that a survey response was submitted (completed).
@@ -10,7 +11,6 @@ import admin from '../../../lib/firebase-admin';
  * - It validates the response exists, and enforces idempotency via `completionEmailSentAt` on the response doc.
  */
 
-const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
 const SENDER_NAME = process.env.BREVO_SENDER_NAME || 'Pulse';
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://fitwithpulse.ai';
@@ -97,11 +97,6 @@ export default async function handler(
 ) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method Not Allowed' });
-  }
-
-  if (!BREVO_API_KEY) {
-    console.error('Brevo API key (BREVO_MARKETING_KEY) is not set.');
-    return res.status(500).json({ success: false, error: 'Email service configuration error' });
   }
 
   try {
@@ -192,11 +187,12 @@ export default async function handler(
       viewUrl,
     });
 
-    const brevoPayload = {
-      sender: { name: SENDER_NAME, email: SENDER_EMAIL },
-      to: [{ email: hostEmail, name: hostName }],
+    const sendResult = await sendBrevoTransactionalEmail({
+      toEmail: hostEmail,
+      toName: hostName,
       subject,
       htmlContent,
+      sender: { name: SENDER_NAME, email: SENDER_EMAIL },
       headers: {
         'X-Email-Type': 'survey-completed',
         'X-Survey-Owner': ownerUserId,
@@ -204,29 +200,30 @@ export default async function handler(
         'X-Response-Id': responseId,
         ...(username ? { 'X-Owner-Username': username } : {}),
       },
-    };
-
-    const brevoResp = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'api-key': BREVO_API_KEY,
-        'Content-Type': 'application/json',
+      idempotencyKey: buildEmailDedupeKey(['survey-completed-v1', ownerUserId, responseId]),
+      idempotencyMetadata: {
+        sequence: 'survey-completed',
+        ownerUserId,
+        surveyId,
+        responseId,
       },
-      body: JSON.stringify(brevoPayload),
+      dailyRecipientLimit: 10,
+      dailyRecipientMetadata: {
+        sequence: 'survey-completed',
+        ownerUserId,
+        surveyId,
+      },
     });
 
-    if (!brevoResp.ok) {
-      const errorBody = await brevoResp.json().catch(() => ({}));
-      console.error('[notify-completed] Brevo API Error:', brevoResp.status, errorBody);
-      return res.status(brevoResp.status).json({
+    if (!sendResult.success) {
+      console.error('[notify-completed] Brevo API Error:', sendResult.error);
+      return res.status(502).json({
         success: false,
-        error: `Failed to send email: ${errorBody.message || 'Unknown error'}`,
+        error: `Failed to send email: ${sendResult.error || 'Unknown error'}`,
       });
     }
 
-    const responseDataBrevo = await brevoResp.json();
-    const messageId = responseDataBrevo?.messageId ? String(responseDataBrevo.messageId) : undefined;
+    const messageId = sendResult.messageId ? String(sendResult.messageId) : undefined;
 
     await responseRef.set(
       {

@@ -1,20 +1,18 @@
 import { Handler, HandlerEvent, HandlerContext } from '@netlify/functions';
 import { admin } from './config/firebase';
+import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
 
 const db = admin.firestore();
 const MILLION_VERIFY_KEY = process.env.MILLION_VERIFY_KEY;
-const BREVO_API_KEY = process.env.BREVO_API_KEY || process.env.BREVO_MARKETING_KEY;
-
 // Brevo mail sender helper
 async function notifyAdmin(campaignName: string, verified: number, failed: number) {
-    if (!BREVO_API_KEY) return;
     try {
         const adminEmail = process.env.BREVO_SENDER_EMAIL || 'no-reply@fitwithpulse.ai';
-        const payload = {
-            sender: { email: adminEmail, name: "Pulse Admin" },
-            to: [{ email: "tremaine@fitwithpulse.ai", name: "Tremaine" }, { email: "admin@fitwithpulse.ai", name: "Admin" }],
-            subject: `✅ Outreach Campaign Verified: ${campaignName}`,
-            htmlContent: `
+        const recipients = [
+            { email: "tremaine@fitwithpulse.ai", name: "Tremaine" },
+            { email: "admin@fitwithpulse.ai", name: "Admin" },
+        ];
+        const htmlContent = `
         <h2>Lead Verification Complete!</h2>
         <p>Your outreach campaign staging <strong>${campaignName}</strong> has finished processing emails via MillionVerifier.</p>
         <ul>
@@ -23,18 +21,33 @@ async function notifyAdmin(campaignName: string, verified: number, failed: numbe
         </ul>
         <p>Head to your Pulse Admin dashboard to review and push these leads directly to Instantly.</p>
         <p><a href="https://pulsecheck.fitwithpulse.ai/admin/outreach-campaigns">View Outreach Campaigns Dashboard</a></p>
-      `
-        };
+      `;
 
-        await fetch('https://api.brevo.com/v3/smtp/email', {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'api-key': BREVO_API_KEY
-            },
-            body: JSON.stringify(payload)
-        });
+        await Promise.all(
+            recipients.map((recipient) =>
+                sendBrevoTransactionalEmail({
+                    toEmail: recipient.email,
+                    toName: recipient.name,
+                    subject: `✅ Outreach Campaign Verified: ${campaignName}`,
+                    htmlContent,
+                    sender: { email: adminEmail, name: "Pulse Admin" },
+                    idempotencyKey: buildEmailDedupeKey([
+                        'outreach-campaign-verified-v1',
+                        campaignName,
+                        recipient.email,
+                    ]),
+                    idempotencyMetadata: {
+                        sequence: 'outreach-campaign-verified',
+                        campaignName,
+                        recipientEmail: recipient.email,
+                    },
+                    dailyRecipientMetadata: {
+                        sequence: 'outreach-campaign-verified',
+                        campaignName,
+                    },
+                })
+            )
+        );
     } catch (e) {
         console.error('Failed to send Brevo notify:', e);
     }

@@ -1,4 +1,5 @@
 const { admin, db, headers } = require('./config/firebase');
+const { buildEmailDedupeKey, sendBrevoTransactionalEmail } = require('./utils/sendBrevoTransactionalEmail');
 
 exports.handler = async (event) => {
   // CORS preflight
@@ -66,11 +67,6 @@ exports.handler = async (event) => {
     // Fire Brevo confirmation email (non-blocking)
     (async () => {
       try {
-        const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
-        if (!BREVO_API_KEY) {
-          console.error('[creator-waitlist-signup] Brevo API key not configured');
-          return;
-        }
         const baseUrl = process.env.SITE_URL || 'https://fitwithpulse.ai';
         const pageUrl = `${baseUrl}/${username}/${page}`;
         const safeName = String(name).trim() || 'there';
@@ -96,26 +92,27 @@ exports.handler = async (event) => {
           </div>
         `;
 
-        const brevoPayload = {
-          sender: { name: 'Pulse', email: 'no-reply@fitwithpulse.ai' },
-          to: [{ email: String(email).toLowerCase() }],
+        const sendResult = await sendBrevoTransactionalEmail({
+          toEmail: String(email).toLowerCase(),
+          toName: safeName,
           subject: `You're on the waitlist for ${pageTitle}`,
           htmlContent,
-          headers: { 'X-Email-Type': 'creator-waitlist-confirmation' }
-        };
-
-        const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            'api-key': BREVO_API_KEY,
-            'Content-Type': 'application/json'
+          sender: { name: 'Pulse', email: 'no-reply@fitwithpulse.ai' },
+          headers: { 'X-Email-Type': 'creator-waitlist-confirmation' },
+          idempotencyKey: buildEmailDedupeKey(['creator-waitlist-confirmation-v1', userId, page, email]),
+          idempotencyMetadata: {
+            sequence: 'creator-waitlist-confirmation',
+            userId,
+            page,
           },
-          body: JSON.stringify(brevoPayload)
+          dailyRecipientMetadata: {
+            sequence: 'creator-waitlist-confirmation',
+            userId,
+            page,
+          },
         });
-        if (!resp.ok) {
-          const errTxt = await resp.text().catch(() => '');
-          console.error('[creator-waitlist-signup] Brevo send failed:', resp.status, errTxt);
+        if (!sendResult.success) {
+          console.error('[creator-waitlist-signup] Brevo send failed:', sendResult.error);
         }
       } catch (e) {
         console.error('[creator-waitlist-signup] Unexpected error sending Brevo email:', e);
@@ -128,6 +125,5 @@ exports.handler = async (event) => {
     return { statusCode: 500, headers, body: JSON.stringify({ success: false, error: error.message }) };
   }
 };
-
 
 
