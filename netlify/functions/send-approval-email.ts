@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import {
+  buildEmailDedupeKey,
   resolveRecipient,
   resolveSequenceTemplate,
   sendBrevoTransactionalEmail,
@@ -137,6 +138,10 @@ export const handler: Handler = async (event) => {
       },
     });
 
+    const idempotencyKey = !isTest
+      ? buildEmailDedupeKey(['approval-v1', userId || recipient.toEmail])
+      : '';
+
     const sendResult = await sendBrevoTransactionalEmail({
       toEmail: recipient.toEmail,
       toName: recipient.toName,
@@ -144,6 +149,14 @@ export const handler: Handler = async (event) => {
       htmlContent: template.html,
       tags: ['approval', isTest ? 'test' : ''],
       scheduledAt,
+      idempotencyKey,
+      idempotencyMetadata: idempotencyKey
+        ? {
+            sequence: 'approval-v1',
+            userId: userId || null,
+            toEmail: recipient.toEmail,
+          }
+        : undefined,
     });
 
     if (!sendResult.success) {

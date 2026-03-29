@@ -2,7 +2,6 @@ import React from 'react';
 import Head from 'next/head';
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { MailPlus, ShieldPlus, Stethoscope } from 'lucide-react';
-import admin from '../../../lib/firebase-admin';
 import { getFirestoreDocFallback } from '../../../lib/server-firestore-fallback';
 
 type ClinicianOnboardingPageProps = {
@@ -76,6 +75,8 @@ export const getServerSideProps: GetServerSideProps<ClinicianOnboardingPageProps
   if (!token) return { notFound: true };
 
   try {
+    const admin = (await import('../../../lib/firebase-admin')).default;
+
     let invite = await admin
       .firestore()
       .collection('pulsecheck-invite-links')

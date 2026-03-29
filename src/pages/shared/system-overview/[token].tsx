@@ -7,7 +7,6 @@ import { Loader2, StickyNote, Trash2, X } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { db } from '../../../api/firebase/config';
 import { RootState } from '../../../redux/store';
-import admin from '../../../lib/firebase-admin';
 import { getSystemOverviewShareCookieName, verifySystemOverviewShareAccessCookieValue } from '../../../lib/systemOverviewShareAccess';
 import { resolveSystemOverviewSharePreviewMeta } from '../../../lib/sharePreviewMeta';
 
@@ -1593,6 +1592,7 @@ export const getServerSideProps: GetServerSideProps<SharedSystemOverviewPageProp
   if (!token) return { notFound: true };
 
   try {
+    const admin = (await import('../../../lib/firebase-admin')).default;
     const docSnap = await admin.firestore().collection('systemOverviewShareLinks').doc(token).get();
     if (!docSnap.exists) return { notFound: true };
 

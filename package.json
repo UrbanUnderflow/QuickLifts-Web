@@ -76,6 +76,7 @@
     "typecheck": "tsc --noEmit",
     "guard:firebase-admin": "node scripts/check-firebase-admin-guardrails.js",
     "audit:firebase-next-api": "node scripts/audit-firebase-next-api-runtime-risk.js",
+    "probe:firebase-next-api:live": "node scripts/probe-firebase-next-api-live.cjs",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings 0",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --grep @smoke",
@@ -92,7 +93,7 @@
     "machine:setup:export": "node scripts/export-local-machine-setup.cjs",
     "machine:setup:import": "node scripts/import-local-machine-setup.cjs",
     "test:group-meet": "node --test tests/api/group-meet/*.test.cjs",
-    "test:firebase-admin:runtime": "node --test tests/api/firebase-admin/*.test.cjs",
+    "test:firebase-admin:runtime": "node --test tests/api/firebase-admin/*.runtime.test.cjs",
     "test:pulsecheck:repair": "node --test tests/api/pulsecheck/repair-daily-assignment.test.cjs",
     "test:pulsecheck:runtime": "node --test tests/api/pulsecheck/submit-pulsecheck-checkin.runtime.test.cjs tests/api/pulsecheck/pulsecheck-functions-proxy.runtime.test.cjs",
     "test:pulsecheck:gate": "node --test tests/api/pulsecheck/repair-daily-assignment.test.cjs tests/api/pulsecheck/submit-pulsecheck-checkin.runtime.test.cjs tests/api/pulsecheck/pulsecheck-functions-proxy.runtime.test.cjs",
@@ -156,7 +157,6 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "firebase-tools": "^13.34.0",
     "globals": "^15.12.0",
-    "netlify-cli": "^24.3.0",
-    "netlify-plugin-inline-functions-env": "^1.0.9"
+    "netlify-cli": "^24.3.0"
   }
 }

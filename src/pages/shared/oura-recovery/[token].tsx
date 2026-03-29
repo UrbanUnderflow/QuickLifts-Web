@@ -1,6 +1,5 @@
 import Head from 'next/head';
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
-import admin from '../../../lib/firebase-admin';
 import { resolveOuraRecoverySharePreviewMeta } from '../../../lib/sharePreviewMeta';
 
 const COLLECTION = 'pulsecheck-oura-recovery-shares';
@@ -372,6 +371,7 @@ export const getServerSideProps: GetServerSideProps<SharedOuraRecoveryPageProps>
   if (!token) return { notFound: true };
 
   try {
+    const admin = (await import('../../../lib/firebase-admin')).default;
     const docSnap = await admin.firestore().collection(COLLECTION).doc(token).get();
     if (!docSnap.exists) return { notFound: true };
 

@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import {
+  buildEmailDedupeKey,
   getBaseSiteUrl,
   resolveRecipient,
   resolveSequenceTemplate,
@@ -162,6 +163,10 @@ export const handler: Handler = async (event) => {
       },
     });
 
+    const idempotencyKey = !isTest
+      ? buildEmailDedupeKey(['challenge-ending-soon-v1', userId || recipient.toEmail, challengeId || '', hoursRemaining])
+      : '';
+
     const sendResult = await sendBrevoTransactionalEmail({
       toEmail: recipient.toEmail,
       toName: recipient.toName,
@@ -169,6 +174,15 @@ export const handler: Handler = async (event) => {
       htmlContent: template.html,
       tags: ['challenge-ending-soon', `hours:${hoursRemaining}`, isTest ? 'test' : ''],
       scheduledAt,
+      idempotencyKey,
+      idempotencyMetadata: idempotencyKey
+        ? {
+            sequence: 'challenge-ending-soon-v1',
+            userId: userId || null,
+            challengeId: challengeId || null,
+            hoursRemaining,
+          }
+        : undefined,
     });
 
     if (!sendResult.success) {
@@ -192,4 +206,3 @@ export const handler: Handler = async (event) => {
     };
   }
 };
-

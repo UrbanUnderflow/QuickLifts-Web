@@ -60,20 +60,20 @@ const COVERAGE_AREAS: CoverageArea[] = [
   },
   {
     area: 'Shared backend and data contracts',
-    current: 58,
-    target: 88,
-    scope: 'Firestore-backed models, API routes, index contracts, and the data dependencies that power the client surfaces.',
-    evidence: ['manifested data contracts', 'index registry', 'shared API services', 'firebase-admin runtime harness', 'backend dependency maps'],
-    note: 'This moved up because the shared Firebase adapter and high-risk route contracts now have runnable runtime coverage, but the backend surface is still much larger than the exercised set.',
+    current: 66,
+    target: 90,
+    scope: 'Firestore-backed models, API routes, index contracts, runtime bridges, and the data dependencies that power the client surfaces.',
+    evidence: ['manifested data contracts', 'index registry', 'shared API services', 'firebase-admin runtime harness', 'firebase-next-api bridge', '`npm run audit:firebase-next-api`', '`node scripts/probe-firebase-next-api-live.cjs`'],
+    note: 'This moved up because the Firebase-backed Next API risk bucket is now fully mitigated in the workspace and covered by runtime bridge tests, although production still needs the new deploy before the live probes turn green.',
     tone: 'blue',
   },
   {
     area: 'Operational safety and release tooling',
-    current: 60,
+    current: 66,
     target: 92,
-    scope: 'Admin guards, local machine setup, release handoff, share-link security, and other operator-facing protections.',
-    evidence: ['admin auth guard', 'local machine setup', 'share link auth', 'release-path controls'],
-    note: 'Operational guardrails are well articulated, but the release-safety net still needs more automated proof.',
+    scope: 'Admin guards, local machine setup, release handoff, share-link security, route-risk audit commands, and live smoke verification.',
+    evidence: ['admin auth guard', 'local machine setup', 'share link auth', 'release-path controls', 'firebase next-runtime audit', 'live smoke probes'],
+    note: 'Operational guardrails are stronger now because the repo can audit Firebase-backed Next API risk and probe the live site directly, but deployment-state verification is still an active operator step.',
     tone: 'green',
   },
 ];
@@ -92,6 +92,15 @@ const METHOD_ROWS = [
   ['Step 3', 'Apply a penalty when a surface is mostly documented but still lacks a runnable regression lane.'],
   ['Step 4', 'Treat mutation paths as incomplete unless they prove cleanup and safe reuse of the namespace.'],
   ['Step 5', 'Revisit the estimate whenever a new harness, selector contract, or cleanup policy lands.'],
+];
+
+const COVERAGE_MATRIX_ROWS = [
+  ['Firebase-backed Next API routes', 'Yes', 'No', 'Yes', 'All 36 callable Firebase-backed Next API routes are now routed through Netlify functions in the workspace; the live probe script is the release check.'],
+  ['Stripe revenue and payout lanes', 'Yes', 'No', 'No', 'Critical subscription, onboarding, deposit, webhook, payout execution, and earnings-read handlers have direct runtime coverage.'],
+  ['PulseCheck shared function proxy', 'Yes', 'No', 'Indirect', 'Runtime contract tests prove the proxy forwards to Netlify functions instead of executing inside Next; PulseCheck iOS still needs native flow validation on top.'],
+  ['Admin and share-link web flows', 'Mixed', 'Yes', 'Partial', 'Browser coverage exists for major admin/share-link journeys, while the live probe layer only verifies backend reachability and non-500 behavior.'],
+  ['PulseCheck iOS profile and Oura lane', 'Partial', 'No', 'No', 'Backend sync and proxy paths are now protected, but the native profile read and UI-state layer still depends on simulator or device validation.'],
+  ['Operational release safety', 'Yes', 'No', 'Yes', 'Audit scripts and live smoke probes now exist for the bridged Firebase surface, but deployment-state verification is still an operator gate rather than a full CI release block.'],
 ];
 
 const getWeightedAverage = (areas: CoverageArea[]) => {
@@ -270,6 +279,13 @@ const SystemCoverageTab: React.FC = () => {
             </div>,
             area.note,
           ])}
+        />
+      </SectionBlock>
+
+      <SectionBlock icon={CheckCircle2} title="Coverage Matrix">
+        <DataTable
+          columns={['System slice', 'Runtime harness', 'Browser/native E2E', 'Live smoke probe', 'Current read']}
+          rows={COVERAGE_MATRIX_ROWS}
         />
       </SectionBlock>
 

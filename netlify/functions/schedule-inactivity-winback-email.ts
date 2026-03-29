@@ -1,6 +1,13 @@
 import type { Handler } from '@netlify/functions';
 import { getFirestore } from './utils/getServiceAccount';
-import { getBaseSiteUrl, toMillis } from './utils/emailSequenceHelpers';
+import {
+  buildEmailDedupeKey,
+  claimScheduledSequenceSend,
+  finalizeScheduledSequenceSend,
+  getBaseSiteUrl,
+  releaseScheduledSequenceSend,
+  toMillis,
+} from './utils/emailSequenceHelpers';
 
 const INACTIVITY_MILESTONES = [3, 7, 14];
 const LOOKBACK_DAYS = 45;
@@ -84,7 +91,9 @@ export const handler: Handler = async () => {
   try {
     const db = await getFirestore();
     const nowMs = Date.now();
+    const runId = `inactivity-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
     const lookbackSec = Math.floor((nowMs - LOOKBACK_DAYS * 24 * 60 * 60 * 1000) / 1000);
+    const claimedDedupeKeys = new Set<string>();
 
     const querySnap = await db
       .collection('user-challenge')
@@ -135,6 +144,38 @@ export const handler: Handler = async () => {
         continue;
       }
 
+      const pendingField = `emailSequenceState.inactivityWinbackPending.${milestone}`;
+      const dedupeKey = buildEmailDedupeKey(['inactivity-winback-v1', data.userId || doc.id, data.challengeId || doc.id, milestone]);
+      if (claimedDedupeKeys.has(dedupeKey)) {
+        skipped++;
+        continue;
+      }
+
+      const claimed = await claimScheduledSequenceSend({
+        docRef: doc.ref,
+        pendingField,
+        completionFields: [
+          `emailSequenceState.inactivityWinbackSent.${milestone}`,
+          `emailSequenceState.inactivityWinbackSkipped.${milestone}`,
+        ],
+        dedupeKey,
+        runId,
+        nowMs,
+        metadata: {
+          sequence: 'inactivity-winback-v1',
+          userId: data.userId || null,
+          challengeId: data.challengeId || null,
+          milestone,
+        },
+      });
+
+      if (!claimed) {
+        skipped++;
+        continue;
+      }
+
+      claimedDedupeKeys.add(dedupeKey);
+
       try {
         const sendResult = await sendInactivityWinback({
           userId: data.userId,
@@ -147,13 +188,17 @@ export const handler: Handler = async () => {
           ? `emailSequenceState.inactivityWinbackSkipped.${milestone}`
           : `emailSequenceState.inactivityWinbackSent.${milestone}`;
 
-        await doc.ref.set(
-          {
-            [stateField]: new Date(),
+        await finalizeScheduledSequenceSend({
+          docRef: doc.ref,
+          pendingField,
+          resultField: stateField,
+          dedupeKey,
+          runId,
+          markSent: !sendResult.skipped,
+          updateFields: {
             updatedAt: Math.floor(Date.now() / 1000),
-          } as any,
-          { merge: true } as any
-        );
+          },
+        });
 
         if (sendResult.skipped) {
           skipped++;
@@ -161,6 +206,15 @@ export const handler: Handler = async () => {
           sent++;
         }
       } catch (error) {
+        claimedDedupeKeys.delete(dedupeKey);
+        await releaseScheduledSequenceSend({
+          docRef: doc.ref,
+          pendingField,
+          dedupeKey,
+          runId,
+        }).catch((releaseError) => {
+          console.warn('[schedule-inactivity-winback-email] Failed to release claim:', doc.id, releaseError);
+        });
         console.warn('[schedule-inactivity-winback-email] Failed for doc:', doc.id, error);
       }
     }

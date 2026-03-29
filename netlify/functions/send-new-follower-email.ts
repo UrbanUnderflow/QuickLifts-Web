@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { getFirestore } from './utils/getServiceAccount';
+import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
 
 type SendResponse = {
   success: boolean;
@@ -10,6 +11,7 @@ type SendResponse = {
 
 type RequestBody = {
   userId?: string;
+  followerUserId?: string;
   toEmail: string;
   firstName?: string;
   followerName?: string;
@@ -237,6 +239,7 @@ export const handler: Handler = async (event) => {
     const body = (event.body ? JSON.parse(event.body) : {}) as RequestBody;
     const {
       userId,
+      followerUserId,
       toEmail,
       firstName,
       followerName,
@@ -284,40 +287,38 @@ export const handler: Handler = async (event) => {
     subject = applyTemplateVars(subject, { firstName, followerName, followerUsername, followerLocation });
     html = applyTemplateVars(html, { firstName, followerName, followerUsername, followerLocation });
 
-    const payload: any = {
-      sender: { name: senderName, email: senderEmail },
-      to: [{ email: toEmail, name: firstName || toEmail }],
+    const idempotencyKey = !isTest && userId && followerUserId
+      ? buildEmailDedupeKey(['new-follower-v1', userId, followerUserId])
+      : '';
+    const sendResult = await sendBrevoTransactionalEmail({
+      toEmail,
+      toName: firstName || toEmail,
       subject,
       htmlContent: html,
-      replyTo: { email: senderEmail, name: 'Pulse Team' },
       tags: ['new-follower', isTest ? 'test' : null].filter(Boolean),
-    };
-
-    const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'api-key': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
+      idempotencyKey,
+      idempotencyMetadata: idempotencyKey
+        ? {
+            sequence: 'new-follower-v1',
+            userId,
+            followerUserId,
+            toEmail,
+          }
+        : undefined,
     });
 
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
+    if (!sendResult.success) {
       return {
-        statusCode: resp.status,
+        statusCode: 500,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: false, error: err?.message || 'Brevo API error' } satisfies SendResponse),
+        body: JSON.stringify({ success: false, error: sendResult.error || 'Brevo API error' } satisfies SendResponse),
       };
     }
-
-    const data = await resp.json().catch(() => ({}));
 
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ success: true, messageId: data?.messageId } satisfies SendResponse),
+      body: JSON.stringify({ success: true, skipped: sendResult.skipped, messageId: sendResult.messageId } satisfies SendResponse),
     };
   } catch (e: any) {
     return {

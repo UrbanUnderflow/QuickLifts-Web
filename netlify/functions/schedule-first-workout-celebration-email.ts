@@ -1,6 +1,13 @@
 import type { Handler } from '@netlify/functions';
 import { getFirestore } from './utils/getServiceAccount';
-import { getBaseSiteUrl, toMillis } from './utils/emailSequenceHelpers';
+import {
+  buildEmailDedupeKey,
+  claimScheduledSequenceSend,
+  finalizeScheduledSequenceSend,
+  getBaseSiteUrl,
+  releaseScheduledSequenceSend,
+  toMillis,
+} from './utils/emailSequenceHelpers';
 
 const LOOKBACK_DAYS = 7;
 const FIRST_WORKOUT_RECENCY_HOURS = 72;
@@ -63,7 +70,9 @@ export const handler: Handler = async () => {
   try {
     const db = await getFirestore();
     const nowMs = Date.now();
+    const runId = `first-workout-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
     const lookbackSec = Math.floor((nowMs - LOOKBACK_DAYS * 24 * 60 * 60 * 1000) / 1000);
+    const claimedDedupeKeys = new Set<string>();
 
     const querySnap = await db
       .collection('user-challenge')
@@ -108,6 +117,37 @@ export const handler: Handler = async () => {
         continue;
       }
 
+      const pendingField = 'emailSequenceState.firstWorkoutCelebrationPending';
+      const dedupeKey = buildEmailDedupeKey(['first-workout-celebration-v1', data.userId || doc.id, data.challengeId || doc.id]);
+      if (claimedDedupeKeys.has(dedupeKey)) {
+        skipped++;
+        continue;
+      }
+
+      const claimed = await claimScheduledSequenceSend({
+        docRef: doc.ref,
+        pendingField,
+        completionFields: [
+          'emailSequenceState.firstWorkoutCelebrationSentAt',
+          'emailSequenceState.firstWorkoutCelebrationSkippedAt',
+        ],
+        dedupeKey,
+        runId,
+        nowMs,
+        metadata: {
+          sequence: 'first-workout-celebration-v1',
+          userId: data.userId || null,
+          challengeId: data.challengeId || null,
+        },
+      });
+
+      if (!claimed) {
+        skipped++;
+        continue;
+      }
+
+      claimedDedupeKeys.add(dedupeKey);
+
       try {
         const sendResult = await sendFirstWorkoutCelebration({
           userId: data.userId,
@@ -120,13 +160,17 @@ export const handler: Handler = async () => {
           ? 'emailSequenceState.firstWorkoutCelebrationSkippedAt'
           : 'emailSequenceState.firstWorkoutCelebrationSentAt';
 
-        await doc.ref.set(
-          {
-            [field]: new Date(),
+        await finalizeScheduledSequenceSend({
+          docRef: doc.ref,
+          pendingField,
+          resultField: field,
+          dedupeKey,
+          runId,
+          markSent: !sendResult.skipped,
+          updateFields: {
             updatedAt: Math.floor(Date.now() / 1000),
-          } as any,
-          { merge: true } as any
-        );
+          },
+        });
 
         if (sendResult.skipped) {
           skipped++;
@@ -134,6 +178,15 @@ export const handler: Handler = async () => {
           sent++;
         }
       } catch (error) {
+        claimedDedupeKeys.delete(dedupeKey);
+        await releaseScheduledSequenceSend({
+          docRef: doc.ref,
+          pendingField,
+          dedupeKey,
+          runId,
+        }).catch((releaseError) => {
+          console.warn('[schedule-first-workout-celebration-email] Failed to release claim:', doc.id, releaseError);
+        });
         console.warn('[schedule-first-workout-celebration-email] Failed for doc:', doc.id, error);
       }
     }

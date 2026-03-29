@@ -3,7 +3,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { ArrowRight, CheckCircle2, Download, Smartphone, Users2 } from 'lucide-react';
-import admin from '../../lib/firebase-admin';
 import { getFirestoreDocFallback } from '../../lib/server-firestore-fallback';
 import type { PulseCheckPilotInviteConfig } from '../../api/firebase/pulsecheckPilotDashboard/types';
 import { appLinks } from '../../utils/platformDetection';
@@ -242,6 +241,7 @@ export const getServerSideProps: GetServerSideProps<PilotInviteNextStepsProps> =
   const teamId = normalizeString(query.teamId);
   const pilotId = normalizeString(query.pilotId);
   const targetEmail = normalizeString(query.targetEmail);
+  const admin = (await import('../../lib/firebase-admin')).default;
 
   const fallback = buildFallbackConfig(pilotId, organizationId, teamId, organizationName, teamName, pilotName);
 

@@ -5,7 +5,6 @@ import { useRouter } from 'next/router';
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut, type User as FirebaseAuthUser } from 'firebase/auth';
 import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, LogIn, LogOut, MailPlus, ShieldCheck, UserPlus, Users } from 'lucide-react';
-import admin from '../../../lib/firebase-admin';
 import { getFirestoreDocFallback } from '../../../lib/server-firestore-fallback';
 import { auth } from '../../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
@@ -666,6 +665,8 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
   if (!token) return { notFound: true };
 
   try {
+    const admin = (await import('../../../lib/firebase-admin')).default;
+
     let invite = await admin
       .firestore()
       .collection('pulsecheck-invite-links')

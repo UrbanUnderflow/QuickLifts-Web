@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import {
+  buildEmailDedupeKey,
   getBaseSiteUrl,
   resolveRecipient,
   resolveSequenceTemplate,
@@ -170,6 +171,18 @@ async function sendSingleWinnerEmail(args: {
   });
 
   const sendResult = await sendBrevoTransactionalEmail({
+    idempotencyKey: !args.isTest
+      ? buildEmailDedupeKey(['winner-notification-v1', args.challengeId || '', args.winner.userId || recipient.toEmail, rank])
+      : '',
+    idempotencyMetadata: !args.isTest
+      ? {
+          sequence: 'winner-notification-v1',
+          challengeId: args.challengeId || null,
+          userId: args.winner.userId || null,
+          rank,
+          toEmail: recipient.toEmail,
+        }
+      : undefined,
     toEmail: recipient.toEmail,
     toName: recipient.toName,
     subject: template.subject,

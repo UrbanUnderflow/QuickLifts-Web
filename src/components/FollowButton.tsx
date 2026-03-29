@@ -96,6 +96,8 @@ const FollowButton: React.FC<FollowButtonProps> = ({ targetUser, onFollowSuccess
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              userId: targetUser.id,
+              followerUserId: currentUser.id,
               toEmail: targetUser.email,
               firstName: targetUser.displayName?.split(' ')[0] || targetUser.username,
               followerName: currentUser.displayName || currentUser.username,

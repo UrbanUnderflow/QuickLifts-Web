@@ -1,6 +1,13 @@
 import type { Handler } from '@netlify/functions';
 import { getFirestore } from './utils/getServiceAccount';
-import { getBaseSiteUrl, toMillis } from './utils/emailSequenceHelpers';
+import {
+  buildEmailDedupeKey,
+  claimScheduledSequenceSend,
+  finalizeScheduledSequenceSend,
+  getBaseSiteUrl,
+  releaseScheduledSequenceSend,
+  toMillis,
+} from './utils/emailSequenceHelpers';
 
 const HOURS_24 = 24;
 const HOURS_72 = 72;
@@ -74,8 +81,10 @@ export const handler: Handler = async () => {
   try {
     const db = await getFirestore();
     const nowMs = Date.now();
+    const runId = `challenge-ending-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
     const nowSec = Math.floor(nowMs / 1000);
     const horizonSec = nowSec + HOURS_72 * 60 * 60 + 60 * 60; // +1h buffer
+    const claimedDedupeKeys = new Set<string>();
 
     const querySnap = await db
       .collection('user-challenge')
@@ -122,6 +131,37 @@ export const handler: Handler = async () => {
         continue;
       }
 
+      const pendingField = bucket === HOURS_72
+        ? 'emailSequenceState.challengeEndingSoon72hPending'
+        : 'emailSequenceState.challengeEndingSoon24hPending';
+      const dedupeKey = buildEmailDedupeKey(['challenge-ending-soon-v1', data.userId || doc.id, data.challengeId || doc.id, bucket]);
+      if (claimedDedupeKeys.has(dedupeKey)) {
+        skipped++;
+        continue;
+      }
+
+      const claimed = await claimScheduledSequenceSend({
+        docRef: doc.ref,
+        pendingField,
+        completionFields: [`emailSequenceState.${sentField}`, `emailSequenceState.${skippedField}`],
+        dedupeKey,
+        runId,
+        nowMs,
+        metadata: {
+          sequence: 'challenge-ending-soon-v1',
+          userId: data.userId || null,
+          challengeId: data.challengeId || null,
+          hoursRemaining: bucket,
+        },
+      });
+
+      if (!claimed) {
+        skipped++;
+        continue;
+      }
+
+      claimedDedupeKeys.add(dedupeKey);
+
       try {
         const sendResult = await sendChallengeEndingSoon({
           userId: data.userId,
@@ -136,13 +176,17 @@ export const handler: Handler = async () => {
           ? `emailSequenceState.${skippedField}`
           : `emailSequenceState.${sentField}`;
 
-        await doc.ref.set(
-          {
-            [stateField]: new Date(),
+        await finalizeScheduledSequenceSend({
+          docRef: doc.ref,
+          pendingField,
+          resultField: stateField,
+          dedupeKey,
+          runId,
+          markSent: !sendResult.skipped,
+          updateFields: {
             updatedAt: Math.floor(Date.now() / 1000),
-          } as any,
-          { merge: true } as any
-        );
+          },
+        });
 
         if (sendResult.skipped) {
           skipped++;
@@ -150,6 +194,15 @@ export const handler: Handler = async () => {
           sent++;
         }
       } catch (error) {
+        claimedDedupeKeys.delete(dedupeKey);
+        await releaseScheduledSequenceSend({
+          docRef: doc.ref,
+          pendingField,
+          dedupeKey,
+          runId,
+        }).catch((releaseError) => {
+          console.warn('[schedule-challenge-ending-soon-email] Failed to release claim:', doc.id, releaseError);
+        });
         console.warn('[schedule-challenge-ending-soon-email] Failed for doc:', doc.id, error);
       }
     }

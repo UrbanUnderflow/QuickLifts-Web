@@ -158,6 +158,29 @@ function buildNoraPushMessage({
   };
 }
 
+function classifyMessagingFailure(error) {
+  const code = typeof error?.code === 'string' ? error.code.trim() : '';
+  const message = typeof error?.message === 'string' ? error.message.trim() : '';
+
+  if (code === 'messaging/third-party-auth-error') {
+    return {
+      failureCategory: 'apns_or_fcm_credential_misconfigured',
+      errorCode: code,
+      message,
+      needsConsoleConfig: true,
+      recommendedAction: 'Check Firebase Cloud Messaging APNs credentials for the PulseCheck iOS app in Firebase console.',
+    };
+  }
+
+  return {
+    failureCategory: 'unknown_messaging_failure',
+    errorCode: code || 'UNKNOWN',
+    message,
+    needsConsoleConfig: false,
+    recommendedAction: null,
+  };
+}
+
 async function logNotification({
   db,
   fcmToken,
@@ -255,6 +278,7 @@ async function sendLoggedNoraPush({
 
     return { success: true, messageId, logId };
   } catch (error) {
+    const failure = classifyMessagingFailure(error);
     const logId = await logNotification({
       db,
       fcmToken: normalizedToken,
@@ -264,17 +288,40 @@ async function sendLoggedNoraPush({
       notificationType,
       functionName,
       success: false,
-      error,
+      error: {
+        ...(error || {}),
+        code: failure.errorCode,
+        message: failure.message || error?.message || 'Unknown error',
+        details: failure.recommendedAction,
+      },
       additionalContext: {
         userId,
+        failureCategory: failure.failureCategory,
+        needsConsoleConfig: failure.needsConsoleConfig,
+        recommendedAction: failure.recommendedAction,
         ...additionalContext,
       },
     });
 
-    console.error('[pulsecheck-notification-utils] Failed to send Nora push:', error);
+    const logPayload = {
+      code: failure.errorCode,
+      failureCategory: failure.failureCategory,
+      needsConsoleConfig: failure.needsConsoleConfig,
+      recommendedAction: failure.recommendedAction,
+      message: failure.message || error?.message || 'Unknown error',
+    };
+    if (failure.needsConsoleConfig) {
+      console.warn('[pulsecheck-notification-utils] Nora push is unavailable until APNs/FCM credentials are fixed:', logPayload);
+    } else {
+      console.error('[pulsecheck-notification-utils] Failed to send Nora push:', logPayload);
+    }
     return {
       success: false,
-      error: error?.message || 'Unknown error',
+      error: failure.message || error?.message || 'Unknown error',
+      errorCode: failure.errorCode,
+      failureCategory: failure.failureCategory,
+      needsConsoleConfig: failure.needsConsoleConfig,
+      recommendedAction: failure.recommendedAction,
       logId,
     };
   }
@@ -284,6 +331,7 @@ module.exports = {
   buildNoraBiometricBriefNotification,
   buildNoraDailyReflectionNotification,
   buildNoraPushMessage,
+  classifyMessagingFailure,
   normalizeStringMap,
   resolveAthleteFirstName,
   resolvePulseCheckFcmToken,
