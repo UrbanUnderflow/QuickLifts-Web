@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from '../../../../netlify/functions/utils/emailSequenceHelpers';
 
-const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:8888';
 
@@ -22,13 +22,6 @@ function resolveBranding(companyName: string) {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method Not Allowed' });
-  }
-
-  console.log('[send-signing-request] Called. BREVO_MARKETING_KEY present:', !!BREVO_API_KEY);
-
-  if (!BREVO_API_KEY) {
-    console.error('[send-signing-request] BREVO_MARKETING_KEY is not set in environment');
-    return res.status(500).json({ message: 'Email service not configured: BREVO_MARKETING_KEY missing' });
   }
 
   const { documentId, documentName, documentType: _documentType, recipientName, recipientEmail, companyName } = req.body;
@@ -106,34 +99,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   `;
 
   try {
-    const brevoPayload = {
-      sender: { name: branding.senderName, email: SENDER_EMAIL },
-      to: [{ email: recipientEmail, name: recipientName || recipientEmail }],
+    console.log('[send-signing-request] Calling Brevo API | sender:', branding.senderName, '| company:', branding.displayCompany);
+    const sendResult = await sendBrevoTransactionalEmail({
+      toEmail: recipientEmail,
+      toName: recipientName || recipientEmail,
       subject,
       htmlContent,
-    };
-
-    console.log('[send-signing-request] Calling Brevo API | sender:', branding.senderName, '| company:', branding.displayCompany);
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'api-key': BREVO_API_KEY,
-        'Content-Type': 'application/json',
+      sender: { name: branding.senderName, email: SENDER_EMAIL },
+      idempotencyKey: buildEmailDedupeKey(['admin-signing-request-v1', documentId, recipientEmail]),
+      idempotencyMetadata: {
+        sequence: 'admin-signing-request',
+        documentId,
+        recipientEmail,
       },
-      body: JSON.stringify(brevoPayload),
+      bypassDailyRecipientLimit: true,
+      dailyRecipientMetadata: {
+        sequence: 'admin-signing-request',
+        documentId,
+      },
     });
 
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      console.error('[send-signing-request] Brevo error:', response.status, JSON.stringify(errorBody));
+    if (!sendResult.success) {
+      console.error('[send-signing-request] Brevo error:', sendResult.error);
       return res.status(500).json({
-        message: `Failed to send email via Brevo (${response.status}): ${JSON.stringify(errorBody)}`,
+        message: `Failed to send email via Brevo: ${sendResult.error || 'Unknown error'}`,
       });
     }
 
-    const brevoResponse = await response.json().catch(() => ({}));
-    console.log('[send-signing-request] Email sent successfully to', recipientEmail, '| Brevo:', JSON.stringify(brevoResponse));
+    console.log('[send-signing-request] Email sent successfully to', recipientEmail, '| Brevo:', JSON.stringify({ messageId: sendResult.messageId }));
     return res.status(200).json({ message: 'Signing request sent successfully.' });
   } catch (error: any) {
     console.error('[send-signing-request] Exception:', error);

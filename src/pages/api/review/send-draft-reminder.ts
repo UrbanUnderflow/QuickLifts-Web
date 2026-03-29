@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebase-admin';
+import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from '../../../../netlify/functions/utils/emailSequenceHelpers';
 
 /**
  * API endpoint to send draft review reminder email
@@ -10,7 +11,6 @@ import admin from '../../../lib/firebase-admin';
  * It generates a draft review and sends an email with a link to review it
  */
 
-const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
 const SENDER_NAME = process.env.BREVO_SENDER_NAME || "Pulse Review Bot";
 const FOUNDER_EMAIL = "tre@fitwithpulse.ai";
@@ -201,11 +201,6 @@ export default async function handler(
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
 
-  if (!BREVO_API_KEY) {
-    console.error('Brevo API key (BREVO_MARKETING_KEY) is not set.');
-    return res.status(500).json({ success: false, error: 'Email service configuration error' });
-  }
-
   try {
     const db = admin.firestore();
     
@@ -280,54 +275,47 @@ export default async function handler(
 
     console.log(`📧 Sending draft reminder email for ${monthName} ${year}`);
 
-    const brevoPayload = {
+    const sendResult = await sendBrevoTransactionalEmail({
+      toEmail: FOUNDER_EMAIL,
+      toName: FOUNDER_NAME,
+      subject,
+      htmlContent,
       sender: {
         name: SENDER_NAME,
         email: SENDER_EMAIL,
       },
-      to: [
-        {
-          email: FOUNDER_EMAIL,
-          name: FOUNDER_NAME,
-        },
-      ],
-      subject,
-      htmlContent,
       replyTo: {
         email: SENDER_EMAIL,
-        name: SENDER_NAME
+        name: SENDER_NAME,
       },
       headers: {
         'X-Review-Month': monthYear,
-        'X-Email-Type': 'draft-review-reminder'
-      }
-    };
-
-    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "Accept": "application/json",
-        "api-key": BREVO_API_KEY,
-        "Content-Type": "application/json",
+        'X-Email-Type': 'draft-review-reminder',
       },
-      body: JSON.stringify(brevoPayload),
+      idempotencyKey: buildEmailDedupeKey(['review-api-draft-reminder-v1', monthYear]),
+      idempotencyMetadata: {
+        sequence: 'review-api-draft-reminder',
+        monthYear,
+      },
+      dailyRecipientMetadata: {
+        sequence: 'review-api-draft-reminder',
+        monthYear,
+      },
     });
 
-    if (!response.ok) {
-      const errorBody = await response.json();
-      console.error("Brevo API Error:", response.status, errorBody);
-      return res.status(response.status).json({ 
+    if (!sendResult.success) {
+      console.error("Brevo API Error:", sendResult.error);
+      return res.status(502).json({ 
         success: false,
-        error: `Failed to send email: ${errorBody.message || 'Unknown error'}`
+        error: `Failed to send email: ${sendResult.error || 'Unknown error'}`
       });
     }
 
-    const responseData = await response.json();
-    console.log("📧 Draft reminder email sent successfully:", responseData);
+    console.log("📧 Draft reminder email sent successfully:", sendResult.messageId);
 
     return res.status(200).json({
       success: true,
-      messageId: responseData.messageId,
+      messageId: sendResult.messageId,
       draftId
     });
 

@@ -1,6 +1,6 @@
 const { db, headers } = require('./config/firebase');
+const { buildEmailDedupeKey, sendBrevoTransactionalEmail } = require('./utils/sendBrevoTransactionalEmail');
 
-const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
 const SENDER_NAME = process.env.BREVO_SENDER_NAME || "Pulse Security";
 
@@ -39,11 +39,6 @@ const shouldSendEmail = async (ip, type) => {
 // Send email notification using Brevo (matching your existing pattern)
 const sendEmailNotification = async (logData) => {
   try {
-    if (!BREVO_API_KEY) {
-      console.error('Brevo API key (BREVO_MARKETING_KEY) is not set.');
-      return { success: false, error: 'Brevo API key not configured' };
-    }
-
     // Check rate limiting
     const shouldSend = await shouldSendEmail(logData.ip, logData.type);
     if (!shouldSend) {
@@ -67,15 +62,9 @@ const sendEmailNotification = async (logData) => {
     const alertColor = getAlertColor(logData.type);
     const isSuccess = logData.type === 'successful_access';
 
-    const brevoPayload = {
-      sender: {
-        name: SENDER_NAME,
-        email: SENDER_EMAIL
-      },
-      to: [{
-        email: 'tremaine.grant@gmail.com',
-        name: 'Tremaine Grant'
-      }],
+    const sendResult = await sendBrevoTransactionalEmail({
+      toEmail: 'tremaine.grant@gmail.com',
+      toName: 'Tremaine Grant',
       subject: `🚨 Secure Page Access Alert - ${logData.type.replace('_', ' ').toUpperCase()}`,
       htmlContent: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -137,33 +126,40 @@ const sendEmailNotification = async (logData) => {
             </div>
           </div>
         </div>
-      `
-    };
-
-    // Send email via Brevo API (matching your existing pattern)
-    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "Accept": "application/json",
-        "api-key": BREVO_API_KEY,
-        "Content-Type": "application/json",
+      `,
+      sender: {
+        name: SENDER_NAME,
+        email: SENDER_EMAIL,
       },
-      body: JSON.stringify(brevoPayload),
+      bypassDailyRecipientLimit: true,
+      dailyRecipientMetadata: {
+        sequence: 'secure-access-alert',
+        alertType: logData.type,
+      },
+      idempotencyKey: buildEmailDedupeKey([
+        'secure-access-alert-v1',
+        logData.type,
+        logData.ip || 'unknown-ip',
+        Math.floor(new Date(logData.timestamp || Date.now()).getTime() / (10 * 60 * 1000)),
+      ]),
+      idempotencyMetadata: {
+        sequence: 'secure-access-alert',
+        ip: logData.ip || null,
+        alertType: logData.type,
+      },
     });
 
-    if (!response.ok) {
-      const errorBody = await response.json();
-      console.error('Brevo API Error for secure access alert:', response.status, errorBody);
-      return { success: false, error: errorBody.message || 'Brevo API error' };
+    if (!sendResult.success) {
+      console.error('Brevo API Error for secure access alert:', sendResult.error);
+      return { success: false, error: sendResult.error || 'Brevo API error' };
     }
 
-    const responseData = await response.json();
-    console.log(`✅ Secure access alert email sent successfully via Brevo for IP ${logData.ip}:`, responseData);
+    console.log(`✅ Secure access alert email sent successfully via Brevo for IP ${logData.ip}:`, sendResult.messageId);
     
     return { 
       success: true, 
       message: 'Email notification sent via Brevo',
-      messageId: responseData.messageId,
+      messageId: sendResult.messageId,
       rateLimited: false
     };
 

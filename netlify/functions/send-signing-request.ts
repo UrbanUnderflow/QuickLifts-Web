@@ -1,7 +1,7 @@
 import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { admin } from "./config/firebase";
+import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
 
-const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
 const BASE_URL = process.env.CUSTOM_BASE_URL || "https://fitwithpulse.ai";
 
@@ -23,11 +23,6 @@ function resolveBranding(companyName: string) {
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
-  }
-
-  if (!BREVO_API_KEY) {
-    console.error("Brevo API key (BREVO_MARKETING_KEY) is not set.");
-    return { statusCode: 500, body: JSON.stringify({ message: "Email service configuration error." }) };
   }
 
   try {
@@ -188,37 +183,33 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       </html>
     `;
 
-    const brevoPayload = {
+    const sendResult = await sendBrevoTransactionalEmail({
+      toEmail: recipientEmail,
+      toName: recipientName || recipientEmail,
+      subject,
+      htmlContent,
       sender: {
         name: branding.senderName,
         email: SENDER_EMAIL,
       },
-      to: [
-        {
-          email: recipientEmail,
-          name: recipientName || recipientEmail,
-        },
-      ],
-      subject: subject,
-      htmlContent: htmlContent,
-    };
-
-    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "Accept": "application/json",
-        "api-key": BREVO_API_KEY,
-        "Content-Type": "application/json",
+      idempotencyKey: buildEmailDedupeKey(['signing-request-v1', documentId, recipientEmail]),
+      idempotencyMetadata: {
+        sequence: 'signing-request',
+        documentId,
+        recipientEmail,
       },
-      body: JSON.stringify(brevoPayload),
+      bypassDailyRecipientLimit: true,
+      dailyRecipientMetadata: {
+        sequence: 'signing-request',
+        documentId,
+      },
     });
 
-    if (!response.ok) {
-      const errorBody = await response.json();
-      console.error("Brevo API Error:", response.status, errorBody);
+    if (!sendResult.success) {
+      console.error("Brevo API Error:", sendResult.error);
       return {
-        statusCode: response.status,
-        body: JSON.stringify({ message: "Failed to send email via Brevo.", details: errorBody })
+        statusCode: 502,
+        body: JSON.stringify({ message: "Failed to send email via Brevo.", details: sendResult.error })
       };
     }
 
@@ -234,8 +225,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       // Don't fail the request if Firestore update fails
     }
 
-    const responseData = await response.json();
-    console.log("Signing request email sent successfully:", responseData);
+    console.log("Signing request email sent successfully:", sendResult.messageId);
 
     return { statusCode: 200, body: JSON.stringify({ message: "Signing request sent successfully." }) };
 
@@ -252,6 +242,5 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 };
 
 export { handler };
-
 
 

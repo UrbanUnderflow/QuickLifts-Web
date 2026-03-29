@@ -1,6 +1,6 @@
 import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
+import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
 
-const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
 const SENDER_NAME = "Pulse Intelligence Labs";
 const ADMIN_EMAIL = "tre@fitwithpulse.ai";
@@ -14,11 +14,6 @@ type Recipient = {
 const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) => {
     if (event.httpMethod !== "POST") {
         return { statusCode: 405, body: "Method Not Allowed" };
-    }
-
-    if (!BREVO_API_KEY) {
-        console.error("Brevo API key (BREVO_MARKETING_KEY) is not set.");
-        return { statusCode: 500, body: JSON.stringify({ message: "Email service configuration error." }) };
     }
 
     try {
@@ -97,29 +92,26 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
         if (recipients.length > 0) {
             const results = await Promise.allSettled(
                 recipients.map(async (recipient) => {
-                    const executedResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
-                        method: "POST",
-                        headers: {
-                            "Accept": "application/json",
-                            "api-key": BREVO_API_KEY,
-                            "Content-Type": "application/json",
+                    const sendResult = await sendBrevoTransactionalEmail({
+                        toEmail: recipient.email,
+                        toName: recipient.name,
+                        subject: executedSubject,
+                        htmlContent: executedHtmlContent,
+                        sender: { name: SENDER_NAME, email: SENDER_EMAIL },
+                        idempotencyKey: buildEmailDedupeKey(['fully-executed-v1', documentId, recipient.email]),
+                        idempotencyMetadata: {
+                            sequence: 'fully-executed',
+                            documentId,
+                            recipientEmail: recipient.email,
                         },
-                        body: JSON.stringify({
-                            sender: { name: SENDER_NAME, email: SENDER_EMAIL },
-                            to: [recipient],
-                            subject: executedSubject,
-                            htmlContent: executedHtmlContent,
-                        }),
+                        bypassDailyRecipientLimit: true,
+                        dailyRecipientMetadata: {
+                            sequence: 'fully-executed',
+                            documentId,
+                        },
                     });
-
-                    if (!executedResponse.ok) {
-                        let errorBody: unknown;
-                        try {
-                            errorBody = await executedResponse.json();
-                        } catch {
-                            errorBody = await executedResponse.text();
-                        }
-                        throw new Error(`Failed for ${recipient.email}: ${JSON.stringify(errorBody)}`);
+                    if (!sendResult.success) {
+                        throw new Error(`Failed for ${recipient.email}: ${sendResult.error || 'unknown error'}`);
                     }
                 })
             );

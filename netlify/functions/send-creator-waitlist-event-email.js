@@ -1,6 +1,6 @@
 const { headers } = require('./config/firebase');
+const { buildEmailDedupeKey, sendBrevoTransactionalEmail } = require('./utils/sendBrevoTransactionalEmail');
 
-const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'no-reply@fitwithpulse.ai';
 const SENDER_NAME = process.env.BREVO_SENDER_NAME || 'Pulse: The Fitness Collective';
 
@@ -23,15 +23,6 @@ exports.handler = async (event) => {
       statusCode: 405,
       headers,
       body: JSON.stringify({ success: false, error: 'Method not allowed' }),
-    };
-  }
-
-  if (!BREVO_API_KEY) {
-    console.error('[send-creator-waitlist-event-email] Brevo API key not configured');
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ success: false, error: 'Email service not configured' }),
     };
   }
 
@@ -82,32 +73,35 @@ exports.handler = async (event) => {
           return { success: false, error: 'Missing email', index: idx };
         }
 
-        const brevoPayload = {
-          sender: { name: entrySenderName, email: SENDER_EMAIL },
-          to: [{ email: toEmail, name: safeName }],
+        const sendResult = await sendBrevoTransactionalEmail({
+          toEmail,
+          toName: safeName,
           subject: entrySubject,
           htmlContent,
+          sender: { name: entrySenderName, email: SENDER_EMAIL },
           headers: { 'X-Email-Type': 'creator-waitlist-event-confirmation' },
-        };
-
-        const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            'api-key': BREVO_API_KEY,
-            'Content-Type': 'application/json',
+          idempotencyKey: buildEmailDedupeKey([
+            'creator-waitlist-event-v1',
+            entry.id || toEmail,
+            entrySubject,
+          ]),
+          idempotencyMetadata: {
+            sequence: 'creator-waitlist-event-confirmation',
+            entryId: entry.id || null,
+            toEmail,
           },
-          body: JSON.stringify(brevoPayload),
+          dailyRecipientMetadata: {
+            sequence: 'creator-waitlist-event-confirmation',
+            entryId: entry.id || null,
+          },
         });
 
-        if (!resp.ok) {
-          const errTxt = await resp.text().catch(() => '');
-          console.error('[send-creator-waitlist-event-email] Brevo send failed:', resp.status, errTxt);
-          return { success: false, error: 'Brevo send failed', status: resp.status, index: idx };
+        if (!sendResult.success) {
+          console.error('[send-creator-waitlist-event-email] Brevo send failed:', sendResult.error);
+          return { success: false, error: sendResult.error || 'Brevo send failed', index: idx };
         }
 
-        const data = await resp.json().catch(() => ({}));
-        return { success: true, index: idx, brevo: data };
+        return { success: true, index: idx, brevo: { messageId: sendResult.messageId }, skipped: !!sendResult.skipped };
       } catch (err) {
         console.error('[send-creator-waitlist-event-email] Unexpected error for entry', idx, err);
         return { success: false, error: err && err.message ? err.message : 'Unknown error', index: idx };
@@ -236,6 +230,5 @@ function buildDefaultHtmlTemplate(safeName) {
     </div>
   `;
 }
-
 
 

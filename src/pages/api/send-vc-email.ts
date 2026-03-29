@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from '../../../netlify/functions/utils/emailSequenceHelpers';
 
 interface EmailRecipient {
   email: string;
@@ -18,7 +19,6 @@ interface SendEmailResponse {
   scheduledFor: string;
 }
 
-const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
 const SENDER_NAME = process.env.BREVO_SENDER_NAME || "Tremaine Grant";
 
@@ -36,11 +36,6 @@ export default async function handler(
     // Validate input
     if (!to?.email || !to?.name || !subject?.trim() || !htmlContent?.trim()) {
       return res.status(400).json({ error: 'Missing required email fields', success: false });
-    }
-
-    if (!BREVO_API_KEY) {
-      console.error('Brevo API key (BREVO_MARKETING_KEY) is not set.');
-      return res.status(500).json({ error: 'Email service configuration error', success: false });
     }
 
     // Calculate 5 minutes from now in ISO format for scheduling
@@ -110,65 +105,56 @@ export default async function handler(
     `;
 
     // Prepare Brevo API payload for scheduled email
-    const brevoPayload = {
+    console.log('📤 Sending to Brevo API with payload:', {
+      to: [{ email: to.email, name: to.name }],
+      subject,
+      scheduledAt: scheduledTimeISO,
+      prospectId
+    });
+
+    const sendResult = await sendBrevoTransactionalEmail({
+      toEmail: to.email,
+      toName: to.name,
+      subject,
+      htmlContent: formattedHtmlContent,
+      scheduledAt: scheduledTimeISO,
       sender: {
         name: SENDER_NAME,
         email: SENDER_EMAIL,
       },
-      to: [
-        {
-          email: to.email,
-          name: to.name,
-        },
-      ],
-      subject: subject,
-      htmlContent: formattedHtmlContent,
-      scheduledAt: scheduledTimeISO, // Schedule for 5 minutes from now
-      // Add tracking and analytics
       headers: {
         'X-Prospect-ID': prospectId,
-        'X-Email-Type': 'vc-outreach'
+        'X-Email-Type': 'vc-outreach',
       },
-      // Enable tracking
       replyTo: {
         email: SENDER_EMAIL,
-        name: SENDER_NAME
-      }
-    };
-
-    console.log('📤 Sending to Brevo API with payload:', {
-      to: brevoPayload.to,
-      subject: brevoPayload.subject,
-      scheduledAt: brevoPayload.scheduledAt,
-      prospectId
-    });
-
-    // Send to Brevo API
-    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "Accept": "application/json",
-        "api-key": BREVO_API_KEY,
-        "Content-Type": "application/json",
+        name: SENDER_NAME,
       },
-      body: JSON.stringify(brevoPayload),
+      idempotencyKey: buildEmailDedupeKey(['vc-outreach-v1', prospectId, to.email, subject]),
+      idempotencyMetadata: {
+        sequence: 'vc-outreach',
+        prospectId,
+        recipientEmail: to.email,
+      },
+      dailyRecipientMetadata: {
+        sequence: 'vc-outreach',
+        prospectId,
+      },
     });
 
-    if (!response.ok) {
-      const errorBody = await response.json();
-      console.error("Brevo API Error:", response.status, errorBody);
-      return res.status(response.status).json({ 
-        error: `Failed to schedule email via Brevo: ${errorBody.message || 'Unknown error'}`,
+    if (!sendResult.success) {
+      console.error("Brevo API Error:", sendResult.error);
+      return res.status(502).json({ 
+        error: `Failed to schedule email via Brevo: ${sendResult.error || 'Unknown error'}`,
         success: false
       });
     }
 
-    const responseData = await response.json();
-    console.log("📧 Email scheduled successfully via Brevo:", responseData);
+    console.log("📧 Email scheduled successfully via Brevo:", sendResult.messageId);
 
     return res.status(200).json({
       success: true,
-      messageId: responseData.messageId,
+      messageId: sendResult.messageId,
       scheduledFor: scheduledTimeISO
     });
 

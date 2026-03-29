@@ -1,4 +1,12 @@
 import { getFirestore, initAdmin } from './getServiceAccount';
+import {
+  DEFAULT_EMAIL_LOCK_STALE_MS,
+  buildEmailDedupeKey as buildSharedEmailDedupeKey,
+  buildRecipientDailyQuotaKey,
+  getUtcDateKey,
+  normalizeEmailAddress,
+  shouldBlockRecipientDailyQuota,
+} from './emailSafety';
 
 export type SequenceTemplate = {
   subject: string;
@@ -39,7 +47,6 @@ type RecipientDailyState = {
 const EMAIL_SEND_LOCK_COLLECTION = 'email-send-idempotency';
 const EMAIL_SEQUENCE_LOCK_COLLECTION = 'email-sequence-locks';
 const EMAIL_RECIPIENT_DAILY_COLLECTION = 'email-recipient-daily-limits';
-const DEFAULT_EMAIL_LOCK_STALE_MS = 2 * 60 * 60 * 1000;
 
 function toText(value: any): string {
   if (value === null || value === undefined) return '';
@@ -72,33 +79,13 @@ function buildTemplateVarLookup(vars: Record<string, any>): Map<string, string> 
   return map;
 }
 
-function normalizeDedupePart(value: any): string {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'number' && Number.isFinite(value)) return String(Math.trunc(value));
-  if (typeof value === 'string') return value.trim().toLowerCase();
-  return String(value).trim().toLowerCase();
-}
-
 function getNestedValue(source: Record<string, any>, path: string): any {
   if (!source || !path) return undefined;
   return path.split('.').reduce<any>((acc, part) => (acc === null || acc === undefined ? undefined : acc[part]), source);
 }
 
 export function buildEmailDedupeKey(parts: any[]): string {
-  return parts.map(normalizeDedupePart).filter(Boolean).join('::');
-}
-
-function normalizeEmailAddress(email: string): string {
-  return String(email || '').trim().toLowerCase();
-}
-
-function getUtcDateKey(value?: string | Date | null): string {
-  const date = value ? new Date(value) : new Date();
-  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
-  const year = safeDate.getUTCFullYear();
-  const month = String(safeDate.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(safeDate.getUTCDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return buildSharedEmailDedupeKey(parts);
 }
 
 async function claimRecipientDailyQuota(args: {
@@ -110,23 +97,24 @@ async function claimRecipientDailyQuota(args: {
   metadata?: Record<string, any>;
 }): Promise<{ status: 'claimed' | 'blocked' }> {
   const db = await getFirestore();
-  const recipientKey = buildEmailDedupeKey([normalizeEmailAddress(args.toEmail), getUtcDateKey(args.scheduledAt)]);
+  const recipientKey = buildRecipientDailyQuotaKey({
+    toEmail: args.toEmail,
+    scheduledAt: args.scheduledAt,
+  });
   const docRef = db.collection(EMAIL_RECIPIENT_DAILY_COLLECTION).doc(recipientKey);
 
   return db.runTransaction(async (tx) => {
     const snap = (await tx.get(docRef)) as any;
     const data = (snap.data() || {}) as RecipientDailyState;
-    const sentCount = Number(data.sentCount || 0) || 0;
-
-    if (sentCount >= args.dailyLimit) {
+    if (
+      shouldBlockRecipientDailyQuota({
+        state: data,
+        runId: args.runId,
+        nowMs: args.nowMs,
+        dailyLimit: args.dailyLimit,
+      })
+    ) {
       return { status: 'blocked' as const };
-    }
-
-    if (data.runId && data.runId !== args.runId) {
-      const claimedAtMs = toMillis(data.claimedAt);
-      if (claimedAtMs !== null && args.nowMs - claimedAtMs < DEFAULT_EMAIL_LOCK_STALE_MS) {
-        return { status: 'blocked' as const };
-      }
     }
 
     tx.set(
@@ -155,7 +143,10 @@ async function finalizeRecipientDailyQuota(args: {
 }): Promise<void> {
   const db = await getFirestore();
   const FieldValue = initAdmin().firestore.FieldValue;
-  const recipientKey = buildEmailDedupeKey([normalizeEmailAddress(args.toEmail), getUtcDateKey(args.scheduledAt)]);
+  const recipientKey = buildRecipientDailyQuotaKey({
+    toEmail: args.toEmail,
+    scheduledAt: args.scheduledAt,
+  });
   const docRef = db.collection(EMAIL_RECIPIENT_DAILY_COLLECTION).doc(recipientKey);
 
   await db.runTransaction(async (tx) => {
@@ -191,7 +182,10 @@ async function releaseRecipientDailyQuota(args: {
 }): Promise<void> {
   const db = await getFirestore();
   const FieldValue = initAdmin().firestore.FieldValue;
-  const recipientKey = buildEmailDedupeKey([normalizeEmailAddress(args.toEmail), getUtcDateKey(args.scheduledAt)]);
+  const recipientKey = buildRecipientDailyQuotaKey({
+    toEmail: args.toEmail,
+    scheduledAt: args.scheduledAt,
+  });
   const docRef = db.collection(EMAIL_RECIPIENT_DAILY_COLLECTION).doc(recipientKey);
 
   await db.runTransaction(async (tx) => {
@@ -568,7 +562,12 @@ export async function sendBrevoTransactionalEmail(args: {
   subject: string;
   htmlContent: string;
   tags?: string[];
+  headers?: Record<string, string>;
+  cc?: Array<{ email: string; name?: string }>;
+  bcc?: Array<{ email: string; name?: string }>;
   scheduledAt?: string;
+  sender?: { email: string; name?: string };
+  replyTo?: { email: string; name?: string };
   idempotencyKey?: string;
   idempotencyMetadata?: Record<string, any>;
   bypassDailyRecipientLimit?: boolean;
@@ -584,8 +583,8 @@ export async function sendBrevoTransactionalEmail(args: {
     return { success: false, error: 'Missing recipient email' };
   }
 
-  const senderEmail = process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
-  const senderName = process.env.BREVO_SENDER_NAME || 'Pulse';
+  const senderEmail = args.sender?.email || process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
+  const senderName = args.sender?.name || process.env.BREVO_SENDER_NAME || 'Pulse';
   const nowMs = Date.now();
   const runId = `brevo-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
   const dailyRecipientLimit = Math.max(1, Number(args.dailyRecipientLimit || 1) || 1);
@@ -632,9 +631,19 @@ export async function sendBrevoTransactionalEmail(args: {
     to: [{ email: args.toEmail, name: args.toName || args.toEmail }],
     subject: args.subject,
     htmlContent: args.htmlContent,
-    replyTo: { email: senderEmail, name: 'Pulse Team' },
+    replyTo: args.replyTo || { email: senderEmail, name: senderName || 'Pulse Team' },
     tags: (args.tags || []).filter(Boolean),
   };
+
+  if (args.headers && Object.keys(args.headers).length > 0) {
+    payload.headers = args.headers;
+  }
+  if (args.cc && args.cc.length > 0) {
+    payload.cc = args.cc;
+  }
+  if (args.bcc && args.bcc.length > 0) {
+    payload.bcc = args.bcc;
+  }
 
   if (args.scheduledAt) {
     const d = new Date(args.scheduledAt);

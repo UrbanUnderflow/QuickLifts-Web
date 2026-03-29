@@ -1,4 +1,5 @@
 import type { Handler } from '@netlify/functions';
+import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
 
 type SendResponse = { 
   success: boolean; 
@@ -17,17 +18,8 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
     const senderEmail = 'tre@fitwithpulse.ai';
     const senderName = 'Tremaine Grant';
-
-    if (!apiKey) {
-      return {
-        statusCode: 500,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: false, error: 'Brevo not configured' } satisfies SendResponse),
-      };
-    }
 
     const body = event.body ? JSON.parse(event.body) : {};
     const { to, subject, textContent, htmlContent, scheduledAt, friendId, updatePeriodId } = body || {};
@@ -75,63 +67,56 @@ export const handler: Handler = async (event) => {
       `;
     }
 
-    const payload: any = {
-      sender: { name: senderName, email: senderEmail },
-      to: [{ email: to.email, name: to.name || to.email }],
+    const sendResult = await sendBrevoTransactionalEmail({
+      toEmail: to.email,
+      toName: to.name || to.email,
       subject,
       htmlContent: finalHtmlContent,
+      scheduledAt,
+      sender: { email: senderEmail, name: senderName },
       replyTo: { email: senderEmail, name: senderName },
-      // Enable Brevo tracking - this is safe for domain reputation
-      // Brevo handles tracking via their own infrastructure
       headers: {
         'X-Mailin-custom': JSON.stringify({
           friendId: friendId || null,
-          emailRecordId: emailRecordId,
-          updatePeriodId: updatePeriodId || null
-        })
+          emailRecordId,
+          updatePeriodId: updatePeriodId || null,
+        }),
       },
-      // Tags help organize emails and enable filtering in Brevo dashboard
       tags: [
-        'friends-of-business', 
+        'friends-of-business',
         friendId ? `friend:${friendId}` : null,
-        updatePeriodId ? `update:${updatePeriodId}` : null
-      ].filter(Boolean),
-    };
-
-    // Optional scheduling per Brevo API (ISO8601 with timezone)
-    if (scheduledAt) {
-      const date = new Date(scheduledAt);
-      if (!isNaN(date.getTime())) {
-        payload.scheduledAt = date.toISOString();
-      }
-    }
-
-    const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'api-key': apiKey,
-        'Content-Type': 'application/json',
+        updatePeriodId ? `update:${updatePeriodId}` : null,
+      ].filter(Boolean) as string[],
+      idempotencyKey: buildEmailDedupeKey([
+        'friend-email-v1',
+        friendId || to.email,
+        updatePeriodId || subject,
+      ]),
+      idempotencyMetadata: {
+        sequence: 'friend-email',
+        friendId: friendId || null,
+        updatePeriodId: updatePeriodId || null,
       },
-      body: JSON.stringify(payload),
+      dailyRecipientMetadata: {
+        sequence: 'friend-email',
+        friendId: friendId || null,
+      },
     });
 
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
+    if (!sendResult.success) {
       return {
-        statusCode: resp.status,
+        statusCode: 502,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: false, error: err?.message || 'Brevo API error' } satisfies SendResponse),
+        body: JSON.stringify({ success: false, error: sendResult.error || 'Brevo API error' } satisfies SendResponse),
       };
     }
 
-    const data = await resp.json().catch(() => ({}));
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         success: true, 
-        messageId: data?.messageId,
+        messageId: sendResult.messageId,
         emailRecordId: emailRecordId
       } satisfies SendResponse),
     };
@@ -153,4 +138,3 @@ function escapeHtml(input: string) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
-

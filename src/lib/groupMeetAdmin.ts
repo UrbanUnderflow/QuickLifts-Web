@@ -1,5 +1,6 @@
 import type { NextApiRequest } from 'next';
 import admin from './firebase-admin';
+import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from '../../netlify/functions/utils/emailSequenceHelpers';
 import {
   buildGroupMeetShareUrl,
   normalizeGroupMeetAvailabilitySlots,
@@ -175,27 +176,37 @@ export async function sendGroupMeetInviteEmail(args: {
     </div>
   `;
 
-  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      'api-key': apiKey,
+  const sendResult = await sendBrevoTransactionalEmail({
+    toEmail: args.recipientEmail,
+    toName: args.recipientName || args.recipientEmail,
+    subject,
+    htmlContent,
+    sender: { email: senderEmail, name: senderName },
+    replyTo: { email: senderEmail, name: senderName },
+    idempotencyKey: buildEmailDedupeKey([
+      'group-meet-invite-v1',
+      args.shareUrl,
+      args.recipientEmail,
+      mode,
+    ]),
+    idempotencyMetadata: {
+      sequence: 'group-meet-invite',
+      shareUrl: args.shareUrl,
+      recipientEmail: args.recipientEmail,
+      mode,
     },
-    body: JSON.stringify({
-      sender: { email: senderEmail, name: senderName },
-      to: [{ email: args.recipientEmail, name: args.recipientName || args.recipientEmail }],
-      subject,
-      htmlContent,
-      replyTo: { email: senderEmail, name: senderName },
-    }),
+    dailyRecipientLimit: mode === 'test' ? 2 : 1,
+    dailyRecipientMetadata: {
+      sequence: 'group-meet-invite',
+      shareUrl: args.shareUrl,
+      mode,
+    },
   });
 
-  if (!response.ok) {
-    const errorPayload = await response.json().catch(() => ({}));
+  if (!sendResult.success) {
     return {
       success: false,
-      error: errorPayload?.message || `Brevo error (${response.status})`,
+      error: sendResult.error || 'Brevo error',
     };
   }
 

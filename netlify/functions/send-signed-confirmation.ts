@@ -1,6 +1,6 @@
 import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
+import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
 
-const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
 const SENDER_NAME = "Pulse Intelligence Labs";
 const ADMIN_EMAIL = "tre@fitwithpulse.ai";
@@ -9,11 +9,6 @@ const BASE_URL = process.env.CUSTOM_BASE_URL || "https://fitwithpulse.ai";
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
-  }
-
-  if (!BREVO_API_KEY) {
-    console.error("Brevo API key (BREVO_MARKETING_KEY) is not set.");
-    return { statusCode: 500, body: JSON.stringify({ message: "Email service configuration error." }) };
   }
 
   try {
@@ -343,43 +338,51 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     `;
 
     // Send email to Admin
-    const adminResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "Accept": "application/json",
-        "api-key": BREVO_API_KEY,
-        "Content-Type": "application/json",
+    const adminSendResult = await sendBrevoTransactionalEmail({
+      toEmail: ADMIN_EMAIL,
+      toName: "Tremaine Grant",
+      subject: adminSubject,
+      htmlContent: adminHtmlContent,
+      sender: { name: SENDER_NAME, email: SENDER_EMAIL },
+      idempotencyKey: buildEmailDedupeKey(['signed-confirmation-admin-v1', documentId, recipientEmail]),
+      idempotencyMetadata: {
+        sequence: 'signed-confirmation-admin',
+        documentId,
+        recipientEmail,
       },
-      body: JSON.stringify({
-        sender: { name: SENDER_NAME, email: SENDER_EMAIL },
-        to: [{ email: ADMIN_EMAIL, name: "Tremaine Grant" }],
-        subject: adminSubject,
-        htmlContent: adminHtmlContent,
-      }),
+      bypassDailyRecipientLimit: true,
+      dailyRecipientMetadata: {
+        sequence: 'signed-confirmation-admin',
+        documentId,
+      },
     });
 
-    if (!adminResponse.ok) {
-      console.error("Failed to send admin notification:", await adminResponse.json());
+    if (!adminSendResult.success) {
+      console.error("Failed to send admin notification:", adminSendResult.error);
     }
 
     // Send confirmation email to Signer
-    const signerResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "Accept": "application/json",
-        "api-key": BREVO_API_KEY,
-        "Content-Type": "application/json",
+    const signerSendResult = await sendBrevoTransactionalEmail({
+      toEmail: recipientEmail,
+      toName: recipientName,
+      subject: signerSubject,
+      htmlContent: signerHtmlContent,
+      sender: { name: SENDER_NAME, email: SENDER_EMAIL },
+      idempotencyKey: buildEmailDedupeKey(['signed-confirmation-signer-v1', documentId, recipientEmail]),
+      idempotencyMetadata: {
+        sequence: 'signed-confirmation-signer',
+        documentId,
+        recipientEmail,
       },
-      body: JSON.stringify({
-        sender: { name: SENDER_NAME, email: SENDER_EMAIL },
-        to: [{ email: recipientEmail, name: recipientName }],
-        subject: signerSubject,
-        htmlContent: signerHtmlContent,
-      }),
+      bypassDailyRecipientLimit: true,
+      dailyRecipientMetadata: {
+        sequence: 'signed-confirmation-signer',
+        documentId,
+      },
     });
 
-    if (!signerResponse.ok) {
-      console.error("Failed to send signer confirmation:", await signerResponse.json());
+    if (!signerSendResult.success) {
+      console.error("Failed to send signer confirmation:", signerSendResult.error);
     }
 
     // --- NEW LOGIC: Fully Executed Email for Multiple Signers ---
@@ -440,23 +443,32 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       recipients.push({ name: "Tremaine Grant", email: ADMIN_EMAIL });
 
       if (recipients.length > 0) {
-        const executedResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
-          method: "POST",
-          headers: {
-            "Accept": "application/json",
-            "api-key": BREVO_API_KEY,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            sender: { name: SENDER_NAME, email: SENDER_EMAIL },
-            to: recipients,
-            subject: executedSubject,
-            htmlContent: executedHtmlContent,
-          }),
-        });
+        const results = await Promise.all(
+          recipients.map((recipient: any) =>
+            sendBrevoTransactionalEmail({
+              toEmail: recipient.email,
+              toName: recipient.name,
+              subject: executedSubject,
+              htmlContent: executedHtmlContent,
+              sender: { name: SENDER_NAME, email: SENDER_EMAIL },
+              idempotencyKey: buildEmailDedupeKey(['signed-confirmation-executed-v1', documentId, recipient.email]),
+              idempotencyMetadata: {
+                sequence: 'signed-confirmation-executed',
+                documentId,
+                recipientEmail: recipient.email,
+              },
+              bypassDailyRecipientLimit: true,
+              dailyRecipientMetadata: {
+                sequence: 'signed-confirmation-executed',
+                documentId,
+              },
+            })
+          )
+        );
 
-        if (!executedResponse.ok) {
-          console.error("Failed to send fully executed confirmation:", await executedResponse.json());
+        const failures = results.filter((result) => !result.success);
+        if (failures.length > 0) {
+          console.error("Failed to send fully executed confirmation:", failures.map((result) => result.error));
         } else {
           console.log("Fully executed notification sent to:", recipients.map((r: any) => r.email));
         }
@@ -480,7 +492,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 };
 
 export { handler };
-
 
 
 

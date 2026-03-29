@@ -1,7 +1,7 @@
 // netlify/functions/send-staff-invite-email.js
 // Sends a staff invite email via Brevo (Sendinblue) transactional API
 
-const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
+const { buildEmailDedupeKey, sendBrevoTransactionalEmail } = require('./utils/sendBrevoTransactionalEmail');
 
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
@@ -12,11 +12,6 @@ exports.handler = async function (event) {
   }
 
   try {
-    if (!BREVO_API_KEY) {
-      console.error('Brevo API key (BREVO_MARKETING_KEY) is not set.');
-      return { statusCode: 500, body: JSON.stringify({ message: 'Email service not configured' }) };
-    }
-
     const body = JSON.parse(event.body || '{}');
     const {
       toEmail,
@@ -53,36 +48,33 @@ exports.handler = async function (event) {
       </div>
     `;
 
-    const brevoPayload = {
-      sender: { name: 'Pulse', email: 'no-reply@fitwithpulse.ai' },
-      to: [{ email: toEmail }],
+    const sendResult = await sendBrevoTransactionalEmail({
+      toEmail,
       subject,
       htmlContent,
-      headers: { 'X-Email-Type': 'staff-invite' }
-    };
-
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'api-key': BREVO_API_KEY,
-        'Content-Type': 'application/json'
+      sender: { name: 'Pulse', email: 'no-reply@fitwithpulse.ai' },
+      headers: { 'X-Email-Type': 'staff-invite' },
+      idempotencyKey: buildEmailDedupeKey(['staff-invite-v1', toEmail, inviteUrl]),
+      idempotencyMetadata: {
+        sequence: 'staff-invite',
+        toEmail,
+        inviteUrl,
       },
-      body: JSON.stringify(brevoPayload)
+      bypassDailyRecipientLimit: true,
+      dailyRecipientMetadata: {
+        sequence: 'staff-invite',
+      },
     });
 
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      console.error('[send-staff-invite-email] Brevo error:', response.status, errorBody);
-      return { statusCode: 400, body: JSON.stringify({ message: 'Failed to send invite', details: errorBody }) };
+    if (!sendResult.success) {
+      console.error('[send-staff-invite-email] Brevo error:', sendResult.error);
+      return { statusCode: 400, body: JSON.stringify({ message: 'Failed to send invite', details: sendResult.error }) };
     }
 
-    const resJson = await response.json();
-    return { statusCode: 200, body: JSON.stringify({ message: 'Invite sent', result: resJson }) };
+    return { statusCode: 200, body: JSON.stringify({ message: 'Invite sent', result: { messageId: sendResult.messageId } }) };
   } catch (err) {
     console.error('[send-staff-invite-email] Unexpected error:', err);
     return { statusCode: 500, body: JSON.stringify({ message: 'Internal error' }) };
   }
 };
-
 
