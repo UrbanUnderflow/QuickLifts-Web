@@ -57,6 +57,18 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "/api/vision-pro/reset-sounds"
+  to = "/.netlify/functions/vision-pro-reset-sounds"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/audio/run-alerts"
+  to = "/.netlify/functions/audio-run-alerts"
+  status = 200
+  force = true
+
 
 # NOTE: Do NOT add SPA-style catch-all redirects like "/* → / 200" here.
 # The @netlify/plugin-nextjs plugin handles ALL Next.js routing automatically.
