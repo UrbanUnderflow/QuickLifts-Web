@@ -1,28 +1,13 @@
 const { db, headers } = require('./config/firebase');
+const { resolveFirebaseAdminCredential } = require('../../src/lib/server/firebase/credential-source');
 
 // Check if we're in development mode (based on NODE_ENV)
 const isDevelopmentMode = process.env.NODE_ENV === 'development';
-
-// Check each environment variable separately for better error diagnosis
-let missingVars = [];
-
-if (!process.env.FIREBASE_SECRET_KEY) {
-  missingVars.push('FIREBASE_SECRET_KEY');
-  console.error('Missing environment variable: FIREBASE_SECRET_KEY');
-}
-
-if (!process.env.FIREBASE_PRIVATE_KEY) {
-  missingVars.push('FIREBASE_PRIVATE_KEY_ALT');
-  console.error('Missing environment variable: FIREBASE_PRIVATE_KEY_ALT');
-}
+const firebaseCredential = resolveFirebaseAdminCredential({ mode: 'prod' });
+const hasSharedFirebaseCredential = firebaseCredential.source !== 'prod:unresolved';
 
 // Mock configuration for development mode
-const useMockData = isDevelopmentMode && missingVars.length > 0;
-
-// If in production, throw error about missing variables
-if (missingVars.length > 0 && !useMockData) {
-  throw new Error(`Missing environment variables: ${missingVars.join(', ')}`);
-}
+const useMockData = isDevelopmentMode && !hasSharedFirebaseCredential;
 
 // Mock user data for development testing
 const mockUsers = {
@@ -168,8 +153,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         success: false,
         error: error.message,
-        mode: useMockData ? 'development (mock data)' : 'production',
-        missingEnvVars: missingVars.length > 0 ? missingVars : undefined
+        mode: useMockData ? 'development (mock data)' : 'production'
       })
     };
   }

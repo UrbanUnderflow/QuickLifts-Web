@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import admin from '../../../lib/firebase-admin';
 
 /**
  * Notify a survey owner that a survey response was submitted (completed).
@@ -105,8 +105,7 @@ export default async function handler(
   }
 
   try {
-    // Firebase Admin is initialized on import
-    const db = getFirestore();
+    const db = admin.firestore();
 
     const body = (req.body || {}) as Partial<NotifyCompletedRequestBody>;
     const ownerUserId = String(body.ownerUserId || '').trim();
@@ -168,7 +167,7 @@ export default async function handler(
       // Mark as "sent" to avoid infinite retry loops; we still return success.
       await responseRef.set(
         {
-          completionEmailSentAt: FieldValue.serverTimestamp(),
+          completionEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
           completionEmailMessageId: null,
           completionEmailError: 'Owner missing email',
         },
@@ -231,7 +230,7 @@ export default async function handler(
 
     await responseRef.set(
       {
-        completionEmailSentAt: FieldValue.serverTimestamp(),
+        completionEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
         completionEmailMessageId: messageId || null,
       },
       { merge: true }

@@ -1,26 +1,7 @@
 // Netlify function: notify-coach-connection
 // Purpose: When an athlete connects to a coach, send a DM + email to the coach (idempotent)
 
-const admin = require('firebase-admin');
-
-// Initialize Firebase Admin once (reuse pattern from other functions)
-if (admin.apps.length === 0) {
-  try {
-    const projectId = 'quicklifts-dd3f1';
-    const privateKey = process.env.FIREBASE_SECRET_KEY ? process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n') : '';
-    const clientEmail = 'firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com';
-
-    if (!privateKey) {
-      admin.initializeApp({ projectId });
-    } else {
-      admin.initializeApp({
-        credential: admin.credential.cert({ projectId, privateKey, clientEmail })
-      });
-    }
-  } catch (e) {
-    console.error('[notify-coach-connection] Firebase init error:', e);
-  }
-}
+const { admin } = require('./config/firebase');
 
 const db = admin.firestore();
 
@@ -155,5 +136,4 @@ exports.handler = async (event) => {
     return { statusCode: 500, body: JSON.stringify({ message: 'Unexpected error' }) };
   }
 };
-
 

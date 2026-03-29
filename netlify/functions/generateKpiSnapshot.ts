@@ -7,14 +7,6 @@ import { KpiSnapshot } from './models/kpiSnapshot'; // Keep existing model impor
 import { FunctionMetadata } from './models/functionMetadata';
 import { v4 as uuidv4 } from 'uuid';
 
-// Check if Firebase Admin SDK is initialized correctly
-if (admin.apps.length === 0) { // Check the apps array
-  admin.initializeApp(); // Initialize if not already done
-  console.log("Firebase Admin SDK initialized by generateKpiSnapshot.");
-} else {
-  console.log("Using existing Firebase Admin SDK instance in generateKpiSnapshot.");
-}
-
 // Interfaces (assuming these are used by the functions called within)
 // Keep interfaces minimal if full logic is in imported functions
 interface WorkoutSummary {

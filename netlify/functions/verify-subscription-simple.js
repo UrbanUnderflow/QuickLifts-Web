@@ -1,40 +1,11 @@
 const Stripe = require('stripe');
-const admin = require('firebase-admin');
+const { admin } = require('./config/firebase');
 
 // Helper to determine if the request is from localhost
 const isLocalhostRequest = (event) => {
   const referer = event.headers.referer || event.headers.origin || '';
   return referer.includes('localhost') || referer.includes('127.0.0.1');
 };
-
-// Initialize Firebase Admin if not already initialized
-if (admin.apps.length === 0) {
-  try {
-    // Use the same pattern as other working functions
-    const projectId = "quicklifts-dd3f1"; // Use the consistent project ID
-    const privateKey = process.env.FIREBASE_SECRET_KEY ? 
-      process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n') : '';
-    const clientEmail = "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com";
-    
-    if (!privateKey) {
-      console.warn('[VerifySubscription] FIREBASE_SECRET_KEY missing, using fallback');
-      admin.initializeApp({
-        projectId: projectId
-      });
-    } else {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: projectId,
-          privateKey: privateKey,
-          clientEmail: clientEmail,
-        })
-      });
-    }
-    console.log('[VerifySubscription] Firebase Admin initialized successfully');
-  } catch (error) {
-    console.error('[VerifySubscription] Firebase initialization error:', error);
-  }
-}
 
 const db = admin.firestore();
 
@@ -265,4 +236,3 @@ const handler = async (event) => {
 };
 
 module.exports = { handler };
-

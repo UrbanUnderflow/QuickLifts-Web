@@ -1,39 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import * as admin from 'firebase-admin';
-
-function formatPrivateKey(key: string | undefined): string {
-  if (!key) return '';
-  let formatted = key.trim();
-  if ((formatted.startsWith('"') && formatted.endsWith('"')) || (formatted.startsWith("'") && formatted.endsWith("'"))) {
-    formatted = formatted.slice(1, -1);
-  }
-  if (formatted.includes('\\n')) formatted = formatted.replace(/\\n/g, '\n');
-  return formatted;
-}
-
-function getAdminApp(): admin.app.App {
-  const appName = 'run-alert-sounds';
-  try {
-    return admin.app(appName);
-  } catch {
-    // Initialize below.
-  }
-
-  const projectId = process.env.FIREBASE_PROJECT_ID || 'quicklifts-dd3f1';
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || 'firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com';
-  const privateKey = formatPrivateKey(process.env.FIREBASE_SECRET_KEY || process.env.FIREBASE_PRIVATE_KEY);
-
-  return admin.initializeApp(
-    {
-      credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey,
-      } as admin.ServiceAccount),
-    },
-    appName,
-  );
-}
+import admin from '../../../lib/firebase-admin';
 
 interface RunAlertCue {
   cueKey: string;
@@ -56,7 +22,7 @@ export default async function handler(
   }
 
   try {
-    const firestore = getAdminApp().firestore();
+    const firestore = admin.firestore();
     const snapshot = await firestore
       .collection('sim-audio-assets')
       .where('family', '==', 'community-run-alerts')

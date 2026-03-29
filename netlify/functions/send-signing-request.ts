@@ -1,6 +1,5 @@
 import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
-import { initializeApp, cert, getApps } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { admin } from "./config/firebase";
 
 const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
@@ -19,28 +18,6 @@ function resolveBranding(companyName: string) {
     accentColor: isTres ? '#3B82F6' : '#E0FE10',
     accentText: isTres ? '#FFFFFF' : '#000000',
   };
-}
-
-// Initialize Firebase Admin if not already initialized
-if (getApps().length === 0) {
-  try {
-    if (process.env.FIREBASE_SECRET_KEY) {
-      initializeApp({
-        credential: cert({
-          projectId: process.env.FIREBASE_PROJECT_ID || "quicklifts-dd3f1",
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL || "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
-          privateKey: process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
-        })
-      });
-    } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || "{}");
-      initializeApp({
-        credential: cert(serviceAccount),
-      });
-    }
-  } catch (error) {
-    console.error("Failed to initialize Firebase Admin:", error);
-  }
 }
 
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
@@ -247,7 +224,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     // Update the signing request status in Firestore
     try {
-      const db = getFirestore();
+      const db = admin.firestore();
       await db.collection("signingRequests").doc(documentId).update({
         status: "sent",
         sentAt: new Date(),
@@ -275,7 +252,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 };
 
 export { handler };
-
 
 
 

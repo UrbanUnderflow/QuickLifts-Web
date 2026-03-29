@@ -8,14 +8,6 @@ import { runKpiGeneration } from './generateKpiSnapshot';
 // import { FunctionMetadata } from './models/functionMetadata';
 // import { v4 as uuidv4 } from 'uuid';
 
-// Ensure Firebase Admin SDK is initialized 
-if (admin.apps.length === 0) {
-  admin.initializeApp();
-  console.log("Firebase Admin SDK initialized by triggerGenerateKpiSnapshot.");
-} else {
-  console.log("Using existing Firebase Admin SDK instance in triggerGenerateKpiSnapshot.");
-}
-
 // Interfaces (copy from generateKpiSnapshot or import if shared)
 interface WorkoutSummary {
   duration?: number; 

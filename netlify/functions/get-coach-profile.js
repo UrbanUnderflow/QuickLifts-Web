@@ -1,26 +1,4 @@
-const admin = require('firebase-admin');
-
-// Initialize Firebase Admin if not already initialized
-if (!admin.apps.length) {
-  try {
-    // Check if we have the required environment variables
-    if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PRIVATE_KEY) {
-      console.warn('[GetCoachProfile] Firebase Admin credentials not found in environment variables');
-      // For local development, we'll handle this in the handler
-    } else {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        }),
-      });
-      console.log('[GetCoachProfile] Firebase Admin initialized successfully');
-    }
-  } catch (error) {
-    console.error('[GetCoachProfile] Failed to initialize Firebase Admin:', error.message);
-  }
-}
+const { admin } = require('./config/firebase');
 
 const db = admin.firestore();
 

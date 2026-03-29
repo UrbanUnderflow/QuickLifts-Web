@@ -1,22 +1,4 @@
-const admin = require('firebase-admin');
-
-// Initialize Firebase Admin if not already initialized
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      type: "service_account",
-      project_id: "quicklifts-dd3f1",
-      private_key_id: process.env.FIREBASE_PRIVATE_KEY,
-      private_key: process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
-      client_email: "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
-      client_id: "111494077667496751062",
-      auth_uri: "https://accounts.google.com/o/oauth2/auth",
-      token_uri: "https://oauth2.googleapis.com/token",
-      auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-      client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0%40quicklifts-dd3f1.iam.gserviceaccount.com"
-    }),
-  });
-}
+const { admin } = require('./config/firebase');
 
 const db = admin.firestore();
 
@@ -91,6 +73,7 @@ exports.handler = async (event, context) => {
         const platformFeeCents = parseInt(platformFee) || 0;
         const totalChargeAmountCents = parseInt(totalChargeAmount || totalAmount) || paymentIntent.amount;
         const isPartialDeposit = existingEscrowAmountCents > 0;
+        const assignmentIdMeta = paymentIntent.metadata?.prizeAssignmentId || null;
 
         console.log(`[StripeDepositWebhook] Processing ${isPartialDeposit ? 'partial' : 'full'} deposit:`, {
           fullPrizeAmount: fullPrizeAmountCents,
@@ -148,11 +131,11 @@ exports.handler = async (event, context) => {
             status: 'held',
             paymentIntentId: paymentIntent.id,
             stripeChargeId: paymentIntent.latest_charge,
-            depositedBy,
-            depositorName,
-            depositorEmail,
-              prizeAssignmentId: assignmentIdMeta || null,
-            createdAt: new Date(),
+              depositedBy,
+              depositorName,
+              depositorEmail,
+              prizeAssignmentId: assignmentIdMeta,
+              createdAt: new Date(),
             updatedAt: new Date(),
             metadata: {
               fullPrizeAmount: fullPrizeAmountCents,
@@ -202,7 +185,6 @@ exports.handler = async (event, context) => {
         try {
           // Prefer direct assignmentId when provided to avoid updating older versions
           let prizeDoc = null;
-          const assignmentIdMeta = paymentIntent.metadata?.prizeAssignmentId;
           if (assignmentIdMeta) {
             const direct = await db.collection('challenge-prizes').doc(assignmentIdMeta).get();
             if (direct.exists) prizeDoc = direct;

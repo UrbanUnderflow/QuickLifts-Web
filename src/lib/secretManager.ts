@@ -1,4 +1,5 @@
 import { JWT } from 'google-auth-library';
+import firebaseCredentialSource from './server/firebase/credential-source';
 
 type ServiceAccountCredential = {
   projectId: string | null;
@@ -6,64 +7,18 @@ type ServiceAccountCredential = {
   privateKey: string | null;
 };
 
+const {
+  normalizePrivateKey,
+  parseSerializedServiceAccount,
+  resolveFirebaseAdminCredential,
+} = firebaseCredentialSource as {
+  normalizePrivateKey: (value?: string) => string | null;
+  parseSerializedServiceAccount: (raw?: string) => ServiceAccountCredential | null;
+  resolveFirebaseAdminCredential: (options?: Record<string, unknown>) => ServiceAccountCredential & { source: string; mode: string };
+};
+
 const SECRET_CACHE = new Map<string, string>();
 const SECRET_MANAGER_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
-
-function normalizePrivateKey(value?: string): string | null {
-  if (!value) return null;
-
-  let normalized = value.trim();
-  if (
-    (normalized.startsWith('"') && normalized.endsWith('"')) ||
-    (normalized.startsWith("'") && normalized.endsWith("'"))
-  ) {
-    normalized = normalized.slice(1, -1);
-  }
-
-  normalized = normalized.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n');
-  return normalized || null;
-}
-
-function parseSerializedServiceAccount(raw?: string): ServiceAccountCredential | null {
-  if (!raw) return null;
-
-  try {
-    const parsed = JSON.parse(raw) as {
-      project_id?: string;
-      projectId?: string;
-      client_email?: string;
-      clientEmail?: string;
-      private_key?: string;
-      privateKey?: string;
-    };
-
-    return {
-      projectId: parsed.project_id || parsed.projectId || null,
-      clientEmail: parsed.client_email || parsed.clientEmail || null,
-      privateKey: normalizePrivateKey(parsed.private_key || parsed.privateKey || undefined),
-    };
-  } catch (_error) {
-    return null;
-  }
-}
-
-function getInlineFirebasePrivateKey(): string | null {
-  const direct = normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_SECRET_KEY);
-  if (direct) return direct;
-
-  if (process.env.FIREBASE_PRIVATE_KEY_1) {
-    return normalizePrivateKey(
-      [
-        process.env.FIREBASE_PRIVATE_KEY_1 || '',
-        process.env.FIREBASE_PRIVATE_KEY_2 || '',
-        process.env.FIREBASE_PRIVATE_KEY_3 || '',
-        process.env.FIREBASE_PRIVATE_KEY_4 || '',
-      ].join('')
-    );
-  }
-
-  return null;
-}
 
 function getRuntimeServiceAccountCredential(): ServiceAccountCredential | null {
   const explicit =
@@ -74,28 +29,20 @@ function getRuntimeServiceAccountCredential(): ServiceAccountCredential | null {
     return explicit;
   }
 
-  const firebaseSerialized = parseSerializedServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT);
-  if (firebaseSerialized?.clientEmail && firebaseSerialized.privateKey) {
-    return firebaseSerialized;
-  }
-
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || null;
-  const privateKey = getInlineFirebasePrivateKey();
-  const projectId =
-    process.env.GOOGLE_SECRET_MANAGER_PROJECT_ID ||
-    process.env.GOOGLE_CLOUD_PROJECT ||
-    process.env.GCP_PROJECT ||
-    process.env.FIREBASE_PROJECT_ID ||
-    null;
-
-  if (!clientEmail || !privateKey) {
+  const firebaseCredential = resolveFirebaseAdminCredential({ mode: 'prod' });
+  if (!firebaseCredential?.clientEmail || !firebaseCredential.privateKey) {
     return null;
   }
 
   return {
-    projectId,
-    clientEmail,
-    privateKey,
+    projectId:
+      process.env.GOOGLE_SECRET_MANAGER_PROJECT_ID ||
+      process.env.GOOGLE_CLOUD_PROJECT ||
+      process.env.GCP_PROJECT ||
+      firebaseCredential.projectId ||
+      null,
+    clientEmail: firebaseCredential.clientEmail,
+    privateKey: firebaseCredential.privateKey,
   };
 }
 
@@ -175,4 +122,3 @@ export async function getSecretManagerSecret(secretName: string): Promise<string
   SECRET_CACHE.set(normalizedName, value);
   return value;
 }
-

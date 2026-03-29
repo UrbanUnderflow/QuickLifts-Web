@@ -5,67 +5,34 @@
  * It doesn't try to load Firebase or any other libraries to avoid initialization errors.
  */
 
+const { resolveFirebaseAdminCredential } = require('../../src/lib/server/firebase/credential-source');
+
 const handler = async (event) => {
   try {
     const isLocalhost = event.headers.referer?.includes('localhost') || event.headers.origin?.includes('localhost');
-    
-    // Define required environment variables
-    const requiredVars = {
-      common: [
-        'FIREBASE_SECRET_KEY',
-        'FIREBASE_PRIVATE_KEY',
-        'STRIPE_SECRET_KEY',
-        'STRIPE_TEST_SECRET_KEY',
-      ],
-      production: [
-        'FIREBASE_PROJECT_ID',
-        'FIREBASE_CLIENT_EMAIL',
-      ],
-      development: [
-        'DEV_FIREBASE_PROJECT_ID',
-        'DEV_FIREBASE_CLIENT_EMAIL',
-      ]
-    };
+    const prodCredential = resolveFirebaseAdminCredential({ mode: 'prod' });
+    const devCredential = resolveFirebaseAdminCredential({ mode: 'dev' });
     
     // Check environment variables
     const results = {
       environment: isLocalhost ? 'development' : 'production',
       timestamp: new Date().toISOString(),
-      variables: {}
-    };
-    
-    // Check common variables
-    requiredVars.common.forEach(varName => {
-      results.variables[varName] = process.env[varName] ? 'PRESENT' : 'MISSING';
-    });
-    
-    // Check environment-specific variables
-    const envVars = isLocalhost ? requiredVars.development : requiredVars.production;
-    envVars.forEach(varName => {
-      results.variables[varName] = process.env[varName] ? 'PRESENT' : 'MISSING';
-    });
-    
-    // Add Firebase project details
-    if (isLocalhost) {
-      results.firebaseProject = {
-        id: process.env.DEV_FIREBASE_PROJECT_ID || 'Not set',
-        clientEmail: process.env.DEV_FIREBASE_CLIENT_EMAIL 
-          ? process.env.DEV_FIREBASE_CLIENT_EMAIL.substring(0, 5) + '...' 
-          : 'Not set'
-      };
-    } else {
-      results.firebaseProject = {
-        id: process.env.FIREBASE_PROJECT_ID || 'Not set',
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL 
-          ? process.env.FIREBASE_CLIENT_EMAIL.substring(0, 5) + '...' 
-          : 'Not set'
-      };
-    }
-    
-    // Add Stripe details (don't expose keys)
-    results.stripe = {
-      liveKeyPresent: !!process.env.STRIPE_SECRET_KEY,
-      testKeyPresent: !!process.env.STRIPE_TEST_SECRET_KEY
+      firebaseAdmin: {
+        production: {
+          source: prodCredential.source,
+          projectId: prodCredential.projectId || 'Not set',
+          clientEmail: prodCredential.clientEmail ? `${prodCredential.clientEmail.substring(0, 5)}...` : 'Not set',
+        },
+        development: {
+          source: devCredential.source,
+          projectId: devCredential.projectId || 'Not set',
+          clientEmail: devCredential.clientEmail ? `${devCredential.clientEmail.substring(0, 5)}...` : 'Not set',
+        },
+      },
+      stripe: {
+        liveKeyPresent: !!process.env.STRIPE_SECRET_KEY,
+        testKeyPresent: !!process.env.STRIPE_TEST_SECRET_KEY
+      }
     };
     
     return {

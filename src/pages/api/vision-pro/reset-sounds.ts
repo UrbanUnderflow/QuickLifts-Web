@@ -1,43 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import * as admin from 'firebase-admin';
-
-// ─── Firebase Admin init (mirrors netlify/functions/config/firebase.js) ───────
-
-function formatPrivateKey(key: string | undefined): string {
-  if (!key) return '';
-  let k = key.trim();
-  if ((k.startsWith('"') && k.endsWith('"')) || (k.startsWith("'") && k.endsWith("'"))) {
-    k = k.slice(1, -1);
-  }
-  if (k.includes('\\n')) k = k.replace(/\\n/g, '\n');
-  return k;
-}
-
-function getAdminApp(): admin.app.App {
-  const appName = 'vision-pro-reset-sounds';
-  try {
-    return admin.app(appName);
-  } catch {
-    // Not yet initialized — create it now
-  }
-
-  const projectId   = process.env.FIREBASE_PROJECT_ID   || 'quicklifts-dd3f1';
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || 'firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com';
-  const privateKey  = formatPrivateKey(process.env.FIREBASE_SECRET_KEY || process.env.FIREBASE_PRIVATE_KEY);
-
-  console.log('[reset-sounds] Firebase init — project:', projectId, '| email present:', !!clientEmail, '| key present:', !!privateKey);
-
-  return admin.initializeApp(
-    {
-      credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey,
-      } as admin.ServiceAccount),
-    },
-    appName,
-  );
-}
+import admin from '../../../lib/firebase-admin';
 
 // ─── Response types ──────────────────────────────────────────────────────────
 
@@ -72,7 +34,7 @@ export default async function handler(
   }
 
   try {
-    const firestore = getAdminApp().firestore();
+    const firestore = admin.firestore();
 
     const snapshot = await firestore
       .collection('sim-audio-assets')

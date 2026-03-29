@@ -4,8 +4,7 @@ import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { promisify } from 'util';
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import admin from '../../../lib/firebase-admin';
 
 /**
  * POST /api/agent/kickoff-mission
@@ -26,28 +25,13 @@ import { getFirestore } from 'firebase-admin/firestore';
  */
 
 function getDb() {
-    const SERVICE_ACCOUNT = {
-        type: 'service_account' as const,
-        project_id: 'quicklifts-dd3f1',
-        private_key_id: '***REMOVED***',
-        private_key: '***REMOVED***',
-        client_email: 'firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com',
-        client_id: '111494077667496751062',
-        auth_uri: 'https://accounts.google.com/o/oauth2/auth',
-        token_uri: 'https://oauth2.googleapis.com/token',
-        auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
-        client_x509_cert_url: 'https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0%40quicklifts-dd3f1.iam.gserviceaccount.com',
-        universe_domain: 'googleapis.com',
-    };
-    const existing = getApps().find(a => a.name === 'mission-api');
-    const adminApp = existing || initializeApp({ credential: cert(SERVICE_ACCOUNT as any) }, 'mission-api');
-    return getFirestore(adminApp);
+    return admin.firestore();
 }
 
 const RUNNER_AGENT_IDS = ['nora', 'scout', 'solara', 'sage'];
 const execAsync = promisify(exec);
 
-async function setRunnersEnabled(db: ReturnType<typeof getFirestore>, enabled: boolean, reason: string) {
+async function setRunnersEnabled(db: FirebaseFirestore.Firestore, enabled: boolean, reason: string) {
     const now = new Date();
     await Promise.all(
         RUNNER_AGENT_IDS.map((agentId) => {
