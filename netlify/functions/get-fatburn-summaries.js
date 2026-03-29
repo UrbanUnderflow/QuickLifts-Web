@@ -1,26 +1,4 @@
-const admin = require('firebase-admin');
-
-// Initialize Firebase Admin if not already initialized
-if (!admin.apps.length) {
-  try {
-    if (process.env.FIREBASE_SECRET_KEY) {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: process.env.FIREBASE_PROJECT_ID || "quicklifts-dd3f1",
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL || "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
-          privateKey: process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
-        })
-      });
-    } else if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-    }
-  } catch (error) {
-    console.error('Error initializing Firebase Admin:', error);
-  }
-}
+const { admin } = require('./config/firebase');
 
 const db = admin.firestore();
 

@@ -18,6 +18,7 @@ import {
   Search,
   Server,
   Share2,
+  ShieldCheck,
   Smartphone,
   TestTube2,
   Trash2,
@@ -84,6 +85,7 @@ import PulseCheckSchoolWearableBundlePlanTab from "../../components/admin/system
 import PulseCheckPatentEligibilityAuditTab from "../../components/admin/system-overview/PulseCheckPatentEligibilityAuditTab";
 import FirestoreIndexRegistryTab from "../../components/admin/system-overview/FirestoreIndexRegistryTab";
 import InfrastructureSecretsStackTab from "../../components/admin/system-overview/InfrastructureSecretsStackTab";
+import FirebaseAdminCredentialArchitectureTab from "../../components/admin/system-overview/FirebaseAdminCredentialArchitectureTab";
 import PulseCheckStateSnapshotFreshnessPolicyTab from "../../components/admin/system-overview/PulseCheckStateSnapshotFreshnessPolicyTab";
 import PulseCheckPerformanceStateFlagDefinitionsTab from "../../components/admin/system-overview/PulseCheckPerformanceStateFlagDefinitionsTab";
 import PulseCheckNoraAssignmentRulesTab from "../../components/admin/system-overview/PulseCheckNoraAssignmentRulesTab";
@@ -104,6 +106,7 @@ import QuickLiftsProfileHealthSystemTab, {
 import PulseCheckVisionProImmersiveTestsTab from "../../components/admin/system-overview/PulseCheckVisionProImmersiveTestsTab";
 import PulseSystemDesignLanguageTab from "../../components/admin/system-overview/PulseSystemDesignLanguageTab";
 import AuntEdnaIntegrationStrategyTab from "../../components/admin/system-overview/AuntEdnaIntegrationStrategyTab";
+import SystemTestCoverageTab from "../../components/admin/system-overview/SystemTestCoverageTab";
 import PlaywrightTestingStrategyTab from "../../components/admin/system-overview/PlaywrightTestingStrategyTab";
 import AndroidTestingStrategyTab from "../../components/admin/system-overview/AndroidTestingStrategyTab";
 import XCUITestingStrategyTab from "../../components/admin/system-overview/XCUITestingStrategyTab";
@@ -159,6 +162,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "workout-share-cards",
       "backend-data",
       "infrastructure-secrets-stack",
+      "firebase-admin-credential-architecture",
       "firestore-index-registry",
       "integrations",
       "end-to-end-flows",
@@ -259,6 +263,13 @@ const SYSTEM_TABS: SystemTab[] = [
     icon: Link2,
     accent: "#f59e0b",
     sectionIds: ["auntedna-integration-strategy"],
+  },
+  {
+    id: "system-test-coverage",
+    label: "Coverage",
+    icon: ShieldCheck,
+    accent: "#22d3ee",
+    sectionIds: ["system-test-coverage"],
   },
   {
     id: "hunter-world",
@@ -1687,6 +1698,9 @@ const SystemOverviewPage: React.FC = () => {
       case "infrastructure-secrets-stack":
         return <InfrastructureSecretsStackTab />;
 
+      case "firebase-admin-credential-architecture":
+        return <FirebaseAdminCredentialArchitectureTab />;
+
       case "pulsecheck-state-snapshot-freshness-policy":
         return <PulseCheckStateSnapshotFreshnessPolicyTab />;
 
@@ -1743,6 +1757,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "auntedna-integration-strategy":
         return <AuntEdnaIntegrationStrategyTab />;
+
+      case "system-test-coverage":
+        return <SystemTestCoverageTab />;
 
       case "playwright-testing-strategy":
         return <PlaywrightTestingStrategyTab />;

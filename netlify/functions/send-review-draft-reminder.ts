@@ -1,5 +1,5 @@
 import { Handler, HandlerEvent, HandlerContext, schedule } from "@netlify/functions";
-import * as admin from 'firebase-admin';
+import { admin } from './config/firebase';
 
 /**
  * Netlify Scheduled Function: Send Draft Review Reminder Email
@@ -17,38 +17,7 @@ const FOUNDER_EMAIL = "tre@fitwithpulse.ai";
 const FOUNDER_NAME = "Tremaine";
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://fitwithpulse.ai';
 
-// Initialize Firebase Admin
-let db: admin.firestore.Firestore;
-
-function initializeFirebase() {
-  if (!admin.apps.length) {
-    if (process.env.FIREBASE_SECRET_KEY) {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: process.env.FIREBASE_PROJECT_ID || "quicklifts-dd3f1",
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL || "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
-          privateKey: process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
-        })
-      });
-    } else if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-      let serviceAccount;
-      try {
-        serviceAccount = JSON.parse(serviceAccountJson);
-      } catch {
-        serviceAccount = JSON.parse(Buffer.from(serviceAccountJson, 'base64').toString());
-      }
-
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      });
-    } else {
-      throw new Error('Firebase credentials environment variables are not set');
-    }
-  }
-
-  db = admin.firestore();
-}
+const db = admin.firestore();
 
 function getMonthName(month: number): string {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -257,8 +226,6 @@ const sendDraftReminder: Handler = async (event: HandlerEvent, context: HandlerC
   }
 
   try {
-    initializeFirebase();
-
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
@@ -405,4 +372,3 @@ const sendDraftReminder: Handler = async (event: HandlerEvent, context: HandlerC
 // Schedule: Every Saturday at 9am EST (14:00 UTC)
 // The function internally checks if it's the right Saturday to send
 export const handler = schedule("0 14 * * 6", sendDraftReminder);
-

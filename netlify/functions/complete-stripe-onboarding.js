@@ -1,6 +1,10 @@
 // Import necessary modules
 const { db, admin } = require('./config/firebase');
 const Stripe = require('stripe');
+const { resolveFirebaseAdminCredential } = require('../../src/lib/server/firebase/credential-source');
+
+const firebaseCredential = resolveFirebaseAdminCredential({ mode: 'prod' });
+const isFirebaseCredentialUnavailable = firebaseCredential.source === 'prod:unresolved';
 
 // Initialize Stripe
 let stripe;
@@ -114,7 +118,7 @@ async function verifyAndFixStripeAccount(userId, userData) {
 
 async function updateOnboardingStatus(userId) {
   // Skip DB update in development without Firebase credentials
-  if (!process.env.FIREBASE_SECRET_KEY) {
+  if (isFirebaseCredentialUnavailable) {
     console.warn('Running in development mode without Firebase credentials - skipping DB update');
     return { success: true, accountId: null };
   }
@@ -196,7 +200,7 @@ exports.handler = async function(event, context) {
     }
     
     // In development without Firebase creds, just return success
-    if (!process.env.FIREBASE_SECRET_KEY) {
+    if (isFirebaseCredentialUnavailable) {
       return {
         statusCode: 200,
         headers: {

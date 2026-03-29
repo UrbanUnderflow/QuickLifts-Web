@@ -1,6 +1,4 @@
-const { initializeApp, cert } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
-const admin = require('firebase-admin');
+const { admin } = require('./config/firebase');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -19,26 +17,7 @@ const SubscriptionPlatform = {
   Web: "web",
 };
 
-// Initialize Firebase if not already initialized
-let db;
-if (!global.firebaseInitialized) {
-  if (process.env.FIREBASE_SECRET_KEY) {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID || "quicklifts-dd3f1",
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL || "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
-        privateKey: process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
-      })
-    });
-  } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    initializeApp({
-      credential: cert(serviceAccount)
-    });
-  }
-  global.firebaseInitialized = true;
-}
-db = getFirestore();
+const db = admin.firestore();
 
 // Price ID to subscription type mapping
 function mapPriceIdToSubscriptionType(priceId) {

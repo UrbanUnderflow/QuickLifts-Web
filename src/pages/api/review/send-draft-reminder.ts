@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getFirestore } from 'firebase-admin/firestore';
+import admin from '../../../lib/firebase-admin';
 
 /**
  * API endpoint to send draft review reminder email
@@ -207,8 +207,7 @@ export default async function handler(
   }
 
   try {
-    // Firebase Admin is initialized on import
-    const db = getFirestore();
+    const db = admin.firestore();
     
     const now = new Date();
     const year = now.getFullYear();

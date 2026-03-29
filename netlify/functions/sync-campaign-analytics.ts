@@ -1,22 +1,5 @@
 import { Handler, HandlerEvent } from '@netlify/functions';
-import * as admin from 'firebase-admin';
-
-// Initialize Firebase Admin if not already initialized
-if (!admin.apps.length) {
-    try {
-        if (process.env.FIREBASE_SECRET_KEY) {
-            admin.initializeApp({
-                credential: admin.credential.cert({
-                    projectId: "quicklifts-dd3f1",
-                    privateKey: process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
-                    clientEmail: "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
-                })
-            });
-        }
-    } catch (error) {
-        console.error('Firebase admin init error:', error);
-    }
-}
+import { admin } from './config/firebase';
 
 const db = admin.firestore();
 const INSTANTLY_KEY = process.env.INSTANTLY_KEY || process.env.INSTANTLY_API_KEY;

@@ -1,25 +1,5 @@
-const admin = require('firebase-admin');
+const { admin } = require('./config/firebase');
 const Stripe = require('stripe');
-
-// Initialize Firebase Admin if not already initialized
-if (admin.apps.length === 0) {
-  try {
-    const projectId = process.env.FIREBASE_PROJECT_ID || 'quicklifts-dd3f1';
-    const privateKey = process.env.FIREBASE_SECRET_KEY ? process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n') : '';
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || 'firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com';
-
-    if (!privateKey) {
-      console.warn('[CreateRoundCheckout] FIREBASE_SECRET_KEY missing, using fallback app init');
-      admin.initializeApp({ projectId });
-    } else {
-      admin.initializeApp({
-        credential: admin.credential.cert({ projectId, privateKey, clientEmail })
-      });
-    }
-  } catch (error) {
-    console.error('[CreateRoundCheckout] Firebase initialization error:', error);
-  }
-}
 
 const db = admin.firestore();
 
@@ -167,5 +147,4 @@ exports.handler = async (event) => {
     return { statusCode: 500, body: JSON.stringify({ message: error.message || 'Server error' }) };
   }
 };
-
 

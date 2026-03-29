@@ -9,7 +9,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Pulse architecture, products, data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-03-24',
+  lastUpdated: '2026-03-29',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -24,6 +24,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'notification-systems-architecture', label: 'Notification Systems', description: 'Cross-product notification architecture covering Fit With Pulse, Pulse Check, token ownership, senders, sequences, and operational debugging.' },
     { id: 'backend-data', label: 'Backend and Data', description: 'Core services and canonical data collections.' },
     { id: 'infrastructure-secrets-stack', label: 'Infrastructure & Secrets Stack', description: 'Operational relationship between Netlify, Firebase, Google Cloud, Workspace, and secret storage policy.' },
+    { id: 'firebase-admin-credential-architecture', label: 'Firebase Admin Credential Architecture', description: 'Unified server credential model for Next API routes and Netlify functions, including the canonical env contract, runtime adapters, and phased implementation plan.', parentSectionId: 'infrastructure-secrets-stack' },
     { id: 'firestore-index-registry', label: 'Firestore Index Registry', description: 'Shared source-of-truth registry and operating discipline for Firestore indexes across development and production.' },
     { id: 'integrations', label: 'Integrations', description: 'External systems, ownership, and credential sources.' },
     { id: 'end-to-end-flows', label: 'End-to-End Flows', description: 'Cross-product flows from trigger to failure points.' },
@@ -97,6 +98,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-vision-pro-immersive-tests', label: 'Vision Pro - Immersive Tests', description: 'Spec stack for the football Vision Pro package, including immersive trial positioning, environment design, event schema, protocol rules, and pilot operations.' },
     { id: 'system-design-language', label: 'System Design & Language', description: 'Voice, copy posture, and human-centered UI rules for how Pulse speaks to users across products.' },
     { id: 'auntedna-integration-strategy', label: 'Integration Strategy', description: 'API layer, webhook contract, profile mirror model, and MCP positioning for the AuntEdna clinical bridge.' },
+    { id: 'system-test-coverage', label: 'System Test Coverage', description: 'Handbook audit of full-system harness completeness across web, backend, mobile, and operational surfaces. This is a system-confidence estimate, not line coverage.' },
     { id: 'playwright-testing-strategy', label: 'Testing Strategy', description: 'Playwright harness model, suite inventory, run commands, and PulseCheck UI regression coverage.' },
     { id: 'android-testing-strategy', label: 'Android Testing Strategy', description: 'Native Android instrumentation baseline, dev-Firebase E2E contract, and namespaced cleanup policy.' },
     { id: 'xcuitest-testing-strategy', label: 'XCUITest Strategy', description: 'Deterministic iOS launch model, native club activation suite inventory, and accessibility-id contract.' },

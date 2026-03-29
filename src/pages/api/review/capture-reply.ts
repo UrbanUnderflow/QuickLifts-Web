@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getFirestore } from 'firebase-admin/firestore';
+import admin from '../../../lib/firebase-admin';
 
 /**
  * Webhook to capture email replies from Brevo
@@ -79,8 +79,7 @@ export default async function handler(
   }
 
   try {
-    // Firebase Admin is initialized on import
-    const db = getFirestore();
+    const db = admin.firestore();
     
     // Parse the inbound email
     const email = req.body as BrevoInboundEmail;
