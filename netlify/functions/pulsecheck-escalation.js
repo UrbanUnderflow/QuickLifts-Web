@@ -12,7 +12,13 @@
  * Body: { action, userId, conversationId, ... }
  */
 
-const { initializeFirebaseAdmin, db, headers } = require('./config/firebase');
+const { initializeFirebaseAdmin, db, headers, admin } = require('./config/firebase');
+const {
+  emitPilotMetricEvent,
+  recordPilotMetricAlert,
+  recomputePilotMetricRollups,
+  resolvePilotEnrollmentContext,
+} = require('./utils/pulsecheck-pilot-metrics');
 
 // Escalation Tier enum values
 const EscalationTier = {
@@ -49,6 +55,7 @@ const AUNTEDNA_API_KEY = process.env.AUNTEDNA_API_KEY || '';
 const USE_MOCK = process.env.AUNTEDNA_MOCK === 'true' || !AUNTEDNA_API_KEY;
 
 exports.handler = async (event, context) => {
+  let requestBody = {};
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
   }
@@ -61,6 +68,7 @@ exports.handler = async (event, context) => {
     }
 
     const body = JSON.parse(event.body || '{}');
+    requestBody = body;
     const { action } = body;
 
     switch (action) {
@@ -82,6 +90,20 @@ exports.handler = async (event, context) => {
 
   } catch (error) {
     console.error('[pulsecheck-escalation] Error:', error);
+    try {
+      const candidatePilotId = typeof requestBody?.pilotId === 'string' ? requestBody.pilotId.trim() : '';
+      if (candidatePilotId) {
+        await recordPilotMetricAlert({
+          db,
+          pilotId: candidatePilotId,
+          scope: 'escalation_handler',
+          severity: 'error',
+          message: error?.message || 'PulseCheck escalation handler failed.',
+        });
+      }
+    } catch (nestedError) {
+      console.error('[pulsecheck-escalation] Failed to record alert:', nestedError);
+    }
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server error' }) };
   }
 };
@@ -120,6 +142,12 @@ async function handleCreateEscalation(body) {
     consentStatus: tier === EscalationTier.CriticalRisk ? ConsentStatus.NotRequired : ConsentStatus.Pending,
     handoffStatus: HandoffStatus.Pending,
     coachNotified: false,
+    coachNotifiedAt: null,
+    handoffInitiatedAt: null,
+    handoffAcceptedAt: null,
+    firstClinicianResponseAt: null,
+    handoffCompletedAt: null,
+    resolvedAt: null,
     createdAt: nowSec,
     status: EscalationRecordStatus.Active
   };
@@ -127,6 +155,24 @@ async function handleCreateEscalation(body) {
   const docRef = await db.collection('escalation-records').add(escalationData);
   const escalationId = docRef.id;
   await docRef.update({ id: escalationId });
+
+  await emitPilotMetricEvent({
+    db,
+    athleteId: userId,
+    eventType: 'escalation_created',
+    actorRole: 'system',
+    actorUserId: userId,
+    sourceCollection: 'escalation-records',
+    sourceDocumentId: escalationId,
+    metricPayload: {
+      tier,
+      category: category || 'general',
+      consentStatus: escalationData.consentStatus,
+    },
+    createdAt: nowSec * 1000,
+  });
+
+  await refreshPilotOutcomeRollupsForAthlete(userId, nowSec * 1000);
 
   // Update conversation with escalation state
   await db.collection('conversations').doc(conversationId).set({
@@ -203,6 +249,8 @@ async function handleConsent(body) {
       console.error('[pulsecheck-escalation] Elevated handoff error:', err);
     });
 
+    await refreshPilotOutcomeRollupsForAthlete(userId, nowSec * 1000);
+
     console.log('[pulsecheck-escalation] Consent accepted:', escalationId);
 
     return {
@@ -226,6 +274,8 @@ async function handleConsent(body) {
     await db.collection('conversations').doc(data.conversationId).set({
       escalationStatus: EscalationRecordStatus.Declined
     }, { merge: true });
+
+    await refreshPilotOutcomeRollupsForAthlete(userId, nowSec * 1000);
 
     console.log('[pulsecheck-escalation] Consent declined:', escalationId);
 
@@ -420,6 +470,23 @@ async function notifyCoach(body) {
     coachNotifiedAt: nowSec
   });
 
+  await emitPilotMetricEvent({
+    db,
+    athleteId: userId,
+    eventType: 'coach_notified',
+    actorRole: 'coach',
+    actorUserId: targetCoachId,
+    sourceCollection: 'escalation-records',
+    sourceDocumentId: escalationId,
+    metricPayload: {
+      coachId: targetCoachId,
+      tier,
+    },
+    createdAt: nowSec * 1000,
+  });
+
+  await refreshPilotOutcomeRollupsForAthlete(userId, nowSec * 1000);
+
   // Create notification for coach
   // Note: This would integrate with your push notification system
   // For now, we create a notification document
@@ -596,6 +663,8 @@ async function handleResolve(body) {
     }, { merge: true });
   }
 
+  await refreshPilotOutcomeRollupsForAthlete(userId || escalationDoc.data()?.userId, nowSec * 1000);
+
   return {
     statusCode: 200,
     headers,
@@ -609,6 +678,50 @@ async function handleResolve(body) {
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+async function refreshPilotOutcomeRollupsForAthlete(userId, timestampMs) {
+  const normalizedUserId = typeof userId === 'string' ? userId.trim() : '';
+  if (!normalizedUserId) return;
+
+  try {
+    const pilotContext = await resolvePilotEnrollmentContext({
+      db,
+      athleteId: normalizedUserId,
+      allowMembershipFallback: false,
+    });
+
+    if (!pilotContext?.pilotId) return;
+
+    await recomputePilotMetricRollups({
+      db,
+      pilotId: pilotContext.pilotId,
+      explicitDateKeys: [new Date(Number(timestampMs || Date.now())).toISOString().slice(0, 10)],
+    });
+  } catch (error) {
+    console.warn('[pulsecheck-escalation] Failed to refresh pilot outcome rollups (non-blocking):', error?.message || error);
+    try {
+      const pilotContext = await resolvePilotEnrollmentContext({
+        db,
+        athleteId: normalizedUserId,
+        allowMembershipFallback: false,
+      });
+      if (pilotContext?.pilotId) {
+        await recordPilotMetricAlert({
+          db,
+          pilotId: pilotContext.pilotId,
+          scope: 'escalation_rollup_refresh',
+          severity: 'warning',
+          message: error?.message || 'Failed to refresh pilot outcome rollups after escalation update.',
+          context: {
+            athleteId: normalizedUserId,
+          },
+        });
+      }
+    } catch (nestedError) {
+      console.error('[pulsecheck-escalation] Failed to record rollup refresh alert:', nestedError);
+    }
+  }
+}
 
 /**
  * Perform clinical handoff to AuntEDNA
@@ -681,9 +794,29 @@ async function performClinicalHandoff(userId, conversationId, escalationId, esca
   };
 
   // Update handoff status
+  const initiatedAt = Math.floor(Date.now() / 1000);
   await db.collection('escalation-records').doc(escalationId).update({
-    handoffStatus: HandoffStatus.Initiated
+    handoffStatus: HandoffStatus.Initiated,
+    handoffInitiatedAt: initiatedAt
   });
+
+  await emitPilotMetricEvent({
+    db,
+    athleteId: userId,
+    eventType: 'care_handoff_initiated',
+    actorRole: 'system',
+    actorUserId: userId,
+    sourceCollection: 'escalation-records',
+    sourceDocumentId: escalationId,
+    metricPayload: {
+      tier: escalationData.tier,
+      category: escalationData.category,
+      handoffStatus: HandoffStatus.Initiated,
+    },
+    createdAt: initiatedAt * 1000,
+  });
+
+  await refreshPilotOutcomeRollupsForAthlete(userId, initiatedAt * 1000);
 
   // Send to AuntEDNA
   let result;
@@ -715,10 +848,31 @@ async function performClinicalHandoff(userId, conversationId, escalationId, esca
 
   // Update final status
   if (result.success) {
+    const completedAt = Math.floor(Date.now() / 1000);
     await db.collection('escalation-records').doc(escalationId).update({
       handoffStatus: HandoffStatus.Completed,
-      clinicalReferenceId: result.escalationId
+      clinicalReferenceId: result.escalationId,
+      handoffAcceptedAt: completedAt,
+      handoffCompletedAt: completedAt
     });
+
+    await emitPilotMetricEvent({
+      db,
+      athleteId: userId,
+      eventType: 'care_handoff_completed',
+      actorRole: 'system',
+      actorUserId: userId,
+      sourceCollection: 'escalation-records',
+      sourceDocumentId: escalationId,
+      metricPayload: {
+        tier: escalationData.tier,
+        category: escalationData.category,
+        clinicalReferenceId: result.escalationId || null,
+      },
+      createdAt: completedAt * 1000,
+    });
+
+    await refreshPilotOutcomeRollupsForAthlete(userId, completedAt * 1000);
   } else {
     await db.collection('escalation-records').doc(escalationId).update({
       handoffStatus: HandoffStatus.Failed

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import { Activity, ArrowRight, Building2, FlaskConical, Layers3, MonitorPlay, RefreshCcw, Users2 } from 'lucide-react';
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
+import { LocalFirebaseModeButton } from '../../../components/admin/pilot-dashboard/LocalFirebaseModeButton';
 import NoraMetricHelpButton from '../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
 import type { PilotDashboardMetricExplanationKey } from '../../../components/admin/pilot-dashboard/noraMetricCatalog';
 import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
@@ -194,6 +195,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <LocalFirebaseModeButton />
               {demoModeEnabled ? (
                 <button
                   onClick={resetDemoModeData}
@@ -232,24 +234,28 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
             </div>
           ) : null}
 
-          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
+          <div className="mt-6 grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
             {primarySummaryCards.map((card) => (
-              <div key={card.label} className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                <NoraMetricHelpButton metricKey={card.metricKey} className="absolute right-4 top-4" testId={card.testId} />
-                <div className={`flex items-center gap-3 ${card.iconClassName}`}>
-                  {card.icon}
-                  <span className="text-sm font-medium">{card.label}</span>
+              <div key={card.label} className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className={`flex min-w-0 flex-1 items-center gap-3 pr-2 ${card.iconClassName}`}>
+                    {card.icon}
+                    <span className="text-sm font-medium leading-tight">{card.label}</span>
+                  </div>
+                  <NoraMetricHelpButton metricKey={card.metricKey} className="shrink-0" testId={card.testId} />
                 </div>
                 <div className="mt-3 text-3xl font-semibold">{card.value}</div>
               </div>
             ))}
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4">
             {secondarySummaryCards.map((card) => (
-              <div key={card.label} className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                <NoraMetricHelpButton metricKey={card.metricKey} className="absolute right-4 top-4" />
-                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{card.label}</div>
+              <div key={card.label} className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 pr-2 text-xs uppercase tracking-[0.18em] leading-tight text-zinc-500">{card.label}</div>
+                  <NoraMetricHelpButton metricKey={card.metricKey} className="shrink-0" />
+                </div>
                 <div className="mt-3 text-3xl font-semibold">{card.value}</div>
               </div>
             ))}
@@ -336,9 +342,11 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
 
                   <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-zinc-300">
                     {primaryPilotMetrics.map((metric) => (
-                      <div key={metric.label} className="relative rounded-2xl border border-white/5 bg-black/20 p-3">
-                        <NoraMetricHelpButton metricKey={metric.metricKey} className="absolute right-3 top-3" />
-                        <div className="text-xs uppercase tracking-wide text-zinc-500">{metric.label}</div>
+                      <div key={metric.label} className="rounded-2xl border border-white/5 bg-black/20 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 pr-2 text-xs uppercase tracking-wide text-zinc-500">{metric.label}</div>
+                          <NoraMetricHelpButton metricKey={metric.metricKey} className="shrink-0" />
+                        </div>
                         <div className="mt-1 text-lg font-semibold text-white">{metric.value}</div>
                       </div>
                     ))}
@@ -346,9 +354,11 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
 
                   <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-zinc-300">
                     {secondaryPilotMetrics.map((metric) => (
-                      <div key={metric.label} className="relative rounded-2xl border border-white/5 bg-black/20 p-3">
-                        <NoraMetricHelpButton metricKey={metric.metricKey} className="absolute right-3 top-3" />
-                        <div className="text-xs uppercase tracking-wide text-zinc-500">{metric.label}</div>
+                      <div key={metric.label} className="rounded-2xl border border-white/5 bg-black/20 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 pr-2 text-xs uppercase tracking-wide text-zinc-500">{metric.label}</div>
+                          <NoraMetricHelpButton metricKey={metric.metricKey} className="shrink-0" />
+                        </div>
                         <div className="mt-1 text-lg font-semibold text-white">{metric.value}</div>
                       </div>
                     ))}

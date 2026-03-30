@@ -29,6 +29,19 @@ interface PilotDashboardFixture {
   readoutIds: string[];
 }
 
+interface PilotDashboardSurveyResponseFixture {
+  id?: string;
+  respondentUserId: string;
+  respondentRole: 'athlete' | 'coach' | 'clinician';
+  surveyKind: 'trust' | 'nps';
+  score: number;
+  athleteId?: string | null;
+  pilotEnrollmentId?: string | null;
+  cohortId?: string | null;
+  source?: 'ios' | 'android' | 'web-admin';
+  submittedAt?: string | number | Date;
+}
+
 async function waitForStableAppFrame(page: Page) {
   const transientRefreshText = page.getByText(/missing required error components, refreshing/i);
 
@@ -96,7 +109,10 @@ async function ensureAdminSession(page: Page, nextPath: string) {
   }
 }
 
-async function seedPilotDashboardFixture(page: Page): Promise<{ fixture: PilotDashboardFixture; adminIdentity: AuthIdentity }> {
+async function seedPilotDashboardFixture(
+  page: Page,
+  overrides: { surveyResponses?: PilotDashboardSurveyResponseFixture[] } = {}
+): Promise<{ fixture: PilotDashboardFixture; adminIdentity: AuthIdentity }> {
   await ensureAdminSession(page, '/admin/pulsecheckPilotDashboard');
   await waitForPulseE2EHarness(page);
 
@@ -119,17 +135,19 @@ async function seedPilotDashboardFixture(page: Page): Promise<{ fixture: PilotDa
   );
 
   const fixture = await page.evaluate(
-    async ({ namespace, adminUserId, adminEmail }) => {
+    async ({ namespace, adminUserId, adminEmail, surveyResponses }) => {
       return window.__pulseE2E?.seedPulseCheckPilotDashboardFixture({
         namespace,
         adminUserId,
         adminEmail,
+        surveyResponses,
       });
     },
     {
       namespace: pulseCheckNamespace,
       adminUserId: adminIdentity.uid,
       adminEmail: adminIdentity.email,
+      surveyResponses: overrides.surveyResponses || [],
     }
   );
 
@@ -144,7 +162,10 @@ async function seedPilotDashboardFixture(page: Page): Promise<{ fixture: PilotDa
 }
 
 async function cleanupPilotDashboardFixture(page: Page, adminIdentity: AuthIdentity) {
-  await waitForPulseE2EHarness(page);
+  if (page.isClosed()) {
+    return;
+  }
+
   await page.evaluate(
     async ({ namespace, adminUserId }) => {
       await window.__pulseE2E?.cleanupPulseCheckPilotDashboardFixture({
@@ -225,6 +246,152 @@ test.describe.serial('PulseCheck pilot dashboard', () => {
         page.getByTestId('pilot-readout-section-hypothesis-mapper').getByTestId('pilot-readout-hypothesis-H1')
       ).toContainText('Promising');
       await expect(page.getByTestId('pilot-readout-section-research-notes')).toContainText('Candidate findings only');
+    } finally {
+      await cleanupPilotDashboardFixture(page, adminIdentity);
+    }
+  });
+
+  test('shows the low-sample trust and NPS fallback copy on the pilot dashboard', async ({ page }) => {
+    test.setTimeout(120_000);
+    const { fixture, adminIdentity } = await seedPilotDashboardFixture(page, {
+      surveyResponses: [
+        {
+          id: 'trust-response-1',
+          respondentUserId: 'athlete-low-sample-a',
+          respondentRole: 'athlete',
+          surveyKind: 'trust',
+          score: 8,
+        },
+        {
+          id: 'trust-response-2',
+          respondentUserId: 'athlete-low-sample-b',
+          respondentRole: 'athlete',
+          surveyKind: 'trust',
+          score: 7,
+        },
+        {
+          id: 'nps-response-1',
+          respondentUserId: 'athlete-low-sample-c',
+          respondentRole: 'athlete',
+          surveyKind: 'nps',
+          score: 9,
+        },
+        {
+          id: 'nps-response-2',
+          respondentUserId: 'athlete-low-sample-d',
+          respondentRole: 'athlete',
+          surveyKind: 'nps',
+          score: 6,
+        },
+        {
+          id: 'coach-trust-response-1',
+          respondentUserId: 'coach-low-sample-a',
+          respondentRole: 'coach',
+          surveyKind: 'trust',
+          score: 8,
+        },
+        {
+          id: 'coach-nps-response-1',
+          respondentUserId: 'coach-low-sample-b',
+          respondentRole: 'coach',
+          surveyKind: 'nps',
+          score: 7,
+        },
+        {
+          id: 'clinician-trust-response-1',
+          respondentUserId: 'clinician-low-sample-a',
+          respondentRole: 'clinician',
+          surveyKind: 'trust',
+          score: 9,
+        },
+        {
+          id: 'clinician-nps-response-1',
+          respondentUserId: 'clinician-low-sample-b',
+          respondentRole: 'clinician',
+          surveyKind: 'nps',
+          score: 8,
+        },
+      ],
+    });
+
+    try {
+      await page.goto(`/admin/pulsecheckPilotDashboard/${encodeURIComponent(fixture.pilotId)}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await waitForStableAppFrame(page);
+
+      await page.getByRole('button', { name: /Refresh/i }).click();
+      await waitForStableAppFrame(page);
+
+      const trustDiagnosticsSection = page.locator('section,div').filter({ hasText: 'Role-Sliced Trust and NPS' }).first();
+      await expect(page.getByText('Not enough responses yet').first()).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText(/2\/5 responses collected · below sample threshold/).first()).toBeVisible({ timeout: 30_000 });
+      await expect(trustDiagnosticsSection).toContainText('Coach Trust');
+      await expect(trustDiagnosticsSection).toContainText('Coach NPS');
+      await expect(trustDiagnosticsSection).toContainText('Clinician Trust');
+      await expect(trustDiagnosticsSection).toContainText('Clinician NPS');
+      await expect(trustDiagnosticsSection).toContainText('below sample threshold');
+    } finally {
+      await cleanupPilotDashboardFixture(page, adminIdentity);
+    }
+  });
+
+  test('shows rollout controls, ops status, cohort-specific slices, and trust disposition baseline on the overview tab', async ({ page }) => {
+    const { fixture, adminIdentity } = await seedPilotDashboardFixture(page);
+
+    try {
+      await page.goto(`/admin/pulsecheckPilotDashboard/${encodeURIComponent(fixture.pilotId)}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await waitForStableAppFrame(page);
+
+      await expect(page.getByRole('button', { name: 'Stage Outcomes' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Mark Outcomes Live' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Disable Outcomes' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Recompute Outcomes' })).toBeVisible();
+
+      await expect(page.getByText('Outcome rollout state')).toBeVisible();
+      await expect(page.getByText('Stage: staged')).toBeVisible();
+      await expect(page.getByText('Rollup recompute health')).toBeVisible();
+      await expect(page.getByText('succeeded').first()).toBeVisible();
+      await expect(page.getByText('Optional Trust Disposition Baseline')).toBeVisible();
+      await expect(page.getByText('PTT average:').first()).toBeVisible();
+
+      await page.locator('select').first().selectOption(fixture.cohortIds[1]);
+
+      await expect(page.getByText('Cohort view')).toBeVisible();
+      await expect(page.getByText('79.0% adherence')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('6.7 trust')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('83.0% adherence')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('7.0 trust')).toBeVisible({ timeout: 30_000 });
+    } finally {
+      await cleanupPilotDashboardFixture(page, adminIdentity);
+    }
+  });
+
+  test('keeps refresh, recommendation slices, escalation diagnostics, and readiness gates visible in the pilot dashboard flow', async ({ page }) => {
+    const { fixture, adminIdentity } = await seedPilotDashboardFixture(page);
+
+    try {
+      await page.goto(`/admin/pulsecheckPilotDashboard/${encodeURIComponent(fixture.pilotId)}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await waitForStableAppFrame(page);
+
+      await expect(page.getByRole('button', { name: /Refresh/i })).toBeVisible();
+      await page.getByRole('button', { name: /Refresh/i }).click();
+      await waitForStableAppFrame(page);
+
+      await expect(page.getByText('Trust and adherence by recommendation path')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('Status mix and supporting speed-to-care')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('State-Aware vs Fallback')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('Coach notified')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('Handoff accepted')).toBeVisible({ timeout: 30_000 });
+
+      await page.getByTestId('pilot-dashboard-tab-research-readout').click();
+      await expect(page.getByText('Readiness Gates').first()).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('sample-size: passed').first()).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('denominator-availability: passed').first()).toBeVisible({ timeout: 30_000 });
     } finally {
       await cleanupPilotDashboardFixture(page, adminIdentity);
     }

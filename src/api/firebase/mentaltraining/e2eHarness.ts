@@ -28,6 +28,7 @@ import {
   PULSECHECK_PROTOCOLS_COLLECTION,
   PULSECHECK_PROTOCOL_RESPONSIVENESS_PROFILES_COLLECTION,
   PULSECHECK_STATE_SNAPSHOTS_COLLECTION,
+  PULSECHECK_PILOT_SURVEY_RESPONSES_COLLECTION,
   PULSECHECK_TRAINING_PLANS_COLLECTION,
   RECOMMENDATION_PROJECTIONS_SUBCOLLECTION,
   SIM_CHECKINS_ROOT,
@@ -71,6 +72,10 @@ const PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const PULSECHECK_ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
 const PULSECHECK_PILOT_HYPOTHESES_COLLECTION = 'pulsecheck-pilot-hypotheses';
 const PULSECHECK_PILOT_RESEARCH_READOUTS_COLLECTION = 'pulsecheck-pilot-research-readouts';
+const PULSECHECK_PILOT_METRIC_ROLLUPS_COLLECTION = 'pulsecheck-pilot-metric-rollups';
+const PULSECHECK_PILOT_METRIC_ROLLUP_SUMMARY_SUBCOLLECTION = 'summary';
+const PULSECHECK_PILOT_METRIC_OPS_COLLECTION = 'pulsecheck-pilot-metric-ops';
+const PULSECHECK_PILOT_OUTCOME_RELEASE_SETTINGS_COLLECTION = 'pulsecheck-pilot-outcome-release-settings';
 const PULSECHECK_LEGACY_MIGRATIONS_COLLECTION = 'pulsecheck-legacy-roster-migrations';
 const REFERRAL_CODE_LOOKUP_COLLECTION = 'referralCodeLookup';
 const {
@@ -120,6 +125,187 @@ function humanizeRuntimeLabel(value: unknown) {
   return typeof value === 'string' && value.trim()
     ? value.trim().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
     : '';
+}
+
+function averageScores(scores: number[]) {
+  if (!scores.length) return null;
+  return Number((scores.reduce((sum, score) => sum + score, 0) / scores.length).toFixed(1));
+}
+
+function medianScores(scores: number[]) {
+  if (!scores.length) return null;
+  const ordered = [...scores].sort((left, right) => left - right);
+  const midpoint = Math.floor(ordered.length / 2);
+  const value =
+    ordered.length % 2 === 0 ? (ordered[midpoint - 1] + ordered[midpoint]) / 2 : ordered[midpoint];
+  return Number(value.toFixed(1));
+}
+
+function buildHarnessSurveySummary(scores: number[], minimumResponseThreshold = 5) {
+  const averageScore = averageScores(scores);
+  const responseCount = scores.length;
+  const minimumSampleMet = responseCount >= minimumResponseThreshold;
+  return {
+    responseCount,
+    minimumSampleMet,
+    averageScore,
+    medianScore: medianScores(scores),
+    lowScoreShare: responseCount ? Number(((scores.filter((score) => score <= 6).length / responseCount) * 100).toFixed(1)) : null,
+    highScoreShare: responseCount ? Number(((scores.filter((score) => score >= 9).length / responseCount) * 100).toFixed(1)) : null,
+    headlineValue: minimumSampleMet ? averageScore : null,
+  };
+}
+
+function buildHarnessSurveyDiagnostics(
+  responses: Array<{
+    respondentRole: 'athlete' | 'coach' | 'clinician';
+    surveyKind: 'trust' | 'nps';
+    score: number;
+  }>,
+  minimumResponseThreshold = 5
+) {
+  const scoresFor = (respondentRole: 'athlete' | 'coach' | 'clinician', surveyKind: 'trust' | 'nps') =>
+    responses
+      .filter((response) => response.respondentRole === respondentRole && response.surveyKind === surveyKind)
+      .map((response) => response.score);
+
+  return {
+    minimumResponseThreshold,
+    athleteTrust: buildHarnessSurveySummary(scoresFor('athlete', 'trust'), minimumResponseThreshold),
+    coachTrust: buildHarnessSurveySummary(scoresFor('coach', 'trust'), minimumResponseThreshold),
+    clinicianTrust: buildHarnessSurveySummary(scoresFor('clinician', 'trust'), minimumResponseThreshold),
+    athleteNps: buildHarnessSurveySummary(scoresFor('athlete', 'nps'), minimumResponseThreshold),
+    coachNps: buildHarnessSurveySummary(scoresFor('coach', 'nps'), minimumResponseThreshold),
+    clinicianNps: buildHarnessSurveySummary(scoresFor('clinician', 'nps'), minimumResponseThreshold),
+  };
+}
+
+function buildHarnessOutcomeMetrics(surveys: ReturnType<typeof buildHarnessSurveyDiagnostics>) {
+  return {
+    enrollmentRate: 100,
+    consentCompletionRate: 100,
+    baselineCompletionRate: 100,
+    adherenceRate: 66.7,
+    dailyCheckInRate: 66.7,
+    assignmentCompletionRate: 66.7,
+    mentalPerformanceDelta: 4.2,
+    escalationsTotal: 0,
+    escalationsTier1: 0,
+    escalationsTier2: 0,
+    escalationsTier3: 0,
+    medianMinutesToCare: null,
+    athleteNps: surveys.athleteNps.headlineValue,
+    coachNps: surveys.coachNps.headlineValue,
+    clinicianNps: surveys.clinicianNps.headlineValue,
+    athleteTrust: surveys.athleteTrust.headlineValue,
+    coachTrust: surveys.coachTrust.headlineValue,
+    clinicianTrust: surveys.clinicianTrust.headlineValue,
+  };
+}
+
+function buildHarnessRecommendationTypeSlices(
+  variant: 'whole-pilot' | 'cohort-alpha' | 'cohort-beta' = 'whole-pilot'
+) {
+  const variants = {
+    'whole-pilot': {
+      stateAwareAdherence: 88,
+      stateAwareTrust: 7.9,
+      fallbackAdherence: 67,
+      fallbackTrust: 6.8,
+      protocolCompletedAdherence: 91,
+      protocolCompletedTrust: 8.1,
+      protocolSkippedAdherence: 64,
+      protocolSkippedTrust: 6.5,
+    },
+    'cohort-alpha': {
+      stateAwareAdherence: 92,
+      stateAwareTrust: 8.3,
+      fallbackAdherence: 71,
+      fallbackTrust: 7.1,
+      protocolCompletedAdherence: 94,
+      protocolCompletedTrust: 8.4,
+      protocolSkippedAdherence: 69,
+      protocolSkippedTrust: 6.9,
+    },
+    'cohort-beta': {
+      stateAwareAdherence: 79,
+      stateAwareTrust: 6.7,
+      fallbackAdherence: 58,
+      fallbackTrust: 5.9,
+      protocolCompletedAdherence: 83,
+      protocolCompletedTrust: 7.0,
+      protocolSkippedAdherence: 51,
+      protocolSkippedTrust: 5.6,
+    },
+  } as const;
+
+  const selected = variants[variant];
+  return {
+    stateAwareVsFallback: {
+      stateAware: {
+        athleteCount: 2,
+        adherenceRate: selected.stateAwareAdherence,
+        mentalPerformanceDelta: 4.1,
+        athleteTrust: selected.stateAwareTrust,
+        athleteNps: 42,
+      },
+      fallbackOrNone: {
+        athleteCount: 1,
+        adherenceRate: selected.fallbackAdherence,
+        mentalPerformanceDelta: 2.4,
+        athleteTrust: selected.fallbackTrust,
+        athleteNps: 28,
+      },
+      delta: {
+        adherenceRate: Number((selected.stateAwareAdherence - selected.fallbackAdherence).toFixed(1)),
+        mentalPerformanceDelta: 1.7,
+        athleteTrust: Number((selected.stateAwareTrust - selected.fallbackTrust).toFixed(1)),
+      },
+    },
+    protocolCompletion: {
+      completedProtocol: {
+        athleteCount: 2,
+        adherenceRate: selected.protocolCompletedAdherence,
+        mentalPerformanceDelta: 4.4,
+        athleteTrust: selected.protocolCompletedTrust,
+        athleteNps: 44,
+      },
+      incompleteOrSkippedProtocol: {
+        athleteCount: 1,
+        adherenceRate: selected.protocolSkippedAdherence,
+        mentalPerformanceDelta: 2.2,
+        athleteTrust: selected.protocolSkippedTrust,
+        athleteNps: 24,
+      },
+      delta: {
+        adherenceRate: Number((selected.protocolCompletedAdherence - selected.protocolSkippedAdherence).toFixed(1)),
+        mentalPerformanceDelta: 2.2,
+        athleteTrust: Number((selected.protocolCompletedTrust - selected.protocolSkippedTrust).toFixed(1)),
+      },
+    },
+  };
+}
+
+function buildHarnessOperationalDiagnostics() {
+  const speedToCare = {
+    coachNotification: { medianMinutes: 15, p75Minutes: 22, sampleCount: 3 },
+    consentAccepted: { medianMinutes: 18, p75Minutes: 26, sampleCount: 3 },
+    handoffInitiated: { medianMinutes: 24, p75Minutes: 31, sampleCount: 3 },
+    handoffAccepted: { medianMinutes: 31, p75Minutes: 38, sampleCount: 3 },
+    firstClinicianResponse: { medianMinutes: 36, p75Minutes: 44, sampleCount: 3 },
+    careCompleted: { medianMinutes: 51, p75Minutes: 58, sampleCount: 3 },
+  };
+
+  return {
+    escalations: {
+      statusCounts: {
+        active: 1,
+        resolved: 1,
+        declined: 1,
+      },
+      supportingSpeedToCare: speedToCare,
+    },
+  };
 }
 
 function intersectsTags(left: string[], right: string[]) {
@@ -1024,6 +1210,18 @@ async function seedPulseCheckPilotDashboardFixture(
     namespace: string;
     adminUserId: string;
     adminEmail: string;
+    surveyResponses?: Array<{
+      id?: string;
+      respondentUserId: string;
+      respondentRole: 'athlete' | 'coach' | 'clinician';
+      surveyKind: 'trust' | 'nps';
+      score: number;
+      athleteId?: string | null;
+      pilotEnrollmentId?: string | null;
+      cohortId?: string | null;
+      source?: 'ios' | 'android' | 'web-admin';
+      submittedAt?: Date | number;
+    }>;
   }
 ) {
   const fixture = buildPilotDashboardFixtureIds(input.namespace);
@@ -1149,6 +1347,148 @@ async function seedPulseCheckPilotDashboardFixture(
         notes: 'Secondary cohort for E2E pilot dashboard coverage.',
         createdAt: now,
         updatedAt: now,
+      },
+      { merge: true }
+    ),
+  ]);
+
+  const surveyResponses = Array.isArray(input.surveyResponses) ? input.surveyResponses : [];
+  const wholePilotSurveyDiagnostics = buildHarnessSurveyDiagnostics(surveyResponses);
+  const surveyDiagnosticsByCohort = Object.fromEntries(
+    uniqueStrings(surveyResponses.map((response) => response.cohortId || ''))
+      .filter(Boolean)
+      .map((cohortId) => [
+        cohortId,
+        buildHarnessSurveyDiagnostics(surveyResponses.filter((response) => response.cohortId === cohortId)),
+      ])
+  );
+  const outcomeByCohort = Object.fromEntries(
+    Object.entries(surveyDiagnosticsByCohort).map(([cohortId, diagnostics]) => [cohortId, buildHarnessOutcomeMetrics(diagnostics)])
+  );
+  const recommendationTypeSlices = buildHarnessRecommendationTypeSlices();
+  const recommendationTypeSlicesByCohort = {
+    [fixture.cohortAlphaId]: buildHarnessRecommendationTypeSlices('cohort-alpha'),
+    [fixture.cohortBetaId]: buildHarnessRecommendationTypeSlices('cohort-beta'),
+  };
+  const operationalDiagnostics = buildHarnessOperationalDiagnostics();
+  const trustDispositionBaseline = {
+    averageScore: 6.9,
+    responseCount: 3,
+  };
+
+  if (surveyResponses.length > 0) {
+    await Promise.all(
+      surveyResponses.map((response, index) =>
+        setDoc(
+          doc(db, PULSECHECK_PILOT_SURVEY_RESPONSES_COLLECTION, response.id || `${fixture.pilotId}-survey-${index + 1}`),
+          {
+            id: response.id || `${fixture.pilotId}-survey-${index + 1}`,
+            pilotId: fixture.pilotId,
+            pilotEnrollmentId: response.pilotEnrollmentId || null,
+            organizationId: fixture.organizationId,
+            teamId: fixture.teamId,
+            cohortId: response.cohortId || null,
+            respondentUserId: response.respondentUserId,
+            respondentRole: response.respondentRole,
+            athleteId: response.athleteId || null,
+            surveyKind: response.surveyKind,
+            score: response.score,
+            source: response.source || 'web-admin',
+            submittedAt: response.submittedAt || now,
+            trustBattery: null,
+          },
+          { merge: true }
+        )
+      )
+    );
+  }
+
+  await Promise.all([
+    setDoc(
+      doc(db, PULSECHECK_PILOT_OUTCOME_RELEASE_SETTINGS_COLLECTION, fixture.pilotId),
+      {
+        pilotId: fixture.pilotId,
+        outcomesEnabled: true,
+        rolloutStage: 'staged',
+        rolloutNotes: 'Seeded E2E staged rollout state.',
+        updatedAt: now,
+        updatedByUserId: input.adminUserId,
+        updatedByEmail: input.adminEmail.trim().toLowerCase(),
+      },
+      { merge: true }
+    ),
+    setDoc(
+      doc(db, PULSECHECK_PILOT_METRIC_OPS_COLLECTION, fixture.pilotId),
+      {
+        pilotId: fixture.pilotId,
+        updatedAt: now,
+      },
+      { merge: true }
+    ),
+    setDoc(
+      doc(db, PULSECHECK_PILOT_METRIC_OPS_COLLECTION, fixture.pilotId, 'scopes', 'rollup_recompute'),
+      {
+        pilotId: fixture.pilotId,
+        scope: 'rollup_recompute',
+        status: 'succeeded',
+        startedAt: new Date(nowMs - 1000 * 60 * 6),
+        completedAt: new Date(nowMs - 1000 * 60 * 5),
+        durationMs: 1100,
+        lastError: null,
+      },
+      { merge: true }
+    ),
+    setDoc(
+      doc(db, PULSECHECK_PILOT_METRIC_OPS_COLLECTION, fixture.pilotId, 'scopes', 'scheduled_rollup_repair'),
+      {
+        pilotId: fixture.pilotId,
+        scope: 'scheduled_rollup_repair',
+        status: 'succeeded',
+        startedAt: new Date(nowMs - 1000 * 60 * 18),
+        completedAt: new Date(nowMs - 1000 * 60 * 17),
+        durationMs: 2200,
+        lastError: null,
+      },
+      { merge: true }
+    ),
+    setDoc(
+      doc(db, PULSECHECK_PILOT_METRIC_ROLLUPS_COLLECTION, fixture.pilotId),
+      {
+        id: fixture.pilotId,
+        pilotId: fixture.pilotId,
+        organizationId: fixture.organizationId,
+        teamId: fixture.teamId,
+        updatedAt: now,
+        updatedAtMs: nowMs,
+      },
+      { merge: true }
+    ),
+    setDoc(
+      doc(
+        db,
+        PULSECHECK_PILOT_METRIC_ROLLUPS_COLLECTION,
+        fixture.pilotId,
+        PULSECHECK_PILOT_METRIC_ROLLUP_SUMMARY_SUBCOLLECTION,
+        'current'
+      ),
+      {
+        pilotId: fixture.pilotId,
+        organizationId: fixture.organizationId,
+        teamId: fixture.teamId,
+        cohortId: null,
+        window: 'current',
+        metrics: buildHarnessOutcomeMetrics(wholePilotSurveyDiagnostics),
+          diagnostics: {
+            surveys: wholePilotSurveyDiagnostics,
+            surveysByCohort: surveyDiagnosticsByCohort,
+            recommendationTypeSlices,
+            recommendationTypeSlicesByCohort,
+            trustDispositionBaseline,
+            ...operationalDiagnostics,
+          },
+        outcomeByCohort,
+        computedAt: now,
+        computedAtMs: nowMs,
       },
       { merge: true }
     ),
@@ -1638,6 +1978,13 @@ async function cleanupPulseCheckPilotDashboardFixture(
     deleteQueryDocs(db, PULSECHECK_PILOT_HYPOTHESES_COLLECTION, 'pilotId', fixture.pilotId),
     deleteQueryDocs(db, PULSECHECK_PILOT_ENROLLMENTS_COLLECTION, 'pilotId', fixture.pilotId),
     deleteQueryDocs(db, PULSECHECK_PILOT_COHORTS_COLLECTION, 'pilotId', fixture.pilotId),
+    deleteQueryDocs(db, PULSECHECK_PILOT_SURVEY_RESPONSES_COLLECTION, 'pilotId', fixture.pilotId),
+    deleteDoc(doc(db, PULSECHECK_PILOT_METRIC_ROLLUPS_COLLECTION, fixture.pilotId, PULSECHECK_PILOT_METRIC_ROLLUP_SUMMARY_SUBCOLLECTION, 'current')).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_PILOT_METRIC_ROLLUPS_COLLECTION, fixture.pilotId)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_PILOT_OUTCOME_RELEASE_SETTINGS_COLLECTION, fixture.pilotId)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_PILOT_METRIC_OPS_COLLECTION, fixture.pilotId, 'scopes', 'rollup_recompute')).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_PILOT_METRIC_OPS_COLLECTION, fixture.pilotId, 'scopes', 'scheduled_rollup_repair')).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_PILOT_METRIC_OPS_COLLECTION, fixture.pilotId)).catch(() => undefined),
   ]);
 
   await Promise.all(

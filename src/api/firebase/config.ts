@@ -51,6 +51,30 @@ const getPreferredServerMode = () => {
   return true;
 };
 
+const resolveClientFirebaseMode = () => {
+  if (process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true') {
+    return true;
+  }
+
+  if (typeof window === 'undefined') {
+    return getPreferredServerMode();
+  }
+
+  const isLocalhost = isBrowserLocalhost();
+  const forceDevFirebase = window.localStorage.getItem('forceDevFirebase') === 'true';
+  const savedDevMode = window.localStorage.getItem('devMode');
+  const hasExplicitDevMode = savedDevMode !== null;
+  let mode = forceDevFirebase || (hasExplicitDevMode ? savedDevMode === 'true' : isLocalhost);
+
+  const hasDevKeys = !!process.env.NEXT_PUBLIC_DEV_FIREBASE_API_KEY;
+  const hasProdKeys = !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  if (mode && !hasDevKeys && hasProdKeys) {
+    mode = false;
+  }
+
+  return mode;
+};
+
 const getFirebaseConfig = (isDev: boolean) => {
   const isLocalhost = isBrowserLocalhost();
   
@@ -208,15 +232,7 @@ const getInitialMode = () => {
     const forceDevFirebase = window.localStorage.getItem('forceDevFirebase') === 'true';
     const savedDevMode = window.localStorage.getItem('devMode');
     const hasExplicitDevMode = savedDevMode !== null;
-    let mode = forceDevFirebase
-      || (hasExplicitDevMode ? savedDevMode === 'true' : isLocalhost);
-      
-    // Fall back to production config if dev keys are missing
-    const hasDevKeys = !!process.env.NEXT_PUBLIC_DEV_FIREBASE_API_KEY;
-    const hasProdKeys = !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-    if (mode && !hasDevKeys && hasProdKeys) {
-      mode = false;
-    }
+    const mode = resolveClientFirebaseMode();
     console.log('[Firebase] Initial mode:', {
       isDev: mode,
       source: forceDevFirebase
@@ -258,3 +274,20 @@ if (typeof window !== 'undefined') {
 }
 
 export { app, auth, db, storage };
+
+export const isLocalFirebaseRuntime = () => isBrowserLocalhost();
+
+export const isUsingDevFirebase = () => resolveClientFirebaseMode();
+
+export const getActiveFirebaseProjectId = () =>
+  resolveClientFirebaseMode()
+    ? process.env.NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID || 'quicklifts-dev-01'
+    : process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'quicklifts-dd3f1';
+
+export const setPreferredFirebaseMode = (isDev: boolean) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem('devMode', isDev ? 'true' : 'false');
+  if (!isDev) {
+    window.localStorage.removeItem('forceDevFirebase');
+  }
+};

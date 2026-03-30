@@ -73,6 +73,7 @@ function buildEngineSummary(input: {
   highConfidencePatternCount: number;
   degradedPatternCount: number;
   recommendationProjectionCount: number;
+  recommendationProjectionCountsByConsumer?: Record<string, number>;
   lastEngineRefreshAt: number;
   activePatternKeys?: string[];
   activeProjectionKeys?: string[];
@@ -92,6 +93,7 @@ function buildEngineSummary(input: {
     highConfidencePatternCount: input.highConfidencePatternCount,
     degradedPatternCount: input.degradedPatternCount,
     recommendationProjectionCount: input.recommendationProjectionCount,
+    recommendationProjectionCountsByConsumer: input.recommendationProjectionCountsByConsumer || {},
   };
 }
 
@@ -670,6 +672,13 @@ function buildBaseDemoStore(): PilotDashboardDemoStore {
       createdAt: asTimestamp(now - oneDay * 16),
       updatedAt: asTimestamp(now - oneHour),
     } as PulseCheckTeamMembership;
+    const recommendationProjectionCountsByConsumer = athlete.recentProjections.reduce(
+      (accumulator: Record<string, number>, projection: PilotDashboardRecentProjection) => {
+        accumulator[projection.consumer] = (accumulator[projection.consumer] || 0) + 1;
+        return accumulator;
+      },
+      {}
+    );
     const engineSummary = buildEngineSummary({
       evidenceRecordCount: athlete.evidenceCount,
       patternModelCount: athlete.patternCount,
@@ -677,6 +686,7 @@ function buildBaseDemoStore(): PilotDashboardDemoStore {
       highConfidencePatternCount: athlete.highConfidenceCount,
       degradedPatternCount: athlete.degradedCount,
       recommendationProjectionCount: athlete.projections,
+      recommendationProjectionCountsByConsumer,
       lastEngineRefreshAt: now - oneHour * (index + 1),
       activePatternKeys: athlete.recentPatterns.map((pattern: PilotDashboardRecentPattern) => pattern.patternKey),
       activeProjectionKeys: athlete.recentProjections.map((projection: PilotDashboardRecentProjection) => projection.projectionKey),

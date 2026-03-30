@@ -16,6 +16,41 @@ import type {
   PulseCheckTeam,
   PulseCheckTeamMembership,
 } from '../pulsecheckProvisioning/types';
+import type {
+  PulseCheckPilotMentalPerformanceSnapshot,
+  PulseCheckPilotMentalPerformanceSnapshotSet,
+  PulseCheckPilotMetricRollupWindow,
+  PulseCheckPilotOutcomeDashboardCardKey,
+  PulseCheckPilotOutcomeMetricRollup,
+  PulseCheckPilotOutcomeMetrics,
+  PulseCheckPilotSurveyResponse,
+  PulseCheckPilotSurveyKind,
+  PulseCheckPilotTrustBatteryPayload,
+  PulseCheckPilotTrustBatteryItemKey,
+  PulseCheckPilotMetricEvent,
+  PulseCheckPilotMetricEventType,
+  PulseCheckPilotMetricEventActorRole,
+  PulseCheckPilotMetricRecomputeMode,
+  PulseCheckPilotHypothesisEvaluationDiagnostics,
+  PulseCheckPilotOutcomeSurveyDiagnostics,
+} from '../mentaltraining/pulsecheckPilotOutcomeMetrics';
+
+export type PilotDashboardOutcomeCardKey = PulseCheckPilotOutcomeDashboardCardKey;
+export type PilotDashboardOutcomeMetrics = PulseCheckPilotOutcomeMetrics;
+export type PilotDashboardOutcomeMetricRollup = PulseCheckPilotOutcomeMetricRollup;
+export type PilotDashboardOutcomeMetricRollupWindow = PulseCheckPilotMetricRollupWindow;
+export type PulseCheckPilotOutcomeMetricRecomputeMode = PulseCheckPilotMetricRecomputeMode;
+export type PilotDashboardOutcomeSurveyDiagnostics = PulseCheckPilotOutcomeSurveyDiagnostics;
+export type PilotDashboardHypothesisEvaluation = PulseCheckPilotHypothesisEvaluationDiagnostics;
+export type PulseCheckPilotOutcomeTrustBatteryPayload = PulseCheckPilotTrustBatteryPayload;
+export type PulseCheckPilotOutcomeTrustBatteryItemKey = PulseCheckPilotTrustBatteryItemKey;
+export type PulseCheckPilotOutcomeSurveyKind = PulseCheckPilotSurveyKind;
+export type PulseCheckPilotOutcomeSurveyResponse = PulseCheckPilotSurveyResponse;
+export type PulseCheckPilotOutcomeMetricEvent = PulseCheckPilotMetricEvent;
+export type PulseCheckPilotOutcomeMetricEventType = PulseCheckPilotMetricEventType;
+export type PulseCheckPilotOutcomeMetricEventActorRole = PulseCheckPilotMetricEventActorRole;
+export type PulseCheckPilotMentalPerformanceSnapshotRecord = PulseCheckPilotMentalPerformanceSnapshot;
+export type PulseCheckPilotMentalPerformanceSnapshotRecordSet = PulseCheckPilotMentalPerformanceSnapshotSet;
 
 export type PilotHypothesisStatus = 'not-enough-data' | 'promising' | 'mixed' | 'not-supported';
 export type PilotHypothesisConfidenceLevel = 'low' | 'medium' | 'high';
@@ -175,6 +210,19 @@ export interface PilotHypothesisAssistFrame {
     avgPatternModelsPerActiveAthlete: number;
     avgRecommendationProjectionsPerActiveAthlete: number;
   };
+  outcomes?: {
+    enrollmentRate: number;
+    adherenceRate: number;
+    mentalPerformanceDelta: number;
+    athleteTrust: number | null;
+    athleteNps: number | null;
+    coachTrust: number | null;
+    coachNps: number | null;
+    clinicianTrust: number | null;
+    clinicianNps: number | null;
+  };
+  outcomeSurveyDiagnostics?: PilotDashboardOutcomeSurveyDiagnostics;
+  hypothesisEvaluation?: PilotDashboardHypothesisEvaluation;
   cohortSummaries: Array<{
     cohortId: string;
     cohortName: string;
@@ -304,6 +352,7 @@ export interface PilotDashboardEngineSummary {
   highConfidencePatternCount: number;
   degradedPatternCount: number;
   recommendationProjectionCount: number;
+  recommendationProjectionCountsByConsumer?: Record<string, number>;
 }
 
 export interface PilotDashboardAthleteSummary {
@@ -332,6 +381,9 @@ export interface PilotDashboardDirectoryEntry {
   stablePatternRate: number;
   avgEvidenceRecordsPerActiveAthlete: number;
   avgRecommendationProjectionsPerActiveAthlete: number;
+  outcomeMetrics?: PilotDashboardOutcomeMetrics;
+  outcomeDiagnostics?: PilotDashboardOutcomeSurveyDiagnostics;
+  hypothesisEvaluation?: PilotDashboardHypothesisEvaluation;
 }
 
 export interface PilotDashboardMetrics {
@@ -443,6 +495,18 @@ export interface PilotDashboardDetail {
   hasPilotInviteConfigOverride: boolean;
   teamInviteConfigDefault: PulseCheckPilotInviteDefaultConfig | null;
   organizationInviteConfigDefault: PulseCheckPilotInviteDefaultConfig | null;
+  outcomeMetrics?: PilotDashboardOutcomeMetrics;
+  outcomeMetricsByCohort?: Record<string, PilotDashboardOutcomeMetrics>;
+  outcomeDiagnostics?: PilotDashboardOutcomeSurveyDiagnostics;
+  outcomeDiagnosticsByCohort?: Record<string, PilotDashboardOutcomeSurveyDiagnostics>;
+  outcomeOperationalDiagnostics?: Record<string, any>;
+  outcomeRecommendationTypeSlices?: Record<string, any>;
+  outcomeRecommendationTypeSlicesByCohort?: Record<string, Record<string, any>>;
+  outcomeTrustDispositionBaseline?: Record<string, any>;
+  outcomeReleaseSettings?: Record<string, any>;
+  outcomeOpsStatus?: Record<string, any>;
+  hypothesisEvaluation?: PilotDashboardHypothesisEvaluation;
+  hypothesisEvaluationByCohort?: Record<string, PilotDashboardHypothesisEvaluation>;
   latestResearchReadout?: PilotResearchReadout | null;
   researchReadouts: PilotResearchReadout[];
 }
@@ -460,6 +524,7 @@ export interface PilotDashboardAthleteDetail {
   profileSnapshotCount: number;
   latestAssessmentContextFlagStatus: string;
   latestAssessmentCapturedAt?: PilotDashboardTimeValue;
+  mentalPerformanceSnapshots?: PulseCheckPilotMentalPerformanceSnapshotSet;
   recentPatterns: PilotDashboardRecentPattern[];
   recentProjections: PilotDashboardRecentProjection[];
   recentEvidence: PilotDashboardRecentEvidence[];

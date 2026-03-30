@@ -21,7 +21,9 @@ import {
   Users2,
 } from 'lucide-react';
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
+import { LocalFirebaseModeButton } from '../../../components/admin/pilot-dashboard/LocalFirebaseModeButton';
 import NoraMetricHelpButton from '../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
+import { StaffPilotSurveyModal } from '../../../components/admin/pilot-dashboard/StaffPilotSurveyModal';
 import type { PilotDashboardMetricExplanationKey } from '../../../components/admin/pilot-dashboard/noraMetricCatalog';
 import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
@@ -293,6 +295,142 @@ const formatBaselineModeLabel = (value: PilotResearchReadoutBaselineMode) =>
 const formatReadinessStatusLabel = (value: PilotResearchReadoutSection['readinessStatus']) =>
   value === 'suppressed' ? 'Suppressed' : 'Ready';
 
+const OUTCOME_CARD_ORDER = ['enrollment', 'adherence', 'escalations', 'speedToCare', 'athleteTrust', 'athleteNps'] as const;
+const OUTCOME_CARD_PRESENTATION: Record<typeof OUTCOME_CARD_ORDER[number], { label: string; help: string }> = {
+  enrollment: { label: 'Enrollment', help: 'Enrollment complete rate' },
+  adherence: { label: 'Adherence', help: 'Full-day adherence rate' },
+  escalations: { label: 'Escalations', help: 'Pilot escalation volume' },
+  speedToCare: { label: 'Speed to Care', help: 'Median minutes to handoff initiated' },
+  athleteTrust: { label: 'Athlete Trust', help: 'Average trust score' },
+  athleteNps: { label: 'Athlete NPS', help: 'Average recommendation score' },
+};
+
+type SurveyMetricKey = 'athleteTrust' | 'coachTrust' | 'clinicianTrust' | 'athleteNps' | 'coachNps' | 'clinicianNps';
+
+const SURVEY_METRIC_CARDS: Array<{
+  key: SurveyMetricKey;
+  label: string;
+  helpKey: PilotDashboardMetricExplanationKey;
+  accentClassName: string;
+}> = [
+  { key: 'athleteTrust', label: 'Athlete Trust', helpKey: 'athlete-trust', accentClassName: 'border-cyan-400/20 bg-cyan-400/10 text-cyan-100' },
+  { key: 'coachTrust', label: 'Coach Trust', helpKey: 'coach-trust', accentClassName: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' },
+  { key: 'clinicianTrust', label: 'Clinician Trust', helpKey: 'clinician-trust', accentClassName: 'border-violet-400/20 bg-violet-400/10 text-violet-100' },
+  { key: 'athleteNps', label: 'Athlete NPS', helpKey: 'athlete-nps', accentClassName: 'border-cyan-400/20 bg-cyan-400/10 text-cyan-100' },
+  { key: 'coachNps', label: 'Coach NPS', helpKey: 'coach-nps', accentClassName: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' },
+  { key: 'clinicianNps', label: 'Clinician NPS', helpKey: 'clinician-nps', accentClassName: 'border-violet-400/20 bg-violet-400/10 text-violet-100' },
+];
+
+const RECOMMENDATION_CONSUMER_ORDER = ['profile', 'nora', 'coach', 'protocol_planner', 'ops', 'research'] as const;
+const RECOMMENDATION_CONSUMER_LABELS: Record<typeof RECOMMENDATION_CONSUMER_ORDER[number], string> = {
+  profile: 'Profile',
+  nora: 'Nora',
+  coach: 'Coach',
+  protocol_planner: 'Protocol Planner',
+  ops: 'Ops',
+  research: 'Research',
+};
+
+const formatOutcomeValue = (metricKey: typeof OUTCOME_CARD_ORDER[number], metrics: PilotDashboardDetail['outcomeMetrics'] | null | undefined) => {
+  if (!metrics) return 'No outcome rollup yet';
+  switch (metricKey) {
+    case 'enrollment':
+      return `${metrics.enrollmentRate.toFixed(1)}%`;
+    case 'adherence':
+      return `${metrics.adherenceRate.toFixed(1)}%`;
+    case 'escalations':
+      return `${metrics.escalationsTotal}`;
+    case 'speedToCare':
+      return metrics.medianMinutesToCare !== null ? `${metrics.medianMinutesToCare.toFixed(1)} min` : 'No escalations yet';
+    case 'athleteTrust':
+      return metrics.athleteTrust !== null ? metrics.athleteTrust.toFixed(1) : 'Not enough responses yet';
+    case 'athleteNps':
+      return metrics.athleteNps !== null ? metrics.athleteNps.toFixed(1) : 'Not enough responses yet';
+    default:
+      return 'No outcome rollup yet';
+  }
+};
+
+const formatOutcomeSubtext = (
+  metricKey: typeof OUTCOME_CARD_ORDER[number],
+  metrics: PilotDashboardDetail['outcomeMetrics'] | null | undefined,
+  diagnostics: PilotDashboardDetail['outcomeDiagnostics'] | null | undefined
+) => {
+  if (!metrics) return '';
+  const surveySummary =
+    metricKey === 'athleteTrust'
+      ? diagnostics?.athleteTrust
+      : metricKey === 'athleteNps'
+        ? diagnostics?.athleteNps
+        : null;
+  switch (metricKey) {
+    case 'enrollment':
+      return `${metrics.consentCompletionRate.toFixed(1)}% consent completion`;
+    case 'adherence':
+      return `${metrics.dailyCheckInRate.toFixed(1)}% check-ins, ${metrics.assignmentCompletionRate.toFixed(1)}% assignments`;
+    case 'escalations':
+      return `${metrics.escalationsTier1} T1, ${metrics.escalationsTier2} T2, ${metrics.escalationsTier3} T3`;
+    case 'speedToCare':
+      return metrics.medianMinutesToCare !== null ? 'Median minutes to handoff initiated' : 'No handoffs yet';
+    case 'athleteTrust':
+      return metrics.athleteTrust !== null
+        ? 'Average athlete trust score'
+        : surveySummary
+          ? `${surveySummary.responseCount}/${diagnostics?.minimumResponseThreshold || 5} responses collected`
+          : 'Minimum 5 responses required';
+    case 'athleteNps':
+      return metrics.athleteNps !== null
+        ? 'Average athlete NPS score'
+        : surveySummary
+          ? `${surveySummary.responseCount}/${diagnostics?.minimumResponseThreshold || 5} responses collected`
+          : 'Minimum 5 responses required';
+    default:
+      return '';
+  }
+};
+
+const formatSurveyMetricValue = (
+  metricKey: SurveyMetricKey,
+  metrics: PilotDashboardDetail['outcomeMetrics'] | null | undefined
+) => {
+  if (!metrics) return 'No outcome rollup yet';
+  const value = metrics[metricKey];
+  return value !== null ? value.toFixed(1) : 'Not enough responses yet';
+};
+
+const formatSurveyMetricSubtext = (
+  metricKey: SurveyMetricKey,
+  diagnostics: PilotDashboardDetail['outcomeDiagnostics'] | null | undefined
+) => {
+  if (!diagnostics) {
+    return 'Trust and NPS diagnostics will appear once this frame has a persisted survey rollup.';
+  }
+  const summary = diagnostics[metricKey];
+  if (!summary) {
+    return `Minimum ${diagnostics.minimumResponseThreshold} responses required`;
+  }
+  return summary.minimumSampleMet
+    ? `${summary.responseCount} responses collected · sample threshold met`
+    : `${summary.responseCount}/${diagnostics.minimumResponseThreshold} responses collected · below sample threshold`;
+};
+
+const formatConsumerLabel = (consumer: typeof RECOMMENDATION_CONSUMER_ORDER[number]) => RECOMMENDATION_CONSUMER_LABELS[consumer];
+const formatSignedDelta = (value: number | null | undefined, suffix = '') => {
+  if (value === null || value === undefined) return 'No comparison yet';
+  const prefix = value > 0 ? '+' : '';
+  return `${prefix}${value.toFixed(1)}${suffix}`;
+};
+const formatComparisonMetricValue = (value: number | null | undefined, kind: 'percent' | 'score') => {
+  if (value === null || value === undefined) return 'Not enough data yet';
+  return kind === 'percent' ? `${value.toFixed(1)}%` : value.toFixed(1);
+};
+const formatAthleteCountLabel = (count: number | null | undefined) => {
+  const safeCount = Number.isFinite(count) ? Number(count) : 0;
+  return `${safeCount} athlete${safeCount === 1 ? '' : 's'}`;
+};
+const formatDurationMetricValue = (value: number | null | undefined) =>
+  value === null || value === undefined ? 'Not enough data yet' : `${value.toFixed(1)} min`;
+
 const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const currentUser = useUser();
   const router = useRouter();
@@ -315,6 +453,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [creatingSuggestedHypothesisKey, setCreatingSuggestedHypothesisKey] = useState<string | null>(null);
   const [savingInviteConfig, setSavingInviteConfig] = useState(false);
   const [savingRequiredConsents, setSavingRequiredConsents] = useState(false);
+  const [savingOutcomeReleaseSettings, setSavingOutcomeReleaseSettings] = useState(false);
+  const [recomputingOutcomeRollups, setRecomputingOutcomeRollups] = useState(false);
   const [savingInviteDefaultScope, setSavingInviteDefaultScope] = useState<'team' | 'organization' | null>(null);
   const [resettingInviteConfig, setResettingInviteConfig] = useState(false);
   const [seedingDefaults, setSeedingDefaults] = useState(false);
@@ -323,7 +463,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [deletingInviteId, setDeletingInviteId] = useState<string | null>(null);
   const [unenrollingAthleteId, setUnenrollingAthleteId] = useState<string | null>(null);
   const [savingAthleteCohortId, setSavingAthleteCohortId] = useState<string | null>(null);
+  const [seedingAthleteDataId, setSeedingAthleteDataId] = useState<string | null>(null);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
+  const [staffSurveyModalRole, setStaffSurveyModalRole] = useState<'coach' | 'clinician' | null>(null);
   const [demoModeEnabled, setDemoModeEnabled] = useState(false);
   const [generatingResearchReadout, setGeneratingResearchReadout] = useState(false);
   const [savingResearchReadoutReview, setSavingResearchReadoutReview] = useState(false);
@@ -546,6 +688,57 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         ? visibleMetrics.totalRecommendationProjections / visibleMetrics.activeAthleteCount
         : 0,
   }), [visibleMetrics]);
+
+  const visibleRecommendationProjectionConsumerCounts = useMemo(() => {
+    return visibleAthletes.reduce<Record<string, number>>((accumulator, athlete) => {
+      const counts = athlete.engineSummary.recommendationProjectionCountsByConsumer || {};
+      Object.entries(counts).forEach(([consumer, count]) => {
+        if (!count) return;
+        accumulator[consumer] = (accumulator[consumer] || 0) + count;
+      });
+      return accumulator;
+    }, {});
+  }, [visibleAthletes]);
+
+  const visibleOutcomeMetrics = useMemo(() => {
+    if (!detail) return null;
+    if (cohortFilter) {
+      return detail.outcomeMetricsByCohort?.[cohortFilter] || null;
+    }
+    return detail.outcomeMetrics || null;
+  }, [cohortFilter, detail]);
+
+  const visibleOutcomeDiagnostics = useMemo(() => {
+    if (!detail) return null;
+    if (cohortFilter) {
+      return detail.outcomeDiagnosticsByCohort?.[cohortFilter] || null;
+    }
+    return detail.outcomeDiagnostics || null;
+  }, [cohortFilter, detail]);
+
+  const visibleHypothesisEvaluation = useMemo(() => {
+    if (!detail) return null;
+    if (cohortFilter) {
+      return detail.hypothesisEvaluationByCohort?.[cohortFilter] || null;
+    }
+    return detail.hypothesisEvaluation || null;
+  }, [cohortFilter, detail]);
+
+  const visibleRecommendationTypeSlices = useMemo(() => {
+    if (!detail) return null;
+    if (cohortFilter) {
+      return detail.outcomeRecommendationTypeSlicesByCohort?.[cohortFilter] || null;
+    }
+    return detail.outcomeRecommendationTypeSlices || null;
+  }, [cohortFilter, detail]);
+
+  const visibleOperationalDiagnostics = detail?.outcomeOperationalDiagnostics || null;
+  const visibleTrustDispositionBaseline = detail?.outcomeTrustDispositionBaseline || null;
+  const outcomeReleaseSettings = detail?.outcomeReleaseSettings || null;
+  const outcomeOpsStatus = detail?.outcomeOpsStatus || null;
+  const outcomesEnabled = outcomeReleaseSettings?.outcomesEnabled !== false;
+
+  const wholePilotOutcomeMetrics = detail?.outcomeMetrics || null;
 
   const selectedResearchReadout = useMemo(
     () => detail?.researchReadouts.find((readout) => readout.id === selectedReadoutId) || detail?.researchReadouts[0] || null,
@@ -884,6 +1077,21 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
             hypothesisCount: detail.metrics.hypothesisCount,
           },
           coverage: visibleCoverage,
+          outcomes: visibleOutcomeMetrics
+            ? {
+                enrollmentRate: visibleOutcomeMetrics.enrollmentRate,
+                adherenceRate: visibleOutcomeMetrics.adherenceRate,
+                mentalPerformanceDelta: visibleOutcomeMetrics.mentalPerformanceDelta,
+                athleteTrust: visibleOutcomeMetrics.athleteTrust,
+                athleteNps: visibleOutcomeMetrics.athleteNps,
+                coachTrust: visibleOutcomeMetrics.coachTrust,
+                coachNps: visibleOutcomeMetrics.coachNps,
+                clinicianTrust: visibleOutcomeMetrics.clinicianTrust,
+                clinicianNps: visibleOutcomeMetrics.clinicianNps,
+              }
+            : undefined,
+          outcomeSurveyDiagnostics: visibleOutcomeDiagnostics || undefined,
+          hypothesisEvaluation: visibleHypothesisEvaluation || undefined,
           cohortSummaries: visibleCohortSummaries,
           hypotheses: detail.hypotheses.map((hypothesis) => ({
             code: hypothesis.code,
@@ -1165,6 +1373,39 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
+  const handleSeedAthleteData = async (athlete: PilotDashboardDetail['athletes'][number]) => {
+    if (!detail) return;
+
+    if (demoModeEnabled) {
+      setPageMessage({ type: 'error', text: 'Demo mode does not support seeding pilot athlete data.' });
+      return;
+    }
+
+    setSeedingAthleteDataId(athlete.athleteId);
+    setPageMessage(null);
+    try {
+      await pulseCheckProvisioningService.backfillPilotAthleteOutcomeHistory({
+        pilotId: detail.pilot.id,
+        athleteId: athlete.athleteId,
+        pilotEnrollmentId: athlete.pilotEnrollment.id,
+        teamMembershipId: athlete.pilotEnrollment.teamMembershipId,
+        lookbackDays: 14,
+        source: 'pilot_athlete_manual_seed',
+        actorRole: 'admin',
+      });
+      await load('refresh');
+      setPageMessage({
+        type: 'success',
+        text: `${athlete.displayName}'s recent PulseCheck history was seeded into this pilot outcome frame.`,
+      });
+    } catch (seedError: any) {
+      console.error('[PulseCheckPilotDashboard] Failed to seed pilot athlete outcome history:', seedError);
+      setPageMessage({ type: 'error', text: seedError?.message || 'Failed to seed this athlete into the pilot outcome rollup.' });
+    } finally {
+      setSeedingAthleteDataId(null);
+    }
+  };
+
   const updateInviteConfigField = (field: keyof PulseCheckPilotInviteConfig, value: string) => {
     setInviteConfigDraft((current) => (current ? { ...current, [field]: value } : current));
   };
@@ -1253,6 +1494,18 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     } finally {
       setSavingRequiredConsents(false);
     }
+  };
+
+  const openStaffSurveyModal = (role: 'coach' | 'clinician') => {
+    setStaffSurveyModalRole(role);
+  };
+
+  const handleStaffSurveySubmitted = () => {
+    setPageMessage({
+      type: 'success',
+      text: 'Staff feedback submitted. Outcome rollups will refresh as the survey response is recorded.',
+    });
+    void load('refresh');
   };
 
   const saveInviteDefault = async (scopeType: 'team' | 'organization') => {
@@ -1403,6 +1656,59 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
+  const updateOutcomeReleaseSettings = async (outcomesEnabled: boolean, rolloutStage: 'disabled' | 'staged' | 'live') => {
+    if (!detail) return;
+    setSavingOutcomeReleaseSettings(true);
+    setPageMessage(null);
+    try {
+      await pulseCheckPilotDashboardService.saveOutcomeReleaseSettings({
+        pilotId: detail.pilot.id,
+        outcomesEnabled,
+        rolloutStage,
+        rolloutNotes:
+          rolloutStage === 'disabled'
+            ? 'Outcome surfaces disabled for rollback or pre-launch hold.'
+            : rolloutStage === 'staged'
+              ? 'Outcome surfaces enabled for staged rollout on a controlled pilot.'
+              : 'Outcome surfaces enabled for live rollout.',
+      });
+      await load('refresh');
+      setPageMessage({
+        type: 'success',
+        text: outcomesEnabled
+          ? `Outcome dashboard set to ${rolloutStage}.`
+          : 'Outcome dashboard disabled for this pilot.',
+      });
+    } catch (releaseError) {
+      console.error('[PulseCheckPilotDashboard] Failed to update outcome release settings:', releaseError);
+      setPageMessage({ type: 'error', text: 'Failed to update the outcome dashboard release settings.' });
+    } finally {
+      setSavingOutcomeReleaseSettings(false);
+    }
+  };
+
+  const triggerOutcomeRecompute = async () => {
+    if (!detail) return;
+    setRecomputingOutcomeRollups(true);
+    setPageMessage(null);
+    try {
+      await pulseCheckPilotDashboardService.triggerPilotOutcomeRollupRecompute({
+        pilotId: detail.pilot.id,
+        lookbackDays: 30,
+      });
+      await load('refresh');
+      setPageMessage({
+        type: 'success',
+        text: 'Outcome rollup recompute queued and refreshed for this pilot.',
+      });
+    } catch (recomputeError) {
+      console.error('[PulseCheckPilotDashboard] Failed to recompute outcome rollups:', recomputeError);
+      setPageMessage({ type: 'error', text: 'Failed to recompute pilot outcome rollups.' });
+    } finally {
+      setRecomputingOutcomeRollups(false);
+    }
+  };
+
   return (
     <AdminRouteGuard>
       <Head>
@@ -1427,6 +1733,43 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              <LocalFirebaseModeButton />
+              {!demoModeEnabled ? (
+                <>
+                  <button
+                    onClick={() => void updateOutcomeReleaseSettings(true, 'staged')}
+                    disabled={savingOutcomeReleaseSettings}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    Stage Outcomes
+                  </button>
+                  <button
+                    onClick={() => void updateOutcomeReleaseSettings(true, 'live')}
+                    disabled={savingOutcomeReleaseSettings}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Mark Outcomes Live
+                  </button>
+                  <button
+                    onClick={() => void updateOutcomeReleaseSettings(false, 'disabled')}
+                    disabled={savingOutcomeReleaseSettings}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Disable Outcomes
+                  </button>
+                  <button
+                    onClick={() => void triggerOutcomeRecompute()}
+                    disabled={recomputingOutcomeRollups}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <RefreshCcw className={`h-4 w-4 ${recomputingOutcomeRollups ? 'animate-spin' : ''}`} />
+                    Recompute Outcomes
+                  </button>
+                </>
+              ) : null}
               {demoModeEnabled ? (
                 <button
                   onClick={() => void resetDemoModeData()}
@@ -1485,13 +1828,15 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                 </div>
               ) : null}
 
-              <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+              <div className="mt-6 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
                 {overviewCards.map((card) => (
-                  <div key={card.label} className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                    <NoraMetricHelpButton metricKey={card.metricKey} className="absolute right-4 top-4" />
-                    <div className="flex items-center gap-3 text-cyan-300">
+                  <div key={card.label} className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex min-w-0 flex-1 items-center gap-3 pr-2 text-cyan-300">
                       {card.icon}
-                      <span className="text-sm font-medium">{card.label}</span>
+                        <span className="text-sm font-medium leading-tight">{card.label}</span>
+                      </div>
+                      <NoraMetricHelpButton metricKey={card.metricKey} className="shrink-0" />
                     </div>
                     <div className="mt-3 text-3xl font-semibold">{card.value}</div>
                   </div>
@@ -1537,6 +1882,237 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
               {activeTab === 'overview' ? (
                 <div className="mt-6 space-y-6">
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Release Control</div>
+                      <h2 className="mt-2 text-lg font-semibold text-white">Outcome rollout state</h2>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <span className={`rounded-full border px-3 py-2 text-xs ${
+                          outcomesEnabled
+                            ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
+                            : 'border-rose-400/20 bg-rose-400/10 text-rose-100'
+                        }`}>
+                          {outcomesEnabled ? 'Outcomes enabled' : 'Outcomes disabled'}
+                        </span>
+                        <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-100">
+                          Stage: {outcomeReleaseSettings?.rolloutStage || 'live'}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm text-zinc-400">
+                        Use staged rollout for single-pilot validation, live for broad availability, and disable as the rollback path if outcome read models drift.
+                      </p>
+                    </div>
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Ops Status</div>
+                      <h2 className="mt-2 text-lg font-semibold text-white">Rollup recompute health</h2>
+                      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Last recompute status</div>
+                          <div className="mt-2 text-sm text-white">{outcomeOpsStatus?.scopes?.rollup_recompute?.status || 'No recompute status yet'}</div>
+                          <div className="mt-1 text-xs text-zinc-500">{outcomeOpsStatus?.scopes?.rollup_recompute?.lastError || 'No recorded recompute error'}</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Last scheduled repair</div>
+                          <div className="mt-2 text-sm text-white">{outcomeOpsStatus?.scopes?.scheduled_rollup_repair?.status || 'No repair status yet'}</div>
+                          <div className="mt-1 text-xs text-zinc-500">
+                            {outcomeOpsStatus?.scopes?.scheduled_rollup_repair?.lastError || 'No recorded repair error'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {!outcomesEnabled ? (
+                    <div className="rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
+                      Outcome cards are disabled for this pilot. Engine-health and research surfaces remain available, but governed outcome metrics are hidden until rollout is re-enabled.
+                    </div>
+                  ) : null}
+
+                  {outcomesEnabled ? (
+                  <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pilot Outcomes</p>
+                        <h2 className="mt-2 text-lg font-semibold text-white">Outcome Snapshot</h2>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          {selectedCohort
+                            ? `Showing ${selectedCohort.name} when cohort-specific outcome rollups are available.`
+                            : 'Showing the whole-pilot outcome rollup for the active pilot.'}
+                        </p>
+                      </div>
+                      {selectedCohort ? (
+                        <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-100">
+                          Cohort view
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      {OUTCOME_CARD_ORDER.map((metricKey) => {
+                        const metric = visibleOutcomeMetrics;
+                        return (
+                          <div key={metricKey} className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                              {OUTCOME_CARD_PRESENTATION[metricKey].label}
+                            </div>
+                            <div className="mt-3 text-3xl font-semibold text-white">
+                              {formatOutcomeValue(metricKey, metric)}
+                            </div>
+                            <div className="mt-2 text-sm text-zinc-400">
+                              {formatOutcomeSubtext(metricKey, metric, visibleOutcomeDiagnostics)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-4 text-xs text-zinc-500">
+                      Trust and NPS stay separate. When the sample is below the minimum threshold, the dashboard shows
+                      “Not enough responses yet” instead of a misleading score.
+                    </div>
+
+                    <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5">
+                      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Trust Diagnostics</div>
+                          <h3 className="mt-2 text-lg font-semibold text-white">Role-Sliced Trust and NPS</h3>
+                          <p className="mt-1 text-sm text-zinc-400">
+                            These cards expose the full athlete, coach, and clinician trust/NPS breakdown with low-sample handling preserved.
+                          </p>
+                        </div>
+                        {visibleOutcomeDiagnostics ? (
+                          <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-100">
+                            Minimum sample: {visibleOutcomeDiagnostics.minimumResponseThreshold} responses
+                          </div>
+                        ) : (
+                          <div className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+                            Waiting on survey diagnostics
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        {SURVEY_METRIC_CARDS.map((card) => (
+                          <div key={card.key} className="relative rounded-3xl border border-white/10 bg-[#0b0f17] p-4">
+                            <NoraMetricHelpButton metricKey={card.helpKey} className="absolute right-4 top-4" />
+                            <div className="flex items-center gap-2 text-sm font-medium text-white">
+                              <span className={`rounded-full border px-2 py-1 text-[11px] ${card.accentClassName}`}>{card.label}</span>
+                            </div>
+                            <div className="mt-3 text-3xl font-semibold text-white">
+                              {formatSurveyMetricValue(card.key, visibleOutcomeMetrics)}
+                            </div>
+                            <div className="mt-2 text-sm text-zinc-400">
+                              {formatSurveyMetricSubtext(card.key, visibleOutcomeDiagnostics)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
+                      <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Recommendation-Type Outcome Slices</div>
+                        <h3 className="mt-2 text-lg font-semibold text-white">Trust and adherence by recommendation path</h3>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          These slices stay outcome-native: they compare trust and adherence by recommendation exposure rather than by raw projection counts.
+                        </p>
+                        {visibleRecommendationTypeSlices ? (
+                          <div className="mt-4 space-y-4">
+                            <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">State-Aware vs Fallback</div>
+                              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                                <div>
+                                  <div className="text-zinc-400">State-aware</div>
+                                  <div className="mt-1 text-white">{formatComparisonMetricValue(visibleRecommendationTypeSlices.stateAwareVsFallback?.stateAware?.adherenceRate, 'percent')} adherence</div>
+                                  <div className="mt-1 text-white">{formatComparisonMetricValue(visibleRecommendationTypeSlices.stateAwareVsFallback?.stateAware?.athleteTrust, 'score')} trust</div>
+                                </div>
+                                <div>
+                                  <div className="text-zinc-400">Fallback / none</div>
+                                  <div className="mt-1 text-white">{formatComparisonMetricValue(visibleRecommendationTypeSlices.stateAwareVsFallback?.fallbackOrNone?.adherenceRate, 'percent')} adherence</div>
+                                  <div className="mt-1 text-white">{formatComparisonMetricValue(visibleRecommendationTypeSlices.stateAwareVsFallback?.fallbackOrNone?.athleteTrust, 'score')} trust</div>
+                                </div>
+                              </div>
+                              <div className="mt-3 text-xs text-zinc-500">
+                                Delta: {formatSignedDelta(visibleRecommendationTypeSlices.stateAwareVsFallback?.delta?.adherenceRate, ' pts')} adherence, {formatSignedDelta(visibleRecommendationTypeSlices.stateAwareVsFallback?.delta?.athleteTrust)} trust
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Completed Protocol vs Incomplete / Skipped</div>
+                              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                                <div>
+                                  <div className="text-zinc-400">Completed protocol</div>
+                                  <div className="mt-1 text-white">{formatComparisonMetricValue(visibleRecommendationTypeSlices.protocolCompletion?.completedProtocol?.adherenceRate, 'percent')} adherence</div>
+                                  <div className="mt-1 text-white">{formatComparisonMetricValue(visibleRecommendationTypeSlices.protocolCompletion?.completedProtocol?.athleteTrust, 'score')} trust</div>
+                                </div>
+                                <div>
+                                  <div className="text-zinc-400">Incomplete / skipped</div>
+                                  <div className="mt-1 text-white">{formatComparisonMetricValue(visibleRecommendationTypeSlices.protocolCompletion?.incompleteOrSkippedProtocol?.adherenceRate, 'percent')} adherence</div>
+                                  <div className="mt-1 text-white">{formatComparisonMetricValue(visibleRecommendationTypeSlices.protocolCompletion?.incompleteOrSkippedProtocol?.athleteTrust, 'score')} trust</div>
+                                </div>
+                              </div>
+                              <div className="mt-3 text-xs text-zinc-500">
+                                Delta: {formatSignedDelta(visibleRecommendationTypeSlices.protocolCompletion?.delta?.adherenceRate, ' pts')} adherence, {formatSignedDelta(visibleRecommendationTypeSlices.protocolCompletion?.delta?.athleteTrust)} trust
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-4 rounded-2xl border border-white/5 bg-[#0b0f17] p-4 text-sm text-zinc-400">
+                            Recommendation-type trust and adherence slices will appear once the current rollup has enough governed exposure data.
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Escalation Operations</div>
+                        <h3 className="mt-2 text-lg font-semibold text-white">Status mix and supporting speed-to-care</h3>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          {selectedCohort
+                            ? 'These supporting escalation diagnostics are still displayed on the whole-pilot frame so the operational sample stays interpretable.'
+                            : 'These are the supporting operational metrics under the primary median-minutes-to-handoff KPI.'}
+                        </p>
+                        <div className="mt-4 grid grid-cols-3 gap-3">
+                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Active</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{visibleOperationalDiagnostics?.escalations?.statusCounts?.active ?? 0}</div>
+                          </div>
+                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Resolved</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{visibleOperationalDiagnostics?.escalations?.statusCounts?.resolved ?? 0}</div>
+                          </div>
+                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Declined</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{visibleOperationalDiagnostics?.escalations?.statusCounts?.declined ?? 0}</div>
+                          </div>
+                        </div>
+                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                          {[
+                            ['Coach notified', visibleOperationalDiagnostics?.escalations?.supportingSpeedToCare?.coachNotification],
+                            ['Consent accepted', visibleOperationalDiagnostics?.escalations?.supportingSpeedToCare?.consentAccepted],
+                            ['Handoff initiated', visibleOperationalDiagnostics?.escalations?.supportingSpeedToCare?.handoffInitiated],
+                            ['Handoff accepted', visibleOperationalDiagnostics?.escalations?.supportingSpeedToCare?.handoffAccepted],
+                            ['First clinician response', visibleOperationalDiagnostics?.escalations?.supportingSpeedToCare?.firstClinicianResponse],
+                            ['Care completed', visibleOperationalDiagnostics?.escalations?.supportingSpeedToCare?.careCompleted],
+                          ].map(([label, summary]) => (
+                            <div key={label} className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4 text-sm">
+                              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{label}</div>
+                              <div className="mt-2 text-white">Median: {formatDurationMetricValue((summary as any)?.medianMinutes)}</div>
+                              <div className="mt-1 text-zinc-400">P75: {formatDurationMetricValue((summary as any)?.p75Minutes)}</div>
+                              <div className="mt-1 text-zinc-500">{(summary as any)?.sampleCount ?? 0} escalations in sample</div>
+                            </div>
+                          ))}
+                        </div>
+                        {visibleTrustDispositionBaseline?.responseCount ? (
+                          <div className="mt-4 rounded-2xl border border-white/5 bg-[#0b0f17] p-4 text-sm text-zinc-300">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Optional Trust Disposition Baseline</div>
+                            <div className="mt-2">PTT average: <span className="font-medium text-white">{formatComparisonMetricValue(visibleTrustDispositionBaseline.averageScore, 'score')}</span></div>
+                            <div className="mt-1 text-xs text-zinc-500">{visibleTrustDispositionBaseline.responseCount} athletes with optional onboarding trust-disposition data</div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                  ) : null}
+
                   <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5" data-testid="pilot-readout-workspace">
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pilot Objective</div>
@@ -1552,6 +2128,32 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">V1 Lock</div>
                       <div className="mt-3 text-sm text-zinc-300">
                         Overview, engine health, athlete drill-down, and manual hypothesis tracking are in scope here. Adoption automation and review queue stay deferred to V2.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Staff Feedback</p>
+                        <h2 className="mt-2 text-lg font-semibold text-white">Coach and clinician survey entry</h2>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          Capture trust, NPS, and optional diagnostic trust battery feedback without leaving the pilot detail page.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => openStaffSurveyModal('coach')}
+                          className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15"
+                        >
+                          Submit Coach Feedback
+                        </button>
+                        <button
+                          onClick={() => openStaffSurveyModal('clinician')}
+                          className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-400/15"
+                        >
+                          Submit Clinician Feedback
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -2180,6 +2782,14 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                     </Link>
                                     <button
                                       type="button"
+                                      onClick={() => void handleSeedAthleteData(athlete)}
+                                      disabled={seedingAthleteDataId === athlete.athleteId}
+                                      className="text-amber-200 transition hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-500"
+                                    >
+                                      {seedingAthleteDataId === athlete.athleteId ? 'Seeding data...' : 'Seed data'}
+                                    </button>
+                                    <button
+                                      type="button"
                                       onClick={() => void handleSaveAthleteCohort(athlete)}
                                       disabled={
                                         savingAthleteCohortId === athlete.athleteId ||
@@ -2212,52 +2822,64 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
               {activeTab === 'engine-health' ? (
                 <div className="mt-6 space-y-6">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <NoraMetricHelpButton metricKey="athletes-with-engine-record" className="absolute right-4 top-4" />
-                      <div className="flex items-center gap-3 text-emerald-300">
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex min-w-0 flex-1 items-center gap-3 pr-2 text-emerald-300">
                         <Database className="h-5 w-5" />
-                        <span className="text-sm font-medium">Athletes With Engine Record</span>
+                          <span className="text-sm font-medium leading-tight">Athletes With Engine Record</span>
+                        </div>
+                        <NoraMetricHelpButton metricKey="athletes-with-engine-record" className="shrink-0" />
                       </div>
                       <div className="mt-3 text-3xl font-semibold">{visibleMetrics.athletesWithEngineRecord}</div>
                     </div>
-                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <NoraMetricHelpButton metricKey="evidence-records" className="absolute right-4 top-4" />
-                      <div className="flex items-center gap-3 text-cyan-300">
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex min-w-0 flex-1 items-center gap-3 pr-2 text-cyan-300">
                         <Activity className="h-5 w-5" />
-                        <span className="text-sm font-medium">Evidence Records</span>
+                          <span className="text-sm font-medium leading-tight">Evidence Records</span>
+                        </div>
+                        <NoraMetricHelpButton metricKey="evidence-records" className="shrink-0" />
                       </div>
                       <div className="mt-3 text-3xl font-semibold">{visibleMetrics.totalEvidenceRecords}</div>
                     </div>
-                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <NoraMetricHelpButton metricKey="pattern-models" className="absolute right-4 top-4" />
-                      <div className="flex items-center gap-3 text-amber-300">
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex min-w-0 flex-1 items-center gap-3 pr-2 text-amber-300">
                         <Brain className="h-5 w-5" />
-                        <span className="text-sm font-medium">Pattern Models</span>
+                          <span className="text-sm font-medium leading-tight">Pattern Models</span>
+                        </div>
+                        <NoraMetricHelpButton metricKey="pattern-models" className="shrink-0" />
                       </div>
                       <div className="mt-3 text-3xl font-semibold">{visibleMetrics.totalPatternModels}</div>
                     </div>
-                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <NoraMetricHelpButton metricKey="engine-coverage" className="absolute right-4 top-4" />
-                      <div className="flex items-center gap-3 text-violet-300">
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex min-w-0 flex-1 items-center gap-3 pr-2 text-violet-300">
                         <Users2 className="h-5 w-5" />
-                        <span className="text-sm font-medium">Engine Coverage</span>
+                          <span className="text-sm font-medium leading-tight">Engine Coverage</span>
+                        </div>
+                        <NoraMetricHelpButton metricKey="engine-coverage" className="shrink-0" />
                       </div>
                       <div className="mt-3 text-3xl font-semibold">{formatPercent(visibleCoverage.engineCoverageRate)}</div>
                     </div>
-                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <NoraMetricHelpButton metricKey="avg-evidence-per-athlete" className="absolute right-4 top-4" />
-                      <div className="flex items-center gap-3 text-cyan-300">
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex min-w-0 flex-1 items-center gap-3 pr-2 text-cyan-300">
                         <FlaskConical className="h-5 w-5" />
-                        <span className="text-sm font-medium">Avg Evidence / Athlete</span>
+                          <span className="text-sm font-medium leading-tight">Avg Evidence / Athlete</span>
+                        </div>
+                        <NoraMetricHelpButton metricKey="avg-evidence-per-athlete" className="shrink-0" />
                       </div>
                       <div className="mt-3 text-3xl font-semibold">{formatAverage(visibleCoverage.avgEvidenceRecordsPerActiveAthlete)}</div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <NoraMetricHelpButton metricKey="pattern-density" className="absolute right-4 top-4" />
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pattern Density</div>
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(360px,1fr))] gap-4">
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1 pr-2 text-xs uppercase tracking-[0.18em] leading-tight text-zinc-500">Pattern Density</div>
+                        <NoraMetricHelpButton metricKey="pattern-density" className="shrink-0" />
+                      </div>
                       <div className="mt-3 text-sm text-zinc-300">
                         Average pattern models per active pilot athlete: <span className="font-medium text-white">{formatAverage(visibleCoverage.avgPatternModelsPerActiveAthlete)}</span>
                       </div>
@@ -2265,12 +2887,41 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         Average recommendation projections per active pilot athlete: <span className="font-medium text-white">{formatAverage(visibleCoverage.avgRecommendationProjectionsPerActiveAthlete)}</span>
                       </div>
                     </div>
-                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <NoraMetricHelpButton metricKey="pilot-health-read" className="absolute right-4 top-4" />
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pilot Health Read</div>
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1 pr-2 text-xs uppercase tracking-[0.18em] leading-tight text-zinc-500">Pilot Health Read</div>
+                        <NoraMetricHelpButton metricKey="pilot-health-read" className="shrink-0" />
+                      </div>
                       <div className="mt-3 text-sm text-zinc-300">
                         Stable pattern rate currently sits at <span className="font-medium text-white">{formatPercent(visibleCoverage.stablePatternRate)}</span>. This remains a trustworthy V1 signal because it is derived from persisted pattern-model confidence tiers inside the active pilot population.
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Recommendation Slices</div>
+                        <h3 className="mt-2 text-lg font-semibold text-white">Recommendation Type Breakdown</h3>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          This slices persisted recommendation projections by consumer so we can see whether the engine is actually serving multiple audiences.
+                        </p>
+                      </div>
+                      <NoraMetricHelpButton metricKey="recommendation-type-slices" />
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+                      {RECOMMENDATION_CONSUMER_ORDER.map((consumer) => {
+                        const count = visibleRecommendationProjectionConsumerCounts[consumer] || 0;
+                        return (
+                          <div key={consumer} className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{formatConsumerLabel(consumer)}</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{count}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-3 text-xs text-zinc-500">
+                      Counts are summed from persisted recommendation projections on the active athletes currently in view, so cohort filtering is honored automatically.
                     </div>
                   </div>
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5 text-sm text-zinc-300">
@@ -2295,9 +2946,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       </div>
                     </div>
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">V2 Deferred</div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Outcome Lens</div>
                       <div className="mt-3 text-sm text-zinc-300">
-                        Outcome validation, adoption metrics, automated review queue, and automated hypothesis support remain explicitly deferred until those event contracts and joins are implemented.
+                        Outcome validation is now flowing through pilot rollups for adherence, trust, NPS, mental-performance change, and speed to care. The next interpretation risk is not missing data contracts, but over-reading small slices without checking the sample behind them.
                       </div>
                     </div>
                   </div>
@@ -2354,32 +3005,194 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
               {activeTab === 'hypotheses' ? (
                 <div className="mt-6 space-y-6">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <NoraMetricHelpButton metricKey="not-enough-data" className="absolute right-4 top-4" />
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Not Enough Data</div>
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1 pr-2 text-xs uppercase tracking-[0.18em] leading-tight text-zinc-500">Not Enough Data</div>
+                        <NoraMetricHelpButton metricKey="not-enough-data" className="shrink-0" />
+                      </div>
                       <div className="mt-3 text-3xl font-semibold">{detail.hypothesisSummary.notEnoughDataCount}</div>
                     </div>
-                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <NoraMetricHelpButton metricKey="promising" className="absolute right-4 top-4" />
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Promising</div>
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1 pr-2 text-xs uppercase tracking-[0.18em] leading-tight text-zinc-500">Promising</div>
+                        <NoraMetricHelpButton metricKey="promising" className="shrink-0" />
+                      </div>
                       <div className="mt-3 text-3xl font-semibold">{detail.hypothesisSummary.promisingCount}</div>
                     </div>
-                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <NoraMetricHelpButton metricKey="mixed" className="absolute right-4 top-4" />
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Mixed</div>
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1 pr-2 text-xs uppercase tracking-[0.18em] leading-tight text-zinc-500">Mixed</div>
+                        <NoraMetricHelpButton metricKey="mixed" className="shrink-0" />
+                      </div>
                       <div className="mt-3 text-3xl font-semibold">{detail.hypothesisSummary.mixedCount}</div>
                     </div>
-                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <NoraMetricHelpButton metricKey="not-supported" className="absolute right-4 top-4" />
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Not Supported</div>
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1 pr-2 text-xs uppercase tracking-[0.18em] leading-tight text-zinc-500">Not Supported</div>
+                        <NoraMetricHelpButton metricKey="not-supported" className="shrink-0" />
+                      </div>
                       <div className="mt-3 text-3xl font-semibold">{detail.hypothesisSummary.notSupportedCount}</div>
                     </div>
-                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <NoraMetricHelpButton metricKey="high-confidence" className="absolute right-4 top-4" />
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">High Confidence</div>
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1 pr-2 text-xs uppercase tracking-[0.18em] leading-tight text-zinc-500">High Confidence</div>
+                        <NoraMetricHelpButton metricKey="high-confidence" className="shrink-0" />
+                      </div>
                       <div className="mt-3 text-3xl font-semibold">{detail.hypothesisSummary.highConfidenceCount}</div>
                     </div>
+                  </div>
+                  <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5" data-testid="pilot-hypothesis-outcome-comparisons">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="max-w-3xl">
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Outcome-Backed Comparison Slices</div>
+                        <h2 className="mt-2 text-lg font-semibold text-white">H3, H5, and H6 rollup comparisons</h2>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          These governed slices read the current pilot outcome rollup instead of rescanning raw collections at render time.
+                          They are designed to keep recommendation exposure, adherence, mental-performance delta, and trust in the same frame.
+                        </p>
+                      </div>
+                      <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-100">
+                        {selectedCohort ? `${selectedCohort.name} cohort` : 'Whole-pilot frame'}
+                      </div>
+                    </div>
+
+                    {visibleHypothesisEvaluation ? (
+                      <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-3">
+                        <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-xs uppercase tracking-[0.18em] text-cyan-300">H3</div>
+                              <h3 className="mt-2 text-base font-semibold text-white">Recommendation specificity</h3>
+                            </div>
+                            <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 text-[11px] text-cyan-100">
+                              Rollup-backed
+                            </span>
+                          </div>
+                          <p className="mt-2 text-sm text-zinc-400">{visibleHypothesisEvaluation.h3.comparisonLabel}</p>
+                          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                            <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">State-aware exposure</div>
+                              <div className="mt-2 text-sm text-zinc-300">{formatAthleteCountLabel(visibleHypothesisEvaluation.h3.stateAware.athleteCount)}</div>
+                              <div className="mt-3 text-sm text-zinc-300">Adherence: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h3.stateAware.adherenceRate, 'percent')}</span></div>
+                              <div className="mt-1 text-sm text-zinc-300">Mental delta: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h3.stateAware.mentalPerformanceDelta, 'score')}</span></div>
+                              <div className="mt-1 text-sm text-zinc-300">Athlete trust: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h3.stateAware.athleteTrust, 'score')}</span></div>
+                            </div>
+                            <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Fallback or none</div>
+                              <div className="mt-2 text-sm text-zinc-300">{formatAthleteCountLabel(visibleHypothesisEvaluation.h3.fallbackOrNone.athleteCount)}</div>
+                              <div className="mt-3 text-sm text-zinc-300">Adherence: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h3.fallbackOrNone.adherenceRate, 'percent')}</span></div>
+                              <div className="mt-1 text-sm text-zinc-300">Mental delta: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h3.fallbackOrNone.mentalPerformanceDelta, 'score')}</span></div>
+                              <div className="mt-1 text-sm text-zinc-300">Athlete trust: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h3.fallbackOrNone.athleteTrust, 'score')}</span></div>
+                            </div>
+                          </div>
+                          <div className="mt-4 grid grid-cols-3 gap-3">
+                            <div className="rounded-2xl border border-emerald-400/15 bg-emerald-400/5 p-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-emerald-100">Adherence Delta</div>
+                              <div className="mt-2 text-2xl font-semibold text-white">{formatSignedDelta(visibleHypothesisEvaluation.h3.delta.adherenceRate, ' pts')}</div>
+                            </div>
+                            <div className="rounded-2xl border border-cyan-400/15 bg-cyan-400/5 p-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100">Mental Delta</div>
+                              <div className="mt-2 text-2xl font-semibold text-white">{formatSignedDelta(visibleHypothesisEvaluation.h3.delta.mentalPerformanceDelta)}</div>
+                            </div>
+                            <div className="rounded-2xl border border-violet-400/15 bg-violet-400/5 p-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-violet-100">Trust Delta</div>
+                              <div className="mt-2 text-2xl font-semibold text-white">{formatSignedDelta(visibleHypothesisEvaluation.h3.delta.athleteTrust)}</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-xs uppercase tracking-[0.18em] text-cyan-300">H5</div>
+                              <h3 className="mt-2 text-base font-semibold text-white">Coach actionability proxy</h3>
+                            </div>
+                            <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[11px] text-emerald-100">
+                              Coach-aware
+                            </span>
+                          </div>
+                          <p className="mt-2 text-sm text-zinc-400">{visibleHypothesisEvaluation.h5.comparisonLabel}</p>
+                          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                            <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Body-state-aware exposure</div>
+                              <div className="mt-2 text-sm text-zinc-300">{formatAthleteCountLabel(visibleHypothesisEvaluation.h5.bodyStateAwareExposure.athleteCount)}</div>
+                              <div className="mt-3 text-sm text-zinc-300">Adherence: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h5.bodyStateAwareExposure.adherenceRate, 'percent')}</span></div>
+                              <div className="mt-1 text-sm text-zinc-300">Athlete trust: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h5.bodyStateAwareExposure.athleteTrust, 'score')}</span></div>
+                            </div>
+                            <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Profile-only or none</div>
+                              <div className="mt-2 text-sm text-zinc-300">{formatAthleteCountLabel(visibleHypothesisEvaluation.h5.profileOnlyOrNone.athleteCount)}</div>
+                              <div className="mt-3 text-sm text-zinc-300">Adherence: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h5.profileOnlyOrNone.adherenceRate, 'percent')}</span></div>
+                              <div className="mt-1 text-sm text-zinc-300">Athlete trust: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h5.profileOnlyOrNone.athleteTrust, 'score')}</span></div>
+                            </div>
+                          </div>
+                          <div className="mt-4 grid grid-cols-2 gap-3">
+                            <div className="rounded-2xl border border-emerald-400/15 bg-emerald-400/5 p-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-emerald-100">Adherence Delta</div>
+                              <div className="mt-2 text-2xl font-semibold text-white">{formatSignedDelta(visibleHypothesisEvaluation.h5.delta.adherenceRate, ' pts')}</div>
+                            </div>
+                            <div className="rounded-2xl border border-violet-400/15 bg-violet-400/5 p-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-violet-100">Trust Delta</div>
+                              <div className="mt-2 text-2xl font-semibold text-white">{formatSignedDelta(visibleHypothesisEvaluation.h5.delta.athleteTrust)}</div>
+                            </div>
+                          </div>
+                          <div className="mt-4 rounded-2xl border border-white/5 bg-[#0b0f17] p-4 text-sm text-zinc-300">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Coach Signal</div>
+                            <div className="mt-2">Coach trust: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h5.coachTrust, 'score')}</span></div>
+                            <div className="mt-1">Coach NPS: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h5.coachNps, 'score')}</span></div>
+                            <div className="mt-1 text-xs text-zinc-500">{visibleHypothesisEvaluation.h5.coachResponseCount} coach trust responses in frame</div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-xs uppercase tracking-[0.18em] text-cyan-300">H6</div>
+                              <h3 className="mt-2 text-base font-semibold text-white">Protocol follow-through</h3>
+                            </div>
+                            <span className="rounded-full border border-violet-400/20 bg-violet-400/10 px-2 py-1 text-[11px] text-violet-100">
+                              Completion slice
+                            </span>
+                          </div>
+                          <p className="mt-2 text-sm text-zinc-400">{visibleHypothesisEvaluation.h6.comparisonLabel}</p>
+                          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                            <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Completed protocol</div>
+                              <div className="mt-2 text-sm text-zinc-300">{formatAthleteCountLabel(visibleHypothesisEvaluation.h6.completedProtocol.athleteCount)}</div>
+                              <div className="mt-3 text-sm text-zinc-300">Adherence: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h6.completedProtocol.adherenceRate, 'percent')}</span></div>
+                              <div className="mt-1 text-sm text-zinc-300">Mental delta: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h6.completedProtocol.mentalPerformanceDelta, 'score')}</span></div>
+                              <div className="mt-1 text-sm text-zinc-300">Athlete trust: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h6.completedProtocol.athleteTrust, 'score')}</span></div>
+                            </div>
+                            <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Incomplete or skipped</div>
+                              <div className="mt-2 text-sm text-zinc-300">{formatAthleteCountLabel(visibleHypothesisEvaluation.h6.incompleteOrSkippedProtocol.athleteCount)}</div>
+                              <div className="mt-3 text-sm text-zinc-300">Adherence: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h6.incompleteOrSkippedProtocol.adherenceRate, 'percent')}</span></div>
+                              <div className="mt-1 text-sm text-zinc-300">Mental delta: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h6.incompleteOrSkippedProtocol.mentalPerformanceDelta, 'score')}</span></div>
+                              <div className="mt-1 text-sm text-zinc-300">Athlete trust: <span className="font-medium text-white">{formatComparisonMetricValue(visibleHypothesisEvaluation.h6.incompleteOrSkippedProtocol.athleteTrust, 'score')}</span></div>
+                            </div>
+                          </div>
+                          <div className="mt-4 grid grid-cols-3 gap-3">
+                            <div className="rounded-2xl border border-emerald-400/15 bg-emerald-400/5 p-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-emerald-100">Adherence Delta</div>
+                              <div className="mt-2 text-2xl font-semibold text-white">{formatSignedDelta(visibleHypothesisEvaluation.h6.delta.adherenceRate, ' pts')}</div>
+                            </div>
+                            <div className="rounded-2xl border border-cyan-400/15 bg-cyan-400/5 p-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100">Mental Delta</div>
+                              <div className="mt-2 text-2xl font-semibold text-white">{formatSignedDelta(visibleHypothesisEvaluation.h6.delta.mentalPerformanceDelta)}</div>
+                            </div>
+                            <div className="rounded-2xl border border-violet-400/15 bg-violet-400/5 p-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-violet-100">Trust Delta</div>
+                              <div className="mt-2 text-2xl font-semibold text-white">{formatSignedDelta(visibleHypothesisEvaluation.h6.delta.athleteTrust)}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-5 rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-400">
+                        Outcome-backed hypothesis comparisons will appear once the current pilot rollup has enough governed outcome data for this frame.
+                      </div>
+                    )}
                   </div>
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -3249,6 +4062,19 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
             </>
           )}
         </div>
+        {detail && staffSurveyModalRole ? (
+          <StaffPilotSurveyModal
+            isOpen={Boolean(staffSurveyModalRole)}
+            role={staffSurveyModalRole}
+            pilotId={detail.pilot.id}
+            pilotName={detail.pilot.name}
+            organizationId={detail.organization.id}
+            teamId={detail.team.id}
+            cohortId={selectedCohort?.id || null}
+            onClose={() => setStaffSurveyModalRole(null)}
+            onSubmitted={handleStaffSurveySubmitted}
+          />
+        ) : null}
       </div>
     </AdminRouteGuard>
   );

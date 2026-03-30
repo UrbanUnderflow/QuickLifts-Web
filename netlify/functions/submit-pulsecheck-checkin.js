@@ -2,6 +2,12 @@ const { initializeFirebaseAdmin, getFirebaseAdminApp, admin, headers } = require
 const profileSnapshotRuntime = require('../../src/api/firebase/mentaltraining/profileSnapshotRuntime.js');
 const protocolRegistryRuntime = require('../../src/api/firebase/mentaltraining/protocolRegistryRuntime.js');
 const trainingPlanAuthoringShared = require('../../src/api/firebase/mentaltraining/trainingPlanAuthoringShared.js');
+const {
+  emitPilotMetricEvent,
+  recordPilotMetricAlert,
+  recomputePilotMetricRollups,
+  upsertPilotMentalPerformanceSnapshot,
+} = require('./utils/pulsecheck-pilot-metrics');
 
 const RESPONSE_HEADERS = {
   ...headers,
@@ -3190,6 +3196,8 @@ async function rematerializeAssignmentFromSnapshot({
 }
 
 exports.handler = async (event) => {
+  let pilotIdForAlert = '';
+  let dbInstance = null;
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: RESPONSE_HEADERS, body: '' };
   }
@@ -3206,6 +3214,7 @@ exports.handler = async (event) => {
     initializeFirebaseAdmin({ headers: event.headers || {} });
     const adminApp = getFirebaseAdminApp({ headers: event.headers || {} });
     const db = admin.firestore(adminApp);
+    dbInstance = db;
     const decodedToken = await verifyAuth(event, adminApp);
 
     const body = JSON.parse(event.body || '{}');
@@ -3337,6 +3346,51 @@ exports.handler = async (event) => {
       readinessLabel: body.moodWord || '',
     });
 
+    await emitPilotMetricEvent({
+      db,
+      pilotContext: {
+        pilotEnrollmentId: dailyAssignment?.pilotEnrollmentId || null,
+        pilotId: dailyAssignment?.pilotId || stateSnapshot?.pilotId || null,
+        organizationId: dailyAssignment?.organizationId || null,
+        teamId: dailyAssignment?.teamId || null,
+        cohortId: dailyAssignment?.cohortId || null,
+        athleteId: userId,
+        teamMembershipId: dailyAssignment?.teamMembershipId || null,
+      },
+      eventType: 'daily_checkin_completed',
+      actorRole: 'athlete',
+      actorUserId: userId,
+      athleteId: userId,
+      sourceCollection: CHECKINS_ROOT,
+      sourceDocumentId: checkInRef.id,
+      sourceDate,
+      metricPayload: {
+        readinessScore,
+        recommendedRouting: stateSnapshot?.recommendedRouting || null,
+        recommendedProtocolClass: stateSnapshot?.recommendedProtocolClass || null,
+      },
+      createdAt: now,
+    });
+
+    await upsertPilotMentalPerformanceSnapshot({
+      db,
+      athleteId: userId,
+      snapshotType: 'current_latest_valid',
+      preferredPilotEnrollmentId: dailyAssignment?.pilotEnrollmentId,
+      preferredPilotId: dailyAssignment?.pilotId,
+      preferredTeamMembershipId: dailyAssignment?.teamMembershipId,
+      sourceEventId: `daily_checkin_completed:${checkInRef.id}`,
+    });
+
+    if (dailyAssignment?.pilotId || stateSnapshot?.pilotId) {
+      pilotIdForAlert = dailyAssignment?.pilotId || stateSnapshot?.pilotId || '';
+      await recomputePilotMetricRollups({
+        db,
+        pilotId: dailyAssignment?.pilotId || stateSnapshot?.pilotId,
+        explicitDateKeys: [sourceDate],
+      });
+    }
+
     const responseSnapshot = dailyAssignment
       ? { ...stateSnapshot, executionLink: dailyAssignment.id }
       : stateSnapshot;
@@ -3353,6 +3407,19 @@ exports.handler = async (event) => {
     };
   } catch (error) {
     console.error('[submit-pulsecheck-checkin] Failed:', error);
+    try {
+      if (pilotIdForAlert) {
+        await recordPilotMetricAlert({
+          db: dbInstance,
+          pilotId: pilotIdForAlert,
+          scope: 'checkin_write',
+          severity: 'error',
+          message: error?.message || 'Failed to submit PulseCheck check-in.',
+        });
+      }
+    } catch (nestedError) {
+      console.error('[submit-pulsecheck-checkin] Failed to record alert:', nestedError);
+    }
     return {
       statusCode: 500,
       headers: RESPONSE_HEADERS,

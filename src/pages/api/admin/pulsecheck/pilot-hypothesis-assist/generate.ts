@@ -62,8 +62,67 @@ function statementsLookSimilar(existing: string[], candidate: string) {
 function buildFallbackSuggestions(frame: PilotHypothesisAssistFrame): PilotHypothesisAssistSuggestion[] {
   const existingStatements = frame.hypotheses.map((hypothesis) => normalizeString(hypothesis.statement)).filter(Boolean);
   const suggestions: PilotHypothesisAssistSuggestion[] = [];
+  const comparisonSuggestions: PilotHypothesisAssistSuggestion[] = [];
+
+  if (frame.hypothesisEvaluation) {
+    const { h3, h5, h6 } = frame.hypothesisEvaluation;
+
+    if ((h3.stateAware.athleteCount || 0) > 0 || (h3.fallbackOrNone.athleteCount || 0) > 0) {
+      comparisonSuggestions.push({
+        suggestionKey: 'h3-state-aware-outcomes',
+        title: 'State-Aware Guidance Outperforms Fallback',
+        statement:
+          'Athletes exposed to state-aware PulseCheck recommendations will show stronger adherence and better downstream outcome movement than athletes receiving fallback or no state-aware guidance in the same pilot frame.',
+        leadingIndicator:
+          'Track adherence rate, mental-performance delta, and athlete trust for state-aware exposure versus fallback-or-none exposure inside the current rollup frame.',
+        whySuggested:
+          `The current H3 comparison shows a ${h3.delta.adherenceRate.toFixed(1)} point adherence delta, a ${h3.delta.mentalPerformanceDelta.toFixed(1)} mental-performance delta, and a ${h3.delta.athleteTrust.toFixed(1)} trust delta between state-aware and fallback exposure groups.`,
+        confidenceLevel:
+          Math.abs(h3.delta.adherenceRate) >= 8 || Math.abs(h3.delta.mentalPerformanceDelta) >= 3 ? 'high' : 'medium',
+        evidenceSignals: ['H3 comparison slice', 'adherence rollup', 'mental-performance delta', 'athlete trust'],
+        caveat:
+          'This remains a pilot-scoped comparison. Exposure differences may still reflect athlete mix, maturity, or assignment targeting rather than pure recommendation quality.',
+      });
+    }
+
+    if ((h5.bodyStateAwareExposure.athleteCount || 0) > 0 || (h5.profileOnlyOrNone.athleteCount || 0) > 0) {
+      comparisonSuggestions.push({
+        suggestionKey: 'h5-coach-actionability',
+        title: 'Body-State Insights Improve Coach Actionability',
+        statement:
+          'When athletes are routed through body-state-aware guidance, coaches will report stronger trust in PulseCheck and the exposed athletes will show better adherence than profile-only or no-state-aware lanes.',
+        leadingIndicator:
+          'Compare adherence and athlete trust between body-state-aware exposure and profile-only-or-none exposure, then pair that read with coach trust and coach NPS in the same frame.',
+        whySuggested:
+          `The current H5 comparison shows a ${h5.delta.adherenceRate.toFixed(1)} point adherence delta, a ${h5.delta.athleteTrust.toFixed(1)} trust delta, and ${h5.coachResponseCount} coach trust responses in frame.`,
+        confidenceLevel: h5.coachResponseCount >= 5 ? 'medium' : 'low',
+        evidenceSignals: ['H5 comparison slice', 'coach trust', 'coach NPS', 'adherence rollup'],
+        caveat:
+          'Coach trust is only meaningful when the response count is healthy. Treat this as actionability evidence, not proof that coaches changed behavior because of one product surface.',
+      });
+    }
+
+    if ((h6.completedProtocol.athleteCount || 0) > 0 || (h6.incompleteOrSkippedProtocol.athleteCount || 0) > 0) {
+      comparisonSuggestions.push({
+        suggestionKey: 'h6-protocol-follow-through',
+        title: 'Protocol Follow-Through Improves Outcomes',
+        statement:
+          'Athletes who complete assigned PulseCheck protocols will outperform athletes who skip or leave protocols incomplete on adherence, mental-performance change, and trust inside the pilot window.',
+        leadingIndicator:
+          'Track adherence, mental-performance delta, and athlete trust between completed-protocol and incomplete-or-skipped protocol groups using the current rollup window.',
+        whySuggested:
+          `The current H6 comparison shows a ${h6.delta.adherenceRate.toFixed(1)} point adherence delta, a ${h6.delta.mentalPerformanceDelta.toFixed(1)} mental-performance delta, and a ${h6.delta.athleteTrust.toFixed(1)} trust delta.`,
+        confidenceLevel:
+          Math.abs(h6.delta.adherenceRate) >= 8 || Math.abs(h6.delta.mentalPerformanceDelta) >= 3 ? 'high' : 'medium',
+        evidenceSignals: ['H6 comparison slice', 'protocol completion exposure', 'mental-performance delta', 'athlete trust'],
+        caveat:
+          'Completion itself may be partly a marker of motivation or lower-friction athletes. Keep the read pilot-scoped and be careful not to overstate causality.',
+      });
+    }
+  }
 
   const candidateSuggestions: PilotHypothesisAssistSuggestion[] = [
+    ...comparisonSuggestions,
     {
       suggestionKey: 'coverage-to-stability',
       title: 'Coverage Drives Stable Learning',
@@ -145,6 +204,7 @@ Rules:
 - Stay pilot-scoped and denominator-aware.
 - Prefer ideas that help the team learn something meaningful from the current pilot, not generic sports-science trivia.
 - Good suggestions often connect coverage, evidence depth, stable patterns, cohort differences, or recommendation readiness to a testable next question.
+- When outcome-backed comparison slices are present, prefer suggestions that make use of those governed comparisons instead of inventing a fresh raw-data framing.
 - Do not overstate causality.
 - Each suggestion must feel like something a strong research partner would propose for review.
 
@@ -258,6 +318,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     cohortName: normalizeString(frame.cohortName) || undefined,
     metrics: frame.metrics,
     coverage: frame.coverage,
+    outcomes: frame.outcomes,
+    outcomeSurveyDiagnostics: frame.outcomeSurveyDiagnostics,
+    hypothesisEvaluation: frame.hypothesisEvaluation,
     cohortSummaries: Array.isArray(frame.cohortSummaries) ? frame.cohortSummaries : [],
     hypotheses: Array.isArray(frame.hypotheses) ? frame.hypotheses : [],
   };
