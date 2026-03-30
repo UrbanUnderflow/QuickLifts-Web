@@ -14,7 +14,15 @@ interface NoraMetricHelpButtonProps {
 const NoraMetricHelpButton: React.FC<NoraMetricHelpButtonProps> = ({ metricKey, className = '', testId }) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  const explanation = useMemo(() => getPilotDashboardMetricExplanation(metricKey), [metricKey]);
+  const explanation = useMemo(
+    () =>
+      getPilotDashboardMetricExplanation(metricKey) ?? {
+        title: 'Pilot metric help',
+        whatItMeans: 'An explanation for this metric is not configured yet.',
+        whyItMatters: 'The dashboard keeps rendering, but the help copy should be filled in before this metric is used for review.',
+      },
+    [metricKey]
+  );
 
   useEffect(() => {
     if (!isOpen) return;

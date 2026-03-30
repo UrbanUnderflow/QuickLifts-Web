@@ -164,6 +164,45 @@ const normalizeCompletedConsentIds = (
     .filter((entry, index, entries) => entry && allowedIds.has(entry) && entries.indexOf(entry) === index);
 };
 const buildPilotEnrollmentId = (pilotId: string, userId: string) => `${normalizeString(pilotId)}_${normalizeString(userId)}`;
+const triggerPilotAthleteOutcomeBackfill = async (input: {
+  pilotId: string;
+  athleteId: string;
+  pilotEnrollmentId?: string;
+  teamMembershipId?: string;
+  lookbackDays?: number;
+  source?: string;
+  actorRole?: 'athlete' | 'admin';
+}): Promise<Record<string, any>> => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Authenticated session required to backfill pilot athlete outcomes.');
+  }
+
+  const idToken = await currentUser.getIdToken();
+  const response = await fetch('/.netlify/functions/backfill-pilot-athlete-outcomes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({
+      pilotId: normalizeString(input.pilotId),
+      athleteId: normalizeString(input.athleteId),
+      pilotEnrollmentId: normalizeString(input.pilotEnrollmentId),
+      teamMembershipId: normalizeString(input.teamMembershipId),
+      lookbackDays: Math.max(1, Math.min(30, Number(input.lookbackDays || 14))),
+      source: normalizeString(input.source) || 'manual_seed',
+      actorRole: input.actorRole || 'admin',
+    }),
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Failed to backfill pilot athlete outcomes.');
+  }
+
+  return payload || { success: true };
+};
 const resolveResearchConsentStatusForStudyMode = (
   studyMode: PulseCheckPilotStudyMode | null,
   currentStatus?: unknown
@@ -648,6 +687,18 @@ export const pulseCheckProvisioningService = {
     const snapshot = await getDoc(doc(db, PILOT_ENROLLMENTS_COLLECTION, buildPilotEnrollmentId(pilotId, userId)));
     if (!snapshot.exists()) return null;
     return toPilotEnrollment(snapshot.id, snapshot.data() as Record<string, any>);
+  },
+
+  async backfillPilotAthleteOutcomeHistory(input: {
+    pilotId: string;
+    athleteId: string;
+    pilotEnrollmentId?: string;
+    teamMembershipId?: string;
+    lookbackDays?: number;
+    source?: string;
+    actorRole?: 'athlete' | 'admin';
+  }): Promise<Record<string, any>> {
+    return triggerPilotAthleteOutcomeBackfill(input);
   },
 
   async unenrollAthleteFromPilot(input: {
@@ -1702,6 +1753,22 @@ export const pulseCheckProvisioningService = {
         },
         { merge: true }
       );
+
+      if (nextPilotEnrollmentStatus === 'active') {
+        try {
+          await triggerPilotAthleteOutcomeBackfill({
+            pilotId,
+            athleteId: userId,
+            pilotEnrollmentId: buildPilotEnrollmentId(pilotId, userId),
+            teamMembershipId: normalizeString(input.teamMembershipId),
+            lookbackDays: 14,
+            source: 'complete_athlete_onboarding',
+            actorRole: 'athlete',
+          });
+        } catch (backfillError) {
+          console.warn('[pulseCheckProvisioningService] Automatic athlete outcome backfill failed after onboarding completion:', backfillError);
+        }
+      }
     }
   },
 
@@ -1829,6 +1896,22 @@ export const pulseCheckProvisioningService = {
         },
         { merge: true }
       );
+
+      if (nextPilotEnrollmentStatus === 'active') {
+        try {
+          await triggerPilotAthleteOutcomeBackfill({
+            pilotId,
+            athleteId: userId,
+            pilotEnrollmentId: buildPilotEnrollmentId(pilotId, userId),
+            teamMembershipId: normalizeString(input.teamMembershipId),
+            lookbackDays: 14,
+            source: 'save_onboarding_progress',
+            actorRole: 'athlete',
+          });
+        } catch (backfillError) {
+          console.warn('[pulseCheckProvisioningService] Automatic athlete outcome backfill failed after onboarding progress save:', backfillError);
+        }
+      }
     }
   },
 

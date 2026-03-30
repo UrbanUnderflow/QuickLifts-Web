@@ -117,20 +117,6 @@
       ]
     },
     {
-      "collectionGroup": "coachReferrals",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "referrerCoachId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "coaches",
       "queryScope": "COLLECTION",
       "fields": [
@@ -154,6 +140,20 @@
         },
         {
           "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "coachReferrals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "referrerCoachId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
           "order": "DESCENDING"
         }
       ]
@@ -231,12 +231,7 @@
     {
       "collectionGroup": "daily-reflections",
       "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "__name__",
-          "order": "DESCENDING"
-        }
-      ]
+      "fields": []
     },
     {
       "collectionGroup": "dailySentimentAnalysis",
@@ -877,34 +872,6 @@
       ]
     },
     {
-      "collectionGroup": "promoCodeUsage",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "promoCodeId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "usedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "promoCodeUsage",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "userId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "usedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "promoCodes",
       "queryScope": "COLLECTION",
       "fields": [
@@ -932,6 +899,34 @@
         },
         {
           "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "promoCodeUsage",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "promoCodeId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "usedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "promoCodeUsage",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "usedAt",
           "order": "DESCENDING"
         }
       ]
@@ -1128,20 +1123,20 @@
       "ttl": false,
       "indexes": [
         {
-          "queryScope": "COLLECTION",
-          "arrayConfig": "CONTAINS"
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION",
-          "order": "ASCENDING"
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION",
-          "order": "DESCENDING"
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION_GROUP",
-          "order": "ASCENDING"
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
         }
       ]
     },
@@ -1151,20 +1146,20 @@
       "ttl": false,
       "indexes": [
         {
-          "queryScope": "COLLECTION",
-          "arrayConfig": "CONTAINS"
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION",
-          "order": "ASCENDING"
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION",
-          "order": "DESCENDING"
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION_GROUP",
-          "order": "ASCENDING"
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
         }
       ]
     },
@@ -1174,20 +1169,20 @@
       "ttl": false,
       "indexes": [
         {
-          "queryScope": "COLLECTION",
-          "arrayConfig": "CONTAINS"
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION",
-          "order": "ASCENDING"
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION",
-          "order": "DESCENDING"
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION_GROUP",
-          "order": "ASCENDING"
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
         }
       ]
     },
@@ -1197,20 +1192,20 @@
       "ttl": false,
       "indexes": [
         {
-          "queryScope": "COLLECTION",
-          "arrayConfig": "CONTAINS"
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION",
-          "order": "ASCENDING"
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION",
-          "order": "DESCENDING"
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION_GROUP",
-          "order": "ASCENDING"
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
         }
       ]
     },
@@ -1220,20 +1215,20 @@
       "ttl": false,
       "indexes": [
         {
-          "queryScope": "COLLECTION",
-          "arrayConfig": "CONTAINS"
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION",
-          "order": "ASCENDING"
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION",
-          "order": "DESCENDING"
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION_GROUP",
-          "order": "ASCENDING"
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
         }
       ]
     },
@@ -1243,20 +1238,20 @@
       "ttl": false,
       "indexes": [
         {
-          "queryScope": "COLLECTION",
-          "arrayConfig": "CONTAINS"
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION",
-          "order": "ASCENDING"
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION",
-          "order": "DESCENDING"
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
         },
         {
-          "queryScope": "COLLECTION_GROUP",
-          "order": "ASCENDING"
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
         }
       ]
     }

@@ -9,7 +9,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Pulse architecture, products, data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-03-29',
+  lastUpdated: '2026-03-30',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -75,6 +75,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-correlation-engine-engineering-task-breakdown', label: 'Correlation Engine Engineering Task Breakdown', description: 'End-to-end engineering workstream and milestone breakdown from schema lock through production-ready launch for the correlation engine.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
     { id: 'pulsecheck-correlation-engine-pilot-dashboard', label: 'Correlation Engine Pilot Dashboard', description: 'Pilot-native monitoring surface for active pilots, rooted in Pilot and PilotEnrollment rather than whole-system analytics.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
     { id: 'pulsecheck-correlation-engine-pilot-dashboard-addendum', label: 'Pilot Dashboard Addendum', description: 'Pilot KPI glossary and reporting-separation rules for the pilot dashboard.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
+    { id: 'pulsecheck-pilot-outcome-metrics-contract', label: 'Pilot Outcome Metrics Contract', description: 'Canonical contract for enrollment, adherence, mental performance improvement, escalations, speed to care, trust, and NPS across PulseCheck pilots.' },
     { id: 'pulsecheck-correlation-engine-pilot-ops-runbook', label: 'Pilot Ops Runbook', description: 'Operational ownership, cadence, escalation, and queue guidance for active pilot monitoring.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
     { id: 'pulsecheck-correlation-engine-pilot-research-readout', label: 'Pilot Research Readout Implementation Spec', description: 'AI-assisted, evidence-bounded interpretation-layer spec for one pilot’s governed dashboard data, including gating, output schema, and review workflow.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
     { id: 'pulsecheck-oura-integration-strategy', label: 'Oura Integration Strategy', description: 'Direct Oura OAuth/API lane, HealthKit-derived fallback lane, source-record mapping, merge precedence, and rollout recommendation for PulseCheck.', parentSectionId: 'pulsecheck-device-integration-strategy' },
@@ -115,6 +116,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       'Added the Daily Task + Training Plan Alignment Spec to the PulseCheck runtime stack, locking the canonical DailyTask / TrainingPlan / PlanStep model, lifecycle rules, date-boundary behavior, event contract, and surface-coherence requirements across Home, Mental Training, and Nora chat.',
       'Added the Training Plan Authoring Spec to the PulseCheck runtime stack, defining how Nora authors longer-horizon mental-training blocks, chooses plan types and archetypes, persists provenance, and advances plan pointers over time.',
       'Added a pilot-scoped Correlation Engine dashboard stack, including the pilot dashboard, KPI addendum, and pilot ops runbook, and clarified that active-pilot monitoring is rooted in Pilot and PilotEnrollment rather than whole-team analytics.',
+      'Added the Pilot Outcome Metrics Contract artifact to the Correlation Engine pilot stack, locking the implementation-grounded definitions for enrollment, adherence, mental performance improvement, escalations, speed to care, trust, and NPS plus the default ownership rules needed to build the outcome system cleanly.',
       'Added a Pilot Research Readout Implementation Spec to the Correlation Engine pilot stack, defining the AI-assisted interpretation tab, readiness gates, claim-discipline rules, frozen evidence frame, and human-review workflow for pilot-level research summaries.',
       'Reorganized the PulseCheck handbook around artifact-level libraries so Health Context Pipeline, Protocol System, Runtime Stack, Profile System, Onboarding & Access, and Device & Wearable Integrations now hold their related docs internally instead of exposing long sibling runs in the sidebar.',
       'Added a Protocol Practice Conversation Spec artifact to the Protocol System chapter so protocol execution now has an explicit teach -> practice -> evaluate runtime target instead of ending at narrated instruction.',

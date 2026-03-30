@@ -16,6 +16,11 @@ import {
   ATHLETE_PATTERN_MODELS_SUBCOLLECTION,
   ATHLETE_PHYSIOLOGY_COGNITION_COLLECTION,
   CORRELATION_EVIDENCE_RECORDS_SUBCOLLECTION,
+  PULSECHECK_PILOT_METRIC_OPS_COLLECTION,
+  PULSECHECK_PILOT_METRIC_ROLLUP_SUMMARY_SUBCOLLECTION,
+  PULSECHECK_PILOT_METRIC_ROLLUPS_COLLECTION,
+  PULSECHECK_PILOT_MENTAL_PERFORMANCE_SNAPSHOTS_SUBCOLLECTION,
+  PULSECHECK_PILOT_OUTCOME_RELEASE_SETTINGS_COLLECTION,
   PROFILE_SNAPSHOTS_SUBCOLLECTION,
   RECOMMENDATION_PROJECTIONS_SUBCOLLECTION,
 } from '../mentaltraining/collections';
@@ -31,6 +36,9 @@ import type {
 } from '../pulsecheckProvisioning/types';
 import type {
   PilotDashboardAthleteDetail,
+  PilotDashboardOutcomeMetricRollup,
+  PilotDashboardOutcomeMetrics,
+  PilotDashboardOutcomeSurveyDiagnostics,
   PilotDashboardAthleteSummary,
   PilotDashboardCohortSummary,
   PilotDashboardDetail,
@@ -58,6 +66,9 @@ import type {
   PulseCheckPilotInviteConfigInput,
   PulseCheckPilotRequiredConsentInput,
   PulseCheckPilotHypothesisInput,
+  PulseCheckPilotMentalPerformanceSnapshotRecordSet,
+  PulseCheckPilotOutcomeSurveyResponse,
+  PulseCheckPilotOutcomeTrustBatteryPayload,
 } from './types';
 
 const PILOT_HYPOTHESES_COLLECTION = 'pulsecheck-pilot-hypotheses';
@@ -258,6 +269,65 @@ const sortResearchReadouts = (items: PilotResearchReadout[]) =>
     return toTimeMs(right.updatedAt) - toTimeMs(left.updatedAt);
   });
 
+const loadCurrentOutcomeRollup = async (pilotId: string): Promise<PilotDashboardOutcomeMetricRollup | null> => {
+  const normalizedPilotId = normalizeString(pilotId);
+  if (!normalizedPilotId) return null;
+
+  const rollupRef = doc(
+    db,
+    PULSECHECK_PILOT_METRIC_ROLLUPS_COLLECTION,
+    normalizedPilotId,
+    PULSECHECK_PILOT_METRIC_ROLLUP_SUMMARY_SUBCOLLECTION,
+    'current'
+  );
+  const rollupSnap = await getDoc(rollupRef);
+  if (!rollupSnap.exists()) return null;
+  return rollupSnap.data() as PilotDashboardOutcomeMetricRollup;
+};
+
+const loadPilotOutcomeReleaseSettings = async (pilotId: string): Promise<Record<string, any> | null> => {
+  const normalizedPilotId = normalizeString(pilotId);
+  if (!normalizedPilotId) return null;
+  const snap = await getDoc(doc(db, PULSECHECK_PILOT_OUTCOME_RELEASE_SETTINGS_COLLECTION, normalizedPilotId));
+  if (!snap.exists()) return null;
+  return snap.data() as Record<string, any>;
+};
+
+const loadPilotOutcomeOpsStatus = async (pilotId: string): Promise<Record<string, any> | null> => {
+  const normalizedPilotId = normalizeString(pilotId);
+  if (!normalizedPilotId) return null;
+
+  const rootSnap = await getDoc(doc(db, PULSECHECK_PILOT_METRIC_OPS_COLLECTION, normalizedPilotId));
+  const scopesSnap = await getDocs(collection(db, PULSECHECK_PILOT_METRIC_OPS_COLLECTION, normalizedPilotId, 'scopes'));
+
+  return {
+    root: rootSnap.exists() ? rootSnap.data() : null,
+    scopes: scopesSnap.docs.reduce<Record<string, any>>((accumulator, docSnap) => {
+      accumulator[docSnap.id] = docSnap.data();
+      return accumulator;
+    }, {}),
+  };
+};
+
+const loadPilotMentalPerformanceSnapshotSet = async (
+  pilotEnrollmentId: string
+): Promise<PulseCheckPilotMentalPerformanceSnapshotRecordSet | undefined> => {
+  const normalizedEnrollmentId = normalizeString(pilotEnrollmentId);
+  if (!normalizedEnrollmentId) return undefined;
+
+  const [baselineSnap, currentSnap, endpointSnap] = await Promise.all([
+    getDoc(doc(db, 'pulsecheck-pilot-enrollments', normalizedEnrollmentId, PULSECHECK_PILOT_MENTAL_PERFORMANCE_SNAPSHOTS_SUBCOLLECTION, 'baseline')),
+    getDoc(doc(db, 'pulsecheck-pilot-enrollments', normalizedEnrollmentId, PULSECHECK_PILOT_MENTAL_PERFORMANCE_SNAPSHOTS_SUBCOLLECTION, 'current_latest_valid')),
+    getDoc(doc(db, 'pulsecheck-pilot-enrollments', normalizedEnrollmentId, PULSECHECK_PILOT_MENTAL_PERFORMANCE_SNAPSHOTS_SUBCOLLECTION, 'endpoint')),
+  ]);
+
+  return {
+    baseline: baselineSnap.exists() ? (baselineSnap.data() as any) : null,
+    currentLatestValid: currentSnap.exists() ? (currentSnap.data() as any) : null,
+    endpoint: endpointSnap.exists() ? (endpointSnap.data() as any) : null,
+  };
+};
+
 const buildHypothesisId = (pilotId: string, code: string) => `${normalizeString(pilotId)}__${normalizeString(code).toLowerCase()}`;
 
 const sortHypotheses = (items: PulseCheckPilotHypothesis[]) =>
@@ -395,6 +465,7 @@ async function loadEngineSummaryForAthlete(athleteId: string): Promise<PilotDash
       highConfidencePatternCount: 0,
       degradedPatternCount: 0,
       recommendationProjectionCount: 0,
+      recommendationProjectionCountsByConsumer: {},
     };
   }
 
@@ -407,6 +478,7 @@ async function loadEngineSummaryForAthlete(athleteId: string): Promise<PilotDash
   let stablePatternCount = 0;
   let highConfidencePatternCount = 0;
   let degradedPatternCount = 0;
+  const recommendationProjectionCountsByConsumer: Record<string, number> = {};
   patternSnap.docs.forEach((docSnap) => {
     const data = docSnap.data() as Record<string, any>;
     const confidenceTier = normalizeString(data.confidenceTier);
@@ -416,6 +488,13 @@ async function loadEngineSummaryForAthlete(athleteId: string): Promise<PilotDash
       highConfidencePatternCount += 1;
     }
     if (confidenceTier === 'degraded') degradedPatternCount += 1;
+  });
+
+  projectionSnap.docs.forEach((docSnap) => {
+    const data = docSnap.data() as Record<string, any>;
+    const consumer = normalizeString(data.consumer);
+    if (!consumer) return;
+    recommendationProjectionCountsByConsumer[consumer] = (recommendationProjectionCountsByConsumer[consumer] || 0) + 1;
   });
 
   const athleteData = athleteSnap.data() as Record<string, any>;
@@ -435,6 +514,7 @@ async function loadEngineSummaryForAthlete(athleteId: string): Promise<PilotDash
     highConfidencePatternCount,
     degradedPatternCount,
     recommendationProjectionCount: projectionSnap.size,
+    recommendationProjectionCountsByConsumer,
   };
 }
 
@@ -978,6 +1058,129 @@ export const pulseCheckPilotDashboardService = {
     }
   },
 
+  async recordPilotSurveyResponse(input: {
+    pilotId: string;
+    pilotEnrollmentId?: string;
+    cohortId?: string;
+    teamId: string;
+    organizationId: string;
+    athleteId?: string;
+    respondentRole: 'athlete' | 'coach' | 'clinician';
+    surveyKind: 'trust' | 'nps';
+    score: number;
+    comment?: string;
+    trustBattery?: PulseCheckPilotOutcomeTrustBatteryPayload | null;
+    source?: 'ios' | 'android' | 'web-admin';
+  }): Promise<PulseCheckPilotOutcomeSurveyResponse> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      return {
+        id: `demo-survey-${Date.now()}`,
+        pilotId: input.pilotId,
+        pilotEnrollmentId: input.pilotEnrollmentId || null,
+        organizationId: input.organizationId,
+        teamId: input.teamId,
+        cohortId: input.cohortId || null,
+        respondentUserId: auth.currentUser?.uid || 'demo-user',
+        respondentRole: input.respondentRole,
+        surveyKind: input.surveyKind,
+        score: input.score,
+        comment: input.comment,
+        source: input.source || 'web-admin',
+        submittedAt: Date.now(),
+        trustBattery: (input.trustBattery as any) || null,
+      };
+    }
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Authenticated admin session required.');
+    }
+
+    const idToken = await currentUser.getIdToken();
+    const response = await fetch('/.netlify/functions/record-pilot-survey-response', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        ...input,
+        source: input.source || 'web-admin',
+      }),
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Failed to record pilot survey response.');
+    }
+
+    return payload?.response as PulseCheckPilotOutcomeSurveyResponse;
+  },
+
+  async saveOutcomeReleaseSettings(input: {
+    pilotId: string;
+    outcomesEnabled: boolean;
+    rolloutStage?: 'disabled' | 'staged' | 'live';
+    rolloutNotes?: string;
+  }): Promise<void> {
+    const currentUser = auth.currentUser;
+    const normalizedPilotId = normalizeString(input.pilotId);
+    if (!normalizedPilotId) {
+      throw new Error('pilotId is required.');
+    }
+
+    await setDoc(
+      doc(db, PULSECHECK_PILOT_OUTCOME_RELEASE_SETTINGS_COLLECTION, normalizedPilotId),
+      {
+        pilotId: normalizedPilotId,
+        outcomesEnabled: Boolean(input.outcomesEnabled),
+        rolloutStage: normalizeString(input.rolloutStage) || (input.outcomesEnabled ? 'live' : 'disabled'),
+        rolloutNotes: normalizeString(input.rolloutNotes),
+        updatedAt: serverTimestamp(),
+        updatedByUserId: currentUser?.uid || null,
+        updatedByEmail: currentUser?.email || null,
+      },
+      { merge: true }
+    );
+  },
+
+  async triggerPilotOutcomeRollupRecompute(input: {
+    pilotId: string;
+    lookbackDays?: number;
+  }): Promise<Record<string, any>> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      return {
+        success: true,
+        demoMode: true,
+      };
+    }
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Authenticated admin session required.');
+    }
+
+    const idToken = await currentUser.getIdToken();
+    const response = await fetch('/.netlify/functions/recompute-pilot-outcome-rollups', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        pilotId: input.pilotId,
+        lookbackDays: input.lookbackDays || 30,
+      }),
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Failed to recompute pilot outcome rollups.');
+    }
+
+    return payload || { success: true };
+  },
+
   async listActivePilotDirectory(): Promise<PilotDashboardDirectoryEntry[]> {
     if (pilotDashboardDemoMode.isEnabled()) {
       return pilotDashboardDemoMode.listActivePilotDirectory();
@@ -1067,10 +1270,18 @@ export const pulseCheckPilotDashboardService = {
 
     const enrichedEntries = await Promise.all(
       baseEntries.map(async (entry) => {
-        const directoryMetrics = await loadDirectoryEngineMetrics(entry._activeEnrollments);
+        const [directoryMetrics, outcomeRollup, outcomeReleaseSettings] = await Promise.all([
+          loadDirectoryEngineMetrics(entry._activeEnrollments),
+          loadCurrentOutcomeRollup(entry.pilot.id),
+          loadPilotOutcomeReleaseSettings(entry.pilot.id),
+        ]);
+        const outcomesEnabled = outcomeReleaseSettings?.outcomesEnabled !== false;
         return {
           ...entry,
           ...directoryMetrics,
+          outcomeMetrics: outcomesEnabled ? outcomeRollup?.metrics : undefined,
+          outcomeDiagnostics: outcomesEnabled ? ((outcomeRollup?.diagnostics?.surveys as PilotDashboardOutcomeSurveyDiagnostics) || undefined) : undefined,
+          hypothesisEvaluation: outcomesEnabled ? ((outcomeRollup?.diagnostics?.hypothesisEvaluation as any) || undefined) : undefined,
         };
       })
     );
@@ -1141,11 +1352,14 @@ export const pulseCheckPilotDashboardService = {
     };
     const cohortSummaries = buildCohortSummaries(pilotCohorts, athletes);
     const hypothesisSummary = buildHypothesisSummary(hypotheses);
-    const [organizationInviteConfigDefault, teamInviteConfigDefault, pilotInviteConfig, readouts] = await Promise.all([
+    const [organizationInviteConfigDefault, teamInviteConfigDefault, pilotInviteConfig, readouts, outcomeRollup, outcomeReleaseSettings, outcomeOpsStatus] = await Promise.all([
       getOrganizationInviteDefault(pilot.organizationId),
       getTeamInviteDefault(pilot.teamId),
       getPilotInviteConfig(pilot, organization.displayName, team.displayName),
       this.listPilotResearchReadouts(pilot.id),
+      loadCurrentOutcomeRollup(pilot.id),
+      loadPilotOutcomeReleaseSettings(pilot.id),
+      loadPilotOutcomeOpsStatus(pilot.id),
     ]);
     const pilotConfigRef = doc(db, PILOT_INVITE_CONFIGS_COLLECTION, pilot.id);
     const pilotConfigSnap = await getDoc(pilotConfigRef);
@@ -1155,6 +1369,8 @@ export const pulseCheckPilotDashboardService = {
       teamInviteConfigDefault,
       pilotInviteConfig
     );
+
+    const outcomesEnabled = outcomeReleaseSettings?.outcomesEnabled !== false;
 
     return {
       organization,
@@ -1171,6 +1387,20 @@ export const pulseCheckPilotDashboardService = {
       hasPilotInviteConfigOverride: pilotConfigSnap.exists(),
       teamInviteConfigDefault,
       organizationInviteConfigDefault,
+      outcomeMetrics: outcomesEnabled ? outcomeRollup?.metrics : undefined,
+      outcomeMetricsByCohort: outcomesEnabled ? ((outcomeRollup?.outcomeByCohort as Record<string, PilotDashboardOutcomeMetrics>) || undefined) : undefined,
+      outcomeDiagnostics: outcomesEnabled ? ((outcomeRollup?.diagnostics?.surveys as PilotDashboardOutcomeSurveyDiagnostics) || undefined) : undefined,
+      outcomeDiagnosticsByCohort:
+        outcomesEnabled ? ((outcomeRollup?.diagnostics?.surveysByCohort as Record<string, PilotDashboardOutcomeSurveyDiagnostics>) || undefined) : undefined,
+      outcomeOperationalDiagnostics: outcomesEnabled ? ((outcomeRollup?.diagnostics as Record<string, any>) || undefined) : undefined,
+      outcomeRecommendationTypeSlices: outcomesEnabled ? ((outcomeRollup?.diagnostics?.recommendationTypeSlices as Record<string, any>) || undefined) : undefined,
+      outcomeRecommendationTypeSlicesByCohort:
+        outcomesEnabled ? ((outcomeRollup?.diagnostics?.recommendationTypeSlicesByCohort as Record<string, Record<string, any>>) || undefined) : undefined,
+      outcomeTrustDispositionBaseline: outcomesEnabled ? ((outcomeRollup?.diagnostics?.trustDispositionBaseline as Record<string, any>) || undefined) : undefined,
+      outcomeReleaseSettings: outcomeReleaseSettings || undefined,
+      outcomeOpsStatus: outcomeOpsStatus || undefined,
+      hypothesisEvaluation: outcomesEnabled ? ((outcomeRollup?.diagnostics?.hypothesisEvaluation as any) || undefined) : undefined,
+      hypothesisEvaluationByCohort: outcomesEnabled ? ((outcomeRollup?.diagnostics?.hypothesisEvaluationByCohort as any) || undefined) : undefined,
       latestResearchReadout: readouts[0] || null,
       researchReadouts: readouts,
     };
@@ -1213,6 +1443,8 @@ export const pulseCheckPilotDashboardService = {
     const latestAssessmentContextFlagStatus =
       normalizeString(latestSnapshot?.profilePayload?.stateContextAtCapture?.assessmentContextFlag?.status) || 'unknown';
 
+    const mentalPerformanceSnapshots = await loadPilotMentalPerformanceSnapshotSet(enrollment.id);
+
     return {
       organization,
       team,
@@ -1226,6 +1458,7 @@ export const pulseCheckPilotDashboardService = {
       profileSnapshotCount: snapshots.length,
       latestAssessmentContextFlagStatus,
       latestAssessmentCapturedAt: toTimeValue(latestSnapshot?.capturedAt),
+      mentalPerformanceSnapshots,
       recentPatterns: timelineItems.recentPatterns,
       recentProjections: timelineItems.recentProjections,
       recentEvidence: timelineItems.recentEvidence,

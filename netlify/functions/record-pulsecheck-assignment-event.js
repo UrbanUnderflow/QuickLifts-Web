@@ -1,6 +1,12 @@
 const { initializeFirebaseAdmin, getFirebaseAdminApp, admin, headers } = require('./config/firebase');
 const { runtimeHelpers: pulseCheckSubmissionRuntime } = require('./submit-pulsecheck-checkin');
 const { syncTrainingPlanProgression } = require('../../src/api/firebase/mentaltraining/trainingPlanAuthoringShared.js');
+const {
+  emitPilotMetricEvent,
+  recordPilotMetricAlert,
+  recomputePilotMetricRollups,
+  upsertPilotMentalPerformanceSnapshot,
+} = require('./utils/pulsecheck-pilot-metrics');
 
 const RESPONSE_HEADERS = {
   ...headers,
@@ -708,6 +714,8 @@ function resolveActorType({ eventType, requesterRole, assignment, requesterId })
 }
 
 exports.handler = async (event) => {
+  let pilotIdForAlert = '';
+  let dbInstance = null;
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: RESPONSE_HEADERS, body: '' };
   }
@@ -724,6 +732,7 @@ exports.handler = async (event) => {
     initializeFirebaseAdmin({ headers: event.headers || {} });
     const adminApp = getFirebaseAdminApp({ headers: event.headers || {} });
     const db = admin.firestore(adminApp);
+    dbInstance = db;
     const decodedToken = await verifyAuth(event, adminApp);
     const body = JSON.parse(event.body || '{}');
 
@@ -838,6 +847,54 @@ exports.handler = async (event) => {
       return null;
     });
 
+    if (eventType === 'completed') {
+      await emitPilotMetricEvent({
+        db,
+        pilotContext: {
+          pilotEnrollmentId: nextAssignment.pilotEnrollmentId || assignment.pilotEnrollmentId || null,
+          pilotId: nextAssignment.pilotId || assignment.pilotId || null,
+          organizationId: nextAssignment.organizationId || assignment.organizationId || null,
+          teamId: nextAssignment.teamId || assignment.teamId || null,
+          cohortId: nextAssignment.cohortId || assignment.cohortId || null,
+          athleteId: nextAssignment.athleteId || assignment.athleteId || null,
+          teamMembershipId: nextAssignment.teamMembershipId || assignment.teamMembershipId || null,
+        },
+        eventType: 'daily_assignment_completed',
+        actorRole: actorType,
+        actorUserId,
+        athleteId: nextAssignment.athleteId || assignment.athleteId || null,
+        sourceCollection: ASSIGNMENT_EVENTS_COLLECTION,
+        sourceDocumentId: eventRef.id,
+        sourceDate: nextAssignment.sourceDate || assignment.sourceDate || null,
+        metricPayload: {
+          assignmentId,
+          actionType: nextAssignment.actionType || assignment.actionType || null,
+          executionPattern: nextAssignment.executionPattern || assignment.executionPattern || null,
+          trainingPlanId: nextAssignment.trainingPlanId || assignment.trainingPlanId || null,
+        },
+        createdAt: eventAt,
+      });
+
+      await upsertPilotMentalPerformanceSnapshot({
+        db,
+        athleteId: nextAssignment.athleteId || assignment.athleteId || null,
+        snapshotType: 'current_latest_valid',
+        preferredPilotEnrollmentId: nextAssignment.pilotEnrollmentId || assignment.pilotEnrollmentId,
+        preferredPilotId: nextAssignment.pilotId || assignment.pilotId,
+        preferredTeamMembershipId: nextAssignment.teamMembershipId || assignment.teamMembershipId,
+        sourceEventId: `daily_assignment_completed:${eventRef.id}`,
+      });
+    }
+
+    if (nextAssignment.pilotId || assignment.pilotId) {
+      pilotIdForAlert = nextAssignment.pilotId || assignment.pilotId || '';
+      await recomputePilotMetricRollups({
+        db,
+        pilotId: nextAssignment.pilotId || assignment.pilotId,
+        explicitDateKeys: [nextAssignment.sourceDate || assignment.sourceDate || new Date(eventAt).toISOString().slice(0, 10)],
+      });
+    }
+
     return {
       statusCode: 200,
       headers: RESPONSE_HEADERS,
@@ -854,6 +911,19 @@ exports.handler = async (event) => {
     };
   } catch (error) {
     console.error('[record-pulsecheck-assignment-event] Failed:', error);
+    try {
+      if (pilotIdForAlert) {
+        await recordPilotMetricAlert({
+          db: dbInstance,
+          pilotId: pilotIdForAlert,
+          scope: 'assignment_event_write',
+          severity: 'error',
+          message: error?.message || 'Failed to record PulseCheck assignment event.',
+        });
+      }
+    } catch (nestedError) {
+      console.error('[record-pulsecheck-assignment-event] Failed to record alert:', nestedError);
+    }
     return {
       statusCode: error?.statusCode || 500,
       headers: RESPONSE_HEADERS,

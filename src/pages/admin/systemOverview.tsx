@@ -77,6 +77,7 @@ import PulseCheckCorrelationEnginePilotDashboardTab from "../../components/admin
 import PulseCheckCorrelationEnginePilotDashboardAddendumTab from "../../components/admin/system-overview/PulseCheckCorrelationEnginePilotDashboardAddendumTab";
 import PulseCheckCorrelationEnginePilotOpsRunbookTab from "../../components/admin/system-overview/PulseCheckCorrelationEnginePilotOpsRunbookTab";
 import PulseCheckCorrelationEnginePilotResearchReadoutTab from "../../components/admin/system-overview/PulseCheckCorrelationEnginePilotResearchReadoutTab";
+import PulseCheckPilotOutcomeMetricsContractTab from "../../components/admin/system-overview/PulseCheckPilotOutcomeMetricsContractTab";
 import PulseCheckOuraIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckOuraIntegrationStrategyTab";
 import PulseCheckOuraCognitiveCorrelationSpecTab from "../../components/admin/system-overview/PulseCheckOuraCognitiveCorrelationSpecTab";
 import PulseCheckDeviceIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckDeviceIntegrationStrategyTab";
@@ -220,6 +221,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-correlation-engine-engineering-task-breakdown",
       "pulsecheck-correlation-engine-pilot-dashboard",
       "pulsecheck-correlation-engine-pilot-dashboard-addendum",
+      "pulsecheck-pilot-outcome-metrics-contract",
       "pulsecheck-correlation-engine-pilot-ops-runbook",
       "pulsecheck-correlation-engine-pilot-research-readout",
       "pulsecheck-oura-integration-strategy",
@@ -1667,6 +1669,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-correlation-engine-pilot-dashboard-addendum":
         return <PulseCheckCorrelationEnginePilotDashboardAddendumTab />;
+
+      case "pulsecheck-pilot-outcome-metrics-contract":
+        return <PulseCheckPilotOutcomeMetricsContractTab />;
 
       case "pulsecheck-correlation-engine-pilot-ops-runbook":
         return <PulseCheckCorrelationEnginePilotOpsRunbookTab />;
