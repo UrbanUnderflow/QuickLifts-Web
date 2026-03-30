@@ -88,6 +88,49 @@ test('PulseCheck function proxy forwards supported functions to direct Netlify e
   }
 });
 
+test('PulseCheck function proxy strips upstream transfer and encoding headers', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    status: 200,
+    headers: new Headers({
+      'content-type': 'application/json',
+      'content-length': '999',
+      'transfer-encoding': 'chunked',
+      'content-encoding': 'gzip',
+      'x-proxied': '1',
+    }),
+    async arrayBuffer() {
+      return Buffer.from('{"ok":true}');
+    },
+  });
+
+  try {
+    const { default: handler } = loadProxyModule();
+    const response = createResponseRecorder();
+
+    await handler({
+      method: 'GET',
+      url: '/api/pulsecheck/functions/oura-status',
+      query: { name: 'oura-status' },
+      headers: {
+        host: 'fitwithpulse.ai',
+        'x-forwarded-host': 'fitwithpulse.ai',
+        'x-forwarded-proto': 'https',
+      },
+      body: undefined,
+    }, response);
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.headers['content-type'], 'application/json');
+    assert.equal(response.headers['x-proxied'], '1');
+    assert.equal(response.headers['content-length'], undefined);
+    assert.equal(response.headers['transfer-encoding'], undefined);
+    assert.equal(response.headers['content-encoding'], undefined);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('PulseCheck function proxy rejects unsupported functions', async () => {
   const { default: handler } = loadProxyModule();
   const response = createResponseRecorder();
