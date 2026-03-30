@@ -70,7 +70,15 @@ async function proxyNetlifyFunction(name: string, req: NextApiRequest, res: Next
   res.status(upstreamResponse.status);
 
   upstreamResponse.headers.forEach((headerValue, headerName) => {
-    if (headerName.toLowerCase() === 'content-length' || headerName.toLowerCase() === 'transfer-encoding') {
+    const normalizedHeaderName = headerName.toLowerCase();
+    if (
+      normalizedHeaderName === 'content-length'
+      || normalizedHeaderName === 'transfer-encoding'
+      // Node/Next fetch may already decompress the upstream body before we relay it.
+      // Forwarding the original content-encoding header can make iOS clients try to
+      // decode already-decoded bytes, which surfaces as "cannot decode raw data".
+      || normalizedHeaderName === 'content-encoding'
+    ) {
       return;
     }
     res.setHeader(headerName, headerValue);
