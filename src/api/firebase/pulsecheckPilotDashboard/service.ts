@@ -758,9 +758,9 @@ const resolveEscalationDispositionLabel = (entry: Record<string, any>) => {
   if (status === 'resolved' && hasCareProgress) return 'Care completed';
   if (status === 'resolved') return 'Resolved';
   if (hasCareProgress) return 'In care';
-  if (consentStatus === 'pending' && (Number(entry.tier) || 0) >= 2) return 'Consent pending';
-  if (isCoachReviewEscalation(entry)) return 'Coach review';
   if (isSupportFlagEscalation(entry)) return 'Support flag';
+  if (isCoachReviewEscalation(entry)) return 'Coach review';
+  if (consentStatus === 'pending' && (Number(entry.tier) || 0) >= 2) return 'Consent pending';
   return 'Open care';
 };
 
