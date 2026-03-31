@@ -4250,7 +4250,11 @@ async function getAthletePilotSurveyPromptState({
   const teamMembership = context.teamMembership || null;
   const pilotEnrollment = context.pilotEnrollment || null;
   const enrollmentComplete = isEnrollmentComplete({ teamMembership, pilotEnrollment });
-  const activeEscalation = escalations.some((entry) => normalizeString(entry.status) === 'active');
+  const activeEscalation = escalations.some((entry) => (
+    normalizeEscalationStatus(entry) === 'active'
+    && entry.excludedFromHeadlineMetrics !== true
+    && countsTowardCareEscalationHeadline(entry)
+  ));
   const athleteResponses = responses.filter((entry) => normalizeString(entry.respondentUserId) === normalizeString(context.athleteId));
   const nowMs = Date.now();
   const pilotStartMs = coerceMillis(pilot?.startAt);

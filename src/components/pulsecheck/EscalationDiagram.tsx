@@ -65,14 +65,13 @@ type EscalationDiagramProps = {
 };
 
 const EscalationDiagram: React.FC<EscalationDiagramProps> = ({ step, onAdvance, onSequenceComplete }) => {
-  const normalizedStep = Math.max(1, step);
-  const activeTier = TIERS[Math.min(normalizedStep - 1, TIERS.length - 1)];
+  const activeTier = TIERS[Math.min(Math.max(step, 0), TIERS.length - 1)];
   const accent = activeTier.accent;
   const glow = activeTier.glow;
   const tint = activeTier.tint;
 
   const advance = () => {
-    if (normalizedStep === TIERS.length) {
+    if (step >= TIERS.length - 1) {
       onSequenceComplete?.();
       return;
     }
@@ -113,7 +112,7 @@ const EscalationDiagram: React.FC<EscalationDiagramProps> = ({ step, onAdvance, 
       <div className="relative mx-auto max-w-[1120px] px-4 py-5 md:px-8 md:py-8">
         <div className="mb-5 flex items-center justify-end gap-6">
           <div className="flex items-center gap-2">
-            {[0, 1, 2, 3, 4].map((index) => {
+            {[0, 1, 2, 3].map((index) => {
               const active = step === index;
               const passed = step > index;
 
@@ -140,8 +139,8 @@ const EscalationDiagram: React.FC<EscalationDiagramProps> = ({ step, onAdvance, 
                     title={trigger.title}
                     body={trigger.body}
                     accent={trigger.accent}
-                    muted={normalizedStep > 1}
-                    emphasize={normalizedStep === 1 && index === 0}
+                    muted={step > 0}
+                    emphasize={step === 0 && index === 0}
                   />
                   {index < TRIGGERS.length - 1 && <FlowLink accent={trigger.accent} />}
                 </React.Fragment>

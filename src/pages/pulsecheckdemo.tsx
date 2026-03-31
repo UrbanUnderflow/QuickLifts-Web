@@ -4761,7 +4761,7 @@ const PulseCheckDemo: React.FC = () => {
                             >
                                 <EscalationExplainer
                                     escalationStep={escalationStep}
-                                    onAdvanceEscalation={() => setEscalationStep((current) => Math.min(4, current + 1))}
+                                    onAdvanceEscalation={() => setEscalationStep((current) => Math.min(3, current + 1))}
                                     onContinue={() => setCurrentAct('act3')}
                                 />
                             </motion.div>
