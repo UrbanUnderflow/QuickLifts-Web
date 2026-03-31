@@ -1,4 +1,8 @@
 const NOTIFICATION_LOGS_COLLECTION = 'notification-logs';
+const {
+  loadPilotOperationalState,
+  resolvePilotEnrollmentContext,
+} = require('./utils/pulsecheck-pilot-metrics');
 
 function truncateToken(fcmToken) {
   return fcmToken ? `${String(fcmToken).substring(0, 20)}...` : 'MISSING';
@@ -40,6 +44,93 @@ function resolvePulseCheckPushTarget(userData = {}) {
   }
 
   return { token, eligible: true, reason: 'eligible' };
+}
+
+function isBlockingOperationalStatus(value) {
+  const normalized = sanitizeName(value).toLowerCase();
+  return ['paused', 'withdrawn', 'watch_list', 'watchlist', 'restricted', 'restriction', 'manual_hold'].includes(normalized);
+}
+
+function isNudgeSuppressedByOperationalRestriction(state = null) {
+  if (!state) return false;
+
+  const effectiveFlags = state.effectiveRestrictionFlags || state.restrictionFlags || {};
+  const baseStatus = sanitizeName(state.baseStatus || state.status);
+  const restrictionState = sanitizeName(state.restrictionState || state.operationalStatus);
+
+  return effectiveFlags.suppressNudges === true
+    || effectiveFlags.manualHold === true
+    || isBlockingOperationalStatus(baseStatus)
+    || isBlockingOperationalStatus(restrictionState);
+}
+
+async function loadPulseCheckNudgeSuppressionState({
+  db,
+  athleteId,
+  preferredPilotId = null,
+  preferredPilotEnrollmentId = null,
+  preferredTeamMembershipId = null,
+  allowMembershipFallback = false,
+} = {}) {
+  const normalizedAthleteId = sanitizeName(athleteId);
+  if (!db || !normalizedAthleteId) {
+    return {
+      suppressed: false,
+      reason: 'missing_context',
+      state: null,
+      context: null,
+    };
+  }
+
+  try {
+    const context = await resolvePilotEnrollmentContext({
+      db,
+      athleteId: normalizedAthleteId,
+      preferredPilotEnrollmentId,
+      preferredPilotId,
+      preferredTeamMembershipId,
+      allowMembershipFallback,
+    });
+
+    if (!context?.pilotEnrollmentId) {
+      return {
+        suppressed: false,
+        reason: 'no_pilot_enrollment',
+        state: null,
+        context,
+      };
+    }
+
+    const state = await loadPilotOperationalState(db, context.pilotEnrollmentId, {
+      pilotEnrollment: context.pilotEnrollment,
+      teamMembership: context.teamMembership,
+    });
+
+    if (isNudgeSuppressedByOperationalRestriction(state)) {
+      return {
+        suppressed: true,
+        reason: state?.effectiveRestrictionFlags?.manualHold === true ? 'manual_hold' : 'suppress_nudges',
+        state,
+        context,
+      };
+    }
+
+    return {
+      suppressed: false,
+      reason: 'eligible',
+      state,
+      context,
+    };
+  } catch (error) {
+    console.warn('[pulsecheck-notification-utils] Failed to resolve nudge suppression state:', error?.message || error);
+    return {
+      suppressed: false,
+      reason: 'load_failed',
+      error,
+      state: null,
+      context: null,
+    };
+  }
 }
 
 function resolveAthleteFirstName(userData = {}) {
@@ -334,6 +425,9 @@ module.exports = {
   classifyMessagingFailure,
   normalizeStringMap,
   resolveAthleteFirstName,
+  isBlockingOperationalStatus,
+  isNudgeSuppressedByOperationalRestriction,
+  loadPulseCheckNudgeSuppressionState,
   resolvePulseCheckFcmToken,
   resolvePulseCheckPushTarget,
   sendLoggedNoraPush,

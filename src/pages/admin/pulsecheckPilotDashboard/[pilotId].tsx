@@ -755,6 +755,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const visibleEscalationComparison = visibleEscalationOperationalDiagnostics?.comparison || null;
   const visibleEscalationMigrationContext = visibleEscalationOperationalDiagnostics?.migrationContext || null;
   const visibleTrustDispositionBaseline = detail?.outcomeTrustDispositionBaseline || null;
+  const visibleOperationalWatchListSummary = detail?.operationalWatchListSummary || null;
   const outcomeReleaseSettings = detail?.outcomeReleaseSettings || null;
   const outcomeOpsStatus = detail?.outcomeOpsStatus || null;
   const outcomesEnabled = outcomeReleaseSettings?.outcomesEnabled !== false;
@@ -787,6 +788,61 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   }, [cohortFilter, detail?.metrics.totalEnrollmentCount, visibleAthletes.length, visibleOutcomeMetrics]);
 
   const wholePilotOutcomeMetrics = detail?.outcomeMetrics || null;
+  const operationalWatchListSummaryCards: Array<{
+    label: string;
+    value: string;
+    helper: string;
+    accentClassName: string;
+  }> = [
+    {
+      label: 'Watch-list states',
+      value: String(visibleOperationalWatchListSummary?.stateCount ?? 0),
+      helper: 'All operational watch-list records on this pilot, including requests, active restrictions, and cleared records.',
+      accentClassName: 'border-cyan-400/20 bg-cyan-400/10 text-cyan-100',
+    },
+    {
+      label: 'Active',
+      value: String(visibleOperationalWatchListSummary?.activeCount ?? 0),
+      helper: 'Athletes currently on an active operational watch list with restriction flags in effect.',
+      accentClassName: 'border-rose-400/20 bg-rose-400/10 text-rose-100',
+    },
+    {
+      label: 'Review queued',
+      value: String(visibleOperationalWatchListSummary?.requestedCount ?? 0),
+      helper: 'Review items queued by request; no athlete-facing restriction is active until apply.',
+      accentClassName: 'border-amber-400/20 bg-amber-400/10 text-amber-100',
+    },
+    {
+      label: 'Survey suppression',
+      value: String(visibleOperationalWatchListSummary?.suppressSurveysCount ?? 0),
+      helper: 'Current active restriction states that suppress trust and NPS prompting.',
+      accentClassName: 'border-white/10 bg-white/5 text-zinc-100',
+    },
+    {
+      label: 'Assignment suppression',
+      value: String(visibleOperationalWatchListSummary?.suppressAssignmentsCount ?? 0),
+      helper: 'Current active restriction states that suppress assignment delivery.',
+      accentClassName: 'border-white/10 bg-white/5 text-zinc-100',
+    },
+    {
+      label: 'Nudge suppression',
+      value: String(visibleOperationalWatchListSummary?.suppressNudgesCount ?? 0),
+      helper: 'Current active restriction states that suppress nudges and reminder delivery.',
+      accentClassName: 'border-white/10 bg-white/5 text-zinc-100',
+    },
+    {
+      label: 'Adherence exclusions',
+      value: String(visibleOperationalWatchListSummary?.excludeFromAdherenceCount ?? 0),
+      helper: 'Current active restriction states excluded from adherence denominators.',
+      accentClassName: 'border-white/10 bg-white/5 text-zinc-100',
+    },
+    {
+      label: 'Manual hold',
+      value: String(visibleOperationalWatchListSummary?.manualHoldCount ?? 0),
+      helper: 'Current active restriction states using manual hold across athlete-facing flows.',
+      accentClassName: 'border-white/10 bg-white/5 text-zinc-100',
+    },
+  ];
 
   const selectedResearchReadout = useMemo(
     () => detail?.researchReadouts.find((readout) => readout.id === selectedReadoutId) || detail?.researchReadouts[0] || null,
@@ -1918,7 +1974,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
               {activeTab === 'overview' ? (
                 <div className="mt-6 space-y-6">
-                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Release Control</div>
                       <h2 className="mt-2 text-lg font-semibold text-white">Outcome rollout state</h2>
@@ -1954,6 +2010,42 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                             {outcomeOpsStatus?.scopes?.scheduled_rollup_repair?.lastError || 'No recorded repair error'}
                           </div>
                         </div>
+                      </div>
+                    </div>
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Operational Watch List</div>
+                          <h2 className="mt-2 text-lg font-semibold text-white">Restriction overlay state</h2>
+                        </div>
+                        <div className="rounded-full border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-rose-100">
+                          Internal only
+                        </div>
+                      </div>
+                      <p className="mt-3 text-sm text-zinc-400">
+                        Escalations stay visible as care workflow records. Only this operational layer suppresses surveys, assignments, nudges, or adherence.
+                      </p>
+                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {operationalWatchListSummaryCards.slice(0, 4).map((card) => (
+                          <div key={card.label} className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{card.label}</div>
+                            <div className={`mt-2 inline-flex rounded-full border px-3 py-2 text-2xl font-semibold ${card.accentClassName}`}>
+                              {card.value}
+                            </div>
+                            <div className="mt-2 text-xs text-zinc-500">{card.helper}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 grid grid-cols-1 gap-3">
+                        {operationalWatchListSummaryCards.slice(4).map((card) => (
+                          <div key={card.label} className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{card.label}</div>
+                            <div className={`mt-2 inline-flex rounded-full border px-3 py-2 text-2xl font-semibold ${card.accentClassName}`}>
+                              {card.value}
+                            </div>
+                            <div className="mt-2 text-xs text-zinc-500">{card.helper}</div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -2908,6 +3000,56 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                 <td className="px-3 py-3">
                                   <div className="font-medium text-white">{athlete.displayName}</div>
                                   <div className="text-xs text-zinc-500">{athlete.email || athlete.athleteId}</div>
+                                  <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                                    {athlete.operationalWatchList ? (
+                                      <>
+                                        <span
+                                          className={`rounded-full border px-2 py-1 ${
+                                            athlete.operationalWatchList.watchListActive
+                                              ? 'border-rose-400/25 bg-rose-400/10 text-rose-100'
+                                              : athlete.operationalWatchList.watchListRequested
+                                                ? 'border-amber-400/25 bg-amber-400/10 text-amber-100'
+                                                : 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100'
+                                          }`}
+                                        >
+                                          {athlete.operationalWatchList.watchListActive
+                                            ? 'Watch list active'
+                                            : athlete.operationalWatchList.watchListRequested
+                                              ? 'Review queued'
+                                              : 'Watch list state'}
+                                        </span>
+                                        {athlete.operationalWatchList.restrictionFlags.suppressSurveys ? (
+                                          <span className="rounded-full border border-rose-400/25 bg-rose-400/10 px-2 py-1 text-rose-100">
+                                            Surveys suppressed
+                                          </span>
+                                        ) : null}
+                                        {athlete.operationalWatchList.restrictionFlags.suppressAssignments ? (
+                                          <span className="rounded-full border border-rose-400/25 bg-rose-400/10 px-2 py-1 text-rose-100">
+                                            Assignments suppressed
+                                          </span>
+                                        ) : null}
+                                        {athlete.operationalWatchList.restrictionFlags.suppressNudges ? (
+                                          <span className="rounded-full border border-rose-400/25 bg-rose-400/10 px-2 py-1 text-rose-100">
+                                            Nudges suppressed
+                                          </span>
+                                        ) : null}
+                                        {athlete.operationalWatchList.restrictionFlags.excludeFromAdherence ? (
+                                          <span className="rounded-full border border-rose-400/25 bg-rose-400/10 px-2 py-1 text-rose-100">
+                                            Adherence excluded
+                                          </span>
+                                        ) : null}
+                                        {athlete.operationalWatchList.restrictionFlags.manualHold ? (
+                                          <span className="rounded-full border border-rose-400/25 bg-rose-400/10 px-2 py-1 text-rose-100">
+                                            Manual hold
+                                          </span>
+                                        ) : null}
+                                      </>
+                                    ) : (
+                                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-zinc-400">
+                                        No watch list
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="px-3 py-3 text-zinc-300">
                                   <div className="space-y-3">

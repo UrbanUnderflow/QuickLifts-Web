@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
-import { Activity, ArrowRight, Building2, FlaskConical, Layers3, MonitorPlay, RefreshCcw, Users2 } from 'lucide-react';
+import { Activity, ArrowRight, Building2, FlaskConical, Layers3, MonitorPlay, RefreshCcw, ShieldAlert, Users2 } from 'lucide-react';
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
 import { LocalFirebaseModeButton } from '../../../components/admin/pilot-dashboard/LocalFirebaseModeButton';
 import NoraMetricHelpButton from '../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
@@ -116,6 +116,38 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
             filteredEntries.length
           : 0,
     }),
+    [filteredEntries]
+  );
+
+  const operationalWatchListSummary = useMemo(
+    () =>
+      filteredEntries.reduce(
+        (accumulator, entry) => {
+          const watchListSummary = entry.operationalWatchListSummary;
+          if (!watchListSummary) return accumulator;
+          accumulator.pilotsWithWatchList += watchListSummary.stateCount > 0 ? 1 : 0;
+          accumulator.stateCount += watchListSummary.stateCount;
+          accumulator.requestedCount += watchListSummary.requestedCount;
+          accumulator.activeCount += watchListSummary.activeCount;
+          accumulator.suppressSurveysCount += watchListSummary.suppressSurveysCount;
+          accumulator.suppressAssignmentsCount += watchListSummary.suppressAssignmentsCount;
+          accumulator.suppressNudgesCount += watchListSummary.suppressNudgesCount;
+          accumulator.excludeFromAdherenceCount += watchListSummary.excludeFromAdherenceCount;
+          accumulator.manualHoldCount += watchListSummary.manualHoldCount;
+          return accumulator;
+        },
+        {
+          pilotsWithWatchList: 0,
+          stateCount: 0,
+          requestedCount: 0,
+          activeCount: 0,
+          suppressSurveysCount: 0,
+          suppressAssignmentsCount: 0,
+          suppressNudgesCount: 0,
+          excludeFromAdherenceCount: 0,
+          manualHoldCount: 0,
+        }
+      ),
     [filteredEntries]
   );
 
@@ -259,6 +291,55 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                 <div className="mt-3 text-3xl font-semibold">{card.value}</div>
               </div>
             ))}
+          </div>
+
+          <div className="mt-4 rounded-3xl border border-white/10 bg-[#11151f] p-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex items-center gap-3 text-rose-300">
+                <ShieldAlert className="h-5 w-5" />
+                <div>
+                  <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Operational Watch List</div>
+                  <div className="text-lg font-semibold text-white">Directory-level restriction summary</div>
+                </div>
+              </div>
+              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-300">
+                Escalations remain separate from operational restriction state. Requests are review-only until applied.
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pilots with watch list</div>
+                <div className="mt-2 text-3xl font-semibold text-white">{operationalWatchListSummary.pilotsWithWatchList}</div>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Active states</div>
+                <div className="mt-2 text-3xl font-semibold text-white">{operationalWatchListSummary.activeCount}</div>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Review queued states</div>
+                <div className="mt-2 text-3xl font-semibold text-white">{operationalWatchListSummary.requestedCount}</div>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Survey suppressions</div>
+                <div className="mt-2 text-3xl font-semibold text-white">{operationalWatchListSummary.suppressSurveysCount}</div>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Assignment suppressions</div>
+                <div className="mt-2 text-3xl font-semibold text-white">{operationalWatchListSummary.suppressAssignmentsCount}</div>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Nudge suppressions</div>
+                <div className="mt-2 text-3xl font-semibold text-white">{operationalWatchListSummary.suppressNudgesCount}</div>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Adherence exclusions</div>
+                <div className="mt-2 text-3xl font-semibold text-white">{operationalWatchListSummary.excludeFromAdherenceCount}</div>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Manual holds</div>
+                <div className="mt-2 text-3xl font-semibold text-white">{operationalWatchListSummary.manualHoldCount}</div>
+              </div>
+            </div>
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-3 rounded-3xl border border-white/10 bg-[#11151f] p-4 md:grid-cols-2">
