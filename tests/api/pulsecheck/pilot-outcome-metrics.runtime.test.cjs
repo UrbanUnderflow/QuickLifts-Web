@@ -2043,6 +2043,93 @@ test('getAthletePilotSurveyPromptState suppresses prompts during active escalati
   assert.ok(promptStateAfter.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
 });
 
+test('getAthletePilotSurveyPromptState does not suppress prompts for downgraded active support-only escalations', async () => {
+  const { getAthletePilotSurveyPromptState } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, {
+    pilotStartAt: NOW_MS - 3 * DAY_MS,
+    pilotEndAt: NOW_MS + 3 * DAY_MS,
+  });
+
+  db.seedDoc('pulsecheck-pilot-metric-events', 'support-session-1', {
+    id: 'support-session-1',
+    pilotId: context.pilotId,
+    pilotEnrollmentId: context.pilotEnrollmentId,
+    organizationId: context.organizationId,
+    teamId: context.teamId,
+    athleteId: context.athleteId,
+    actorUserId: context.athleteId,
+    actorRole: 'athlete',
+    eventType: 'daily_assignment_completed',
+    sourceCollection: 'pulsecheck-daily-assignments',
+    sourceDocumentId: 'support-assignment-1',
+    sourceDate: '2026-03-29',
+    metricPayload: {},
+    createdAt: NOW_MS - DAY_MS,
+  });
+  db.seedDoc('pulsecheck-pilot-metric-events', 'support-session-2', {
+    id: 'support-session-2',
+    pilotId: context.pilotId,
+    pilotEnrollmentId: context.pilotEnrollmentId,
+    organizationId: context.organizationId,
+    teamId: context.teamId,
+    athleteId: context.athleteId,
+    actorUserId: context.athleteId,
+    actorRole: 'athlete',
+    eventType: 'daily_assignment_completed',
+    sourceCollection: 'pulsecheck-daily-assignments',
+    sourceDocumentId: 'support-assignment-2',
+    sourceDate: '2026-03-30',
+    metricPayload: {},
+    createdAt: NOW_MS,
+  });
+  db.seedDoc('pulsecheck-pilot-metric-events', 'support-session-3', {
+    id: 'support-session-3',
+    pilotId: context.pilotId,
+    pilotEnrollmentId: context.pilotEnrollmentId,
+    organizationId: context.organizationId,
+    teamId: context.teamId,
+    athleteId: context.athleteId,
+    actorUserId: context.athleteId,
+    actorRole: 'athlete',
+    eventType: 'daily_assignment_completed',
+    sourceCollection: 'pulsecheck-daily-assignments',
+    sourceDocumentId: 'support-assignment-3',
+    sourceDate: '2026-03-30',
+    metricPayload: {},
+    createdAt: NOW_MS,
+  });
+
+  db.seedDoc('escalation-records', 'support-only-escalation', {
+    id: 'support-only-escalation',
+    userId: context.athleteId,
+    conversationId: 'conversation-support',
+    tier: 0,
+    category: 'general',
+    status: 'active',
+    disposition: 'none',
+    classificationFamily: 'performance_support',
+    excludedFromHeadlineMetrics: true,
+    createdAt: NOW_MS - 45 * 60 * 1000,
+    triggerContent: 'I feel nervous about competing and want help regulating it.',
+    classificationReason: 'Performance support only',
+  });
+
+  const promptState = await runWithNow(NOW_MS, () => getAthletePilotSurveyPromptState({
+    db,
+    athleteId: context.athleteId,
+    preferredPilotEnrollmentId: context.pilotEnrollmentId,
+    preferredPilotId: context.pilotId,
+  }));
+
+  assert.equal(promptState.suppressionReason, null);
+  assert.equal(promptState.completedSessions, 3);
+  assert.equal(promptState.endpointEligible, false);
+  assert.equal(promptState.midpointEligible, true);
+  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'trust'));
+  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
+});
+
 test('getAthletePilotSurveyPromptState honors historical completed assignments inside the pilot window', async () => {
   const { getAthletePilotSurveyPromptState } = loadPulsecheckMetrics();
   const { db } = createPulsecheckFirestore();
