@@ -64,6 +64,7 @@ exports.handler = async (event) => {
       organizationId: body.organizationId,
       athleteId: body.athleteId,
       diagnosticBattery: body.trustBattery,
+      metricPayload: body.metricPayload,
     });
 
     await recomputePilotMetricRollups({
