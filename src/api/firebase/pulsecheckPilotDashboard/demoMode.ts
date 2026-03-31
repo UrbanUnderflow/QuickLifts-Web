@@ -138,13 +138,16 @@ function buildCoverage(metrics: PilotDashboardMetrics): PilotDashboardCoverageMe
   };
 }
 
+const resolveCohortEffectiveStatus = (cohort: PulseCheckPilotCohort): PulseCheckPilotCohort['status'] =>
+  cohort.status === 'paused' || cohort.status === 'archived' ? cohort.status : 'active';
+
 function buildCohortSummaries(cohorts: PulseCheckPilotCohort[], athletes: PilotDashboardAthleteSummary[]): PilotDashboardCohortSummary[] {
   return cohorts.map((cohort) => {
     const cohortAthletes = athletes.filter((athlete) => athlete.pilotEnrollment.cohortId === cohort.id);
     return {
       cohortId: cohort.id,
       cohortName: cohort.name,
-      cohortStatus: cohort.status,
+      cohortStatus: resolveCohortEffectiveStatus(cohort),
       activeAthleteCount: cohortAthletes.length,
       athletesWithEngineRecord: cohortAthletes.filter((athlete) => athlete.engineSummary.hasEngineRecord).length,
       athletesWithStablePatterns: cohortAthletes.filter((athlete) => athlete.engineSummary.stablePatternCount > 0).length,
@@ -714,6 +717,17 @@ function buildBaseDemoStore(): PilotDashboardDemoStore {
       profileSnapshotCount: athlete.snapshotHistory.length,
       latestAssessmentContextFlagStatus: athlete.assessmentContextStatus,
       latestAssessmentCapturedAt: athlete.snapshotHistory[0]?.capturedAt || null,
+      adherenceSummary: {
+        expectedAthleteDays: 0,
+        completedCheckInDays: 0,
+        completedAssignmentDays: 0,
+        adheredDays: 0,
+        adherenceRate: 0,
+        dailyCheckInRate: 0,
+        assignmentCompletionRate: 0,
+      },
+      adherenceDays: [],
+      escalations: [],
       recentPatterns: athlete.recentPatterns,
       recentProjections: athlete.recentProjections,
       recentEvidence: athlete.recentEvidence,
@@ -967,7 +981,7 @@ function buildDirectoryEntryFromStore(store: PilotDashboardDemoStore): PilotDash
     cohorts: detail.cohorts,
     totalEnrollmentCount: detail.metrics.totalEnrollmentCount,
     activeEnrollmentCount: detail.metrics.activeAthleteCount,
-    activeCohortCount: detail.cohorts.filter((cohort) => cohort.status === 'active').length,
+    activeCohortCount: detail.cohorts.filter((cohort) => resolveCohortEffectiveStatus(cohort) === 'active').length,
     hypothesisCount: detail.metrics.hypothesisCount,
     unsupportedHypothesisCount: detail.metrics.unsupportedHypotheses,
     promisingHypothesisCount: detail.hypothesisSummary.promisingCount,
@@ -1097,7 +1111,22 @@ export const pilotDashboardDemoMode = {
   getPilotAthleteDetail(pilotId: string, athleteId: string): PilotDashboardAthleteDetail | null {
     if (normalizeString(pilotId) !== DEMO_PILOT_ID) return null;
     const athlete = readStore().athletes.find((entry) => entry.summary.athleteId === normalizeString(athleteId));
-    return athlete ? cloneStore(athlete.athleteDetail) : null;
+    return athlete
+      ? cloneStore({
+          ...athlete.athleteDetail,
+          adherenceSummary: athlete.athleteDetail.adherenceSummary || {
+            expectedAthleteDays: 0,
+            completedCheckInDays: 0,
+            completedAssignmentDays: 0,
+            adheredDays: 0,
+            adherenceRate: 0,
+            dailyCheckInRate: 0,
+            assignmentCompletionRate: 0,
+          },
+          adherenceDays: athlete.athleteDetail.adherenceDays || [],
+          escalations: athlete.athleteDetail.escalations || [],
+        })
+      : null;
   },
 
   saveHypothesis(input: PulseCheckPilotHypothesisInput): string {

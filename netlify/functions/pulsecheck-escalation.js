@@ -15,9 +15,12 @@
 const { initializeFirebaseAdmin, db, headers, admin } = require('./config/firebase');
 const {
   emitPilotMetricEvent,
+  evaluateCoachWorkflowContinuity,
   recordPilotMetricAlert,
   recomputePilotMetricRollups,
   resolvePilotEnrollmentContext,
+  writePilotMetricOpsStatus,
+  isTrueCareEscalationClassification,
 } = require('./utils/pulsecheck-pilot-metrics');
 
 // Escalation Tier enum values
@@ -48,11 +51,352 @@ const EscalationRecordStatus = {
   Resolved: 'resolved',
   Declined: 'declined'
 };
+const EscalationDisposition = {
+  None: 'none',
+  CoachReview: 'coach_review',
+  ClinicalHandoff: 'clinical_handoff',
+};
+const EscalationClassificationFamily = {
+  None: 'none',
+  PerformanceSupport: 'performance_support',
+  CoachReview: 'coach_review',
+  CareEscalation: 'care_escalation',
+  CriticalSafety: 'critical_safety',
+};
+const EscalationSeverity = {
+  None: 'none',
+  Low: 'low',
+  Moderate: 'moderate',
+  High: 'high',
+  Critical: 'critical',
+};
+const EscalationIncidentStatus = {
+  Open: 'open',
+  Monitoring: 'monitoring',
+  Resolved: 'resolved',
+  Declined: 'declined',
+  Merged: 'merged',
+  Superseded: 'superseded',
+};
+const ESCALATION_DEDUPE_WINDOW_SECONDS = 30 * 60;
+const INCIDENT_HISTORY_LIMIT = 10;
 
 // AuntEDNA placeholder URLs (replace with real endpoints)
 const AUNTEDNA_BASE_URL = process.env.AUNTEDNA_API_URL || 'https://api.auntedna.com/v1';
 const AUNTEDNA_API_KEY = process.env.AUNTEDNA_API_KEY || '';
 const USE_MOCK = process.env.AUNTEDNA_MOCK === 'true' || !AUNTEDNA_API_KEY;
+
+function normalizeString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeCategoryValue(value) {
+  return normalizeString(value) || 'general';
+}
+
+function mapTierToSeverity(tier) {
+  switch (Number(tier) || 0) {
+    case EscalationTier.MonitorOnly:
+      return EscalationSeverity.Moderate;
+    case EscalationTier.ElevatedRisk:
+      return EscalationSeverity.High;
+    case EscalationTier.CriticalRisk:
+      return EscalationSeverity.Critical;
+    default:
+      return EscalationSeverity.None;
+  }
+}
+
+function deriveClassificationFamily({ tier, category }) {
+  const normalizedTier = Number(tier) || 0;
+  const normalizedCategory = normalizeCategoryValue(category).toLowerCase();
+  if (normalizedTier >= EscalationTier.CriticalRisk) return EscalationClassificationFamily.CriticalSafety;
+  if (normalizedTier >= EscalationTier.ElevatedRisk) return EscalationClassificationFamily.CareEscalation;
+  if (normalizedTier >= EscalationTier.MonitorOnly) return EscalationClassificationFamily.CoachReview;
+  if (normalizedCategory === 'performance_support') return EscalationClassificationFamily.PerformanceSupport;
+  return EscalationClassificationFamily.None;
+}
+
+function deriveDisposition({ tier, requiresClinicalHandoff, requiresCoachReview }) {
+  if (requiresClinicalHandoff || (Number(tier) || 0) >= EscalationTier.ElevatedRisk) {
+    return EscalationDisposition.ClinicalHandoff;
+  }
+  if (requiresCoachReview || (Number(tier) || 0) >= EscalationTier.MonitorOnly) {
+    return EscalationDisposition.CoachReview;
+  }
+  return EscalationDisposition.None;
+}
+
+function buildIncidentSeed({ conversationId, classificationFamily }) {
+  return {
+    scope: 'same_conversation',
+    status: EscalationIncidentStatus.Open,
+    conversationId,
+    dedupeWindowSeconds: ESCALATION_DEDUPE_WINDOW_SECONDS,
+    family: classificationFamily,
+  };
+}
+
+function sanitizeIncidentKeyPart(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'unknown';
+}
+
+function buildIncidentKeyCandidate({ userId, classificationFamily, category, createdAtSec }) {
+  const bucket = Math.floor(Number(createdAtSec || Math.floor(Date.now() / 1000)) / ESCALATION_DEDUPE_WINDOW_SECONDS);
+  return [
+    sanitizeIncidentKeyPart(userId),
+    sanitizeIncidentKeyPart(classificationFamily),
+    sanitizeIncidentKeyPart(category),
+    String(bucket),
+  ].join('::');
+}
+
+function appendBounded(entries = [], nextEntry) {
+  const existing = Array.isArray(entries) ? entries : [];
+  return [...existing, nextEntry].slice(-INCIDENT_HISTORY_LIMIT);
+}
+
+function buildIncidentRationaleEntry({ model, nowSec }) {
+  return {
+    at: nowSec,
+    tier: Number(model?.tier) || 0,
+    category: normalizeCategoryValue(model?.category),
+    classificationFamily: normalizeString(model?.classificationFamily) || EscalationClassificationFamily.None,
+    severity: normalizeString(model?.severity) || EscalationSeverity.None,
+    reason: normalizeString(model?.classificationReason || model?.reason),
+    explanation: normalizeString(model?.explanation) || undefined,
+  };
+}
+
+function buildIncidentEvidenceEntry({ triggerMessageId, sourceTriggerMessageId, conversationId, triggerContent, mergeStrategy, incidentKeyCandidate, nowSec }) {
+  return {
+    at: nowSec,
+    triggerMessageId: triggerMessageId || '',
+    sourceTriggerMessageId: sourceTriggerMessageId || triggerMessageId || '',
+    conversationId: conversationId || '',
+    triggerContent: String(triggerContent || '').slice(0, 500),
+    mergeStrategy: mergeStrategy || 'new',
+    incidentKeyCandidate: incidentKeyCandidate || '',
+  };
+}
+
+function buildIncidentLifecycleEntry(event, nowSec, detail) {
+  return {
+    at: nowSec,
+    event,
+    ...(detail ? { detail } : {}),
+  };
+}
+
+function deriveIncidentStatus({ requiresClinicalHandoff, requiresCoachReview }) {
+  if (requiresClinicalHandoff) return EscalationIncidentStatus.Open;
+  if (requiresCoachReview) return EscalationIncidentStatus.Monitoring;
+  return EscalationIncidentStatus.Open;
+}
+
+function normalizeEscalationModel(input = {}) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const tier = Number(input.tier);
+  const normalizedTier = Number.isFinite(tier)
+    ? Math.max(EscalationTier.None, Math.min(EscalationTier.CriticalRisk, Math.round(tier)))
+    : EscalationTier.None;
+  const requiresClinicalHandoff = input.requiresClinicalHandoff === true || normalizedTier >= EscalationTier.ElevatedRisk;
+  const requiresCoachReview = input.requiresCoachReview === true || normalizedTier >= EscalationTier.MonitorOnly;
+  const classificationFamily = normalizeString(input.classificationFamily)
+    || deriveClassificationFamily({ tier: normalizedTier, category: input.category });
+  const disposition = normalizeString(input.disposition)
+    || deriveDisposition({ tier: normalizedTier, requiresClinicalHandoff, requiresCoachReview });
+
+  return {
+    tier: normalizedTier,
+    category: normalizeCategoryValue(input.category),
+    classificationReason: normalizeString(input.classificationReason || input.reason),
+    explanation: normalizeString(input.explanation || input.classificationReason || input.reason),
+    classificationConfidence: Number.isFinite(Number(input.classificationConfidence ?? input.confidence))
+      ? Math.max(0, Math.min(1, Number(input.classificationConfidence ?? input.confidence)))
+      : 0,
+    disposition,
+    classificationFamily,
+    severity: normalizeString(input.severity) || mapTierToSeverity(normalizedTier),
+    requiresCoachReview,
+    requiresClinicalHandoff,
+    dedupeEligible: input.dedupeEligible !== false && normalizedTier >= EscalationTier.MonitorOnly,
+    countsTowardCareKpi: requiresClinicalHandoff,
+    sourceTriggerMessageId: normalizeString(input.sourceTriggerMessageId),
+    incident: {
+      ...buildIncidentSeed({
+        conversationId: normalizeString(input.conversationId),
+        classificationFamily,
+      }),
+      incidentKeyCandidate: normalizeString(input.incident?.incidentKeyCandidate)
+        || buildIncidentKeyCandidate({
+          userId: input.userId || 'athlete',
+          classificationFamily,
+          category: input.category,
+          createdAtSec: nowSec,
+        }),
+      canonicalIncidentKey: normalizeString(input.incident?.canonicalIncidentKey) || undefined,
+      mergedIntoIncidentKey: input.incident?.mergedIntoIncidentKey || null,
+      supersededByIncidentKey: input.incident?.supersededByIncidentKey || null,
+      sourceTriggerMessageId: normalizeString(input.incident?.sourceTriggerMessageId || input.sourceTriggerMessageId) || undefined,
+      ...(input.incident && typeof input.incident === 'object' ? input.incident : {}),
+    },
+  };
+}
+
+function buildEscalationRecordPayload({
+  userId,
+  conversationId,
+  triggerMessageId,
+  triggerContent,
+  model,
+  nowSec,
+  existingRecord = null,
+}) {
+  const consentStatus = model.requiresClinicalHandoff
+    ? (model.tier === EscalationTier.CriticalRisk ? ConsentStatus.NotRequired : ConsentStatus.Pending)
+    : ConsentStatus.NotRequired;
+  const baseIncident = existingRecord?.incident && typeof existingRecord.incident === 'object'
+    ? existingRecord.incident
+    : {};
+  const sourceTriggerMessageId = model.sourceTriggerMessageId || triggerMessageId || '';
+  const incidentKeyCandidate = normalizeString(model?.incident?.incidentKeyCandidate)
+    || buildIncidentKeyCandidate({
+      userId,
+      classificationFamily: model.classificationFamily,
+      category: model.category,
+      createdAtSec: nowSec,
+    });
+  const incidentStatus = deriveIncidentStatus({
+    requiresClinicalHandoff: model.requiresClinicalHandoff,
+    requiresCoachReview: model.requiresCoachReview,
+  });
+  const incident = {
+    ...buildIncidentSeed({
+      conversationId,
+      classificationFamily: model.classificationFamily,
+    }),
+    ...baseIncident,
+    status: incidentStatus,
+    conversationId,
+    openedAt: baseIncident.openedAt || existingRecord?.incidentOpenedAt || existingRecord?.createdAt || nowSec,
+    lastActivityAt: nowSec,
+    closedAt: null,
+    recordCount: Math.max(1, Number(baseIncident.recordCount || existingRecord?.incidentRecordCount || 0) || 0),
+    incidentKeyCandidate,
+    canonicalIncidentKey: normalizeString(baseIncident.canonicalIncidentKey || existingRecord?.incidentKeyCandidate || incidentKeyCandidate) || incidentKeyCandidate,
+    mergedIntoIncidentKey: baseIncident.mergedIntoIncidentKey || existingRecord?.mergedIntoIncidentKey || null,
+    supersededByIncidentKey: baseIncident.supersededByIncidentKey || existingRecord?.supersededByIncidentKey || null,
+    sourceTriggerMessageId,
+    lastTriggerMessageId: triggerMessageId || '',
+    lastTriggerContent: triggerContent || '',
+    rationaleHistory: appendBounded(
+      baseIncident.rationaleHistory,
+      buildIncidentRationaleEntry({ model, nowSec })
+    ),
+    evidenceTrail: appendBounded(
+      baseIncident.evidenceTrail,
+      buildIncidentEvidenceEntry({
+        triggerMessageId,
+        sourceTriggerMessageId,
+        conversationId,
+        triggerContent,
+        mergeStrategy: existingRecord ? 'same_conversation' : 'new',
+        incidentKeyCandidate,
+        nowSec,
+      })
+    ),
+    lifecycleEvents: appendBounded(
+      baseIncident.lifecycleEvents,
+      buildIncidentLifecycleEntry(existingRecord ? 'merged' : incidentStatus === EscalationIncidentStatus.Monitoring ? 'monitoring' : 'opened', nowSec)
+    ),
+  };
+
+  return {
+    userId,
+    conversationId,
+    tier: model.tier,
+    category: model.category,
+    triggerMessageId: triggerMessageId || '',
+    triggerContent: triggerContent || '',
+    classificationReason: model.classificationReason,
+    classificationConfidence: model.classificationConfidence,
+    disposition: model.disposition,
+    classificationFamily: model.classificationFamily,
+    explanation: model.explanation,
+    severity: model.severity,
+    requiresCoachReview: model.requiresCoachReview,
+    requiresClinicalHandoff: model.requiresClinicalHandoff,
+    dedupeEligible: model.dedupeEligible,
+    countsTowardCareKpi: model.countsTowardCareKpi,
+    sourceTriggerMessageId,
+    incidentKeyCandidate,
+    mergedIntoIncidentKey: incident.mergedIntoIncidentKey,
+    supersededByIncidentKey: incident.supersededByIncidentKey,
+    consentStatus,
+    handoffStatus: existingRecord?.handoffStatus || HandoffStatus.Pending,
+    coachNotified: Boolean(existingRecord?.coachNotified),
+    coachId: existingRecord?.coachId || undefined,
+    coachNotifiedAt: existingRecord?.coachNotifiedAt || null,
+    handoffInitiatedAt: existingRecord?.handoffInitiatedAt || null,
+    handoffAcceptedAt: existingRecord?.handoffAcceptedAt || null,
+    firstClinicianResponseAt: existingRecord?.firstClinicianResponseAt || null,
+    handoffCompletedAt: existingRecord?.handoffCompletedAt || null,
+    resolvedAt: null,
+    createdAt: existingRecord?.createdAt || nowSec,
+    status: EscalationRecordStatus.Active,
+    incident,
+    incidentId: existingRecord?.incidentId || existingRecord?.id || '',
+    incidentStatus: incidentStatus,
+    incidentOpenedAt: incident.openedAt,
+    incidentLastActivityAt: incident.lastActivityAt,
+    incidentClosedAt: null,
+    incidentRecordCount: incident.recordCount,
+  };
+}
+
+async function findMergeableEscalationRecord({ userId, conversationId, model }) {
+  if (!userId || !conversationId || (Number(model?.tier) || 0) <= EscalationTier.None) {
+    return null;
+  }
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const snapshot = await db.collection('escalation-records')
+    .where('userId', '==', userId)
+    .where('conversationId', '==', conversationId)
+    .where('status', '==', EscalationRecordStatus.Active)
+    .get();
+
+  const candidates = snapshot.docs
+    .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }))
+    .filter((entry) => entry.dedupeEligible !== false)
+    .filter((entry) => nowSec - Number(entry.createdAt || 0) <= ESCALATION_DEDUPE_WINDOW_SECONDS)
+    .sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0));
+
+  const sameConversation = candidates.find((entry) => entry.conversationId === conversationId);
+  if (sameConversation) {
+    return { ...sameConversation, mergeStrategy: 'same_conversation' };
+  }
+
+  const fallbackCandidate = candidates.find((entry) => {
+    const existingCandidate = normalizeString(entry?.incident?.incidentKeyCandidate || entry.incidentKeyCandidate);
+    const existingCanonical = normalizeString(entry?.incident?.canonicalIncidentKey);
+    const incomingCandidate = normalizeString(model?.incident?.incidentKeyCandidate)
+      || buildIncidentKeyCandidate({
+        userId,
+        classificationFamily: model?.classificationFamily,
+        category: model?.category,
+        createdAtSec: nowSec,
+      });
+    return existingCandidate === incomingCandidate || existingCanonical === incomingCandidate;
+  });
+
+  return fallbackCandidate ? { ...fallbackCandidate, mergeStrategy: 'fallback_key' } : null;
+}
 
 exports.handler = async (event, context) => {
   let requestBody = {};
@@ -120,7 +464,16 @@ async function handleCreateEscalation(body) {
     triggerMessageId,
     triggerContent,
     classificationReason,
-    classificationConfidence
+    classificationConfidence,
+    disposition,
+    classificationFamily,
+    explanation,
+    severity,
+    requiresCoachReview,
+    requiresClinicalHandoff,
+    dedupeEligible,
+    sourceTriggerMessageId,
+    incident,
   } = body;
 
   if (!userId || !conversationId || tier === undefined) {
@@ -128,63 +481,171 @@ async function handleCreateEscalation(body) {
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
-
-  // Create escalation record
-  const escalationData = {
+  const model = normalizeEscalationModel({
+    userId,
+    tier,
+    category,
+    conversationId,
+    classificationReason,
+    classificationConfidence,
+    disposition,
+    classificationFamily,
+    explanation,
+    severity,
+    requiresCoachReview,
+    requiresClinicalHandoff,
+    dedupeEligible,
+    sourceTriggerMessageId,
+    incident,
+  });
+  const existingRecord = await findMergeableEscalationRecord({
     userId,
     conversationId,
-    tier,
-    category: category || 'general',
-    triggerMessageId: triggerMessageId || '',
-    triggerContent: triggerContent || '',
-    classificationReason: classificationReason || '',
-    classificationConfidence: classificationConfidence || 0,
-    consentStatus: tier === EscalationTier.CriticalRisk ? ConsentStatus.NotRequired : ConsentStatus.Pending,
-    handoffStatus: HandoffStatus.Pending,
-    coachNotified: false,
-    coachNotifiedAt: null,
-    handoffInitiatedAt: null,
-    handoffAcceptedAt: null,
-    firstClinicianResponseAt: null,
-    handoffCompletedAt: null,
-    resolvedAt: null,
-    createdAt: nowSec,
-    status: EscalationRecordStatus.Active
-  };
-
-  const docRef = await db.collection('escalation-records').add(escalationData);
-  const escalationId = docRef.id;
-  await docRef.update({ id: escalationId });
-
-  await emitPilotMetricEvent({
-    db,
-    athleteId: userId,
-    eventType: 'escalation_created',
-    actorRole: 'system',
-    actorUserId: userId,
-    sourceCollection: 'escalation-records',
-    sourceDocumentId: escalationId,
-    metricPayload: {
-      tier,
-      category: category || 'general',
-      consentStatus: escalationData.consentStatus,
-    },
-    createdAt: nowSec * 1000,
+    model,
   });
+
+  let escalationId = existingRecord?.id || '';
+  let escalationData = null;
+  let createdNewRecord = false;
+  let deduped = false;
+
+  if (existingRecord?.id && model.dedupeEligible !== false) {
+    deduped = true;
+    const incomingIncidentKey = normalizeString(model?.incident?.incidentKeyCandidate || model.incidentKeyCandidate);
+    const existingCanonicalKey = normalizeString(existingRecord?.incident?.canonicalIncidentKey || existingRecord.incidentKeyCandidate || existingRecord.incidentId || existingRecord.id);
+    const upgradeToIncoming = model.requiresClinicalHandoff
+      || (Number(model.tier) || 0) > (Number(existingRecord.tier) || 0);
+    escalationData = buildEscalationRecordPayload({
+      userId,
+      conversationId,
+      triggerMessageId,
+      triggerContent,
+      model: upgradeToIncoming ? model : normalizeEscalationModel({
+        ...existingRecord,
+        conversationId,
+      }),
+      nowSec,
+      existingRecord,
+    });
+    escalationData.dedupeMergedCount = Number(existingRecord.dedupeMergedCount || 0) + 1;
+    escalationData.dedupeLastMergedAt = nowSec;
+    escalationData.dedupeLastTriggerMessageId = triggerMessageId || '';
+    escalationData.dedupeLastTriggerContent = triggerContent || '';
+    escalationData.dedupeLastClassificationReason = model.classificationReason || '';
+    escalationData.incident = {
+      ...(escalationData.incident || {}),
+      id: existingRecord.incidentId || existingRecord.id,
+      recordCount: Math.max(1, Number(existingRecord.incidentRecordCount || existingRecord?.incident?.recordCount || 1)) + 1,
+      lastActivityAt: nowSec,
+      canonicalIncidentKey: upgradeToIncoming && incomingIncidentKey ? incomingIncidentKey : existingCanonicalKey,
+      mergedIntoIncidentKey: existingRecord.mergeStrategy === 'fallback_key' && incomingIncidentKey && incomingIncidentKey !== existingCanonicalKey
+        ? existingCanonicalKey
+        : (escalationData.incident?.mergedIntoIncidentKey || null),
+      supersededByIncidentKey: upgradeToIncoming && incomingIncidentKey && incomingIncidentKey !== existingCanonicalKey
+        ? incomingIncidentKey
+        : (escalationData.incident?.supersededByIncidentKey || null),
+      sourceTriggerMessageId: model.sourceTriggerMessageId || triggerMessageId || '',
+      lastTriggerMessageId: triggerMessageId || '',
+      lastTriggerContent: triggerContent || '',
+      rationaleHistory: appendBounded(
+        escalationData.incident?.rationaleHistory,
+        buildIncidentRationaleEntry({ model, nowSec })
+      ),
+      evidenceTrail: appendBounded(
+        escalationData.incident?.evidenceTrail,
+        buildIncidentEvidenceEntry({
+          triggerMessageId,
+          sourceTriggerMessageId: model.sourceTriggerMessageId || triggerMessageId,
+          conversationId,
+          triggerContent,
+          mergeStrategy: existingRecord.mergeStrategy || 'same_conversation',
+          incidentKeyCandidate: incomingIncidentKey || escalationData.incident?.incidentKeyCandidate,
+          nowSec,
+        })
+      ),
+      lifecycleEvents: appendBounded(
+        escalationData.incident?.lifecycleEvents,
+        buildIncidentLifecycleEntry(
+          upgradeToIncoming && incomingIncidentKey && incomingIncidentKey !== existingCanonicalKey ? 'superseded' : 'merged',
+          nowSec,
+          existingRecord.mergeStrategy === 'fallback_key' ? 'fallback_grouping' : 'same_conversation'
+        )
+      ),
+    };
+    escalationData.incidentId = existingRecord.incidentId || existingRecord.id;
+    escalationData.incidentKeyCandidate = escalationData.incident.incidentKeyCandidate;
+    escalationData.mergedIntoIncidentKey = escalationData.incident.mergedIntoIncidentKey;
+    escalationData.supersededByIncidentKey = escalationData.incident.supersededByIncidentKey;
+    escalationData.sourceTriggerMessageId = escalationData.incident.sourceTriggerMessageId;
+    escalationData.incidentRecordCount = escalationData.incident.recordCount;
+    escalationData.incidentLastActivityAt = nowSec;
+    await db.collection('escalation-records').doc(existingRecord.id).set(escalationData, { merge: true });
+  } else {
+    escalationData = buildEscalationRecordPayload({
+      userId,
+      conversationId,
+      triggerMessageId,
+      triggerContent,
+      model,
+      nowSec,
+    });
+    const docRef = await db.collection('escalation-records').add(escalationData);
+    escalationId = docRef.id;
+    escalationData.id = escalationId;
+    escalationData.incidentId = escalationId;
+    escalationData.incident = {
+      ...(escalationData.incident || {}),
+      id: escalationId,
+    };
+    escalationData.incidentRecordCount = Math.max(1, Number(escalationData.incidentRecordCount || 1));
+    await docRef.update({
+      id: escalationId,
+      incidentId: escalationId,
+      incident: escalationData.incident,
+    });
+    createdNewRecord = true;
+  }
+
+  if (createdNewRecord) {
+    await emitPilotMetricEvent({
+      db,
+      athleteId: userId,
+      eventType: 'escalation_created',
+      actorRole: 'system',
+      actorUserId: userId,
+      sourceCollection: 'escalation-records',
+      sourceDocumentId: escalationId,
+      metricPayload: {
+        tier: escalationData.tier,
+        category: escalationData.category,
+        disposition: escalationData.disposition,
+        classificationFamily: escalationData.classificationFamily,
+        requiresClinicalHandoff: escalationData.requiresClinicalHandoff,
+        countsTowardCareKpi: escalationData.countsTowardCareKpi,
+        consentStatus: escalationData.consentStatus,
+      },
+      createdAt: nowSec * 1000,
+    });
+  }
 
   await refreshPilotOutcomeRollupsForAthlete(userId, nowSec * 1000);
 
   // Update conversation with escalation state
+  const activeTier = isTrueCareEscalationClassification({
+    tier: escalationData.tier,
+    classificationFamily: escalationData.classificationFamily,
+    requiresClinicalHandoff: escalationData.requiresClinicalHandoff,
+  }) ? escalationData.tier : EscalationTier.None;
   await db.collection('conversations').doc(conversationId).set({
-    escalationTier: tier,
+    escalationTier: activeTier,
     escalationStatus: EscalationRecordStatus.Active,
     escalationRecordId: escalationId,
-    isInSafetyMode: tier === EscalationTier.CriticalRisk,
+    isInSafetyMode: activeTier === EscalationTier.CriticalRisk,
     lastEscalationAt: nowSec
   }, { merge: true });
 
   // For Tier 3 (Critical), immediately initiate handoff
-  if (tier === EscalationTier.CriticalRisk) {
+  if (activeTier === EscalationTier.CriticalRisk) {
     // Trigger async handoff (don't wait)
     triggerCriticalHandoff(userId, conversationId, escalationId, escalationData).catch(err => {
       console.error('[pulsecheck-escalation] Critical handoff error:', err);
@@ -204,9 +665,10 @@ async function handleCreateEscalation(body) {
     body: JSON.stringify({
       success: true,
       escalationId,
-      tier,
-      requiresConsent: tier === EscalationTier.ElevatedRisk,
-      isCritical: tier === EscalationTier.CriticalRisk
+      tier: escalationData.tier,
+      deduped,
+      requiresConsent: activeTier === EscalationTier.ElevatedRisk,
+      isCritical: activeTier === EscalationTier.CriticalRisk
     })
   };
 }
@@ -241,7 +703,19 @@ async function handleConsent(body) {
     // User accepted - initiate clinical handoff
     await docRef.update({
       consentStatus: ConsentStatus.Accepted,
-      consentTimestamp: nowSec
+      consentTimestamp: nowSec,
+      incidentStatus: EscalationIncidentStatus.Open,
+      incidentLastActivityAt: nowSec,
+      incident: {
+        ...((data.incident && typeof data.incident === 'object') ? data.incident : {}),
+        id: data.incidentId || escalationId,
+        status: EscalationIncidentStatus.Open,
+        lastActivityAt: nowSec,
+        lifecycleEvents: appendBounded(
+          data?.incident?.lifecycleEvents,
+          buildIncidentLifecycleEntry('opened', nowSec, 'consent_accepted')
+        ),
+      },
     });
 
     // Trigger handoff
@@ -267,7 +741,21 @@ async function handleConsent(body) {
     await docRef.update({
       consentStatus: ConsentStatus.Declined,
       consentTimestamp: nowSec,
-      status: EscalationRecordStatus.Declined
+      status: EscalationRecordStatus.Declined,
+      incidentStatus: EscalationIncidentStatus.Declined,
+      incidentClosedAt: nowSec,
+      incidentLastActivityAt: nowSec,
+      incident: {
+        ...((data.incident && typeof data.incident === 'object') ? data.incident : {}),
+        id: data.incidentId || escalationId,
+        status: EscalationIncidentStatus.Declined,
+        lastActivityAt: nowSec,
+        closedAt: nowSec,
+        lifecycleEvents: appendBounded(
+          data?.incident?.lifecycleEvents,
+          buildIncidentLifecycleEntry('declined', nowSec, 'consent_declined')
+        ),
+      },
     });
 
     // Update conversation state
@@ -463,12 +951,24 @@ async function notifyCoach(body) {
     console.warn('[pulsecheck-escalation] Failed to load escalation tier (non-blocking):', e?.message || e);
   }
 
+  const escalationSnapForUpdate = await db.collection('escalation-records').doc(escalationId).get();
+  const escalationForUpdate = escalationSnapForUpdate.exists ? (escalationSnapForUpdate.data() || {}) : {};
+
   // Update escalation record
   await db.collection('escalation-records').doc(escalationId).update({
     coachNotified: true,
     coachId: targetCoachId,
-    coachNotifiedAt: nowSec
+    coachNotifiedAt: nowSec,
+    incidentLastActivityAt: nowSec,
   });
+  await db.collection('escalation-records').doc(escalationId).set({
+    incident: {
+      ...((escalationForUpdate.incident && typeof escalationForUpdate.incident === 'object') ? escalationForUpdate.incident : {}),
+      id: escalationForUpdate.incidentId || escalationId,
+      status: escalationForUpdate.incidentStatus || EscalationIncidentStatus.Open,
+      lastActivityAt: nowSec,
+    },
+  }, { merge: true });
 
   await emitPilotMetricEvent({
     db,
@@ -478,12 +978,22 @@ async function notifyCoach(body) {
     actorUserId: targetCoachId,
     sourceCollection: 'escalation-records',
     sourceDocumentId: escalationId,
-    metricPayload: {
-      coachId: targetCoachId,
-      tier,
-    },
-    createdAt: nowSec * 1000,
-  });
+      metricPayload: {
+        coachId: targetCoachId,
+        tier,
+        disposition: escalationForUpdate.disposition || deriveDisposition({
+          tier,
+          requiresClinicalHandoff: escalationForUpdate.requiresClinicalHandoff === true,
+          requiresCoachReview: escalationForUpdate.requiresCoachReview !== false,
+        }),
+        classificationFamily: escalationForUpdate.classificationFamily || deriveClassificationFamily({
+          tier,
+          category: escalationForUpdate.category,
+        }),
+        countsTowardCareKpi: escalationForUpdate.countsTowardCareKpi === true,
+      },
+      createdAt: nowSec * 1000,
+    });
 
   await refreshPilotOutcomeRollupsForAthlete(userId, nowSec * 1000);
 
@@ -650,13 +1160,29 @@ async function handleResolve(body) {
   await db.collection('escalation-records').doc(escalationId).update({
     status: EscalationRecordStatus.Resolved,
     resolvedAt: nowSec,
-    resolvedBy: resolvedBy || 'system'
+    resolvedBy: resolvedBy || 'system',
+    incidentStatus: EscalationIncidentStatus.Resolved,
+    incidentClosedAt: nowSec,
+    incidentLastActivityAt: nowSec,
   });
 
   // Update conversation state
   const escalationDoc = await db.collection('escalation-records').doc(escalationId).get();
   if (escalationDoc.exists) {
     const data = escalationDoc.data();
+    await db.collection('escalation-records').doc(escalationId).set({
+      incident: {
+        ...((data.incident && typeof data.incident === 'object') ? data.incident : {}),
+        id: data.incidentId || escalationId,
+        status: EscalationIncidentStatus.Resolved,
+        lastActivityAt: nowSec,
+        closedAt: nowSec,
+        lifecycleEvents: appendBounded(
+          data?.incident?.lifecycleEvents,
+          buildIncidentLifecycleEntry('resolved', nowSec, normalizeString(resolvedBy) || 'system')
+        ),
+      },
+    }, { merge: true });
     await db.collection('conversations').doc(data.conversationId).set({
       escalationStatus: EscalationRecordStatus.Resolved,
       isInSafetyMode: false
@@ -697,6 +1223,50 @@ async function refreshPilotOutcomeRollupsForAthlete(userId, timestampMs) {
       pilotId: pilotContext.pilotId,
       explicitDateKeys: [new Date(Number(timestampMs || Date.now())).toISOString().slice(0, 10)],
     });
+
+    const workflowContinuity = await evaluateCoachWorkflowContinuity({
+      db,
+      pilotContext,
+      sampleLimit: 8,
+    });
+
+    if (workflowContinuity?.pilotId) {
+      await writePilotMetricOpsStatus({
+        db,
+        pilotId: pilotContext.pilotId,
+        scope: 'coach_workflow_continuity',
+        status: workflowContinuity.manualReviewRequired ? 'warning' : 'healthy',
+        details: {
+          athleteId: normalizedUserId,
+          coachWorkflowEligibleTotal: workflowContinuity.coachWorkflowEligibleTotal || 0,
+          coachWorkflowVisibleTotal: workflowContinuity.coachWorkflowVisibleTotal || 0,
+          coachWorkflowActionableTotal: workflowContinuity.coachWorkflowActionableTotal || 0,
+          coachWorkflowVisibilityGapTotal: workflowContinuity.coachWorkflowVisibilityGapTotal || 0,
+          visibilityRate: workflowContinuity.visibilityRate,
+          actionableRate: workflowContinuity.actionableRate,
+          manualReviewRequired: Boolean(workflowContinuity.manualReviewRequired),
+          samples: workflowContinuity.samples || [],
+        },
+      });
+
+      if (workflowContinuity.manualReviewRequired) {
+        await recordPilotMetricAlert({
+          db,
+          pilotId: pilotContext.pilotId,
+          scope: 'coach_workflow_continuity',
+          severity: 'warning',
+          message: 'Coach-review workflow continuity needs manual review after disposition update.',
+          context: {
+            athleteId: normalizedUserId,
+            coachWorkflowEligibleTotal: workflowContinuity.coachWorkflowEligibleTotal || 0,
+            coachWorkflowVisibleTotal: workflowContinuity.coachWorkflowVisibleTotal || 0,
+            coachWorkflowActionableTotal: workflowContinuity.coachWorkflowActionableTotal || 0,
+            coachWorkflowVisibilityGapTotal: workflowContinuity.coachWorkflowVisibilityGapTotal || 0,
+            samples: workflowContinuity.samples || [],
+          },
+        });
+      }
+    }
   } catch (error) {
     console.warn('[pulsecheck-escalation] Failed to refresh pilot outcome rollups (non-blocking):', error?.message || error);
     try {
@@ -727,6 +1297,23 @@ async function refreshPilotOutcomeRollupsForAthlete(userId, timestampMs) {
  * Perform clinical handoff to AuntEDNA
  */
 async function performClinicalHandoff(userId, conversationId, escalationId, escalationData) {
+  if (escalationData?.handoffStatus === HandoffStatus.Completed && escalationData?.clinicalReferenceId) {
+    return {
+      success: true,
+      escalationId: escalationData.clinicalReferenceId,
+      deduped: true,
+      status: 'already_completed',
+    };
+  }
+  if (escalationData?.handoffStatus === HandoffStatus.Initiated) {
+    return {
+      success: true,
+      deduped: true,
+      status: 'already_initiated',
+      escalationId: escalationData?.clinicalReferenceId || null,
+    };
+  }
+
   // Load user profile
   const userDoc = await db.collection('users').doc(userId).get();
   const userData = userDoc.exists ? userDoc.data() : {};
@@ -797,8 +1384,22 @@ async function performClinicalHandoff(userId, conversationId, escalationId, esca
   const initiatedAt = Math.floor(Date.now() / 1000);
   await db.collection('escalation-records').doc(escalationId).update({
     handoffStatus: HandoffStatus.Initiated,
-    handoffInitiatedAt: initiatedAt
+    handoffInitiatedAt: initiatedAt,
+    incidentStatus: EscalationIncidentStatus.Open,
+    incidentLastActivityAt: initiatedAt,
   });
+  await db.collection('escalation-records').doc(escalationId).set({
+    incident: {
+      ...((escalationData.incident && typeof escalationData.incident === 'object') ? escalationData.incident : {}),
+      id: escalationData.incidentId || escalationId,
+      status: EscalationIncidentStatus.Open,
+      lastActivityAt: initiatedAt,
+      lifecycleEvents: appendBounded(
+        escalationData?.incident?.lifecycleEvents,
+        buildIncidentLifecycleEntry('opened', initiatedAt, 'care_handoff_initiated')
+      ),
+    },
+  }, { merge: true });
 
   await emitPilotMetricEvent({
     db,
@@ -808,13 +1409,16 @@ async function performClinicalHandoff(userId, conversationId, escalationId, esca
     actorUserId: userId,
     sourceCollection: 'escalation-records',
     sourceDocumentId: escalationId,
-    metricPayload: {
-      tier: escalationData.tier,
-      category: escalationData.category,
-      handoffStatus: HandoffStatus.Initiated,
-    },
-    createdAt: initiatedAt * 1000,
-  });
+      metricPayload: {
+        tier: escalationData.tier,
+        category: escalationData.category,
+        handoffStatus: HandoffStatus.Initiated,
+        disposition: escalationData.disposition,
+        classificationFamily: escalationData.classificationFamily,
+        countsTowardCareKpi: escalationData.countsTowardCareKpi !== false,
+      },
+      createdAt: initiatedAt * 1000,
+    });
 
   await refreshPilotOutcomeRollupsForAthlete(userId, initiatedAt * 1000);
 
@@ -853,8 +1457,21 @@ async function performClinicalHandoff(userId, conversationId, escalationId, esca
       handoffStatus: HandoffStatus.Completed,
       clinicalReferenceId: result.escalationId,
       handoffAcceptedAt: completedAt,
-      handoffCompletedAt: completedAt
+      handoffCompletedAt: completedAt,
+      incidentLastActivityAt: completedAt,
     });
+    await db.collection('escalation-records').doc(escalationId).set({
+      incident: {
+        ...((escalationData.incident && typeof escalationData.incident === 'object') ? escalationData.incident : {}),
+        id: escalationData.incidentId || escalationId,
+        status: EscalationIncidentStatus.Open,
+        lastActivityAt: completedAt,
+        lifecycleEvents: appendBounded(
+          escalationData?.incident?.lifecycleEvents,
+          buildIncidentLifecycleEntry('opened', completedAt, 'care_handoff_completed')
+        ),
+      },
+    }, { merge: true });
 
     await emitPilotMetricEvent({
       db,
@@ -868,6 +1485,9 @@ async function performClinicalHandoff(userId, conversationId, escalationId, esca
         tier: escalationData.tier,
         category: escalationData.category,
         clinicalReferenceId: result.escalationId || null,
+        disposition: escalationData.disposition,
+        classificationFamily: escalationData.classificationFamily,
+        countsTowardCareKpi: escalationData.countsTowardCareKpi !== false,
       },
       createdAt: completedAt * 1000,
     });

@@ -208,6 +208,305 @@ test('savePilotSurveyResponse persists the trust battery payload and emits match
   assert.deepEqual(eventDocTypes(db), ['survey_submitted', 'trust_submitted']);
 });
 
+test('buildPilotSurveyReclassificationReport flags legacy trust responses for normalization and event backfill', async () => {
+  const { buildPilotSurveyReclassificationReport } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db);
+
+  db.seedDoc('pulsecheck-pilot-survey-responses', 'legacy-trust-1', {
+    id: 'legacy-trust-1',
+    pilotId: context.pilotId,
+    pilotEnrollmentId: '',
+    organizationId: '',
+    teamId: '',
+    respondentUserId: context.athleteId,
+    role: 'player',
+    kind: 'athlete_trust',
+    rating: 7.6,
+    source: '',
+    createdAt: NOW_MS - DAY_MS,
+    diagnosticBattery: {
+      items: [
+        { key: 'credibility', score: 8 },
+        { key: 'reliability', score: 7 },
+      ],
+    },
+  });
+
+  const report = await runWithNow(NOW_MS, async () => buildPilotSurveyReclassificationReport({
+    db,
+    pilotId: context.pilotId,
+    sampleLimit: 5,
+    actorUserId: 'admin-1',
+    persistRun: false,
+  }));
+
+  assert.equal(report.totalSurveyResponseCount, 1);
+  assert.equal(report.applyReadyCount, 1);
+  assert.equal(report.needsDocumentUpdateCount, 1);
+  assert.equal(report.needsEventBackfillCount, 1);
+  assert.equal(report.blockedCount, 0);
+  assert.deepEqual(report.samples[0].missingEventTypes.sort(), ['survey_submitted', 'trust_submitted']);
+  assert.equal(report.samples[0].patchPreview.surveyKind, 'trust');
+  assert.equal(report.samples[0].patchPreview.respondentRole, 'athlete');
+  assert.equal(report.samples[0].patchPreview.organizationId, context.organizationId);
+  assert.equal(report.samples[0].patchPreview.teamId, context.teamId);
+});
+
+test('applyPilotSurveyReclassification normalizes legacy survey docs, backfills events, and can skip recompute', async () => {
+  const { applyPilotSurveyReclassification } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db);
+
+  db.seedDoc('pulsecheck-pilot-survey-responses', 'legacy-nps-1', {
+    id: 'legacy-nps-1',
+    pilotId: context.pilotId,
+    organizationId: context.organizationId,
+    teamId: context.teamId,
+    respondentUserId: context.athleteId,
+    role: 'student-athlete',
+    type: 'recommendation',
+    value: 9,
+    submittedAtMs: NOW_MS - (2 * DAY_MS),
+    source: 'ios',
+  });
+
+  const result = await runWithNow(NOW_MS, async () => applyPilotSurveyReclassification({
+    db,
+    pilotId: context.pilotId,
+    actorUserId: 'admin-1',
+    sampleLimit: 5,
+    recomputeRollups: false,
+  }));
+
+  assert.equal(result.appliedCount, 1);
+  assert.equal(result.recompute, null);
+
+  const updatedDoc = db.getDoc('pulsecheck-pilot-survey-responses', 'legacy-nps-1');
+  assert.equal(updatedDoc.surveyKind, 'nps');
+  assert.equal(updatedDoc.respondentRole, 'athlete');
+  assert.equal(updatedDoc.score, 9);
+  assert.equal(updatedDoc.athleteId, context.athleteId);
+  assert.equal(updatedDoc.migration.lastAppliedKey, 'pilot_outcome_survey_reclassification_v1');
+
+  assert.deepEqual(eventDocTypes(db), ['nps_submitted', 'survey_submitted']);
+
+  const migrationRuns = db.getCollectionDocs(`pulsecheck-pilot-metric-ops/${context.pilotId}/migrations`);
+  assert.equal(migrationRuns.length, 1);
+  assert.equal(migrationRuns[0].data.mode, 'apply');
+});
+
+test('buildPilotEscalationReclassificationReport flags benign support records and same-conversation duplicate care escalations', async () => {
+  const { buildPilotEscalationReclassificationReport } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, {
+    pilotId: 'pilot-escalation-migration-report',
+    pilotEnrollmentId: 'pilot-enrollment-escalation-migration-report',
+    pilotStartAt: NOW_MS - 14 * DAY_MS,
+    pilotEndAt: NOW_MS + DAY_MS,
+  });
+
+  db.seedDoc('escalation-records', 'legacy-benign', {
+    id: 'legacy-benign',
+    userId: context.athleteId,
+    conversationId: 'conversation-benign',
+    tier: 1,
+    category: 'general',
+    status: 'active',
+    createdAt: NOW_MS - 3 * DAY_MS,
+    triggerContent: 'I feel nervous about competition and want help regulating my focus before I compete.',
+    classificationReason: 'Competition stress',
+  });
+
+  db.seedDoc('escalation-records', 'legacy-care-primary', {
+    id: 'legacy-care-primary',
+    userId: context.athleteId,
+    conversationId: 'conversation-care',
+    tier: 2,
+    category: 'general',
+    status: 'active',
+    createdAt: NOW_MS - 2 * DAY_MS,
+    triggerContent: 'I cannot stay safe and need help right now.',
+    classificationReason: 'Safety concern',
+  });
+
+  db.seedDoc('escalation-records', 'legacy-care-duplicate', {
+    id: 'legacy-care-duplicate',
+    userId: context.athleteId,
+    conversationId: 'conversation-care',
+    tier: 2,
+    category: 'general',
+    status: 'active',
+    createdAt: NOW_MS - 2 * DAY_MS + 10 * 60 * 1000,
+    triggerContent: 'I still cannot stay safe and need help again.',
+    classificationReason: 'Safety concern',
+  });
+
+  const report = await runWithNow(NOW_MS, () => buildPilotEscalationReclassificationReport({
+    db,
+    pilotId: context.pilotId,
+    sampleLimit: 10,
+    persistRun: false,
+  }));
+
+  assert.equal(report.totalEscalationRecordCount, 3);
+  assert.equal(report.needsDocumentUpdateCount, 3);
+  assert.equal(report.mergedCount, 1);
+  assert.equal(report.groupedIncidentCount, 1);
+
+  const benignSample = report.samples.find((entry) => entry.recordId === 'legacy-benign');
+  assert.ok(benignSample);
+  assert.equal(benignSample.targetTier, 0);
+  assert.equal(benignSample.targetDisposition, 'none');
+  assert.equal(benignSample.targetClassificationFamily, 'performance_support');
+
+  const duplicateSample = report.samples.find((entry) => entry.recordId === 'legacy-care-duplicate');
+  assert.ok(duplicateSample);
+  assert.equal(duplicateSample.mergedIntoIncidentKey, 'legacy-care-primary');
+  assert.equal(duplicateSample.patchPreview.excludedFromHeadlineMetrics, true);
+});
+
+test('applyPilotEscalationReclassification normalizes historical escalation records and recomputes care-escalation headline counts', async () => {
+  const { applyPilotEscalationReclassification } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, {
+    pilotId: 'pilot-escalation-migration-apply',
+    pilotEnrollmentId: 'pilot-enrollment-escalation-migration-apply',
+    pilotStartAt: NOW_MS - 14 * DAY_MS,
+    pilotEndAt: NOW_MS + DAY_MS,
+  });
+
+  db.seedDoc('escalation-records', 'legacy-benign', {
+    id: 'legacy-benign',
+    userId: context.athleteId,
+    conversationId: 'conversation-benign',
+    tier: 1,
+    category: 'general',
+    status: 'active',
+    createdAt: NOW_MS - 3 * DAY_MS,
+    triggerContent: 'I am nervous about competition and my sleep has been off.',
+    classificationReason: 'Performance stress',
+  });
+
+  db.seedDoc('escalation-records', 'legacy-care-primary', {
+    id: 'legacy-care-primary',
+    userId: context.athleteId,
+    conversationId: 'conversation-care',
+    tier: 2,
+    category: 'general',
+    status: 'active',
+    createdAt: NOW_MS - 2 * DAY_MS,
+    triggerContent: 'I cannot stay safe and need help right now.',
+    classificationReason: 'Safety concern',
+  });
+
+  db.seedDoc('escalation-records', 'legacy-care-duplicate', {
+    id: 'legacy-care-duplicate',
+    userId: context.athleteId,
+    conversationId: 'conversation-care',
+    tier: 2,
+    category: 'general',
+    status: 'active',
+    createdAt: NOW_MS - 2 * DAY_MS + 10 * 60 * 1000,
+    triggerContent: 'I still cannot stay safe and need help again.',
+    classificationReason: 'Safety concern',
+  });
+
+  const result = await runWithNow(NOW_MS, () => applyPilotEscalationReclassification({
+    db,
+    pilotId: context.pilotId,
+    actorUserId: 'admin-user',
+    sampleLimit: 10,
+    recomputeRollups: true,
+    recomputeLookbackDays: 30,
+  }));
+
+  assert.equal(result.appliedCount, 3);
+
+  const benign = db.getDoc('escalation-records', 'legacy-benign');
+  assert.equal(benign.disposition, 'none');
+  assert.equal(benign.classificationFamily, 'performance_support');
+  assert.equal(benign.tier, 0);
+  assert.equal(benign.excludedFromHeadlineMetrics, true);
+  assert.equal(benign.legacyClassification, true);
+
+  const duplicate = db.getDoc('escalation-records', 'legacy-care-duplicate');
+  assert.equal(duplicate.disposition, 'coach_review');
+  assert.equal(duplicate.classificationFamily, 'coach_review');
+  assert.equal(duplicate.tier, 1);
+  assert.equal(duplicate.mergedIntoIncidentKey, 'legacy-care-primary');
+  assert.equal(duplicate.supersededByIncidentKey, 'legacy-care-primary');
+  assert.equal(duplicate.excludedFromHeadlineMetrics, true);
+
+  const primary = db.getDoc('escalation-records', 'legacy-care-primary');
+  assert.equal(primary.disposition, 'clinical_handoff');
+  assert.equal(primary.classificationFamily, 'critical_safety');
+  assert.equal(primary.incidentId, 'legacy-care-primary');
+  assert.equal(primary.incidentRecordCount, 2);
+
+  assert.ok(result.recompute);
+  assert.equal(result.recompute.rollups.current.metrics.escalationsTotal, 1);
+  assert.equal(result.recompute.rollups.current.diagnostics.escalations.coachReviewOnlyTotal, 2);
+  assert.equal(result.recompute.rollups.current.diagnostics.escalations.allOperationalEscalationsTotal, 3);
+
+  const migrationRuns = db.getCollectionDocs(`pulsecheck-pilot-metric-ops/${context.pilotId}/migrations`);
+  assert.ok(migrationRuns.some((entry) => entry.data.migrationKey === 'pilot_outcome_escalation_reclassification_v1'));
+});
+
+test('applyPilotSurveyReclassification is repeat-safe and preserves migration audit metadata on rerun', async () => {
+  const { applyPilotSurveyReclassification } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db);
+
+  db.seedDoc('pulsecheck-pilot-survey-responses', 'legacy-nps-1', {
+    id: 'legacy-nps-1',
+    pilotId: context.pilotId,
+    organizationId: context.organizationId,
+    teamId: context.teamId,
+    respondentUserId: context.athleteId,
+    role: 'student-athlete',
+    type: 'recommendation',
+    value: 9,
+    submittedAtMs: NOW_MS - (2 * DAY_MS),
+    source: 'ios',
+  });
+
+  const first = await runWithNow(NOW_MS, async () => applyPilotSurveyReclassification({
+    db,
+    pilotId: context.pilotId,
+    actorUserId: 'admin-1',
+    sampleLimit: 5,
+    recomputeRollups: false,
+  }));
+
+  const firstDoc = db.getDoc('pulsecheck-pilot-survey-responses', 'legacy-nps-1');
+  const firstMigrationStamp = firstDoc.migration.lastAppliedAtMs;
+
+  const second = await runWithNow(NOW_MS, async () => applyPilotSurveyReclassification({
+    db,
+    pilotId: context.pilotId,
+    actorUserId: 'admin-1',
+    sampleLimit: 5,
+    recomputeRollups: false,
+  }));
+
+  assert.equal(first.appliedCount, 1);
+  assert.equal(first.recompute, null);
+  assert.equal(second.appliedCount, 0);
+  assert.equal(second.recompute, null);
+  assert.equal(db.getCollectionDocs('pulsecheck-pilot-metric-events').length, 2);
+  assert.equal(db.getCollectionDocs(`pulsecheck-pilot-metric-ops/${context.pilotId}/migrations`).length, 2);
+
+  const secondDoc = db.getDoc('pulsecheck-pilot-survey-responses', 'legacy-nps-1');
+  assert.equal(secondDoc.migration.lastAppliedKey, 'pilot_outcome_survey_reclassification_v1');
+  assert.equal(secondDoc.migration.lastAppliedAtMs, firstMigrationStamp);
+  assert.equal(secondDoc.migration.lastAppliedBy, 'admin-1');
+  assert.equal(second.report.applyReadyCount, 0);
+  assert.equal(second.report.needsDocumentUpdateCount, 0);
+  assert.equal(second.report.needsEventBackfillCount, 0);
+  assert.equal(db.getCollectionDocs(`pulsecheck-pilot-metric-ops/${context.pilotId}/migrations`)[1].data.appliedMutationIds.length, 0);
+});
+
 test('computePilotOutcomeRollup keeps empty denominators finite and zeroed', async () => {
   const { computePilotOutcomeRollup } = loadPulsecheckMetrics();
   const { db } = createPulsecheckFirestore();
@@ -736,7 +1035,156 @@ test('computePilotOutcomeRollup excludes withdrawn, paused, escalation-hold, and
   assert.equal(rollup.metrics.assignmentCompletionRate, 100);
 });
 
-test('computePilotOutcomeRollup counts escalation tiers and preserves speed-to-care median across mixed escalation statuses', async () => {
+test('computePilotOutcomeRollup excludes the day after withdrawal from the daily denominator', async () => {
+  const { computePilotOutcomeRollup } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const pilotId = 'pilot-withdrawal-boundary';
+  const organizationId = 'org-withdrawal-boundary';
+  const teamId = 'team-withdrawal-boundary';
+  const day29Ms = NOW_MS - DAY_MS;
+  const day30Ms = NOW_MS;
+
+  db.seedDoc('pulsecheck-pilots', pilotId, {
+    id: pilotId,
+    organizationId,
+    teamId,
+    status: 'active',
+    startAt: day29Ms,
+    endAt: day30Ms,
+  });
+
+  db.seedDoc('pulsecheck-team-memberships', 'membership-withdrawal-boundary', {
+    id: 'membership-withdrawal-boundary',
+    userId: 'athlete-withdrawal-boundary',
+    role: 'athlete',
+    organizationId,
+    teamId,
+    athleteOnboarding: {
+      baselinePathStatus: 'complete',
+      entryOnboardingStep: 'complete',
+      productConsentAccepted: true,
+      completedConsentIds: [],
+      requiredConsentIds: [],
+    },
+  });
+
+  db.seedDoc('pulsecheck-pilot-enrollments', 'enrollment-withdrawal-boundary', {
+    id: 'enrollment-withdrawal-boundary',
+    pilotId,
+    userId: 'athlete-withdrawal-boundary',
+    organizationId,
+    teamId,
+    cohortId: 'alpha',
+    teamMembershipId: 'membership-withdrawal-boundary',
+    status: 'withdrawn',
+    createdAt: day29Ms,
+    updatedAt: day29Ms,
+  });
+
+  db.seedDoc('pulsecheck-pilot-metric-events', 'withdrawal-boundary-activate', {
+    id: 'withdrawal-boundary-activate',
+    pilotId,
+    pilotEnrollmentId: 'enrollment-withdrawal-boundary',
+    organizationId,
+    teamId,
+    cohortId: 'alpha',
+    athleteId: 'athlete-withdrawal-boundary',
+    actorRole: 'system',
+    eventType: 'pilot_enrollment_activated',
+    sourceCollection: 'pulsecheck-pilot-enrollments',
+    sourceDocumentId: 'enrollment-withdrawal-boundary',
+    sourceDate: '2026-03-29',
+    metricPayload: {},
+    createdAt: day29Ms + 8 * 60 * 60 * 1000,
+  });
+
+  db.seedDoc('pulsecheck-pilot-metric-events', 'withdrawal-boundary-checkin-29', {
+    id: 'withdrawal-boundary-checkin-29',
+    pilotId,
+    pilotEnrollmentId: 'enrollment-withdrawal-boundary',
+    organizationId,
+    teamId,
+    cohortId: 'alpha',
+    athleteId: 'athlete-withdrawal-boundary',
+    actorRole: 'athlete',
+    eventType: 'daily_checkin_completed',
+    sourceCollection: 'state-snapshots',
+    sourceDocumentId: 'withdrawal-boundary-checkin-29',
+    sourceDate: '2026-03-29',
+    metricPayload: { readinessScore: 7 },
+    createdAt: day29Ms + 10 * 60 * 60 * 1000,
+  });
+
+  db.seedDoc('pulsecheck-daily-assignments', 'withdrawal-boundary-assignment-29', {
+    id: 'withdrawal-boundary-assignment-29',
+    pilotId,
+    pilotEnrollmentId: 'enrollment-withdrawal-boundary',
+    organizationId,
+    teamId,
+    athleteId: 'athlete-withdrawal-boundary',
+    sourceDate: '2026-03-29',
+    actionType: 'protocol',
+    status: 'completed',
+    sourceStateSnapshotId: null,
+    updatedAt: day29Ms + 11 * 60 * 60 * 1000,
+  });
+
+  db.seedDoc('pulsecheck-pilot-metric-events', 'withdrawal-boundary-assignment-29-complete', {
+    id: 'withdrawal-boundary-assignment-29-complete',
+    pilotId,
+    pilotEnrollmentId: 'enrollment-withdrawal-boundary',
+    organizationId,
+    teamId,
+    cohortId: 'alpha',
+    athleteId: 'athlete-withdrawal-boundary',
+    actorRole: 'athlete',
+    eventType: 'daily_assignment_completed',
+    sourceCollection: 'pulsecheck-daily-assignments',
+    sourceDocumentId: 'withdrawal-boundary-assignment-29',
+    sourceDate: '2026-03-29',
+    metricPayload: { actionType: 'protocol' },
+    createdAt: day29Ms + 11 * 60 * 60 * 1000,
+  });
+
+  const day29Rollup = await runWithNow(NOW_MS, () => computePilotOutcomeRollup({
+    db,
+    pilotId,
+    window: 'daily',
+    explicitDateKey: '2026-03-29',
+    pilot: {
+      id: pilotId,
+      organizationId,
+      teamId,
+      status: 'active',
+      startAt: day29Ms,
+      endAt: day30Ms,
+    },
+  }));
+
+  const day30Rollup = await runWithNow(NOW_MS, () => computePilotOutcomeRollup({
+    db,
+    pilotId,
+    window: 'daily',
+    explicitDateKey: '2026-03-30',
+    pilot: {
+      id: pilotId,
+      organizationId,
+      teamId,
+      status: 'active',
+      startAt: day29Ms,
+      endAt: day30Ms,
+    },
+  }));
+
+  assert.equal(day29Rollup.diagnostics.adherence.expectedAthleteDays, 1);
+  assert.equal(day29Rollup.diagnostics.adherence.completedCheckInDays, 1);
+  assert.equal(day29Rollup.diagnostics.adherence.completedAssignmentDays, 1);
+  assert.equal(day30Rollup.diagnostics.adherence.expectedAthleteDays, 0);
+  assert.equal(day30Rollup.diagnostics.adherence.completedCheckInDays, 0);
+  assert.equal(day30Rollup.diagnostics.adherence.completedAssignmentDays, 0);
+});
+
+test('computePilotOutcomeRollup counts care escalations separately from coach-review-only records and preserves headline speed-to-care metrics', async () => {
   const { computePilotOutcomeRollup } = loadPulsecheckMetrics();
   const { db } = createPulsecheckFirestore();
   const context = seedBasePilotContext(db, {
@@ -751,6 +1199,8 @@ test('computePilotOutcomeRollup counts escalation tiers and preserves speed-to-c
     userId: context.athleteId,
     tier: 1,
     category: 'general',
+    disposition: 'coach_review',
+    classificationFamily: 'performance_stress',
     status: 'active',
     createdAt: NOW_MS - 90 * 60 * 1000,
     handoffInitiatedAt: NOW_MS - 60 * 60 * 1000,
@@ -762,6 +1212,8 @@ test('computePilotOutcomeRollup counts escalation tiers and preserves speed-to-c
     userId: context.athleteId,
     tier: 2,
     category: 'general',
+    disposition: 'clinical_handoff',
+    classificationFamily: 'care_escalation',
     status: 'resolved',
     createdAt: NOW_MS - 120 * 60 * 1000,
     handoffInitiatedAt: NOW_MS - 75 * 60 * 1000,
@@ -773,6 +1225,8 @@ test('computePilotOutcomeRollup counts escalation tiers and preserves speed-to-c
     userId: context.athleteId,
     tier: 3,
     category: 'general',
+    disposition: 'clinical_handoff',
+    classificationFamily: 'care_escalation',
     status: 'active',
     createdAt: NOW_MS - 150 * 60 * 1000,
     handoffInitiatedAt: NOW_MS - 90 * 60 * 1000,
@@ -794,12 +1248,14 @@ test('computePilotOutcomeRollup counts escalation tiers and preserves speed-to-c
     },
   }));
 
-  assert.equal(rollup.metrics.escalationsTotal, 3);
-  assert.equal(rollup.metrics.escalationsTier1, 1);
+  assert.equal(rollup.metrics.escalationsTotal, 2);
+  assert.equal(rollup.metrics.escalationsTier1, 0);
   assert.equal(rollup.metrics.escalationsTier2, 1);
   assert.equal(rollup.metrics.escalationsTier3, 1);
-  assert.equal(rollup.metrics.medianMinutesToCare, 45);
-  assert.equal(rollup.diagnostics.escalations.ratePer100ActiveAthletes, 300);
+  assert.equal(rollup.metrics.medianMinutesToCare, 52.5);
+  assert.equal(rollup.diagnostics.escalations.ratePer100ActiveAthletes, 200);
+  assert.equal(rollup.diagnostics.escalations.coachReviewOnlyTotal, 1);
+  assert.equal(rollup.diagnostics.escalations.allOperationalEscalationsTotal, 3);
 });
 
 test('computePilotOutcomeRollup exposes escalation status buckets and supporting speed-to-care metrics', async () => {
@@ -817,6 +1273,8 @@ test('computePilotOutcomeRollup exposes escalation status buckets and supporting
     userId: context.athleteId,
     tier: 1,
     category: 'general',
+    disposition: 'coach_review',
+    classificationFamily: 'performance_stress',
     status: 'active',
     createdAt: NOW_MS - 60 * 60 * 1000,
     coachNotifiedAt: NOW_MS - 55 * 60 * 1000,
@@ -827,6 +1285,8 @@ test('computePilotOutcomeRollup exposes escalation status buckets and supporting
     userId: context.athleteId,
     tier: 2,
     category: 'general',
+    disposition: 'clinical_handoff',
+    classificationFamily: 'care_escalation',
     status: 'resolved',
     createdAt: NOW_MS - 120 * 60 * 1000,
     coachNotifiedAt: NOW_MS - 115 * 60 * 1000,
@@ -842,6 +1302,8 @@ test('computePilotOutcomeRollup exposes escalation status buckets and supporting
     userId: context.athleteId,
     tier: 3,
     category: 'general',
+    disposition: 'clinical_handoff',
+    classificationFamily: 'care_escalation',
     status: 'declined',
     createdAt: NOW_MS - 180 * 60 * 1000,
     coachNotifiedAt: NOW_MS - 175 * 60 * 1000,
@@ -862,21 +1324,63 @@ test('computePilotOutcomeRollup exposes escalation status buckets and supporting
   }));
 
   assert.deepEqual(rollup.diagnostics.escalations.statusCounts, {
-    active: 1,
+    active: 0,
     resolved: 1,
     declined: 1,
   });
   assert.deepEqual(rollup.diagnostics.escalations.tierByStatus, {
-    tier1: { total: 1, active: 1, resolved: 0, declined: 0 },
+    tier1: { total: 0, active: 0, resolved: 0, declined: 0 },
     tier2: { total: 1, active: 0, resolved: 1, declined: 0 },
     tier3: { total: 1, active: 0, resolved: 0, declined: 1 },
   });
+  assert.equal(rollup.diagnostics.escalations.coachReviewOnlyTotal, 1);
+  assert.equal(rollup.diagnostics.escalations.allOperationalEscalationsTotal, 3);
   assert.equal(rollup.diagnostics.escalations.supportingSpeedToCare.coachNotification.medianMinutes, 5);
   assert.equal(rollup.diagnostics.escalations.supportingSpeedToCare.consentAccepted.medianMinutes, 10);
-  assert.equal(rollup.diagnostics.escalations.supportingSpeedToCare.handoffInitiated.medianMinutes, 25);
+  assert.equal(rollup.diagnostics.escalations.supportingSpeedToCare.handoffInitiated.medianMinutes, 30);
   assert.equal(rollup.diagnostics.escalations.supportingSpeedToCare.handoffAccepted.medianMinutes, 40);
   assert.equal(rollup.diagnostics.escalations.supportingSpeedToCare.firstClinicianResponse.medianMinutes, 45);
   assert.equal(rollup.diagnostics.escalations.supportingSpeedToCare.careCompleted.medianMinutes, 75);
+  assert.equal(rollup.diagnostics.escalations.workflowContinuity.manualReviewRequired, false);
+  assert.equal(rollup.diagnostics.escalations.workflowContinuity.coachWorkflowVisibleTotal, 1);
+  assert.equal(rollup.diagnostics.escalations.workflowContinuity.coachWorkflowActionableTotal, 1);
+});
+
+test('buildCoachWorkflowContinuityReport flags active coach-review items that lose coach visibility after disposition changes', () => {
+  const { buildCoachWorkflowContinuityReport } = loadPulsecheckMetrics();
+
+  const report = buildCoachWorkflowContinuityReport([
+    {
+      id: 'coach-review-visible',
+      userId: 'athlete-1',
+      tier: 1,
+      disposition: 'coach_review',
+      classificationFamily: 'coach_review',
+      status: 'active',
+      requiresCoachReview: true,
+      createdAt: NOW_MS - 60 * 60 * 1000,
+    },
+    {
+      id: 'coach-review-lost',
+      userId: 'athlete-1',
+      tier: 2,
+      disposition: 'clinical_handoff',
+      classificationFamily: 'care_escalation',
+      status: 'active',
+      requiresCoachReview: true,
+      createdAt: NOW_MS - 90 * 60 * 1000,
+    },
+  ], { sampleLimit: 5 });
+
+  assert.equal(report.coachWorkflowEligibleTotal, 2);
+  assert.equal(report.coachWorkflowVisibleTotal, 1);
+  assert.equal(report.coachWorkflowActionableTotal, 1);
+  assert.equal(report.coachWorkflowVisibilityGapTotal, 1);
+  assert.equal(report.manualReviewRequired, true);
+  assert.equal(report.continuityStatus, 'needs_manual_review');
+  assert.equal(report.samples.length, 2);
+  assert.equal(report.samples[0].visibleToCoach, true);
+  assert.equal(report.samples[1].visibleToCoach, false);
 });
 
 test('upsertPilotMentalPerformanceSnapshot preserves endpoint freeze metadata when endpoint snapshots are written', async () => {
@@ -1239,15 +1743,15 @@ test('computePilotOutcomeRollup exposes rollup-backed hypothesis comparisons and
 
   assert.equal(rollup.diagnostics.hypothesisEvaluation.h3.stateAware.athleteCount, 1);
   assert.equal(rollup.diagnostics.hypothesisEvaluation.h3.fallbackOrNone.athleteCount, 1);
-  assert.equal(rollup.diagnostics.hypothesisEvaluation.h3.delta.adherenceRate, 100);
+  assert.equal(rollup.diagnostics.hypothesisEvaluation.h3.delta.adherenceRate, 50);
   assert.equal(rollup.diagnostics.hypothesisEvaluation.h3.delta.mentalPerformanceDelta, 7);
   assert.equal(rollup.diagnostics.hypothesisEvaluation.h3.delta.athleteTrust, 4);
   assert.equal(rollup.diagnostics.hypothesisEvaluation.h5.coachResponseCount, 1);
   assert.equal(rollup.diagnostics.hypothesisEvaluation.h6.completedProtocol.athleteCount, 1);
   assert.equal(rollup.diagnostics.hypothesisEvaluation.h6.incompleteOrSkippedProtocol.athleteCount, 1);
-  assert.equal(rollup.diagnostics.recommendationTypeSlices.stateAwareVsFallback.delta.adherenceRate, 100);
+  assert.equal(rollup.diagnostics.recommendationTypeSlices.stateAwareVsFallback.delta.adherenceRate, 50);
   assert.equal(rollup.diagnostics.recommendationTypeSlices.stateAwareVsFallback.delta.athleteTrust, 4);
-  assert.equal(rollup.diagnostics.recommendationTypeSlices.protocolCompletion.delta.adherenceRate, 100);
+  assert.equal(rollup.diagnostics.recommendationTypeSlices.protocolCompletion.delta.adherenceRate, 50);
   assert.equal(rollup.diagnostics.trustDispositionBaseline.responseCount, 2);
   assert.equal(rollup.diagnostics.trustDispositionBaseline.averageScore, 5.5);
   assert.equal(rollup.diagnostics.surveysByCohort.alpha.athleteTrust.responseCount, 1);
@@ -1539,6 +2043,46 @@ test('getAthletePilotSurveyPromptState suppresses prompts during active escalati
   assert.ok(promptStateAfter.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
 });
 
+test('getAthletePilotSurveyPromptState honors historical completed assignments inside the pilot window', async () => {
+  const { getAthletePilotSurveyPromptState } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, {
+    pilotStartAt: NOW_MS - 10 * DAY_MS,
+    pilotEndAt: NOW_MS + 10 * DAY_MS,
+    enrollmentCreatedAt: NOW_MS - DAY_MS,
+    enrollmentUpdatedAt: NOW_MS - DAY_MS,
+  });
+
+  for (let index = 0; index < 7; index += 1) {
+    const sourceDate = new Date(NOW_MS - (index * DAY_MS)).toISOString().slice(0, 10);
+    const createdAt = NOW_MS - (index * DAY_MS);
+    db.seedDoc('pulsecheck-daily-assignments', `${context.athleteId}_historical_${sourceDate}`, {
+      id: `${context.athleteId}_historical_${sourceDate}`,
+      athleteId: context.athleteId,
+      teamId: context.teamId,
+      teamMembershipId: context.teamMembershipId,
+      sourceDate,
+      status: 'completed',
+      actionType: 'sim',
+      createdAt,
+      updatedAt: createdAt + 30 * 60 * 1000,
+    });
+  }
+
+  const promptState = await runWithNow(NOW_MS, () => getAthletePilotSurveyPromptState({
+    db,
+    athleteId: context.athleteId,
+    preferredPilotEnrollmentId: context.pilotEnrollmentId,
+    preferredPilotId: context.pilotId,
+  }));
+
+  assert.equal(promptState.suppressionReason, null);
+  assert.equal(promptState.completedSessions, 7);
+  assert.ok(promptState.pendingPrompts.some((prompt) => (
+    prompt.surveyKind === 'trust' && prompt.promptStage === 'initial'
+  )));
+});
+
 test('recomputePilotMetricRollups reads emitted events back into the rollup summary', async () => {
   const { emitPilotMetricEvent, recomputePilotMetricRollups } = loadPulsecheckMetrics();
   const { db } = createPulsecheckFirestore();
@@ -1686,7 +2230,7 @@ test('backfillPilotAthleteOutcomeHistory seeds the last 14 days of late-added at
   const context = seedBasePilotContext(db, {
     enrollmentCreatedAt: NOW_MS,
     enrollmentUpdatedAt: NOW_MS,
-    pilotStartAt: NOW_MS - (20 * DAY_MS),
+    pilotStartAt: NOW_MS + DAY_MS,
   });
 
   for (let index = 0; index < 16; index += 1) {
@@ -1730,7 +2274,7 @@ test('backfillPilotAthleteOutcomeHistory seeds the last 14 days of late-added at
   assert.equal(first.explicitDateKeys.length, 14);
 
   const enrollmentDoc = db.getDoc('pulsecheck-pilot-enrollments', context.pilotEnrollmentId);
-  assert.equal(enrollmentDoc.outcomeBackfillLookbackDays, 14);
+  assert.equal(enrollmentDoc.outcomeBackfillLookbackDays, 15);
   assert.equal(enrollmentDoc.outcomeBackfillStartAtMs, Date.parse(first.startDateKey + 'T00:00:00.000Z'));
 
   const stampedAssignment = db.getDoc('pulsecheck-daily-assignments', `${context.athleteId}_${first.startDateKey}`);

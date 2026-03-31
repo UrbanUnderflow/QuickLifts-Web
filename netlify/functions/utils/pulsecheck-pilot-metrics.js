@@ -11,12 +11,15 @@ const PILOT_METRIC_ROLLUP_SUMMARY_SUBCOLLECTION = 'summary';
 const PILOT_METRIC_ROLLUP_DAILY_SUBCOLLECTION = 'daily';
 const PILOT_MENTAL_PERFORMANCE_SNAPSHOTS_SUBCOLLECTION = 'mental-performance-snapshots';
 const PILOT_METRIC_OPS_COLLECTION = 'pulsecheck-pilot-metric-ops';
+const PILOT_METRIC_OPS_MIGRATIONS_SUBCOLLECTION = 'migrations';
 const PILOTS_COLLECTION = 'pulsecheck-pilots';
 const DAILY_ASSIGNMENTS_COLLECTION = 'pulsecheck-daily-assignments';
 const ESCALATION_RECORDS_COLLECTION = 'escalation-records';
 const ASSIGNMENT_EVENTS_COLLECTION = 'pulsecheck-assignment-events';
 const CHECKINS_ROOT = 'mental-check-ins';
 const CHECKINS_SUBCOLLECTION = 'check-ins';
+const SURVEY_RECLASSIFICATION_MIGRATION_KEY = 'pilot_outcome_survey_reclassification_v1';
+const ESCALATION_RECLASSIFICATION_MIGRATION_KEY = 'pilot_outcome_escalation_reclassification_v1';
 
 const FRESHNESS_WINDOW_DAYS = 14;
 const FRESHNESS_WINDOW_MS = FRESHNESS_WINDOW_DAYS * 24 * 60 * 60 * 1000;
@@ -72,6 +75,8 @@ const NO_TASK_ASSIGNMENT_STATUSES = new Set([
 ]);
 
 const ESCALATION_STATUS_ORDER = ['active', 'resolved', 'declined'];
+const ESCALATION_MIGRATION_DEDUPE_WINDOW_MINUTES = 30;
+const ESCALATION_MIGRATION_DEDUPE_WINDOW_SECONDS = ESCALATION_MIGRATION_DEDUPE_WINDOW_MINUTES * 60;
 
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -930,6 +935,783 @@ function buildTrustBatteryPayload(rawBattery) {
   };
 }
 
+function normalizeSurveyKindAlias(value) {
+  const normalized = normalizeString(value).toLowerCase().replace(/[\s-]+/g, '_');
+  if (!normalized) return null;
+
+  if ([
+    'trust',
+    'trust_score',
+    'athlete_trust',
+    'trust_battery',
+    'trustbattery',
+    'trust_index',
+    'trust_diagnostic',
+  ].includes(normalized)) {
+    return 'trust';
+  }
+
+  if ([
+    'nps',
+    'nps_score',
+    'athlete_nps',
+    'recommend',
+    'recommendation',
+    'recommendation_intent',
+    'net_promoter_score',
+    'netpromoterscore',
+  ].includes(normalized)) {
+    return 'nps';
+  }
+
+  return null;
+}
+
+function normalizeRespondentRoleAlias(value) {
+  const normalized = normalizeString(value).toLowerCase().replace(/[\s-]+/g, '_');
+  if (!normalized) return null;
+
+  if (['athlete', 'player', 'student_athlete', 'studentathlete'].includes(normalized)) {
+    return 'athlete';
+  }
+
+  if (['coach', 'staff', 'assistant_coach', 'head_coach'].includes(normalized)) {
+    return 'coach';
+  }
+
+  if (['clinician', 'provider', 'psychologist', 'therapist', 'mental_performance_staff'].includes(normalized)) {
+    return 'clinician';
+  }
+
+  return null;
+}
+
+function normalizeSurveyScoreCandidate(...values) {
+  for (const value of values) {
+    const normalized = normalizeNumber(value);
+    if (normalized !== null && normalized >= 0 && normalized <= 10) {
+      return roundMetric(normalized);
+    }
+  }
+
+  return null;
+}
+
+function normalizeSurveySubmittedAtMs(entry) {
+  return (
+    coerceMillis(entry?.submittedAt)
+    || normalizeNumber(entry?.submittedAtMs)
+    || coerceMillis(entry?.createdAt)
+    || normalizeNumber(entry?.createdAtMs)
+    || coerceMillis(entry?.updatedAt)
+    || normalizeNumber(entry?.updatedAtMs)
+    || null
+  );
+}
+
+function compactMigrationValue(value) {
+  if (value === undefined) return null;
+  if (value === null) return null;
+  if (Array.isArray(value)) return value.map((entry) => compactMigrationValue(entry));
+  if (typeof value !== 'object') return value;
+
+  return Object.entries(value).reduce((accumulator, [key, nested]) => {
+    const compacted = compactMigrationValue(nested);
+    if (compacted !== undefined) {
+      accumulator[key] = compacted;
+    }
+    return accumulator;
+  }, {});
+}
+
+function buildSurveyEventCoverage(events = []) {
+  return events.reduce((accumulator, entry) => {
+    if (normalizeString(entry?.sourceCollection) !== PILOT_SURVEY_RESPONSES_COLLECTION) {
+      return accumulator;
+    }
+
+    const sourceDocumentId = normalizeString(entry?.sourceDocumentId);
+    if (!sourceDocumentId) return accumulator;
+
+    const existing = accumulator.get(sourceDocumentId) || new Set();
+    existing.add(normalizeString(entry?.eventType));
+    accumulator.set(sourceDocumentId, existing);
+    return accumulator;
+  }, new Map());
+}
+
+function buildSurveyResponsePatchPreview(patch) {
+  return Object.entries(compactMigrationValue(patch) || {}).reduce((accumulator, [key, value]) => {
+    accumulator[key] = value;
+    return accumulator;
+  }, {});
+}
+
+async function resolveSurveyReclassificationContext(db, entry, pilotId, contextCache) {
+  const respondentRole = normalizeRespondentRoleAlias(entry?.respondentRole || entry?.role);
+  const athleteId = normalizeString(entry?.athleteId || entry?.userId || entry?.respondentUserId);
+  const pilotEnrollmentId = normalizeString(entry?.pilotEnrollmentId);
+
+  if (respondentRole !== 'athlete' && !athleteId && !pilotEnrollmentId) {
+    return null;
+  }
+
+  const cacheKey = [
+    normalizeString(pilotId),
+    pilotEnrollmentId || '-',
+    athleteId || '-',
+  ].join('::');
+
+  if (contextCache.has(cacheKey)) {
+    return contextCache.get(cacheKey);
+  }
+
+  const context = await resolvePilotEnrollmentContext({
+    db,
+    athleteId: athleteId || null,
+    preferredPilotEnrollmentId: pilotEnrollmentId || null,
+    preferredPilotId: normalizeString(pilotId) || null,
+    allowMembershipFallback: false,
+  });
+
+  contextCache.set(cacheKey, context || null);
+  return context || null;
+}
+
+async function classifyPilotSurveyResponseForMigration({
+  db,
+  pilotId,
+  entry,
+  eventCoverage,
+  contextCache,
+}) {
+  const currentSurveyKind = normalizeSurveyKindAlias(
+    entry?.surveyKind || entry?.kind || entry?.type || entry?.metricKind || entry?.questionKind || entry?.promptKind,
+  );
+  const currentRespondentRole = normalizeRespondentRoleAlias(entry?.respondentRole || entry?.role);
+  const targetSurveyKind = normalizeSurveyKindAlias(
+    entry?.surveyKind || entry?.kind || entry?.type || entry?.metricKind || entry?.questionKind || entry?.promptKind,
+  );
+  const targetRespondentRole = normalizeRespondentRoleAlias(
+    entry?.respondentRole || entry?.role || (entry?.athleteId ? 'athlete' : null),
+  );
+  const submittedAtMs = normalizeSurveySubmittedAtMs(entry);
+  const targetScore = normalizeSurveyScoreCandidate(
+    entry?.score,
+    entry?.trustScore,
+    entry?.npsScore,
+    entry?.rating,
+    entry?.value,
+  );
+  const targetTrustBattery = targetSurveyKind === 'trust'
+    ? buildTrustBatteryPayload(entry?.trustBattery || entry?.diagnosticBattery || entry?.battery || {})
+    : null;
+  const existingEventTypes = eventCoverage.get(normalizeString(entry?.id)) || new Set();
+  const context = await resolveSurveyReclassificationContext(db, entry, pilotId, contextCache);
+  const resolvedPilotId = normalizeString(entry?.pilotId || context?.pilotId || pilotId);
+  const resolvedPilotEnrollmentId = normalizeString(entry?.pilotEnrollmentId || context?.pilotEnrollmentId) || null;
+  const resolvedOrganizationId = normalizeString(entry?.organizationId || context?.organizationId);
+  const resolvedTeamId = normalizeString(entry?.teamId || context?.teamId);
+  const resolvedCohortId = normalizeString(entry?.cohortId || context?.cohortId) || null;
+  const resolvedAthleteId = normalizeString(entry?.athleteId || context?.athleteId || entry?.respondentUserId) || null;
+  const respondentUserId = normalizeString(entry?.respondentUserId || entry?.userId);
+  const source = normalizeString(entry?.source) || 'migration';
+
+  const blockingReasons = [];
+  if (!targetSurveyKind) blockingReasons.push('unrecognized_survey_kind');
+  if (!targetRespondentRole) blockingReasons.push('unrecognized_respondent_role');
+  if (targetScore === null) blockingReasons.push('invalid_score');
+  if (!respondentUserId) blockingReasons.push('missing_respondent_user_id');
+  if (!resolvedPilotId) blockingReasons.push('missing_pilot_id');
+  if (!resolvedOrganizationId) blockingReasons.push('missing_organization_id');
+  if (!resolvedTeamId) blockingReasons.push('missing_team_id');
+  if (!submittedAtMs) blockingReasons.push('missing_submitted_at');
+  if (targetRespondentRole === 'athlete' && !resolvedAthleteId) blockingReasons.push('missing_athlete_id');
+
+  const patch = {};
+  if (targetSurveyKind && normalizeString(entry?.surveyKind) !== targetSurveyKind) {
+    patch.surveyKind = targetSurveyKind;
+  }
+  if (targetRespondentRole && normalizeString(entry?.respondentRole) !== targetRespondentRole) {
+    patch.respondentRole = targetRespondentRole;
+  }
+  if (targetScore !== null && normalizeNumber(entry?.score) !== targetScore) {
+    patch.score = targetScore;
+  }
+  if (resolvedPilotId && normalizeString(entry?.pilotId) !== resolvedPilotId) {
+    patch.pilotId = resolvedPilotId;
+  }
+  if (resolvedPilotEnrollmentId !== normalizeString(entry?.pilotEnrollmentId || null)) {
+    patch.pilotEnrollmentId = resolvedPilotEnrollmentId;
+  }
+  if (resolvedOrganizationId && normalizeString(entry?.organizationId) !== resolvedOrganizationId) {
+    patch.organizationId = resolvedOrganizationId;
+  }
+  if (resolvedTeamId && normalizeString(entry?.teamId) !== resolvedTeamId) {
+    patch.teamId = resolvedTeamId;
+  }
+  if (resolvedCohortId !== normalizeString(entry?.cohortId || null)) {
+    patch.cohortId = resolvedCohortId;
+  }
+  if ((targetRespondentRole === 'athlete' ? resolvedAthleteId : null) !== normalizeString(entry?.athleteId || null)) {
+    patch.athleteId = targetRespondentRole === 'athlete' ? resolvedAthleteId : null;
+  }
+  if (respondentUserId && normalizeString(entry?.respondentUserId) !== respondentUserId) {
+    patch.respondentUserId = respondentUserId;
+  }
+  if (source && normalizeString(entry?.source) !== source) {
+    patch.source = source;
+  }
+  if (submittedAtMs && (coerceMillis(entry?.submittedAt) !== submittedAtMs || normalizeNumber(entry?.submittedAtMs) !== submittedAtMs)) {
+    patch.submittedAt = timestampFromMillis(submittedAtMs);
+    patch.submittedAtMs = submittedAtMs;
+  }
+  if (targetSurveyKind === 'trust') {
+    if (stableSerialize(entry?.trustBattery || null) !== stableSerialize(targetTrustBattery || null)) {
+      patch.trustBattery = targetTrustBattery;
+    }
+  } else if (entry?.trustBattery !== undefined) {
+    patch.trustBattery = null;
+  }
+
+  const missingEventTypes = [];
+  if (!existingEventTypes.has('survey_submitted')) {
+    missingEventTypes.push('survey_submitted');
+  }
+  if (targetSurveyKind === 'trust' && !existingEventTypes.has('trust_submitted')) {
+    missingEventTypes.push('trust_submitted');
+  }
+  if (targetSurveyKind === 'nps' && !existingEventTypes.has('nps_submitted')) {
+    missingEventTypes.push('nps_submitted');
+  }
+
+  const canApply = blockingReasons.length === 0;
+  const needsDocumentUpdate = Object.keys(patch).length > 0;
+  const needsEventBackfill = missingEventTypes.length > 0;
+
+  return {
+    responseId: normalizeString(entry?.id),
+    currentSurveyKind,
+    currentRespondentRole,
+    targetSurveyKind,
+    targetRespondentRole,
+    targetScore,
+    source,
+    submittedAtMs,
+    context: {
+      pilotId: resolvedPilotId || null,
+      pilotEnrollmentId: resolvedPilotEnrollmentId,
+      organizationId: resolvedOrganizationId || null,
+      teamId: resolvedTeamId || null,
+      cohortId: resolvedCohortId,
+      athleteId: targetRespondentRole === 'athlete' ? resolvedAthleteId : null,
+      respondentUserId: respondentUserId || null,
+    },
+    needsDocumentUpdate,
+    needsEventBackfill,
+    missingEventTypes,
+    canApply,
+    blockingReasons,
+    patch,
+  };
+}
+
+async function collectPilotSurveyReclassificationCandidates({
+  db,
+  pilotId,
+  sampleLimit = 20,
+}) {
+  const normalizedPilotId = normalizeString(pilotId);
+  if (!normalizedPilotId) {
+    throw new Error('pilotId is required.');
+  }
+
+  const [responses, events] = await Promise.all([
+    loadPilotSurveyResponses(db, normalizedPilotId),
+    loadPilotMetricEvents(db, normalizedPilotId),
+  ]);
+
+  const eventCoverage = buildSurveyEventCoverage(events);
+  const contextCache = new Map();
+  const candidates = [];
+
+  for (const entry of responses) {
+    candidates.push(await classifyPilotSurveyResponseForMigration({
+      db,
+      pilotId: normalizedPilotId,
+      entry,
+      eventCoverage,
+      contextCache,
+    }));
+  }
+
+  const alreadyCanonicalCount = candidates.filter((entry) => !entry.needsDocumentUpdate && !entry.needsEventBackfill && entry.canApply).length;
+  const blockedCount = candidates.filter((entry) => !entry.canApply).length;
+  const needsDocumentUpdateCount = candidates.filter((entry) => entry.canApply && entry.needsDocumentUpdate).length;
+  const needsEventBackfillCount = candidates.filter((entry) => entry.canApply && entry.needsEventBackfill).length;
+  const applyReady = candidates.filter((entry) => entry.canApply && (entry.needsDocumentUpdate || entry.needsEventBackfill));
+  const samples = applyReady
+    .concat(candidates.filter((entry) => !entry.canApply))
+    .slice(0, Math.max(1, Math.min(50, Number(sampleLimit) || 20)))
+    .map((entry) => ({
+      responseId: entry.responseId,
+      currentSurveyKind: entry.currentSurveyKind,
+      targetSurveyKind: entry.targetSurveyKind,
+      currentRespondentRole: entry.currentRespondentRole,
+      targetRespondentRole: entry.targetRespondentRole,
+      canApply: entry.canApply,
+      needsDocumentUpdate: entry.needsDocumentUpdate,
+      needsEventBackfill: entry.needsEventBackfill,
+      missingEventTypes: entry.missingEventTypes,
+      blockingReasons: entry.blockingReasons,
+      patchPreview: buildSurveyResponsePatchPreview(entry.patch),
+    }));
+
+  return {
+    pilotId: normalizedPilotId,
+    migrationKey: SURVEY_RECLASSIFICATION_MIGRATION_KEY,
+    totalSurveyResponseCount: responses.length,
+    alreadyCanonicalCount,
+    blockedCount,
+    needsDocumentUpdateCount,
+    needsEventBackfillCount,
+    applyReadyCount: applyReady.length,
+    samples,
+    candidates,
+  };
+}
+
+async function writePilotMigrationRun({
+  db,
+  pilotId,
+  actorUserId = null,
+  mode,
+  migrationKey = SURVEY_RECLASSIFICATION_MIGRATION_KEY,
+  report,
+  reportSummary = null,
+  appliedMutationIds = [],
+  recompute = null,
+}) {
+  const rootRef = db.collection(PILOT_METRIC_OPS_COLLECTION).doc(pilotId);
+  const runRef = rootRef.collection(PILOT_METRIC_OPS_MIGRATIONS_SUBCOLLECTION).doc();
+  const nowMs = Date.now();
+  const normalizedReportSummary = reportSummary || {
+    totalSurveyResponseCount: report.totalSurveyResponseCount,
+    alreadyCanonicalCount: report.alreadyCanonicalCount,
+    blockedCount: report.blockedCount,
+    needsDocumentUpdateCount: report.needsDocumentUpdateCount,
+    needsEventBackfillCount: report.needsEventBackfillCount,
+    applyReadyCount: report.applyReadyCount,
+    samples: report.samples || [],
+  };
+  const payload = {
+    id: runRef.id,
+    migrationKey: normalizeString(migrationKey) || SURVEY_RECLASSIFICATION_MIGRATION_KEY,
+    mode: normalizeString(mode) || 'report',
+    pilotId,
+    actorUserId: normalizeString(actorUserId) || null,
+    report: normalizedReportSummary,
+    appliedMutationIds,
+    recompute: recompute || null,
+    createdAt: timestampFromMillis(nowMs),
+    createdAtMs: nowMs,
+    updatedAt: timestampFromMillis(nowMs),
+    updatedAtMs: nowMs,
+  };
+
+  await runRef.set(payload, { merge: true });
+  return payload;
+}
+
+function normalizeEscalationClassificationFamily(value, { entry = null, text = '' } = {}) {
+  const normalized = normalizeString(value).toLowerCase();
+  if (['critical_safety', 'care_escalation', 'coach_review', 'performance_support', 'none'].includes(normalized)) {
+    return normalized;
+  }
+  const tier = Number(entry?.tier) || 0;
+  if (tier >= 3) return 'critical_safety';
+  if (tier >= 2) return 'care_escalation';
+  if (tier >= 1) return 'coach_review';
+  if (BENIGN_PERFORMANCE_SUPPORT_PATTERN.test(text)) return 'performance_support';
+  return 'none';
+}
+
+function normalizeEscalationDisposition(value, { family = 'none', entry = null } = {}) {
+  const normalized = normalizeString(value).toLowerCase();
+  if (['none', 'coach_review', 'clinical_handoff'].includes(normalized)) {
+    return normalized;
+  }
+  if (family === 'critical_safety' || family === 'care_escalation') return 'clinical_handoff';
+  if (family === 'coach_review') return 'coach_review';
+  if ((Number(entry?.tier) || 0) >= 2 || entry?.requiresClinicalHandoff === true || entry?.countsTowardCareKpi === true) {
+    return 'clinical_handoff';
+  }
+  if ((Number(entry?.tier) || 0) >= 1 || entry?.requiresCoachReview === true) {
+    return 'coach_review';
+  }
+  return 'none';
+}
+
+function mapEscalationDispositionToTier(disposition, family, entry = {}) {
+  const existingTier = Number(entry?.tier) || 0;
+  if (family === 'critical_safety') {
+    return Math.max(3, existingTier || 3);
+  }
+  if (disposition === 'clinical_handoff' || family === 'care_escalation') {
+    return Math.max(2, Math.min(3, existingTier || 2));
+  }
+  if (disposition === 'coach_review' || family === 'coach_review') {
+    return 1;
+  }
+  return 0;
+}
+
+function mapEscalationDispositionToSeverity(disposition, family) {
+  if (family === 'critical_safety') return 'critical';
+  if (disposition === 'clinical_handoff') return 'high';
+  if (disposition === 'coach_review') return 'moderate';
+  return 'none';
+}
+
+function buildEscalationMigrationExplanation(entry, { family, disposition, text }) {
+  if (family === 'performance_support') {
+    return 'Historical record reads as ordinary performance-support language without clear safety or severe-impairment markers.';
+  }
+  if (family === 'critical_safety') {
+    return normalizeString(entry?.explanation || entry?.classificationReason) || 'Historical record includes critical-safety language and stays in the care escalation lane.';
+  }
+  if (disposition === 'clinical_handoff') {
+    return normalizeString(entry?.explanation || entry?.classificationReason) || 'Historical record retains care-escalation posture because it indicates safety/clinical handoff criteria or workflow progression.';
+  }
+  if (disposition === 'coach_review') {
+    return normalizeString(entry?.explanation || entry?.classificationReason) || 'Historical record is preserved for coach/staff review without counting as a care escalation.';
+  }
+  if (BENIGN_PERFORMANCE_SUPPORT_PATTERN.test(text)) {
+    return 'Historical record was normalized into the support-only lane based on benign performance-support language.';
+  }
+  return normalizeString(entry?.explanation || entry?.classificationReason) || 'Historical record was normalized to the canonical escalation disposition model.';
+}
+
+function buildEscalationMigrationPatchPreview(patch = {}) {
+  if (!patch || typeof patch !== 'object') return {};
+  return {
+    tier: patch.tier,
+    disposition: patch.disposition,
+    classificationFamily: patch.classificationFamily,
+    requiresCoachReview: patch.requiresCoachReview,
+    requiresClinicalHandoff: patch.requiresClinicalHandoff,
+    countsTowardCareKpi: patch.countsTowardCareKpi,
+    incidentId: patch.incidentId,
+    incidentStatus: patch.incidentStatus,
+    mergedIntoIncidentKey: patch.mergedIntoIncidentKey || null,
+    supersededByIncidentKey: patch.supersededByIncidentKey || null,
+    excludedFromHeadlineMetrics: patch.excludedFromHeadlineMetrics === true,
+  };
+}
+
+function areEscalationFamiliesAdjacent(leftFamily, rightFamily) {
+  const familyOrder = {
+    none: 0,
+    performance_support: 1,
+    coach_review: 2,
+    care_escalation: 3,
+    critical_safety: 4,
+  };
+  const left = familyOrder[normalizeString(leftFamily).toLowerCase()];
+  const right = familyOrder[normalizeString(rightFamily).toLowerCase()];
+  if (left === undefined || right === undefined) return false;
+  return Math.abs(left - right) <= 1;
+}
+
+function deriveEscalationMigrationTarget(entry = {}) {
+  const text = [
+    normalizeString(entry.category),
+    normalizeString(entry.classificationReason),
+    normalizeString(entry.explanation),
+    normalizeString(entry.triggerContent),
+  ].join(' ').trim();
+  const hardRisk = HARD_RISK_ESCALATION_PATTERN.test(text)
+    || normalizeString(entry.classificationFamily).toLowerCase() === 'critical_safety'
+    || (Number(entry.tier) || 0) >= 3;
+  const workflowProgress = hasEscalationWorkflowProgress(entry);
+  const benignPerformanceSupport = !hardRisk
+    && !workflowProgress
+    && (Number(entry.tier) || 0) < 3
+    && BENIGN_PERFORMANCE_SUPPORT_PATTERN.test(text);
+
+  let targetFamily;
+  let targetDisposition;
+
+  if (benignPerformanceSupport) {
+    targetFamily = 'performance_support';
+    targetDisposition = 'none';
+  } else if (
+    hardRisk
+    || normalizeString(entry.disposition).toLowerCase() === 'clinical_handoff'
+    || entry.requiresClinicalHandoff === true
+    || entry.countsTowardCareKpi === true
+    || (Number(entry.tier) || 0) >= 2
+    || workflowProgress
+  ) {
+    targetFamily = hardRisk ? 'critical_safety' : 'care_escalation';
+    targetDisposition = 'clinical_handoff';
+  } else if (
+    normalizeString(entry.disposition).toLowerCase() === 'coach_review'
+    || entry.requiresCoachReview === true
+    || (Number(entry.tier) || 0) >= 1
+  ) {
+    targetFamily = 'coach_review';
+    targetDisposition = 'coach_review';
+  } else {
+    targetFamily = normalizeEscalationClassificationFamily(entry.classificationFamily, { entry, text });
+    targetDisposition = normalizeEscalationDisposition(entry.disposition, { family: targetFamily, entry });
+  }
+
+  const targetTier = mapEscalationDispositionToTier(targetDisposition, targetFamily, entry);
+  const targetSeverity = mapEscalationDispositionToSeverity(targetDisposition, targetFamily);
+  const countsTowardCareKpi = targetDisposition === 'clinical_handoff';
+  const explanation = buildEscalationMigrationExplanation(entry, {
+    family: targetFamily,
+    disposition: targetDisposition,
+    text,
+  });
+
+  return {
+    text,
+    hardRisk,
+    benignPerformanceSupport,
+    workflowProgress,
+    targetFamily,
+    targetDisposition,
+    targetTier,
+    targetSeverity,
+    requiresCoachReview: targetDisposition === 'coach_review' || targetDisposition === 'clinical_handoff',
+    requiresClinicalHandoff: targetDisposition === 'clinical_handoff',
+    countsTowardCareKpi,
+    explanation,
+    groupingEligible: targetDisposition !== 'none' && targetFamily !== 'critical_safety',
+  };
+}
+
+function buildEscalationMigrationGroups(candidates = []) {
+  const sorted = [...candidates].sort((left, right) => {
+    const leftMs = coerceMillis(left.entry?.createdAt) || Number(left.entry?.createdAt || 0) * 1000 || 0;
+    const rightMs = coerceMillis(right.entry?.createdAt) || Number(right.entry?.createdAt || 0) * 1000 || 0;
+    return leftMs - rightMs;
+  });
+  const groups = [];
+
+  sorted.forEach((candidate) => {
+    const createdAtMs = coerceMillis(candidate.entry?.createdAt) || Number(candidate.entry?.createdAt || 0) * 1000 || 0;
+    const conversationId = normalizeString(candidate.entry?.conversationId || candidate.target?.incidentConversationId);
+    const athleteId = normalizeString(candidate.entry?.userId);
+    const family = candidate.target?.targetFamily || 'none';
+    const status = normalizeEscalationStatus(candidate.entry);
+    const matchingGroup = groups.find((group) => {
+      if (group.athleteId !== athleteId) return false;
+      if (!areEscalationFamiliesAdjacent(group.family, family)) return false;
+      if (conversationId && group.conversationId && conversationId === group.conversationId && group.status === 'active') {
+        return true;
+      }
+      const deltaMs = Math.abs(createdAtMs - group.lastCreatedAtMs);
+      return deltaMs <= ESCALATION_MIGRATION_DEDUPE_WINDOW_SECONDS * 1000;
+    });
+
+    if (matchingGroup) {
+      matchingGroup.entries.push(candidate);
+      matchingGroup.lastCreatedAtMs = Math.max(matchingGroup.lastCreatedAtMs, createdAtMs);
+      if (status === 'active') {
+        matchingGroup.status = 'active';
+      }
+      return;
+    }
+
+    groups.push({
+      groupId: candidate.entry.id,
+      athleteId,
+      family,
+      conversationId,
+      status,
+      lastCreatedAtMs: createdAtMs,
+      entries: [candidate],
+    });
+  });
+
+  return groups;
+}
+
+async function collectPilotEscalationReclassificationCandidates({
+  db,
+  pilotId,
+  sampleLimit = 20,
+}) {
+  const normalizedPilotId = normalizeString(pilotId);
+  if (!normalizedPilotId) {
+    throw new Error('pilotId is required.');
+  }
+
+  const [pilot, enrollments] = await Promise.all([
+    loadPilotDocument(db, normalizedPilotId),
+    loadPilotEnrollments(db, normalizedPilotId),
+  ]);
+  const athleteIds = [...new Set(enrollments.map((entry) => normalizeString(entry.userId)).filter(Boolean))];
+  const escalations = await loadPilotEscalations(db, athleteIds);
+  const pilotStartMs = coerceMillis(pilot?.startAt) || 0;
+  const pilotEndMs = coerceMillis(pilot?.endAt) || Date.now();
+  const inWindowEscalations = escalations.filter((entry) => {
+    const createdAtMs = coerceMillis(entry?.createdAt) || Number(entry?.createdAt || 0) * 1000 || 0;
+    if (!createdAtMs) return false;
+    if (pilotStartMs && createdAtMs < pilotStartMs) return false;
+    if (pilotEndMs && createdAtMs > pilotEndMs) return false;
+    return true;
+  });
+
+  const baseCandidates = inWindowEscalations.map((entry) => {
+    const target = deriveEscalationMigrationTarget(entry);
+    return {
+      recordId: normalizeString(entry.id),
+      entry,
+      target,
+    };
+  });
+  const groups = buildEscalationMigrationGroups(baseCandidates);
+  const groupMap = new Map();
+  groups.forEach((group) => {
+    const primary = group.entries[0] || null;
+    if (!primary) return;
+    group.entries.forEach((candidate, index) => {
+      groupMap.set(candidate.recordId, {
+        groupId: group.groupId,
+        primaryRecordId: primary.recordId,
+        groupSize: group.entries.length,
+        merged: index > 0,
+        groupStatus: group.status,
+      });
+    });
+  });
+
+  const candidates = baseCandidates.map(({ recordId, entry, target }) => {
+    const grouping = groupMap.get(recordId) || {
+      groupId: recordId,
+      primaryRecordId: recordId,
+      groupSize: 1,
+      merged: false,
+      groupStatus: normalizeEscalationStatus(entry),
+    };
+    const patch = {
+      tier: grouping.merged ? Math.min(target.targetTier, 1) : target.targetTier,
+      disposition: grouping.merged ? (target.targetDisposition === 'clinical_handoff' ? 'coach_review' : target.targetDisposition) : target.targetDisposition,
+      classificationFamily: grouping.merged ? (target.targetDisposition === 'clinical_handoff' ? 'coach_review' : target.targetFamily) : target.targetFamily,
+      severity: grouping.merged && target.targetDisposition === 'clinical_handoff' ? 'moderate' : target.targetSeverity,
+      requiresCoachReview: target.requiresCoachReview,
+      requiresClinicalHandoff: grouping.merged ? false : target.requiresClinicalHandoff,
+      countsTowardCareKpi: grouping.merged ? false : target.countsTowardCareKpi,
+      explanation: target.explanation,
+      dedupeEligible: target.targetDisposition !== 'none',
+      excludedFromHeadlineMetrics: grouping.merged || !target.countsTowardCareKpi,
+      legacyClassification: true,
+      migrationNormalizedAt: timestampFromMillis(Date.now()),
+      migrationNormalizedAtMs: Date.now(),
+      incidentId: grouping.primaryRecordId,
+      incidentStatus: grouping.merged ? 'merged' : grouping.groupStatus,
+      incidentRecordCount: grouping.groupSize,
+      incident: {
+        ...(entry.incident && typeof entry.incident === 'object' ? entry.incident : {}),
+        id: grouping.primaryRecordId,
+        status: grouping.merged ? 'merged' : grouping.groupStatus,
+        recordCount: grouping.groupSize,
+        dedupeWindowSeconds: ESCALATION_MIGRATION_DEDUPE_WINDOW_SECONDS,
+        conversationId: normalizeString(entry.conversationId),
+        family: grouping.merged && target.targetDisposition === 'clinical_handoff' ? 'coach_review' : target.targetFamily,
+      },
+      supersededByIncidentKey: grouping.merged ? grouping.primaryRecordId : null,
+      mergedIntoIncidentKey: grouping.merged ? grouping.primaryRecordId : null,
+      sourceTriggerMessageId: normalizeString(entry.messageId || entry.triggerMessageId || entry.dedupeLastTriggerMessageId) || null,
+    };
+
+    const needsDocumentUpdate = stableSerialize({
+      tier: Number(entry.tier) || 0,
+      disposition: normalizeString(entry.disposition) || null,
+      classificationFamily: normalizeString(entry.classificationFamily) || null,
+      severity: normalizeString(entry.severity) || null,
+      requiresCoachReview: entry.requiresCoachReview === true,
+      requiresClinicalHandoff: entry.requiresClinicalHandoff === true,
+      countsTowardCareKpi: entry.countsTowardCareKpi === true,
+      excludedFromHeadlineMetrics: entry.excludedFromHeadlineMetrics === true,
+      incidentId: normalizeString(entry.incidentId) || null,
+      incidentStatus: normalizeString(entry.incidentStatus) || null,
+      supersededByIncidentKey: normalizeString(entry.supersededByIncidentKey) || null,
+      mergedIntoIncidentKey: normalizeString(entry.mergedIntoIncidentKey) || null,
+      sourceTriggerMessageId: normalizeString(entry.sourceTriggerMessageId) || null,
+    }) !== stableSerialize({
+      tier: patch.tier,
+      disposition: patch.disposition,
+      classificationFamily: patch.classificationFamily,
+      severity: patch.severity,
+      requiresCoachReview: patch.requiresCoachReview,
+      requiresClinicalHandoff: patch.requiresClinicalHandoff,
+      countsTowardCareKpi: patch.countsTowardCareKpi,
+      excludedFromHeadlineMetrics: patch.excludedFromHeadlineMetrics,
+      incidentId: patch.incidentId,
+      incidentStatus: patch.incidentStatus,
+      supersededByIncidentKey: patch.supersededByIncidentKey,
+      mergedIntoIncidentKey: patch.mergedIntoIncidentKey,
+      sourceTriggerMessageId: patch.sourceTriggerMessageId,
+    });
+
+    return {
+      recordId,
+      canApply: true,
+      needsDocumentUpdate,
+      blockingReasons: [],
+      targetDisposition: patch.disposition,
+      targetFamily: patch.classificationFamily,
+      grouping,
+      patch,
+      entry,
+    };
+  });
+
+  const alreadyCanonicalCount = candidates.filter((entry) => !entry.needsDocumentUpdate).length;
+  const blockedCount = candidates.filter((entry) => !entry.canApply).length;
+  const needsDocumentUpdateCount = candidates.filter((entry) => entry.canApply && entry.needsDocumentUpdate).length;
+  const mergedCount = candidates.filter((entry) => entry.grouping?.merged).length;
+  const groupedIncidentCount = groups.filter((group) => group.entries.length > 1).length;
+  const applyReady = candidates.filter((entry) => entry.canApply && entry.needsDocumentUpdate);
+  const samples = applyReady
+    .concat(candidates.filter((entry) => !entry.canApply))
+    .slice(0, Math.max(1, Math.min(50, Number(sampleLimit) || 20)))
+    .map((entry) => ({
+      recordId: entry.recordId,
+      currentTier: Number(entry.entry?.tier) || 0,
+      targetTier: entry.patch.tier,
+      currentDisposition: normalizeString(entry.entry?.disposition) || null,
+      targetDisposition: entry.targetDisposition,
+      currentClassificationFamily: normalizeString(entry.entry?.classificationFamily) || null,
+      targetClassificationFamily: entry.targetFamily,
+      mergedIntoIncidentKey: entry.grouping?.merged ? entry.grouping.primaryRecordId : null,
+      groupSize: entry.grouping?.groupSize || 1,
+      canApply: entry.canApply,
+      needsDocumentUpdate: entry.needsDocumentUpdate,
+      blockingReasons: entry.blockingReasons,
+      patchPreview: buildEscalationMigrationPatchPreview(entry.patch),
+    }));
+
+  return {
+    pilotId: normalizedPilotId,
+    migrationKey: ESCALATION_RECLASSIFICATION_MIGRATION_KEY,
+    totalEscalationRecordCount: inWindowEscalations.length,
+    alreadyCanonicalCount,
+    blockedCount,
+    needsDocumentUpdateCount,
+    mergedCount,
+    groupedIncidentCount,
+    applyReadyCount: applyReady.length,
+    samples,
+    candidates,
+  };
+}
+
 async function savePilotSurveyResponse({
   db,
   authUserId,
@@ -1063,6 +1845,319 @@ async function savePilotSurveyResponse({
   return payload;
 }
 
+async function buildPilotSurveyReclassificationReport({
+  db,
+  pilotId,
+  sampleLimit = 20,
+  actorUserId = null,
+  persistRun = true,
+}) {
+  const report = await collectPilotSurveyReclassificationCandidates({
+    db,
+    pilotId,
+    sampleLimit,
+  });
+
+  let run = null;
+  if (persistRun) {
+    run = await writePilotMigrationRun({
+      db,
+      pilotId: report.pilotId,
+      actorUserId,
+      mode: 'report',
+      report,
+      appliedMutationIds: [],
+      recompute: null,
+    });
+  }
+
+  return {
+    ...report,
+    runId: run?.id || null,
+  };
+}
+
+async function applyPilotSurveyReclassification({
+  db,
+  pilotId,
+  actorUserId = null,
+  sampleLimit = 20,
+  recomputeRollups = true,
+  recomputeLookbackDays = ROLLUP_REPAIR_LOOKBACK_DAYS,
+}) {
+  const report = await collectPilotSurveyReclassificationCandidates({
+    db,
+    pilotId,
+    sampleLimit,
+  });
+  const applyReady = report.candidates.filter((entry) => entry.canApply && (entry.needsDocumentUpdate || entry.needsEventBackfill));
+  const appliedAtMs = Date.now();
+  const appliedMutationIds = [];
+
+  for (const candidate of applyReady) {
+    if (candidate.needsDocumentUpdate) {
+      const surveyRef = db.collection(PILOT_SURVEY_RESPONSES_COLLECTION).doc(candidate.responseId);
+      await surveyRef.set({
+        ...candidate.patch,
+        migration: {
+          lastAppliedKey: SURVEY_RECLASSIFICATION_MIGRATION_KEY,
+          lastAppliedAt: timestampFromMillis(appliedAtMs),
+          lastAppliedAtMs: appliedAtMs,
+          lastAppliedBy: normalizeString(actorUserId) || null,
+        },
+        updatedAt: timestampFromMillis(appliedAtMs),
+        updatedAtMs: appliedAtMs,
+      }, { merge: true });
+    }
+
+    if (candidate.needsEventBackfill) {
+      const pilotContext = {
+        pilotId: candidate.context.pilotId,
+        pilotEnrollmentId: candidate.context.pilotEnrollmentId,
+        organizationId: candidate.context.organizationId,
+        teamId: candidate.context.teamId,
+        cohortId: candidate.context.cohortId,
+        athleteId: candidate.context.athleteId,
+      };
+
+      if (candidate.missingEventTypes.includes('survey_submitted')) {
+        await emitPilotMetricEvent({
+          db,
+          pilotContext,
+          eventType: 'survey_submitted',
+          actorRole: candidate.targetRespondentRole,
+          actorUserId: candidate.context.respondentUserId,
+          athleteId: candidate.context.athleteId,
+          sourceCollection: PILOT_SURVEY_RESPONSES_COLLECTION,
+          sourceDocumentId: candidate.responseId,
+          metricPayload: {
+            surveyKind: candidate.targetSurveyKind,
+            score: candidate.targetScore,
+          },
+          createdAt: candidate.submittedAtMs,
+        });
+      }
+
+      if (candidate.targetSurveyKind === 'trust' && candidate.missingEventTypes.includes('trust_submitted')) {
+        const surveyDoc = await db.collection(PILOT_SURVEY_RESPONSES_COLLECTION).doc(candidate.responseId).get();
+        const surveyData = surveyDoc.exists ? (surveyDoc.data() || {}) : {};
+        await emitPilotMetricEvent({
+          db,
+          pilotContext,
+          eventType: 'trust_submitted',
+          actorRole: candidate.targetRespondentRole,
+          actorUserId: candidate.context.respondentUserId,
+          athleteId: candidate.context.athleteId,
+          sourceCollection: PILOT_SURVEY_RESPONSES_COLLECTION,
+          sourceDocumentId: candidate.responseId,
+          metricPayload: {
+            surveyKind: 'trust',
+            score: candidate.targetScore,
+            trustBatteryAverage: normalizeNumber(surveyData?.trustBattery?.averageScore),
+            trustBatteryCompletionStatus: normalizeString(surveyData?.trustBattery?.completionStatus) || null,
+          },
+          createdAt: candidate.submittedAtMs,
+        });
+      }
+
+      if (candidate.targetSurveyKind === 'nps' && candidate.missingEventTypes.includes('nps_submitted')) {
+        await emitPilotMetricEvent({
+          db,
+          pilotContext,
+          eventType: 'nps_submitted',
+          actorRole: candidate.targetRespondentRole,
+          actorUserId: candidate.context.respondentUserId,
+          athleteId: candidate.context.athleteId,
+          sourceCollection: PILOT_SURVEY_RESPONSES_COLLECTION,
+          sourceDocumentId: candidate.responseId,
+          metricPayload: {
+            surveyKind: 'nps',
+            score: candidate.targetScore,
+          },
+          createdAt: candidate.submittedAtMs,
+        });
+      }
+    }
+
+    appliedMutationIds.push(candidate.responseId);
+  }
+
+  let recompute = null;
+  if (recomputeRollups) {
+    const lookbackDays = Math.max(1, Math.min(90, Number(recomputeLookbackDays) || ROLLUP_REPAIR_LOOKBACK_DAYS));
+    const explicitDateKeys = buildRepairDateKeys(lookbackDays);
+    recompute = {
+      lookbackDays,
+      explicitDateKeys,
+      rollups: await recomputePilotMetricRollups({
+        db,
+        pilotId: report.pilotId,
+        explicitDateKeys,
+      }),
+    };
+  }
+
+  const run = await writePilotMigrationRun({
+    db,
+    pilotId: report.pilotId,
+    actorUserId,
+    mode: 'apply',
+    report,
+    appliedMutationIds,
+    recompute,
+  });
+
+  return {
+    pilotId: report.pilotId,
+    migrationKey: SURVEY_RECLASSIFICATION_MIGRATION_KEY,
+    runId: run.id,
+    totalSurveyResponseCount: report.totalSurveyResponseCount,
+    blockedCount: report.blockedCount,
+    appliedDocumentIds: appliedMutationIds,
+    appliedCount: appliedMutationIds.length,
+    recompute,
+    report: {
+      alreadyCanonicalCount: report.alreadyCanonicalCount,
+      needsDocumentUpdateCount: report.needsDocumentUpdateCount,
+      needsEventBackfillCount: report.needsEventBackfillCount,
+      applyReadyCount: report.applyReadyCount,
+      samples: report.samples,
+    },
+  };
+}
+
+async function buildPilotEscalationReclassificationReport({
+  db,
+  pilotId,
+  sampleLimit = 20,
+  actorUserId = null,
+  persistRun = true,
+}) {
+  const report = await collectPilotEscalationReclassificationCandidates({
+    db,
+    pilotId,
+    sampleLimit,
+  });
+
+  let run = null;
+  if (persistRun) {
+    run = await writePilotMigrationRun({
+      db,
+      pilotId: report.pilotId,
+      actorUserId,
+      mode: 'report',
+      migrationKey: ESCALATION_RECLASSIFICATION_MIGRATION_KEY,
+      report,
+      reportSummary: {
+        totalEscalationRecordCount: report.totalEscalationRecordCount,
+        alreadyCanonicalCount: report.alreadyCanonicalCount,
+        blockedCount: report.blockedCount,
+        needsDocumentUpdateCount: report.needsDocumentUpdateCount,
+        mergedCount: report.mergedCount,
+        groupedIncidentCount: report.groupedIncidentCount,
+        applyReadyCount: report.applyReadyCount,
+        samples: report.samples || [],
+      },
+      appliedMutationIds: [],
+      recompute: null,
+    });
+  }
+
+  return {
+    ...report,
+    runId: run?.id || null,
+  };
+}
+
+async function applyPilotEscalationReclassification({
+  db,
+  pilotId,
+  actorUserId = null,
+  sampleLimit = 20,
+  recomputeRollups = true,
+  recomputeLookbackDays = ROLLUP_REPAIR_LOOKBACK_DAYS,
+}) {
+  const report = await collectPilotEscalationReclassificationCandidates({
+    db,
+    pilotId,
+    sampleLimit,
+  });
+  const applyReady = report.candidates.filter((entry) => entry.canApply && entry.needsDocumentUpdate);
+  const appliedAtMs = Date.now();
+  const appliedMutationIds = [];
+
+  for (const candidate of applyReady) {
+    const escalationRef = db.collection(ESCALATION_RECORDS_COLLECTION).doc(candidate.recordId);
+    await escalationRef.set({
+      ...candidate.patch,
+      migration: {
+        lastAppliedKey: ESCALATION_RECLASSIFICATION_MIGRATION_KEY,
+        lastAppliedAt: timestampFromMillis(appliedAtMs),
+        lastAppliedAtMs: appliedAtMs,
+        lastAppliedBy: normalizeString(actorUserId) || null,
+      },
+      updatedAt: timestampFromMillis(appliedAtMs),
+      updatedAtMs: appliedAtMs,
+    }, { merge: true });
+    appliedMutationIds.push(candidate.recordId);
+  }
+
+  let recompute = null;
+  if (recomputeRollups) {
+    const lookbackDays = Math.max(1, Math.min(180, Number(recomputeLookbackDays) || ROLLUP_REPAIR_LOOKBACK_DAYS));
+    const explicitDateKeys = buildRepairDateKeys(lookbackDays);
+    recompute = {
+      lookbackDays,
+      explicitDateKeys,
+      rollups: await recomputePilotMetricRollups({
+        db,
+        pilotId: report.pilotId,
+        explicitDateKeys,
+      }),
+    };
+  }
+
+  const run = await writePilotMigrationRun({
+    db,
+    pilotId: report.pilotId,
+    actorUserId,
+    mode: 'apply',
+    migrationKey: ESCALATION_RECLASSIFICATION_MIGRATION_KEY,
+    report,
+    reportSummary: {
+      totalEscalationRecordCount: report.totalEscalationRecordCount,
+      alreadyCanonicalCount: report.alreadyCanonicalCount,
+      blockedCount: report.blockedCount,
+      needsDocumentUpdateCount: report.needsDocumentUpdateCount,
+      mergedCount: report.mergedCount,
+      groupedIncidentCount: report.groupedIncidentCount,
+      applyReadyCount: report.applyReadyCount,
+      samples: report.samples || [],
+    },
+    appliedMutationIds,
+    recompute,
+  });
+
+  return {
+    pilotId: report.pilotId,
+    migrationKey: ESCALATION_RECLASSIFICATION_MIGRATION_KEY,
+    runId: run.id,
+    totalEscalationRecordCount: report.totalEscalationRecordCount,
+    blockedCount: report.blockedCount,
+    appliedDocumentIds: appliedMutationIds,
+    appliedCount: appliedMutationIds.length,
+    recompute,
+    report: {
+      alreadyCanonicalCount: report.alreadyCanonicalCount,
+      needsDocumentUpdateCount: report.needsDocumentUpdateCount,
+      mergedCount: report.mergedCount,
+      groupedIncidentCount: report.groupedIncidentCount,
+      applyReadyCount: report.applyReadyCount,
+      samples: report.samples,
+    },
+  };
+}
+
 function hasCompletedEnrollmentConsents({ teamMembership, pilotEnrollment }) {
   const onboarding = teamMembership?.athleteOnboarding || {};
   const productConsentAccepted = Boolean(onboarding.productConsentAccepted || pilotEnrollment?.productConsentAccepted);
@@ -1124,6 +2219,42 @@ async function loadPilotEscalations(db, athleteIds) {
   }
 }
 
+async function evaluateCoachWorkflowContinuity({
+  db,
+  athleteId,
+  pilotContext = null,
+  preferredPilotEnrollmentId = null,
+  preferredPilotId = null,
+  preferredTeamMembershipId = null,
+  sampleLimit = 10,
+}) {
+  let resolvedContext = pilotContext || null;
+  const normalizedAthleteId = normalizeString(athleteId || resolvedContext?.athleteId);
+
+  if ((!resolvedContext?.pilotId || !resolvedContext?.athleteId) && normalizedAthleteId) {
+    resolvedContext = await resolvePilotEnrollmentContext({
+      db,
+      athleteId: normalizedAthleteId,
+      preferredPilotEnrollmentId,
+      preferredPilotId,
+      preferredTeamMembershipId,
+      allowMembershipFallback: false,
+    });
+  }
+
+  if (!resolvedContext?.pilotId || !resolvedContext?.athleteId) {
+    return null;
+  }
+
+  const escalations = await loadPilotEscalations(db, [resolvedContext.athleteId]);
+  return {
+    pilotId: normalizeString(resolvedContext.pilotId),
+    pilotEnrollmentId: normalizeString(resolvedContext.pilotEnrollmentId) || null,
+    athleteId: normalizeString(resolvedContext.athleteId),
+    ...(buildCoachWorkflowContinuityReport(escalations, { sampleLimit }) || {}),
+  };
+}
+
 function buildBackfillMetadata({
   source = 'manual_seed',
   lookbackDays = OUTCOME_BACKFILL_LOOKBACK_DAYS,
@@ -1146,16 +2277,23 @@ function resolveBackfillWindowBounds({
   pilotEnrollment = null,
   lookbackDays = OUTCOME_BACKFILL_LOOKBACK_DAYS,
 }) {
-  const normalizedLookbackDays = Math.max(1, Math.min(30, Math.floor(Number(lookbackDays) || OUTCOME_BACKFILL_LOOKBACK_DAYS)));
+  const normalizedLookbackDays = Math.max(1, Math.floor(Number(lookbackDays) || OUTCOME_BACKFILL_LOOKBACK_DAYS));
+  const pilotStartAt = coerceMillis(pilot?.startAt);
   const pilotEndAt = coerceMillis(pilot?.endAt);
   const enrollmentCompletedAt = coerceMillis(pilotEnrollment?.completedAt);
   const endAnchorMs = pilotEndAt && pilotEndAt < Date.now()
     ? pilotEndAt
     : (enrollmentCompletedAt && enrollmentCompletedAt < Date.now() ? enrollmentCompletedAt : Date.now());
   const endDateKey = toUtcDateKey(endAnchorMs);
-  const startDateKey = shiftUtcDateKey(endDateKey, -(normalizedLookbackDays - 1));
+  const pilotStartDateKey = pilotStartAt && pilotStartAt <= endAnchorMs ? toUtcDateKey(pilotStartAt) : '';
+  const fallbackStartDateKey = shiftUtcDateKey(endDateKey, -(normalizedLookbackDays - 1));
+  const startDateKey = pilotStartDateKey || fallbackStartDateKey;
+  const effectiveLookbackDays = Math.max(
+    1,
+    Math.round((endOfUtcDayMs(endDateKey) - startOfUtcDayMs(startDateKey)) / (24 * 60 * 60 * 1000)) + 1
+  );
   return {
-    lookbackDays: normalizedLookbackDays,
+    lookbackDays: effectiveLookbackDays,
     startDateKey,
     endDateKey,
     startMs: startOfUtcDayMs(startDateKey),
@@ -1344,6 +2482,7 @@ async function backfillPilotAthleteOutcomeHistory({
     actorUserId,
   });
   const explicitDateKeys = new Set();
+  const materializedDateKeys = listDateKeysBetween(windowBounds.startDateKey, windowBounds.endDateKey);
   const touchedAssignmentIds = new Set();
 
   const [checkIns, assignments, assignmentEvents] = await Promise.all([
@@ -1474,12 +2613,13 @@ async function backfillPilotAthleteOutcomeHistory({
   });
 
   const explicitDateKeyList = [...explicitDateKeys].sort();
+  const recomputeDateKeys = [...new Set([...materializedDateKeys, ...explicitDateKeyList])].sort();
   let rollups = null;
   if (recompute) {
     rollups = await recomputePilotMetricRollups({
       db,
       pilotId: normalizeString(pilotContext.pilotId),
-      explicitDateKeys: explicitDateKeyList,
+      explicitDateKeys: recomputeDateKeys,
     });
   }
 
@@ -1495,6 +2635,7 @@ async function backfillPilotAthleteOutcomeHistory({
     backfilledAssignmentCount: touchedAssignmentIds.size,
     backfilledAssignmentCompletionEventCount: completedAssignmentIds.size,
     explicitDateKeys: explicitDateKeyList,
+    materializedDateKeys,
     rollups,
   };
 }
@@ -1799,8 +2940,56 @@ function isEnrollmentPausedDay({
   return !(pausedDateKey === dateKey && hasSameDayActivity);
 }
 
+const HARD_RISK_ESCALATION_PATTERN = /\b(suicid|self[- ]?harm|hurt myself|kill myself|end my life|overdose|unsafe|can't stay safe|cannot stay safe|want to die|die tonight|abuse|assault|violence|psychosis|hallucinat|manic|panic attack|can't function|cannot function)\b/i;
+const BENIGN_PERFORMANCE_SUPPORT_PATTERN = /\b(competition|compete|competing|on stage|performance|pre[- ]?competition|nervous|anxious|anxiety|excited|regulate|regulation|focus|attention|sleep|bed|go to sleep|late|mind|what'?s on my mind|talk about|emotional regulation|stress)\b/i;
+const LOSS_OF_FUNCTION_PATTERN = /\b(can't walk|cannot walk|can't move|cannot move|can't feel|cannot feel|can't use my (?:arm|leg|hand|foot)|cannot use my (?:arm|leg|hand|foot)|can't lift my (?:arm|leg|hand|foot)|cannot lift my (?:arm|leg|hand|foot)|can't grip|cannot grip|can't hold|cannot hold|arm won't work|leg won't work|hand won't work|foot won't work|went numb|loss of function|lost function|sudden weakness|weakness on one side|numbness|numb|paralysis|dropping things|stroke[- ]?like)\b/i;
+
+function hasEscalationWorkflowProgress(escalation = {}) {
+  return Boolean(
+    coerceMillis(escalation.coachNotifiedAt)
+    || coerceMillis(escalation.handoffInitiatedAt)
+    || coerceMillis(escalation.handoffAcceptedAt)
+    || coerceMillis(escalation.firstClinicianResponseAt)
+    || coerceMillis(escalation.handoffCompletedAt)
+    || coerceMillis(escalation.resolvedAt)
+    || normalizeString(escalation.consentStatus) === 'accepted'
+  );
+}
+
+function isBenignPerformanceSupportEscalation(escalation = {}) {
+  const tier = Number(escalation.tier) || 0;
+  if (tier <= 0 || tier >= 3) return false;
+  if (hasEscalationWorkflowProgress(escalation)) return false;
+  const combinedText = `${normalizeString(escalation.category)} ${normalizeString(escalation.classificationReason)} ${normalizeString(escalation.triggerContent)}`.trim();
+  if (!combinedText) return false;
+  if (HARD_RISK_ESCALATION_PATTERN.test(combinedText)) return false;
+  return BENIGN_PERFORMANCE_SUPPORT_PATTERN.test(combinedText);
+}
+
+function hasLossOfFunctionConcern(text = '', recentMessages = []) {
+  const combinedText = [text]
+    .concat((Array.isArray(recentMessages) ? recentMessages : []).slice(-5).map((entry) => entry?.content || ''))
+    .join(' ')
+    .trim();
+  return Boolean(combinedText) && LOSS_OF_FUNCTION_PATTERN.test(combinedText);
+}
+
+function isTrueCareEscalationClassification(classification = {}, text = '', recentMessages = []) {
+  if (!classification || typeof classification !== 'object') return false;
+  if (classification.requiresClinicalHandoff === true) return true;
+
+  const family = normalizeString(classification.classificationFamily);
+  if (family === 'care_escalation' || family === 'critical_safety') return true;
+
+  const tier = Number(classification.tier) || 0;
+  if (tier >= 2) return true;
+
+  return hasLossOfFunctionConcern(text, recentMessages);
+}
+
 function isEscalationHoldDay(escalations = [], dateKey) {
   return escalations.some((escalation) => {
+    if (isBenignPerformanceSupportEscalation(escalation)) return false;
     const createdDate = toUtcDateKey((coerceMillis(escalation.createdAt) || 0) * (coerceMillis(escalation.createdAt) ? 1 : 1000));
     const resolvedDate = toUtcDateKey(
       (coerceMillis(escalation.resolvedAt) || coerceMillis(escalation.handoffCompletedAt) || Date.now()) * ((coerceMillis(escalation.resolvedAt) || coerceMillis(escalation.handoffCompletedAt)) ? 1 : 1000)
@@ -1841,6 +3030,14 @@ function normalizeEscalationStatus(entry = {}) {
     return 'resolved';
   }
   return 'active';
+}
+
+function countsTowardCareEscalationHeadline(entry = {}) {
+  if (isBenignPerformanceSupportEscalation(entry)) return false;
+  if (entry.countsTowardCareKpi === true || entry.requiresClinicalHandoff === true) return true;
+  const disposition = normalizeString(entry.disposition).toLowerCase();
+  if (disposition === 'clinical_handoff') return true;
+  return (Number(entry.tier) || 0) >= 2;
 }
 
 function computeElapsedMinutes(entry, startField, endField) {
@@ -2015,6 +3212,7 @@ function computeMentalPerformanceSummary(snapshotSets = [], windowStartMs, windo
 
 function computeEscalationSummary(escalations = [], athleteIds = [], windowStartMs, windowEndMs) {
   const filtered = escalations.filter((entry) => {
+    if (isBenignPerformanceSupportEscalation(entry)) return false;
     const createdAtMs = coerceMillis(entry.createdAt);
     const normalizedCreatedAtMs =
       createdAtMs
@@ -2022,18 +3220,20 @@ function computeEscalationSummary(escalations = [], athleteIds = [], windowStart
       || 0;
     return normalizedCreatedAtMs >= windowStartMs && normalizedCreatedAtMs <= windowEndMs;
   });
+  const headlineEligible = filtered.filter((entry) => countsTowardCareEscalationHeadline(entry));
+  const coachReviewOnly = filtered.filter((entry) => !countsTowardCareEscalationHeadline(entry));
 
-  const timeToCareMinutes = filtered
+  const timeToCareMinutes = headlineEligible
     .map((entry) => computeElapsedMinutes(entry, 'createdAt', 'handoffInitiatedAt'))
     .filter((value) => value !== null);
 
   const statusCounts = ESCALATION_STATUS_ORDER.reduce((accumulator, status) => {
-    accumulator[status] = filtered.filter((entry) => normalizeEscalationStatus(entry) === status).length;
+    accumulator[status] = headlineEligible.filter((entry) => normalizeEscalationStatus(entry) === status).length;
     return accumulator;
   }, {});
 
   const tierByStatus = [1, 2, 3].reduce((accumulator, tier) => {
-    const tierEntries = filtered.filter((entry) => Number(entry.tier) === tier);
+    const tierEntries = headlineEligible.filter((entry) => Number(entry.tier) === tier);
     accumulator[`tier${tier}`] = {
       total: tierEntries.length,
       active: tierEntries.filter((entry) => normalizeEscalationStatus(entry) === 'active').length,
@@ -2044,24 +3244,109 @@ function computeEscalationSummary(escalations = [], athleteIds = [], windowStart
   }, {});
 
   const supportingSpeedToCare = {
-    coachNotification: summarizeDurationMetric(filtered.map((entry) => computeElapsedMinutes(entry, 'createdAt', 'coachNotifiedAt'))),
-    consentAccepted: summarizeDurationMetric(filtered.map((entry) => computeElapsedMinutes(entry, 'createdAt', 'consentTimestamp'))),
-    handoffInitiated: summarizeDurationMetric(filtered.map((entry) => computeElapsedMinutes(entry, 'createdAt', 'handoffInitiatedAt'))),
-    handoffAccepted: summarizeDurationMetric(filtered.map((entry) => computeElapsedMinutes(entry, 'createdAt', 'handoffAcceptedAt'))),
-    firstClinicianResponse: summarizeDurationMetric(filtered.map((entry) => computeElapsedMinutes(entry, 'createdAt', 'firstClinicianResponseAt'))),
-    careCompleted: summarizeDurationMetric(filtered.map((entry) => computeElapsedMinutes(entry, 'createdAt', 'handoffCompletedAt'))),
+    coachNotification: summarizeDurationMetric(headlineEligible.map((entry) => computeElapsedMinutes(entry, 'createdAt', 'coachNotifiedAt'))),
+    consentAccepted: summarizeDurationMetric(headlineEligible.map((entry) => computeElapsedMinutes(entry, 'createdAt', 'consentTimestamp'))),
+    handoffInitiated: summarizeDurationMetric(headlineEligible.map((entry) => computeElapsedMinutes(entry, 'createdAt', 'handoffInitiatedAt'))),
+    handoffAccepted: summarizeDurationMetric(headlineEligible.map((entry) => computeElapsedMinutes(entry, 'createdAt', 'handoffAcceptedAt'))),
+    firstClinicianResponse: summarizeDurationMetric(headlineEligible.map((entry) => computeElapsedMinutes(entry, 'createdAt', 'firstClinicianResponseAt'))),
+    careCompleted: summarizeDurationMetric(headlineEligible.map((entry) => computeElapsedMinutes(entry, 'createdAt', 'handoffCompletedAt'))),
   };
 
   return {
-    total: filtered.length,
-    tier1: filtered.filter((entry) => Number(entry.tier) === 1).length,
-    tier2: filtered.filter((entry) => Number(entry.tier) === 2).length,
-    tier3: filtered.filter((entry) => Number(entry.tier) === 3).length,
+    total: headlineEligible.length,
+    tier1: headlineEligible.filter((entry) => Number(entry.tier) === 1).length,
+    tier2: headlineEligible.filter((entry) => Number(entry.tier) === 2).length,
+    tier3: headlineEligible.filter((entry) => Number(entry.tier) === 3).length,
+    coachReviewOnlyTotal: coachReviewOnly.length,
+    allOperationalEscalationsTotal: filtered.length,
     statusCounts,
     tierByStatus,
     medianMinutesToCare: calculateMedian(timeToCareMinutes),
     supportingSpeedToCare,
-    ratePer100ActiveAthletes: athleteIds.length ? roundMetric((filtered.length / athleteIds.length) * 100) : 0,
+    ratePer100ActiveAthletes: athleteIds.length ? roundMetric((headlineEligible.length / athleteIds.length) * 100) : 0,
+    workflowContinuity: buildCoachWorkflowContinuityReport(filtered),
+  };
+}
+
+function buildCoachWorkflowContinuityReport(escalations = [], { sampleLimit = 10 } = {}) {
+  const normalizedSampleLimit = Math.max(1, Math.min(20, Number(sampleLimit) || 10));
+  const filtered = (Array.isArray(escalations) ? escalations : []).filter((entry) => !isBenignPerformanceSupportEscalation(entry));
+
+  const statusCounts = ESCALATION_STATUS_ORDER.reduce((accumulator, status) => {
+    accumulator[status] = 0;
+    return accumulator;
+  }, {});
+  const dispositionCounts = {
+    coach_review: 0,
+    clinical_handoff: 0,
+    other: 0,
+  };
+
+  const evaluated = filtered.map((entry) => {
+    const disposition = normalizeString(entry.disposition).toLowerCase();
+    const status = normalizeEscalationStatus(entry);
+    const requiresCoachReview = entry.requiresCoachReview !== false;
+    const hasCoachSignal = disposition === 'coach_review'
+      || Boolean(coerceMillis(entry.coachNotifiedAt))
+      || normalizeString(entry.classificationFamily).toLowerCase() === 'coach_review';
+    const visibleToCoach = status === 'active' && requiresCoachReview && hasCoachSignal;
+    const actionableToCoach = visibleToCoach;
+    const visibilityReason = !requiresCoachReview
+      ? 'not_required'
+      : hasCoachSignal
+        ? (disposition === 'coach_review'
+          ? 'coach_review_disposition'
+          : coerceMillis(entry.coachNotifiedAt)
+            ? 'coach_notified'
+            : 'coach_classification')
+        : 'missing_coach_signal';
+
+    if (statusCounts[status] !== undefined) {
+      statusCounts[status] += 1;
+    }
+    if (dispositionCounts[disposition] !== undefined) {
+      dispositionCounts[disposition] += 1;
+    } else {
+      dispositionCounts.other += 1;
+    }
+
+    return {
+      id: normalizeString(entry.id) || null,
+      tier: Number(entry.tier) || null,
+      disposition: disposition || 'other',
+      status,
+      requiresCoachReview,
+      hasCoachSignal,
+      visibleToCoach,
+      actionableToCoach,
+      visibilityReason,
+      coachNotifiedAt: coerceMillis(entry.coachNotifiedAt) || null,
+      handoffInitiatedAt: coerceMillis(entry.handoffInitiatedAt) || null,
+      handoffCompletedAt: coerceMillis(entry.handoffCompletedAt) || null,
+      resolvedAt: coerceMillis(entry.resolvedAt) || null,
+      classificationFamily: normalizeString(entry.classificationFamily) || null,
+    };
+  });
+
+  const eligible = evaluated.filter((entry) => entry.status === 'active' && entry.requiresCoachReview);
+  const visible = eligible.filter((entry) => entry.visibleToCoach);
+  const actionable = visible.filter((entry) => entry.actionableToCoach);
+  const visibilityGapTotal = Math.max(0, eligible.length - visible.length);
+
+  return {
+    totalEscalations: filtered.length,
+    activeEscalations: statusCounts.active,
+    coachWorkflowEligibleTotal: eligible.length,
+    coachWorkflowVisibleTotal: visible.length,
+    coachWorkflowActionableTotal: actionable.length,
+    coachWorkflowVisibilityGapTotal: visibilityGapTotal,
+    visibilityRate: eligible.length ? roundMetric((visible.length / eligible.length) * 100) : null,
+    actionableRate: eligible.length ? roundMetric((actionable.length / eligible.length) * 100) : null,
+    manualReviewRequired: visibilityGapTotal > 0,
+    continuityStatus: visibilityGapTotal > 0 ? 'needs_manual_review' : 'healthy',
+    statusCounts,
+    dispositionCounts,
+    samples: evaluated.filter((entry) => entry.status === 'active' && entry.requiresCoachReview).slice(0, normalizedSampleLimit),
   };
 }
 
@@ -2916,6 +4201,20 @@ function findMostRecentSurveyResponse(responses = [], surveyKind) {
     .sort((left, right) => (coerceMillis(right.submittedAt) || right.submittedAtMs || 0) - (coerceMillis(left.submittedAt) || left.submittedAtMs || 0))[0] || null;
 }
 
+function buildCompletedSessionEventKey(entry = {}) {
+  const assignmentId = normalizeString(entry.metricPayload?.assignmentId)
+    || normalizeString(entry.assignmentId)
+    || normalizeString(entry.sourceAssignmentId);
+  if (assignmentId) {
+    return `assignment:${assignmentId}`;
+  }
+
+  const sourceCollection = normalizeString(entry.sourceCollection) || 'pilot_metric_event';
+  const sourceDocumentId = normalizeString(entry.sourceDocumentId) || normalizeString(entry.id) || 'unknown';
+  const sourceDate = normalizeString(entry.sourceDate) || 'undated';
+  return `${sourceCollection}:${sourceDocumentId}:${sourceDate}`;
+}
+
 async function getAthletePilotSurveyPromptState({
   db,
   athleteId,
@@ -2953,10 +4252,44 @@ async function getAthletePilotSurveyPromptState({
   const enrollmentComplete = isEnrollmentComplete({ teamMembership, pilotEnrollment });
   const activeEscalation = escalations.some((entry) => normalizeString(entry.status) === 'active');
   const athleteResponses = responses.filter((entry) => normalizeString(entry.respondentUserId) === normalizeString(context.athleteId));
-  const completedSessions = events.filter((entry) => (
-    normalizeString(entry.athleteId) === normalizeString(context.athleteId)
-    && entry.eventType === 'daily_assignment_completed'
-  )).length;
+  const nowMs = Date.now();
+  const pilotStartMs = coerceMillis(pilot?.startAt);
+  const pilotEndMs = coerceMillis(pilot?.endAt);
+  const effectiveSurveyWindowStartMs =
+    pilotStartMs
+    || coerceMillis(pilotEnrollment?.outcomeBackfillStartAt)
+    || coerceMillis(pilotEnrollment?.createdAt)
+    || nowMs;
+  const effectiveSurveyWindowEndMs =
+    pilotEndMs && pilotEndMs < nowMs ? pilotEndMs : nowMs;
+  const historicalAssignments = await loadAthleteHistoricalAssignments({
+    db,
+    athleteId: context.athleteId,
+    startDateKey: toUtcDateKey(effectiveSurveyWindowStartMs),
+    endDateKey: toUtcDateKey(effectiveSurveyWindowEndMs),
+  });
+  const completedSessionKeys = new Set(
+    events
+      .filter((entry) => (
+        normalizeString(entry.athleteId) === normalizeString(context.athleteId)
+        && entry.eventType === 'daily_assignment_completed'
+      ))
+      .map((entry) => buildCompletedSessionEventKey(entry)),
+  );
+  historicalAssignments
+    .filter((assignment) => normalizeString(assignment.status) === 'completed')
+    .forEach((assignment) => {
+      const assignmentId = normalizeString(assignment.id);
+      if (assignmentId) {
+        completedSessionKeys.add(`assignment:${assignmentId}`);
+        return;
+      }
+
+      const sourceDate = normalizeString(assignment.sourceDate) || 'undated';
+      const actionType = normalizeString(assignment.actionType) || 'assignment';
+      completedSessionKeys.add(`historical_assignment:${sourceDate}:${actionType}`);
+    });
+  const completedSessions = completedSessionKeys.size;
   const trustResponses = athleteResponses.filter((entry) => normalizeString(entry.surveyKind) === 'trust');
   const npsResponses = athleteResponses.filter((entry) => normalizeString(entry.surveyKind) === 'nps');
   const lastTrustResponse = findMostRecentSurveyResponse(trustResponses, 'trust');
@@ -2988,9 +4321,6 @@ async function getAthletePilotSurveyPromptState({
     };
   }
 
-  const nowMs = Date.now();
-  const pilotStartMs = coerceMillis(pilot?.startAt);
-  const pilotEndMs = coerceMillis(pilot?.endAt);
   const progressRatio =
     pilotStartMs && pilotEndMs && pilotEndMs > pilotStartMs
       ? Math.max(0, Math.min(1, (nowMs - pilotStartMs) / (pilotEndMs - pilotStartMs)))
@@ -3065,21 +4395,32 @@ module.exports = {
   PILOT_METRIC_ROLLUP_DAILY_SUBCOLLECTION,
   PILOT_SURVEY_RESPONSES_COLLECTION,
   PILOT_MENTAL_PERFORMANCE_SNAPSHOTS_SUBCOLLECTION,
+  SURVEY_RECLASSIFICATION_MIGRATION_KEY,
+  ESCALATION_RECLASSIFICATION_MIGRATION_KEY,
   TRUST_BATTERY_ITEM_KEYS,
   TRUST_BATTERY_VERSION,
   buildTrustBatteryPayload,
+  buildPilotSurveyReclassificationReport,
+  buildPilotEscalationReclassificationReport,
   buildOutcomeHypothesisEvaluation,
+  buildCoachWorkflowContinuityReport,
+  computeEscalationSummary,
   computePilotOutcomeRollup,
   emitPilotMetricEvent,
+  evaluateCoachWorkflowContinuity,
   getAthletePilotSurveyPromptState,
+  hasLossOfFunctionConcern,
   isEnrollmentComplete,
   hasCompletedEnrollmentConsents,
+  isTrueCareEscalationClassification,
   buildRepairDateKeys,
   backfillPilotAthleteOutcomeHistory,
   recomputePilotMetricRollups,
   repairRecentPilotMetricRollups,
   recordPilotMetricAlert,
   resolvePilotEnrollmentContext,
+  applyPilotSurveyReclassification,
+  applyPilotEscalationReclassification,
   savePilotSurveyResponse,
   upsertPilotMentalPerformanceSnapshot,
   deriveBaselineProbeProfile,

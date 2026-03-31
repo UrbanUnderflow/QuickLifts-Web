@@ -1,9 +1,10 @@
 import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
-import { auth, db } from '../config';
+import { auth, db, getFirebaseModeRequestHeaders } from '../config';
 import { buildPulseCheckTeamInviteOneLink, resolvePulseCheckInvitePreviewImage } from '../../../utils/pulsecheckInviteLinks';
 import { mergePulseCheckRequiredConsents } from './types';
 import { ATHLETE_MENTAL_PROGRESS_COLLECTION } from '../mentaltraining/collections';
 import type { AthleteMentalProgress } from '../mentaltraining/types';
+import { resolvePulseCheckFunctionUrl } from '../mentaltraining/pulseCheckFunctionsUrl';
 import { getCompletedBaselineEvidence } from './athleteTaskState';
 import {
   resolvePilotEnrollmentStatus,
@@ -179,11 +180,12 @@ const triggerPilotAthleteOutcomeBackfill = async (input: {
   }
 
   const idToken = await currentUser.getIdToken();
-  const response = await fetch('/.netlify/functions/backfill-pilot-athlete-outcomes', {
+  const response = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/backfill-pilot-athlete-outcomes'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${idToken}`,
+      ...getFirebaseModeRequestHeaders(),
     },
     body: JSON.stringify({
       pilotId: normalizeString(input.pilotId),
@@ -373,20 +375,25 @@ const toPilot = (id: string, data: Record<string, any>): PulseCheckPilot => ({
   updatedAt: data.updatedAt || null,
 });
 
-const toPilotCohort = (id: string, data: Record<string, any>): PulseCheckPilotCohort => ({
-  id,
-  organizationId: data.organizationId || '',
-  teamId: data.teamId || '',
-  pilotId: data.pilotId || '',
-  name: data.name || '',
-  cohortType: data.cohortType || '',
-  assignmentRule: data.assignmentRule || '',
-  reportingTags: Array.isArray(data.reportingTags) ? data.reportingTags : [],
-  status: (data.status as PulseCheckPilotCohortStatus) || 'draft',
-  notes: data.notes || '',
-  createdAt: data.createdAt || null,
-  updatedAt: data.updatedAt || null,
-});
+const toPilotCohort = (id: string, data: Record<string, any>): PulseCheckPilotCohort => {
+  const rawStatus = (data.status as PulseCheckPilotCohortStatus) || 'active';
+  const normalizedStatus: PulseCheckPilotCohortStatus =
+    rawStatus === 'paused' || rawStatus === 'archived' ? rawStatus : 'active';
+  return {
+    id,
+    organizationId: data.organizationId || '',
+    teamId: data.teamId || '',
+    pilotId: data.pilotId || '',
+    name: data.name || '',
+    cohortType: data.cohortType || '',
+    assignmentRule: data.assignmentRule || '',
+    reportingTags: Array.isArray(data.reportingTags) ? data.reportingTags : [],
+    status: normalizedStatus,
+    notes: data.notes || '',
+    createdAt: data.createdAt || null,
+    updatedAt: data.updatedAt || null,
+  };
+};
 
 const toPilotEnrollment = (id: string, data: Record<string, any>): PulseCheckPilotEnrollment => ({
   id,
@@ -1383,7 +1390,7 @@ export const pulseCheckProvisioningService = {
       cohortType: normalizeString(input.cohortType),
       assignmentRule: normalizeString(input.assignmentRule),
       reportingTags: (input.reportingTags || []).map((tag) => normalizeString(tag)).filter(Boolean),
-      status: input.status || 'draft',
+      status: 'active',
       notes: normalizeString(input.notes),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -1392,7 +1399,6 @@ export const pulseCheckProvisioningService = {
     const docRef = await addDoc(collection(db, PILOT_COHORTS_COLLECTION), payload);
     return docRef.id;
   },
-
   async createAdminActivationLink(input: {
     organizationId: string;
     teamId: string;

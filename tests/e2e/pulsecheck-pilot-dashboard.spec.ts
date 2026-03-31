@@ -364,6 +364,14 @@ test.describe.serial('PulseCheck pilot dashboard', () => {
       await expect(page.getByText('6.7 trust')).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText('83.0% adherence')).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText('7.0 trust')).toBeVisible({ timeout: 30_000 });
+      const careDiagnosticsSection = page.locator('section,div').filter({
+        hasText: 'Secondary operational reads and supporting speed-to-care',
+      }).first();
+      await expect(careDiagnosticsSection).toContainText('Grouped Incidents');
+      await expect(careDiagnosticsSection).toContainText('Open Care Escalations');
+      await expect(careDiagnosticsSection).toContainText('Active');
+      await expect(careDiagnosticsSection).toContainText('Resolved');
+      await expect(careDiagnosticsSection).toContainText('Declined');
     } finally {
       await cleanupPilotDashboardFixture(page, adminIdentity);
     }
@@ -383,7 +391,10 @@ test.describe.serial('PulseCheck pilot dashboard', () => {
       await waitForStableAppFrame(page);
 
       await expect(page.getByText('Trust and adherence by recommendation path')).toBeVisible({ timeout: 30_000 });
-      await expect(page.getByText('Status mix and supporting speed-to-care')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('Secondary operational reads and supporting speed-to-care')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('Rollout Review')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('Legacy Raw Records')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('Normalized Incidents')).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText('State-Aware vs Fallback')).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText('Coach notified')).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText('Handoff accepted')).toBeVisible({ timeout: 30_000 });
@@ -412,8 +423,33 @@ test.describe.serial('PulseCheck pilot dashboard', () => {
       await expect(page.getByRole('heading', { name: fixture.athleteNames[0] })).toBeVisible();
       await expect(page.getByText(/Athlete drill-down inside one pilot/i)).toBeVisible();
       await expect(page.getByText('Enrollment status: active')).toBeVisible();
+      await expect(page.getByText('Normalized Incidents')).toBeVisible();
+      await expect(page.getByText('This uses the same grouped-incident normalization shown in the pilot dashboard rollout review.')).toBeVisible();
       await expect(page.getByText('Stable Patterns')).toBeVisible();
       await expect(page.getByText('Recent Patterns')).toBeVisible();
+    } finally {
+      await cleanupPilotDashboardFixture(page, adminIdentity);
+    }
+  });
+
+  test('supports per-athlete Seed data backfill from the pilot athletes table', async ({ page }) => {
+    test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
+
+    const { fixture, adminIdentity } = await seedPilotDashboardFixture(page);
+
+    try {
+      await page.goto(`/admin/pulsecheckPilotDashboard/${encodeURIComponent(fixture.pilotId)}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await waitForStableAppFrame(page);
+
+      const athleteRow = page.locator('tr').filter({ hasText: fixture.athleteNames[0] }).first();
+      const seedButton = athleteRow.getByRole('button', { name: 'Seed data' });
+
+      await expect(seedButton).toBeVisible();
+      await seedButton.click();
+      await expect(athleteRow.getByRole('button', { name: 'Seeding data...' })).toBeVisible({ timeout: 10_000 });
+      await expect(athleteRow.getByRole('button', { name: 'Seed data' })).toBeVisible({ timeout: 60_000 });
     } finally {
       await cleanupPilotDashboardFixture(page, adminIdentity);
     }

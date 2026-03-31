@@ -284,6 +284,15 @@ export const getActiveFirebaseProjectId = () =>
     ? process.env.NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID || 'quicklifts-dev-01'
     : process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'quicklifts-dd3f1';
 
+export const getFirebaseModeRequestHeaders = (): Record<string, string> => {
+  const isDev = resolveClientFirebaseMode();
+  return {
+    'X-PulseCheck-Firebase-Mode': isDev ? 'dev' : 'prod',
+    'X-PulseCheck-Dev-Firebase': isDev ? 'true' : 'false',
+    'X-PulseCheck-Firebase-Project-Id': getActiveFirebaseProjectId(),
+  };
+};
+
 export const setPreferredFirebaseMode = (isDev: boolean) => {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem('devMode', isDev ? 'true' : 'false');

@@ -480,6 +480,96 @@ export interface PilotDashboardSnapshotHistoryItem {
   coachDetailSummary?: string;
 }
 
+export interface PilotDashboardAthleteAdherenceSummary {
+  expectedAthleteDays: number;
+  completedCheckInDays: number;
+  completedAssignmentDays: number;
+  adheredDays: number;
+  adherenceRate: number;
+  dailyCheckInRate: number;
+  assignmentCompletionRate: number;
+}
+
+export interface PilotDashboardAthleteAdherenceDay {
+  dateKey: string;
+  timezone: string;
+  expected: boolean;
+  status: 'green' | 'red' | 'excluded';
+  checkInCompleted: boolean;
+  assignmentCompleted: boolean;
+  checkInCount: number;
+  assignmentId?: string | null;
+  assignmentStatus?: string | null;
+  assignmentActionType?: string | null;
+  exclusionReason?: 'not_enrolled_yet' | 'manual_pause' | 'paused' | 'escalation_hold' | 'no_task_rest_day' | 'withdrawn' | null;
+  checkInRecordedAt?: PilotDashboardTimeValue;
+  assignmentCompletedAt?: PilotDashboardTimeValue;
+}
+
+export interface PilotDashboardAthleteEscalationDetail {
+  id: string;
+  conversationId?: string | null;
+  tier: number;
+  category: string;
+  status: 'active' | 'resolved' | 'declined';
+  dispositionLabel: string;
+  groupedIncidentKey: string;
+  groupedIncidentLabel: string;
+  groupedIncidentDispositionLabel: string;
+  groupedIncidentRecordCount: number;
+  coachReviewFlag: boolean;
+  supportFlag: boolean;
+  openCareEscalation: boolean;
+  consentStatus?: string | null;
+  handoffStatus?: string | null;
+  classificationReason?: string | null;
+  triggerContent?: string | null;
+  createdAt: PilotDashboardTimeValue;
+  coachNotifiedAt?: PilotDashboardTimeValue;
+  consentTimestamp?: PilotDashboardTimeValue;
+  handoffInitiatedAt?: PilotDashboardTimeValue;
+  handoffAcceptedAt?: PilotDashboardTimeValue;
+  firstClinicianResponseAt?: PilotDashboardTimeValue;
+  handoffCompletedAt?: PilotDashboardTimeValue;
+  resolvedAt?: PilotDashboardTimeValue;
+}
+
+export interface PilotDashboardEscalationSecondaryDiagnostics {
+  coachReviewFlags: number;
+  supportFlags: number;
+  groupedIncidents: number;
+  openCareEscalations: number;
+}
+
+export interface PilotDashboardEscalationCountComparison {
+  legacyRecordCount: number;
+  normalizedIncidentCount: number;
+  recordsCollapsedByGrouping: number;
+  status: 'no-escalations' | 'parity' | 'grouped';
+}
+
+export interface PilotDashboardEscalationMigrationContext {
+  statusLabel: string;
+  sourceLabel: string;
+}
+
+export interface PilotDashboardEscalationOperationalDiagnostics {
+  statusCounts?: {
+    active: number;
+    resolved: number;
+    declined: number;
+  };
+  supportingSpeedToCare?: Record<string, any>;
+  secondaryCounts: PilotDashboardEscalationSecondaryDiagnostics;
+  comparison: PilotDashboardEscalationCountComparison;
+  migrationContext?: PilotDashboardEscalationMigrationContext;
+}
+
+export interface PilotDashboardOutcomeOperationalDiagnostics {
+  escalations?: PilotDashboardEscalationOperationalDiagnostics;
+  [key: string]: any;
+}
+
 export interface PilotDashboardDetail {
   organization: PulseCheckOrganization;
   team: PulseCheckTeam;
@@ -499,7 +589,7 @@ export interface PilotDashboardDetail {
   outcomeMetricsByCohort?: Record<string, PilotDashboardOutcomeMetrics>;
   outcomeDiagnostics?: PilotDashboardOutcomeSurveyDiagnostics;
   outcomeDiagnosticsByCohort?: Record<string, PilotDashboardOutcomeSurveyDiagnostics>;
-  outcomeOperationalDiagnostics?: Record<string, any>;
+  outcomeOperationalDiagnostics?: PilotDashboardOutcomeOperationalDiagnostics;
   outcomeRecommendationTypeSlices?: Record<string, any>;
   outcomeRecommendationTypeSlicesByCohort?: Record<string, Record<string, any>>;
   outcomeTrustDispositionBaseline?: Record<string, any>;
@@ -525,6 +615,9 @@ export interface PilotDashboardAthleteDetail {
   latestAssessmentContextFlagStatus: string;
   latestAssessmentCapturedAt?: PilotDashboardTimeValue;
   mentalPerformanceSnapshots?: PulseCheckPilotMentalPerformanceSnapshotSet;
+  adherenceSummary: PilotDashboardAthleteAdherenceSummary;
+  adherenceDays: PilotDashboardAthleteAdherenceDay[];
+  escalations: PilotDashboardAthleteEscalationDetail[];
   recentPatterns: PilotDashboardRecentPattern[];
   recentProjections: PilotDashboardRecentProjection[];
   recentEvidence: PilotDashboardRecentEvidence[];
