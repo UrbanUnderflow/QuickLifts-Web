@@ -946,6 +946,65 @@ function normalizeTrustBatteryItem(entry) {
   };
 }
 
+function normalizeSurveyMetricPayload(rawPayload, surveyKind, comment) {
+  if (!rawPayload || typeof rawPayload !== 'object' || Array.isArray(rawPayload)) {
+    const fallbackComment = sanitizeSurveyComment(comment);
+    return fallbackComment ? { comment: fallbackComment } : null;
+  }
+
+  const payload = {};
+  const normalizedComment = sanitizeSurveyComment(rawPayload.comment ?? comment);
+  if (normalizedComment) {
+    payload.comment = normalizedComment;
+  }
+
+  if (surveyKind === 'trust') {
+    const rawDrivers = rawPayload.drivers;
+    if (rawDrivers && typeof rawDrivers === 'object' && !Array.isArray(rawDrivers)) {
+      const normalizedDrivers = {
+        credibility: rawDrivers.credibility === true,
+        reliability: rawDrivers.reliability === true,
+        safety: rawDrivers.safety === true,
+        relevance: rawDrivers.relevance === true,
+        usefulness: rawDrivers.usefulness === true,
+      };
+      payload.drivers = normalizedDrivers;
+      payload.driverCount = Object.values(normalizedDrivers).filter(Boolean).length;
+    } else if (normalizeNumber(rawPayload.driverCount) !== null) {
+      payload.driverCount = Math.max(0, Math.round(normalizeNumber(rawPayload.driverCount)));
+    }
+  }
+
+  return Object.keys(payload).length ? payload : null;
+}
+
+function buildTrustBatteryPayloadFromMetricPayload(metricPayload) {
+  const rawDrivers = metricPayload?.drivers;
+  if (!rawDrivers || typeof rawDrivers !== 'object' || Array.isArray(rawDrivers)) {
+    return null;
+  }
+
+  const driverKeyMap = {
+    credibility: 'credibility',
+    reliability: 'reliability',
+    safety: 'honesty_safety',
+    relevance: 'athlete_interest',
+    usefulness: 'practical_usefulness',
+  };
+
+  const items = Object.entries(driverKeyMap).map(([driverId, legacyKey]) => ({
+    key: legacyKey,
+    score: rawDrivers[driverId] === true ? 10 : 0,
+    completed: true,
+    prompt: null,
+  }));
+
+  return buildTrustBatteryPayload({
+    version: 'athlete_trust_driver_binary_v1',
+    items,
+  });
+}
+
 function buildTrustBatteryPayload(rawBattery) {
   const items = Array.isArray(rawBattery?.items)
     ? rawBattery.items.map((entry) => normalizeTrustBatteryItem(entry)).filter(Boolean)
@@ -1767,6 +1826,7 @@ async function savePilotSurveyResponse({
   organizationId,
   athleteId,
   diagnosticBattery,
+  metricPayload,
 }) {
   const normalizedSurveyKind = normalizeString(surveyKind);
   if (!['trust', 'nps'].includes(normalizedSurveyKind)) {
@@ -1796,8 +1856,9 @@ async function savePilotSurveyResponse({
 
   const submittedAtMs = Date.now();
   const surveyRef = db.collection(PILOT_SURVEY_RESPONSES_COLLECTION).doc();
+  const normalizedMetricPayload = normalizeSurveyMetricPayload(metricPayload, normalizedSurveyKind, comment);
   const trustBattery = normalizedSurveyKind === 'trust'
-    ? buildTrustBatteryPayload(diagnosticBattery || {})
+    ? buildTrustBatteryPayload(diagnosticBattery || buildTrustBatteryPayloadFromMetricPayload(normalizedMetricPayload) || {})
     : null;
 
   const resolvedPilotId = normalizeString(pilotContext?.pilotId || pilotId);
@@ -1824,6 +1885,7 @@ async function savePilotSurveyResponse({
     surveyKind: normalizedSurveyKind,
     score: roundMetric(normalizedScore),
     comment: sanitizeSurveyComment(comment),
+    metricPayload: normalizedMetricPayload,
     source: normalizeString(source) || 'web-admin',
     submittedAt: timestampFromMillis(submittedAtMs),
     submittedAtMs,

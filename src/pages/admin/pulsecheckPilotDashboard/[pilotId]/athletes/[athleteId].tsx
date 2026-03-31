@@ -69,7 +69,7 @@ const formatExclusionReason = (value?: string | null) => {
     case 'watch_list_hold':
       return 'Watch list hold';
     case 'escalation_hold':
-      return 'Legacy escalation hold';
+      return 'Escalation hold';
     case 'no_task_rest_day':
       return 'No-task rest day';
     case 'withdrawn':
@@ -147,17 +147,11 @@ const escalationRecordTitle = (escalation: PilotDashboardAthleteDetail['escalati
 };
 
 const escalationRecordMeta = (escalation: PilotDashboardAthleteDetail['escalations'][number]) => {
-  const parts = [
+  return [
     escalation.category,
     escalation.status,
     `created ${formatTimestamp(escalation.createdAt)}`,
-  ];
-
-  if (escalation.supportFlag || escalation.coachReviewFlag) {
-    parts.unshift(`Historical tier ${escalation.tier}`);
-  }
-
-  return parts.join(' · ');
+  ].join(' · ');
 };
 
 const escalationWorkflowSummary = (escalation: PilotDashboardAthleteDetail['escalations'][number]) => {
