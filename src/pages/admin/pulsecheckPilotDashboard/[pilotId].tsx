@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,
   ArrowLeft,
@@ -19,6 +20,7 @@ import {
   Sparkles,
   Trash2,
   Users2,
+  X,
 } from 'lucide-react';
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
 import { LocalFirebaseModeButton } from '../../../components/admin/pilot-dashboard/LocalFirebaseModeButton';
@@ -299,11 +301,29 @@ const OUTCOME_CARD_ORDER = ['enrollment', 'adherence', 'escalations', 'speedToCa
 const OUTCOME_CARD_PRESENTATION: Record<typeof OUTCOME_CARD_ORDER[number], { label: string; help: string }> = {
   enrollment: { label: 'Enrollment', help: 'Enrollment complete rate' },
   adherence: { label: 'Adherence', help: 'Full-day adherence rate' },
-  escalations: { label: 'Escalations', help: 'Pilot escalation volume' },
+  escalations: { label: 'Care Escalations', help: 'Pilot care-escalation volume' },
   speedToCare: { label: 'Speed to Care', help: 'Median minutes to handoff initiated' },
   athleteTrust: { label: 'Athlete Trust', help: 'Average trust score' },
   athleteNps: { label: 'Athlete NPS', help: 'Average recommendation score' },
 };
+
+const ESCALATION_MIGRATION_DRY_RUN_GUIDANCE = [
+  'Stop if blocked rows remain or if any sample patch would move escalation context without a clear reason.',
+  'Capture the current pilot baseline before apply: total escalations, tier split, status buckets, and median minutes to care.',
+  'Treat classifier and disposition changes as denominator changes, not cosmetic relabeling.',
+];
+
+const ESCALATION_MIGRATION_STAGED_VALIDATION = [
+  'Run one pilot in staged mode first and compare before and after counts on the same frame.',
+  'Hold rollout if active, resolved, or declined buckets move unexpectedly.',
+  'If speed to care becomes null or jumps sharply, inspect care timing milestones before widening rollout.',
+];
+
+const ESCALATION_MIGRATION_ROLLBACK_GUIDANCE = [
+  'Disable outcomes for containment if operators need a fast stop.',
+  'Revert classifier or disposition logic to the prior released version if escalation meaning changed unexpectedly.',
+  'Restore exported source docs and recompute pilot rollups before re-enabling live rollout.',
+];
 
 type SurveyMetricKey = 'athleteTrust' | 'coachTrust' | 'clinicianTrust' | 'athleteNps' | 'coachNps' | 'clinicianNps';
 
@@ -354,7 +374,8 @@ const formatOutcomeValue = (metricKey: typeof OUTCOME_CARD_ORDER[number], metric
 const formatOutcomeSubtext = (
   metricKey: typeof OUTCOME_CARD_ORDER[number],
   metrics: PilotDashboardDetail['outcomeMetrics'] | null | undefined,
-  diagnostics: PilotDashboardDetail['outcomeDiagnostics'] | null | undefined
+  diagnostics: PilotDashboardDetail['outcomeDiagnostics'] | null | undefined,
+  enrollmentCount?: { enrolledCount: number; totalCount: number } | null
 ) => {
   if (!metrics) return '';
   const surveySummary =
@@ -365,11 +386,13 @@ const formatOutcomeSubtext = (
         : null;
   switch (metricKey) {
     case 'enrollment':
-      return `${metrics.consentCompletionRate.toFixed(1)}% consent completion`;
+      return enrollmentCount
+        ? `${enrollmentCount.enrolledCount} of ${enrollmentCount.totalCount} fully enrolled · ${metrics.consentCompletionRate.toFixed(1)}% consent completion`
+        : `${metrics.consentCompletionRate.toFixed(1)}% consent completion`;
     case 'adherence':
       return `${metrics.dailyCheckInRate.toFixed(1)}% check-ins, ${metrics.assignmentCompletionRate.toFixed(1)}% assignments`;
     case 'escalations':
-      return `${metrics.escalationsTier1} T1, ${metrics.escalationsTier2} T2, ${metrics.escalationsTier3} T3`;
+      return `${metrics.escalationsTier1} coach review, ${metrics.escalationsTier2} T2, ${metrics.escalationsTier3} T3`;
     case 'speedToCare':
       return metrics.medianMinutesToCare !== null ? 'Median minutes to handoff initiated' : 'No handoffs yet';
     case 'athleteTrust':
@@ -624,12 +647,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   }, [filteredResearchReadouts, selectedReadoutId]);
 
-  const activeCohorts = useMemo(
-    () => (detail?.cohorts || []).filter((cohort) => cohort.status === 'active'),
-    [detail]
-  );
-
-  const availableCohorts = activeCohorts.length > 0 ? activeCohorts : detail?.cohorts || [];
+  const availableCohorts = detail?.cohorts || [];
 
   const selectedCohort = useMemo(
     () => availableCohorts.find((cohort) => cohort.id === cohortFilter) || null,
@@ -655,7 +673,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   }, [detail, cohortFilter]);
 
   const visibleMetrics = useMemo(() => {
-    const activeCohortCount = activeCohorts.length > 0 ? activeCohorts.length : detail?.cohorts.length || 0;
+    const activeCohortCount = detail?.cohorts.length || 0;
     return {
       activeAthleteCount: visibleAthletes.length,
       cohortCount: cohortFilter ? (selectedCohort ? 1 : 0) : activeCohortCount,
@@ -668,7 +686,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         0
       ),
     };
-  }, [activeCohorts.length, cohortFilter, detail?.cohorts.length, selectedCohort, visibleAthletes]);
+  }, [cohortFilter, detail?.cohorts.length, selectedCohort, visibleAthletes]);
 
   const visibleCohortSummaries = useMemo(() => {
     if (!detail) return [];
@@ -733,10 +751,40 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   }, [cohortFilter, detail]);
 
   const visibleOperationalDiagnostics = detail?.outcomeOperationalDiagnostics || null;
+  const visibleEscalationOperationalDiagnostics = visibleOperationalDiagnostics?.escalations || null;
+  const visibleEscalationComparison = visibleEscalationOperationalDiagnostics?.comparison || null;
+  const visibleEscalationMigrationContext = visibleEscalationOperationalDiagnostics?.migrationContext || null;
   const visibleTrustDispositionBaseline = detail?.outcomeTrustDispositionBaseline || null;
   const outcomeReleaseSettings = detail?.outcomeReleaseSettings || null;
   const outcomeOpsStatus = detail?.outcomeOpsStatus || null;
   const outcomesEnabled = outcomeReleaseSettings?.outcomesEnabled !== false;
+  const rollupRecomputeStatus = outcomeOpsStatus?.scopes?.rollup_recompute?.status || '';
+  const escalationMigrationReadiness = !outcomesEnabled
+    ? {
+        label: 'Outcomes disabled',
+        className: 'border-rose-400/20 bg-rose-400/10 text-rose-100',
+      }
+    : rollupRecomputeStatus && !['ok', 'success'].includes(rollupRecomputeStatus)
+      ? {
+          label: 'Investigate recompute before widening rollout',
+          className: 'border-amber-400/20 bg-amber-400/10 text-amber-100',
+        }
+      : visibleOutcomeMetrics?.escalationsTotal && visibleOutcomeMetrics?.medianMinutesToCare === null
+        ? {
+            label: 'Escalations present but speed-to-care is missing',
+            className: 'border-amber-400/20 bg-amber-400/10 text-amber-100',
+          }
+        : {
+            label: 'Ready for staged comparison review',
+            className: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100',
+          };
+
+  const visibleEnrollmentCount = useMemo(() => {
+    if (!visibleOutcomeMetrics) return null;
+    const totalCount = cohortFilter ? visibleAthletes.length : (detail?.metrics.totalEnrollmentCount || 0);
+    const enrolledCount = totalCount > 0 ? Math.round((visibleOutcomeMetrics.enrollmentRate / 100) * totalCount) : 0;
+    return { enrolledCount, totalCount };
+  }, [cohortFilter, detail?.metrics.totalEnrollmentCount, visibleAthletes.length, visibleOutcomeMetrics]);
 
   const wholePilotOutcomeMetrics = detail?.outcomeMetrics || null;
 
@@ -1013,7 +1061,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
   const saveHypothesis = async (hypothesis: PulseCheckPilotHypothesis) => {
     setSavingHypothesisId(hypothesis.id);
-    setError(null);
+    setPageMessage(null);
     try {
       await pulseCheckPilotDashboardService.saveHypothesis({
         id: hypothesis.id,
@@ -1028,7 +1076,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       });
       await load('refresh');
     } catch (saveError: any) {
-      setError(saveError?.message || 'Failed to save hypothesis.');
+      setPageMessage({ type: 'error', text: saveError?.message || 'Failed to save hypothesis.' });
     } finally {
       setSavingHypothesisId(null);
     }
@@ -1037,13 +1085,13 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const seedDefaults = async () => {
     if (!pilotId) return;
     setSeedingDefaults(true);
-    setError(null);
+    setPageMessage(null);
     try {
       await pulseCheckPilotDashboardService.seedDefaultHypotheses(pilotId);
       await load('refresh');
       setActiveTab('hypotheses');
     } catch (seedError: any) {
-      setError(seedError?.message || 'Failed to seed default hypotheses.');
+      setPageMessage({ type: 'error', text: seedError?.message || 'Failed to seed default hypotheses.' });
     } finally {
       setSeedingDefaults(false);
     }
@@ -1816,18 +1864,6 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
             <div className="mt-6 rounded-3xl border border-white/10 bg-[#11151f] p-8 text-sm text-zinc-400">Pilot not found.</div>
           ) : (
             <>
-              {pageMessage ? (
-                <div
-                  className={`mt-6 rounded-3xl border p-4 text-sm ${
-                    pageMessage.type === 'success'
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                      : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
-                  }`}
-                >
-                  {pageMessage.text}
-                </div>
-              ) : null}
-
               <div className="mt-6 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
                 {overviewCards.map((card) => (
                   <div key={card.label} className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
@@ -1959,7 +1995,12 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                               {formatOutcomeValue(metricKey, metric)}
                             </div>
                             <div className="mt-2 text-sm text-zinc-400">
-                              {formatOutcomeSubtext(metricKey, metric, visibleOutcomeDiagnostics)}
+                              {formatOutcomeSubtext(
+                                metricKey,
+                                metric,
+                                visibleOutcomeDiagnostics,
+                                metricKey === 'enrollment' ? visibleEnrollmentCount : null
+                              )}
                             </div>
                           </div>
                         );
@@ -2063,35 +2104,160 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       </div>
 
                       <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Escalation Operations</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">Status mix and supporting speed-to-care</h3>
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Care Escalation Diagnostics</div>
+                        <h3 className="mt-2 text-lg font-semibold text-white">Secondary operational reads and supporting speed-to-care</h3>
                         <p className="mt-1 text-sm text-zinc-400">
                           {selectedCohort
                             ? 'These supporting escalation diagnostics are still displayed on the whole-pilot frame so the operational sample stays interpretable.'
                             : 'These are the supporting operational metrics under the primary median-minutes-to-handoff KPI.'}
                         </p>
+                        <div className="mt-4 rounded-2xl border border-cyan-400/10 bg-[#0b0f17] p-4">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                              <div className="text-xs uppercase tracking-[0.18em] text-cyan-300">Rollout Review</div>
+                              <div className="mt-2 text-sm text-zinc-300">
+                                Legacy raw escalation records vs normalized grouped incidents.
+                              </div>
+                            </div>
+                            {visibleEscalationMigrationContext ? (
+                              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-zinc-300">
+                                {visibleEscalationMigrationContext.sourceLabel}
+                              </div>
+                            ) : null}
+                        </div>
+                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                          <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Legacy Raw Records</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationComparison?.legacyRecordCount ?? 0}</div>
+                            </div>
+                            <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Normalized Incidents</div>
+                              <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationComparison?.normalizedIncidentCount ?? 0}</div>
+                            </div>
+                            <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Records Collapsed</div>
+                              <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationComparison?.recordsCollapsedByGrouping ?? 0}</div>
+                            </div>
+                          </div>
+                          {visibleEscalationMigrationContext ? (
+                            <div className="mt-3 text-xs text-zinc-500">
+                              {visibleEscalationMigrationContext.statusLabel}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Readiness Cue</div>
+                                <div className="mt-2 text-sm text-white">{escalationMigrationReadiness.label}</div>
+                              </div>
+                              <div className={`rounded-full border px-3 py-2 text-[11px] ${escalationMigrationReadiness.className}`}>
+                                Staged rollout
+                              </div>
+                            </div>
+                            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                              <div>
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Total</div>
+                                <div className="mt-1 text-white">{visibleOutcomeMetrics?.escalationsTotal ?? 0}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Median To Care</div>
+                                <div className="mt-1 text-white">{visibleOutcomeMetrics?.medianMinutesToCare !== null && visibleOutcomeMetrics?.medianMinutesToCare !== undefined ? `${visibleOutcomeMetrics.medianMinutesToCare.toFixed(1)} min` : 'No handoff sample'}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Tier Split</div>
+                                <div className="mt-1 text-white">
+                                  {visibleOutcomeMetrics?.escalationsTier1 ?? 0} / {visibleOutcomeMetrics?.escalationsTier2 ?? 0} / {visibleOutcomeMetrics?.escalationsTier3 ?? 0}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Status Buckets</div>
+                                <div className="mt-1 text-white">
+                                  {visibleEscalationOperationalDiagnostics?.statusCounts?.active ?? 0} active, {visibleEscalationOperationalDiagnostics?.statusCounts?.resolved ?? 0} resolved, {visibleEscalationOperationalDiagnostics?.statusCounts?.declined ?? 0} declined
+                                </div>
+                              </div>
+                            </div>
+                            <div className="mt-3 text-xs text-zinc-500">
+                              Treat this pilot frame as the before/after comparison baseline when classifier or disposition logic changes.
+                            </div>
+                          </div>
+                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Dry-Run Review</div>
+                            <div className="mt-2 text-sm text-zinc-300">
+                              Review these before applying any escalation classifier or disposition migration.
+                            </div>
+                            <div className="mt-4 space-y-2 text-sm text-zinc-300">
+                              {ESCALATION_MIGRATION_DRY_RUN_GUIDANCE.map((item) => (
+                                <div key={item} className="rounded-2xl border border-white/5 bg-black/20 px-3 py-3">
+                                  {item}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Validation And Rollback</div>
+                            <div className="mt-2 text-sm text-zinc-300">
+                              Promote from staged to live only after the same pilot stays stable through recompute and comparison review.
+                            </div>
+                            <div className="mt-4 space-y-2">
+                              {ESCALATION_MIGRATION_STAGED_VALIDATION.map((item) => (
+                                <div key={item} className="rounded-2xl border border-emerald-400/10 bg-emerald-400/5 px-3 py-3 text-sm text-zinc-300">
+                                  {item}
+                                </div>
+                              ))}
+                              {ESCALATION_MIGRATION_ROLLBACK_GUIDANCE.map((item) => (
+                                <div key={item} className="rounded-2xl border border-rose-400/10 bg-rose-400/5 px-3 py-3 text-sm text-zinc-300">
+                                  {item}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Coach Review Flags</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.secondaryCounts?.coachReviewFlags ?? 0}</div>
+                            <div className="mt-1 text-xs text-zinc-500">Tier 1 review-lane escalations still requiring coach visibility.</div>
+                          </div>
+                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Support Flags</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.secondaryCounts?.supportFlags ?? 0}</div>
+                            <div className="mt-1 text-xs text-zinc-500">Benign support-lane incidents that should stay visible without being overstated as care handoffs.</div>
+                          </div>
+                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Grouped Incidents</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.secondaryCounts?.groupedIncidents ?? 0}</div>
+                            <div className="mt-1 text-xs text-zinc-500">Same normalized incident count used when grouped escalation threads are shown in the athlete drill-down.</div>
+                          </div>
+                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Open Care Escalations</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.secondaryCounts?.openCareEscalations ?? 0}</div>
+                            <div className="mt-1 text-xs text-zinc-500">Active escalations still in the care lane and not yet resolved, declined, or reduced to coach-review/support-flag posture.</div>
+                          </div>
+                        </div>
                         <div className="mt-4 grid grid-cols-3 gap-3">
                           <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
                             <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Active</div>
-                            <div className="mt-2 text-2xl font-semibold text-white">{visibleOperationalDiagnostics?.escalations?.statusCounts?.active ?? 0}</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.statusCounts?.active ?? 0}</div>
                           </div>
                           <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
                             <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Resolved</div>
-                            <div className="mt-2 text-2xl font-semibold text-white">{visibleOperationalDiagnostics?.escalations?.statusCounts?.resolved ?? 0}</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.statusCounts?.resolved ?? 0}</div>
                           </div>
                           <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
                             <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Declined</div>
-                            <div className="mt-2 text-2xl font-semibold text-white">{visibleOperationalDiagnostics?.escalations?.statusCounts?.declined ?? 0}</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.statusCounts?.declined ?? 0}</div>
                           </div>
                         </div>
                         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                           {[
-                            ['Coach notified', visibleOperationalDiagnostics?.escalations?.supportingSpeedToCare?.coachNotification],
-                            ['Consent accepted', visibleOperationalDiagnostics?.escalations?.supportingSpeedToCare?.consentAccepted],
-                            ['Handoff initiated', visibleOperationalDiagnostics?.escalations?.supportingSpeedToCare?.handoffInitiated],
-                            ['Handoff accepted', visibleOperationalDiagnostics?.escalations?.supportingSpeedToCare?.handoffAccepted],
-                            ['First clinician response', visibleOperationalDiagnostics?.escalations?.supportingSpeedToCare?.firstClinicianResponse],
-                            ['Care completed', visibleOperationalDiagnostics?.escalations?.supportingSpeedToCare?.careCompleted],
+                            ['Coach notified', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.coachNotification],
+                            ['Consent accepted', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.consentAccepted],
+                            ['Handoff initiated', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.handoffInitiated],
+                            ['Handoff accepted', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.handoffAccepted],
+                            ['First clinician response', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.firstClinicianResponse],
+                            ['Care completed', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.careCompleted],
                           ].map(([label, summary]) => (
                             <div key={label} className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4 text-sm">
                               <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{label}</div>
@@ -2673,7 +2839,6 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         <thead className="text-xs uppercase tracking-wide text-zinc-500">
                           <tr>
                             <th className="px-3 py-2 text-left">Cohort</th>
-                            <th className="px-3 py-2 text-left">Status</th>
                             <th className="px-3 py-2 text-left">Active Athletes</th>
                             <th className="px-3 py-2 text-left">Engine Coverage</th>
                             <th className="px-3 py-2 text-left">Stable Patterns</th>
@@ -2683,7 +2848,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         <tbody>
                           {visibleCohortSummaries.length === 0 ? (
                             <tr className="border-t border-white/5">
-                              <td colSpan={6} className="px-3 py-6 text-center text-sm text-zinc-500">
+                              <td colSpan={5} className="px-3 py-6 text-center text-sm text-zinc-500">
                                 No cohort rollups match the current filter.
                               </td>
                             </tr>
@@ -2691,7 +2856,6 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                             visibleCohortSummaries.map((summary) => (
                               <tr key={summary.cohortId} className="border-t border-white/5">
                                 <td className="px-3 py-3 font-medium text-white">{summary.cohortName}</td>
-                                <td className="px-3 py-3 text-zinc-300">{summary.cohortStatus}</td>
                                 <td className="px-3 py-3 text-zinc-300">{summary.activeAthleteCount}</td>
                                 <td className="px-3 py-3 text-zinc-300">
                                   {formatPercent(
@@ -4075,6 +4239,37 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
             onSubmitted={handleStaffSurveySubmitted}
           />
         ) : null}
+        <AnimatePresence>
+          {pageMessage ? (
+            <motion.div
+              initial={{ opacity: 0, y: 32, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 32, scale: 0.98 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="pointer-events-none fixed inset-x-0 bottom-5 z-[120] flex justify-center px-4"
+            >
+              <div
+                className={`pointer-events-auto flex w-full max-w-2xl items-start gap-3 rounded-2xl border px-4 py-4 shadow-2xl backdrop-blur-md ${
+                  pageMessage.type === 'success'
+                    ? 'border-emerald-400/25 bg-emerald-500/12 text-emerald-100'
+                    : 'border-rose-400/25 bg-rose-500/12 text-rose-100'
+                }`}
+                role="status"
+                aria-live="polite"
+              >
+                <div className="min-w-0 flex-1 pr-2 text-sm font-medium leading-6">{pageMessage.text}</div>
+                <button
+                  type="button"
+                  onClick={() => setPageMessage(null)}
+                  className="rounded-full border border-white/10 bg-black/20 p-1 text-zinc-200 transition hover:bg-black/35 hover:text-white"
+                  aria-label="Dismiss notification"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
     </AdminRouteGuard>
   );

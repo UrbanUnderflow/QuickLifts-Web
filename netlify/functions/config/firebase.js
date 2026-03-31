@@ -9,13 +9,28 @@ const {
 
 function isDevMode(request) {
   if (!request) return false;
+  const explicitModeHeader =
+    request.headers?.['x-pulsecheck-firebase-mode']
+    || request.headers?.['X-PulseCheck-Firebase-Mode'];
+  const normalizedExplicitMode = String(explicitModeHeader || '').trim().toLowerCase();
+  if (normalizedExplicitMode === 'dev') {
+    return true;
+  }
+  if (normalizedExplicitMode === 'prod') {
+    return false;
+  }
+
   const forcedHeader =
     request.headers?.['x-force-dev-firebase']
     || request.headers?.['X-Force-Dev-Firebase']
     || request.headers?.['x-pulsecheck-dev-firebase']
     || request.headers?.['X-PulseCheck-Dev-Firebase'];
-  if (String(forcedHeader || '').toLowerCase() === 'true' || String(forcedHeader || '') === '1') {
+  const normalizedForcedHeader = String(forcedHeader || '').trim().toLowerCase();
+  if (normalizedForcedHeader === 'true' || normalizedForcedHeader === '1') {
     return true;
+  }
+  if (normalizedForcedHeader === 'false' || normalizedForcedHeader === '0') {
+    return false;
   }
 
   const referer = request.headers?.referer || request.headers?.origin || '';

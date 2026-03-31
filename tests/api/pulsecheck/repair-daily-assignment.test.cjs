@@ -761,3 +761,95 @@ test('preferLaunchableAlternative returns debug trace when no launchable candida
   assert.equal(body.debugTrace.snapshotRecommendedRouting, 'protocol_then_sim');
   assert.equal(body.debugTrace.plannerActionType, null);
 });
+
+test('emits a full repair trace when conversation recovery drives a rematerialized assignment', async () => {
+  const snapshot = {
+    id: 'athlete-1_2026-03-18',
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-18',
+    sourceCheckInId: 'checkin-1',
+    overallReadiness: 'green',
+    confidence: 'medium',
+    recommendedRouting: 'defer_alternate_path',
+    recommendedProtocolClass: 'priming',
+    supportFlag: false,
+  };
+  const recoveredSnapshot = {
+    ...snapshot,
+    recommendedRouting: 'protocol_only',
+    confidence: 'high',
+    sourcesUsed: ['conversation_signal_runtime'],
+  };
+  const handler = loadHandler({
+    db: createDb({ existingAssignment: null }),
+    runtimeHelpers: {
+      getSnapshotById: async () => snapshot,
+      loadOrInitializeProgress: async () => ({ athleteId: 'athlete-1' }),
+      syncTaxonomyProfile: async (_db, athleteId, progress) => ({ ...progress, athleteId, activeProgram: { recommendedSimId: 'noise_gate' } }),
+      rematerializeAssignmentFromSnapshot: async ({ sourceStateSnapshotId }) => {
+        assert.equal(sourceStateSnapshotId, recoveredSnapshot.id);
+        return {
+          stateSnapshot: recoveredSnapshot,
+          candidateSet: {
+            id: 'candidate-set-4',
+            candidates: [
+              {
+                id: 'athlete-1_2026-03-18_visualization',
+                type: 'protocol',
+                label: 'Visualization',
+                actionType: 'protocol',
+                protocolId: 'visualization',
+                protocolLabel: 'Visualization Primer',
+              },
+            ],
+            candidateIds: ['athlete-1_2026-03-18_visualization'],
+            plannerEligible: true,
+          },
+          plannerDecision: {
+            decisionSource: 'recovery',
+            actionType: 'protocol',
+            selectedCandidateId: 'athlete-1_2026-03-18_visualization',
+            selectedCandidateType: 'protocol',
+            rationaleSummary: 'Recovered from saved Nora conversation.',
+          },
+          dailyAssignment: {
+            id: 'athlete-1_2026-03-18',
+            athleteId: 'athlete-1',
+            sourceDate: '2026-03-18',
+            status: 'assigned',
+            actionType: 'protocol',
+            protocolId: 'visualization',
+            protocolLabel: 'Visualization Primer',
+            chosenCandidateId: 'athlete-1_2026-03-18_visualization',
+          },
+        };
+      },
+    },
+    chatRuntimeHelpers: {
+      recoverSnapshotFromSavedConversation: async () => ({
+        applied: true,
+        detail: 'Recovered today’s assignment context from the saved Nora conversation.',
+        stateSnapshot: recoveredSnapshot,
+      }),
+    },
+  });
+
+  const body = parseBody(await handler({
+    httpMethod: 'POST',
+    headers: { authorization: 'Bearer fake-token' },
+    body: JSON.stringify({ sourceDate: '2026-03-18', recoverFromConversation: true }),
+  }));
+
+  assert.equal(body.repairApplied, true);
+  assert.equal(body.detail, 'Recovered today’s assignment context from the saved Nora conversation.');
+  assert.equal(body.debugTrace.conversationRecoveryApplied, true);
+  assert.equal(body.debugTrace.snapshotRecommendedRouting, 'protocol_only');
+  assert.equal(body.debugTrace.candidateCount, 1);
+  assert.equal(body.debugTrace.plannerActionType, 'protocol');
+  assert.equal(body.debugTrace.finalAssignmentActionType, 'protocol');
+  assert.match(body.debugTrace.summary, /conversationRecovery=on/);
+  assert.match(body.debugTrace.summary, /conversationApplied=true/);
+  assert.match(body.debugTrace.summary, /plannerAction=protocol/);
+  assert.match(body.debugTrace.summary, /finalAction=protocol/);
+  assert.match(body.debugTrace.summary, /overrideApplied=false/);
+});

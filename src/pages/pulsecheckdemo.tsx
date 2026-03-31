@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import Head from 'next/head';
 import { motion, AnimatePresence } from 'framer-motion';
 import act1AudioManifest from '../data/pulsecheckdemo-act1-audio.json';
+import EscalationDiagram from '../components/pulsecheck/EscalationDiagram';
 import {
     Volume2,
     VolumeX,
@@ -1251,111 +1252,11 @@ const PulseCheckToAuntEdnaFlow: React.FC = () => {
     );
 };
 
-const EscalationExplainer: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
-    const [visibleTiers, setVisibleTiers] = useState<number[]>([]);
-    const [activeTier, setActiveTier] = useState(0);
-    const [showCTA, setShowCTA] = useState(false);
-
-    useEffect(() => {
-        const t1 = setTimeout(() => {
-            setVisibleTiers([0]);
-            setActiveTier(0);
-        }, 700);
-        const t2 = setTimeout(() => {
-            setVisibleTiers([0, 1]);
-            setActiveTier(1);
-        }, 1400);
-        const t3 = setTimeout(() => {
-            setVisibleTiers([0, 1, 2]);
-            setActiveTier(2);
-        }, 2100);
-        const t4 = setTimeout(() => {
-            setVisibleTiers([0, 1, 2, 3]);
-            setActiveTier(3);
-        }, 2800);
-        const t5 = setTimeout(() => setShowCTA(true), 3600);
-        return () => {
-            clearTimeout(t1);
-            clearTimeout(t2);
-            clearTimeout(t3);
-            clearTimeout(t4);
-            clearTimeout(t5);
-        };
-    }, []);
-
-    const tiers = [
-        {
-            number: 0,
-            label: 'Monitor-Only',
-            sublabel: 'Tier 0',
-            desc: 'Normal check-in flagged for passive tracking. Nora logs the sentiment and continues the conversation. No action taken.',
-            color: '#10b981',
-            glow: 'rgba(16,185,129,0.25)',
-            border: 'border-emerald-500/30',
-            bg: 'bg-emerald-500/5',
-            dot: 'bg-emerald-400',
-            tag: 'No Action',
-            tagColor: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
-            condition: 'Mild nerves or routine frustration with stable biometrics and no safety language.',
-            outcome: 'Pulse logs the moment, updates the trendline, and lets Nora keep coaching in flow.',
-            example: '"I am a little tight before the game, but I think I will settle in once warmups start."',
-            automation: ['Sentiment saved', 'Trendline updated', 'Conversation continues'],
-        },
-        {
-            number: 1,
-            label: 'Coach Notified',
-            sublabel: 'Tier 1',
-            desc: 'Low-risk signals detected. Nora quietly notifies the support staff with full context — sleep data, HRV, conversation sentiment.',
-            color: '#f59e0b',
-            glow: 'rgba(245,158,11,0.25)',
-            border: 'border-amber-500/30',
-            bg: 'bg-amber-500/5',
-            dot: 'bg-amber-400',
-            tag: 'Staff Notice',
-            tagColor: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
-            condition: 'Anxiety or mood strain repeats across signals, but the athlete is still stable and coach-visible.',
-            outcome: 'Pulse compiles a staff briefing and sends a quiet notice to the selected support contact.',
-            example: '"I am trying to lock in, but I have been off all week and barely slept last night."',
-            automation: ['Coach briefing created', 'Sleep + HRV attached', 'Support staff notified'],
-        },
-        {
-            number: 2,
-            label: 'Consent-Based Escalation',
-            sublabel: 'Tier 2',
-            desc: 'Elevated psychological risk. Nora surfaces a consent modal — athlete chooses whether to initiate a clinical handoff to AuntEdna.',
-            color: '#f97316',
-            glow: 'rgba(249,115,22,0.25)',
-            border: 'border-orange-500/30',
-            bg: 'bg-orange-500/5',
-            dot: 'bg-orange-400',
-            tag: 'Consent Required',
-            tagColor: 'bg-orange-500/15 text-orange-400 border-orange-500/25',
-            condition: 'Elevated distress or functional drop suggests clinician support is warranted, but the athlete can still consent.',
-            outcome: 'Pulse pauses normal programming, opens the consent flow, and stages the handoff packet for AuntEdna.',
-            example: '"I do not feel like myself at all right now. I think I need more help than this chat can give me."',
-            automation: ['Consent modal opened', 'Clinical packet prepared', 'Coach visibility preserved'],
-        },
-        {
-            number: 3,
-            label: 'Mandatory Clinical',
-            sublabel: 'Tier 3',
-            desc: 'Critical risk detected. No consent required. Pulse automatically packages the full case and initiates an immediate clinical handoff to AuntEdna.',
-            color: '#ef4444',
-            glow: 'rgba(239,68,68,0.3)',
-            border: 'border-red-500/35',
-            bg: 'bg-red-500/8',
-            dot: 'bg-red-400 animate-pulse',
-            tag: 'Immediate',
-            tagColor: 'bg-red-500/20 text-red-400 border-red-500/30 font-bold',
-            condition: 'Direct self-harm, hopelessness, or acute safety language crosses the hard escalation threshold.',
-            outcome: 'Pulse overrides consent, assembles the full case instantly, and routes a live alert into AuntEdna.',
-            example: '"Maybe everyone would be better off without me. I do not even want to be here today."',
-            automation: ['Immediate handoff', 'Clinician alerted', 'Audit trail stamped'],
-        },
-    ];
-
-    const activeTierData = tiers.find((tier) => tier.number === activeTier) ?? tiers[0];
-
+const EscalationExplainer: React.FC<{ onContinue: () => void; escalationStep: number; onAdvanceEscalation: () => void }> = ({
+    onContinue,
+    escalationStep,
+    onAdvanceEscalation,
+}) => {
     return (
         <motion.div
             initial={{ opacity: 0 }}
@@ -1379,215 +1280,17 @@ const EscalationExplainer: React.FC<{ onContinue: () => void }> = ({ onContinue 
             </div>
 
             <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                className="mb-8 relative"
+                transition={{ duration: 0.55, delay: 0.1 }}
+                className="relative"
             >
-                <div className="text-[10px] font-bold text-purple-400 uppercase tracking-[0.3em] mb-2">
-                    Pulse Signal Architecture
-                </div>
-                <h2 className="text-2xl font-bold text-white leading-snug">
-                    Escalation tiers are the decision engine
-                </h2>
-                <p className="text-sm text-zinc-400 mt-2 leading-relaxed max-w-3xl">
-                    Hover or tap through the tiers to see the exact type of condition that triggers each level and the action Pulse runs in response.
-                </p>
+                <EscalationDiagram
+                    step={escalationStep}
+                    onAdvance={onAdvanceEscalation}
+                    onSequenceComplete={onContinue}
+                />
             </motion.div>
-
-            <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                    Escalation Tier System
-                </div>
-                <div className="text-[10px] text-zinc-600 uppercase tracking-[0.2em]">
-                    If X happens, Y action runs
-                </div>
-            </div>
-
-            <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr] mb-8 items-start">
-                <div className="space-y-3">
-                    {tiers.map((tier) => {
-                        const isVisible = visibleTiers.includes(tier.number);
-                        const isActive = tier.number === activeTier;
-
-                        return (
-                            <AnimatePresence key={tier.number}>
-                                {isVisible && (
-                                    <motion.button
-                                        type="button"
-                                        initial={{ opacity: 0, x: -30, filter: 'blur(8px)' }}
-                                        animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
-                                        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                                        onMouseEnter={() => setActiveTier(tier.number)}
-                                        onFocus={() => setActiveTier(tier.number)}
-                                        onClick={() => setActiveTier(tier.number)}
-                                        className={`group w-full text-left rounded-[26px] ${tier.bg} ${tier.border} border p-4 relative overflow-hidden transition-all ${isActive ? 'scale-[1.01] border-opacity-100 shadow-[0_0_30px_rgba(0,0,0,0.2)]' : 'hover:border-opacity-70 hover:bg-white/[0.04]'}`}
-                                    >
-                                        <div
-                                            className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[26px]"
-                                            style={{ backgroundColor: tier.color, boxShadow: `0 0 12px ${tier.color}` }}
-                                        />
-                                        <motion.div
-                                            className="absolute inset-0"
-                                            animate={{ opacity: isActive ? 0.12 : 0 }}
-                                            transition={{ duration: 0.25 }}
-                                            style={{ background: `radial-gradient(circle at 15% 50%, ${tier.glow} 0%, transparent 70%)` }}
-                                        />
-                                        <div className="relative flex items-start gap-4 pl-3">
-                                            <div className="flex-shrink-0 flex flex-col items-center gap-1 mt-0.5">
-                                                <div
-                                                    className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-black"
-                                                    style={{ backgroundColor: `${tier.color}20`, color: tier.color }}
-                                                >
-                                                    {tier.number}
-                                                </div>
-                                                <div className={`w-2 h-2 rounded-full ${tier.dot}`} />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 flex-wrap mb-1">
-                                                    <span className="text-xs font-bold" style={{ color: tier.color }}>
-                                                        {tier.sublabel}
-                                                    </span>
-                                                    <span className="text-sm font-semibold text-white">
-                                                        {tier.label}
-                                                    </span>
-                                                    <span className={`ml-auto text-[9px] px-2 py-0.5 rounded-full border ${tier.tagColor}`}>
-                                                        {tier.tag}
-                                                    </span>
-                                                </div>
-                                                <p className="text-xs text-zinc-400 leading-relaxed">{tier.desc}</p>
-                                                <div className="mt-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600">
-                                                    <span>Preview rule path</span>
-                                                    <ChevronRight className={`w-3 h-3 transition-transform ${isActive ? 'translate-x-0.5' : ''}`} />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </motion.button>
-                                )}
-                            </AnimatePresence>
-                        );
-                    })}
-                </div>
-
-                <AnimatePresence mode="wait">
-                    <motion.div
-                        key={activeTierData.number}
-                        initial={{ opacity: 0, y: 18 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -18 }}
-                        transition={{ duration: 0.28 }}
-                        className="lg:sticky lg:top-6 rounded-[28px] border p-5 md:p-6 relative overflow-hidden"
-                        style={{
-                            borderColor: `${activeTierData.color}55`,
-                            background: `linear-gradient(145deg, ${activeTierData.color}14 0%, rgba(10,10,11,0.92) 32%, rgba(10,10,11,0.98) 100%)`,
-                            boxShadow: `0 0 40px ${activeTierData.color}12`,
-                        }}
-                    >
-                        <div
-                            className="absolute inset-0 opacity-70"
-                            style={{ background: `radial-gradient(circle at 85% 15%, ${activeTierData.glow} 0%, transparent 35%)` }}
-                        />
-
-                        <div className="relative">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div
-                                    className="w-11 h-11 rounded-2xl flex items-center justify-center text-lg font-black"
-                                    style={{ backgroundColor: `${activeTierData.color}22`, color: activeTierData.color }}
-                                >
-                                    {activeTierData.number}
-                                </div>
-                                <div>
-                                    <div className="text-[10px] font-bold uppercase tracking-[0.28em]" style={{ color: activeTierData.color }}>
-                                        {activeTierData.sublabel}
-                                    </div>
-                                    <h3 className="text-xl font-bold text-white">{activeTierData.label}</h3>
-                                </div>
-                            </div>
-
-                            <p className="text-sm text-zinc-300 leading-relaxed mb-5 max-w-xl">
-                                {activeTierData.desc}
-                            </p>
-
-                            <div className="grid gap-3 md:grid-cols-2 mb-4">
-                                <div className="rounded-2xl border border-white/6 bg-black/20 p-4">
-                                    <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.25em] mb-2">
-                                        If Pulse Detects
-                                    </div>
-                                    <p className="text-sm text-white leading-relaxed">
-                                        {activeTierData.condition}
-                                    </p>
-                                </div>
-                                <div className="rounded-2xl border border-white/6 bg-black/20 p-4">
-                                    <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.25em] mb-2">
-                                        Then Pulse Runs
-                                    </div>
-                                    <p className="text-sm text-white leading-relaxed">
-                                        {activeTierData.outcome}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="grid gap-3 md:grid-cols-[1.05fr_0.95fr]">
-                                <div className="rounded-2xl border border-white/6 bg-zinc-950/60 p-4">
-                                    <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.25em] mb-2">
-                                        Example Condition
-                                    </div>
-                                    <p className="text-sm text-zinc-200 leading-relaxed">
-                                        {activeTierData.example}
-                                    </p>
-                                </div>
-                                <div className="rounded-2xl border border-white/6 bg-zinc-950/60 p-4">
-                                    <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.25em] mb-2">
-                                        Outcome Matrix
-                                    </div>
-                                    <div className="space-y-2">
-                                        {activeTierData.automation.map((item) => (
-                                            <div key={item} className="flex items-center gap-2">
-                                                <div
-                                                    className="w-1.5 h-1.5 rounded-full"
-                                                    style={{ backgroundColor: activeTierData.color }}
-                                                />
-                                                <span className="text-xs text-zinc-300">{item}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </motion.div>
-                </AnimatePresence>
-            </div>
-
-            <AnimatePresence>
-                {showCTA && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.6 }}
-                        className="rounded-2xl bg-gradient-to-br from-red-500/10 to-red-900/5 border border-red-500/25 p-5 flex items-center justify-between gap-4"
-                    >
-                        <div>
-                            <div className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-1">
-                                What happens next
-                            </div>
-                            <p className="text-sm text-zinc-300">
-                                K. Thompson triggered a <span className="text-red-400 font-semibold">Tier 3 — Mandatory Clinical</span> escalation at 6:50 AM.
-                                Now watch Pulse package the case and transfer it into AuntEdna.
-                            </p>
-                        </div>
-                        <motion.button
-                            onClick={onContinue}
-                            whileHover={{ scale: 1.04 }}
-                            whileTap={{ scale: 0.97 }}
-                            className="flex-shrink-0 px-5 py-2.5 rounded-xl text-sm font-bold text-black flex items-center gap-2"
-                            style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)' }}
-                        >
-                            See Clinical Handoff
-                            <ChevronRight className="w-4 h-4" />
-                        </motion.button>
-                    </motion.div>
-                )}
-            </AnimatePresence>
         </motion.div>
     );
 };
@@ -4058,6 +3761,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
 const PulseCheckDemo: React.FC = () => {
     // ── State ─────────────────────────────────────────────
     const [currentAct, setCurrentAct] = useState<DemoAct>('intro');
+    const [escalationStep, setEscalationStep] = useState(0);
     const [messages, setMessages] = useState<ChatMsg[]>([]);
     const [input, setInput] = useState('');
     const [scriptIndex, setScriptIndex] = useState(0);
@@ -4191,6 +3895,21 @@ const PulseCheckDemo: React.FC = () => {
         window.speechSynthesis?.cancel();
         setIsSpeaking(false);
     }, [stopVoiceOrb]);
+
+    const DEMO_ACT_ORDER: DemoAct[] = ['intro', 'act1', 'act2', 'act2b', 'act3', 'act4', 'act5'];
+
+    const goBackOneStep = useCallback(() => {
+        if (currentAct === 'act2b' && escalationStep > 0) {
+            setEscalationStep((current) => Math.max(0, current - 1));
+            return;
+        }
+
+        const currentIndex = DEMO_ACT_ORDER.indexOf(currentAct);
+        if (currentIndex <= 0) return;
+
+        stopNarration();
+        setCurrentAct(DEMO_ACT_ORDER[currentIndex - 1]);
+    }, [currentAct, escalationStep, stopNarration]);
 
     // ── Nora wakeup chime — plays whenever Nora comes online to respond ──────
     const playNoraWakeup = useCallback(() => {
@@ -4590,6 +4309,15 @@ const PulseCheckDemo: React.FC = () => {
 
                         {/* Voice controls */}
                         <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={goBackOneStep}
+                                className="w-9 h-9 rounded-lg flex items-center justify-center transition-all bg-zinc-800/60 border border-zinc-700/40 hover:bg-zinc-700/60"
+                                title="Go back"
+                            >
+                                <ChevronLeft className="w-4 h-4 text-zinc-300" />
+                            </button>
+
                             {/* TTS Toggle */}
                             <button
                                 onClick={() => {
@@ -5031,7 +4759,11 @@ const PulseCheckDemo: React.FC = () => {
                                 exit={{ opacity: 0, x: -100 }}
                                 className="h-full overflow-y-auto"
                             >
-                                <EscalationExplainer onContinue={() => setCurrentAct('act3')} />
+                                <EscalationExplainer
+                                    escalationStep={escalationStep}
+                                    onAdvanceEscalation={() => setEscalationStep((current) => Math.min(4, current + 1))}
+                                    onContinue={() => setCurrentAct('act3')}
+                                />
                             </motion.div>
                         )}
 

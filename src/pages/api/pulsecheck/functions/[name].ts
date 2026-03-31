@@ -4,6 +4,9 @@ const SUPPORTED_FUNCTIONS = new Set([
   'submit-pulsecheck-checkin',
   'repair-pulsecheck-daily-assignment',
   'record-pulsecheck-assignment-event',
+  'record-pilot-survey-response',
+  'recompute-pilot-outcome-rollups',
+  'backfill-pilot-athlete-outcomes',
   'tts-mental-step',
   'pulsecheck-chat',
   'pulsecheck-escalation',
@@ -26,18 +29,29 @@ function normalizeQueryValue(value: string | string[] | undefined) {
 function resolveSiteOrigin(req: NextApiRequest) {
   const forwardedProto = req.headers['x-forwarded-proto'];
   const forwardedHost = req.headers['x-forwarded-host'];
-  const protocol = typeof forwardedProto === 'string' && forwardedProto.trim() ? forwardedProto : 'https';
   const host = typeof forwardedHost === 'string' && forwardedHost.trim()
     ? forwardedHost
     : typeof req.headers.host === 'string' && req.headers.host.trim()
       ? req.headers.host
       : 'fitwithpulse.ai';
 
+  const normalizedHost = host.toLowerCase();
+  if (
+    normalizedHost.startsWith('localhost:')
+    || normalizedHost.startsWith('127.0.0.1:')
+    || normalizedHost.startsWith('0.0.0.0:')
+  ) {
+    return (process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
+  }
+
+  const protocol = typeof forwardedProto === 'string' && forwardedProto.trim() ? forwardedProto : 'https';
+
   return `${protocol}://${host}`;
 }
 
 async function proxyNetlifyFunction(name: string, req: NextApiRequest, res: NextApiResponse) {
-  const targetURL = new URL(`/.netlify/functions/${name}`, resolveSiteOrigin(req));
+  const upstreamOrigin = resolveSiteOrigin(req);
+  const targetURL = new URL(`/.netlify/functions/${name}`, upstreamOrigin);
 
   Object.entries(req.query).forEach(([key, value]) => {
     if (key === 'name') return;
@@ -54,6 +68,13 @@ async function proxyNetlifyFunction(name: string, req: NextApiRequest, res: Next
     if (key.toLowerCase() === 'host' || key.toLowerCase() === 'content-length') return;
     requestHeaders.set(key, Array.isArray(value) ? value.join(',') : String(value));
   });
+
+  // When localhost proxies to a live Netlify function, forwarding the browser's original
+  // localhost origin makes older function runtimes infer "dev Firebase" from the request.
+  // Normalize these headers to the selected upstream origin so token verification follows
+  // the actual DB mode the page is using.
+  requestHeaders.set('origin', upstreamOrigin);
+  requestHeaders.set('referer', `${upstreamOrigin}/`);
 
   const body = req.method === 'GET' || req.method === 'HEAD'
     ? undefined

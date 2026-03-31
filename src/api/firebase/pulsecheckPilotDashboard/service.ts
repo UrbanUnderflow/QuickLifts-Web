@@ -10,12 +10,14 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from '../config';
-import { auth } from '../config';
+import { auth, getFirebaseModeRequestHeaders } from '../config';
 import {
   ATHLETE_MENTAL_PROGRESS_COLLECTION,
   ATHLETE_PATTERN_MODELS_SUBCOLLECTION,
   ATHLETE_PHYSIOLOGY_COGNITION_COLLECTION,
   CORRELATION_EVIDENCE_RECORDS_SUBCOLLECTION,
+  PULSECHECK_ASSIGNMENT_EVENTS_COLLECTION,
+  PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION,
   PULSECHECK_PILOT_METRIC_OPS_COLLECTION,
   PULSECHECK_PILOT_METRIC_ROLLUP_SUMMARY_SUBCOLLECTION,
   PULSECHECK_PILOT_METRIC_ROLLUPS_COLLECTION,
@@ -23,7 +25,9 @@ import {
   PULSECHECK_PILOT_OUTCOME_RELEASE_SETTINGS_COLLECTION,
   PROFILE_SNAPSHOTS_SUBCOLLECTION,
   RECOMMENDATION_PROJECTIONS_SUBCOLLECTION,
+  SIM_CHECKINS_ROOT,
 } from '../mentaltraining/collections';
+import { resolvePulseCheckFunctionUrl } from '../mentaltraining/pulseCheckFunctionsUrl';
 import { pulseCheckProvisioningService } from '../pulsecheckProvisioning/service';
 import { pilotDashboardDemoMode } from './demoMode';
 import { mergePulseCheckRequiredConsents } from '../pulsecheckProvisioning/types';
@@ -36,8 +40,12 @@ import type {
 } from '../pulsecheckProvisioning/types';
 import type {
   PilotDashboardAthleteDetail,
+  PilotDashboardAthleteAdherenceDay,
+  PilotDashboardAthleteAdherenceSummary,
+  PilotDashboardAthleteEscalationDetail,
   PilotDashboardOutcomeMetricRollup,
   PilotDashboardOutcomeMetrics,
+  PilotDashboardOutcomeOperationalDiagnostics,
   PilotDashboardOutcomeSurveyDiagnostics,
   PilotDashboardAthleteSummary,
   PilotDashboardCohortSummary,
@@ -77,6 +85,11 @@ const TEAM_INVITE_DEFAULTS_COLLECTION = 'pulsecheck-team-invite-defaults';
 const ORGANIZATION_INVITE_DEFAULTS_COLLECTION = 'pulsecheck-organization-invite-defaults';
 const PILOT_RESEARCH_READOUTS_COLLECTION = 'pulsecheck-pilot-research-readouts';
 const PILOT_RESEARCH_READ_MODEL_VERSION = 'pilot-dashboard-v1';
+const ESCALATION_RECORDS_COLLECTION = 'escalation-records';
+const CHECKINS_SUBCOLLECTION = 'check-ins';
+const ADHERENCE_ACTIVATION_DAY_CUTOFF_HOUR = 12;
+const NO_TASK_ASSIGNMENT_ACTION_TYPES = new Set(['defer', 'rest', 'rest_day', 'rest-day', 'no_task', 'no-task', 'off_day', 'off-day', 'none']);
+const NO_TASK_ASSIGNMENT_STATUSES = new Set(['deferred', 'rest', 'rest_day', 'rest-day', 'no_task', 'no-task', 'off_day', 'off-day', 'none']);
 
 const DEFAULT_PILOT_HYPOTHESES: Array<Pick<PulseCheckPilotHypothesis, 'code' | 'statement' | 'leadingIndicator'> > = [
   {
@@ -138,24 +151,95 @@ const roundMetric = (value: number) => Number(value.toFixed(1));
 const toPercentage = (numerator: number, denominator: number) =>
   denominator > 0 ? roundMetric((numerator / denominator) * 100) : 0;
 const toAverage = (total: number, count: number) => (count > 0 ? roundMetric(total / count) : 0);
+const coerceTimestampMs = (value: any): number => {
+  if (!value) return 0;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 1e12 ? value : value * 1000;
+  }
+  if (value instanceof Date) return value.getTime();
+  if (typeof value?.toMillis === 'function') return value.toMillis();
+  if (typeof value?.toDate === 'function') return value.toDate().getTime();
+  return 0;
+};
 
 const toDate = (value: any): Date | null => {
   if (!value) return null;
-  if (typeof value === 'number' && Number.isFinite(value)) return new Date(value);
+  if (typeof value === 'number' && Number.isFinite(value)) return new Date(coerceTimestampMs(value));
   if (value instanceof Date) return value;
   if (typeof value?.toDate === 'function') return value.toDate();
   return null;
 };
 const toTimeValue = (value: any) => {
-  if (typeof value === 'number') return value;
+  if (typeof value === 'number') return coerceTimestampMs(value);
   return value || null;
 };
 const toTimeMs = (value: any): number => {
-  if (!value) return 0;
-  if (typeof value === 'number') return value;
-  if (value instanceof Date) return value.getTime();
-  if (typeof value?.toDate === 'function') return value.toDate().getTime();
-  return 0;
+  return coerceTimestampMs(value);
+};
+
+const normalizeTimezone = (value: any) => {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: value.trim() }).format(new Date());
+    return value.trim();
+  } catch (_error) {
+    return null;
+  }
+};
+
+const toUtcDateKey = (value: any) => {
+  const millis = coerceTimestampMs(value);
+  return millis ? new Date(millis).toISOString().slice(0, 10) : '';
+};
+
+const resolveTimezoneDateParts = (timestampMs: number, timezone: string) => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: normalizeTimezone(timezone) || 'UTC',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = formatter.formatToParts(new Date(timestampMs));
+  const map = parts.reduce<Record<string, string>>((accumulator, part) => {
+    accumulator[part.type] = part.value;
+    return accumulator;
+  }, {});
+
+  return {
+    year: Number(map.year || 0),
+    month: Number(map.month || 1),
+    day: Number(map.day || 1),
+    hour: Number(map.hour || 0),
+    minute: Number(map.minute || 0),
+    second: Number(map.second || 0),
+  };
+};
+
+const formatDateKeyFromParts = (parts: { year: number; month: number; day: number }) =>
+  [String(parts.year).padStart(4, '0'), String(parts.month).padStart(2, '0'), String(parts.day).padStart(2, '0')].join('-');
+
+const toTimezoneDateKey = (timestampMs: number, timezone: string) =>
+  timestampMs ? formatDateKeyFromParts(resolveTimezoneDateParts(timestampMs, timezone)) : '';
+
+const shiftUtcDateKey = (dateKey: string, deltaDays: number) => {
+  if (!dateKey) return '';
+  const [year, month, day] = String(dateKey).split('-').map((segment) => Number(segment));
+  return new Date(Date.UTC(year, month - 1, day + deltaDays)).toISOString().slice(0, 10);
+};
+
+const listDateKeysBetween = (startDateKey: string, endDateKey: string) => {
+  if (!startDateKey || !endDateKey || startDateKey > endDateKey) return [] as string[];
+  const values: string[] = [];
+  let cursor = startDateKey;
+  while (cursor <= endDateKey) {
+    values.push(cursor);
+    cursor = shiftUtcDateKey(cursor, 1);
+  }
+  return values;
 };
 
 const resolvePilotEffectiveStatus = (pilot: PulseCheckPilot): PulseCheckPilot['status'] => {
@@ -175,6 +259,9 @@ const resolvePilotEffectiveStatus = (pilot: PulseCheckPilot): PulseCheckPilot['s
 
 const isActivePilotDashboardScope = (pilot: PulseCheckPilot) => resolvePilotEffectiveStatus(pilot) === 'active';
 
+const resolveCohortEffectiveStatus = (cohort: PulseCheckPilotCohort): PulseCheckPilotCohort['status'] =>
+  cohort.status === 'paused' || cohort.status === 'archived' ? cohort.status : 'active';
+
 const isPilotOperationallyActive = (
   pilot: PulseCheckPilot,
   cohorts: PulseCheckPilotCohort[] = [],
@@ -182,7 +269,7 @@ const isPilotOperationallyActive = (
 ) => {
   if (isActivePilotDashboardScope(pilot)) return true;
   if (enrollments.some((enrollment) => enrollment.status === 'active')) return true;
-  if (cohorts.some((cohort) => cohort.status === 'active')) return true;
+  if (cohorts.some((cohort) => resolveCohortEffectiveStatus(cohort) === 'active')) return true;
   return false;
 };
 
@@ -285,6 +372,49 @@ const loadCurrentOutcomeRollup = async (pilotId: string): Promise<PilotDashboard
   return rollupSnap.data() as PilotDashboardOutcomeMetricRollup;
 };
 
+const loadPilotEscalationOperationalDiagnostics = async ({
+  pilot,
+  activeEnrollments,
+  existingDiagnostics,
+}: {
+  pilot: PulseCheckPilot;
+  activeEnrollments: PulseCheckPilotEnrollment[];
+  existingDiagnostics?: Record<string, any> | null;
+}) => {
+  if (!activeEnrollments.length) {
+    return buildEscalationOperationalDiagnostics([], existingDiagnostics);
+  }
+
+  const uniqueAthleteIds = [...new Set(activeEnrollments.map((enrollment) => normalizeString(enrollment.userId)).filter(Boolean))];
+  const enrollmentByAthleteId = activeEnrollments.reduce<Record<string, PulseCheckPilotEnrollment>>((accumulator, enrollment) => {
+    accumulator[normalizeString(enrollment.userId)] = enrollment;
+    return accumulator;
+  }, {});
+
+  const escalationSnapshots = await Promise.all(
+    uniqueAthleteIds.map((athleteId) =>
+      getDocs(query(collection(db, ESCALATION_RECORDS_COLLECTION), where('userId', '==', athleteId)))
+    )
+  );
+
+  const escalations = escalationSnapshots.flatMap((snapshot, index) => {
+    const athleteId = uniqueAthleteIds[index];
+    const enrollment = enrollmentByAthleteId[athleteId];
+    const windowStart = coerceTimestampMs(pilot.startAt)
+      || coerceTimestampMs((enrollment as any)?.outcomeBackfillStartAt)
+      || coerceTimestampMs(enrollment?.createdAt);
+
+    return snapshot.docs
+      .map<Record<string, any>>((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Record<string, any>) }))
+      .filter((entry) => {
+        const createdAtMs = coerceTimestampMs(entry.createdAt);
+        return !windowStart || !createdAtMs || createdAtMs >= windowStart;
+      });
+  });
+
+  return buildEscalationOperationalDiagnostics(escalations, existingDiagnostics);
+};
+
 const loadPilotOutcomeReleaseSettings = async (pilotId: string): Promise<Record<string, any> | null> => {
   const normalizedPilotId = normalizeString(pilotId);
   if (!normalizedPilotId) return null;
@@ -325,6 +455,520 @@ const loadPilotMentalPerformanceSnapshotSet = async (
     baseline: baselineSnap.exists() ? (baselineSnap.data() as any) : null,
     currentLatestValid: currentSnap.exists() ? (currentSnap.data() as any) : null,
     endpoint: endpointSnap.exists() ? (endpointSnap.data() as any) : null,
+  };
+};
+
+const resolveAthleteTimezoneForAdherence = (
+  teamMembership: PulseCheckTeamMembership | null,
+  assignments: Array<Record<string, any>>
+) => {
+  const onboardingTimezone =
+    normalizeTimezone((teamMembership as any)?.athleteOnboarding?.timezone)
+    || normalizeTimezone((teamMembership as any)?.timezone);
+  if (onboardingTimezone) return onboardingTimezone;
+
+  const assignmentTimezone = [...assignments]
+    .map((assignment) => normalizeTimezone(assignment.timezone))
+    .find(Boolean);
+  return assignmentTimezone || 'UTC';
+};
+
+const normalizeEscalationStatus = (entry: Record<string, any>): 'active' | 'resolved' | 'declined' => {
+  const status = normalizeString(entry.status).toLowerCase();
+  if (['declined', 'dismissed', 'cancelled', 'canceled'].includes(status)) return 'declined';
+  if (['resolved', 'closed', 'completed'].includes(status) || coerceTimestampMs(entry.resolvedAt) || coerceTimestampMs(entry.handoffCompletedAt)) {
+    return 'resolved';
+  }
+  return 'active';
+};
+
+const HARD_RISK_ESCALATION_PATTERN = /\b(suicid|self[- ]?harm|hurt myself|kill myself|end my life|overdose|unsafe|can't stay safe|cannot stay safe|want to die|die tonight|abuse|assault|violence|psychosis|hallucinat|manic|panic attack|can't function|cannot function)\b/i;
+const BENIGN_PERFORMANCE_SUPPORT_PATTERN = /\b(competition|compete|competing|on stage|performance|pre[- ]?competition|nervous|anxious|anxiety|excited|regulate|regulation|focus|attention|sleep|bed|go to sleep|late|mind|what'?s on my mind|talk about|emotional regulation|stress)\b/i;
+
+const hasEscalationWorkflowProgress = (entry: Record<string, any>) =>
+  Boolean(
+    coerceTimestampMs(entry.coachNotifiedAt)
+    || coerceTimestampMs(entry.handoffInitiatedAt)
+    || coerceTimestampMs(entry.handoffAcceptedAt)
+    || coerceTimestampMs(entry.firstClinicianResponseAt)
+    || coerceTimestampMs(entry.handoffCompletedAt)
+    || coerceTimestampMs(entry.resolvedAt)
+    || normalizeString(entry.consentStatus) === 'accepted'
+  );
+
+const isBenignPerformanceSupportEscalation = (entry: Record<string, any>) => {
+  const tier = Number(entry.tier) || 0;
+  if (tier <= 0 || tier >= 3) return false;
+  if (hasEscalationWorkflowProgress(entry)) return false;
+
+  const combinedText = `${normalizeString(entry.category)} ${normalizeString(entry.classificationReason)} ${normalizeString(entry.triggerContent)}`.trim();
+  if (!combinedText) return false;
+  if (HARD_RISK_ESCALATION_PATTERN.test(combinedText)) return false;
+  return BENIGN_PERFORMANCE_SUPPORT_PATTERN.test(combinedText);
+};
+
+const normalizeBoolean = (value: any) => {
+  if (typeof value === 'boolean') return value;
+  const normalized = normalizeString(typeof value === 'string' ? value : String(value || '')).toLowerCase();
+  if (!normalized) return false;
+  return ['true', '1', 'yes', 'y'].includes(normalized);
+};
+
+const isCoachReviewEscalation = (entry: Record<string, any>) => {
+  if (normalizeBoolean(entry.coachReviewFlag) || normalizeBoolean(entry.requiresCoachReview)) return true;
+  return (Number(entry.tier) || 0) === 1;
+};
+
+const isSupportFlagEscalation = (entry: Record<string, any>) =>
+  normalizeBoolean(entry.supportFlag) || isBenignPerformanceSupportEscalation(entry);
+
+const isOpenCareEscalation = (entry: Record<string, any>) =>
+  normalizeEscalationStatus(entry) === 'active' && !isCoachReviewEscalation(entry) && !isSupportFlagEscalation(entry);
+
+const resolveEscalationDispositionLabel = (entry: Record<string, any>) => {
+  const status = normalizeEscalationStatus(entry);
+  const consentStatus = normalizeString(entry.consentStatus).toLowerCase();
+  const hasCareProgress = Boolean(
+    coerceTimestampMs(entry.handoffInitiatedAt)
+    || coerceTimestampMs(entry.handoffAcceptedAt)
+    || coerceTimestampMs(entry.firstClinicianResponseAt)
+    || coerceTimestampMs(entry.handoffCompletedAt)
+  );
+
+  if (status === 'declined' || consentStatus === 'declined') return 'Declined care';
+  if (coerceTimestampMs(entry.handoffCompletedAt)) return 'Care completed';
+  if (status === 'resolved' && hasCareProgress) return 'Care completed';
+  if (status === 'resolved') return 'Resolved';
+  if (hasCareProgress) return 'In care';
+  if (consentStatus === 'pending' && (Number(entry.tier) || 0) >= 2) return 'Consent pending';
+  if (isCoachReviewEscalation(entry)) return 'Coach review';
+  if (isSupportFlagEscalation(entry)) return 'Support flag';
+  return 'Open care';
+};
+
+const resolveEscalationIncidentKey = (entry: Record<string, any>) =>
+  normalizeString(entry.groupedIncidentKey)
+  || normalizeString(entry.groupedIncidentId)
+  || normalizeString(entry.incidentGroupId)
+  || normalizeString(entry.incidentId)
+  || normalizeString(entry.caseId)
+  || normalizeString(entry.conversationId)
+  || normalizeString(entry.id);
+
+const resolveGroupedIncidentDispositionLabel = (entries: Array<Record<string, any>>) => {
+  if (entries.some((entry) => isOpenCareEscalation(entry))) return 'Open care';
+  if (entries.some((entry) => isCoachReviewEscalation(entry) && normalizeEscalationStatus(entry) === 'active')) return 'Coach review';
+  if (entries.some((entry) => isSupportFlagEscalation(entry) && normalizeEscalationStatus(entry) === 'active')) return 'Support flag';
+  if (entries.every((entry) => normalizeEscalationStatus(entry) === 'declined')) return 'Declined care';
+  if (entries.some((entry) => resolveEscalationDispositionLabel(entry) === 'Care completed')) return 'Care completed';
+  if (entries.some((entry) => normalizeEscalationStatus(entry) === 'resolved')) return 'Resolved';
+  return resolveEscalationDispositionLabel(entries[0] || {});
+};
+
+const buildEscalationOperationalDiagnostics = (
+  escalations: Array<Record<string, any>>,
+  existingDiagnostics?: Record<string, any> | null
+) => {
+  const groupedIncidentKeys = new Set<string>();
+  let coachReviewFlags = 0;
+  let supportFlags = 0;
+  let openCareEscalations = 0;
+
+  escalations.forEach((entry) => {
+    groupedIncidentKeys.add(resolveEscalationIncidentKey(entry));
+    if (isCoachReviewEscalation(entry)) coachReviewFlags += 1;
+    if (isSupportFlagEscalation(entry)) supportFlags += 1;
+    if (isOpenCareEscalation(entry)) openCareEscalations += 1;
+  });
+
+  const legacyRecordCount = escalations.length;
+  const normalizedIncidentCount = groupedIncidentKeys.size;
+  const recordsCollapsedByGrouping = Math.max(0, legacyRecordCount - normalizedIncidentCount);
+  const comparisonStatus: 'no-escalations' | 'parity' | 'grouped' =
+    legacyRecordCount === 0
+      ? 'no-escalations'
+      : recordsCollapsedByGrouping > 0
+        ? 'grouped'
+        : 'parity';
+  const existingMigrationStatusLabel =
+    normalizeString(existingDiagnostics?.migrationContext?.statusLabel)
+    || normalizeString(existingDiagnostics?.migrationStatus?.statusLabel)
+    || normalizeString(existingDiagnostics?.migrationStatusLabel);
+  const existingMigrationSourceLabel =
+    normalizeString(existingDiagnostics?.migrationContext?.sourceLabel)
+    || normalizeString(existingDiagnostics?.migrationStatus?.sourceLabel)
+    || normalizeString(existingDiagnostics?.migrationSourceLabel);
+  const migrationContext =
+    comparisonStatus === 'no-escalations' && !existingMigrationStatusLabel
+      ? undefined
+      : {
+          statusLabel:
+            existingMigrationStatusLabel
+            || (comparisonStatus === 'grouped'
+              ? 'Legacy raw-record counts are being normalized into grouped incidents.'
+              : 'Legacy raw-record counts and normalized incident counts currently match.'),
+          sourceLabel: existingMigrationSourceLabel || 'Live dashboard grouping',
+        };
+
+  return {
+    ...(existingDiagnostics || {}),
+    statusCounts: existingDiagnostics?.statusCounts || {
+      active: escalations.filter((entry) => normalizeEscalationStatus(entry) === 'active').length,
+      resolved: escalations.filter((entry) => normalizeEscalationStatus(entry) === 'resolved').length,
+      declined: escalations.filter((entry) => normalizeEscalationStatus(entry) === 'declined').length,
+    },
+    secondaryCounts: {
+      coachReviewFlags,
+      supportFlags,
+      groupedIncidents: groupedIncidentKeys.size,
+      openCareEscalations,
+    },
+    comparison: {
+      legacyRecordCount,
+      normalizedIncidentCount,
+      recordsCollapsedByGrouping,
+      status: comparisonStatus,
+    },
+    migrationContext,
+  };
+};
+
+const isNoTaskRestDay = (assignment: Record<string, any> | null | undefined) => {
+  if (!assignment) return false;
+  return NO_TASK_ASSIGNMENT_ACTION_TYPES.has(normalizeString(assignment.actionType))
+    || NO_TASK_ASSIGNMENT_STATUSES.has(normalizeString(assignment.status));
+};
+
+const isManualPauseDay = (
+  teamMembership: PulseCheckTeamMembership | null,
+  pilotEnrollment: PulseCheckPilotEnrollment,
+  dateKey: string
+) => {
+  const membershipPauseWindows = Array.isArray((teamMembership as any)?.athleteOnboarding?.manualPauseWindows)
+    ? ((teamMembership as any).athleteOnboarding.manualPauseWindows as Array<Record<string, any>>)
+    : [];
+  const enrollmentPauseWindows = Array.isArray((pilotEnrollment as any)?.manualPauseWindows)
+    ? ((pilotEnrollment as any).manualPauseWindows as Array<Record<string, any>>)
+    : [];
+
+  return [...membershipPauseWindows, ...enrollmentPauseWindows].some((window) => {
+    const startDate = normalizeString(window?.startDate);
+    const endDate = normalizeString(window?.endDate) || startDate;
+    return startDate && dateKey >= startDate && dateKey <= endDate;
+  });
+};
+
+const isEnrollmentPausedDay = (
+  pilotEnrollment: PulseCheckPilotEnrollment,
+  dateKey: string,
+  timezone: string,
+  hasSameDayActivity: boolean
+) => {
+  if (normalizeString(pilotEnrollment.status) !== 'paused') return false;
+  const pausedAtMs = coerceTimestampMs((pilotEnrollment as any).pausedAt) || coerceTimestampMs(pilotEnrollment.updatedAt);
+  if (!pausedAtMs) return true;
+  const pausedDateKey = toTimezoneDateKey(pausedAtMs, timezone);
+  if (!pausedDateKey || dateKey < pausedDateKey) return false;
+  return !(pausedDateKey === dateKey && hasSameDayActivity);
+};
+
+const isEscalationHoldDay = (escalations: Array<Record<string, any>>, dateKey: string) =>
+  escalations.some((escalation) => {
+    if (isBenignPerformanceSupportEscalation(escalation)) return false;
+    if (normalizeEscalationStatus(escalation) !== 'active') return false;
+    const createdDateKey = toUtcDateKey(escalation.createdAt);
+    const resolvedDateKey = toUtcDateKey(escalation.resolvedAt || escalation.handoffCompletedAt || Date.now());
+    return Boolean(createdDateKey && resolvedDateKey && dateKey >= createdDateKey && dateKey <= resolvedDateKey);
+  });
+
+const buildAthleteAdherenceDetail = ({
+  pilot,
+  pilotEnrollment,
+  teamMembership,
+  assignments,
+  assignmentEvents,
+  checkIns,
+  escalations,
+}: {
+  pilot: PulseCheckPilot;
+  pilotEnrollment: PulseCheckPilotEnrollment;
+  teamMembership: PulseCheckTeamMembership | null;
+  assignments: Array<Record<string, any>>;
+  assignmentEvents: Array<Record<string, any>>;
+  checkIns: Array<Record<string, any>>;
+  escalations: Array<Record<string, any>>;
+}): {
+  adherenceSummary: PilotDashboardAthleteAdherenceSummary;
+  adherenceDays: PilotDashboardAthleteAdherenceDay[];
+} => {
+  const athleteId = normalizeString(pilotEnrollment.userId);
+  const timezone = resolveAthleteTimezoneForAdherence(teamMembership, assignments);
+  const assignmentByDate = assignments.reduce<Map<string, Record<string, any>>>((accumulator, assignment) => {
+    const sourceDate = normalizeString(assignment.sourceDate);
+    if (!sourceDate) return accumulator;
+    const existing = accumulator.get(sourceDate);
+    if (!existing || toTimeMs(assignment.updatedAt) >= toTimeMs(existing.updatedAt)) {
+      accumulator.set(sourceDate, assignment);
+    }
+    return accumulator;
+  }, new Map());
+
+  const assignmentCompletionByDate = assignmentEvents.reduce<Map<string, Record<string, any>>>((accumulator, event) => {
+    if (normalizeString(event.eventType) !== 'completed') return accumulator;
+    const sourceDate = normalizeString(event.sourceDate);
+    if (!sourceDate) return accumulator;
+    const existing = accumulator.get(sourceDate);
+    if (!existing || toTimeMs(event.createdAt) >= toTimeMs(existing.createdAt)) {
+      accumulator.set(sourceDate, event);
+    }
+    return accumulator;
+  }, new Map());
+
+  const checkInsByDate = checkIns.reduce<Map<string, Array<Record<string, any>>>>((accumulator, checkIn) => {
+    const sourceDate = normalizeString(checkIn.date) || toTimezoneDateKey(toTimeMs(checkIn.createdAt), timezone);
+    if (!sourceDate) return accumulator;
+    const current = accumulator.get(sourceDate) || [];
+    current.push(checkIn);
+    accumulator.set(sourceDate, current);
+    return accumulator;
+  }, new Map());
+
+  const pilotTimelineStartMs =
+    coerceTimestampMs(pilot.startAt)
+    || coerceTimestampMs((pilotEnrollment as any).outcomeBackfillStartAt)
+    || coerceTimestampMs(pilotEnrollment.createdAt)
+    || Date.now();
+  const athleteInclusionStartMs =
+    coerceTimestampMs((pilotEnrollment as any).outcomeBackfillStartAt)
+    || coerceTimestampMs(pilotEnrollment.createdAt)
+    || pilotTimelineStartMs;
+  const athleteInclusionDateKeyRaw = toTimezoneDateKey(athleteInclusionStartMs, timezone);
+  const athleteInclusionHasSameDayActivity = Boolean(
+    checkInsByDate.get(athleteInclusionDateKeyRaw)?.length
+    || assignmentCompletionByDate.has(athleteInclusionDateKeyRaw)
+    || normalizeString(assignmentByDate.get(athleteInclusionDateKeyRaw)?.status) === 'completed'
+  );
+  const athleteInclusionLocalHour = resolveTimezoneDateParts(athleteInclusionStartMs, timezone).hour;
+  const athleteInclusionDateKey =
+    athleteInclusionLocalHour >= ADHERENCE_ACTIVATION_DAY_CUTOFF_HOUR && !athleteInclusionHasSameDayActivity
+      ? shiftUtcDateKey(athleteInclusionDateKeyRaw, 1)
+      : athleteInclusionDateKeyRaw;
+
+  const seededStartMs = pilotTimelineStartMs;
+  const seededEndMs =
+    normalizeString(pilotEnrollment.status) === 'withdrawn'
+      ? (coerceTimestampMs(pilotEnrollment.updatedAt) || Date.now())
+      : (isPilotOperationallyActive(pilot, [], [pilotEnrollment])
+        ? Date.now()
+        : (resolvePilotEffectiveStatus(pilot) === 'completed'
+        ? (coerceTimestampMs(pilot.endAt) || Date.now())
+        : Date.now()));
+
+  const startDateKey = toTimezoneDateKey(seededStartMs, timezone);
+
+  const rawEndDateKey = toTimezoneDateKey(seededEndMs, timezone);
+  const endHasSameDayActivity = Boolean(
+    checkInsByDate.get(rawEndDateKey)?.length
+    || assignmentCompletionByDate.has(rawEndDateKey)
+    || normalizeString(assignmentByDate.get(rawEndDateKey)?.status) === 'completed'
+  );
+  const endDateKey =
+    normalizeString(pilotEnrollment.status) === 'withdrawn' && rawEndDateKey
+      ? (endHasSameDayActivity ? rawEndDateKey : shiftUtcDateKey(rawEndDateKey, -1))
+      : rawEndDateKey;
+
+  const days = listDateKeysBetween(startDateKey, endDateKey).map((dateKey) => {
+    const assignment = assignmentByDate.get(dateKey) || null;
+    const completionEvent = assignmentCompletionByDate.get(dateKey) || null;
+    const checkInsForDate = checkInsByDate.get(dateKey) || [];
+    const hasCheckIn = checkInsForDate.length > 0;
+    const hasAssignmentCompletion = Boolean(completionEvent) || normalizeString(assignment?.status) === 'completed';
+    const hasSameDayActivity = hasCheckIn || hasAssignmentCompletion;
+
+    let exclusionReason: PilotDashboardAthleteAdherenceDay['exclusionReason'] = null;
+    const withdrawnAtMs = normalizeString(pilotEnrollment.status) === 'withdrawn' ? (coerceTimestampMs(pilotEnrollment.updatedAt) || 0) : 0;
+    const withdrawnDateKey = withdrawnAtMs ? toTimezoneDateKey(withdrawnAtMs, timezone) : '';
+    const withdrawnHasSameDayActivity = withdrawnDateKey
+      ? Boolean(
+          checkInsByDate.get(withdrawnDateKey)?.length
+          || assignmentCompletionByDate.has(withdrawnDateKey)
+          || normalizeString(assignmentByDate.get(withdrawnDateKey)?.status) === 'completed'
+        )
+      : false;
+    const withdrawnBoundaryDateKey =
+      withdrawnDateKey
+      && !withdrawnHasSameDayActivity
+        ? shiftUtcDateKey(withdrawnDateKey, -1)
+        : withdrawnDateKey;
+
+    if (dateKey < athleteInclusionDateKey) {
+      exclusionReason = 'not_enrolled_yet';
+    } else if (withdrawnBoundaryDateKey && dateKey > withdrawnBoundaryDateKey) {
+      exclusionReason = 'withdrawn';
+    } else if (isManualPauseDay(teamMembership, pilotEnrollment, dateKey)) {
+      exclusionReason = 'manual_pause';
+    } else if (isEnrollmentPausedDay(pilotEnrollment, dateKey, timezone, hasSameDayActivity)) {
+      exclusionReason = 'paused';
+    } else if (isEscalationHoldDay(escalations, dateKey)) {
+      exclusionReason = 'escalation_hold';
+    } else if (isNoTaskRestDay(assignment)) {
+      exclusionReason = 'no_task_rest_day';
+    }
+
+    const expected = !exclusionReason;
+    return {
+      dateKey,
+      timezone,
+      expected,
+      status: !expected ? 'excluded' : hasCheckIn && hasAssignmentCompletion ? 'green' : 'red',
+      checkInCompleted: hasCheckIn,
+      assignmentCompleted: hasAssignmentCompletion,
+      checkInCount: checkInsForDate.length,
+      assignmentId: normalizeString(assignment?.id) || null,
+      assignmentStatus: normalizeString(assignment?.status) || null,
+      assignmentActionType: normalizeString(assignment?.actionType) || null,
+      exclusionReason,
+      checkInRecordedAt: hasCheckIn ? toTimeValue(checkInsForDate[checkInsForDate.length - 1]?.createdAt) : null,
+      assignmentCompletedAt: hasAssignmentCompletion ? toTimeValue(completionEvent?.createdAt || assignment?.updatedAt) : null,
+    } as PilotDashboardAthleteAdherenceDay;
+  });
+
+  const expectedAthleteDays = days.filter((entry) => entry.expected).length;
+  const completedCheckInDays = days.filter((entry) => entry.expected && entry.checkInCompleted).length;
+  const completedAssignmentDays = days.filter((entry) => entry.expected && entry.assignmentCompleted).length;
+  const adheredDays = days.filter((entry) => entry.expected && entry.status === 'green').length;
+
+  return {
+    adherenceSummary: {
+      expectedAthleteDays,
+      completedCheckInDays,
+      completedAssignmentDays,
+      adheredDays,
+      adherenceRate: expectedAthleteDays ? roundMetric((adheredDays / expectedAthleteDays) * 100) : 0,
+      dailyCheckInRate: expectedAthleteDays ? roundMetric((completedCheckInDays / expectedAthleteDays) * 100) : 0,
+      assignmentCompletionRate: expectedAthleteDays ? roundMetric((completedAssignmentDays / expectedAthleteDays) * 100) : 0,
+    },
+    adherenceDays: days.sort((left, right) => right.dateKey.localeCompare(left.dateKey)),
+  };
+};
+
+const loadAthleteOutcomeDetail = async ({
+  pilot,
+  athleteId,
+  pilotEnrollment,
+  teamMembership,
+}: {
+  pilot: PulseCheckPilot;
+  athleteId: string;
+  pilotEnrollment: PulseCheckPilotEnrollment;
+  teamMembership: PulseCheckTeamMembership | null;
+}): Promise<{
+  adherenceSummary: PilotDashboardAthleteAdherenceSummary;
+  adherenceDays: PilotDashboardAthleteAdherenceDay[];
+  escalations: PilotDashboardAthleteEscalationDetail[];
+}> => {
+  const [checkInSnap, assignmentSnap, assignmentEventSnap, escalationSnap] = await Promise.all([
+    getDocs(collection(db, SIM_CHECKINS_ROOT, athleteId, CHECKINS_SUBCOLLECTION)),
+    getDocs(query(collection(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION), where('athleteId', '==', athleteId))),
+    getDocs(query(collection(db, PULSECHECK_ASSIGNMENT_EVENTS_COLLECTION), where('athleteId', '==', athleteId))),
+    getDocs(query(collection(db, ESCALATION_RECORDS_COLLECTION), where('userId', '==', athleteId))),
+  ]);
+
+  const assignments = assignmentSnap.docs
+    .map<Record<string, any>>((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Record<string, any>) }))
+    .filter((assignment) => {
+      const assignmentPilotId = normalizeString(assignment.pilotId);
+      const assignmentEnrollmentId = normalizeString(assignment.pilotEnrollmentId);
+      return !assignmentPilotId || assignmentPilotId === pilot.id || assignmentEnrollmentId === pilotEnrollment.id;
+    });
+
+  const assignmentEvents = assignmentEventSnap.docs
+    .map<Record<string, any>>((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Record<string, any>) }))
+    .filter((event) => {
+      const eventAt = toTimeMs(event.createdAt);
+      const windowStart = coerceTimestampMs(pilot.startAt) || coerceTimestampMs((pilotEnrollment as any).outcomeBackfillStartAt) || coerceTimestampMs(pilotEnrollment.createdAt);
+      return !windowStart || eventAt >= windowStart;
+    });
+
+  const allEscalations = escalationSnap.docs
+    .map<Record<string, any>>((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Record<string, any>) }))
+    .filter((entry) => {
+      const createdAtMs = coerceTimestampMs(entry.createdAt);
+      const windowStart = coerceTimestampMs(pilot.startAt) || coerceTimestampMs((pilotEnrollment as any).outcomeBackfillStartAt) || coerceTimestampMs(pilotEnrollment.createdAt);
+      return !windowStart || !createdAtMs || createdAtMs >= windowStart;
+    });
+
+  const rawEscalations = allEscalations.filter((entry) => !isBenignPerformanceSupportEscalation(entry));
+
+  const adherenceDetail = buildAthleteAdherenceDetail({
+    pilot,
+    pilotEnrollment,
+    teamMembership,
+    assignments,
+    assignmentEvents,
+    checkIns: checkInSnap.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Record<string, any>) })),
+    escalations: rawEscalations,
+  });
+
+  const incidentGroups = [...allEscalations]
+    .sort((left, right) => toTimeMs(right.createdAt) - toTimeMs(left.createdAt))
+    .reduce<Map<string, Array<Record<string, any>>>>((accumulator, entry) => {
+      const incidentKey = resolveEscalationIncidentKey(entry);
+      const existing = accumulator.get(incidentKey) || [];
+      existing.push(entry);
+      accumulator.set(incidentKey, existing);
+      return accumulator;
+    }, new Map());
+
+  const incidentLabelMap = new Map<string, string>();
+  const incidentDispositionMap = new Map<string, string>();
+  const incidentRecordCountMap = new Map<string, number>();
+
+  [...incidentGroups.entries()]
+    .sort((left, right) => toTimeMs(right[1][0]?.createdAt) - toTimeMs(left[1][0]?.createdAt))
+    .forEach(([incidentKey, incidentEntries], index) => {
+      incidentLabelMap.set(incidentKey, `Incident ${index + 1}`);
+      incidentDispositionMap.set(incidentKey, resolveGroupedIncidentDispositionLabel(incidentEntries));
+      incidentRecordCountMap.set(incidentKey, incidentEntries.length);
+    });
+
+  const escalations = allEscalations
+    .map((entry) => {
+      const incidentKey = resolveEscalationIncidentKey(entry);
+      return {
+        id: normalizeString(entry.id),
+        conversationId: normalizeString(entry.conversationId) || null,
+        tier: Number(entry.tier) || 0,
+        category: normalizeString(entry.category) || 'general',
+        status: normalizeEscalationStatus(entry),
+        dispositionLabel: resolveEscalationDispositionLabel(entry),
+        groupedIncidentKey: incidentKey,
+        groupedIncidentLabel: incidentLabelMap.get(incidentKey) || 'Incident',
+        groupedIncidentDispositionLabel: incidentDispositionMap.get(incidentKey) || resolveEscalationDispositionLabel(entry),
+        groupedIncidentRecordCount: incidentRecordCountMap.get(incidentKey) || 1,
+        coachReviewFlag: isCoachReviewEscalation(entry),
+        supportFlag: isSupportFlagEscalation(entry),
+        openCareEscalation: isOpenCareEscalation(entry),
+        consentStatus: normalizeString(entry.consentStatus) || null,
+        handoffStatus: normalizeString(entry.handoffStatus) || null,
+        classificationReason: normalizeString(entry.classificationReason) || null,
+        triggerContent: normalizeString(entry.triggerContent) || null,
+        createdAt: toTimeValue(entry.createdAt),
+        coachNotifiedAt: toTimeValue(entry.coachNotifiedAt),
+        consentTimestamp: toTimeValue(entry.consentTimestamp),
+        handoffInitiatedAt: toTimeValue(entry.handoffInitiatedAt),
+        handoffAcceptedAt: toTimeValue(entry.handoffAcceptedAt),
+        firstClinicianResponseAt: toTimeValue(entry.firstClinicianResponseAt),
+        handoffCompletedAt: toTimeValue(entry.handoffCompletedAt),
+        resolvedAt: toTimeValue(entry.resolvedAt),
+      } satisfies PilotDashboardAthleteEscalationDetail;
+    })
+    .sort((left, right) => toTimeMs(right.createdAt) - toTimeMs(left.createdAt));
+
+  return {
+    adherenceSummary: adherenceDetail.adherenceSummary,
+    adherenceDays: adherenceDetail.adherenceDays,
+    escalations,
   };
 };
 
@@ -564,7 +1208,7 @@ function buildCohortSummaries(
     return {
       cohortId: cohort.id,
       cohortName: cohort.name || 'Unnamed cohort',
-      cohortStatus: cohort.status,
+      cohortStatus: resolveCohortEffectiveStatus(cohort),
       activeAthleteCount: cohortAthletes.length,
       athletesWithEngineRecord: cohortAthletes.filter((athlete) => athlete.engineSummary.hasEngineRecord).length,
       athletesWithStablePatterns: cohortAthletes.filter((athlete) => athlete.engineSummary.stablePatternCount > 0).length,
@@ -1097,11 +1741,12 @@ export const pulseCheckPilotDashboardService = {
     }
 
     const idToken = await currentUser.getIdToken();
-    const response = await fetch('/.netlify/functions/record-pilot-survey-response', {
+    const response = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/record-pilot-survey-response'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${idToken}`,
+        ...getFirebaseModeRequestHeaders(),
       },
       body: JSON.stringify({
         ...input,
@@ -1161,11 +1806,12 @@ export const pulseCheckPilotDashboardService = {
     }
 
     const idToken = await currentUser.getIdToken();
-    const response = await fetch('/.netlify/functions/recompute-pilot-outcome-rollups', {
+    const response = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/recompute-pilot-outcome-rollups'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${idToken}`,
+        ...getFirebaseModeRequestHeaders(),
       },
       body: JSON.stringify({
         pilotId: input.pilotId,
@@ -1241,7 +1887,7 @@ export const pulseCheckPilotDashboardService = {
           cohorts: pilotCohorts,
           totalEnrollmentCount: pilotEnrollments.length,
           activeEnrollmentCount: activeEnrollments.length,
-          activeCohortCount: pilotCohorts.filter((cohort) => cohort.status === 'active').length,
+          activeCohortCount: pilotCohorts.filter((cohort) => resolveCohortEffectiveStatus(cohort) === 'active').length,
           hypothesisCount: pilotHypotheses.length,
           unsupportedHypothesisCount: pilotHypotheses.filter((hypothesis) => hypothesis.status === 'not-supported').length,
           promisingHypothesisCount: hypothesisSummary.promisingCount,
@@ -1371,6 +2017,16 @@ export const pulseCheckPilotDashboardService = {
     );
 
     const outcomesEnabled = outcomeReleaseSettings?.outcomesEnabled !== false;
+    const mergedOutcomeOperationalDiagnostics: PilotDashboardOutcomeOperationalDiagnostics | undefined = outcomesEnabled
+      ? {
+          ...((outcomeRollup?.diagnostics as Record<string, any>) || {}),
+          escalations: await loadPilotEscalationOperationalDiagnostics({
+            pilot,
+            activeEnrollments,
+            existingDiagnostics: (outcomeRollup?.diagnostics as Record<string, any> | undefined)?.escalations || null,
+          }),
+        }
+      : undefined;
 
     return {
       organization,
@@ -1392,7 +2048,7 @@ export const pulseCheckPilotDashboardService = {
       outcomeDiagnostics: outcomesEnabled ? ((outcomeRollup?.diagnostics?.surveys as PilotDashboardOutcomeSurveyDiagnostics) || undefined) : undefined,
       outcomeDiagnosticsByCohort:
         outcomesEnabled ? ((outcomeRollup?.diagnostics?.surveysByCohort as Record<string, PilotDashboardOutcomeSurveyDiagnostics>) || undefined) : undefined,
-      outcomeOperationalDiagnostics: outcomesEnabled ? ((outcomeRollup?.diagnostics as Record<string, any>) || undefined) : undefined,
+      outcomeOperationalDiagnostics: mergedOutcomeOperationalDiagnostics,
       outcomeRecommendationTypeSlices: outcomesEnabled ? ((outcomeRollup?.diagnostics?.recommendationTypeSlices as Record<string, any>) || undefined) : undefined,
       outcomeRecommendationTypeSlicesByCohort:
         outcomesEnabled ? ((outcomeRollup?.diagnostics?.recommendationTypeSlicesByCohort as Record<string, Record<string, any>>) || undefined) : undefined,
@@ -1444,6 +2100,12 @@ export const pulseCheckPilotDashboardService = {
       normalizeString(latestSnapshot?.profilePayload?.stateContextAtCapture?.assessmentContextFlag?.status) || 'unknown';
 
     const mentalPerformanceSnapshots = await loadPilotMentalPerformanceSnapshotSet(enrollment.id);
+    const outcomeDetail = await loadAthleteOutcomeDetail({
+      pilot,
+      athleteId,
+      pilotEnrollment: enrollment,
+      teamMembership,
+    });
 
     return {
       organization,
@@ -1459,6 +2121,9 @@ export const pulseCheckPilotDashboardService = {
       latestAssessmentContextFlagStatus,
       latestAssessmentCapturedAt: toTimeValue(latestSnapshot?.capturedAt),
       mentalPerformanceSnapshots,
+      adherenceSummary: outcomeDetail.adherenceSummary,
+      adherenceDays: outcomeDetail.adherenceDays,
+      escalations: outcomeDetail.escalations,
       recentPatterns: timelineItems.recentPatterns,
       recentProjections: timelineItems.recentProjections,
       recentEvidence: timelineItems.recentEvidence,

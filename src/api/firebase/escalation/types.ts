@@ -65,6 +65,58 @@ export enum EscalationRecordStatus {
   Declined = 'declined'
 }
 
+export type EscalationDisposition = 'none' | 'coach_review' | 'clinical_handoff';
+export type EscalationClassificationFamily = 'none' | 'performance_support' | 'coach_review' | 'care_escalation' | 'critical_safety';
+export type EscalationSeverity = 'none' | 'low' | 'moderate' | 'high' | 'critical';
+export type EscalationIncidentStatus = 'open' | 'monitoring' | 'resolved' | 'declined' | 'merged' | 'superseded';
+
+export interface EscalationIncidentRationaleEntry {
+  at: number;
+  tier: number;
+  category: string;
+  classificationFamily: string;
+  severity: string;
+  reason: string;
+  explanation?: string;
+}
+
+export interface EscalationIncidentEvidenceEntry {
+  at: number;
+  triggerMessageId?: string;
+  sourceTriggerMessageId?: string;
+  conversationId?: string;
+  triggerContent?: string;
+  mergeStrategy?: 'new' | 'same_conversation' | 'fallback_key';
+  incidentKeyCandidate?: string;
+}
+
+export interface EscalationIncidentLifecycleEntry {
+  at: number;
+  event: 'opened' | 'monitoring' | 'merged' | 'superseded' | 'resolved' | 'declined';
+  detail?: string;
+}
+
+export interface EscalationIncident {
+  id: string;
+  status: EscalationIncidentStatus;
+  conversationId: string;
+  openedAt: number;
+  lastActivityAt: number;
+  closedAt?: number | null;
+  recordCount: number;
+  dedupeWindowSeconds: number;
+  incidentKeyCandidate?: string;
+  canonicalIncidentKey?: string;
+  mergedIntoIncidentKey?: string | null;
+  supersededByIncidentKey?: string | null;
+  sourceTriggerMessageId?: string;
+  lastTriggerMessageId?: string;
+  lastTriggerContent?: string;
+  rationaleHistory?: EscalationIncidentRationaleEntry[];
+  evidenceTrail?: EscalationIncidentEvidenceEntry[];
+  lifecycleEvents?: EscalationIncidentLifecycleEntry[];
+}
+
 // ============================================================================
 // Escalation Condition (Admin-managed for AI fine-tuning)
 // ============================================================================
@@ -113,6 +165,19 @@ export interface EscalationRecord {
   triggerContent: string;         // The message that triggered escalation
   classificationReason: string;   // AI's reasoning for classification
   classificationConfidence: number; // 0-1 confidence score
+  disposition?: EscalationDisposition;
+  classificationFamily?: EscalationClassificationFamily;
+  explanation?: string;
+  severity?: EscalationSeverity;
+  requiresCoachReview?: boolean;
+  requiresClinicalHandoff?: boolean;
+  dedupeEligible?: boolean;
+  countsTowardCareKpi?: boolean;
+  incident?: EscalationIncident;
+  sourceTriggerMessageId?: string;
+  incidentKeyCandidate?: string;
+  mergedIntoIncidentKey?: string | null;
+  supersededByIncidentKey?: string | null;
   
   // Consent & Handoff Status
   consentStatus: ConsentStatus;
@@ -201,6 +266,17 @@ export interface EscalationClassification {
   reason: string;
   confidence: number;
   shouldEscalate: boolean;
+  disposition?: EscalationDisposition;
+  classificationFamily?: EscalationClassificationFamily;
+  explanation?: string;
+  severity?: EscalationSeverity;
+  requiresCoachReview?: boolean;
+  requiresClinicalHandoff?: boolean;
+  dedupeEligible?: boolean;
+  incident?: Omit<EscalationIncident, 'id' | 'openedAt' | 'lastActivityAt' | 'recordCount'> & {
+    scope?: 'same_conversation';
+  };
+  sourceTriggerMessageId?: string;
   suggestedResponse?: string;    // Safety-mode response for Tier 3
 }
 
@@ -288,6 +364,19 @@ export function escalationRecordFromFirestore(id: string, data: any): Escalation
     triggerContent: data.triggerContent ?? '',
     classificationReason: data.classificationReason ?? '',
     classificationConfidence: data.classificationConfidence ?? 0,
+    disposition: data.disposition ?? undefined,
+    classificationFamily: data.classificationFamily ?? undefined,
+    explanation: data.explanation ?? undefined,
+    severity: data.severity ?? undefined,
+    requiresCoachReview: data.requiresCoachReview ?? undefined,
+    requiresClinicalHandoff: data.requiresClinicalHandoff ?? undefined,
+    dedupeEligible: data.dedupeEligible ?? undefined,
+    countsTowardCareKpi: data.countsTowardCareKpi ?? undefined,
+    incident: data.incident ?? undefined,
+    sourceTriggerMessageId: data.sourceTriggerMessageId ?? undefined,
+    incidentKeyCandidate: data.incidentKeyCandidate ?? undefined,
+    mergedIntoIncidentKey: data.mergedIntoIncidentKey ?? undefined,
+    supersededByIncidentKey: data.supersededByIncidentKey ?? undefined,
     consentStatus: data.consentStatus ?? ConsentStatus.Pending,
     consentTimestamp: data.consentTimestamp,
     handoffStatus: data.handoffStatus ?? HandoffStatus.Pending,
@@ -312,6 +401,19 @@ export function escalationRecordToFirestore(record: Omit<EscalationRecord, 'id'>
     triggerContent: record.triggerContent,
     classificationReason: record.classificationReason,
     classificationConfidence: record.classificationConfidence,
+    disposition: record.disposition,
+    classificationFamily: record.classificationFamily,
+    explanation: record.explanation,
+    severity: record.severity,
+    requiresCoachReview: record.requiresCoachReview,
+    requiresClinicalHandoff: record.requiresClinicalHandoff,
+    dedupeEligible: record.dedupeEligible,
+    countsTowardCareKpi: record.countsTowardCareKpi,
+    incident: record.incident,
+    sourceTriggerMessageId: record.sourceTriggerMessageId,
+    incidentKeyCandidate: record.incidentKeyCandidate,
+    mergedIntoIncidentKey: record.mergedIntoIncidentKey,
+    supersededByIncidentKey: record.supersededByIncidentKey,
     consentStatus: record.consentStatus,
     consentTimestamp: record.consentTimestamp,
     handoffStatus: record.handoffStatus,

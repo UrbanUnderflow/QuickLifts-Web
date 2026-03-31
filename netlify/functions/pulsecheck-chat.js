@@ -8,6 +8,10 @@
 
 const { initializeFirebaseAdmin, admin, headers } = require('./config/firebase');
 const { runtimeHelpers: pulseCheckSubmissionRuntime } = require('./submit-pulsecheck-checkin');
+const {
+  hasLossOfFunctionConcern,
+  isTrueCareEscalationClassification,
+} = require('./utils/pulsecheck-pilot-metrics');
 
 const SNAPSHOTS_COLLECTION = 'state-snapshots';
 const CONVERSATION_SIGNAL_EVENTS_COLLECTION = 'conversation-derived-signal-events';
@@ -32,12 +36,371 @@ const EscalationTier = {
   CriticalRisk: 3
 };
 
+const HARD_RISK_ESCALATION_PATTERN = /\b(suicid|self[- ]?harm|hurt myself|kill myself|end my life|overdose|unsafe|can't stay safe|cannot stay safe|want to die|die tonight|abuse|assault|violence|psychosis|hallucinat|manic|panic attack|can't function|cannot function)\b/i;
+const BENIGN_PERFORMANCE_SUPPORT_PATTERN = /\b(competition|compete|competing|on stage|performance|pre[- ]?competition|nervous|anxious|anxiety|excited|regulate|regulation|focus|attention|sleep|bed|go to sleep|late|mind|what'?s on my mind|talk about|emotional regulation|stress)\b/i;
+const LOSS_OF_FUNCTION_PROMPT_NOTE = 'Loss of function, inability to move or feel a limb, sudden weakness, or stroke-like symptoms are true care escalations.';
+const ESCALATION_DEDUPE_WINDOW_SECONDS = 30 * 60;
+const EscalationDisposition = {
+  None: 'none',
+  CoachReview: 'coach_review',
+  ClinicalHandoff: 'clinical_handoff',
+};
+const EscalationClassificationFamily = {
+  None: 'none',
+  PerformanceSupport: 'performance_support',
+  CoachReview: 'coach_review',
+  CareEscalation: 'care_escalation',
+  CriticalSafety: 'critical_safety',
+};
+const EscalationSeverity = {
+  None: 'none',
+  Low: 'low',
+  Moderate: 'moderate',
+  High: 'high',
+  Critical: 'critical',
+};
+const EscalationIncidentStatus = {
+  Open: 'open',
+  Monitoring: 'monitoring',
+  Resolved: 'resolved',
+  Declined: 'declined',
+  Merged: 'merged',
+  Superseded: 'superseded',
+};
+const INCIDENT_HISTORY_LIMIT = 10;
+
 // ============================================================================
 // Mental assignment reminder onboarding (chat-driven preference capture)
 // ============================================================================
 
 function normalizeText(t) {
   return String(t || '').trim().toLowerCase();
+}
+
+function normalizeCategoryValue(value) {
+  return String(value || '').trim() || 'general';
+}
+
+function mapTierToSeverity(tier) {
+  switch (Number(tier) || 0) {
+    case EscalationTier.MonitorOnly:
+      return EscalationSeverity.Moderate;
+    case EscalationTier.ElevatedRisk:
+      return EscalationSeverity.High;
+    case EscalationTier.CriticalRisk:
+      return EscalationSeverity.Critical;
+    default:
+      return EscalationSeverity.None;
+  }
+}
+
+function deriveClassificationFamily({ tier, category, message, recentMessages }) {
+  const normalizedCategory = normalizeCategoryValue(category).toLowerCase();
+  const combinedText = [message].concat((recentMessages || []).slice(-5).map((entry) => entry?.content || '')).join(' ');
+  if ((Number(tier) || 0) <= EscalationTier.None) {
+    return BENIGN_PERFORMANCE_SUPPORT_PATTERN.test(combinedText) || normalizedCategory === 'performance_support'
+      ? EscalationClassificationFamily.PerformanceSupport
+      : EscalationClassificationFamily.None;
+  }
+  if ((Number(tier) || 0) >= EscalationTier.CriticalRisk) {
+    return EscalationClassificationFamily.CriticalSafety;
+  }
+  if ((Number(tier) || 0) >= EscalationTier.ElevatedRisk) {
+    return EscalationClassificationFamily.CareEscalation;
+  }
+  return EscalationClassificationFamily.CoachReview;
+}
+
+function deriveDisposition({ tier, requiresClinicalHandoff, requiresCoachReview }) {
+  if (requiresClinicalHandoff || (Number(tier) || 0) >= EscalationTier.ElevatedRisk) {
+    return EscalationDisposition.ClinicalHandoff;
+  }
+  if (requiresCoachReview || (Number(tier) || 0) >= EscalationTier.MonitorOnly) {
+    return EscalationDisposition.CoachReview;
+  }
+  return EscalationDisposition.None;
+}
+
+function buildIncidentSeed({ conversationId, classificationFamily, dedupeWindowSeconds }) {
+  return {
+    scope: 'same_conversation',
+    status: EscalationIncidentStatus.Open,
+    conversationId,
+    dedupeWindowSeconds,
+    family: classificationFamily,
+  };
+}
+
+function sanitizeIncidentKeyPart(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'unknown';
+}
+
+function buildIncidentKeyCandidate({ userId, classificationFamily, category, createdAtSec }) {
+  const bucket = Math.floor(Number(createdAtSec || Math.floor(Date.now() / 1000)) / ESCALATION_DEDUPE_WINDOW_SECONDS);
+  return [
+    sanitizeIncidentKeyPart(userId),
+    sanitizeIncidentKeyPart(classificationFamily),
+    sanitizeIncidentKeyPart(category),
+    String(bucket),
+  ].join('::');
+}
+
+function appendBounded(entries = [], nextEntry) {
+  const existing = Array.isArray(entries) ? entries : [];
+  return [...existing, nextEntry].slice(-INCIDENT_HISTORY_LIMIT);
+}
+
+function buildIncidentRationaleEntry({ classification, nowSec }) {
+  return {
+    at: nowSec,
+    tier: Number(classification?.tier) || 0,
+    category: normalizeCategoryValue(classification?.category),
+    classificationFamily: String(classification?.classificationFamily || '').trim() || EscalationClassificationFamily.None,
+    severity: String(classification?.severity || '').trim() || EscalationSeverity.None,
+    reason: String(classification?.reason || '').trim(),
+    explanation: String(classification?.explanation || '').trim() || undefined,
+  };
+}
+
+function buildIncidentEvidenceEntry({ triggerMessageId, sourceTriggerMessageId, conversationId, triggerContent, mergeStrategy, incidentKeyCandidate, nowSec }) {
+  return {
+    at: nowSec,
+    triggerMessageId: triggerMessageId || '',
+    sourceTriggerMessageId: sourceTriggerMessageId || triggerMessageId || '',
+    conversationId: conversationId || '',
+    triggerContent: String(triggerContent || '').slice(0, 500),
+    mergeStrategy: mergeStrategy || 'new',
+    incidentKeyCandidate: incidentKeyCandidate || '',
+  };
+}
+
+function buildIncidentLifecycleEntry(event, nowSec, detail) {
+  return {
+    at: nowSec,
+    event,
+    ...(detail ? { detail } : {}),
+  };
+}
+
+function deriveIncidentStatus({ requiresClinicalHandoff, requiresCoachReview }) {
+  if (requiresClinicalHandoff) return EscalationIncidentStatus.Open;
+  if (requiresCoachReview) return EscalationIncidentStatus.Monitoring;
+  return EscalationIncidentStatus.Open;
+}
+
+function normalizeEscalationClassification(parsed = {}, { userId, message, recentMessages, conversationId } = {}) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const tier = Number(parsed.tier);
+  const normalizedTier = Number.isFinite(tier)
+    ? Math.max(EscalationTier.None, Math.min(EscalationTier.CriticalRisk, Math.round(tier)))
+    : EscalationTier.None;
+  const requiresClinicalHandoff = parsed.requiresClinicalHandoff === true || normalizedTier >= EscalationTier.ElevatedRisk;
+  const requiresCoachReview = parsed.requiresCoachReview === true || normalizedTier >= EscalationTier.MonitorOnly;
+  const classificationFamily = String(parsed.classificationFamily || '').trim()
+    || deriveClassificationFamily({
+      tier: normalizedTier,
+      category: parsed.category,
+      message,
+      recentMessages,
+    });
+  const disposition = String(parsed.disposition || '').trim()
+    || deriveDisposition({ tier: normalizedTier, requiresClinicalHandoff, requiresCoachReview });
+  const severity = String(parsed.severity || '').trim() || mapTierToSeverity(normalizedTier);
+  const reason = String(parsed.reason || '').trim();
+  const explanation = String(parsed.explanation || '').trim() || reason;
+  const shouldEscalate = parsed.shouldEscalate === true || normalizedTier >= EscalationTier.ElevatedRisk;
+  const lossOfFunctionConcern = hasLossOfFunctionConcern(message, recentMessages);
+  if (lossOfFunctionConcern) {
+    return {
+      ...parsed,
+      tier: EscalationTier.ElevatedRisk,
+      category: 'loss_of_function',
+      reason: reason || 'Loss-of-function language detected.',
+      explanation: explanation || 'Loss-of-function language indicates a true care escalation.',
+      confidence: Number.isFinite(Number(parsed.confidence)) ? Math.max(0, Math.min(1, Number(parsed.confidence))) : 0,
+      shouldEscalate: true,
+      disposition: EscalationDisposition.ClinicalHandoff,
+      classificationFamily: EscalationClassificationFamily.CareEscalation,
+      severity: EscalationSeverity.High,
+      requiresCoachReview: true,
+      requiresClinicalHandoff: true,
+      dedupeEligible: true,
+      sourceTriggerMessageId: String(parsed.sourceTriggerMessageId || '').trim() || undefined,
+      incident: {
+        ...buildIncidentSeed({
+          conversationId,
+          classificationFamily: EscalationClassificationFamily.CareEscalation,
+          dedupeWindowSeconds: ESCALATION_DEDUPE_WINDOW_SECONDS,
+        }),
+        incidentKeyCandidate: String(parsed.incident?.incidentKeyCandidate || '').trim()
+          || buildIncidentKeyCandidate({
+            userId: parsed.userId || 'athlete',
+            classificationFamily: EscalationClassificationFamily.CareEscalation,
+            category: 'loss_of_function',
+            createdAtSec: nowSec,
+          }),
+        canonicalIncidentKey: String(parsed.incident?.canonicalIncidentKey || '').trim() || undefined,
+        mergedIntoIncidentKey: parsed.incident?.mergedIntoIncidentKey || null,
+        supersededByIncidentKey: parsed.incident?.supersededByIncidentKey || null,
+        sourceTriggerMessageId: String(parsed.incident?.sourceTriggerMessageId || parsed.sourceTriggerMessageId || '').trim() || undefined,
+        ...(parsed.incident && typeof parsed.incident === 'object' ? parsed.incident : {}),
+      },
+    };
+  }
+
+  return {
+    ...parsed,
+    tier: normalizedTier,
+    category: normalizeCategoryValue(parsed.category),
+    reason,
+    explanation,
+    confidence: Number.isFinite(Number(parsed.confidence)) ? Math.max(0, Math.min(1, Number(parsed.confidence))) : 0,
+    shouldEscalate,
+    disposition,
+    classificationFamily,
+    severity,
+    requiresCoachReview,
+    requiresClinicalHandoff,
+    dedupeEligible: parsed.dedupeEligible !== false && normalizedTier >= EscalationTier.MonitorOnly,
+    sourceTriggerMessageId: String(parsed.sourceTriggerMessageId || '').trim() || undefined,
+    incident: {
+      ...buildIncidentSeed({
+        conversationId,
+        classificationFamily,
+        dedupeWindowSeconds: ESCALATION_DEDUPE_WINDOW_SECONDS,
+      }),
+      incidentKeyCandidate: String(parsed.incident?.incidentKeyCandidate || '').trim()
+        || buildIncidentKeyCandidate({
+          userId: userId || parsed.userId || 'athlete',
+          classificationFamily,
+          category: parsed.category,
+          createdAtSec: nowSec,
+        }),
+      canonicalIncidentKey: String(parsed.incident?.canonicalIncidentKey || '').trim() || undefined,
+      mergedIntoIncidentKey: parsed.incident?.mergedIntoIncidentKey || null,
+      supersededByIncidentKey: parsed.incident?.supersededByIncidentKey || null,
+      sourceTriggerMessageId: String(parsed.incident?.sourceTriggerMessageId || parsed.sourceTriggerMessageId || '').trim() || undefined,
+      ...(parsed.incident && typeof parsed.incident === 'object' ? parsed.incident : {}),
+    },
+  };
+}
+
+function buildEscalationRecordPayload({
+  userId,
+  conversationId,
+  messageId,
+  triggerContent,
+  classification,
+  nowSec,
+  existingIncident = null,
+}) {
+  const requiresClinicalHandoff = classification.requiresClinicalHandoff === true;
+  const consentStatus = requiresClinicalHandoff
+    ? (classification.tier === EscalationTier.CriticalRisk ? 'not-required' : 'pending')
+    : 'not-required';
+  const handoffStatus = requiresClinicalHandoff ? 'pending' : 'pending';
+  const baseIncident = existingIncident?.incident && typeof existingIncident.incident === 'object'
+    ? existingIncident.incident
+    : {};
+  const sourceTriggerMessageId = classification.sourceTriggerMessageId || messageId || '';
+  const incidentKeyCandidate = String(classification?.incident?.incidentKeyCandidate || '').trim()
+    || buildIncidentKeyCandidate({
+      userId,
+      classificationFamily: classification.classificationFamily,
+      category: classification.category,
+      createdAtSec: nowSec,
+    });
+  const incidentStatus = deriveIncidentStatus({
+    requiresClinicalHandoff,
+    requiresCoachReview: classification.requiresCoachReview === true,
+  });
+  const incident = {
+    ...buildIncidentSeed({
+      conversationId,
+      classificationFamily: classification.classificationFamily,
+      dedupeWindowSeconds: ESCALATION_DEDUPE_WINDOW_SECONDS,
+    }),
+    ...baseIncident,
+    status: incidentStatus,
+    conversationId,
+    openedAt: baseIncident.openedAt || existingIncident?.incidentOpenedAt || existingIncident?.createdAt || nowSec,
+    lastActivityAt: nowSec,
+    closedAt: null,
+    recordCount: Math.max(1, Number(baseIncident.recordCount || existingIncident?.incidentRecordCount || 0) || 0),
+    incidentKeyCandidate,
+    canonicalIncidentKey: String(baseIncident.canonicalIncidentKey || existingIncident?.incidentKeyCandidate || incidentKeyCandidate).trim() || incidentKeyCandidate,
+    mergedIntoIncidentKey: baseIncident.mergedIntoIncidentKey || existingIncident?.mergedIntoIncidentKey || null,
+    supersededByIncidentKey: baseIncident.supersededByIncidentKey || existingIncident?.supersededByIncidentKey || null,
+    sourceTriggerMessageId,
+    lastTriggerMessageId: messageId || '',
+    lastTriggerContent: triggerContent || '',
+    rationaleHistory: appendBounded(
+      baseIncident.rationaleHistory,
+      buildIncidentRationaleEntry({ classification, nowSec })
+    ),
+    evidenceTrail: appendBounded(
+      baseIncident.evidenceTrail,
+      buildIncidentEvidenceEntry({
+        triggerMessageId: messageId,
+        sourceTriggerMessageId,
+        conversationId,
+        triggerContent,
+        mergeStrategy: existingIncident ? 'same_conversation' : 'new',
+        incidentKeyCandidate,
+        nowSec,
+      })
+    ),
+    lifecycleEvents: appendBounded(
+      baseIncident.lifecycleEvents,
+      buildIncidentLifecycleEntry(existingIncident ? 'merged' : incidentStatus === EscalationIncidentStatus.Monitoring ? 'monitoring' : 'opened', nowSec)
+    ),
+  };
+
+  return {
+    userId,
+    conversationId,
+    tier: classification.tier,
+    category: classification.category || 'general',
+    triggerMessageId: messageId || '',
+    triggerContent: triggerContent || '',
+    classificationReason: classification.reason || '',
+    classificationConfidence: classification.confidence || 0,
+    disposition: classification.disposition || deriveDisposition(classification),
+    classificationFamily: classification.classificationFamily || deriveClassificationFamily(classification),
+    explanation: classification.explanation || classification.reason || '',
+    severity: classification.severity || mapTierToSeverity(classification.tier),
+    requiresCoachReview: classification.requiresCoachReview === true,
+    requiresClinicalHandoff,
+    dedupeEligible: classification.dedupeEligible !== false,
+    countsTowardCareKpi: requiresClinicalHandoff,
+    sourceTriggerMessageId,
+    incidentKeyCandidate,
+    mergedIntoIncidentKey: incident.mergedIntoIncidentKey,
+    supersededByIncidentKey: incident.supersededByIncidentKey,
+    consentStatus,
+    handoffStatus,
+    coachNotified: Boolean(existingIncident?.coachNotified),
+    coachId: existingIncident?.coachId || undefined,
+    coachNotifiedAt: existingIncident?.coachNotifiedAt || null,
+    handoffInitiatedAt: existingIncident?.handoffInitiatedAt || null,
+    handoffAcceptedAt: existingIncident?.handoffAcceptedAt || null,
+    firstClinicianResponseAt: existingIncident?.firstClinicianResponseAt || null,
+    handoffCompletedAt: existingIncident?.handoffCompletedAt || null,
+    resolvedAt: null,
+    createdAt: existingIncident?.createdAt || nowSec,
+    status: 'active',
+    incident,
+    incidentId: existingIncident?.incidentId || existingIncident?.id || '',
+    incidentStatus: incidentStatus,
+    incidentOpenedAt: incident.openedAt,
+    incidentLastActivityAt: incident.lastActivityAt,
+    incidentClosedAt: null,
+    incidentRecordCount: incident.recordCount,
+  };
 }
 
 function parseYesNo(text) {
@@ -1573,10 +1936,11 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
           isTier1: escalation?.tier === EscalationTier.MonitorOnly,
           isTier2: escalation?.tier === EscalationTier.ElevatedRisk,
           isTier3: escalation?.tier === EscalationTier.CriticalRisk,
-          shouldCreateRecord: escalation && escalation.tier >= EscalationTier.MonitorOnly
+          shouldCreateRecord: escalation && isTrueCareEscalationClassification(escalation, message, recentMessages),
+          isTrueCareEscalation: isTrueCareEscalationClassification(escalation, message, recentMessages),
         });
         
-        if (escalation && escalation.tier >= EscalationTier.MonitorOnly) {
+        if (escalation && isTrueCareEscalationClassification(escalation, message, recentMessages)) {
           const tier = escalation.tier;
           console.log(`[pulsecheck-chat] [4/5] Escalation tier detected (record will be saved). Tier: ${tier}`);
           console.log(`[pulsecheck-chat] [4/5] Record creation params:`, {
@@ -1645,8 +2009,16 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
       tier: escalation.tier,
       category: escalation.category,
       reason: escalation.reason,
+      explanation: escalation.explanation,
       confidence: escalation.confidence,
-      shouldEscalate: escalation.shouldEscalate
+      shouldEscalate: escalation.shouldEscalate,
+      disposition: escalation.disposition,
+      classificationFamily: escalation.classificationFamily,
+      severity: escalation.severity,
+      requiresCoachReview: escalation.requiresCoachReview,
+      requiresClinicalHandoff: escalation.requiresClinicalHandoff,
+      dedupeEligible: escalation.dedupeEligible,
+      incident: escalation.incident,
     } : null;
     
     console.log('[pulsecheck-chat] ========== RESPONSE PREPARATION ==========');
@@ -1790,10 +2162,25 @@ ESCALATION TIERS:
 
 ${trainingContext}
 
-Respond with JSON only:
-{"tier":0-3,"category":"string","reason":"brief reason","confidence":0.0-1.0,"shouldEscalate":boolean}
+  Respond with JSON only:
+  {
+    "tier":0-3,
+    "category":"string",
+    "reason":"brief reason",
+    "explanation":"short operator-facing explanation",
+    "confidence":0.0-1.0,
+    "shouldEscalate":boolean,
+    "disposition":"none|coach_review|clinical_handoff",
+    "classificationFamily":"none|performance_support|coach_review|care_escalation|critical_safety",
+    "severity":"none|low|moderate|high|critical",
+    "requiresCoachReview":boolean,
+    "requiresClinicalHandoff":boolean,
+    "dedupeEligible":boolean
+  }
 
-CRITICAL: Err on side of caution. Tier 3 has ZERO threshold for safety concerns.`;
+CRITICAL: Err on side of caution. Tier 3 has ZERO threshold for safety concerns.
+${LOSS_OF_FUNCTION_PROMPT_NOTE}`;
+  
 
   const conversationContext = recentMessages.length > 0
     ? '\nRecent messages:\n' + recentMessages.slice(-5).map(m => 
@@ -1922,45 +2309,30 @@ CRITICAL: Err on side of caution. Tier 3 has ZERO threshold for safety concerns.
       
       console.log('[classifyEscalation] [STEP 8] Validating and normalizing classification result...');
       
-      // Ensure shouldEscalate is set correctly based on tier
-      // Tier 2 (Elevated) and Tier 3 (Critical) should always escalate
-      // Tier 1 (Monitor) might escalate depending on the response
-      // Tier 0 (None) should never escalate
-      const originalTier = parsed.tier;
-      const originalShouldEscalate = parsed.shouldEscalate;
-      
-      if (parsed.tier === undefined || parsed.tier === null) {
-        console.warn('[classifyEscalation] [STEP 8] ⚠️ Classification missing tier, defaulting to 0');
-        parsed.tier = 0;
-      }
-      
-      // Set shouldEscalate based on tier if not provided or incorrect
-      if (parsed.shouldEscalate === undefined || parsed.shouldEscalate === null) {
-        parsed.shouldEscalate = parsed.tier >= EscalationTier.ElevatedRisk;
-        console.log('[classifyEscalation] [STEP 8] Set shouldEscalate based on tier:', {
-          tier: parsed.tier,
-          shouldEscalate: parsed.shouldEscalate,
-          reason: 'was undefined/null'
-        });
-      } else if (parsed.tier >= EscalationTier.ElevatedRisk && !parsed.shouldEscalate) {
-        // Override: Tier 2/3 must escalate
-        console.warn('[classifyEscalation] [STEP 8] ⚠️ Overriding shouldEscalate to true for tier', parsed.tier);
-        parsed.shouldEscalate = true;
-      } else if (parsed.tier === EscalationTier.None && parsed.shouldEscalate) {
-        // Override: Tier 0 should not escalate
-        console.warn('[classifyEscalation] [STEP 8] ⚠️ Overriding shouldEscalate to false for tier 0');
-        parsed.shouldEscalate = false;
-      }
-      
-      console.log('[classifyEscalation] [STEP 8] Validation complete:', {
-        original: { tier: originalTier, shouldEscalate: originalShouldEscalate },
-        final: { tier: parsed.tier, shouldEscalate: parsed.shouldEscalate },
-        changed: originalTier !== parsed.tier || originalShouldEscalate !== parsed.shouldEscalate
+      const normalized = normalizeEscalationClassification(parsed, {
+        userId,
+        message,
+        recentMessages,
+        conversationId,
       });
+
+      console.log('[classifyEscalation] [STEP 8] Validation complete:', {
+        original: { tier: parsed.tier, shouldEscalate: parsed.shouldEscalate },
+        final: { tier: normalized.tier, shouldEscalate: normalized.shouldEscalate },
+        changed: parsed.tier !== normalized.tier || parsed.shouldEscalate !== normalized.shouldEscalate
+      });
+
+      const suppressed = suppressBenignPerformanceEscalation(normalized, message, recentMessages, conversationId);
+      if (suppressed.tier !== normalized.tier || suppressed.shouldEscalate !== normalized.shouldEscalate) {
+        console.log('[classifyEscalation] [STEP 8] Benign performance-support suppression applied:', {
+          before: { tier: normalized.tier, shouldEscalate: normalized.shouldEscalate, category: normalized.category },
+          after: { tier: suppressed.tier, shouldEscalate: suppressed.shouldEscalate, category: suppressed.category },
+        });
+      }
       
-      console.log('[classifyEscalation] [STEP 8] ✅ Final classification result:', JSON.stringify(parsed, null, 2));
+      console.log('[classifyEscalation] [STEP 8] ✅ Final classification result:', JSON.stringify(suppressed, null, 2));
       console.log('[classifyEscalation] ========== CLASSIFICATION COMPLETE ==========');
-      return parsed;
+      return suppressed;
     } catch (parseErr) {
       console.error('[classifyEscalation] [STEP 7] ❌ JSON parse FAILED');
       console.error('[classifyEscalation] [STEP 7] Parse error:', {
@@ -2000,6 +2372,72 @@ function buildEscalationTrainingContext(conditions) {
   return ctx || 'Use clinical judgment for escalation.';
 }
 
+function suppressBenignPerformanceEscalation(classification, message, recentMessages = [], conversationId) {
+  if (!classification || typeof classification !== 'object') return classification;
+  if ((classification.tier || 0) <= EscalationTier.None || (classification.tier || 0) >= EscalationTier.CriticalRisk) {
+    return classification;
+  }
+
+  const combinedText = [message].concat((recentMessages || []).slice(-5).map((entry) => entry?.content || '')).join(' ');
+  if (!combinedText.trim()) return classification;
+  if (HARD_RISK_ESCALATION_PATTERN.test(combinedText)) return classification;
+  if (!BENIGN_PERFORMANCE_SUPPORT_PATTERN.test(combinedText)) return classification;
+
+  return {
+    ...classification,
+    tier: EscalationTier.None,
+    shouldEscalate: false,
+    category: 'performance_support',
+    reason: 'Ordinary performance-coaching language detected without clear safety or severe-impairment markers.',
+    explanation: 'Performance-support language was detected without clear distress, impairment, or safety markers.',
+    disposition: EscalationDisposition.None,
+    classificationFamily: EscalationClassificationFamily.PerformanceSupport,
+    severity: EscalationSeverity.None,
+    requiresCoachReview: false,
+    requiresClinicalHandoff: false,
+    dedupeEligible: false,
+    incident: buildIncidentSeed({
+      conversationId,
+      classificationFamily: EscalationClassificationFamily.PerformanceSupport,
+      dedupeWindowSeconds: ESCALATION_DEDUPE_WINDOW_SECONDS,
+    }),
+  };
+}
+
+async function findMergeableEscalationRecord(db, userId, conversationId, classification) {
+  if (!db || !userId || !conversationId || !classification || (classification.tier || 0) <= EscalationTier.None) {
+    return null;
+  }
+  if (classification.dedupeEligible === false) {
+    return null;
+  }
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const snap = await db.collection('escalation-records').where('userId', '==', userId).get();
+  const candidates = snap.docs
+    .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }))
+    .filter((entry) => entry.status === 'active')
+    .filter((entry) => entry.dedupeEligible !== false)
+    .filter((entry) => nowSec - Number(entry.createdAt || 0) <= ESCALATION_DEDUPE_WINDOW_SECONDS)
+    .sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0));
+  const sameConversation = candidates.find((entry) => entry.conversationId === conversationId);
+  if (sameConversation) {
+    return { ...sameConversation, mergeStrategy: 'same_conversation' };
+  }
+
+  const incidentKeyCandidate = classification?.incident?.incidentKeyCandidate;
+  const fallback = candidates.find((entry) => {
+    const existingCandidate = String(entry?.incident?.incidentKeyCandidate || entry.incidentKeyCandidate || '').trim();
+    const existingCanonical = String(entry?.incident?.canonicalIncidentKey || '').trim();
+    return Boolean(
+      incidentKeyCandidate
+      && (existingCandidate === incidentKeyCandidate || existingCanonical === incidentKeyCandidate)
+    );
+  });
+
+  return fallback ? { ...fallback, mergeStrategy: 'fallback_key' } : null;
+}
+
 /**
  * Create escalation record for Tier 2/3
  */
@@ -2015,35 +2453,113 @@ async function createEscalationRecord(db, userId, conversationId, messageId, tri
   });
   
   try {
+    const existingIncident = await findMergeableEscalationRecord(db, userId, conversationId, classification);
+    if (existingIncident?.id) {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const existingTier = Number(existingIncident.tier) || EscalationTier.None;
+      const incomingIncidentKey = String(classification?.incident?.incidentKeyCandidate || classification.incidentKeyCandidate || '').trim();
+      const existingCanonicalKey = String(existingIncident?.incident?.canonicalIncidentKey || existingIncident.incidentKeyCandidate || existingIncident.incidentId || existingIncident.id).trim();
+      const upgradeToIncoming = (classification.requiresClinicalHandoff && !existingIncident.requiresClinicalHandoff)
+        || (Number(classification.tier || 0) > existingTier);
+      const nextRecord = buildEscalationRecordPayload({
+        userId,
+        conversationId,
+        messageId,
+        triggerContent,
+        classification: existingTier >= (classification.tier || 0) && existingIncident.requiresClinicalHandoff && !upgradeToIncoming
+          ? {
+              ...classification,
+              tier: existingTier,
+              category: existingIncident.category || classification.category,
+              reason: existingIncident.classificationReason || classification.reason,
+              explanation: existingIncident.explanation || classification.explanation || classification.reason,
+              confidence: Math.max(Number(existingIncident.classificationConfidence || 0), Number(classification.confidence || 0)),
+              disposition: existingIncident.disposition || classification.disposition,
+              classificationFamily: existingIncident.classificationFamily || classification.classificationFamily,
+              severity: existingIncident.severity || classification.severity,
+              requiresCoachReview: existingIncident.requiresCoachReview !== false,
+              requiresClinicalHandoff: existingIncident.requiresClinicalHandoff === true,
+              dedupeEligible: existingIncident.dedupeEligible !== false,
+            }
+          : classification,
+        nowSec,
+        existingIncident,
+      });
+      nextRecord.dedupeMergedCount = Number(existingIncident.dedupeMergedCount || 0) + 1;
+      nextRecord.dedupeLastMergedAt = nowSec;
+      nextRecord.dedupeLastTriggerMessageId = messageId;
+      nextRecord.dedupeLastTriggerContent = triggerContent;
+      nextRecord.dedupeLastClassificationReason = classification.reason || '';
+      nextRecord.incident = {
+        ...(nextRecord.incident || {}),
+        id: existingIncident.incidentId || existingIncident.id,
+        recordCount: Math.max(1, Number(existingIncident.incidentRecordCount || existingIncident?.incident?.recordCount || 1)) + 1,
+        lastActivityAt: nowSec,
+        canonicalIncidentKey: upgradeToIncoming && incomingIncidentKey ? incomingIncidentKey : existingCanonicalKey,
+        mergedIntoIncidentKey: existingIncident.mergeStrategy === 'fallback_key' && incomingIncidentKey && incomingIncidentKey !== existingCanonicalKey
+          ? existingCanonicalKey
+          : (nextRecord.incident?.mergedIntoIncidentKey || null),
+        supersededByIncidentKey: upgradeToIncoming && incomingIncidentKey && incomingIncidentKey !== existingCanonicalKey
+          ? incomingIncidentKey
+          : (nextRecord.incident?.supersededByIncidentKey || null),
+        sourceTriggerMessageId: classification.sourceTriggerMessageId || messageId || '',
+        lastTriggerMessageId: messageId,
+        lastTriggerContent: triggerContent,
+        rationaleHistory: appendBounded(
+          nextRecord.incident?.rationaleHistory,
+          buildIncidentRationaleEntry({ classification, nowSec })
+        ),
+        evidenceTrail: appendBounded(
+          nextRecord.incident?.evidenceTrail,
+          buildIncidentEvidenceEntry({
+            triggerMessageId: messageId,
+            sourceTriggerMessageId: classification.sourceTriggerMessageId || messageId,
+            conversationId,
+            triggerContent,
+            mergeStrategy: existingIncident.mergeStrategy || 'same_conversation',
+            incidentKeyCandidate: incomingIncidentKey || nextRecord.incident?.incidentKeyCandidate,
+            nowSec,
+          })
+        ),
+        lifecycleEvents: appendBounded(
+          nextRecord.incident?.lifecycleEvents,
+          buildIncidentLifecycleEntry(
+            upgradeToIncoming && incomingIncidentKey && incomingIncidentKey !== existingCanonicalKey ? 'superseded' : 'merged',
+            nowSec,
+            existingIncident.mergeStrategy === 'fallback_key' ? 'fallback_grouping' : 'same_conversation'
+          )
+        ),
+      };
+      nextRecord.incidentId = existingIncident.incidentId || existingIncident.id;
+      nextRecord.incidentKeyCandidate = nextRecord.incident.incidentKeyCandidate;
+      nextRecord.mergedIntoIncidentKey = nextRecord.incident.mergedIntoIncidentKey;
+      nextRecord.supersededByIncidentKey = nextRecord.incident.supersededByIncidentKey;
+      nextRecord.sourceTriggerMessageId = nextRecord.incident.sourceTriggerMessageId;
+      nextRecord.incidentRecordCount = nextRecord.incident.recordCount;
+      nextRecord.incidentLastActivityAt = nowSec;
+      await db.collection('escalation-records').doc(existingIncident.id).set(nextRecord, { merge: true });
+      return existingIncident.id;
+    }
+
     console.log('[createEscalationRecord] [STEP 2] Preparing record data...');
     const nowSec = Math.floor(Date.now() / 1000);
-    
-    // Tier behavior:
-    // - Tier 1 (MonitorOnly): save record + notify coach; no consent/handoff needed
-    // - Tier 2 (ElevatedRisk): consent-based handoff
-    // - Tier 3 (CriticalRisk): mandatory clinical handoff, no consent
-    const consentStatus =
-      classification.tier === EscalationTier.ElevatedRisk ? 'pending' : 'not-required';
-
-    const data = {
+    const data = buildEscalationRecordPayload({
       userId,
       conversationId,
-      tier: classification.tier,
-      category: classification.category || 'general',
-      triggerMessageId: messageId,
-      triggerContent: triggerContent,
-      classificationReason: classification.reason || '',
-      classificationConfidence: classification.confidence || 0,
-      consentStatus,
-      handoffStatus: 'pending',
-      coachNotified: false,
-      createdAt: nowSec,
-      status: 'active'
-    };
+      messageId,
+      triggerContent,
+      classification,
+      nowSec,
+    });
 
     console.log('[createEscalationRecord] [STEP 2] Record data prepared:', {
       tier: data.tier,
       category: data.category,
+      disposition: data.disposition,
+      classificationFamily: data.classificationFamily,
+      severity: data.severity,
+      requiresCoachReview: data.requiresCoachReview,
+      requiresClinicalHandoff: data.requiresClinicalHandoff,
       consentStatus: data.consentStatus,
       handoffStatus: data.handoffStatus,
       createdAt: data.createdAt,
@@ -2064,17 +2580,27 @@ async function createEscalationRecord(db, userId, conversationId, messageId, tri
     
     console.log('[createEscalationRecord] [STEP 4] Updating document with ID field...');
     const updateStartTime = Date.now();
-    await docRef.update({ id: docRef.id });
+    await docRef.update({
+      id: docRef.id,
+      incidentId: docRef.id,
+      incident: {
+        ...(data.incident || {}),
+        id: docRef.id,
+      },
+    });
     const updateDuration = Date.now() - updateStartTime;
     console.log(`[createEscalationRecord] [STEP 4] ✅ ID field updated in ${updateDuration}ms`);
 
     console.log('[createEscalationRecord] [STEP 5] Updating conversation document...');
     const conversationUpdateStartTime = Date.now();
+    const activeTier = isTrueCareEscalationClassification(classification, triggerContent, [triggerContent])
+      ? classification.tier
+      : EscalationTier.None;
     const conversationUpdate = {
-      escalationTier: classification.tier,
+      escalationTier: activeTier,
       escalationStatus: 'active',
       escalationRecordId: docRef.id,
-      isInSafetyMode: classification.tier === EscalationTier.CriticalRisk,
+      isInSafetyMode: activeTier === EscalationTier.CriticalRisk,
       lastEscalationAt: nowSec
     };
     console.log('[createEscalationRecord] [STEP 5] Conversation update data:', conversationUpdate);

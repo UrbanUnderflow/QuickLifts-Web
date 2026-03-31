@@ -1,7 +1,6 @@
 const { initializeFirebaseAdmin, getFirebaseAdminApp, admin, headers } = require('./config/firebase');
 const {
-  OUTCOME_BACKFILL_LOOKBACK_DAYS,
-  backfillPilotAthleteOutcomeHistory,
+  applyPilotEscalationReclassification,
   recordPilotMetricAlert,
 } = require('./utils/pulsecheck-pilot-metrics');
 
@@ -49,32 +48,31 @@ exports.handler = async (event) => {
     const body = JSON.parse(event.body || '{}');
 
     pilotId = String(body.pilotId || '').trim();
-    const athleteId = String(body.athleteId || '').trim();
-    if (!pilotId || !athleteId) {
-      throw createError(400, 'pilotId and athleteId are required.');
+    if (!pilotId) {
+      throw createError(400, 'pilotId is required.');
     }
 
-    const result = await backfillPilotAthleteOutcomeHistory({
+    const sampleLimit = Math.max(1, Math.min(50, Number(body.sampleLimit || 20)));
+    const recomputeLookbackDays = Math.max(1, Math.min(180, Number(body.recomputeLookbackDays || 30)));
+    const result = await applyPilotEscalationReclassification({
       db,
-      athleteId,
-      preferredPilotId: pilotId,
-      preferredPilotEnrollmentId: String(body.pilotEnrollmentId || '').trim() || null,
-      preferredTeamMembershipId: String(body.teamMembershipId || '').trim() || null,
-      lookbackDays: Math.max(1, Math.floor(Number(body.lookbackDays || OUTCOME_BACKFILL_LOOKBACK_DAYS))),
-      actorRole: body.actorRole === 'athlete' ? 'athlete' : 'admin',
+      pilotId,
       actorUserId: decodedToken.uid,
-      source: String(body.source || 'manual_seed').trim() || 'manual_seed',
-      stampAssignments: body.stampAssignments !== false,
-      recompute: true,
+      sampleLimit,
+      recomputeRollups: body.recomputeRollups !== false,
+      recomputeLookbackDays,
     });
 
     return {
       statusCode: 200,
       headers: RESPONSE_HEADERS,
-      body: JSON.stringify(result),
+      body: JSON.stringify({
+        success: true,
+        result,
+      }),
     };
   } catch (error) {
-    console.error('[backfill-pilot-athlete-outcomes] Failed:', error);
+    console.error('[apply-pilot-escalation-reclassification] Failed:', error);
     try {
       if (pilotId) {
         initializeFirebaseAdmin({ headers: event.headers || {} });
@@ -83,20 +81,20 @@ exports.handler = async (event) => {
         await recordPilotMetricAlert({
           db,
           pilotId,
-          scope: 'pilot_athlete_backfill',
+          scope: 'escalation_reclassification_apply',
           severity: 'error',
-          message: error?.message || 'Pilot athlete backfill failed.',
+          message: error?.message || 'Pilot escalation reclassification apply failed.',
         });
       }
     } catch (nestedError) {
-      console.error('[backfill-pilot-athlete-outcomes] Failed to record alert:', nestedError);
+      console.error('[apply-pilot-escalation-reclassification] Failed to record alert:', nestedError);
     }
 
     return {
       statusCode: error?.statusCode || 500,
       headers: RESPONSE_HEADERS,
       body: JSON.stringify({
-        error: error?.message || 'Failed to backfill pilot athlete outcomes.',
+        error: error?.message || 'Failed to apply pilot escalation reclassification.',
       }),
     };
   }
