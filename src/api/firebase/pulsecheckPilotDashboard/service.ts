@@ -716,15 +716,32 @@ const normalizeOperationalWatchListMutationForDemo = (
 });
 
 const isCoachReviewEscalation = (entry: Record<string, any>) => {
-  if (normalizeBoolean(entry.coachReviewFlag) || normalizeBoolean(entry.requiresCoachReview)) return true;
-  return (Number(entry.tier) || 0) === 1;
+  if (isBenignPerformanceSupportEscalation(entry)) return false;
+  if (normalizeBoolean(entry.supportFlag)) return false;
+  if (normalizeBoolean(entry.coachReviewFlag)) return true;
+
+  const disposition = normalizeString(entry.disposition).toLowerCase();
+  const family = normalizeString(entry.classificationFamily).toLowerCase();
+  if (disposition === 'coach_review' || family === 'coach_review') return true;
+
+  const tier = Number(entry.tier) || 0;
+  return tier === 1 && disposition !== 'clinical_handoff' && family !== 'care_escalation' && family !== 'critical_safety';
 };
 
 const isSupportFlagEscalation = (entry: Record<string, any>) =>
   normalizeBoolean(entry.supportFlag) || isBenignPerformanceSupportEscalation(entry);
 
-const isOpenCareEscalation = (entry: Record<string, any>) =>
-  normalizeEscalationStatus(entry) === 'active' && !isCoachReviewEscalation(entry) && !isSupportFlagEscalation(entry);
+const isOpenCareEscalation = (entry: Record<string, any>) => {
+  if (normalizeEscalationStatus(entry) !== 'active' || isSupportFlagEscalation(entry)) return false;
+
+  const disposition = normalizeString(entry.disposition).toLowerCase();
+  const family = normalizeString(entry.classificationFamily).toLowerCase();
+  if (disposition === 'clinical_handoff') return true;
+  if (family === 'care_escalation' || family === 'critical_safety') return true;
+  if (entry.requiresClinicalHandoff === true || entry.countsTowardCareKpi === true) return true;
+
+  return (Number(entry.tier) || 0) >= 2;
+};
 
 const resolveEscalationDispositionLabel = (entry: Record<string, any>) => {
   const status = normalizeEscalationStatus(entry);
