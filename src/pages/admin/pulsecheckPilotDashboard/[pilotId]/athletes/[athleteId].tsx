@@ -137,6 +137,38 @@ const escalationDispositionClassName = (label: string) => {
   }
 };
 
+const escalationRecordTitle = (escalation: PilotDashboardAthleteDetail['escalations'][number]) => {
+  if (escalation.supportFlag) return 'Support record';
+  if (escalation.coachReviewFlag) return 'Coach review record';
+  if (escalation.openCareEscalation) return `Tier ${Math.max(escalation.tier, 2)} care escalation`;
+  if (escalation.dispositionLabel === 'Care completed') return 'Care record';
+  if (escalation.dispositionLabel === 'Resolved') return 'Resolved record';
+  return 'Escalation record';
+};
+
+const escalationRecordMeta = (escalation: PilotDashboardAthleteDetail['escalations'][number]) => {
+  const parts = [
+    escalation.category,
+    escalation.status,
+    `created ${formatTimestamp(escalation.createdAt)}`,
+  ];
+
+  if (escalation.supportFlag || escalation.coachReviewFlag) {
+    parts.unshift(`Historical tier ${escalation.tier}`);
+  }
+
+  return parts.join(' · ');
+};
+
+const escalationWorkflowSummary = (escalation: PilotDashboardAthleteDetail['escalations'][number]) => {
+  if (escalation.supportFlag) return 'No care consent required · support-only record';
+  if (escalation.coachReviewFlag) return 'No care consent required · coach review';
+  if (escalation.openCareEscalation) {
+    return `${escalation.consentStatus ? `Consent ${escalation.consentStatus}` : 'No consent state'} · ${escalation.handoffStatus || 'No handoff state'}`;
+  }
+  return 'No care handoff required';
+};
+
 const PulseCheckPilotDashboardAthletePage: React.FC = () => {
   const router = useRouter();
   const pilotId = typeof router.query.pilotId === 'string' ? router.query.pilotId : '';
@@ -192,17 +224,6 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
       (left, right) => coerceTimestampMs(right[0]?.createdAt) - coerceTimestampMs(left[0]?.createdAt)
     );
   }, [detail]);
-
-  const escalationComparison = useMemo(() => {
-    const legacyRecordCount = detail?.escalations.length || 0;
-    const normalizedIncidentCount = groupedIncidents.length;
-    const recordsCollapsedByGrouping = Math.max(0, legacyRecordCount - normalizedIncidentCount);
-    return {
-      legacyRecordCount,
-      normalizedIncidentCount,
-      recordsCollapsedByGrouping,
-    };
-  }, [detail, groupedIncidents]);
 
   const currentWatchList = detail?.operationalWatchList || null;
   const linkedOpenEscalations = useMemo(() => {
@@ -411,13 +432,13 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                           ? `${currentWatchList.linkedIncidentIds.length} linked incident${currentWatchList.linkedIncidentIds.length === 1 ? '' : 's'} recorded.`
                           : 'No linked incidents have been recorded yet.'}
                       </div>
-                      {linkedOpenEscalations.length > 0 ? (
-                        <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                          {linkedOpenEscalations.slice(0, 3).map((escalation) => (
-                            <span key={escalation.id} className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-zinc-300">
-                              Tier {escalation.tier} · {escalation.dispositionLabel}
-                            </span>
-                          ))}
+                          {linkedOpenEscalations.length > 0 ? (
+                            <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                              {linkedOpenEscalations.slice(0, 3).map((escalation) => (
+                                <span key={escalation.id} className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-zinc-300">
+                              {escalationRecordTitle(escalation)}
+                                </span>
+                              ))}
                           {linkedOpenEscalations.length > 3 ? (
                             <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-zinc-300">
                               +{linkedOpenEscalations.length - 3} more
@@ -714,32 +735,25 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
               <div className="mt-6 rounded-3xl border border-white/10 bg-[#11151f] p-5">
                 <div className="flex items-center gap-3 text-rose-300">
                   <ShieldAlert className="h-5 w-5" />
-                  <span className="text-sm font-medium">Escalation Detail</span>
+                  <span className="text-sm font-medium">Current Incident Detail</span>
                 </div>
                 <p className="mt-3 text-sm text-zinc-400">
-                  These are the pilot-scoped care records currently tied to this athlete inside the selected pilot outcome frame. They stay visible even when no watch list is active.
+                  These are the current normalized incident records for this athlete inside the selected pilot outcome frame.
                 </p>
-                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                   <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Legacy Raw Records</div>
-                    <div className="mt-2 text-2xl font-semibold text-white">{escalationComparison.legacyRecordCount}</div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Current Incidents</div>
+                    <div className="mt-2 text-2xl font-semibold text-white">{groupedIncidents.length}</div>
                   </div>
                   <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Normalized Incidents</div>
-                    <div className="mt-2 text-2xl font-semibold text-white">{escalationComparison.normalizedIncidentCount}</div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Open Care Incidents</div>
+                    <div className="mt-2 text-2xl font-semibold text-white">{groupedIncidents.filter((incident) => incident[0]?.openCareEscalation).length}</div>
                   </div>
-                  <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Records Collapsed</div>
-                    <div className="mt-2 text-2xl font-semibold text-white">{escalationComparison.recordsCollapsedByGrouping}</div>
-                  </div>
-                </div>
-                <div className="mt-3 text-xs text-zinc-500">
-                  This uses the same grouped-incident normalization shown in the pilot dashboard rollout review.
                 </div>
                 <div className="mt-4 space-y-3">
                   {groupedIncidents.length === 0 ? (
                     <div className="rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-400">
-                      No linked care records are currently attached to this athlete in the pilot outcome frame.
+                      No current incident records are attached to this athlete in the pilot outcome frame.
                     </div>
                   ) : (
                     groupedIncidents.map((incident) => {
@@ -756,7 +770,7 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                                 </span>
                               </div>
                               <div className="mt-1 text-xs text-zinc-400">
-                                {lead.groupedIncidentRecordCount} record{lead.groupedIncidentRecordCount === 1 ? '' : 's'} · latest created {formatTimestamp(lead.createdAt)}
+                                Latest update created {formatTimestamp(lead.createdAt)}
                               </div>
                             </div>
                             <div className="flex flex-wrap gap-2 text-[11px]">
@@ -772,55 +786,51 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                             </div>
                           </div>
 
-                          <div className="mt-4 space-y-3">
-                            {incident.map((escalation) => (
-                              <div key={escalation.id} className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
-                                <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-                                  <div>
-                                    <div className="flex flex-wrap items-center gap-2 text-white">
-                                      <span className="font-medium">Tier {escalation.tier} escalation</span>
-                                      <span className={`rounded-full border px-2 py-1 text-[11px] ${escalationDispositionClassName(escalation.dispositionLabel)}`}>
-                                        {escalation.dispositionLabel}
-                                      </span>
-                                    </div>
-                                    <div className="mt-1 text-xs text-zinc-400">
-                                      {escalation.category} · {escalation.status} · created {formatTimestamp(escalation.createdAt)}
-                                    </div>
-                                  </div>
-                                  <div className="text-xs text-zinc-400">
-                                    {escalation.consentStatus ? `Consent ${escalation.consentStatus}` : 'No consent state'} · {escalation.handoffStatus || 'No handoff state'}
-                                  </div>
+                          <div className="mt-4 rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                            <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2 text-white">
+                                  <span className="font-medium">{escalationRecordTitle(lead)}</span>
+                                  <span className={`rounded-full border px-2 py-1 text-[11px] ${escalationDispositionClassName(lead.dispositionLabel)}`}>
+                                    {lead.dispositionLabel}
+                                  </span>
                                 </div>
-                                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                                  <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-sm text-zinc-300">
-                                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Coach Notified</div>
-                                    <div className="mt-2">{formatTimestamp(escalation.coachNotifiedAt)}</div>
-                                  </div>
-                                  <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-sm text-zinc-300">
-                                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Handoff Initiated</div>
-                                    <div className="mt-2">{formatTimestamp(escalation.handoffInitiatedAt)}</div>
-                                  </div>
-                                  <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-sm text-zinc-300">
-                                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Clinician Response</div>
-                                    <div className="mt-2">{formatTimestamp(escalation.firstClinicianResponseAt)}</div>
-                                  </div>
-                                  <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-sm text-zinc-300">
-                                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Resolved</div>
-                                    <div className="mt-2">{formatTimestamp(escalation.resolvedAt || escalation.handoffCompletedAt)}</div>
-                                  </div>
+                                <div className="mt-1 text-xs text-zinc-400">
+                                  {escalationRecordMeta(lead)}
                                 </div>
-                                {escalation.classificationReason || escalation.triggerContent ? (
-                                  <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-3 text-sm text-zinc-300">
-                                    {escalation.classificationReason ? (
-                                      <div><span className="text-zinc-500">Classification:</span> {escalation.classificationReason}</div>
-                                    ) : null}
-                                    {escalation.triggerContent ? (
-                                      <div className="mt-2"><span className="text-zinc-500">Trigger:</span> {escalation.triggerContent}</div>
-                                    ) : null}
-                                  </div>
+                              </div>
+                              <div className="text-xs text-zinc-400">
+                                {escalationWorkflowSummary(lead)}
+                              </div>
+                            </div>
+                            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                              <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-sm text-zinc-300">
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Coach Notified</div>
+                                <div className="mt-2">{formatTimestamp(lead.coachNotifiedAt)}</div>
+                              </div>
+                              <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-sm text-zinc-300">
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Handoff Initiated</div>
+                                <div className="mt-2">{formatTimestamp(lead.handoffInitiatedAt)}</div>
+                              </div>
+                              <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-sm text-zinc-300">
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Clinician Response</div>
+                                <div className="mt-2">{formatTimestamp(lead.firstClinicianResponseAt)}</div>
+                              </div>
+                              <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-sm text-zinc-300">
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Resolved</div>
+                                <div className="mt-2">{formatTimestamp(lead.resolvedAt || lead.handoffCompletedAt)}</div>
+                              </div>
+                            </div>
+                            {lead.classificationReason || lead.triggerContent ? (
+                              <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-3 text-sm text-zinc-300">
+                                {lead.classificationReason ? (
+                                  <div><span className="text-zinc-500">Current classification:</span> {lead.classificationReason}</div>
+                                ) : null}
+                                {lead.triggerContent ? (
+                                  <div className="mt-2"><span className="text-zinc-500">Latest trigger:</span> {lead.triggerContent}</div>
                                 ) : null}
                               </div>
-                            ))}
+                            ) : null}
                           </div>
                         </div>
                       );
