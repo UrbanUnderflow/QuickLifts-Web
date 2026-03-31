@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
+import { loadPulseCheckNudgeSuppressionState } from './pulsecheck-notification-utils';
 
 /**
  * Scheduled Mental Check-In Notifications
@@ -191,9 +192,10 @@ export const handler: Handler = async (event) => {
       timestamp: String(Date.now()),
     };
 
-    let successCount = 0;
-    let failCount = 0;
-    const errors: string[] = [];
+  let successCount = 0;
+  let failCount = 0;
+  let skippedSuppressed = 0;
+  const errors: string[] = [];
 
     for (const userDoc of usersSnap.docs) {
       const userData = userDoc.data();
@@ -215,6 +217,15 @@ export const handler: Handler = async (event) => {
         continue; // Skip inactive users
       }
 
+      const nudgeSuppression = await loadPulseCheckNudgeSuppressionState({
+        db,
+        athleteId: userId,
+      });
+      if (nudgeSuppression.suppressed) {
+        skippedSuppressed++;
+        continue;
+      }
+
       const result = await sendNotification(messaging, fcmToken, title, body, notificationData);
       
       if (result.success) {
@@ -234,6 +245,7 @@ export const handler: Handler = async (event) => {
       date: today,
       successCount,
       failCount,
+      skippedSuppressed,
       totalAttempted: successCount + failCount,
       errors: errors.slice(0, 10),
       createdAt: new Date(),
@@ -247,6 +259,7 @@ export const handler: Handler = async (event) => {
         processed: successCount + failCount,
         successCount,
         failCount,
+        skippedSuppressed,
       }),
     };
   } catch (error: any) {

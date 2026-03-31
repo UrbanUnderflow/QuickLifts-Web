@@ -1316,13 +1316,6 @@ const CallTimer: React.FC = () => {
 };
 
 const ClinicalHandoffHeader: React.FC = () => {
-    const packetCards = [
-        { title: 'Conversation context', value: 'Flagged excerpts + last exchange', accent: '#E0FE10' },
-        { title: 'Biometric snapshot', value: 'HRV, sleep, RHR, stress markers', accent: '#10b981' },
-        { title: 'Risk routing', value: 'Tier 3 hard-threshold override', accent: '#f97316' },
-        { title: 'Destination', value: 'AuntEdna clinician alert + chart seed', accent: '#ef4444' },
-    ];
-
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1332,50 +1325,19 @@ const ClinicalHandoffHeader: React.FC = () => {
         >
             <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-red-500/6" />
             <div className="relative">
-                <div className="grid gap-5 xl:grid-cols-[0.88fr_1.12fr] items-start">
-                    <div>
-                        <div className="text-[10px] font-bold text-red-400 uppercase tracking-[0.28em] mb-2">
-                            Tier 3 Clinical Transfer
-                        </div>
-                        <h2 className="text-2xl font-bold text-white leading-tight">
-                            Pulse packages the case and pushes it into AuntEdna in real time
-                        </h2>
-                        <p className="text-sm text-zinc-400 mt-3 leading-relaxed max-w-md">
-                            This is the boundary crossing. The conversation context, biometrics, and escalation decision are encrypted, routed, and handed off to the clinician-side system instantly.
-                        </p>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        {packetCards.map((card, index) => (
-                            <motion.div
-                                key={card.title}
-                                initial={{ opacity: 0, y: 12 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.35, delay: index * 0.08 }}
-                                className="rounded-2xl border border-white/6 bg-black/20 p-4"
-                            >
-                                <div className="text-[10px] uppercase tracking-[0.24em] mb-2" style={{ color: card.accent }}>
-                                    {card.title}
-                                </div>
-                                <div className="text-sm text-zinc-200 leading-relaxed">{card.value}</div>
-                            </motion.div>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="mt-6 pt-5 border-t border-zinc-800/70">
+                <div>
                     <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-5">
                         Live Handoff Pipeline
                     </div>
                     <PulseCheckToAuntEdnaFlow />
                     <div className="mt-5 grid gap-3 md:grid-cols-3 text-center">
                         <div className="rounded-2xl border border-white/6 bg-black/20 px-3 py-3">
-                            <div className="text-[10px] text-zinc-500 uppercase tracking-widest">Transfer Mode</div>
-                            <div className="text-xs text-zinc-200 mt-1">Encrypted packet + clinician alert</div>
+                            <div className="text-[10px] text-zinc-500 uppercase tracking-widest">Trigger</div>
+                            <div className="text-xs text-zinc-200 mt-1">Flagged context + biometric snapshot</div>
                         </div>
                         <div className="rounded-2xl border border-white/6 bg-black/20 px-3 py-3">
-                            <div className="text-[10px] text-zinc-500 uppercase tracking-widest">Decision Layer</div>
-                            <div className="text-xs text-zinc-200 mt-1">GPT-4o routing + hard safety thresholds</div>
+                            <div className="text-[10px] text-zinc-500 uppercase tracking-widest">Decision</div>
+                            <div className="text-xs text-zinc-200 mt-1">Tier 3 override + clinical routing</div>
                         </div>
                         <div className="rounded-2xl border border-white/6 bg-black/20 px-3 py-3">
                             <div className="text-[10px] text-zinc-500 uppercase tracking-widest">Destination</div>

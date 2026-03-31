@@ -64,6 +64,14 @@ import type {
   PilotResearchReadoutCitation,
   PilotResearchReadoutReadinessGateResult,
   PilotDashboardSnapshotHistoryItem,
+  PilotDashboardOperationalStatus,
+  PilotDashboardOperationalWatchListLifecycleStatus,
+  PilotDashboardOperationalWatchListReasonCode,
+  PilotDashboardOperationalWatchListRestrictionFlags,
+  PilotDashboardOperationalWatchListSource,
+  PilotDashboardOperationalWatchListState,
+  PilotDashboardOperationalWatchListSummary,
+  PilotDashboardTimeValue,
   PulseCheckPilotHypothesis,
   PilotHypothesisAssistFrame,
   PilotHypothesisAssistGenerationInput,
@@ -86,6 +94,7 @@ const ORGANIZATION_INVITE_DEFAULTS_COLLECTION = 'pulsecheck-organization-invite-
 const PILOT_RESEARCH_READOUTS_COLLECTION = 'pulsecheck-pilot-research-readouts';
 const PILOT_RESEARCH_READ_MODEL_VERSION = 'pilot-dashboard-v1';
 const ESCALATION_RECORDS_COLLECTION = 'escalation-records';
+const PILOT_OPERATIONAL_STATE_COLLECTION = 'pulsecheck-pilot-operational-states';
 const CHECKINS_SUBCOLLECTION = 'check-ins';
 const ADHERENCE_ACTIVATION_DAY_CUTOFF_HOUR = 12;
 const NO_TASK_ASSIGNMENT_ACTION_TYPES = new Set(['defer', 'rest', 'rest_day', 'rest-day', 'no_task', 'no-task', 'off_day', 'off-day', 'none']);
@@ -439,6 +448,81 @@ const loadPilotOutcomeOpsStatus = async (pilotId: string): Promise<Record<string
   };
 };
 
+const loadPilotOperationalWatchListStates = async (pilotId: string): Promise<PilotDashboardOperationalWatchListState[]> => {
+  const normalizedPilotId = normalizeString(pilotId);
+  if (!normalizedPilotId) return [];
+
+  const snapshot = await getDocs(
+    query(collection(db, PILOT_OPERATIONAL_STATE_COLLECTION), where('pilotId', '==', normalizedPilotId))
+  );
+  return snapshot.docs.map((docSnap) => normalizeOperationalWatchListState(docSnap.id, docSnap.data() as Record<string, any>));
+};
+
+const loadAthleteOperationalWatchListState = async (
+  pilotEnrollmentId: string
+): Promise<PilotDashboardOperationalWatchListState | null> => {
+  const normalizedEnrollmentId = normalizeString(pilotEnrollmentId);
+  if (!normalizedEnrollmentId) return null;
+
+  const snap = await getDoc(doc(db, PILOT_OPERATIONAL_STATE_COLLECTION, normalizedEnrollmentId));
+  if (!snap.exists()) return null;
+  return normalizeOperationalWatchListState(snap.id, snap.data() as Record<string, any>);
+};
+
+const persistOperationalWatchListState = async (
+  action: OperationalWatchListMutationAction,
+  input: OperationalWatchListMutationInput
+): Promise<void> => {
+  const normalizedPilotId = normalizeString(input.pilotId);
+  const normalizedPilotEnrollmentId = normalizeString(input.pilotEnrollmentId);
+  const normalizedAthleteId = normalizeString(input.athleteId);
+  if (!normalizedPilotId || !normalizedPilotEnrollmentId || !normalizedAthleteId) {
+    throw new Error('pilotId, pilotEnrollmentId, and athleteId are required.');
+  }
+
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Authenticated admin session required.');
+  }
+  const idToken = await currentUser.getIdToken();
+  const endpointName =
+    action === 'request'
+      ? 'request-pilot-watch-list'
+      : action === 'apply'
+        ? 'apply-pilot-watch-list'
+        : 'clear-pilot-watch-list';
+  const response = await fetch(resolvePulseCheckFunctionUrl(`/.netlify/functions/${endpointName}`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+      ...getFirebaseModeRequestHeaders(),
+    },
+    body: JSON.stringify({
+      pilotId: normalizedPilotId,
+      pilotEnrollmentId: normalizedPilotEnrollmentId,
+      athleteId: normalizedAthleteId,
+      reasonCode: normalizeOperationalWatchListReasonCode(input.reasonCode || 'other'),
+      reason: normalizeString(input.reasonText),
+      watchListSource: normalizeOperationalWatchListSource(input.source || 'clinician'),
+      watchListReviewDueAt: input.reviewDueAt,
+      linkedIncidentIds: Array.isArray(input.linkedIncidentIds)
+        ? input.linkedIncidentIds.map((entry) => normalizeString(entry)).filter(Boolean)
+        : [],
+      ...(action === 'request'
+        ? { requestedRestrictionFlags: buildDefaultOperationalWatchListFlags(input.restrictionFlags || null) }
+        : action === 'apply'
+          ? { restrictionFlags: buildDefaultOperationalWatchListFlags(input.restrictionFlags || null) }
+          : {}),
+    }),
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Failed to update operational watch list.');
+  }
+};
+
 const loadPilotMentalPerformanceSnapshotSet = async (
   pilotEnrollmentId: string
 ): Promise<PulseCheckPilotMentalPerformanceSnapshotRecordSet | undefined> => {
@@ -513,6 +597,123 @@ const normalizeBoolean = (value: any) => {
   if (!normalized) return false;
   return ['true', '1', 'yes', 'y'].includes(normalized);
 };
+
+const DEFAULT_OPERATIONAL_WATCH_LIST_FLAGS: PilotDashboardOperationalWatchListRestrictionFlags = {
+  suppressSurveys: false,
+  suppressAssignments: false,
+  suppressNudges: false,
+  excludeFromAdherence: false,
+  manualHold: false,
+};
+
+const normalizeOperationalStatus = (value: any): PilotDashboardOperationalStatus =>
+  ['paused', 'withdrawn'].includes(normalizeString(value)) ? (normalizeString(value) as PilotDashboardOperationalStatus) : 'normal';
+
+const normalizeOperationalWatchListLifecycleStatus = (
+  value: any
+): PilotDashboardOperationalWatchListLifecycleStatus => {
+  const normalized = normalizeString(value);
+  if (normalized === 'requested' || normalized === 'active' || normalized === 'cleared') return normalized;
+  return 'none';
+};
+
+const normalizeOperationalWatchListReasonCode = (value: any): PilotDashboardOperationalWatchListReasonCode | string =>
+  normalizeString(value) || 'other';
+
+const normalizeOperationalWatchListSource = (value: any): PilotDashboardOperationalWatchListSource | null => {
+  const normalized = normalizeString(value);
+  if (normalized === 'clinician' || normalized === 'staff' || normalized === 'system') return normalized;
+  return null;
+};
+
+const normalizeOperationalWatchListFlags = (value: any): PilotDashboardOperationalWatchListRestrictionFlags => ({
+  suppressSurveys: normalizeBoolean(value?.suppressSurveys),
+  suppressAssignments: normalizeBoolean(value?.suppressAssignments),
+  suppressNudges: normalizeBoolean(value?.suppressNudges),
+  excludeFromAdherence: normalizeBoolean(value?.excludeFromAdherence),
+  manualHold: normalizeBoolean(value?.manualHold),
+});
+
+const buildDefaultOperationalWatchListFlags = (
+  overrides?: Partial<PilotDashboardOperationalWatchListRestrictionFlags> | null
+): PilotDashboardOperationalWatchListRestrictionFlags => ({
+  ...DEFAULT_OPERATIONAL_WATCH_LIST_FLAGS,
+  ...(overrides || {}),
+});
+
+const normalizeOperationalWatchListState = (id: string, data: Record<string, any>): PilotDashboardOperationalWatchListState => ({
+  id,
+  pilotId: normalizeString(data.pilotId),
+  pilotEnrollmentId: normalizeString(data.pilotEnrollmentId),
+  athleteId: normalizeString(data.athleteId),
+  status: normalizeOperationalStatus(data.status),
+  lifecycleStatus: normalizeOperationalWatchListLifecycleStatus(data.lifecycleStatus),
+  watchListActive: normalizeBoolean(data.watchListActive),
+  watchListRequested: normalizeBoolean(data.watchListRequested),
+  reasonCode: normalizeOperationalWatchListReasonCode(data.reasonCode),
+  reasonText: normalizeString(data.reasonText),
+  source: normalizeOperationalWatchListSource(data.source),
+  reviewDueAt: toTimeValue(data.reviewDueAt),
+  requestedAt: toTimeValue(data.requestedAt),
+  requestedByUserId: normalizeString(data.requestedByUserId) || null,
+  requestedByEmail: normalizeString(data.requestedByEmail) || null,
+  appliedAt: toTimeValue(data.appliedAt),
+  appliedByUserId: normalizeString(data.appliedByUserId) || null,
+  appliedByEmail: normalizeString(data.appliedByEmail) || null,
+  clearedAt: toTimeValue(data.clearedAt),
+  clearedByUserId: normalizeString(data.clearedByUserId) || null,
+  clearedByEmail: normalizeString(data.clearedByEmail) || null,
+  linkedIncidentIds: Array.isArray(data.linkedIncidentIds) ? data.linkedIncidentIds.map((entry) => normalizeString(entry)).filter(Boolean) : [],
+  restrictionFlags: normalizeOperationalWatchListFlags(data.restrictionFlags),
+  createdAt: toTimeValue(data.createdAt),
+  updatedAt: toTimeValue(data.updatedAt),
+});
+
+const buildOperationalWatchListSummary = (
+  states: PilotDashboardOperationalWatchListState[]
+): PilotDashboardOperationalWatchListSummary => ({
+  stateCount: states.length,
+  requestedCount: states.filter((state) => state.lifecycleStatus === 'requested' || (state.watchListRequested && !state.watchListActive)).length,
+  activeCount: states.filter((state) => state.watchListActive).length,
+  pausedCount: states.filter((state) => state.status === 'paused').length,
+  withdrawnCount: states.filter((state) => state.status === 'withdrawn').length,
+  suppressSurveysCount: states.filter((state) => state.restrictionFlags.suppressSurveys).length,
+  suppressAssignmentsCount: states.filter((state) => state.restrictionFlags.suppressAssignments).length,
+  suppressNudgesCount: states.filter((state) => state.restrictionFlags.suppressNudges).length,
+  excludeFromAdherenceCount: states.filter((state) => state.restrictionFlags.excludeFromAdherence).length,
+  manualHoldCount: states.filter((state) => state.restrictionFlags.manualHold).length,
+});
+
+type OperationalWatchListMutationAction = 'request' | 'apply' | 'clear';
+
+interface OperationalWatchListMutationInput {
+  pilotId: string;
+  pilotEnrollmentId: string;
+  athleteId: string;
+  reasonCode?: PilotDashboardOperationalWatchListReasonCode | string;
+  reasonText?: string;
+  source?: PilotDashboardOperationalWatchListSource;
+  reviewDueAt?: PilotDashboardTimeValue;
+  restrictionFlags?: Partial<PilotDashboardOperationalWatchListRestrictionFlags> | null;
+  linkedIncidentIds?: string[];
+}
+
+const normalizeOperationalWatchListMutationForDemo = (
+  input: OperationalWatchListMutationInput
+): {
+  pilotId: string;
+  pilotEnrollmentId: string;
+  athleteId: string;
+  reasonCode?: string;
+  reasonText?: string;
+  source?: PilotDashboardOperationalWatchListSource;
+  reviewDueAt?: number | null;
+  restrictionFlags?: Partial<PilotDashboardOperationalWatchListRestrictionFlags> | null;
+  linkedIncidentIds?: string[];
+} => ({
+  ...input,
+  reviewDueAt: input.reviewDueAt ? coerceTimestampMs(input.reviewDueAt) : null,
+});
 
 const isCoachReviewEscalation = (entry: Record<string, any>) => {
   if (normalizeBoolean(entry.coachReviewFlag) || normalizeBoolean(entry.requiresCoachReview)) return true;
@@ -681,6 +882,19 @@ const isEscalationHoldDay = (escalations: Array<Record<string, any>>, dateKey: s
     return Boolean(createdDateKey && resolvedDateKey && dateKey >= createdDateKey && dateKey <= resolvedDateKey);
   });
 
+const isOperationalWatchListHoldDay = (
+  watchList: PilotDashboardOperationalWatchListState | null | undefined,
+  dateKey: string
+) => {
+  if (!watchList?.watchListActive) return false;
+  const flags = watchList.restrictionFlags || DEFAULT_OPERATIONAL_WATCH_LIST_FLAGS;
+  if (!flags.excludeFromAdherence && !flags.manualHold) return false;
+
+  const startDateKey = toUtcDateKey(watchList.appliedAt || watchList.requestedAt || watchList.createdAt);
+  if (!startDateKey) return false;
+  return dateKey >= startDateKey;
+};
+
 const buildAthleteAdherenceDetail = ({
   pilot,
   pilotEnrollment,
@@ -689,6 +903,7 @@ const buildAthleteAdherenceDetail = ({
   assignmentEvents,
   checkIns,
   escalations,
+  operationalWatchList,
 }: {
   pilot: PulseCheckPilot;
   pilotEnrollment: PulseCheckPilotEnrollment;
@@ -697,6 +912,7 @@ const buildAthleteAdherenceDetail = ({
   assignmentEvents: Array<Record<string, any>>;
   checkIns: Array<Record<string, any>>;
   escalations: Array<Record<string, any>>;
+  operationalWatchList?: PilotDashboardOperationalWatchListState | null;
 }): {
   adherenceSummary: PilotDashboardAthleteAdherenceSummary;
   adherenceDays: PilotDashboardAthleteAdherenceDay[];
@@ -809,8 +1025,8 @@ const buildAthleteAdherenceDetail = ({
       exclusionReason = 'manual_pause';
     } else if (isEnrollmentPausedDay(pilotEnrollment, dateKey, timezone, hasSameDayActivity)) {
       exclusionReason = 'paused';
-    } else if (isEscalationHoldDay(escalations, dateKey)) {
-      exclusionReason = 'escalation_hold';
+    } else if (isOperationalWatchListHoldDay(operationalWatchList, dateKey)) {
+      exclusionReason = operationalWatchList?.restrictionFlags?.manualHold ? 'manual_hold' : 'watch_list_hold';
     } else if (isNoTaskRestDay(assignment)) {
       exclusionReason = 'no_task_rest_day';
     }
@@ -857,11 +1073,13 @@ const loadAthleteOutcomeDetail = async ({
   athleteId,
   pilotEnrollment,
   teamMembership,
+  operationalWatchList,
 }: {
   pilot: PulseCheckPilot;
   athleteId: string;
   pilotEnrollment: PulseCheckPilotEnrollment;
   teamMembership: PulseCheckTeamMembership | null;
+  operationalWatchList?: PilotDashboardOperationalWatchListState | null;
 }): Promise<{
   adherenceSummary: PilotDashboardAthleteAdherenceSummary;
   adherenceDays: PilotDashboardAthleteAdherenceDay[];
@@ -908,6 +1126,7 @@ const loadAthleteOutcomeDetail = async ({
     assignmentEvents,
     checkIns: checkInSnap.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Record<string, any>) })),
     escalations: rawEscalations,
+    operationalWatchList: operationalWatchList || null,
   });
 
   const incidentGroups = [...allEscalations]
@@ -1165,7 +1384,8 @@ async function loadEngineSummaryForAthlete(athleteId: string): Promise<PilotDash
 async function buildAthleteSummary(
   enrollment: PulseCheckPilotEnrollment,
   cohortMap: Map<string, PulseCheckPilotCohort>,
-  teamMembershipMap: Map<string, PulseCheckTeamMembership>
+  teamMembershipMap: Map<string, PulseCheckTeamMembership>,
+  operationalWatchList?: PilotDashboardOperationalWatchListState | null
 ): Promise<PilotDashboardAthleteSummary> {
   const teamMembership = teamMembershipMap.get(enrollment.userId) || null;
   const cohort = normalizeString(enrollment.cohortId) ? cohortMap.get(normalizeString(enrollment.cohortId)) || null : null;
@@ -1179,6 +1399,7 @@ async function buildAthleteSummary(
     teamMembership,
     cohort,
     engineSummary,
+    operationalWatchList: operationalWatchList || null,
   };
 }
 
@@ -1789,6 +2010,30 @@ export const pulseCheckPilotDashboardService = {
     );
   },
 
+  async requestPilotOperationalWatchList(input: OperationalWatchListMutationInput): Promise<void> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      pilotDashboardDemoMode.requestPilotOperationalWatchList(normalizeOperationalWatchListMutationForDemo(input));
+      return;
+    }
+    await persistOperationalWatchListState('request', input);
+  },
+
+  async applyPilotOperationalWatchList(input: OperationalWatchListMutationInput): Promise<void> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      pilotDashboardDemoMode.applyPilotOperationalWatchList(normalizeOperationalWatchListMutationForDemo(input));
+      return;
+    }
+    await persistOperationalWatchListState('apply', input);
+  },
+
+  async clearPilotOperationalWatchList(input: OperationalWatchListMutationInput): Promise<void> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      pilotDashboardDemoMode.clearPilotOperationalWatchList(normalizeOperationalWatchListMutationForDemo(input));
+      return;
+    }
+    await persistOperationalWatchListState('clear', input);
+  },
+
   async triggerPilotOutcomeRollupRecompute(input: {
     pilotId: string;
     lookbackDays?: number;
@@ -1916,10 +2161,11 @@ export const pulseCheckPilotDashboardService = {
 
     const enrichedEntries = await Promise.all(
       baseEntries.map(async (entry) => {
-        const [directoryMetrics, outcomeRollup, outcomeReleaseSettings] = await Promise.all([
+        const [directoryMetrics, outcomeRollup, outcomeReleaseSettings, operationalWatchListStates] = await Promise.all([
           loadDirectoryEngineMetrics(entry._activeEnrollments),
           loadCurrentOutcomeRollup(entry.pilot.id),
           loadPilotOutcomeReleaseSettings(entry.pilot.id),
+          loadPilotOperationalWatchListStates(entry.pilot.id),
         ]);
         const outcomesEnabled = outcomeReleaseSettings?.outcomesEnabled !== false;
         return {
@@ -1928,6 +2174,7 @@ export const pulseCheckPilotDashboardService = {
           outcomeMetrics: outcomesEnabled ? outcomeRollup?.metrics : undefined,
           outcomeDiagnostics: outcomesEnabled ? ((outcomeRollup?.diagnostics?.surveys as PilotDashboardOutcomeSurveyDiagnostics) || undefined) : undefined,
           hypothesisEvaluation: outcomesEnabled ? ((outcomeRollup?.diagnostics?.hypothesisEvaluation as any) || undefined) : undefined,
+          operationalWatchListSummary: buildOperationalWatchListSummary(operationalWatchListStates),
         };
       })
     );
@@ -1949,13 +2196,14 @@ export const pulseCheckPilotDashboardService = {
     const pilot = await pulseCheckProvisioningService.getPilot(pilotId);
     if (!pilot) return null;
 
-    const [organization, team, cohorts, enrollments, teamMemberships, hypotheses] = await Promise.all([
+    const [organization, team, cohorts, enrollments, teamMemberships, hypotheses, operationalWatchListStates] = await Promise.all([
       pulseCheckProvisioningService.getOrganization(pilot.organizationId),
       pulseCheckProvisioningService.getTeam(pilot.teamId),
       pulseCheckProvisioningService.listPilotCohorts(),
       pulseCheckProvisioningService.listPilotEnrollmentsByPilot(pilot.id),
       pulseCheckProvisioningService.listTeamMemberships(pilot.teamId),
       listPilotHypotheses(pilot.id),
+      loadPilotOperationalWatchListStates(pilot.id),
     ]);
 
     if (!organization || !team) return null;
@@ -1964,9 +2212,14 @@ export const pulseCheckPilotDashboardService = {
     if (!isPilotOperationallyActive(pilot, pilotCohorts, enrollments)) return null;
     const cohortMap = new Map(pilotCohorts.map((cohort) => [cohort.id, cohort]));
     const teamMembershipMap = new Map(teamMemberships.map((membership) => [membership.userId, membership]));
+    const operationalWatchListByEnrollmentId = new Map(
+      operationalWatchListStates.map((state) => [state.pilotEnrollmentId, state])
+    );
     const activeEnrollments = enrollments.filter((enrollment) => enrollment.status === 'active');
     const athletes = await Promise.all(
-      activeEnrollments.map((enrollment) => buildAthleteSummary(enrollment, cohortMap, teamMembershipMap))
+      activeEnrollments.map((enrollment) =>
+        buildAthleteSummary(enrollment, cohortMap, teamMembershipMap, operationalWatchListByEnrollmentId.get(enrollment.id) || null)
+      )
     );
     const totalEvidenceRecords = athletes.reduce((sum, athlete) => sum + athlete.engineSummary.evidenceRecordCount, 0);
     const totalPatternModels = athletes.reduce((sum, athlete) => sum + athlete.engineSummary.patternModelCount, 0);
@@ -1998,6 +2251,7 @@ export const pulseCheckPilotDashboardService = {
     };
     const cohortSummaries = buildCohortSummaries(pilotCohorts, athletes);
     const hypothesisSummary = buildHypothesisSummary(hypotheses);
+    const operationalWatchListSummary = buildOperationalWatchListSummary(operationalWatchListStates);
     const [organizationInviteConfigDefault, teamInviteConfigDefault, pilotInviteConfig, readouts, outcomeRollup, outcomeReleaseSettings, outcomeOpsStatus] = await Promise.all([
       getOrganizationInviteDefault(pilot.organizationId),
       getTeamInviteDefault(pilot.teamId),
@@ -2055,6 +2309,7 @@ export const pulseCheckPilotDashboardService = {
       outcomeTrustDispositionBaseline: outcomesEnabled ? ((outcomeRollup?.diagnostics?.trustDispositionBaseline as Record<string, any>) || undefined) : undefined,
       outcomeReleaseSettings: outcomeReleaseSettings || undefined,
       outcomeOpsStatus: outcomeOpsStatus || undefined,
+      operationalWatchListSummary,
       hypothesisEvaluation: outcomesEnabled ? ((outcomeRollup?.diagnostics?.hypothesisEvaluation as any) || undefined) : undefined,
       hypothesisEvaluationByCohort: outcomesEnabled ? ((outcomeRollup?.diagnostics?.hypothesisEvaluationByCohort as any) || undefined) : undefined,
       latestResearchReadout: readouts[0] || null,
@@ -2069,13 +2324,14 @@ export const pulseCheckPilotDashboardService = {
     const pilot = await pulseCheckProvisioningService.getPilot(pilotId);
     if (!pilot) return null;
 
-    const [organization, team, enrollment, cohorts, teamMemberships, engineSummary] = await Promise.all([
+    const [organization, team, enrollment, cohorts, teamMemberships, engineSummary, operationalWatchList] = await Promise.all([
       pulseCheckProvisioningService.getOrganization(pilot.organizationId),
       pulseCheckProvisioningService.getTeam(pilot.teamId),
       pulseCheckProvisioningService.getPilotEnrollment(pilotId, athleteId),
       pulseCheckProvisioningService.listPilotCohorts(),
       pulseCheckProvisioningService.listTeamMemberships(pilot.teamId),
       loadEngineSummaryForAthlete(athleteId),
+      loadAthleteOperationalWatchListState(athleteId),
     ]);
 
     const pilotCohorts = cohorts.filter((entry) => entry.pilotId === pilotId);
@@ -2105,6 +2361,7 @@ export const pulseCheckPilotDashboardService = {
       athleteId,
       pilotEnrollment: enrollment,
       teamMembership,
+      operationalWatchList,
     });
 
     return {
@@ -2114,6 +2371,7 @@ export const pulseCheckPilotDashboardService = {
       cohort,
       pilotEnrollment: enrollment,
       teamMembership,
+      operationalWatchList,
       displayName: buildAthleteLabel(teamMembership, enrollment),
       email: normalizeString(teamMembership?.email),
       engineSummary,

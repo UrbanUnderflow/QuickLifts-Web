@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
+import { loadPulseCheckNudgeSuppressionState } from './pulsecheck-notification-utils';
 
 /**
  * Scheduled Mental Assignment Reminder Notifications
@@ -119,6 +120,7 @@ export const handler: Handler = async () => {
   let skippedAlreadySent = 0;
   let skippedCompleted = 0;
   let skippedNoAssignments = 0;
+  let skippedSuppressed = 0;
   let failed = 0;
   const errors: Array<{ userId: string; error: string }> = [];
 
@@ -179,6 +181,15 @@ export const handler: Handler = async () => {
 
     if (assignmentsSnap.empty) {
       skippedNoAssignments++;
+      continue;
+    }
+
+    const nudgeSuppression = await loadPulseCheckNudgeSuppressionState({
+      db,
+      athleteId: userId,
+    });
+    if (nudgeSuppression.suppressed) {
+      skippedSuppressed++;
       continue;
     }
 
@@ -249,6 +260,7 @@ export const handler: Handler = async () => {
     skippedAlreadySent,
     skippedCompleted,
     skippedNoAssignments,
+    skippedSuppressed,
     failed,
     errors: errors.slice(0, 10),
   });
@@ -256,6 +268,7 @@ export const handler: Handler = async () => {
   console.log('[scheduled-mental-assignment-reminder] Run complete', {
     runId,
     processed,
+    skippedSuppressed,
     considered,
     eligible,
     notified,

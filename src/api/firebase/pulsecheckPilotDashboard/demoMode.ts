@@ -8,6 +8,8 @@ import type {
   PilotDashboardEngineSummary,
   PilotDashboardHypothesisSummary,
   PilotDashboardMetrics,
+  PilotDashboardOperationalWatchListState,
+  PilotDashboardOperationalWatchListSummary,
   PilotDashboardRecentEvidence,
   PilotDashboardRecentPattern,
   PilotDashboardRecentProjection,
@@ -48,6 +50,7 @@ interface PilotDashboardDemoStore {
     summary: PilotDashboardAthleteSummary;
     athleteDetail: PilotDashboardAthleteDetail;
   }>;
+  operationalWatchListStates: PilotDashboardOperationalWatchListState[];
   hypotheses: PulseCheckPilotHypothesis[];
   inviteConfig: PulseCheckPilotInviteConfig;
   hasPilotInviteConfigOverride: boolean;
@@ -135,6 +138,23 @@ function buildCoverage(metrics: PilotDashboardMetrics): PilotDashboardCoverageMe
     avgEvidenceRecordsPerActiveAthlete: toAverage(metrics.totalEvidenceRecords, metrics.activeAthleteCount),
     avgPatternModelsPerActiveAthlete: toAverage(metrics.totalPatternModels, metrics.activeAthleteCount),
     avgRecommendationProjectionsPerActiveAthlete: toAverage(metrics.totalRecommendationProjections, metrics.activeAthleteCount),
+  };
+}
+
+function buildOperationalWatchListSummary(
+  states: PilotDashboardOperationalWatchListState[]
+): PilotDashboardOperationalWatchListSummary {
+  return {
+    stateCount: states.length,
+    requestedCount: states.filter((state) => state.lifecycleStatus === 'requested' || (state.watchListRequested && !state.watchListActive)).length,
+    activeCount: states.filter((state) => state.watchListActive).length,
+    pausedCount: states.filter((state) => state.status === 'paused').length,
+    withdrawnCount: states.filter((state) => state.status === 'withdrawn').length,
+    suppressSurveysCount: states.filter((state) => state.restrictionFlags.suppressSurveys).length,
+    suppressAssignmentsCount: states.filter((state) => state.restrictionFlags.suppressAssignments).length,
+    suppressNudgesCount: states.filter((state) => state.restrictionFlags.suppressNudges).length,
+    excludeFromAdherenceCount: states.filter((state) => state.restrictionFlags.excludeFromAdherence).length,
+    manualHoldCount: states.filter((state) => state.restrictionFlags.manualHold).length,
   };
 }
 
@@ -695,6 +715,45 @@ function buildBaseDemoStore(): PilotDashboardDemoStore {
       activeProjectionKeys: athlete.recentProjections.map((projection: PilotDashboardRecentProjection) => projection.projectionKey),
     });
     const cohort = cohorts.find((entry) => entry.id === athlete.cohortId) || null;
+    const operationalWatchList =
+      athlete.athleteId === 'demo-athlete-morgan'
+        ? ({
+            id: enrollment.id,
+            pilotId: pilot.id,
+            pilotEnrollmentId: enrollment.id,
+            athleteId: athlete.athleteId,
+            status: 'normal',
+            lifecycleStatus: 'active',
+            watchListActive: true,
+            watchListRequested: false,
+            reasonCode: 'clinical_review_pending',
+            reasonText: 'Demo clinician review holds trust prompting while the athlete remains otherwise trainable.',
+            source: 'clinician',
+            reviewDueAt: asTimestamp(now + oneDay * 3),
+            requestedAt: asTimestamp(now - oneHour * 8),
+            requestedByUserId: 'demo-clinician-user',
+            requestedByEmail: 'clinician@pulsecheck.test',
+            appliedAt: asTimestamp(now - oneHour * 6),
+            appliedByUserId: 'demo-clinician-user',
+            appliedByEmail: 'clinician@pulsecheck.test',
+            clearedAt: null,
+            clearedByUserId: null,
+            clearedByEmail: null,
+            linkedIncidentIds: ['demo-escalation-morgan-1'],
+            restrictionFlags: {
+              suppressSurveys: true,
+              suppressAssignments: false,
+              suppressNudges: false,
+              excludeFromAdherence: false,
+              manualHold: false,
+            },
+            createdAt: asTimestamp(now - oneHour * 8),
+            updatedAt: asTimestamp(now - oneHour * 6),
+          } satisfies PilotDashboardOperationalWatchListState)
+        : null;
+    if (operationalWatchList) {
+      operationalWatchListStates.push(operationalWatchList);
+    }
     const summary = {
       athleteId: athlete.athleteId,
       displayName: athlete.displayName,
@@ -703,6 +762,7 @@ function buildBaseDemoStore(): PilotDashboardDemoStore {
       teamMembership,
       cohort,
       engineSummary,
+      operationalWatchList,
     } as PilotDashboardAthleteSummary;
     const athleteDetail = {
       organization,
@@ -711,6 +771,7 @@ function buildBaseDemoStore(): PilotDashboardDemoStore {
       cohort,
       pilotEnrollment: enrollment,
       teamMembership,
+      operationalWatchList,
       displayName: athlete.displayName,
       email: athlete.email,
       engineSummary,
@@ -796,6 +857,7 @@ function buildBaseDemoStore(): PilotDashboardDemoStore {
   ] as PulseCheckPilotHypothesis[];
 
   const readoutSections = buildResearchReadoutSectionSet(now);
+  const operationalWatchListStates: PilotDashboardOperationalWatchListState[] = [];
   const researchReadouts = [
     {
       id: 'demo-readout-older',
@@ -912,6 +974,7 @@ function buildBaseDemoStore(): PilotDashboardDemoStore {
     organizationInviteConfigDefault,
     researchReadouts,
     inviteLinks,
+    operationalWatchListStates,
   };
 }
 
@@ -951,6 +1014,7 @@ function buildDetailFromStore(store: PilotDashboardDemoStore): PilotDashboardDet
   const coverage = buildCoverage(metrics);
   const cohortSummaries = buildCohortSummaries(store.cohorts, athletes);
   const sortedReadouts = [...store.researchReadouts].sort((left, right) => Number(right.generatedAt || 0) - Number(left.generatedAt || 0));
+  const operationalWatchListSummary = buildOperationalWatchListSummary(store.operationalWatchListStates || []);
 
   return {
     organization: store.organization,
@@ -967,6 +1031,7 @@ function buildDetailFromStore(store: PilotDashboardDemoStore): PilotDashboardDet
     hasPilotInviteConfigOverride: store.hasPilotInviteConfigOverride,
     teamInviteConfigDefault: store.teamInviteConfigDefault,
     organizationInviteConfigDefault: store.organizationInviteConfigDefault,
+    operationalWatchListSummary,
     latestResearchReadout: sortedReadouts[0] || null,
     researchReadouts: sortedReadouts,
   };
@@ -990,7 +1055,91 @@ function buildDirectoryEntryFromStore(store: PilotDashboardDemoStore): PilotDash
     stablePatternRate: detail.coverage.stablePatternRate,
     avgEvidenceRecordsPerActiveAthlete: detail.coverage.avgEvidenceRecordsPerActiveAthlete,
     avgRecommendationProjectionsPerActiveAthlete: detail.coverage.avgRecommendationProjectionsPerActiveAthlete,
+    operationalWatchListSummary: detail.operationalWatchListSummary || null,
   };
+}
+
+type DemoWatchListMutationAction = 'request' | 'apply' | 'clear';
+
+interface DemoWatchListMutationInput {
+  pilotId: string;
+  pilotEnrollmentId: string;
+  athleteId: string;
+  reasonCode?: string;
+  reasonText?: string;
+  source?: 'clinician' | 'staff' | 'system';
+  reviewDueAt?: number | null;
+  restrictionFlags?: Partial<PilotDashboardOperationalWatchListState['restrictionFlags']> | null;
+  linkedIncidentIds?: string[];
+}
+
+function mutateOperationalWatchListState(
+  store: PilotDashboardDemoStore,
+  action: DemoWatchListMutationAction,
+  input: DemoWatchListMutationInput
+) {
+  const normalizedPilotId = normalizeString(input.pilotId);
+  const normalizedEnrollmentId = normalizeString(input.pilotEnrollmentId);
+  const normalizedAthleteId = normalizeString(input.athleteId);
+  if (!normalizedPilotId || !normalizedEnrollmentId || !normalizedAthleteId) return;
+
+  const now = Date.now();
+  const existingIndex = store.operationalWatchListStates.findIndex((state) => state.pilotEnrollmentId === normalizedEnrollmentId);
+  const existing = existingIndex >= 0 ? store.operationalWatchListStates[existingIndex] : null;
+  const nextState: PilotDashboardOperationalWatchListState = {
+    id: normalizedEnrollmentId,
+    pilotId: normalizedPilotId,
+    pilotEnrollmentId: normalizedEnrollmentId,
+    athleteId: normalizedAthleteId,
+    status: existing?.status || 'normal',
+    lifecycleStatus: action === 'request' ? 'requested' : action === 'apply' ? 'active' : 'cleared',
+    watchListActive: action === 'apply',
+    watchListRequested: action === 'request',
+    reasonCode: input.reasonCode || existing?.reasonCode || 'other',
+    reasonText: normalizeString(input.reasonText || existing?.reasonText),
+    source: input.source || existing?.source || 'clinician',
+    reviewDueAt: input.reviewDueAt ?? existing?.reviewDueAt ?? null,
+    requestedAt: action === 'request' ? asTimestamp(now) : existing?.requestedAt || null,
+    requestedByUserId: action === 'request' ? 'demo-admin-user' : existing?.requestedByUserId || null,
+    requestedByEmail: action === 'request' ? 'demo-admin@pulsecheck.test' : existing?.requestedByEmail || null,
+    appliedAt: action === 'apply' ? asTimestamp(now) : existing?.appliedAt || null,
+    appliedByUserId: action === 'apply' ? 'demo-admin-user' : existing?.appliedByUserId || null,
+    appliedByEmail: action === 'apply' ? 'demo-admin@pulsecheck.test' : existing?.appliedByEmail || null,
+    clearedAt: action === 'clear' ? asTimestamp(now) : existing?.clearedAt || null,
+    clearedByUserId: action === 'clear' ? 'demo-admin-user' : existing?.clearedByUserId || null,
+    clearedByEmail: action === 'clear' ? 'demo-admin@pulsecheck.test' : existing?.clearedByEmail || null,
+    linkedIncidentIds: Array.isArray(input.linkedIncidentIds) ? input.linkedIncidentIds.filter(Boolean) : existing?.linkedIncidentIds || [],
+    restrictionFlags:
+      action === 'clear'
+        ? {
+            suppressSurveys: false,
+            suppressAssignments: false,
+            suppressNudges: false,
+            excludeFromAdherence: false,
+            manualHold: false,
+          }
+        : {
+            suppressSurveys: Boolean(input.restrictionFlags?.suppressSurveys),
+            suppressAssignments: Boolean(input.restrictionFlags?.suppressAssignments),
+            suppressNudges: Boolean(input.restrictionFlags?.suppressNudges),
+            excludeFromAdherence: Boolean(input.restrictionFlags?.excludeFromAdherence),
+            manualHold: Boolean(input.restrictionFlags?.manualHold),
+          },
+    createdAt: existing?.createdAt || asTimestamp(now),
+    updatedAt: asTimestamp(now),
+  };
+
+  if (existingIndex >= 0) {
+    store.operationalWatchListStates[existingIndex] = nextState;
+  } else {
+    store.operationalWatchListStates.push(nextState);
+  }
+
+  const athleteEntry = store.athletes.find((entry) => entry.summary.athleteId === normalizedAthleteId);
+  if (athleteEntry) {
+    athleteEntry.summary = { ...athleteEntry.summary, operationalWatchList: nextState };
+    athleteEntry.athleteDetail = { ...athleteEntry.athleteDetail, operationalWatchList: nextState };
+  }
 }
 
 function nextResearchSections(frame: Record<string, any>, hypotheses: PulseCheckPilotHypothesis[]): PilotResearchReadoutSection[] {
@@ -1125,8 +1274,26 @@ export const pilotDashboardDemoMode = {
           },
           adherenceDays: athlete.athleteDetail.adherenceDays || [],
           escalations: athlete.athleteDetail.escalations || [],
-        })
+      })
       : null;
+  },
+
+  requestPilotOperationalWatchList(input: DemoWatchListMutationInput) {
+    const store = readStore();
+    mutateOperationalWatchListState(store, 'request', input);
+    writeStore(store);
+  },
+
+  applyPilotOperationalWatchList(input: DemoWatchListMutationInput) {
+    const store = readStore();
+    mutateOperationalWatchListState(store, 'apply', input);
+    writeStore(store);
+  },
+
+  clearPilotOperationalWatchList(input: DemoWatchListMutationInput) {
+    const store = readStore();
+    mutateOperationalWatchListState(store, 'clear', input);
+    writeStore(store);
   },
 
   saveHypothesis(input: PulseCheckPilotHypothesisInput): string {

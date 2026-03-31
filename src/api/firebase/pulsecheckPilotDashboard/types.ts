@@ -143,6 +143,65 @@ export interface PilotResearchReadoutReviewInput {
   }>;
 }
 
+export type PilotDashboardOperationalStatus = 'normal' | 'paused' | 'withdrawn';
+export type PilotDashboardOperationalWatchListLifecycleStatus = 'none' | 'requested' | 'active' | 'cleared';
+export type PilotDashboardOperationalWatchListReasonCode =
+  | 'clinical_review_pending'
+  | 'manual_safety_hold'
+  | 'temporary_restriction'
+  | 'care_team_requested_pause'
+  | 'other';
+export type PilotDashboardOperationalWatchListSource = 'clinician' | 'staff' | 'system';
+
+export interface PilotDashboardOperationalWatchListRestrictionFlags {
+  suppressSurveys: boolean;
+  suppressAssignments: boolean;
+  suppressNudges: boolean;
+  excludeFromAdherence: boolean;
+  manualHold: boolean;
+}
+
+export interface PilotDashboardOperationalWatchListState {
+  id: string;
+  pilotId: string;
+  pilotEnrollmentId: string;
+  athleteId: string;
+  status: PilotDashboardOperationalStatus;
+  lifecycleStatus: PilotDashboardOperationalWatchListLifecycleStatus;
+  watchListActive: boolean;
+  watchListRequested: boolean;
+  reasonCode?: PilotDashboardOperationalWatchListReasonCode | string;
+  reasonText?: string;
+  source?: PilotDashboardOperationalWatchListSource | null;
+  reviewDueAt?: PilotDashboardTimeValue;
+  requestedAt?: PilotDashboardTimeValue;
+  requestedByUserId?: string | null;
+  requestedByEmail?: string | null;
+  appliedAt?: PilotDashboardTimeValue;
+  appliedByUserId?: string | null;
+  appliedByEmail?: string | null;
+  clearedAt?: PilotDashboardTimeValue;
+  clearedByUserId?: string | null;
+  clearedByEmail?: string | null;
+  linkedIncidentIds: string[];
+  restrictionFlags: PilotDashboardOperationalWatchListRestrictionFlags;
+  createdAt?: PilotDashboardTimeValue;
+  updatedAt?: PilotDashboardTimeValue;
+}
+
+export interface PilotDashboardOperationalWatchListSummary {
+  stateCount: number;
+  requestedCount: number;
+  activeCount: number;
+  pausedCount: number;
+  withdrawnCount: number;
+  suppressSurveysCount: number;
+  suppressAssignmentsCount: number;
+  suppressNudgesCount: number;
+  excludeFromAdherenceCount: number;
+  manualHoldCount: number;
+}
+
 export interface PulseCheckPilotHypothesis {
   id: string;
   pilotId: string;
@@ -363,6 +422,7 @@ export interface PilotDashboardAthleteSummary {
   teamMembership: PulseCheckTeamMembership | null;
   cohort: PulseCheckPilotCohort | null;
   engineSummary: PilotDashboardEngineSummary;
+  operationalWatchList?: PilotDashboardOperationalWatchListState | null;
 }
 
 export interface PilotDashboardDirectoryEntry {
@@ -384,6 +444,7 @@ export interface PilotDashboardDirectoryEntry {
   outcomeMetrics?: PilotDashboardOutcomeMetrics;
   outcomeDiagnostics?: PilotDashboardOutcomeSurveyDiagnostics;
   hypothesisEvaluation?: PilotDashboardHypothesisEvaluation;
+  operationalWatchListSummary?: PilotDashboardOperationalWatchListSummary | null;
 }
 
 export interface PilotDashboardMetrics {
@@ -501,7 +562,16 @@ export interface PilotDashboardAthleteAdherenceDay {
   assignmentId?: string | null;
   assignmentStatus?: string | null;
   assignmentActionType?: string | null;
-  exclusionReason?: 'not_enrolled_yet' | 'manual_pause' | 'paused' | 'escalation_hold' | 'no_task_rest_day' | 'withdrawn' | null;
+  exclusionReason?:
+    | 'not_enrolled_yet'
+    | 'manual_pause'
+    | 'paused'
+    | 'manual_hold'
+    | 'watch_list_hold'
+    | 'escalation_hold'
+    | 'no_task_rest_day'
+    | 'withdrawn'
+    | null;
   checkInRecordedAt?: PilotDashboardTimeValue;
   assignmentCompletedAt?: PilotDashboardTimeValue;
 }
@@ -595,6 +665,7 @@ export interface PilotDashboardDetail {
   outcomeTrustDispositionBaseline?: Record<string, any>;
   outcomeReleaseSettings?: Record<string, any>;
   outcomeOpsStatus?: Record<string, any>;
+  operationalWatchListSummary?: PilotDashboardOperationalWatchListSummary | null;
   hypothesisEvaluation?: PilotDashboardHypothesisEvaluation;
   hypothesisEvaluationByCohort?: Record<string, PilotDashboardHypothesisEvaluation>;
   latestResearchReadout?: PilotResearchReadout | null;
@@ -608,6 +679,7 @@ export interface PilotDashboardAthleteDetail {
   cohort: PulseCheckPilotCohort | null;
   pilotEnrollment: PulseCheckPilotEnrollment;
   teamMembership: PulseCheckTeamMembership | null;
+  operationalWatchList?: PilotDashboardOperationalWatchListState | null;
   displayName: string;
   email: string;
   engineSummary: PilotDashboardEngineSummary;

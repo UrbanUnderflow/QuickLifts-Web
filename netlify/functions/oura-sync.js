@@ -12,6 +12,7 @@ const {
   buildNoraBiometricBriefNotification,
   resolveAthleteFirstName,
   resolvePulseCheckPushTarget,
+  loadPulseCheckNudgeSuppressionState,
   sendLoggedNoraPush,
 } = require('./pulsecheck-notification-utils');
 
@@ -768,6 +769,18 @@ async function maybeSendBiometricBriefReadyNotification({
 
   if (userData.mentalTrainingPreferences?.checkInNotificationsEnabled === false) {
     return { success: false, reason: 'notifications_disabled' };
+  }
+
+  const nudgeSuppression = await loadPulseCheckNudgeSuppressionState({
+    db,
+    athleteId: userId,
+  });
+  if (nudgeSuppression.suppressed) {
+    return {
+      success: false,
+      reason: nudgeSuppression.reason,
+      suppressionReason: nudgeSuppression.reason,
+    };
   }
 
   const lastSentSnapshotDateKey = userData.noraNotificationState?.biometricBriefReady?.lastSentSnapshotDateKey;

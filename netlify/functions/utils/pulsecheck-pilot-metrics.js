@@ -15,6 +15,8 @@ const PILOT_METRIC_OPS_MIGRATIONS_SUBCOLLECTION = 'migrations';
 const PILOTS_COLLECTION = 'pulsecheck-pilots';
 const DAILY_ASSIGNMENTS_COLLECTION = 'pulsecheck-daily-assignments';
 const ESCALATION_RECORDS_COLLECTION = 'escalation-records';
+const PILOT_OPERATIONAL_STATES_COLLECTION = 'pulsecheck-pilot-operational-states';
+const PILOT_OPERATIONAL_STATE_ACTIONS_SUBCOLLECTION = 'actions';
 const ASSIGNMENT_EVENTS_COLLECTION = 'pulsecheck-assignment-events';
 const CHECKINS_ROOT = 'mental-check-ins';
 const CHECKINS_SUBCOLLECTION = 'check-ins';
@@ -77,6 +79,18 @@ const NO_TASK_ASSIGNMENT_STATUSES = new Set([
 const ESCALATION_STATUS_ORDER = ['active', 'resolved', 'declined'];
 const ESCALATION_MIGRATION_DEDUPE_WINDOW_MINUTES = 30;
 const ESCALATION_MIGRATION_DEDUPE_WINDOW_SECONDS = ESCALATION_MIGRATION_DEDUPE_WINDOW_MINUTES * 60;
+const OPERATIONAL_STATUS_NORMAL = 'normal';
+const OPERATIONAL_STATUS_PAUSED = 'paused';
+const OPERATIONAL_STATUS_WITHDRAWN = 'withdrawn';
+const OPERATIONAL_STATE_VERSION = 'operational_state_v1';
+const WATCH_LIST_REASON_CODES = new Set([
+  'clinical_review_pending',
+  'manual_safety_hold',
+  'temporary_restriction',
+  'care_team_requested_pause',
+  'operational_hold',
+  'other',
+]);
 
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -85,6 +99,32 @@ function normalizeString(value) {
 function normalizeNumber(value) {
   const next = Number(value);
   return Number.isFinite(next) ? next : null;
+}
+
+function normalizeBoolean(value, fallback = false) {
+  if (value === undefined || value === null) return Boolean(fallback);
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'n', 'off', ''].includes(normalized)) return false;
+  }
+  return Boolean(value);
+}
+
+function normalizeOperationalBaseStatus(value) {
+  const normalized = normalizeString(value).toLowerCase();
+  if (normalized === OPERATIONAL_STATUS_PAUSED || normalized === OPERATIONAL_STATUS_WITHDRAWN) {
+    return normalized;
+  }
+  return OPERATIONAL_STATUS_NORMAL;
+}
+
+function normalizeWatchListReasonCode(value) {
+  const normalized = normalizeString(value).toLowerCase().replace(/[\s-]+/g, '_');
+  if (!normalized) return 'other';
+  return WATCH_LIST_REASON_CODES.has(normalized) ? normalized : 'other';
 }
 
 function coerceMillis(value) {
@@ -2219,6 +2259,495 @@ async function loadPilotEscalations(db, athleteIds) {
   }
 }
 
+function normalizeLinkedIncidentIds(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((entry) => normalizeString(entry)).filter(Boolean))];
+}
+
+function normalizeOperationalRestrictionFlags(value = {}, { baseStatus = OPERATIONAL_STATUS_NORMAL, watchListActive = false } = {}) {
+  const normalizedBaseStatus = normalizeOperationalBaseStatus(baseStatus);
+  const activeDefault = normalizedBaseStatus !== OPERATIONAL_STATUS_NORMAL || watchListActive;
+  const source = value && typeof value === 'object' ? value : {};
+
+  return {
+    suppressSurveys: normalizeBoolean(source.suppressSurveys, activeDefault),
+    suppressAssignments: normalizeBoolean(source.suppressAssignments, activeDefault),
+    suppressNudges: normalizeBoolean(source.suppressNudges, activeDefault),
+    excludeFromAdherence: normalizeBoolean(source.excludeFromAdherence, activeDefault),
+    manualHold: normalizeBoolean(source.manualHold, false),
+  };
+}
+
+function resolveOperationalRestrictionFlags({
+  baseStatus = OPERATIONAL_STATUS_NORMAL,
+  watchListActive = false,
+  restrictionFlags = {},
+}) {
+  const normalizedBaseStatus = normalizeOperationalBaseStatus(baseStatus);
+  const storedFlags = normalizeOperationalRestrictionFlags(restrictionFlags, {
+    baseStatus: normalizedBaseStatus,
+    watchListActive,
+  });
+  const baseRestricted = normalizedBaseStatus !== OPERATIONAL_STATUS_NORMAL;
+
+  return {
+    suppressSurveys: baseRestricted || (watchListActive && storedFlags.suppressSurveys),
+    suppressAssignments: baseRestricted || (watchListActive && storedFlags.suppressAssignments),
+    suppressNudges: baseRestricted || (watchListActive && storedFlags.suppressNudges),
+    excludeFromAdherence: baseRestricted || (watchListActive && storedFlags.excludeFromAdherence),
+    manualHold: baseRestricted ? false : (watchListActive && storedFlags.manualHold),
+  };
+}
+
+function buildDefaultOperationalStateFromEnrollment(enrollment = {}, membership = null) {
+  const baseStatus = normalizeOperationalBaseStatus(enrollment?.status);
+  const teamMembership = membership || null;
+  const nowMs = Date.now();
+  return {
+    id: normalizeString(enrollment?.id) || null,
+    pilotEnrollmentId: normalizeString(enrollment?.id) || null,
+    pilotId: normalizeString(enrollment?.pilotId) || null,
+    athleteId: normalizeString(enrollment?.userId) || null,
+    organizationId: normalizeString(enrollment?.organizationId || teamMembership?.organizationId) || null,
+    teamId: normalizeString(enrollment?.teamId || teamMembership?.teamId) || null,
+    cohortId: normalizeString(enrollment?.cohortId) || null,
+    baseStatus,
+    watchListActive: false,
+    watchListRequested: false,
+    watchListApplied: false,
+    watchListRequestedAt: null,
+    watchListAppliedAt: null,
+    watchListClearedAt: null,
+    watchListReasonCode: null,
+    watchListReason: null,
+    watchListSource: null,
+    watchListReviewDueAt: null,
+    requestedRestrictionFlags: null,
+    restrictionFlags: normalizeOperationalRestrictionFlags({}, {
+      baseStatus,
+      watchListActive: false,
+    }),
+    effectiveRestrictionFlags: resolveOperationalRestrictionFlags({
+      baseStatus,
+      watchListActive: false,
+      restrictionFlags: {},
+    }),
+    linkedIncidentIds: [],
+    lastAction: null,
+    stateVersion: OPERATIONAL_STATE_VERSION,
+    createdAt: timestampFromMillis(nowMs),
+    createdAtMs: nowMs,
+    updatedAt: timestampFromMillis(nowMs),
+    updatedAtMs: nowMs,
+  };
+}
+
+function normalizePilotOperationalState(rawState = null, fallback = {}) {
+  const enrollment = fallback.pilotEnrollment || {};
+  const membership = fallback.teamMembership || null;
+  const baseStatus = normalizeOperationalBaseStatus(
+    rawState?.baseStatus
+    || rawState?.status
+    || fallback.baseStatus
+    || enrollment?.status
+  );
+  const watchListActive = normalizeBoolean(rawState?.watchListActive, false);
+  const requestedRestrictionFlags = rawState?.requestedRestrictionFlags
+    ? normalizeOperationalRestrictionFlags(rawState.requestedRestrictionFlags, {
+        baseStatus,
+        watchListActive: false,
+      })
+    : null;
+  const restrictionFlags = normalizeOperationalRestrictionFlags(
+    rawState?.restrictionFlags || rawState?.watchListRestrictionFlags || {},
+    {
+      baseStatus,
+      watchListActive,
+    }
+  );
+  const effectiveRestrictionFlags = resolveOperationalRestrictionFlags({
+    baseStatus,
+    watchListActive,
+    restrictionFlags,
+  });
+  const current = {
+    ...buildDefaultOperationalStateFromEnrollment(enrollment, membership),
+    ...(rawState && typeof rawState === 'object' ? rawState : {}),
+  };
+  const nowMs = coerceMillis(rawState?.updatedAt) || rawState?.updatedAtMs || Date.now();
+
+  return {
+    ...current,
+    id: normalizeString(rawState?.id || current.id || fallback.pilotEnrollmentId) || null,
+    pilotEnrollmentId: normalizeString(rawState?.pilotEnrollmentId || fallback.pilotEnrollmentId || current.pilotEnrollmentId) || null,
+    pilotId: normalizeString(rawState?.pilotId || fallback.pilotId || current.pilotId) || null,
+    athleteId: normalizeString(rawState?.athleteId || fallback.athleteId || current.athleteId) || null,
+    organizationId: normalizeString(rawState?.organizationId || fallback.organizationId || current.organizationId) || null,
+    teamId: normalizeString(rawState?.teamId || fallback.teamId || current.teamId) || null,
+    cohortId: normalizeString(rawState?.cohortId || fallback.cohortId || current.cohortId) || null,
+    baseStatus,
+    watchListActive: normalizeBoolean(rawState?.watchListActive, false),
+    watchListRequested: normalizeBoolean(rawState?.watchListRequested, false),
+    watchListApplied: normalizeBoolean(rawState?.watchListApplied, false),
+    watchListRequestedAt: coerceMillis(rawState?.watchListRequestedAt) || null,
+    watchListAppliedAt: coerceMillis(rawState?.watchListAppliedAt) || null,
+    watchListClearedAt: coerceMillis(rawState?.watchListClearedAt) || null,
+    watchListReasonCode: rawState?.watchListReasonCode ? normalizeWatchListReasonCode(rawState.watchListReasonCode) : null,
+    watchListReason: normalizeString(rawState?.watchListReason) || null,
+    watchListSource: normalizeString(rawState?.watchListSource) || null,
+    watchListReviewDueAt: coerceMillis(rawState?.watchListReviewDueAt) || null,
+    requestedRestrictionFlags,
+    restrictionFlags,
+    effectiveRestrictionFlags,
+    linkedIncidentIds: normalizeLinkedIncidentIds(rawState?.linkedIncidentIds),
+    lastAction: rawState?.lastAction && typeof rawState.lastAction === 'object'
+      ? {
+          ...rawState.lastAction,
+          action: normalizeString(rawState.lastAction.action) || null,
+          actorUserId: normalizeString(rawState.lastAction.actorUserId) || null,
+          actorRole: normalizeString(rawState.lastAction.actorRole) || null,
+          reasonCode: rawState.lastAction.reasonCode ? normalizeWatchListReasonCode(rawState.lastAction.reasonCode) : null,
+          reason: normalizeString(rawState.lastAction.reason) || null,
+          at: coerceMillis(rawState.lastAction.at) || null,
+          atMs: coerceMillis(rawState.lastAction.at) || rawState.lastAction.atMs || null,
+        }
+      : null,
+    stateVersion: normalizeString(rawState?.stateVersion) || OPERATIONAL_STATE_VERSION,
+    createdAt: rawState?.createdAt || timestampFromMillis(rawState?.createdAtMs || nowMs),
+    createdAtMs: coerceMillis(rawState?.createdAt) || rawState?.createdAtMs || nowMs,
+    updatedAt: rawState?.updatedAt || timestampFromMillis(nowMs),
+    updatedAtMs: nowMs,
+  };
+}
+
+async function loadPilotOperationalState(db, pilotEnrollmentId, fallback = {}) {
+  const normalizedPilotEnrollmentId = normalizeString(pilotEnrollmentId);
+  if (!normalizedPilotEnrollmentId) return null;
+
+  try {
+    const stateSnap = await db.collection(PILOT_OPERATIONAL_STATES_COLLECTION).doc(normalizedPilotEnrollmentId).get();
+    const rawState = stateSnap.exists ? { id: stateSnap.id, ...(stateSnap.data() || {}) } : null;
+    if (!rawState) {
+      return fallback.pilotEnrollment ? buildDefaultOperationalStateFromEnrollment(fallback.pilotEnrollment, fallback.teamMembership || null) : null;
+    }
+    return normalizePilotOperationalState(rawState, {
+      ...fallback,
+      pilotEnrollmentId: normalizedPilotEnrollmentId,
+    });
+  } catch (error) {
+    return fallback.pilotEnrollment ? buildDefaultOperationalStateFromEnrollment(fallback.pilotEnrollment, fallback.teamMembership || null) : null;
+  }
+}
+
+async function loadPilotOperationalStates(db, enrollments = [], membershipMap = new Map()) {
+  const states = await Promise.all(
+    (Array.isArray(enrollments) ? enrollments : []).map(async (enrollment) => {
+      const pilotEnrollmentId = normalizeString(enrollment?.id);
+      if (!pilotEnrollmentId) return null;
+      const teamMembership = membershipMap.get(normalizeString(enrollment.teamMembershipId)) || null;
+      return loadPilotOperationalState(db, pilotEnrollmentId, {
+        pilotEnrollment: enrollment,
+        teamMembership,
+      });
+    })
+  );
+
+  return states.filter(Boolean);
+}
+
+function buildOperationalStateSummary(states = []) {
+  const normalizedStates = Array.isArray(states) ? states.filter(Boolean) : [];
+  return normalizedStates.reduce((accumulator, state) => {
+    accumulator.total += 1;
+    if (state.watchListActive) accumulator.watchListActive += 1;
+    if (state.baseStatus === OPERATIONAL_STATUS_PAUSED) accumulator.paused += 1;
+    if (state.baseStatus === OPERATIONAL_STATUS_WITHDRAWN) accumulator.withdrawn += 1;
+    if (state.effectiveRestrictionFlags?.suppressSurveys) accumulator.suppressSurveys += 1;
+    if (state.effectiveRestrictionFlags?.suppressAssignments) accumulator.suppressAssignments += 1;
+    if (state.effectiveRestrictionFlags?.suppressNudges) accumulator.suppressNudges += 1;
+    if (state.effectiveRestrictionFlags?.excludeFromAdherence) accumulator.excludeFromAdherence += 1;
+    return accumulator;
+  }, {
+    total: 0,
+    watchListActive: 0,
+    paused: 0,
+    withdrawn: 0,
+    suppressSurveys: 0,
+    suppressAssignments: 0,
+    suppressNudges: 0,
+    excludeFromAdherence: 0,
+  });
+}
+
+function isOperationalRestrictedDay({
+  operationalState,
+  dateKey,
+  timezone,
+  checkIns,
+  assignmentCompletions,
+}) {
+  const state = operationalState || null;
+  if (!state?.effectiveRestrictionFlags?.excludeFromAdherence) return false;
+
+  const appliedAtMs = coerceMillis(state.watchListAppliedAt) || coerceMillis(state.updatedAt) || state.updatedAtMs || null;
+  if (!appliedAtMs) return false;
+
+  const appliedDateKey = toTimezoneDateKey(appliedAtMs, timezone);
+  const clearedAtMs = coerceMillis(state.watchListClearedAt);
+  const clearedDateKey = clearedAtMs ? toTimezoneDateKey(clearedAtMs, timezone) : null;
+  if (appliedDateKey && dateKey < appliedDateKey) return false;
+  if (clearedDateKey && dateKey > clearedDateKey) return false;
+  return true;
+}
+
+async function writePilotOperationalStateChange({
+  db,
+  athleteId,
+  preferredPilotEnrollmentId = null,
+  preferredPilotId = null,
+  preferredTeamMembershipId = null,
+  actorUserId = null,
+  actorRole = 'staff',
+  action,
+  reasonCode = null,
+  reason = null,
+  watchListSource = null,
+  requestedRestrictionFlags = null,
+  restrictionFlags = null,
+  watchListReviewDueAt = null,
+  linkedIncidentIds = [],
+  baseStatus = null,
+  createdAt = Date.now(),
+}) {
+  const normalizedAction = normalizeString(action).toLowerCase();
+  if (!['request', 'apply', 'clear'].includes(normalizedAction)) {
+    throw new Error('action must be request, apply, or clear.');
+  }
+
+  const context = await resolvePilotEnrollmentContext({
+    db,
+    athleteId,
+    preferredPilotEnrollmentId,
+    preferredPilotId,
+    preferredTeamMembershipId,
+    allowMembershipFallback: false,
+  });
+
+  if (!context?.pilotEnrollmentId) {
+    throw new Error('Unable to resolve a pilot enrollment for the watch list change.');
+  }
+
+  const normalizedBaseStatus = normalizeOperationalBaseStatus(baseStatus || context?.pilotEnrollment?.status);
+  const existingState = await loadPilotOperationalState(db, context.pilotEnrollmentId, {
+    pilotEnrollment: context.pilotEnrollment,
+    teamMembership: context.teamMembership,
+  });
+  const existingWatchListActive = Boolean(existingState?.watchListActive);
+  const nextRequestedRestrictionFlags = requestedRestrictionFlags
+    ? normalizeOperationalRestrictionFlags(requestedRestrictionFlags, {
+        baseStatus: normalizedBaseStatus,
+        watchListActive: false,
+      })
+    : null;
+  const nextRestrictionFlags = restrictionFlags
+    ? normalizeOperationalRestrictionFlags(restrictionFlags, {
+        baseStatus: normalizedBaseStatus,
+        watchListActive: normalizedAction === 'apply',
+      })
+    : null;
+  const nowMs = coerceMillis(createdAt) || Date.now();
+  const nextState = {
+    ...existingState,
+    id: context.pilotEnrollmentId,
+    pilotEnrollmentId: context.pilotEnrollmentId,
+    pilotId: context.pilotId,
+    athleteId: context.athleteId,
+    organizationId: context.organizationId,
+    teamId: context.teamId,
+    cohortId: context.cohortId,
+    baseStatus: normalizedBaseStatus,
+    updatedAt: timestampFromMillis(nowMs),
+    updatedAtMs: nowMs,
+    lastAction: {
+      action: normalizedAction,
+      at: timestampFromMillis(nowMs),
+      atMs: nowMs,
+      actorUserId: normalizeString(actorUserId) || null,
+      actorRole: normalizeString(actorRole) || 'staff',
+      reasonCode: reasonCode ? normalizeWatchListReasonCode(reasonCode) : null,
+      reason: normalizeString(reason) || null,
+    },
+    stateVersion: OPERATIONAL_STATE_VERSION,
+  };
+
+  if (normalizedAction === 'request') {
+    nextState.watchListRequested = true;
+    nextState.watchListApplied = false;
+    nextState.watchListActive = false;
+    nextState.watchListRequestedAt = nowMs;
+    nextState.watchListAppliedAt = null;
+    nextState.watchListClearedAt = null;
+    nextState.watchListReasonCode = reasonCode ? normalizeWatchListReasonCode(reasonCode) : null;
+    nextState.watchListReason = normalizeString(reason) || null;
+    nextState.watchListSource = normalizeString(watchListSource) || normalizeString(actorRole) || 'staff';
+    nextState.watchListReviewDueAt = coerceMillis(watchListReviewDueAt) || null;
+    nextState.requestedRestrictionFlags = nextRequestedRestrictionFlags;
+    nextState.restrictionFlags = normalizeOperationalRestrictionFlags({}, {
+      baseStatus: normalizedBaseStatus,
+      watchListActive: false,
+    });
+    nextState.effectiveRestrictionFlags = resolveOperationalRestrictionFlags({
+      baseStatus: normalizedBaseStatus,
+      watchListActive: false,
+      restrictionFlags: nextState.restrictionFlags,
+    });
+    nextState.linkedIncidentIds = normalizeLinkedIncidentIds(linkedIncidentIds);
+  } else if (normalizedAction === 'apply') {
+    nextState.watchListRequested = false;
+    nextState.watchListApplied = true;
+    nextState.watchListActive = true;
+    nextState.watchListRequestedAt = existingState?.watchListRequestedAt || null;
+    nextState.watchListAppliedAt = nowMs;
+    nextState.watchListClearedAt = null;
+    nextState.watchListReasonCode = reasonCode
+      ? normalizeWatchListReasonCode(reasonCode)
+      : normalizeWatchListReasonCode(existingState?.watchListReasonCode);
+    nextState.watchListReason = normalizeString(reason) || normalizeString(existingState?.watchListReason) || null;
+    nextState.watchListSource = normalizeString(watchListSource) || normalizeString(actorRole) || 'staff';
+    nextState.watchListReviewDueAt = coerceMillis(watchListReviewDueAt) || coerceMillis(existingState?.watchListReviewDueAt) || null;
+    nextState.requestedRestrictionFlags = nextRequestedRestrictionFlags || existingState?.requestedRestrictionFlags || null;
+    nextState.restrictionFlags = nextRestrictionFlags || normalizeOperationalRestrictionFlags(existingState?.requestedRestrictionFlags || existingState?.restrictionFlags || {}, {
+      baseStatus: normalizedBaseStatus,
+      watchListActive: true,
+    });
+    nextState.effectiveRestrictionFlags = resolveOperationalRestrictionFlags({
+      baseStatus: normalizedBaseStatus,
+      watchListActive: true,
+      restrictionFlags: nextState.restrictionFlags,
+    });
+    nextState.linkedIncidentIds = normalizeLinkedIncidentIds(linkedIncidentIds.length ? linkedIncidentIds : existingState?.linkedIncidentIds);
+  } else {
+    nextState.watchListRequested = false;
+    nextState.watchListApplied = false;
+    nextState.watchListActive = false;
+    nextState.watchListRequestedAt = null;
+    nextState.watchListAppliedAt = null;
+    nextState.watchListClearedAt = nowMs;
+    nextState.watchListReasonCode = null;
+    nextState.watchListReason = null;
+    nextState.watchListSource = normalizeString(watchListSource) || normalizeString(actorRole) || 'staff';
+    nextState.watchListReviewDueAt = null;
+    nextState.requestedRestrictionFlags = null;
+    nextState.restrictionFlags = normalizeOperationalRestrictionFlags({}, {
+      baseStatus: normalizedBaseStatus,
+      watchListActive: false,
+    });
+    nextState.effectiveRestrictionFlags = resolveOperationalRestrictionFlags({
+      baseStatus: normalizedBaseStatus,
+      watchListActive: false,
+      restrictionFlags: nextState.restrictionFlags,
+    });
+    nextState.linkedIncidentIds = normalizeLinkedIncidentIds(linkedIncidentIds.length ? linkedIncidentIds : existingState?.linkedIncidentIds);
+  }
+
+  const docRef = db.collection(PILOT_OPERATIONAL_STATES_COLLECTION).doc(context.pilotEnrollmentId);
+  await docRef.set(nextState, { merge: true });
+  await docRef.collection(PILOT_OPERATIONAL_STATE_ACTIONS_SUBCOLLECTION).doc().set({
+    id: `${normalizedAction}_${nowMs}`,
+    action: normalizedAction,
+    pilotEnrollmentId: context.pilotEnrollmentId,
+    pilotId: context.pilotId,
+    athleteId: context.athleteId,
+    organizationId: context.organizationId,
+    teamId: context.teamId,
+    cohortId: context.cohortId,
+    actorUserId: normalizeString(actorUserId) || null,
+    actorRole: normalizeString(actorRole) || 'staff',
+    reasonCode: reasonCode ? normalizeWatchListReasonCode(reasonCode) : null,
+    reason: normalizeString(reason) || null,
+    baseStatus: normalizedBaseStatus,
+    watchListActiveBefore: existingWatchListActive,
+    watchListActiveAfter: Boolean(nextState.watchListActive),
+    requestedRestrictionFlags: nextRequestedRestrictionFlags,
+    restrictionFlags: nextState.restrictionFlags,
+    linkedIncidentIds: nextState.linkedIncidentIds,
+    watchListSource: nextState.watchListSource,
+    watchListReviewDueAt: nextState.watchListReviewDueAt,
+    createdAt: timestampFromMillis(nowMs),
+    createdAtMs: nowMs,
+  }, { merge: true });
+
+  return nextState;
+}
+
+async function requestPilotWatchList(payload) {
+  return writePilotOperationalStateChange({
+    ...payload,
+    action: 'request',
+  });
+}
+
+async function applyPilotWatchList(payload) {
+  return writePilotOperationalStateChange({
+    ...payload,
+    action: 'apply',
+  });
+}
+
+async function clearPilotWatchList(payload) {
+  return writePilotOperationalStateChange({
+    ...payload,
+    action: 'clear',
+  });
+}
+
+function buildPilotOperationalRestrictionSummary(entry = {}) {
+  const restriction = normalizePilotOperationalState(entry, {});
+  return {
+    ...restriction,
+    active: restriction.watchListActive
+      || restriction.effectiveRestrictionFlags?.suppressSurveys
+      || restriction.effectiveRestrictionFlags?.suppressAssignments
+      || restriction.effectiveRestrictionFlags?.suppressNudges
+      || restriction.effectiveRestrictionFlags?.excludeFromAdherence
+      || restriction.effectiveRestrictionFlags?.manualHold
+      || ['paused', 'withdrawn'].includes(restriction.baseStatus),
+  };
+}
+
+async function loadPilotOperationalRestrictions(db, pilotEnrollmentIds = []) {
+  if (!Array.isArray(pilotEnrollmentIds) || !pilotEnrollmentIds.length) return new Map();
+
+  const uniquePilotEnrollmentIds = [...new Set(pilotEnrollmentIds.map(normalizeString).filter(Boolean))];
+  const entries = await Promise.all(uniquePilotEnrollmentIds.map(async (pilotEnrollmentId) => {
+    try {
+      const snapshot = await db.collection(PILOT_OPERATIONAL_STATES_COLLECTION).doc(pilotEnrollmentId).get();
+      if (!snapshot.exists) return null;
+      return [pilotEnrollmentId, buildPilotOperationalRestrictionSummary({
+        id: snapshot.id,
+        ...(snapshot.data() || {}),
+      })];
+    } catch (error) {
+      return null;
+    }
+  }));
+
+  return new Map(entries.filter(Boolean));
+}
+
+function isSurveyPromptSuppressedByOperationalRestriction(restriction = null) {
+  if (!restriction) return false;
+  return restriction.effectiveRestrictionFlags?.suppressSurveys === true
+    || restriction.effectiveRestrictionFlags?.manualHold === true
+    || ['paused', 'withdrawn'].includes(normalizeOperationalBaseStatus(restriction.baseStatus));
+}
+
+function isAdherenceExcludedByOperationalRestriction(restriction = null) {
+  if (!restriction) return false;
+  return restriction.effectiveRestrictionFlags?.excludeFromAdherence === true
+    || restriction.effectiveRestrictionFlags?.manualHold === true;
+}
+
 async function evaluateCoachWorkflowContinuity({
   db,
   athleteId,
@@ -3359,7 +3888,7 @@ function computeAdherenceSummary({
   assignmentCompletions,
   activationEvents,
   withdrawalEvents,
-  escalationsByAthlete,
+  operationalRestrictionsByEnrollmentId,
   windowStartDate,
   windowEndDate,
 }) {
@@ -3383,7 +3912,7 @@ function computeAdherenceSummary({
       checkIns,
       assignmentCompletions,
     });
-    const athleteEscalations = escalationsByAthlete.get(athleteId) || [];
+    const operationalRestriction = operationalRestrictionsByEnrollmentId?.get(normalizeString(enrollment.id)) || null;
     let athleteExpectedDays = 0;
 
     intervals.forEach((interval) => {
@@ -3400,7 +3929,13 @@ function computeAdherenceSummary({
           checkIns,
           assignmentCompletions,
         })) return;
-        if (isEscalationHoldDay(athleteEscalations, dateKey)) return;
+        if (isOperationalRestrictedDay({
+          operationalState: operationalRestriction,
+          dateKey,
+          timezone,
+          checkIns,
+          assignmentCompletions,
+        })) return;
 
         const assignment = dailyAssignmentState.get(`${athleteId}::${dateKey}`);
         if (isNoTaskRestDay(assignment)) {
@@ -3785,6 +4320,10 @@ async function computePilotOutcomeRollup({
   const athleteIds = resolvedEnrollments.map((entry) => normalizeString(entry.userId)).filter(Boolean);
   const resolvedEscalations = escalations || await loadPilotEscalations(db, athleteIds);
   const initialSnapshotSets = snapshotSets || await Promise.all(resolvedEnrollments.map((entry) => loadSnapshotSetForEnrollment(db, entry)));
+  const resolvedOperationalStates = await loadPilotOperationalStates(db, resolvedEnrollments, resolvedMembershipMap);
+  const operationalRestrictionsByEnrollmentId = new Map(
+    resolvedOperationalStates.map((state) => [normalizeString(state.pilotEnrollmentId || state.id), state])
+  );
   const resolvedSnapshotSets = await syncEndpointFreezeSnapshots({
     db,
     pilot: resolvedPilot,
@@ -3799,14 +4338,6 @@ async function computePilotOutcomeRollup({
   const assignmentsByAthlete = buildAssignmentsByAthlete(resolvedAssignments);
   const dailyAssignmentState = groupDailyAssignmentState(resolvedAssignments);
   const { checkIns, assignmentCompletions, activationEvents, withdrawalEvents } = groupDailyEvents(resolvedEvents);
-  const escalationsByAthlete = resolvedEscalations.reduce((accumulator, escalation) => {
-    const athleteId = normalizeString(escalation.userId);
-    if (!athleteId) return accumulator;
-    const current = accumulator.get(athleteId) || [];
-    current.push(escalation);
-    accumulator.set(athleteId, current);
-    return accumulator;
-  }, new Map());
 
   const enrollmentSummary = buildEnrollmentSummary(resolvedEnrollments, resolvedMembershipMap);
   const adherenceSummary = computeAdherenceSummary({
@@ -3818,7 +4349,7 @@ async function computePilotOutcomeRollup({
     assignmentCompletions,
     activationEvents,
     withdrawalEvents,
-    escalationsByAthlete,
+    operationalRestrictionsByEnrollmentId,
     windowStartDate: bounds.startDateKey,
     windowEndDate: bounds.endDateKey,
   });
@@ -3876,7 +4407,7 @@ async function computePilotOutcomeRollup({
       assignmentCompletions,
       activationEvents,
       withdrawalEvents,
-      escalationsByAthlete,
+      operationalRestrictionsByEnrollmentId,
       windowStartDate: bounds.startDateKey,
       windowEndDate: bounds.endDateKey,
     });
@@ -3945,6 +4476,7 @@ async function computePilotOutcomeRollup({
         adheredDays: adherenceSummary.adheredDays,
         activeAthleteCount: adherenceSummary.activeAthleteCount,
       },
+      operational: buildOperationalStateSummary(resolvedOperationalStates),
       mentalPerformance: mentalPerformanceSummary,
       escalations: escalationSummary,
       surveys: surveyDiagnostics,
@@ -4239,12 +4771,16 @@ async function getAthletePilotSurveyPromptState({
     };
   }
 
-  const [pilot, responses, events, escalations, snapshots] = await Promise.all([
+  const [pilot, responses, events, escalations, snapshots, operationalRestriction] = await Promise.all([
     loadPilotDocument(db, context.pilotId),
     loadPilotSurveyResponses(db, context.pilotId),
     loadPilotMetricEvents(db, context.pilotId),
     loadPilotEscalations(db, [context.athleteId]),
     loadSnapshotSetForEnrollment(db, { id: context.pilotEnrollmentId }),
+    loadPilotOperationalState(db, context.pilotEnrollmentId, {
+      pilotEnrollment: context.pilotEnrollment,
+      teamMembership: context.teamMembership,
+    }),
   ]);
 
   const teamMembership = context.teamMembership || null;
@@ -4255,6 +4791,8 @@ async function getAthletePilotSurveyPromptState({
     && entry.excludedFromHeadlineMetrics !== true
     && countsTowardCareEscalationHeadline(entry)
   ));
+  const surveySuppressedByOperationalRestriction = isSurveyPromptSuppressedByOperationalRestriction(operationalRestriction);
+  const operationalRestrictionSummary = operationalRestriction || null;
   const athleteResponses = responses.filter((entry) => normalizeString(entry.respondentUserId) === normalizeString(context.athleteId));
   const nowMs = Date.now();
   const pilotStartMs = coerceMillis(pilot?.startAt);
@@ -4310,18 +4848,20 @@ async function getAthletePilotSurveyPromptState({
       suppressionReason: 'enrollment_incomplete',
       completedSessions,
       activeEscalation,
+      operationalRestriction: operationalRestrictionSummary,
     };
   }
 
-  if (activeEscalation) {
+  if (surveySuppressedByOperationalRestriction) {
     return {
       athleteId: context.athleteId,
       pilotId: context.pilotId,
       pilotEnrollmentId: context.pilotEnrollmentId,
       pendingPrompts: [],
-      suppressionReason: 'active_escalation',
+      suppressionReason: 'operational_restriction',
       completedSessions,
       activeEscalation,
+      operationalRestriction: operationalRestrictionSummary,
     };
   }
 
@@ -4378,6 +4918,7 @@ async function getAthletePilotSurveyPromptState({
     suppressionReason: null,
     completedSessions,
     activeEscalation,
+    operationalRestriction: operationalRestrictionSummary,
     progressRatio,
     endpointEligible,
     midpointEligible,
@@ -4399,6 +4940,8 @@ module.exports = {
   PILOT_METRIC_ROLLUP_DAILY_SUBCOLLECTION,
   PILOT_SURVEY_RESPONSES_COLLECTION,
   PILOT_MENTAL_PERFORMANCE_SNAPSHOTS_SUBCOLLECTION,
+  PILOT_OPERATIONAL_STATES_COLLECTION,
+  PILOT_OPERATIONAL_STATE_ACTIONS_SUBCOLLECTION,
   SURVEY_RECLASSIFICATION_MIGRATION_KEY,
   ESCALATION_RECLASSIFICATION_MIGRATION_KEY,
   TRUST_BATTERY_ITEM_KEYS,
@@ -4412,19 +4955,29 @@ module.exports = {
   computePilotOutcomeRollup,
   emitPilotMetricEvent,
   evaluateCoachWorkflowContinuity,
+  buildDefaultOperationalStateFromEnrollment,
+  buildOperationalStateSummary,
   getAthletePilotSurveyPromptState,
   hasLossOfFunctionConcern,
   isEnrollmentComplete,
   hasCompletedEnrollmentConsents,
   isTrueCareEscalationClassification,
+  isSurveyPromptSuppressedByOperationalRestriction,
+  isAdherenceExcludedByOperationalRestriction,
   buildRepairDateKeys,
   backfillPilotAthleteOutcomeHistory,
   recomputePilotMetricRollups,
   repairRecentPilotMetricRollups,
   recordPilotMetricAlert,
+  loadPilotOperationalState,
+  loadPilotOperationalStates,
   resolvePilotEnrollmentContext,
   applyPilotSurveyReclassification,
   applyPilotEscalationReclassification,
+  requestPilotWatchList,
+  applyPilotWatchList,
+  clearPilotWatchList,
+  writePilotOperationalStateChange,
   savePilotSurveyResponse,
   upsertPilotMentalPerformanceSnapshot,
   deriveBaselineProbeProfile,

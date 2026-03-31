@@ -8,6 +8,7 @@ const {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const NOW_MS = Date.parse('2026-03-30T12:00:00.000Z');
+const PILOT_OPERATIONAL_STATES_COLLECTION = 'pulsecheck-pilot-operational-states';
 
 function seedBasePilotContext(db, overrides = {}) {
   const pilotId = overrides.pilotId || 'pilot-1';
@@ -102,6 +103,108 @@ function seedBasePilotContext(db, overrides = {}) {
     cohortId,
     teamMembershipId,
   };
+}
+
+function seedPromptThresholdSessions(db, context, sourceDates = ['2026-03-29', '2026-03-30', '2026-03-30']) {
+  sourceDates.forEach((sourceDate, index) => {
+    const createdAt = index === 0 ? NOW_MS - DAY_MS : NOW_MS;
+    db.seedDoc('pulsecheck-pilot-metric-events', `${context.athleteId}-prompt-${index + 1}`, {
+      id: `${context.athleteId}-prompt-${index + 1}`,
+      pilotId: context.pilotId,
+      pilotEnrollmentId: context.pilotEnrollmentId,
+      organizationId: context.organizationId,
+      teamId: context.teamId,
+      athleteId: context.athleteId,
+      actorUserId: context.athleteId,
+      actorRole: 'athlete',
+      eventType: 'daily_assignment_completed',
+      sourceCollection: 'pulsecheck-daily-assignments',
+      sourceDocumentId: `assignment-${index + 1}`,
+      sourceDate,
+      metricPayload: {},
+      createdAt,
+    });
+  });
+}
+
+function seedAdherenceDay(db, context, sourceDate = '2026-03-30') {
+  const createdAt = NOW_MS;
+  db.seedDoc('pulsecheck-pilot-metric-events', `${context.athleteId}-checkin-${sourceDate}`, {
+    id: `${context.athleteId}-checkin-${sourceDate}`,
+    pilotId: context.pilotId,
+    pilotEnrollmentId: context.pilotEnrollmentId,
+    organizationId: context.organizationId,
+    teamId: context.teamId,
+    cohortId: context.cohortId,
+    athleteId: context.athleteId,
+    actorRole: 'athlete',
+    actorUserId: context.athleteId,
+    eventType: 'daily_checkin_completed',
+    sourceCollection: 'mental-check-ins',
+    sourceDocumentId: `checkin-${sourceDate}`,
+    sourceDate,
+    metricPayload: { readinessScore: 7 },
+    createdAt,
+  });
+  db.seedDoc(`mental-check-ins/${context.athleteId}/check-ins`, `checkin-${sourceDate}`, {
+    id: `checkin-${sourceDate}`,
+    userId: context.athleteId,
+    readinessScore: 7,
+    createdAt,
+    date: sourceDate,
+  });
+  db.seedDoc('pulsecheck-daily-assignments', `${context.athleteId}_${sourceDate}`, {
+    id: `${context.athleteId}_${sourceDate}`,
+    pilotId: context.pilotId,
+    pilotEnrollmentId: context.pilotEnrollmentId,
+    organizationId: context.organizationId,
+    teamId: context.teamId,
+    athleteId: context.athleteId,
+    sourceDate,
+    actionType: 'sim',
+    status: 'completed',
+    createdAt,
+    updatedAt: createdAt + 60 * 60 * 1000,
+  });
+}
+
+function seedOperationalRestriction(db, context, overrides = {}) {
+  const restrictionFlags = {
+    suppressSurveys: overrides.suppressSurveys === true,
+    suppressAssignments: overrides.suppressAssignments === true,
+    suppressNudges: overrides.suppressNudges === true,
+    excludeFromAdherence: overrides.excludeFromAdherence === true,
+    manualHold: overrides.manualHold === true,
+  };
+  db.seedDoc(PILOT_OPERATIONAL_STATES_COLLECTION, context.pilotEnrollmentId, {
+    id: context.pilotEnrollmentId,
+    pilotId: context.pilotId,
+    pilotEnrollmentId: context.pilotEnrollmentId,
+    athleteId: context.athleteId,
+    baseStatus: overrides.baseStatus || 'normal',
+    status: overrides.status || 'normal',
+    watchListActive: overrides.watchListActive !== undefined ? overrides.watchListActive : true,
+    watchListApplied: overrides.watchListApplied !== undefined ? overrides.watchListApplied : true,
+    watchListRequested: overrides.watchListRequested === true,
+    restrictionFlags,
+    watchListRestrictionFlags: restrictionFlags,
+    requestedRestrictionFlags: overrides.requestedRestrictionFlags || null,
+    watchListReasonCode: overrides.watchListReasonCode || 'temporary_restriction',
+    watchListReason: overrides.watchListReason || 'Watch list seeded from test',
+    watchListSource: overrides.watchListSource || 'clinician',
+    watchListAppliedAt: overrides.watchListAppliedAt || NOW_MS - 60 * 60 * 1000,
+    watchListReviewDueAt: overrides.watchListReviewDueAt || NOW_MS + DAY_MS,
+    linkedIncidentIds: overrides.linkedIncidentIds || [],
+    lastAction: overrides.lastAction || {
+      action: 'apply',
+      actorRole: 'clinician',
+      actorUserId: 'clinician-1',
+      reasonCode: overrides.watchListReasonCode || 'temporary_restriction',
+      reason: overrides.watchListReason || 'Watch list seeded from test',
+      at: NOW_MS - 60 * 60 * 1000,
+      atMs: NOW_MS - 60 * 60 * 1000,
+    },
+  });
 }
 
 function eventDocTypes(db) {
@@ -1923,62 +2026,18 @@ test('recomputePilotMetricRollups records ops status for admin debugging', async
   assert.equal(scopeDoc.repairedDailyCount, 1);
 });
 
-test('getAthletePilotSurveyPromptState suppresses prompts during active escalation and resumes after resolution', async () => {
+test('getAthletePilotSurveyPromptState does not suppress prompts when an active escalation exists without a watch list restriction', async () => {
   const { getAthletePilotSurveyPromptState, computePilotOutcomeRollup } = loadPulsecheckMetrics();
   const { db } = createPulsecheckFirestore();
   const context = seedBasePilotContext(db, {
+    enrollmentCreatedAt: NOW_MS,
+    enrollmentUpdatedAt: NOW_MS,
     pilotStartAt: NOW_MS - 3 * DAY_MS,
     pilotEndAt: NOW_MS + 3 * DAY_MS,
   });
 
-  db.seedDoc('pulsecheck-pilot-metric-events', 'session-1', {
-    id: 'session-1',
-    pilotId: context.pilotId,
-    pilotEnrollmentId: context.pilotEnrollmentId,
-    organizationId: context.organizationId,
-    teamId: context.teamId,
-    athleteId: context.athleteId,
-    actorUserId: context.athleteId,
-    actorRole: 'athlete',
-    eventType: 'daily_assignment_completed',
-    sourceCollection: 'pulsecheck-daily-assignments',
-    sourceDocumentId: 'assignment-1',
-    sourceDate: '2026-03-29',
-    metricPayload: {},
-    createdAt: NOW_MS - DAY_MS,
-  });
-  db.seedDoc('pulsecheck-pilot-metric-events', 'session-2', {
-    id: 'session-2',
-    pilotId: context.pilotId,
-    pilotEnrollmentId: context.pilotEnrollmentId,
-    organizationId: context.organizationId,
-    teamId: context.teamId,
-    athleteId: context.athleteId,
-    actorUserId: context.athleteId,
-    actorRole: 'athlete',
-    eventType: 'daily_assignment_completed',
-    sourceCollection: 'pulsecheck-daily-assignments',
-    sourceDocumentId: 'assignment-2',
-    sourceDate: '2026-03-30',
-    metricPayload: {},
-    createdAt: NOW_MS,
-  });
-  db.seedDoc('pulsecheck-pilot-metric-events', 'session-3', {
-    id: 'session-3',
-    pilotId: context.pilotId,
-    pilotEnrollmentId: context.pilotEnrollmentId,
-    organizationId: context.organizationId,
-    teamId: context.teamId,
-    athleteId: context.athleteId,
-    actorUserId: context.athleteId,
-    actorRole: 'athlete',
-    eventType: 'daily_assignment_completed',
-    sourceCollection: 'pulsecheck-daily-assignments',
-    sourceDocumentId: 'assignment-3',
-    sourceDate: '2026-03-30',
-    metricPayload: {},
-    createdAt: NOW_MS,
-  });
+  seedPromptThresholdSessions(db, context);
+  seedAdherenceDay(db, context);
 
   db.seedDoc('escalation-records', 'escalation-1', {
     id: 'escalation-1',
@@ -1992,7 +2051,20 @@ test('getAthletePilotSurveyPromptState suppresses prompts during active escalati
     resolvedAt: null,
   });
 
-  const beforeResolution = await runWithNow(NOW_MS, async () => computePilotOutcomeRollup({
+  const promptState = await runWithNow(NOW_MS, () => getAthletePilotSurveyPromptState({
+    db,
+    athleteId: context.athleteId,
+    preferredPilotEnrollmentId: context.pilotEnrollmentId,
+    preferredPilotId: context.pilotId,
+  }));
+  assert.equal(promptState.suppressionReason, null);
+  assert.ok(promptState.completedSessions >= 3);
+  assert.equal(promptState.endpointEligible, false);
+  assert.equal(promptState.midpointEligible, true);
+  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'trust'));
+  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
+
+  const rollup = await runWithNow(NOW_MS, () => computePilotOutcomeRollup({
     db,
     pilotId: context.pilotId,
     window: 'current',
@@ -2005,8 +2077,290 @@ test('getAthletePilotSurveyPromptState suppresses prompts during active escalati
       endAt: NOW_MS + 3 * DAY_MS,
     },
   }));
-  assert.equal(beforeResolution.metrics.escalationsTotal, 1);
-  assert.equal(beforeResolution.metrics.medianMinutesToCare, 30);
+  assert.equal(rollup.metrics.escalationsTotal, 1);
+  assert.equal(rollup.metrics.medianMinutesToCare, 30);
+  assert.ok(rollup.diagnostics.adherence.expectedAthleteDays > 0);
+  assert.equal(rollup.diagnostics.adherence.completedCheckInDays, rollup.diagnostics.adherence.expectedAthleteDays);
+  assert.equal(rollup.diagnostics.adherence.completedAssignmentDays, rollup.diagnostics.adherence.expectedAthleteDays);
+  assert.equal(rollup.diagnostics.adherence.adheredDays, rollup.diagnostics.adherence.expectedAthleteDays);
+  assert.equal(rollup.metrics.adherenceRate, 100);
+});
+
+test('getAthletePilotSurveyPromptState suppresses only the configured survey flow for an active watch list', async () => {
+  const { getAthletePilotSurveyPromptState, computePilotOutcomeRollup } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, {
+    enrollmentCreatedAt: NOW_MS,
+    enrollmentUpdatedAt: NOW_MS,
+    pilotStartAt: NOW_MS - 3 * DAY_MS,
+    pilotEndAt: NOW_MS + 3 * DAY_MS,
+  });
+
+  seedPromptThresholdSessions(db, context);
+  seedAdherenceDay(db, context);
+  seedOperationalRestriction(db, context, {
+    watchListActive: true,
+    suppressSurveys: true,
+    excludeFromAdherence: false,
+    watchListReasonCode: 'temporary_restriction',
+  });
+
+  const promptState = await runWithNow(NOW_MS, () => getAthletePilotSurveyPromptState({
+    db,
+    athleteId: context.athleteId,
+    preferredPilotEnrollmentId: context.pilotEnrollmentId,
+    preferredPilotId: context.pilotId,
+  }));
+  assert.equal(promptState.suppressionReason, 'operational_restriction');
+  assert.equal(promptState.pendingPrompts.length, 0);
+
+  const rollup = await runWithNow(NOW_MS, () => computePilotOutcomeRollup({
+    db,
+    pilotId: context.pilotId,
+    window: 'current',
+    pilot: {
+      id: context.pilotId,
+      organizationId: context.organizationId,
+      teamId: context.teamId,
+      status: 'active',
+      startAt: NOW_MS - 3 * DAY_MS,
+      endAt: NOW_MS + 3 * DAY_MS,
+    },
+  }));
+  assert.ok(rollup.diagnostics.adherence.expectedAthleteDays > 0);
+  assert.equal(rollup.diagnostics.adherence.adheredDays, rollup.diagnostics.adherence.expectedAthleteDays);
+  assert.equal(rollup.metrics.adherenceRate, 100);
+});
+
+test('getAthletePilotSurveyPromptState leaves prompts available when watch list excludes only adherence', async () => {
+  const { getAthletePilotSurveyPromptState, computePilotOutcomeRollup } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, {
+    enrollmentCreatedAt: NOW_MS,
+    enrollmentUpdatedAt: NOW_MS,
+    pilotStartAt: NOW_MS - 3 * DAY_MS,
+    pilotEndAt: NOW_MS + 3 * DAY_MS,
+  });
+
+  seedPromptThresholdSessions(db, context);
+  seedAdherenceDay(db, context);
+  seedOperationalRestriction(db, context, {
+    watchListActive: true,
+    suppressSurveys: false,
+    excludeFromAdherence: true,
+    watchListReasonCode: 'manual_safety_hold',
+  });
+
+  const promptState = await runWithNow(NOW_MS, () => getAthletePilotSurveyPromptState({
+    db,
+    athleteId: context.athleteId,
+    preferredPilotEnrollmentId: context.pilotEnrollmentId,
+    preferredPilotId: context.pilotId,
+  }));
+  assert.equal(promptState.suppressionReason, null);
+  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'trust'));
+  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
+
+  const rollup = await runWithNow(NOW_MS, () => computePilotOutcomeRollup({
+    db,
+    pilotId: context.pilotId,
+    window: 'current',
+    pilot: {
+      id: context.pilotId,
+      organizationId: context.organizationId,
+      teamId: context.teamId,
+      status: 'active',
+      startAt: NOW_MS - 3 * DAY_MS,
+      endAt: NOW_MS + 3 * DAY_MS,
+    },
+  }));
+  assert.equal(rollup.diagnostics.adherence.expectedAthleteDays, 0);
+  assert.equal(rollup.diagnostics.adherence.completedCheckInDays, 0);
+  assert.equal(rollup.diagnostics.adherence.completedAssignmentDays, 0);
+  assert.equal(rollup.diagnostics.adherence.adheredDays, 0);
+  assert.equal(rollup.metrics.adherenceRate, 0);
+});
+
+test('request/apply/clear watch list mutates operational state without touching escalation history', async () => {
+  const {
+    requestPilotWatchList,
+    applyPilotWatchList,
+    clearPilotWatchList,
+    loadPilotOperationalState,
+  } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, {
+    enrollmentCreatedAt: NOW_MS,
+    enrollmentUpdatedAt: NOW_MS,
+    pilotStartAt: NOW_MS - 3 * DAY_MS,
+    pilotEndAt: NOW_MS + 3 * DAY_MS,
+  });
+
+  await runWithNow(NOW_MS, async () => {
+    await requestPilotWatchList({
+      db,
+      athleteId: context.athleteId,
+      preferredPilotEnrollmentId: context.pilotEnrollmentId,
+      preferredPilotId: context.pilotId,
+      actorUserId: 'clinician-1',
+      actorRole: 'clinician',
+      reasonCode: 'clinical_review_pending',
+      reason: 'Pending care review',
+      requestedRestrictionFlags: {
+        suppressSurveys: true,
+        suppressAssignments: false,
+        suppressNudges: false,
+        excludeFromAdherence: false,
+        manualHold: false,
+      },
+      createdAt: NOW_MS,
+    });
+
+    const requested = await loadPilotOperationalState(db, context.pilotEnrollmentId, {
+      pilotEnrollment: db.getDoc('pulsecheck-pilot-enrollments', context.pilotEnrollmentId),
+    });
+    assert.equal(requested.watchListRequested, true);
+    assert.equal(requested.watchListActive, false);
+    assert.equal(requested.requestedRestrictionFlags.suppressSurveys, true);
+    assert.equal(requested.effectiveRestrictionFlags.suppressSurveys, false);
+
+    await applyPilotWatchList({
+      db,
+      athleteId: context.athleteId,
+      preferredPilotEnrollmentId: context.pilotEnrollmentId,
+      preferredPilotId: context.pilotId,
+      actorUserId: 'clinician-1',
+      actorRole: 'clinician',
+      reasonCode: 'clinical_review_pending',
+      reason: 'Watch list applied after review',
+      restrictionFlags: {
+        suppressSurveys: true,
+        suppressAssignments: true,
+        suppressNudges: true,
+        excludeFromAdherence: true,
+        manualHold: false,
+      },
+      createdAt: NOW_MS + 1000,
+    });
+
+    const applied = await loadPilotOperationalState(db, context.pilotEnrollmentId, {
+      pilotEnrollment: db.getDoc('pulsecheck-pilot-enrollments', context.pilotEnrollmentId),
+    });
+    assert.equal(applied.watchListRequested, false);
+    assert.equal(applied.watchListApplied, true);
+    assert.equal(applied.watchListActive, true);
+    assert.equal(applied.restrictionFlags.suppressSurveys, true);
+    assert.equal(applied.effectiveRestrictionFlags.excludeFromAdherence, true);
+
+    await clearPilotWatchList({
+      db,
+      athleteId: context.athleteId,
+      preferredPilotEnrollmentId: context.pilotEnrollmentId,
+      preferredPilotId: context.pilotId,
+      actorUserId: 'clinician-1',
+      actorRole: 'clinician',
+      reasonCode: 'other',
+      reason: 'Cleared after review',
+      createdAt: NOW_MS + 2000,
+    });
+
+    const cleared = await loadPilotOperationalState(db, context.pilotEnrollmentId, {
+      pilotEnrollment: db.getDoc('pulsecheck-pilot-enrollments', context.pilotEnrollmentId),
+    });
+    assert.equal(cleared.watchListRequested, false);
+    assert.equal(cleared.watchListApplied, false);
+    assert.equal(cleared.watchListActive, false);
+    assert.equal(cleared.effectiveRestrictionFlags.suppressSurveys, false);
+    assert.equal(cleared.effectiveRestrictionFlags.excludeFromAdherence, false);
+  });
+});
+
+test('requested watch list does not suppress prompts until it is applied', async () => {
+  const { requestPilotWatchList, getAthletePilotSurveyPromptState, computePilotOutcomeRollup } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, {
+    enrollmentCreatedAt: NOW_MS,
+    enrollmentUpdatedAt: NOW_MS,
+    pilotStartAt: NOW_MS - 3 * DAY_MS,
+    pilotEndAt: NOW_MS + 3 * DAY_MS,
+  });
+
+  seedPromptThresholdSessions(db, context);
+  seedAdherenceDay(db, context);
+
+  await runWithNow(NOW_MS, async () => {
+    await requestPilotWatchList({
+      db,
+      athleteId: context.athleteId,
+      preferredPilotEnrollmentId: context.pilotEnrollmentId,
+      preferredPilotId: context.pilotId,
+      actorUserId: 'clinician-1',
+      actorRole: 'clinician',
+      reasonCode: 'clinical_review_pending',
+      reason: 'Pending review only',
+      requestedRestrictionFlags: {
+        suppressSurveys: true,
+        suppressAssignments: true,
+        suppressNudges: true,
+        excludeFromAdherence: true,
+        manualHold: true,
+      },
+      createdAt: NOW_MS,
+    });
+  });
+
+  const promptState = await runWithNow(NOW_MS, () => getAthletePilotSurveyPromptState({
+    db,
+    athleteId: context.athleteId,
+    preferredPilotEnrollmentId: context.pilotEnrollmentId,
+    preferredPilotId: context.pilotId,
+  }));
+
+  assert.equal(promptState.suppressionReason, null);
+  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'trust'));
+  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
+  assert.equal(promptState.operationalRestriction.watchListRequested, true);
+  assert.equal(promptState.operationalRestriction.watchListActive, false);
+  assert.equal(promptState.operationalRestriction.effectiveRestrictionFlags.suppressSurveys, false);
+
+  const rollup = await runWithNow(NOW_MS, () => computePilotOutcomeRollup({
+    db,
+    pilotId: context.pilotId,
+    window: 'current',
+    pilot: {
+      id: context.pilotId,
+      organizationId: context.organizationId,
+      teamId: context.teamId,
+      status: 'active',
+      startAt: NOW_MS - 3 * DAY_MS,
+      endAt: NOW_MS + 3 * DAY_MS,
+    },
+  }));
+
+  assert.equal(rollup.diagnostics.operational.watchListActive, 0);
+  assert.equal(rollup.diagnostics.operational.suppressAssignments, 0);
+  assert.equal(rollup.diagnostics.operational.suppressNudges, 0);
+  assert.equal(rollup.diagnostics.operational.excludeFromAdherence, 0);
+});
+
+test('clearing watch list restores prompt eligibility and adherence counts', async () => {
+  const { getAthletePilotSurveyPromptState, computePilotOutcomeRollup } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, {
+    enrollmentCreatedAt: NOW_MS,
+    enrollmentUpdatedAt: NOW_MS,
+    pilotStartAt: NOW_MS - 3 * DAY_MS,
+    pilotEndAt: NOW_MS + 3 * DAY_MS,
+  });
+
+  seedPromptThresholdSessions(db, context);
+  seedAdherenceDay(db, context);
+  seedOperationalRestriction(db, context, {
+    watchListActive: true,
+    suppressSurveys: true,
+    excludeFromAdherence: true,
+    watchListReasonCode: 'temporary_restriction',
+  });
 
   const promptStateBefore = await runWithNow(NOW_MS, () => getAthletePilotSurveyPromptState({
     db,
@@ -2014,20 +2368,25 @@ test('getAthletePilotSurveyPromptState suppresses prompts during active escalati
     preferredPilotEnrollmentId: context.pilotEnrollmentId,
     preferredPilotId: context.pilotId,
   }));
-  assert.equal(promptStateBefore.suppressionReason, 'active_escalation');
+  assert.equal(promptStateBefore.suppressionReason, 'operational_restriction');
   assert.equal(promptStateBefore.pendingPrompts.length, 0);
 
-  db.seedDoc('escalation-records', 'escalation-1', {
-    id: 'escalation-1',
-    userId: context.athleteId,
-    tier: 2,
-    category: 'general',
-    status: 'resolved',
-    createdAt: NOW_MS - 45 * 60 * 1000,
-    handoffInitiatedAt: NOW_MS - 15 * 60 * 1000,
-    handoffCompletedAt: NOW_MS - 10 * 60 * 1000,
-    resolvedAt: NOW_MS,
-  });
+  const rollupBefore = await runWithNow(NOW_MS, () => computePilotOutcomeRollup({
+    db,
+    pilotId: context.pilotId,
+    window: 'current',
+    pilot: {
+      id: context.pilotId,
+      organizationId: context.organizationId,
+      teamId: context.teamId,
+      status: 'active',
+      startAt: NOW_MS - 3 * DAY_MS,
+      endAt: NOW_MS + 3 * DAY_MS,
+    },
+  }));
+  assert.equal(rollupBefore.diagnostics.adherence.expectedAthleteDays, 0);
+
+  await db.collection(PILOT_OPERATIONAL_STATES_COLLECTION).doc(context.pilotEnrollmentId).delete();
 
   const promptStateAfter = await runWithNow(NOW_MS, () => getAthletePilotSurveyPromptState({
     db,
@@ -2035,70 +2394,164 @@ test('getAthletePilotSurveyPromptState suppresses prompts during active escalati
     preferredPilotEnrollmentId: context.pilotEnrollmentId,
     preferredPilotId: context.pilotId,
   }));
-
   assert.equal(promptStateAfter.suppressionReason, null);
   assert.equal(promptStateAfter.endpointEligible, false);
   assert.equal(promptStateAfter.midpointEligible, true);
   assert.ok(promptStateAfter.pendingPrompts.some((prompt) => prompt.surveyKind === 'trust'));
   assert.ok(promptStateAfter.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
+
+  const rollupAfter = await runWithNow(NOW_MS, () => computePilotOutcomeRollup({
+    db,
+    pilotId: context.pilotId,
+    window: 'current',
+    pilot: {
+      id: context.pilotId,
+      organizationId: context.organizationId,
+      teamId: context.teamId,
+      status: 'active',
+      startAt: NOW_MS - 3 * DAY_MS,
+      endAt: NOW_MS + 3 * DAY_MS,
+    },
+  }));
+  assert.ok(rollupAfter.diagnostics.adherence.expectedAthleteDays > 0);
+  assert.equal(rollupAfter.diagnostics.adherence.completedCheckInDays, rollupAfter.diagnostics.adherence.expectedAthleteDays);
+  assert.equal(rollupAfter.diagnostics.adherence.completedAssignmentDays, rollupAfter.diagnostics.adherence.expectedAthleteDays);
+  assert.equal(rollupAfter.diagnostics.adherence.adheredDays, rollupAfter.diagnostics.adherence.expectedAthleteDays);
+  assert.equal(rollupAfter.metrics.adherenceRate, 100);
 });
 
-test('getAthletePilotSurveyPromptState does not suppress prompts for downgraded active support-only escalations', async () => {
-  const { getAthletePilotSurveyPromptState } = loadPulsecheckMetrics();
+test('assignment-only watch list restriction is tracked without suppressing survey prompts', async () => {
+  const { getAthletePilotSurveyPromptState, computePilotOutcomeRollup, loadPilotOperationalState } = loadPulsecheckMetrics();
   const { db } = createPulsecheckFirestore();
   const context = seedBasePilotContext(db, {
+    enrollmentCreatedAt: NOW_MS,
+    enrollmentUpdatedAt: NOW_MS,
     pilotStartAt: NOW_MS - 3 * DAY_MS,
     pilotEndAt: NOW_MS + 3 * DAY_MS,
   });
 
-  db.seedDoc('pulsecheck-pilot-metric-events', 'support-session-1', {
-    id: 'support-session-1',
-    pilotId: context.pilotId,
-    pilotEnrollmentId: context.pilotEnrollmentId,
-    organizationId: context.organizationId,
-    teamId: context.teamId,
-    athleteId: context.athleteId,
-    actorUserId: context.athleteId,
-    actorRole: 'athlete',
-    eventType: 'daily_assignment_completed',
-    sourceCollection: 'pulsecheck-daily-assignments',
-    sourceDocumentId: 'support-assignment-1',
-    sourceDate: '2026-03-29',
-    metricPayload: {},
-    createdAt: NOW_MS - DAY_MS,
+  seedPromptThresholdSessions(db, context);
+  seedAdherenceDay(db, context);
+  seedOperationalRestriction(db, context, {
+    watchListActive: true,
+    suppressSurveys: false,
+    suppressAssignments: true,
+    suppressNudges: false,
+    excludeFromAdherence: false,
+    watchListReasonCode: 'manual_safety_hold',
   });
-  db.seedDoc('pulsecheck-pilot-metric-events', 'support-session-2', {
-    id: 'support-session-2',
-    pilotId: context.pilotId,
-    pilotEnrollmentId: context.pilotEnrollmentId,
-    organizationId: context.organizationId,
-    teamId: context.teamId,
+
+  const promptState = await runWithNow(NOW_MS, () => getAthletePilotSurveyPromptState({
+    db,
     athleteId: context.athleteId,
-    actorUserId: context.athleteId,
-    actorRole: 'athlete',
-    eventType: 'daily_assignment_completed',
-    sourceCollection: 'pulsecheck-daily-assignments',
-    sourceDocumentId: 'support-assignment-2',
-    sourceDate: '2026-03-30',
-    metricPayload: {},
-    createdAt: NOW_MS,
-  });
-  db.seedDoc('pulsecheck-pilot-metric-events', 'support-session-3', {
-    id: 'support-session-3',
+    preferredPilotEnrollmentId: context.pilotEnrollmentId,
+    preferredPilotId: context.pilotId,
+  }));
+
+  assert.equal(promptState.suppressionReason, null);
+  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'trust'));
+  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
+  assert.equal(promptState.operationalRestriction.effectiveRestrictionFlags.suppressAssignments, true);
+  assert.equal(promptState.operationalRestriction.effectiveRestrictionFlags.suppressNudges, false);
+
+  const rollup = await runWithNow(NOW_MS, () => computePilotOutcomeRollup({
+    db,
     pilotId: context.pilotId,
-    pilotEnrollmentId: context.pilotEnrollmentId,
-    organizationId: context.organizationId,
-    teamId: context.teamId,
-    athleteId: context.athleteId,
-    actorUserId: context.athleteId,
-    actorRole: 'athlete',
-    eventType: 'daily_assignment_completed',
-    sourceCollection: 'pulsecheck-daily-assignments',
-    sourceDocumentId: 'support-assignment-3',
-    sourceDate: '2026-03-30',
-    metricPayload: {},
-    createdAt: NOW_MS,
+    window: 'current',
+    pilot: {
+      id: context.pilotId,
+      organizationId: context.organizationId,
+      teamId: context.teamId,
+      status: 'active',
+      startAt: NOW_MS - 3 * DAY_MS,
+      endAt: NOW_MS + 3 * DAY_MS,
+    },
+  }));
+
+  assert.equal(rollup.diagnostics.operational.watchListActive, 1);
+  assert.equal(rollup.diagnostics.operational.suppressAssignments, 1);
+  assert.equal(rollup.diagnostics.operational.suppressNudges, 0);
+
+  const operationalState = await loadPilotOperationalState(db, context.pilotEnrollmentId, {
+    pilotEnrollment: db.getDoc('pulsecheck-pilot-enrollments', context.pilotEnrollmentId),
   });
+  assert.equal(operationalState.watchListActive, true);
+  assert.equal(operationalState.effectiveRestrictionFlags.suppressAssignments, true);
+  assert.equal(operationalState.effectiveRestrictionFlags.suppressNudges, false);
+});
+
+test('nudge-only watch list restriction is tracked without suppressing survey prompts', async () => {
+  const { getAthletePilotSurveyPromptState, computePilotOutcomeRollup, loadPilotOperationalState } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, {
+    enrollmentCreatedAt: NOW_MS,
+    enrollmentUpdatedAt: NOW_MS,
+    pilotStartAt: NOW_MS - 3 * DAY_MS,
+    pilotEndAt: NOW_MS + 3 * DAY_MS,
+  });
+
+  seedPromptThresholdSessions(db, context);
+  seedAdherenceDay(db, context);
+  seedOperationalRestriction(db, context, {
+    watchListActive: true,
+    suppressSurveys: false,
+    suppressAssignments: false,
+    suppressNudges: true,
+    excludeFromAdherence: false,
+    watchListReasonCode: 'temporary_restriction',
+  });
+
+  const promptState = await runWithNow(NOW_MS, () => getAthletePilotSurveyPromptState({
+    db,
+    athleteId: context.athleteId,
+    preferredPilotEnrollmentId: context.pilotEnrollmentId,
+    preferredPilotId: context.pilotId,
+  }));
+
+  assert.equal(promptState.suppressionReason, null);
+  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'trust'));
+  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
+  assert.equal(promptState.operationalRestriction.effectiveRestrictionFlags.suppressAssignments, false);
+  assert.equal(promptState.operationalRestriction.effectiveRestrictionFlags.suppressNudges, true);
+
+  const rollup = await runWithNow(NOW_MS, () => computePilotOutcomeRollup({
+    db,
+    pilotId: context.pilotId,
+    window: 'current',
+    pilot: {
+      id: context.pilotId,
+      organizationId: context.organizationId,
+      teamId: context.teamId,
+      status: 'active',
+      startAt: NOW_MS - 3 * DAY_MS,
+      endAt: NOW_MS + 3 * DAY_MS,
+    },
+  }));
+
+  assert.equal(rollup.diagnostics.operational.watchListActive, 1);
+  assert.equal(rollup.diagnostics.operational.suppressAssignments, 0);
+  assert.equal(rollup.diagnostics.operational.suppressNudges, 1);
+
+  const operationalState = await loadPilotOperationalState(db, context.pilotEnrollmentId, {
+    pilotEnrollment: db.getDoc('pulsecheck-pilot-enrollments', context.pilotEnrollmentId),
+  });
+  assert.equal(operationalState.watchListActive, true);
+  assert.equal(operationalState.effectiveRestrictionFlags.suppressAssignments, false);
+  assert.equal(operationalState.effectiveRestrictionFlags.suppressNudges, true);
+});
+
+test('getAthletePilotSurveyPromptState and adherence ignore migrated false-positive support escalations', async () => {
+  const { getAthletePilotSurveyPromptState, computePilotOutcomeRollup } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, {
+    enrollmentCreatedAt: NOW_MS,
+    enrollmentUpdatedAt: NOW_MS,
+    pilotStartAt: NOW_MS - 3 * DAY_MS,
+    pilotEndAt: NOW_MS + 3 * DAY_MS,
+  });
+
+  seedPromptThresholdSessions(db, context);
+  seedAdherenceDay(db, context);
 
   db.seedDoc('escalation-records', 'support-only-escalation', {
     id: 'support-only-escalation',
@@ -2121,13 +2574,32 @@ test('getAthletePilotSurveyPromptState does not suppress prompts for downgraded 
     preferredPilotEnrollmentId: context.pilotEnrollmentId,
     preferredPilotId: context.pilotId,
   }));
-
   assert.equal(promptState.suppressionReason, null);
-  assert.equal(promptState.completedSessions, 3);
+  assert.ok(promptState.completedSessions >= 3);
   assert.equal(promptState.endpointEligible, false);
   assert.equal(promptState.midpointEligible, true);
   assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'trust'));
   assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
+
+  const rollup = await runWithNow(NOW_MS, () => computePilotOutcomeRollup({
+    db,
+    pilotId: context.pilotId,
+    window: 'current',
+    pilot: {
+      id: context.pilotId,
+      organizationId: context.organizationId,
+      teamId: context.teamId,
+      status: 'active',
+      startAt: NOW_MS - 3 * DAY_MS,
+      endAt: NOW_MS + 3 * DAY_MS,
+    },
+  }));
+  assert.equal(rollup.metrics.escalationsTotal, 0);
+  assert.ok(rollup.diagnostics.adherence.expectedAthleteDays > 0);
+  assert.equal(rollup.diagnostics.adherence.completedCheckInDays, rollup.diagnostics.adherence.expectedAthleteDays);
+  assert.equal(rollup.diagnostics.adherence.completedAssignmentDays, rollup.diagnostics.adherence.expectedAthleteDays);
+  assert.equal(rollup.diagnostics.adherence.adheredDays, rollup.diagnostics.adherence.expectedAthleteDays);
+  assert.equal(rollup.metrics.adherenceRate, 100);
 });
 
 test('getAthletePilotSurveyPromptState honors historical completed assignments inside the pilot window', async () => {
