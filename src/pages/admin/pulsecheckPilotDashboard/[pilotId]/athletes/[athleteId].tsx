@@ -101,6 +101,14 @@ const buildWatchListDraft = (state?: PilotDashboardOperationalWatchListState | n
   },
 });
 
+const defaultWatchListRestrictionFlags: PilotDashboardOperationalWatchListRestrictionFlags = {
+  suppressSurveys: true,
+  suppressAssignments: true,
+  suppressNudges: true,
+  excludeFromAdherence: true,
+  manualHold: true,
+};
+
 const watchListStatusClassName = (state?: PilotDashboardOperationalWatchListState | null) => {
   if (state?.watchListActive) {
     return 'border-rose-400/25 bg-rose-400/10 text-rose-100';
@@ -220,6 +228,12 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
   }, [detail]);
 
   const currentWatchList = detail?.operationalWatchList || null;
+  const hasWatchListHistory = Boolean(
+    currentWatchList?.requestedAt ||
+    currentWatchList?.appliedAt ||
+    currentWatchList?.clearedAt ||
+    currentWatchList?.linkedIncidentIds?.length
+  );
   const linkedOpenEscalations = useMemo(() => {
     if (!detail || !currentWatchList?.linkedIncidentIds?.length) return [];
     const linkedIncidentIdSet = new Set(currentWatchList.linkedIncidentIds);
@@ -241,7 +255,7 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
         reasonText: watchListDraft.reasonText,
         source: watchListDraft.source,
         reviewDueAt: reviewDueAt ? reviewDueAt.getTime() : null,
-        restrictionFlags: watchListDraft.restrictionFlags,
+        restrictionFlags: action === 'apply' ? defaultWatchListRestrictionFlags : watchListDraft.restrictionFlags,
         linkedIncidentIds: detail.escalations.filter((escalation) => escalation.openCareEscalation).map((escalation) => escalation.id),
       };
 
@@ -343,220 +357,104 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex items-center gap-3 text-rose-300">
                     <ShieldAlert className="h-5 w-5" />
-                    <span className="text-sm font-medium">Operational Watch List</span>
+                    <span className="text-sm font-medium">Watch List</span>
                   </div>
                   <span className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${watchListStatusClassName(currentWatchList)}`}>
-                    {watchListStatusLabel(currentWatchList)}
+                    {currentWatchList?.watchListActive ? 'On' : 'Off'}
                   </span>
                 </div>
                 <p className="mt-3 text-sm text-zinc-400">
-                  Escalations stay visible as care workflow records. Request queues a review only, apply activates restrictions, and clear removes them.
+                  Use this only if this athlete should be taken out of the normal Pulse Check flow.
                 </p>
-                <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Current State</div>
+
+                <div className="mt-4 rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                  <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Current status</div>
+                  <div className="mt-2 text-lg font-medium text-white">
+                    {currentWatchList?.watchListActive ? 'On watch list' : 'Not on watch list'}
+                  </div>
+                  <div className="mt-2 text-sm text-zinc-400">
+                    {currentWatchList?.watchListActive
+                      ? 'Standard watch-list protections are active for this athlete.'
+                      : 'This athlete is currently in the normal Pulse Check experience.'}
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
+                  <span className={`rounded-full border px-2 py-1 ${currentWatchList?.watchListActive ? 'border-rose-400/25 bg-rose-400/10 text-rose-100' : 'border-white/10 bg-white/5 text-zinc-300'}`}>
+                    Surveys {currentWatchList?.watchListActive ? 'blocked' : 'available'}
+                  </span>
+                  <span className={`rounded-full border px-2 py-1 ${currentWatchList?.watchListActive ? 'border-rose-400/25 bg-rose-400/10 text-rose-100' : 'border-white/10 bg-white/5 text-zinc-300'}`}>
+                    Assignments {currentWatchList?.watchListActive ? 'blocked' : 'available'}
+                  </span>
+                  <span className={`rounded-full border px-2 py-1 ${currentWatchList?.watchListActive ? 'border-rose-400/25 bg-rose-400/10 text-rose-100' : 'border-white/10 bg-white/5 text-zinc-300'}`}>
+                    Nudges {currentWatchList?.watchListActive ? 'blocked' : 'available'}
+                  </span>
+                  <span className={`rounded-full border px-2 py-1 ${currentWatchList?.watchListActive ? 'border-rose-400/25 bg-rose-400/10 text-rose-100' : 'border-white/10 bg-white/5 text-zinc-300'}`}>
+                    Adherence {currentWatchList?.watchListActive ? 'excluded' : 'counting normally'}
+                  </span>
+                  <span className={`rounded-full border px-2 py-1 ${currentWatchList?.watchListActive ? 'border-rose-400/25 bg-rose-400/10 text-rose-100' : 'border-white/10 bg-white/5 text-zinc-300'}`}>
+                    Manual hold {currentWatchList?.watchListActive ? 'on' : 'off'}
+                  </span>
+                </div>
+
+                <div className="mt-4 text-sm text-zinc-300">
+                  Linked care records: <span className="font-medium text-white">{currentWatchList?.linkedIncidentIds?.length || 0}</span>
+                </div>
+                {isReviewDueOverdue ? (
+                  <div className="mt-3 inline-flex rounded-full border border-rose-400/25 bg-rose-400/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-rose-100">
+                    Follow-up overdue
+                  </div>
+                ) : null}
+
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void submitWatchListAction(currentWatchList?.watchListActive ? 'clear' : 'apply')}
+                    disabled={savingWatchListAction !== null}
+                    className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition disabled:opacity-60 ${
+                      currentWatchList?.watchListActive
+                        ? 'border-white/10 bg-white/5 text-white hover:bg-white/10'
+                        : 'border-rose-400/30 bg-rose-400/10 text-rose-100 hover:bg-rose-400/15'
+                    }`}
+                  >
+                    {currentWatchList?.watchListActive
+                      ? savingWatchListAction === 'clear'
+                        ? 'Turning off...'
+                        : 'Turn watch list off'
+                      : savingWatchListAction === 'apply'
+                        ? 'Turning on...'
+                        : 'Turn watch list on'}
+                  </button>
+                  <div className="max-w-xl text-sm text-zinc-400">
+                    {currentWatchList?.watchListActive
+                      ? 'Turning this off returns the athlete to the normal Pulse Check flow.'
+                      : 'Turning this on applies the standard watch-list protections for this athlete.'}
+                  </div>
+                </div>
+
+                {hasWatchListHistory || linkedOpenEscalations.length > 0 ? (
+                  <div className="mt-5 rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Recent activity</div>
                     <div className="mt-3 space-y-2 text-sm text-zinc-300">
-                      <div>Base status: <span className="font-medium text-white">{currentWatchList?.status || 'normal'}</span></div>
-                      <div>Lifecycle: <span className="font-medium text-white">{currentWatchList?.lifecycleStatus || 'none'}</span></div>
-                      <div>Reason code: <span className="font-medium text-white">{currentWatchList?.reasonCode || 'other'}</span></div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span>Review due:</span>
-                        <span className="font-medium text-white">{currentWatchList?.reviewDueAt ? formatShortDate(currentWatchList.reviewDueAt) : 'Not scheduled'}</span>
-                        {isReviewDueOverdue ? (
-                          <span className="rounded-full border border-rose-400/25 bg-rose-400/10 px-2 py-1 text-[11px] uppercase tracking-[0.18em] text-rose-100">
-                            Overdue
+                      <div>Turned on: <span className="font-medium text-white">{currentWatchList?.appliedAt ? formatTimestamp(currentWatchList.appliedAt) : 'Not recorded'}</span></div>
+                      <div>Turned off: <span className="font-medium text-white">{currentWatchList?.clearedAt ? formatTimestamp(currentWatchList.clearedAt) : 'Not recorded'}</span></div>
+                    </div>
+                    {linkedOpenEscalations.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                        {linkedOpenEscalations.slice(0, 3).map((escalation) => (
+                          <span key={escalation.id} className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-zinc-300">
+                            {escalationRecordTitle(escalation)}
+                          </span>
+                        ))}
+                        {linkedOpenEscalations.length > 3 ? (
+                          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-zinc-300">
+                            +{linkedOpenEscalations.length - 3} more
                           </span>
                         ) : null}
                       </div>
-                      <div>Linked incidents: <span className="font-medium text-white">{currentWatchList?.linkedIncidentIds?.length || 0}</span></div>
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
-                      <span className={`rounded-full border px-2 py-1 ${currentWatchList?.restrictionFlags?.suppressSurveys ? 'border-rose-400/25 bg-rose-400/10 text-rose-100' : 'border-white/10 bg-white/5 text-zinc-300'}`}>
-                        Surveys {currentWatchList?.restrictionFlags?.suppressSurveys ? 'suppressed' : 'open'}
-                      </span>
-                      <span className={`rounded-full border px-2 py-1 ${currentWatchList?.restrictionFlags?.suppressAssignments ? 'border-rose-400/25 bg-rose-400/10 text-rose-100' : 'border-white/10 bg-white/5 text-zinc-300'}`}>
-                        Assignments {currentWatchList?.restrictionFlags?.suppressAssignments ? 'suppressed' : 'open'}
-                      </span>
-                      <span className={`rounded-full border px-2 py-1 ${currentWatchList?.restrictionFlags?.suppressNudges ? 'border-rose-400/25 bg-rose-400/10 text-rose-100' : 'border-white/10 bg-white/5 text-zinc-300'}`}>
-                        Nudges {currentWatchList?.restrictionFlags?.suppressNudges ? 'suppressed' : 'open'}
-                      </span>
-                      <span className={`rounded-full border px-2 py-1 ${currentWatchList?.restrictionFlags?.excludeFromAdherence ? 'border-rose-400/25 bg-rose-400/10 text-rose-100' : 'border-white/10 bg-white/5 text-zinc-300'}`}>
-                        Adherence {currentWatchList?.restrictionFlags?.excludeFromAdherence ? 'excluded' : 'included'}
-                      </span>
-                      <span className={`rounded-full border px-2 py-1 ${currentWatchList?.restrictionFlags?.manualHold ? 'border-rose-400/25 bg-rose-400/10 text-rose-100' : 'border-white/10 bg-white/5 text-zinc-300'}`}>
-                        Manual hold {currentWatchList?.restrictionFlags?.manualHold ? 'on' : 'off'}
-                      </span>
-                    </div>
-                    <div className="mt-4 rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Lifecycle audit</div>
-                      <div className="mt-3 space-y-3 text-sm text-zinc-300">
-                        <div>
-                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Requested</div>
-                          <div className="mt-1 font-medium text-white">
-                            {currentWatchList?.requestedAt ? formatTimestamp(currentWatchList.requestedAt) : 'Not requested'}
-                          </div>
-                          <div className="mt-1 text-xs text-zinc-500">
-                            {currentWatchList?.requestedByEmail || currentWatchList?.requestedByUserId || 'No requester recorded'}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Applied</div>
-                          <div className="mt-1 font-medium text-white">
-                            {currentWatchList?.appliedAt ? formatTimestamp(currentWatchList.appliedAt) : 'Not applied'}
-                          </div>
-                          <div className="mt-1 text-xs text-zinc-500">
-                            {currentWatchList?.appliedByEmail || currentWatchList?.appliedByUserId || 'No applier recorded'}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Cleared</div>
-                          <div className="mt-1 font-medium text-white">
-                            {currentWatchList?.clearedAt ? formatTimestamp(currentWatchList.clearedAt) : 'Not cleared'}
-                          </div>
-                          <div className="mt-1 text-xs text-zinc-500">
-                            {currentWatchList?.clearedByEmail || currentWatchList?.clearedByUserId || 'No clearer recorded'}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-4 rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Linked incidents</div>
-                      <div className="mt-2 text-sm text-zinc-300">
-                        {currentWatchList?.linkedIncidentIds?.length
-                          ? `${currentWatchList.linkedIncidentIds.length} linked incident${currentWatchList.linkedIncidentIds.length === 1 ? '' : 's'} recorded.`
-                          : 'No linked incidents have been recorded yet.'}
-                      </div>
-                          {linkedOpenEscalations.length > 0 ? (
-                            <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                              {linkedOpenEscalations.slice(0, 3).map((escalation) => (
-                                <span key={escalation.id} className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-zinc-300">
-                              {escalationRecordTitle(escalation)}
-                                </span>
-                              ))}
-                          {linkedOpenEscalations.length > 3 ? (
-                            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-zinc-300">
-                              +{linkedOpenEscalations.length - 3} more
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
+                    ) : null}
                   </div>
-                  <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Watch-list request / apply draft</div>
-                    <div className="mt-2 text-sm text-zinc-400">
-                      Request records a review item only. Apply turns the selected restrictions on. Clear removes the active restriction state.
-                    </div>
-                    <div className="mt-3 space-y-3">
-                      <label className="block text-sm text-zinc-300">
-                        Reason code
-                        <select
-                          value={watchListDraft.reasonCode}
-                          onChange={(event) => setWatchListDraft((current) => ({ ...current, reasonCode: event.target.value }))}
-                          className="mt-2 w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
-                        >
-                          <option value="clinical_review_pending">Clinical review pending</option>
-                          <option value="manual_safety_hold">Manual safety hold</option>
-                          <option value="temporary_restriction">Temporary restriction</option>
-                          <option value="care_team_requested_pause">Care team requested pause</option>
-                          <option value="other">Other</option>
-                        </select>
-                      </label>
-                      <label className="block text-sm text-zinc-300">
-                        Source
-                        <select
-                          value={watchListDraft.source}
-                          onChange={(event) =>
-                            setWatchListDraft((current) => ({
-                              ...current,
-                              source: event.target.value as WatchListDraft['source'],
-                            }))
-                          }
-                          className="mt-2 w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
-                        >
-                          <option value="clinician">Clinician</option>
-                          <option value="staff">Staff</option>
-                          <option value="system">System</option>
-                        </select>
-                      </label>
-                      <label className="block text-sm text-zinc-300">
-                        Review due date
-                        <input
-                          type="date"
-                          value={watchListDraft.reviewDueAt}
-                          onChange={(event) => setWatchListDraft((current) => ({ ...current, reviewDueAt: event.target.value }))}
-                          className="mt-2 w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
-                        />
-                        <div className="mt-1 text-xs text-zinc-500">Follow-up date only. It does not auto-clear or auto-suppress anything.</div>
-                      </label>
-                      <label className="block text-sm text-zinc-300">
-                        Reason note
-                        <textarea
-                          value={watchListDraft.reasonText}
-                          onChange={(event) => setWatchListDraft((current) => ({ ...current, reasonText: event.target.value }))}
-                          rows={4}
-                          className="mt-2 w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
-                          placeholder="Optional context for the review and restriction decision."
-                        />
-                      </label>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {[
-                    ['suppressSurveys', 'Suppress surveys'],
-                    ['suppressAssignments', 'Suppress assignments'],
-                    ['suppressNudges', 'Suppress nudges'],
-                    ['excludeFromAdherence', 'Exclude from adherence'],
-                    ['manualHold', 'Manual hold'],
-                  ].map(([key, label]) => (
-                    <label key={key} className="rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-300">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(watchListDraft.restrictionFlags[key as keyof WatchListDraft['restrictionFlags']])}
-                          onChange={(event) =>
-                            setWatchListDraft((current) => ({
-                              ...current,
-                              restrictionFlags: {
-                                ...current.restrictionFlags,
-                                [key]: event.target.checked,
-                              },
-                            }))
-                          }
-                          className="h-4 w-4 rounded border-white/20 bg-[#0b0f17] text-cyan-400"
-                        />
-                        <span>{label}</span>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void submitWatchListAction('request')}
-                    disabled={savingWatchListAction !== null}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100 transition hover:bg-amber-400/15 disabled:opacity-60"
-                  >
-                    {savingWatchListAction === 'request' ? 'Requesting...' : 'Request review'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void submitWatchListAction('apply')}
-                    disabled={savingWatchListAction !== null}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100 transition hover:bg-rose-400/15 disabled:opacity-60"
-                  >
-                    {savingWatchListAction === 'apply' ? 'Applying...' : 'Apply restrictions'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void submitWatchListAction('clear')}
-                    disabled={savingWatchListAction !== null}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10 disabled:opacity-60"
-                  >
-                    {savingWatchListAction === 'clear' ? 'Clearing...' : 'Clear restrictions'}
-                  </button>
-                </div>
+                ) : null}
               </div>
 
               <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
