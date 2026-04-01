@@ -1,5 +1,8 @@
 import { Handler } from '@netlify/functions';
 
+const OPENAI_MODEL = process.env.OPENAI_LEGAL_DOCUMENT_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const OPENAI_TIMEOUT_MS = 22_000;
+
 // Document type templates and system prompts
 const DOCUMENT_TEMPLATES: Record<string, { systemPrompt: string; defaultTitle: string }> = {
   nda: {
@@ -266,81 +269,120 @@ ${bulletFormattingRules}
 
 The document should be ready to print as a professional document.`;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${openaiApiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: `${template.systemPrompt}\n\n${formattingInstructions}${preserveVerbiage}`
-          },
-          {
-            role: 'user',
-            content: `Please generate a ${template.defaultTitle} based on the following requirements and details:
+    const abortController = new AbortController();
+    const timeout = setTimeout(() => abortController.abort(), OPENAI_TIMEOUT_MS);
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${openaiApiKey}`
+        },
+        body: JSON.stringify({
+          model: OPENAI_MODEL,
+          messages: [
+            {
+              role: 'system',
+              content: `${template.systemPrompt}\n\n${formattingInstructions}${preserveVerbiage}`
+            },
+            {
+              role: 'user',
+              content: `Please generate a ${template.defaultTitle} based on the following requirements and details:
 
 ${prompt}
 
 Generate a complete, professionally formatted legal document.`
+            }
+          ],
+          temperature: 0.2,
+          max_tokens: 2800
+        }),
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        let errorDetail = '';
+        let errorType = '';
+
+        if (contentType.includes('application/json')) {
+          try {
+            const errorData = await response.json();
+            errorDetail = errorData?.error?.message || JSON.stringify(errorData);
+            errorType = errorData?.error?.type || errorData?.error?.code || '';
+          } catch {
+            errorDetail = 'OpenAI API returned an unreadable error response.';
           }
-        ],
-        temperature: 0.3,
-        max_tokens: 4000
-      })
-    });
-
-    if (!response.ok) {
-      const contentType = response.headers.get('content-type') || '';
-      let errorDetail = '';
-      if (contentType.includes('application/json')) {
-        try {
-          const errorData = await response.json();
-          errorDetail = errorData?.error?.message || JSON.stringify(errorData);
-        } catch (e) {
-          errorDetail = 'OpenAI API returned an unreadable error response.';
+        } else {
+          const text = await response.text();
+          errorDetail = text.substring(0, 500);
         }
-      } else {
-        const text = await response.text();
-        errorDetail = text.substring(0, 500);
+
+        console.error('[generate-legal-document] OpenAI API error:', errorDetail);
+
+        if (response.status === 429 || errorType === 'rate_limit_exceeded' || errorType === 'insufficient_quota') {
+          return {
+            statusCode: 429,
+            headers,
+            body: JSON.stringify({
+              error: 'OpenAI rate limit or quota issue while generating the document. Please wait a moment and try again.'
+            })
+          };
+        }
+
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({
+            error: errorDetail ? `Failed to generate document from AI: ${errorDetail}` : 'Failed to generate document from AI'
+          })
+        };
       }
-      console.error('[generate-legal-document] OpenAI API error:', errorDetail);
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to generate document from AI' }) };
-    }
 
-    const data = await response.json();
-    const generatedContent = data?.choices?.[0]?.message?.content;
+      const data = await response.json();
+      const generatedContent = data?.choices?.[0]?.message?.content;
 
-    if (!generatedContent) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'No content generated' }) };
-    }
-
-    // Extract title from the generated content (first line or use default)
-    const lines = generatedContent.split('\n').filter((line: string) => line.trim());
-    let title = template.defaultTitle;
-
-    // Try to extract title from first line if it looks like a title
-    if (lines[0] && !lines[0].includes('EFFECTIVE DATE') && !lines[0].toLowerCase().startsWith('this')) {
-      const potentialTitle = lines[0].replace(/^#+\s*/, '').replace(/\*+/g, '').trim();
-      if (potentialTitle.length < 100) {
-        title = potentialTitle;
+      if (!generatedContent) {
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'No content generated' }) };
       }
-    }
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        success: true,
-        content: generatedContent,
-        title,
-        documentId
-      })
-    };
+      // Extract title from the generated content (first line or use default)
+      const lines = generatedContent.split('\n').filter((line: string) => line.trim());
+      let title = template.defaultTitle;
+
+      // Try to extract title from first line if it looks like a title
+      if (lines[0] && !lines[0].includes('EFFECTIVE DATE') && !lines[0].toLowerCase().startsWith('this')) {
+        const potentialTitle = lines[0].replace(/^#+\s*/, '').replace(/\*+/g, '').trim();
+        if (potentialTitle.length < 100) {
+          title = potentialTitle;
+        }
+      }
+
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          content: generatedContent,
+          title,
+          documentId
+        })
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return {
+        statusCode: 504,
+        headers,
+        body: JSON.stringify({
+          error: 'Document generation timed out while waiting on OpenAI. Try again or shorten the prompt.'
+        })
+      };
+    }
+
     console.error('[generate-legal-document] Error:', error);
     return {
       statusCode: 500,

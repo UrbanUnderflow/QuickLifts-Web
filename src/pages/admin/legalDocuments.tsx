@@ -65,7 +65,7 @@ interface LegalDocument {
   companyName?: string;
   createdAt: Timestamp | Date;
   updatedAt?: Timestamp | Date;
-  status: 'generating' | 'completed' | 'error';
+  status: 'generating' | 'completed' | 'error' | 'failed';
   errorMessage?: string;
   revisionHistory?: { prompt: string; timestamp: Timestamp | Date }[];
   // Signing-related fields
@@ -229,12 +229,16 @@ const formatDate = (date: Timestamp | Date | undefined): string => {
   });
 };
 
+const isDocumentGenerationTimeout = (statusCode: number): boolean =>
+  statusCode === 502 || statusCode === 504 || statusCode === 524;
+
 // Status badge component
 const StatusBadge: React.FC<{ status: LegalDocument['status'] }> = ({ status }) => {
   const configs = {
     completed: { bg: 'bg-green-900/30', text: 'text-green-400', border: 'border-green-800', icon: CheckCircle },
     generating: { bg: 'bg-yellow-900/30', text: 'text-yellow-400', border: 'border-yellow-800', icon: Loader2 },
     error: { bg: 'bg-red-900/30', text: 'text-red-400', border: 'border-red-800', icon: AlertCircle },
+    failed: { bg: 'bg-red-900/30', text: 'text-red-400', border: 'border-red-800', icon: AlertCircle },
   };
   const config = configs[status] || configs.generating;
   const Icon = config.icon;
@@ -612,14 +616,14 @@ const LegalDocumentsAdmin: React.FC = () => {
         result = await response.json();
       } catch {
         // 502/timeout often returns HTML or empty body
-        if (response.status === 502) {
+        if (isDocumentGenerationTimeout(response.status)) {
           throw new Error('Document generation timed out. Try again or use a shorter prompt.');
         }
         throw new Error('Failed to generate document');
       }
 
       if (!response.ok) {
-        if (response.status === 502) {
+        if (isDocumentGenerationTimeout(response.status)) {
           throw new Error('Document generation timed out. Try again or use a shorter prompt.');
         }
         throw new Error(result.error || 'Failed to generate document');
@@ -638,11 +642,16 @@ const LegalDocumentsAdmin: React.FC = () => {
       loadDocuments();
     } catch (error) {
       console.error('Error generating document:', error);
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to generate document' });
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate document';
+      setMessage({ type: 'error', text: errorMessage });
       // Mark placeholder doc as failed so it doesn't stay "generating"
       if (docRef) {
         try {
-          await updateDoc(doc(db, 'legal-documents', docRef.id), { status: 'failed' });
+          await updateDoc(doc(db, 'legal-documents', docRef.id), {
+            status: 'error',
+            errorMessage,
+            updatedAt: serverTimestamp(),
+          });
         } catch (updateErr) {
           console.warn('Could not update document status to failed:', updateErr);
         }
@@ -3197,7 +3206,7 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                       )}
 
                       {/* Error Message */}
-                      {document.status === 'error' && document.errorMessage && (
+                      {(document.status === 'error' || document.status === 'failed') && document.errorMessage && (
                         <div className="mt-2 p-3 bg-red-900/20 border border-red-800 rounded-lg text-sm text-red-400">
                           {document.errorMessage}
                         </div>

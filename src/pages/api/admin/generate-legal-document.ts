@@ -1,5 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+const OPENAI_MODEL = process.env.OPENAI_LEGAL_DOCUMENT_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const OPENAI_TIMEOUT_MS = 22_000;
+
 // Document type templates and system prompts
 const DOCUMENT_TEMPLATES: Record<string, { systemPrompt: string; defaultTitle: string }> = {
   'nda': {
@@ -239,6 +242,8 @@ export default async function handler(
 
   try {
     const wantsSignature = Boolean(requiresSignature);
+    const abortController = new AbortController();
+    const timeout = setTimeout(() => abortController.abort(), OPENAI_TIMEOUT_MS);
 
     // Universal formatting rules for proper markdown rendering
     const bulletFormattingRules = `
@@ -282,66 +287,87 @@ ${bulletFormattingRules}
 
 The document should be ready to print as a professional document.`;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openaiApiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: `${template.systemPrompt}\n\n${formattingInstructions}${preserveVerbiage}`
-          },
-          {
-            role: 'user',
-            content: `Please generate a ${template.defaultTitle} based on the following requirements and details:
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openaiApiKey}`
+        },
+        body: JSON.stringify({
+          model: OPENAI_MODEL,
+          messages: [
+            {
+              role: 'system',
+              content: `${template.systemPrompt}\n\n${formattingInstructions}${preserveVerbiage}`
+            },
+            {
+              role: 'user',
+              content: `Please generate a ${template.defaultTitle} based on the following requirements and details:
 
 ${prompt}
 
 Generate a complete, professionally formatted legal document.`
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 4000
-      })
-    });
+            }
+          ],
+          temperature: 0.2,
+          max_tokens: 2800
+        }),
+        signal: abortController.signal,
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('OpenAI API error:', errorData);
-      return res.status(500).json({ error: 'Failed to generate document from AI' });
-    }
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+        console.error('OpenAI API error:', errorData);
 
-    const data = await response.json();
-    const generatedContent = data.choices[0]?.message?.content;
+        const errorType = errorData?.error?.type || errorData?.error?.code || '';
+        const errorMessage = errorData?.error?.message || 'Failed to generate document from AI';
 
-    if (!generatedContent) {
-      return res.status(500).json({ error: 'No content generated' });
-    }
+        if (response.status === 429 || errorType === 'rate_limit_exceeded' || errorType === 'insufficient_quota') {
+          return res.status(429).json({
+            error: 'OpenAI rate limit or quota issue while generating the document. Please wait a moment and try again.'
+          });
+        }
 
-    // Extract title from the generated content (first line or use default)
-    const lines = generatedContent.split('\n').filter((line: string) => line.trim());
-    let title = template.defaultTitle;
-
-    // Try to extract title from first line if it looks like a title
-    if (lines[0] && !lines[0].includes('EFFECTIVE DATE') && !lines[0].toLowerCase().startsWith('this')) {
-      const potentialTitle = lines[0].replace(/^#+\s*/, '').replace(/\*+/g, '').trim();
-      if (potentialTitle.length < 100) {
-        title = potentialTitle;
+        return res.status(500).json({ error: `Failed to generate document from AI: ${errorMessage}` });
       }
-    }
 
-    return res.status(200).json({
-      success: true,
-      content: generatedContent,
-      title: title,
-      documentId: documentId
-    });
+      const data = await response.json();
+      const generatedContent = data.choices[0]?.message?.content;
+
+      if (!generatedContent) {
+        return res.status(500).json({ error: 'No content generated' });
+      }
+
+      // Extract title from the generated content (first line or use default)
+      const lines = generatedContent.split('\n').filter((line: string) => line.trim());
+      let title = template.defaultTitle;
+
+      // Try to extract title from first line if it looks like a title
+      if (lines[0] && !lines[0].includes('EFFECTIVE DATE') && !lines[0].toLowerCase().startsWith('this')) {
+        const potentialTitle = lines[0].replace(/^#+\s*/, '').replace(/\*+/g, '').trim();
+        if (potentialTitle.length < 100) {
+          title = potentialTitle;
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        content: generatedContent,
+        title: title,
+        documentId: documentId
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return res.status(504).json({
+        error: 'Document generation timed out while waiting on OpenAI. Try again or shorten the prompt.'
+      });
+    }
+
     console.error('Error generating legal document:', error);
     return res.status(500).json({
       error: error instanceof Error ? error.message : 'Failed to generate document'
