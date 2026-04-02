@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut, type User as FirebaseAuthUser } from 'firebase/auth';
-import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, LogIn, LogOut, MailPlus, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, Download, Loader2, LogIn, LogOut, MailPlus, ShieldCheck, Smartphone, UserPlus, Users } from 'lucide-react';
 import { getFirestoreDocFallback } from '../../../lib/server-firestore-fallback';
 import { auth } from '../../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
@@ -13,9 +13,12 @@ import { claimUsername, generateUsernameFromEmail, isUsernameAvailable, isValidU
 import { SubscriptionPlatform, SubscriptionType, UserLevel, userService } from '../../../api/firebase/user';
 import { resolvePulseCheckInvitePreviewImage } from '../../../utils/pulsecheckInviteLinks';
 
+const PULSECHECK_IOS_APP_STORE_URL = 'https://apps.apple.com/by/app/pulsecheck-mindset-coaching/id6747253393';
+
 type TeamInvitePageProps = {
   invite: {
     token: string;
+    activationUrl: string;
     organizationId: string;
     teamId: string;
     pilotId: string;
@@ -84,6 +87,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   } | null>(null);
   const [redirectingAfterRedeem, setRedirectingAfterRedeem] = useState(false);
   const [athleteCompletionMode, setAthleteCompletionMode] = useState<AthleteCompletionMode>('existing-account');
+  const [showWebOnboarding, setShowWebOnboarding] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
@@ -94,9 +98,42 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!router.isReady) return;
+    setShowWebOnboarding(router.query.web === '1');
+  }, [router.isReady, router.query.web]);
+
   const normalizedTargetEmail = useMemo(() => invite.targetEmail.trim().toLowerCase(), [invite.targetEmail]);
   const normalizedAuthEmail = useMemo(() => authUser?.email?.trim().toLowerCase() || '', [authUser]);
   const authEmailMatchesInvite = !normalizedTargetEmail || !normalizedAuthEmail || normalizedTargetEmail === normalizedAuthEmail;
+  const shouldPreferAppDownload = invite.teamMembershipRole === 'athlete' && Boolean(invite.pilotId || invite.cohortId);
+  const shouldShowDownloadFirst = shouldPreferAppDownload && !showWebOnboarding && !redeemedState;
+  const inviteScopeLabel = invite.pilotName || invite.teamName;
+  const inviteHeadline = shouldPreferAppDownload
+    ? `Download the Pulse Check app to join ${inviteScopeLabel}.`
+    : `Join ${invite.teamName}`;
+
+  const updateWebOnboardingPreference = (nextValue: boolean) => {
+    setShowWebOnboarding(nextValue);
+
+    const nextQuery = { ...router.query };
+    if (nextValue) {
+      nextQuery.web = '1';
+    } else {
+      delete nextQuery.web;
+    }
+
+    router.replace(
+      {
+        pathname: router.pathname,
+        query: nextQuery,
+      },
+      undefined,
+      { shallow: true }
+    ).catch((error) => {
+      console.error('[pulsecheck-team-invite] Failed to sync onboarding preference with query params:', error);
+    });
+  };
 
   const createTeamInviteUser = async (user: FirebaseAuthUser, username: string) => {
     const normalizedName = normalizeUsername(username);
@@ -367,59 +404,73 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
 
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">PulseCheck Team Invite</p>
-                <h1 className="text-3xl font-semibold text-white">Join {invite.teamName}</h1>
+                <h1 className="text-3xl font-semibold text-white">{inviteHeadline}</h1>
                 <p className="max-w-2xl text-sm leading-7 text-zinc-300">
-                  This invite grants <span className="font-medium text-white">{roleLabel[invite.teamMembershipRole]}</span> access
-                  inside <span className="font-medium text-white">{invite.organizationName}</span>.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-cyan-200" />
-                    <p className="text-sm font-semibold text-white">Role</p>
-                  </div>
-                  <p className="mt-3 text-sm text-zinc-300">{roleLabel[invite.teamMembershipRole]}</p>
-                </div>
-
-                <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                  <div className="flex items-center gap-2">
-                    <MailPlus className="h-4 w-4 text-cyan-200" />
-                    <p className="text-sm font-semibold text-white">Target Email</p>
-                  </div>
-                  <p className="mt-3 text-sm text-zinc-300">{invite.targetEmail || 'Open invite link'}</p>
-                </div>
-              </div>
-
-              {invite.invitedTitle ? (
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 text-sm leading-7 text-zinc-200">
-                  Invited title: <span className="font-medium text-white">{invite.invitedTitle}</span>
-                </div>
-              ) : null}
-
-              {invite.cohortId ? (
-                <div className="rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] p-4 text-sm leading-7 text-zinc-200">
-                  This athlete invite is linked to{' '}
-                  <span className="font-medium text-white">{invite.cohortName || 'a cohort'}</span>
-                  {invite.pilotName ? (
+                  {shouldPreferAppDownload ? (
                     <>
-                      {' '}inside <span className="font-medium text-white">{invite.pilotName}</span>
+                      Pulse Check helps athletes build readiness, mindset, and performance habits with guided check-ins and coaching.
+                      Download the iPhone app to join <span className="font-medium text-white">{invite.teamName}</span> inside{' '}
+                      <span className="font-medium text-white">{invite.organizationName}</span>.
                     </>
-                  ) : null}
-                  . Redeeming this link joins the athlete to the team and preserves that cohort assignment automatically.
-                </div>
-              ) : null}
-
-              <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-400">
-                <p className="font-medium text-white">What happens on redemption</p>
-                <p className="mt-2 leading-7">
-                  Your team membership is created and this invite is marked redeemed.
-                  {invite.cohortId
-                    ? ' Because this link is cohort-linked, the athlete is attached directly to that pilot scope and the next-steps page explains whether onboarding is needed.'
-                    : ' Team admins continue into setup, while other roles land in the shared team workspace.'}
+                  ) : (
+                    <>
+                      This invite grants <span className="font-medium text-white">{roleLabel[invite.teamMembershipRole]}</span> access
+                      inside <span className="font-medium text-white">{invite.organizationName}</span>.
+                    </>
+                  )}
                 </p>
               </div>
+
+              {shouldPreferAppDownload ? null : (
+                <>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4 text-cyan-200" />
+                        <p className="text-sm font-semibold text-white">Role</p>
+                      </div>
+                      <p className="mt-3 text-sm text-zinc-300">{roleLabel[invite.teamMembershipRole]}</p>
+                    </div>
+
+                    <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                      <div className="flex items-center gap-2">
+                        <MailPlus className="h-4 w-4 text-cyan-200" />
+                        <p className="text-sm font-semibold text-white">Target Email</p>
+                      </div>
+                      <p className="mt-3 text-sm text-zinc-300">{invite.targetEmail || 'Open invite link'}</p>
+                    </div>
+                  </div>
+
+                  {invite.invitedTitle ? (
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 text-sm leading-7 text-zinc-200">
+                      Invited title: <span className="font-medium text-white">{invite.invitedTitle}</span>
+                    </div>
+                  ) : null}
+
+                  {invite.cohortId ? (
+                    <div className="rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] p-4 text-sm leading-7 text-zinc-200">
+                      This athlete invite is linked to{' '}
+                      <span className="font-medium text-white">{invite.cohortName || 'a cohort'}</span>
+                      {invite.pilotName ? (
+                        <>
+                          {' '}inside <span className="font-medium text-white">{invite.pilotName}</span>
+                        </>
+                      ) : null}
+                      . Redeeming this link joins the athlete to the team and preserves that cohort assignment automatically.
+                    </div>
+                  ) : null}
+
+                  <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-400">
+                    <p className="font-medium text-white">What happens on redemption</p>
+                    <p className="mt-2 leading-7">
+                      Your team membership is created and this invite is marked redeemed.
+                      {invite.cohortId
+                        ? ' Because this link is cohort-linked, the athlete is attached directly to that pilot scope and the next-steps page explains whether onboarding is needed.'
+                        : ' Team admins continue into setup, while other roles land in the shared team workspace.'}
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -435,6 +486,17 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 <AlertTriangle className="mt-0.5 h-4 w-4" />
                 <span>{message.text}</span>
               </div>
+            ) : null}
+
+            {shouldPreferAppDownload && showWebOnboarding && !redeemedState ? (
+              <button
+                type="button"
+                onClick={() => updateWebOnboardingPreference(false)}
+                className="mb-5 inline-flex items-center gap-2 rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/15"
+              >
+                <Smartphone className="h-4 w-4" />
+                Prefer the iPhone app instead
+              </button>
             ) : null}
 
             {redeemedState ? (
@@ -469,6 +531,72 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     Back to PulseCheck
                   </Link>
                 </div>
+              </div>
+            ) : shouldShowDownloadFirst ? (
+              <div className="space-y-6">
+                <div className="inline-flex rounded-2xl border border-cyan-400/25 bg-cyan-400/10 p-3">
+                  <Smartphone className="h-6 w-6 text-cyan-200" />
+                </div>
+
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">iPhone-First Onboarding</p>
+                  <h2 className="mt-2 text-3xl font-semibold text-white">Download the app to join this pilot</h2>
+                  <p className="mt-3 text-sm leading-7 text-zinc-300">
+                    Download Pulse Check on iPhone, then sign in with{' '}
+                    <span className="font-medium text-white">{invite.targetEmail || 'your invited email'}</span> to continue into{' '}
+                    <span className="font-medium text-white">{inviteScopeLabel}</span>.
+                  </p>
+                </div>
+
+                <div className="rounded-3xl border border-cyan-400/15 bg-[linear-gradient(180deg,rgba(34,211,238,0.16),rgba(8,15,28,0.9))] p-5">
+                  <div className="space-y-3">
+                    <div className="text-sm font-semibold text-white">Recommended path</div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-200">
+                      Install the Pulse Check app, create your account with the invited email, then come back to this browser page and tap Join Now to finish entering the pilot in-app.
+                    </div>
+                    <a
+                      href={PULSECHECK_IOS_APP_STORE_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
+                    >
+                      <Download className="h-4 w-4" />
+                      Download the Pulse Check App
+                    </a>
+                    <a
+                      href={invite.activationUrl}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-300/35 bg-cyan-400/[0.12] px-4 py-3 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.18]"
+                    >
+                      Join Now
+                      <ArrowRight className="h-4 w-4" />
+                    </a>
+                    <p className="text-xs uppercase tracking-[0.16em] text-cyan-100/70">Available on iPhone</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-3">
+                  <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-300">
+                    1. Download the app on your iPhone.
+                  </div>
+                  <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-300">
+                    2. Sign in or create your account with the invited email.
+                  </div>
+                  <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-300">
+                    3. Come back to this browser page and tap Join Now to open the app and complete joining the pilot.
+                  </div>
+                  <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-300">
+                    4. If you do not have an iPhone device, use the web fallback below instead.
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => updateWebOnboardingPreference(true)}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
+                >
+                  I don&apos;t have an iPhone device
+                  <ArrowRight className="h-4 w-4" />
+                </button>
               </div>
             ) : !authReady ? (
               <div className="flex min-h-[420px] items-center justify-center">
@@ -725,6 +853,7 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
       props: {
         invite: {
           token,
+          activationUrl: String(invite.activationUrl || pageUrl),
           organizationId: String(invite.organizationId || ''),
           teamId: String(invite.teamId || ''),
           pilotId: String(invite.pilotId || ''),
