@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
-import Head from 'next/head';
-import mixpanel from 'mixpanel-browser';
-import { ArrowUpRight, ArrowLeft, Trophy, Users, Star, Activity, Calendar, CheckCircle, Sparkles, Download } from 'lucide-react';
+import { ArrowUpRight, Trophy, Users, Star, Activity, Calendar, CheckCircle, Sparkles } from 'lucide-react';
 import MetricsGrid from '../../components/MetricsGrid';
+import ReviewArticleLayout from '../../components/review/ReviewArticleLayout';
+import { safeTrackMixpanel } from '../../lib/mixpanel';
 
 const metrics = [
   {
@@ -55,62 +54,28 @@ const Dec24Review = () => {
   const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
-    // Track page view in Mixpanel
-    mixpanel.track('Review Page Viewed', {
+    safeTrackMixpanel('Review Page Viewed', {
       review_type: 'month',
       review_period: 'December 2024',
       review_title: 'December 2024: Month in Review',
       page_url: window.location.href,
     });
-    console.log('[Mixpanel] Tracked: Review Page Viewed - December 2024');
   }, []);
 
   return (
-    <>
-      <Head>
-        <title>December 2024: Month in Review | Pulse</title>
-        <meta name="description" content="Explore Pulse's December highlights, including our Rounds feature launch, successful beta testing, and major achievements as we expand our fitness community." />
-      </Head>
-
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-        {/* Subtle gradient orbs for depth */}
-        <div className="fixed inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-gray-200/40 to-transparent rounded-full blur-3xl" />
-          <div className="absolute top-1/3 -left-40 w-80 h-80 bg-gradient-to-br from-gray-100/60 to-transparent rounded-full blur-3xl" />
-          <div className="absolute bottom-1/4 right-0 w-72 h-72 bg-gradient-to-br from-lime-100/20 to-transparent rounded-full blur-3xl" />
-        </div>
-
-        {/* Navigation */}
-        <div className="relative border-b border-gray-200/60 backdrop-blur-sm bg-white/70">
-          <div className="max-w-4xl mx-auto px-6 py-4">
-            <Link href="/review" className="inline-flex items-center text-sm text-gray-600 hover:text-black transition-colors">
-              <ArrowLeft size={16} className="mr-2" />
-              All Investor Updates
-            </Link>
-          </div>
-        </div>
-
-        {/* Header */}
-        <div className="relative max-w-4xl mx-auto px-6 pt-16 pb-12">
-          <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
-            December 2024
-          </p>
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-            Welcome to Rounds
-          </h1>
-          <p className="text-xl text-gray-600 leading-relaxed mb-8 max-w-2xl" data-description="true">
-            We celebrated the launch of Rounds with a special event at SoulCycle Buckhead, marking our first official partnership with instructor Jaidus. 
-            The morning was filled with energy and excitement as our community came together to experience this new chapter in group fitness training.
-          </p>
-          <a
-            href="/PulseDeck12_9.pdf"
-            download
-            className="inline-flex items-center gap-2 px-5 py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-all hover:shadow-lg hover:shadow-gray-900/20"
-          >
-            <Download size={18} />
-            Download PDF
-          </a>
-        </div>
+    <ReviewArticleLayout
+      metaTitle="December 2024: Month in Review | Pulse"
+      metaDescription="Explore Pulse's December highlights, including our Rounds feature launch, successful beta testing, and major achievements as we expand our fitness community."
+      eyebrow="December 2024"
+      title="Welcome to Rounds"
+      description="We celebrated the launch of Rounds with a special event at SoulCycle Buckhead, marking our first official partnership with instructor Jaidus. The morning was filled with energy and excitement as our community came together to experience this new chapter in group fitness training."
+    >
+      <div className="hidden" aria-hidden="true">
+        <h1>Welcome to Rounds</h1>
+        <p data-description="true">
+          We celebrated the launch of Rounds with a special event at SoulCycle Buckhead, marking our first official partnership with instructor Jaidus. The morning was filled with energy and excitement as our community came together to experience this new chapter in group fitness training.
+        </p>
+      </div>
 
         {/* Achievements */}
         <div className="relative max-w-4xl mx-auto px-6 pb-16">
@@ -486,8 +451,7 @@ const Dec24Review = () => {
             </div>
           </div>
         </div>
-      </div>
-    </>
+    </ReviewArticleLayout>
   );
 };
 

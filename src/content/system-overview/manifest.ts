@@ -9,7 +9,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Pulse architecture, products, data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-03-30',
+  lastUpdated: '2026-04-01',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -99,6 +99,8 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-vision-pro-immersive-tests', label: 'Vision Pro - Immersive Tests', description: 'Spec stack for the football Vision Pro package, including immersive trial positioning, environment design, event schema, protocol rules, and pilot operations.' },
     { id: 'system-design-language', label: 'System Design & Language', description: 'Voice, copy posture, and human-centered UI rules for how Pulse speaks to users across products.' },
     { id: 'auntedna-integration-strategy', label: 'Integration Strategy', description: 'API layer, webhook contract, profile mirror model, and MCP positioning for the AuntEdna clinical bridge.' },
+    { id: 'auntedna-exhibit-a-data-architecture', label: 'Exhibit A - Data Architecture', description: 'Agreement-facing system-of-record boundary, minimum-necessary payload, limited reverse operational-status flow, and PHI handling rules for the AuntEdna bridge.' },
+    { id: 'auntedna-exhibit-b-performance-standards', label: 'Exhibit B - Performance Standards', description: 'Agreement-facing Tier-based response standards, PulseCheck uptime and handoff obligations, reporting cadence, and remediation mechanics for the AuntEdna partnership.' },
     { id: 'system-test-coverage', label: 'System Test Coverage', description: 'Handbook audit of full-system harness completeness across web, backend, mobile, and operational surfaces. This is a system-confidence estimate, not line coverage.' },
     { id: 'playwright-testing-strategy', label: 'Testing Strategy', description: 'Playwright harness model, suite inventory, run commands, and PulseCheck UI regression coverage.' },
     { id: 'android-testing-strategy', label: 'Android Testing Strategy', description: 'Native Android instrumentation baseline, dev-Firebase E2E contract, and namespaced cleanup policy.' },
@@ -167,6 +169,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       'Added the Shared Link Preview Strategy artifact covering crawler metadata fallbacks, protected-share guardrails, and the branded default-image recommendation.',
       'Added the Smart Routes v1 Architecture artifact covering provider boundaries, route scoring, Firestore objects, API contracts, and AI limits.',
       'Added the AuntEdna Integration Strategy artifact covering APIs, webhooks, MCP role, and the local clinician-profile mirror model.',
+      'Added AuntEdna Exhibit A and Exhibit B artifacts to the handbook, locking the agreement-facing data boundary, limited operational mirror rules, Tier-based response standards, and post-receipt accountability model into the System Overview.',
       'Added the Playwright Testing Strategy artifact covering the harness, auth capture flow, commands, environment controls, and PulseCheck suite coverage.',
       'Added Pulse Community Club Activation Architecture artifact for generic creator-club onboarding, introductions, and pairing.',
       'Replaced tab-driven architecture page with a full handbook structure and anchored navigation.',

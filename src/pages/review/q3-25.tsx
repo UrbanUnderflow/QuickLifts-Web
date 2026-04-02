@@ -1,10 +1,6 @@
 import React, { useEffect } from 'react';
-import Link from 'next/link';
-import Head from 'next/head';
-import mixpanel from 'mixpanel-browser';
 import { 
   ArrowUpRight, 
-  ArrowLeft, 
   Trophy, 
   Activity, 
   Target, 
@@ -14,10 +10,11 @@ import {
   Calendar,
   Lightbulb,
   Clock,
-  Rocket,
-  Download
+  Rocket
 } from 'lucide-react';
 import MetricsGrid from '../../components/MetricsGrid';
+import ReviewArticleLayout from '../../components/review/ReviewArticleLayout';
+import { safeTrackMixpanel } from '../../lib/mixpanel';
 
 // Q3 Overall Key Metrics
 const q3OverallMetrics = [
@@ -128,61 +125,28 @@ const nextQuarterPriorities = [
 
 const Q3Review2025 = () => {
   useEffect(() => {
-    // Track page view in Mixpanel
-    mixpanel.track('Review Page Viewed', {
+    safeTrackMixpanel('Review Page Viewed', {
       review_type: 'quarter',
       review_period: 'Q3 2025',
       review_title: 'Q3 2025: Lessons from the Long Round',
       page_url: window.location.href,
     });
-    console.log('[Mixpanel] Tracked: Review Page Viewed - Q3 2025');
   }, []);
 
   return (
-    <>
-      <Head>
-        <title>Q3 2025: Lessons from the Long Round | Pulse</title>
-        <meta name="description" content="Pulse Q3 2025: Morning Mobility completed. Key learnings on Round length, build time, and the path to AI-powered Round creation." />
-      </Head>
-
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-        {/* Subtle gradient orbs for depth */}
-        <div className="fixed inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-amber-200/30 to-transparent rounded-full blur-3xl" />
-          <div className="absolute top-1/3 -left-40 w-80 h-80 bg-gradient-to-br from-gray-100/60 to-transparent rounded-full blur-3xl" />
-          <div className="absolute bottom-1/4 right-0 w-72 h-72 bg-gradient-to-br from-orange-100/20 to-transparent rounded-full blur-3xl" />
-        </div>
-
-        {/* Navigation */}
-        <div className="relative border-b border-gray-200/60 backdrop-blur-sm bg-white/70">
-          <div className="max-w-4xl mx-auto px-6 py-4">
-            <Link href="/review" className="inline-flex items-center text-sm text-gray-600 hover:text-black transition-colors">
-              <ArrowLeft size={16} className="mr-2" />
-              All Investor Updates
-            </Link>
-          </div>
-        </div>
-
-        {/* Header */}
-        <div className="relative max-w-4xl mx-auto px-6 pt-16 pb-12">
-          <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
-            Q3 2025 • July - September
-          </p>
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-            Lessons from the Long Round
-          </h1>
-          <p className="text-xl text-gray-600 leading-relaxed mb-8 max-w-2xl" data-description="true">
-            AWS Bootcamp selected. Morning Mobility completed. 90 days taught us what works—now we're building smarter.
-          </p>
-          <a
-            href="/PulseDeck12_9.pdf"
-            download
-            className="inline-flex items-center gap-2 px-5 py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-all hover:shadow-lg hover:shadow-gray-900/20"
-          >
-            <Download size={18} />
-            Download PDF
-          </a>
-        </div>
+    <ReviewArticleLayout
+      metaTitle="Q3 2025: Lessons from the Long Round | Pulse"
+      metaDescription="Pulse Q3 2025: Morning Mobility completed. Key learnings on Round length, build time, and the path to AI-powered Round creation."
+      eyebrow="Q3 2025 • July - September"
+      title="Lessons from the Long Round"
+      description="AWS Bootcamp selected. Morning Mobility completed. 90 days taught us what works—now we're building smarter."
+    >
+      <div className="hidden" aria-hidden="true">
+        <h1>Lessons from the Long Round</h1>
+        <p data-description="true">
+          AWS Bootcamp selected. Morning Mobility completed. 90 days taught us what works—now we're building smarter.
+        </p>
+      </div>
 
         {/* AWS Bootcamp - Featured */}
         <div className="relative max-w-4xl mx-auto px-6 pb-16">
@@ -395,8 +359,7 @@ const Q3Review2025 = () => {
             </div>
           </div>
         </div>
-      </div>
-    </>
+    </ReviewArticleLayout>
   );
 };
 
