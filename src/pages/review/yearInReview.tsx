@@ -1,6 +1,4 @@
 import React, { useEffect } from 'react';
-import Link from 'next/link';
-import Head from 'next/head';
 import confetti from 'canvas-confetti';
 import { 
   Users, 
@@ -11,11 +9,10 @@ import {
   Rocket,
   Code,
   Target,
-  ArrowLeft,
   ArrowRight,
-  Sparkles,
-  Download
+  Sparkles
 } from 'lucide-react';
+import ReviewArticleLayout from '../../components/review/ReviewArticleLayout';
 
 const yearEndStats = [
   {
@@ -117,51 +114,19 @@ const YearInReview = () => {
   }, []);
 
   return (
-    <>
-      <Head>
-        <title>2024 Year in Review | Pulse</title>
-        <meta name="description" content="Pulse 2024 Year in Review - From beta testing to Rounds launch, a transformative year of building, learning, and growing together." />
-      </Head>
-      
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-        {/* Subtle gradient orbs for depth */}
-        <div className="fixed inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-gray-200/40 to-transparent rounded-full blur-3xl" />
-          <div className="absolute top-1/3 -left-40 w-80 h-80 bg-gradient-to-br from-gray-100/60 to-transparent rounded-full blur-3xl" />
-          <div className="absolute bottom-1/4 right-0 w-72 h-72 bg-gradient-to-br from-blue-100/20 to-transparent rounded-full blur-3xl" />
-        </div>
-
-        {/* Navigation */}
-        <div className="relative border-b border-gray-200/60 backdrop-blur-sm bg-white/70">
-          <div className="max-w-4xl mx-auto px-6 py-4">
-            <Link href="/review" className="inline-flex items-center text-sm text-gray-600 hover:text-black transition-colors">
-              <ArrowLeft size={16} className="mr-2" />
-              All Investor Updates
-            </Link>
-          </div>
-        </div>
-
-        {/* Header */}
-        <div className="relative max-w-4xl mx-auto px-6 pt-16 pb-12">
-          <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
-            Year in Review
-          </p>
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-            2024: A Year of Building and Growing
-          </h1>
-          <p className="text-xl text-gray-600 leading-relaxed mb-8 max-w-2xl" data-description="true">
-            From beta testing to our Rounds launch, 2024 was a transformative year 
-            for Pulse. Here's our journey of building, learning, and growing together.
-          </p>
-          <a
-            href="/PulseDeck12_9.pdf"
-            download
-            className="inline-flex items-center gap-2 px-5 py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-all hover:shadow-lg hover:shadow-gray-900/20"
-          >
-            <Download size={18} />
-            Download PDF
-          </a>
-        </div>
+    <ReviewArticleLayout
+      metaTitle="2024 Year in Review | Pulse"
+      metaDescription="Pulse 2024 Year in Review - From beta testing to Rounds launch, a transformative year of building, learning, and growing together."
+      eyebrow="Year in Review"
+      title="2024: A Year of Building and Growing"
+      description="From beta testing to our Rounds launch, 2024 was a transformative year for Pulse. Here's our journey of building, learning, and growing together."
+    >
+      <div className="hidden" aria-hidden="true">
+        <h1>2024: A Year of Building and Growing</h1>
+        <p data-description="true">
+          From beta testing to our Rounds launch, 2024 was a transformative year for Pulse. Here&apos;s our journey of building, learning, and growing together.
+        </p>
+      </div>
 
         {/* Year End Stats */}
         <div className="relative max-w-4xl mx-auto px-6 pb-16">
@@ -331,8 +296,7 @@ const YearInReview = () => {
             </div>
           </div>
         </div>
-      </div>
-    </>
+    </ReviewArticleLayout>
   );
 };
 

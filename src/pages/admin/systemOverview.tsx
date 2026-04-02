@@ -107,6 +107,8 @@ import QuickLiftsProfileHealthSystemTab, {
 import PulseCheckVisionProImmersiveTestsTab from "../../components/admin/system-overview/PulseCheckVisionProImmersiveTestsTab";
 import PulseSystemDesignLanguageTab from "../../components/admin/system-overview/PulseSystemDesignLanguageTab";
 import AuntEdnaIntegrationStrategyTab from "../../components/admin/system-overview/AuntEdnaIntegrationStrategyTab";
+import AuntEdnaExhibitATab from "../../components/admin/system-overview/AuntEdnaExhibitATab";
+import AuntEdnaExhibitBTab from "../../components/admin/system-overview/AuntEdnaExhibitBTab";
 import SystemTestCoverageTab from "../../components/admin/system-overview/SystemTestCoverageTab";
 import PlaywrightTestingStrategyTab from "../../components/admin/system-overview/PlaywrightTestingStrategyTab";
 import AndroidTestingStrategyTab from "../../components/admin/system-overview/AndroidTestingStrategyTab";
@@ -264,7 +266,11 @@ const SYSTEM_TABS: SystemTab[] = [
     label: "AuntEdna",
     icon: Link2,
     accent: "#f59e0b",
-    sectionIds: ["auntedna-integration-strategy"],
+    sectionIds: [
+      "auntedna-integration-strategy",
+      "auntedna-exhibit-a-data-architecture",
+      "auntedna-exhibit-b-performance-standards",
+    ],
   },
   {
     id: "system-test-coverage",
@@ -1762,6 +1768,12 @@ const SystemOverviewPage: React.FC = () => {
 
       case "auntedna-integration-strategy":
         return <AuntEdnaIntegrationStrategyTab />;
+
+      case "auntedna-exhibit-a-data-architecture":
+        return <AuntEdnaExhibitATab />;
+
+      case "auntedna-exhibit-b-performance-standards":
+        return <AuntEdnaExhibitBTab />;
 
       case "system-test-coverage":
         return <SystemTestCoverageTab />;

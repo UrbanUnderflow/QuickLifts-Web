@@ -19,6 +19,8 @@ import { adminMethods } from '../admin/methods';
 import { 
   WeeklyContext, 
   DraftReview, 
+  DraftReviewType,
+  DraftReviewFormat,
   WeeklyContextData, 
   DraftReviewData,
   ReviewContextSummary,
@@ -163,6 +165,19 @@ class ReviewContextService {
       console.error('[ReviewContextService] Error fetching weekly context by month:', error);
       throw error;
     }
+  }
+
+  private async fetchWeeklyContextByMonths(year: number, months: number[]): Promise<WeeklyContext[]> {
+    const allContexts = await Promise.all(months.map((month) => this.fetchWeeklyContextByMonth(year, month)));
+    return allContexts.flat().sort((a, b) => {
+      if (a.month !== b.month) {
+        return a.month - b.month;
+      }
+      if (a.weekNumber !== b.weekNumber) {
+        return a.weekNumber - b.weekNumber;
+      }
+      return a.createdAt.getTime() - b.createdAt.getTime();
+    });
   }
 
   /**
@@ -439,19 +454,54 @@ class ReviewContextService {
    * Generate a draft review from weekly contexts
    * Uses AI to polish content into investor-ready copy
    */
-  async generateDraftFromContext(year: number, month: number): Promise<DraftReview> {
+  async generateDraftFromContext(
+    year: number,
+    month: number,
+    options?: {
+      reviewType?: DraftReviewType;
+      formatStyle?: DraftReviewFormat;
+    }
+  ): Promise<DraftReview> {
     try {
-      const contexts = await this.fetchWeeklyContextByMonth(year, month);
-      
-      if (contexts.length === 0) {
-        throw new Error('No weekly context found for this month');
-      }
-
-      const monthYear = `${year}-${String(month).padStart(2, '0')}`;
+      const reviewType = options?.reviewType || 'month';
+      const formatStyle = options?.formatStyle || 'investor-update';
+      const quarter = Math.ceil(month / 3);
       const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'];
       const monthNamesUpper = monthNames.map(m => m.toUpperCase());
-      const monthName = monthNames[month - 1];
+
+      let periodMonth = month;
+      let contexts: WeeklyContext[] = [];
+      let periodLabel: string;
+      let titlePrefix: string;
+      let subtitle: string;
+
+      if (reviewType === 'quarter') {
+        const quarterStartMonth = (quarter - 1) * 3 + 1;
+        const quarterMonths = [quarterStartMonth, quarterStartMonth + 1, quarterStartMonth + 2];
+        periodMonth = quarterMonths[2];
+        contexts = await this.fetchWeeklyContextByMonths(year, quarterMonths);
+        periodLabel = `Q${quarter}`;
+        titlePrefix = `Q${quarter} ${year}`;
+        subtitle = `Q${quarter} ${year} • ${monthNamesUpper[quarterStartMonth - 1]} - ${monthNamesUpper[quarterStartMonth + 1]}`;
+      } else if (reviewType === 'year') {
+        periodMonth = 12;
+        contexts = await this.fetchWeeklyContextByMonths(year, Array.from({ length: 12 }, (_, index) => index + 1));
+        periodLabel = 'Year in Review';
+        titlePrefix = `${year}`;
+        subtitle = `${year} YEAR IN REVIEW`;
+      } else {
+        contexts = await this.fetchWeeklyContextByMonth(year, month);
+        periodLabel = monthNames[month - 1];
+        titlePrefix = `${monthNames[month - 1]} ${year}`;
+        subtitle = `${monthNamesUpper[month - 1]} ${year}`;
+      }
+      
+      if (contexts.length === 0) {
+        throw new Error(`No context found for this ${reviewType === 'year' ? 'year' : reviewType}.`);
+      }
+
+      const monthYear = `${year}-${String(periodMonth).padStart(2, '0')}`;
       
       let title: string;
       let description: string;
@@ -465,9 +515,9 @@ class ReviewContextService {
       try {
         // Use AI to polish the content into investor-ready copy
         console.log('[ReviewContextService] Using AI to polish review content...');
-        const polished = await this.polishReviewContent(contexts, monthName, year);
+        const polished = await this.polishReviewContent(contexts, periodLabel, year, reviewType);
         
-        title = `${monthName} ${year}: ${polished.title}`;
+        title = `${titlePrefix}: ${polished.title}`;
         description = polished.description;
         featuredHighlights = polished.featuredHighlights;
         businessHighlights = polished.businessHighlights;
@@ -501,7 +551,7 @@ class ReviewContextService {
         featuredHighlights = allHighlights.filter(h => h.isFeatured).slice(0, 2);
         businessHighlights = allHighlights.filter(h => !h.isFeatured).slice(0, 4);
         productHighlights = this.extractProductHighlights(contexts);
-        title = this.generateTitle(contexts, monthName, year);
+        title = `${titlePrefix}: ${this.generateTitle(contexts, periodLabel, reviewType)}`;
         description = this.generateDescription(contexts);
         metrics = [
           { label: 'Subscribed Members', currentValue: 0, previousValue: 0, showGrowth: true },
@@ -515,9 +565,10 @@ class ReviewContextService {
 
       const draftData: Omit<DraftReviewData, 'id' | 'createdAt' | 'updatedAt' | 'generatedAt'> = {
         monthYear,
-        reviewType: 'month',
+        reviewType,
+        formatStyle,
         title,
-        subtitle: `${monthNamesUpper[month - 1]} ${year}`,
+        subtitle,
         description,
         featuredHighlights,
         metrics,
@@ -533,6 +584,63 @@ class ReviewContextService {
       return draft;
     } catch (error) {
       console.error('[ReviewContextService] Error generating draft from context:', error);
+      throw error;
+    }
+  }
+
+  async createArticleDraftFromContent(
+    year: number,
+    month: number,
+    rawArticleContent: string,
+    options?: {
+      reviewType?: DraftReviewType;
+    }
+  ): Promise<DraftReview> {
+    try {
+      const reviewType = options?.reviewType || 'month';
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'];
+      const monthNamesUpper = monthNames.map(m => m.toUpperCase());
+      const quarter = Math.ceil(month / 3);
+
+      let periodMonth = month;
+      let subtitle: string;
+
+      if (reviewType === 'quarter') {
+        const quarterStartMonth = (quarter - 1) * 3 + 1;
+        periodMonth = quarter * 3;
+        subtitle = `Q${quarter} ${year} • ${monthNamesUpper[quarterStartMonth - 1]} - ${monthNamesUpper[quarterStartMonth + 1]}`;
+      } else if (reviewType === 'year') {
+        periodMonth = 12;
+        subtitle = `${year} YEAR IN REVIEW`;
+      } else {
+        subtitle = `${monthNamesUpper[month - 1]} ${year}`;
+      }
+
+      const normalizedArticle = this.normalizeArticleContent(rawArticleContent);
+      const parsed = this.parseArticleDraft(normalizedArticle, reviewType, year, month);
+      const monthYear = `${year}-${String(periodMonth).padStart(2, '0')}`;
+
+      const draftData: Omit<DraftReviewData, 'id' | 'createdAt' | 'updatedAt' | 'generatedAt'> = {
+        monthYear,
+        reviewType,
+        formatStyle: 'article',
+        title: parsed.title,
+        subtitle,
+        description: parsed.description,
+        articleContent: parsed.articleContent,
+        featuredHighlights: [],
+        metrics: [],
+        businessHighlights: [],
+        productHighlights: [],
+        lookingAhead: [],
+        status: 'draft',
+        weeklyContextIds: [],
+      };
+
+      return this.saveDraftReview(draftData);
+    } catch (error) {
+      console.error('[ReviewContextService] Error creating article draft from content:', error);
       throw error;
     }
   }
@@ -604,21 +712,29 @@ class ReviewContextService {
   /**
    * Generate a title based on context themes
    */
-  private generateTitle(contexts: WeeklyContext[], monthName: string, year: number): string {
+  private generateTitle(contexts: WeeklyContext[], periodLabel: string, reviewType: DraftReviewType): string {
     const allContent = contexts.map(c => c.content.toLowerCase()).join(' ');
     
     // Check for common themes
     if (allContent.includes('launch') || allContent.includes('shipped')) {
-      return `${monthName} ${year}: Shipping Season`;
+      return reviewType === 'year' ? 'A Year of Shipping' : 'Shipping Season';
     }
     if (allContent.includes('investment') || allContent.includes('funding')) {
-      return `${monthName} ${year}: Building Momentum`;
+      return reviewType === 'year' ? 'Building Momentum' : 'Building Momentum';
     }
     if (allContent.includes('growth') || allContent.includes('milestone')) {
-      return `${monthName} ${year}: Hitting Milestones`;
+      return reviewType === 'year' ? 'Hitting Milestones' : 'Hitting Milestones';
     }
     
-    return `${monthName} ${year} Review`;
+    if (reviewType === 'quarter') {
+      return `${periodLabel} Review`;
+    }
+
+    if (reviewType === 'year') {
+      return 'Year in Review';
+    }
+
+    return `${periodLabel} Review`;
   }
 
   /**
@@ -636,6 +752,56 @@ class ReviewContextService {
     }
     
     return 'A recap of our progress, learnings, and achievements this month.';
+  }
+
+  private normalizeArticleContent(rawContent: string): string {
+    return rawContent
+      .replace(/\r\n/g, '\n')
+      .replace(/[ \t]+\n/g, '\n')
+      .trim();
+  }
+
+  private parseArticleDraft(
+    normalizedContent: string,
+    reviewType: DraftReviewType,
+    year: number,
+    month: number
+  ): { title: string; description: string; articleContent: string } {
+    const paragraphs = normalizedContent
+      .split(/\n\s*\n/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean);
+
+    const fallbackTitle = reviewType === 'year'
+      ? `${year} Year in Review`
+      : reviewType === 'quarter'
+        ? `Q${Math.ceil(month / 3)} ${year} Update`
+        : `${['January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'][month - 1]} ${year} Update`;
+
+    let title = fallbackTitle;
+    let contentParagraphs = [...paragraphs];
+
+    if (contentParagraphs.length > 0) {
+      const first = contentParagraphs[0];
+      const boldHeadingMatch = first.match(/^\*\*(.+)\*\*$/);
+      const plainHeadingMatch = first.startsWith('# ') ? first.slice(2).trim() : null;
+
+      if (boldHeadingMatch?.[1]) {
+        title = boldHeadingMatch[1].trim();
+        contentParagraphs = contentParagraphs.slice(1);
+      } else if (plainHeadingMatch) {
+        title = plainHeadingMatch;
+        contentParagraphs = contentParagraphs.slice(1);
+      }
+    }
+
+    const description = contentParagraphs[0] || '';
+    return {
+      title,
+      description,
+      articleContent: normalizedContent,
+    };
   }
 
   // ==================== AI POLISHING METHODS ====================
@@ -684,7 +850,12 @@ class ReviewContextService {
   /**
    * Polish raw context into investor-ready review copy using AI
    */
-  async polishReviewContent(rawContexts: WeeklyContext[], monthName: string, year: number): Promise<{
+  async polishReviewContent(
+    rawContexts: WeeklyContext[],
+    periodLabel: string,
+    year: number,
+    reviewType: DraftReviewType
+  ): Promise<{
     title: string;
     description: string;
     featuredHighlights: ReviewHighlight[];
@@ -706,7 +877,9 @@ The writing style should be:
 
 IMPORTANT: The context may contain section tags like [METRICS], [LOOKING AHEAD], [BUSINESS DEVELOPMENT], [PRODUCT DEVELOPMENT], [KEY MILESTONE]. Use these to categorize content correctly.
 
-Here is the raw context from ${monthName} ${year}:
+This is a ${reviewType === 'year' ? 'year in review' : reviewType === 'quarter' ? 'quarterly review' : 'monthly review'}.
+
+Here is the raw context from ${periodLabel} ${year}:
 
 ${rawContent}
 
@@ -807,8 +980,8 @@ Return ONLY valid JSON, no markdown or explanation.`;
       }
       
       return {
-        title: parsed.title || `${monthName} ${year} Review`,
-        description: parsed.description || 'Monthly progress update.',
+        title: parsed.title || `${periodLabel} Review`,
+        description: parsed.description || 'Progress update.',
         featuredHighlights: (parsed.featuredHighlights || []).map((h: any) => ({
           title: h.title,
           description: h.description,

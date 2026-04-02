@@ -1,9 +1,6 @@
 import React from 'react';
-import Link from 'next/link';
-import Head from 'next/head';
 import { 
   ArrowUpRight, 
-  ArrowLeft, 
   Trophy, 
   Activity, 
   Target, 
@@ -17,10 +14,10 @@ import {
   CheckCircle,
   Layers,
   Zap,
-  Wrench,
-  Download
+  Wrench
 } from 'lucide-react';
 import MetricsGrid from '../../components/MetricsGrid';
+import ReviewArticleLayout from '../../components/review/ReviewArticleLayout';
 
 // Q4 Overall Key Metrics
 const q4OverallMetrics = [
@@ -83,50 +80,19 @@ const productShipped = [
 
 const Q4Review2025 = () => {
   return (
-    <>
-      <Head>
-        <title>Q4 2025: From Bootcamp to Breakthrough | Pulse</title>
-        <meta name="description" content="Pulse Q4 2025: Founder University graduate, LAUNCH investment, AWS Retreat selection, and shipping the AI Round Builder." />
-      </Head>
-
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-        {/* Subtle gradient orbs for depth */}
-        <div className="fixed inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-amber-200/30 to-transparent rounded-full blur-3xl" />
-          <div className="absolute top-1/3 -left-40 w-80 h-80 bg-gradient-to-br from-gray-100/60 to-transparent rounded-full blur-3xl" />
-          <div className="absolute bottom-1/4 right-0 w-72 h-72 bg-gradient-to-br from-yellow-100/20 to-transparent rounded-full blur-3xl" />
-        </div>
-
-        {/* Navigation */}
-        <div className="relative border-b border-gray-200/60 backdrop-blur-sm bg-white/70">
-          <div className="max-w-4xl mx-auto px-6 py-4">
-            <Link href="/review" className="inline-flex items-center text-sm text-gray-600 hover:text-black transition-colors">
-              <ArrowLeft size={16} className="mr-2" />
-              All Investor Updates
-            </Link>
-          </div>
-        </div>
-
-        {/* Header */}
-        <div className="relative max-w-4xl mx-auto px-6 pt-16 pb-12">
-          <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
-            Q4 2025 • October - December
-          </p>
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-            From Bootcamp to Breakthrough
-          </h1>
-          <p className="text-xl text-gray-600 leading-relaxed mb-8 max-w-2xl" data-description="true">
-            Founder University graduate. LAUNCH investment closed. AWS Retreat selected. AI Round Builder shipped. Q4 delivered on every front.
-          </p>
-          <a
-            href="/PulseDeck12_9.pdf"
-            download
-            className="inline-flex items-center gap-2 px-5 py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-all hover:shadow-lg hover:shadow-gray-900/20"
-          >
-            <Download size={18} />
-            Download PDF
-          </a>
-        </div>
+    <ReviewArticleLayout
+      metaTitle="Q4 2025: From Bootcamp to Breakthrough | Pulse"
+      metaDescription="Pulse Q4 2025: Founder University graduate, LAUNCH investment, AWS Retreat selection, and shipping the AI Round Builder."
+      eyebrow="Q4 2025 • October - December"
+      title="From Bootcamp to Breakthrough"
+      description="Founder University graduate. LAUNCH investment closed. AWS Retreat selected. AI Round Builder shipped. Q4 delivered on every front."
+    >
+      <div className="hidden" aria-hidden="true">
+        <h1>From Bootcamp to Breakthrough</h1>
+        <p data-description="true">
+          Founder University graduate. LAUNCH investment closed. AWS Retreat selected. AI Round Builder shipped. Q4 delivered on every front.
+        </p>
+      </div>
 
         {/* Featured Milestones */}
         <div className="relative max-w-4xl mx-auto px-6 pb-16">
@@ -412,10 +378,8 @@ const Q4Review2025 = () => {
             </div>
           </div>
         </div>
-      </div>
-    </>
+    </ReviewArticleLayout>
   );
 };
 
 export default Q4Review2025;
-

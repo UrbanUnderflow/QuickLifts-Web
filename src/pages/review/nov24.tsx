@@ -1,9 +1,8 @@
 import React, { useEffect } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
-import Head from 'next/head';
-import mixpanel from 'mixpanel-browser';
-import { ArrowLeft, CheckCircle, ArrowRight, Briefcase, Code, Users, Calendar, ArrowUpRight, Download } from 'lucide-react';
+import { CheckCircle, ArrowRight, Briefcase, Code, Users, Calendar, ArrowUpRight } from 'lucide-react';
+import ReviewArticleLayout from '../../components/review/ReviewArticleLayout';
+import { safeTrackMixpanel } from '../../lib/mixpanel';
 
 const businessHighlights = [
   {
@@ -58,56 +57,28 @@ const metrics = [
 
 const Nov24Review = () => {
   useEffect(() => {
-    // Track page view in Mixpanel
-    mixpanel.track('Review Page Viewed', {
+    safeTrackMixpanel('Review Page Viewed', {
       review_type: 'month',
       review_period: 'November 2024',
       review_title: 'November 2024: Month in Review',
       page_url: window.location.href,
     });
-    console.log('[Mixpanel] Tracked: Review Page Viewed - November 2024');
   }, []);
 
   return (
-    <>
-      <Head>
-        <title>November 2024: Month in Review | Pulse</title>
-        <meta name="description" content="Pulse November 2024 - Shifting from building code to building community. IBM Sports Innovation, AcceleratorCon, and Rounds feature development." />
-      </Head>
-      
-      <div className="min-h-screen bg-white">
-        {/* Navigation */}
-        <div className="border-b border-gray-200">
-          <div className="max-w-3xl mx-auto px-6 py-4">
-            <Link href="/review" className="inline-flex items-center text-sm text-gray-600 hover:text-black transition-colors">
-              <ArrowLeft size={16} className="mr-2" />
-              All Investor Updates
-            </Link>
-          </div>
-        </div>
-
-        {/* Header */}
-        <div className="max-w-3xl mx-auto px-6 pt-16 pb-12">
-          <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
-            November 2024
-          </p>
-          <h1 className="text-4xl font-bold text-gray-900 mb-6">
-            Shifting From Building Code to Building Community
-          </h1>
-          <p className="text-xl text-gray-600 leading-relaxed mb-8">
-            November marks a pivotal shift—moving beyond the building phase to deeply engaging with 
-            our community and future partners. From prestigious tech accelerator programs to vibrant 
-            community partnerships, we're fostering meaningful dialogues about the future of social fitness.
-          </p>
-          <a
-            href="/PulseDeck12_9.pdf"
-            download
-            className="inline-flex items-center gap-2 px-5 py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-all hover:shadow-lg hover:shadow-gray-900/20"
-          >
-            <Download size={18} />
-            Download PDF
-          </a>
-        </div>
+    <ReviewArticleLayout
+      metaTitle="November 2024: Month in Review | Pulse"
+      metaDescription="Pulse November 2024 - Shifting from building code to building community. IBM Sports Innovation, AcceleratorCon, and Rounds feature development."
+      eyebrow="November 2024"
+      title="Shifting From Building Code to Building Community"
+      description="November marks a pivotal shift—moving beyond the building phase to deeply engaging with our community and future partners. From prestigious tech accelerator programs to vibrant community partnerships, we're fostering meaningful dialogues about the future of social fitness."
+    >
+      <div className="hidden" aria-hidden="true">
+        <h1>Shifting From Building Code to Building Community</h1>
+        <p data-description="true">
+          November marks a pivotal shift—moving beyond the building phase to deeply engaging with our community and future partners. From prestigious tech accelerator programs to vibrant community partnerships, we're fostering meaningful dialogues about the future of social fitness.
+        </p>
+      </div>
 
         {/* Key Metrics */}
         <div className="max-w-3xl mx-auto px-6 pb-12">
@@ -328,8 +299,7 @@ const Nov24Review = () => {
             </div>
           </div>
         </div>
-      </div>
-    </>
+    </ReviewArticleLayout>
   );
 };
 

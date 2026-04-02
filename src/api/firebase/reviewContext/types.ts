@@ -1,5 +1,8 @@
 // Review Context Types for Weekly Progress Tracking
 
+export type DraftReviewType = 'month' | 'quarter' | 'year';
+export type DraftReviewFormat = 'investor-update' | 'article';
+
 export interface WeeklyContextData {
   id: string;
   weekNumber: number; // 0 for month-level backfill, otherwise week of month
@@ -33,12 +36,14 @@ export interface ReviewMetric {
 export interface DraftReviewData {
   id: string;
   monthYear: string; // Format: "2025-01" for January 2025
-  reviewType: 'month' | 'quarter'; // Type of review
+  reviewType: DraftReviewType; // Type of review
+  formatStyle: DraftReviewFormat; // Presentation style for the draft
   
   // Header
   title: string;
   subtitle?: string; // e.g., "DECEMBER 2025" or "Q4 2025 • OCTOBER - DECEMBER"
   description: string;
+  articleContent?: string; // Raw article body for article-mode drafts
   
   // Featured highlights (Key Milestones)
   featuredHighlights: ReviewHighlight[];
@@ -150,10 +155,12 @@ export class WeeklyContext {
 export class DraftReview {
   id: string;
   monthYear: string;
-  reviewType: 'month' | 'quarter';
+  reviewType: DraftReviewType;
+  formatStyle: DraftReviewFormat;
   title: string;
   subtitle?: string;
   description: string;
+  articleContent?: string;
   featuredHighlights: ReviewHighlight[];
   metrics: ReviewMetric[];
   metricsNote?: string;
@@ -172,9 +179,11 @@ export class DraftReview {
     this.id = data.id;
     this.monthYear = data.monthYear;
     this.reviewType = data.reviewType || 'month';
+    this.formatStyle = data.formatStyle || 'investor-update';
     this.title = data.title;
     this.subtitle = data.subtitle;
     this.description = data.description;
+    this.articleContent = data.articleContent;
     this.featuredHighlights = data.featuredHighlights || [];
     this.metrics = data.metrics || [];
     this.metricsNote = data.metricsNote;
@@ -195,9 +204,11 @@ export class DraftReview {
       id,
       monthYear: data.monthYear,
       reviewType: data.reviewType || 'month',
+      formatStyle: data.formatStyle || 'investor-update',
       title: data.title,
       subtitle: data.subtitle,
       description: data.description,
+      articleContent: data.articleContent,
       featuredHighlights: data.featuredHighlights || [],
       metrics: data.metrics || [],
       metricsNote: data.metricsNote,
@@ -218,9 +229,11 @@ export class DraftReview {
     const dict: Record<string, any> = {
       monthYear: this.monthYear,
       reviewType: this.reviewType,
+      formatStyle: this.formatStyle,
       title: this.title,
       subtitle: this.subtitle,
       description: this.description,
+      articleContent: this.articleContent,
       featuredHighlights: this.featuredHighlights,
       metrics: this.metrics,
       businessHighlights: this.businessHighlights,
@@ -249,21 +262,56 @@ export class DraftReview {
     return dict;
   }
 
-  // Get month/year label (e.g., "January 2025")
+  private getYearAndMonth(): { year: number; month: number } {
+    const [year, month] = this.monthYear.split('-').map(Number);
+    return { year, month };
+  }
+
+  private getQuarterNumber(): number {
+    const { month } = this.getYearAndMonth();
+    return Math.ceil(month / 3);
+  }
+
+  // Get period label (e.g., "January 2025", "Q1 2025", "2025 Year in Review")
   getMonthYearLabel(): string {
-    const [year, month] = this.monthYear.split('-');
+    const { year, month } = this.getYearAndMonth();
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'];
-    return `${monthNames[parseInt(month) - 1]} ${year}`;
+
+    if (this.reviewType === 'quarter') {
+      return `Q${this.getQuarterNumber()} ${year}`;
+    }
+
+    if (this.reviewType === 'year') {
+      return `${year} Year in Review`;
+    }
+
+    return `${monthNames[month - 1]} ${year}`;
   }
 
   // Get subtitle for display (e.g., "DECEMBER 2025")
   getDisplaySubtitle(): string {
     if (this.subtitle) return this.subtitle;
-    const [year, month] = this.monthYear.split('-');
+    const { year, month } = this.getYearAndMonth();
     const monthNames = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
       'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
-    return `${monthNames[parseInt(month) - 1]} ${year}`;
+
+    if (this.reviewType === 'quarter') {
+      const quarter = this.getQuarterNumber();
+      const startMonthIndex = (quarter - 1) * 3;
+      const endMonthIndex = startMonthIndex + 2;
+      return `Q${quarter} ${year} • ${monthNames[startMonthIndex]} - ${monthNames[endMonthIndex]}`;
+    }
+
+    if (this.reviewType === 'year') {
+      return `${year} YEAR IN REVIEW`;
+    }
+
+    return `${monthNames[month - 1]} ${year}`;
+  }
+
+  getFormatLabel(): string {
+    return this.formatStyle === 'article' ? 'Article' : 'Investor Update';
   }
 }
 
