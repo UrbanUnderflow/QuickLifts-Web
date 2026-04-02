@@ -36,6 +36,19 @@
   status = 200
   force = true
 
+# Investor deck short link → static PDF asset
+[[redirects]]
+  from = "/pulsedeck"
+  to = "/pulsedeck.pdf"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/pulsedeck/"
+  to = "/pulsedeck.pdf"
+  status = 200
+  force = true
+
 # File browser API → Netlify function (keeps it out of Next.js build)
 [[redirects]]
   from = "/api/files/browse"
