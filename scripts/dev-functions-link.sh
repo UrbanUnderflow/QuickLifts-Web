@@ -76,6 +76,7 @@ CORE_FUNCTIONS=(
   notify-coach-connection
 
   # Admin tools
+  firebase-next-api
   get-dashboard-link
   get-earnings
   fix-null-creator

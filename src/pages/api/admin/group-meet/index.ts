@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { randomBytes } from 'crypto';
-import admin from '../../../../lib/firebase-admin';
+import admin, { getFirebaseAdminApp } from '../../../../lib/firebase-admin';
 import {
   buildGroupMeetShareUrl,
   normalizeGroupMeetAvailabilitySlots,
@@ -65,26 +65,25 @@ async function mapRequest(docSnap: FirebaseFirestore.QueryDocumentSnapshot): Pro
   };
 }
 
-async function listRecentRequests(): Promise<GroupMeetRequestSummary[]> {
-  const snapshot = await admin
-    .firestore()
-    .collection(GROUP_MEET_REQUESTS_COLLECTION)
-    .orderBy('createdAt', 'desc')
-    .limit(15)
-    .get();
-
-  return Promise.all(snapshot.docs.map(mapRequest));
-}
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const adminUser = await requireAdminRequest(req);
   if (!adminUser) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  const forceDevFirebase =
+    req.headers?.['x-force-dev-firebase'] === 'true' ||
+    req.headers?.['x-force-dev-firebase'] === '1';
+  const db = getFirebaseAdminApp(forceDevFirebase).firestore();
+
   if (req.method === 'GET') {
     try {
-      const requests = await listRecentRequests();
+      const snapshot = await db
+        .collection(GROUP_MEET_REQUESTS_COLLECTION)
+        .orderBy('createdAt', 'desc')
+        .limit(15)
+        .get();
+      const requests = await Promise.all(snapshot.docs.map(mapRequest));
       return res.status(200).json({ requests });
     } catch (error) {
       console.error('[group-meet-admin] Failed to list requests:', error);
@@ -118,7 +117,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Choose the host from your contact list.' });
     }
 
-    const db = admin.firestore();
     const contactsRef = db.collection(GROUP_MEET_CONTACTS_COLLECTION);
     const hostContactSnap = await contactsRef.doc(hostContactId).get();
     if (!hostContactSnap.exists) {
