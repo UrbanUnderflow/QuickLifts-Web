@@ -2,8 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  createApiResponseRecorder,
+  createPublicInviteHandlerRuntime,
   loadGoogleCalendarRuntime,
   loadGroupMeetRuntime,
+  makeTimestamp,
 } = require('./_runtimeHarness.cjs');
 
 const CALENDAR_ENV_KEYS = [
@@ -157,4 +160,51 @@ test('getGoogleCalendarSetupStatus blocks scheduling when delegated mailbox is m
       assert.match(setup.message, /GOOGLE_CALENDAR_DELEGATED_USER_EMAIL is missing/);
     }
   );
+});
+
+test('public guest invite endpoint resolves an invite by stored token and honors localhost dev firebase', async () => {
+  const { handler, state } = createPublicInviteHandlerRuntime({
+    requestData: {
+      title: 'Pulse Intelligence Labs Advisory Board Meeting',
+      targetMonth: '2026-04',
+      deadlineAt: makeTimestamp('2026-04-08T21:00:00.000Z'),
+      timezone: 'America/New_York',
+      meetingDurationMinutes: 60,
+      status: 'draft',
+    },
+    inviteDocs: [
+      {
+        id: '40423acc545435231ec30c716f2f289d20c3609c67db7540',
+        data: {
+          token: '40423acc545435231ec30c716f2f289d20c3609c67db7540',
+          name: 'Bobby Weke',
+          email: 'bobby@fitwithpulse.ai',
+          imageUrl: 'https://images.example.com/bobby.png',
+          participantType: 'participant',
+          shareUrl:
+            'https://fitwithpulse.ai/group-meet/40423acc545435231ec30c716f2f289d20c3609c67db7540',
+          availabilityEntries: [],
+          responseSubmittedAt: null,
+          hasResponse: false,
+        },
+      },
+    ],
+  });
+
+  const req = {
+    method: 'GET',
+    query: { token: '40423acc545435231ec30c716f2f289d20c3609c67db7540' },
+    headers: { host: 'localhost:8888' },
+  };
+  const res = createApiResponseRecorder();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(
+    res.payload.invite.shareUrl,
+    'https://fitwithpulse.ai/group-meet/40423acc545435231ec30c716f2f289d20c3609c67db7540'
+  );
+  assert.equal(res.payload.invite.request.title, 'Pulse Intelligence Labs Advisory Board Meeting');
+  assert.equal(state.firebaseAppSelections[0], true);
 });

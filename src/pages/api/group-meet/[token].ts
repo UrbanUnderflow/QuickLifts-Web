@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import admin from '../../../lib/firebase-admin';
+import admin, { getFirebaseAdminApp } from '../../../lib/firebase-admin';
 import {
   normalizeGroupMeetAvailabilitySlots,
   type GroupMeetAvailabilitySlot,
@@ -34,17 +34,52 @@ type GroupMeetInvitePayload = {
 const toIso = (value: FirebaseFirestore.Timestamp | null | undefined) =>
   value?.toDate?.().toISOString?.() || null;
 
-async function findInviteByToken(token: string) {
-  const snapshot = await admin
-    .firestore()
-    .collectionGroup(INVITES_SUBCOLLECTION)
-    .where(admin.firestore.FieldPath.documentId(), '==', token)
-    .limit(1)
-    .get();
+function hasTruthyHeader(value: string | string[] | undefined) {
+  if (Array.isArray(value)) {
+    return value.some((entry) => entry === 'true' || entry === '1');
+  }
 
-  if (snapshot.empty) return null;
+  return value === 'true' || value === '1';
+}
 
-  const inviteDoc = snapshot.docs[0];
+function shouldForceDevFirebase(req: NextApiRequest) {
+  if (hasTruthyHeader(req.headers?.['x-force-dev-firebase'])) {
+    return true;
+  }
+
+  const hostHeader = req.headers?.['x-forwarded-host'] || req.headers?.host || '';
+  const host = Array.isArray(hostHeader) ? hostHeader[0] || '' : hostHeader;
+  const normalizedHost = host.trim().toLowerCase();
+
+  return (
+    normalizedHost.startsWith('localhost:') ||
+    normalizedHost.startsWith('127.0.0.1:') ||
+    normalizedHost.startsWith('[::1]:')
+  );
+}
+
+async function findInviteByToken(db: FirebaseFirestore.Firestore, token: string) {
+  let snapshot: FirebaseFirestore.QuerySnapshot | null = null;
+
+  try {
+    snapshot = await db
+      .collectionGroup(INVITES_SUBCOLLECTION)
+      .where('token', '==', token)
+      .limit(1)
+      .get();
+  } catch (error) {
+    console.warn('[group-meet-public] Token lookup fell back to scan:', error);
+  }
+
+  let inviteDoc = snapshot?.empty ? null : snapshot?.docs?.[0] || null;
+
+  if (!inviteDoc) {
+    const fallbackSnapshot = await db.collectionGroup(INVITES_SUBCOLLECTION).get();
+    inviteDoc =
+      fallbackSnapshot.docs.find((docSnap) => docSnap.id === token || docSnap.data()?.token === token) || null;
+  }
+
+  if (!inviteDoc) return null;
   const requestRef = inviteDoc.ref.parent.parent;
   if (!requestRef) return null;
 
@@ -95,7 +130,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Token is required.' });
   }
 
-  const found = await findInviteByToken(token);
+  const db = getFirebaseAdminApp(shouldForceDevFirebase(req)).firestore();
+  const found = await findInviteByToken(db, token);
   if (!found) {
     return res.status(404).json({ error: 'Invite not found.' });
   }
