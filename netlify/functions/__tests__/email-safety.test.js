@@ -127,3 +127,15 @@ test('buildEmailDedupeKey filters blanks and normalizes case', () => {
     'streak-email::user_abc::7'
   );
 });
+
+test('buildEmailDedupeKey escapes forward slashes so URL-based keys are Firestore-safe', () => {
+  assert.equal(
+    buildEmailDedupeKey([
+      'group-meet-invite-v1',
+      'https://fitwithpulse.ai/group-meet/abc123',
+      'tre@fitwithpulse.ai',
+      'preview',
+    ]),
+    'group-meet-invite-v1::https:%2f%2ffitwithpulse.ai%2fgroup-meet%2fabc123::tre@fitwithpulse.ai::preview'
+  );
+});
