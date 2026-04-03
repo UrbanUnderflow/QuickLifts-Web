@@ -25,7 +25,7 @@ function loadProxyModule() {
 test('firebase-next-api exposes the full migrated route count and matches dynamic patterns', () => {
   const proxyModule = loadProxyModule();
 
-  assert.equal(proxyModule.__test.routeCount, 36);
+  assert.equal(proxyModule.__test.routeCount, 37);
   assert.equal(
     proxyModule.__test.resolveRoutePattern('/api/admin/group-meet/contacts'),
     '/api/admin/group-meet/contacts'
@@ -41,6 +41,10 @@ test('firebase-next-api exposes the full migrated route count and matches dynami
   assert.equal(
     proxyModule.__test.resolveRoutePattern('/api/admin/group-meet/request-123/send'),
     '/api/admin/group-meet/[requestId]/send'
+  );
+  assert.equal(
+    proxyModule.__test.resolveRoutePattern('/api/admin/group-meet/request-123/preview-email'),
+    '/api/admin/group-meet/[requestId]/preview-email'
   );
   assert.deepEqual(
     proxyModule.__test.matchRoutePattern(
@@ -113,5 +117,44 @@ test('firebase-next-api handler adapts Netlify events into Next API req/res sema
     body: { ok: true },
     host: 'fitwithpulse.ai',
     remoteAddress: '203.0.113.44',
+  });
+});
+
+test('firebase-next-api resolves the public api path when originalPath is missing', async () => {
+  const proxyModule = loadProxyModule();
+  const handler = proxyModule.__test.createFirebaseNextApiHandler([
+    {
+      pattern: '/api/example/[token]',
+      async loadHandler() {
+        return {
+          default: async (req, res) => res.status(200).json({
+            token: req.query.token,
+            query: req.query.mode,
+            url: req.url,
+          }),
+        };
+      },
+    },
+  ]);
+
+  const response = await handler({
+    httpMethod: 'GET',
+    path: '/api/example/probe-456',
+    rawUrl: 'https://fitwithpulse.ai/api/example/probe-456?mode=live',
+    headers: {
+      host: 'fitwithpulse.ai',
+    },
+    queryStringParameters: {
+      mode: 'live',
+    },
+    body: null,
+    isBase64Encoded: false,
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(JSON.parse(response.body), {
+    token: 'probe-456',
+    query: 'live',
+    url: '/api/example/probe-456?mode=live',
   });
 });
