@@ -285,6 +285,14 @@ const formatDate = (date: Timestamp | Date | undefined): string => {
   });
 };
 
+const getDateValue = (date?: Timestamp | Date): number => {
+  if (!date) return 0;
+  if (date instanceof Timestamp) return date.toDate().getTime();
+  if (date instanceof Date) return date.getTime();
+  const parsed = new Date(date as any).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
 // Improved content formatter that properly handles markdown
 const formatContentForPdf = (content: string): string => {
   // Normalize line endings
@@ -2386,6 +2394,31 @@ const EquityAdminPage: React.FC = () => {
     return false;
   };
 
+  const getStakeholderCompletedDocuments = (stakeholderId: string) => {
+    return equityDocuments.filter(d => d.stakeholderId === stakeholderId && d.status === 'completed');
+  };
+
+  const getStakeholderSignatureDocuments = (stakeholder: Stakeholder) => {
+    const signaturePriority: Record<string, number> = {
+      advisor_nso_agreement: 0,
+      option_agreement: 1,
+      fast_agreement: 2,
+      board_consent: 3,
+    };
+
+    return getStakeholderCompletedDocuments(stakeholder.id)
+      .filter(d => d.requiresSignature)
+      .sort((a, b) => {
+        const priorityDiff = (signaturePriority[a.documentType] ?? 99) - (signaturePriority[b.documentType] ?? 99);
+        if (priorityDiff !== 0) return priorityDiff;
+        return getDateValue(b.updatedAt || b.createdAt) - getDateValue(a.updatedAt || a.createdAt);
+      });
+  };
+
+  const getPrimaryStakeholderSignatureDoc = (stakeholder: Stakeholder) => {
+    return getStakeholderSignatureDocuments(stakeholder)[0] || null;
+  };
+
   // Start editing grant options for a stakeholder
   const startEditingGrantOptions = (stakeholder: Stakeholder) => {
     const currentOptions = stakeholder.optionsGranted || 
@@ -3071,8 +3104,8 @@ const EquityAdminPage: React.FC = () => {
                                   </h5>
                                   <p className="text-xs text-zinc-500 mt-1">
                                     {hasDocumentsSent(stakeholder) 
-                                      ? 'Cannot modify - documents have been sent for signature'
-                                      : 'Adjust the number of options before sending documents'}
+                                      ? 'Locked once signature packets have been sent so approved paperwork stays in sync.'
+                                      : 'Adjust the number of options before sending. Draft equity docs will regenerate with the updated amount.'}
                                   </p>
                                 </div>
                                 
@@ -3257,7 +3290,7 @@ const EquityAdminPage: React.FC = () => {
                           
                           {/* Attached Documents for this stakeholder */}
                           {(() => {
-                            const stakeholderDocs = equityDocuments.filter(d => d.stakeholderId === stakeholder.id && d.status === 'completed');
+                            const stakeholderDocs = getStakeholderCompletedDocuments(stakeholder.id);
                             
                             if (stakeholderDocs.length > 0) {
                               return (
@@ -3265,6 +3298,7 @@ const EquityAdminPage: React.FC = () => {
                                   <h5 className="text-zinc-400 text-sm font-medium">Documents</h5>
                                   {stakeholderDocs.map((edoc) => {
                                     const signingRequest = signingRequests.find(r => r.equityDocumentId === edoc.id);
+                                    const canManageSignature = edoc.requiresSignature && signingRequest?.status !== 'signed';
                                     return (
                                       <div key={edoc.id} className="p-4 rounded-xl bg-zinc-800/50 border border-zinc-700">
                                         <div className="flex items-start justify-between gap-4 mb-3">
@@ -3308,13 +3342,31 @@ const EquityAdminPage: React.FC = () => {
                                             <ClipboardCheck className="w-3 h-3" />
                                             Audit
                                           </button>
-                                          {edoc.requiresSignature && !signingRequest && (
+                                          {canManageSignature && (
                                             <button
                                               onClick={(e) => { e.stopPropagation(); openSigningModal(edoc); }}
                                               className="flex items-center gap-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs transition-colors"
                                             >
                                               <Send className="w-3 h-3" />
-                                              Send for Signature
+                                              {signingRequest ? 'Resend Signature Email' : 'Send for Signature'}
+                                            </button>
+                                          )}
+                                          {signingRequest && signingRequest.status !== 'signed' && (
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); window.open(`/sign/${signingRequest.id}`, '_blank'); }}
+                                              className="flex items-center gap-1 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-xs transition-colors"
+                                            >
+                                              <Eye className="w-3 h-3" />
+                                              View Signing Page
+                                            </button>
+                                          )}
+                                          {signingRequest && (
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); copySigningLink(signingRequest.id); }}
+                                              className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs transition-colors"
+                                            >
+                                              <Copy className="w-3 h-3" />
+                                              Copy Link
                                             </button>
                                           )}
                                           {signingRequest && signingRequest.status === 'signed' && (
@@ -3374,6 +3426,40 @@ const EquityAdminPage: React.FC = () => {
 
                           {/* Actions */}
                           <div className="flex items-center gap-3 flex-wrap">
+                            {(() => {
+                              const primarySignatureDoc = getPrimaryStakeholderSignatureDoc(stakeholder);
+                              if (!primarySignatureDoc) return null;
+
+                              const signingRequest = signingRequests.find(r => r.equityDocumentId === primarySignatureDoc.id);
+
+                              if (signingRequest?.status === 'signed') {
+                                return (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      window.open(`/sign/${signingRequest.id}?download=true`, '_blank');
+                                    }}
+                                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-500 transition-colors"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                    Download Signed Doc
+                                  </button>
+                                );
+                              }
+
+                              return (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openSigningModal(primarySignatureDoc);
+                                  }}
+                                  className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-500 transition-colors"
+                                >
+                                  <Send className="w-4 h-4" />
+                                  {signingRequest ? 'Resend Signature Doc' : 'Send Signature Doc'}
+                                </button>
+                              );
+                            })()}
                             {/* For advisors: Generate the combined Advisor Agreement + NSO Grant directly (only if no doc exists) */}
                             {stakeholder.type === 'advisor' && !equityDocuments.some(d => d.stakeholderId === stakeholder.id && d.status === 'completed') && (() => {
                               const hasBoardConsent = (stakeholder as Stakeholder & { boardConsentDocId?: string; boardApprovalDate?: string }).boardConsentDocId || 
@@ -3765,13 +3851,13 @@ const EquityAdminPage: React.FC = () => {
                                 <Download className="w-4 h-4" />
                                 Download Signed
                               </button>
-                            ) : needsSignature && !signingRequest ? (
+                            ) : needsSignature ? (
                               <button
                                 onClick={() => openSigningModal(edoc)}
                                 className="flex items-center gap-1 px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm font-medium transition-colors"
                               >
                                 <Send className="w-4 h-4" />
-                                Send for Signature
+                                {signingRequest ? 'Resend Signature Email' : 'Send for Signature'}
                               </button>
                             ) : signingRequest ? (
                               <button

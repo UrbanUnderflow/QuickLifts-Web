@@ -7,6 +7,7 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { useUser } from '../../hooks/useUser';
 import { storage } from '../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
+import { fetchPulseCheckSportConfiguration, getDefaultPulseCheckSports } from '../../api/firebase/pulsecheckSportConfig';
 import type {
   PulseCheckAdminContact,
   CreatePulseCheckPilotCohortInput,
@@ -301,6 +302,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [organizationImageUploadingId, setOrganizationImageUploadingId] = useState<string | null>(null);
   const [teamImageUploadingId, setTeamImageUploadingId] = useState<string | null>(null);
+  const [sportOptions, setSportOptions] = useState(() => getDefaultPulseCheckSports());
 
   const selectedOrganization = useMemo(
     () => organizations.find((organization) => organization.id === teamForm.organizationId) || null,
@@ -372,6 +374,23 @@ const PulseCheckProvisioningPage: React.FC = () => {
     () => clinicianProfiles.find((profile) => profile.id === teamForm.defaultClinicianProfileId) || null,
     [clinicianProfiles, teamForm.defaultClinicianProfileId]
   );
+  const teamSportOptions = useMemo(() => {
+    if (!teamForm.sportOrProgram.trim()) return sportOptions;
+    if (sportOptions.some((sport) => sport.name.toLowerCase() === teamForm.sportOrProgram.trim().toLowerCase())) {
+      return sportOptions;
+    }
+
+    return [
+      ...sportOptions,
+      {
+        id: `legacy-${teamForm.sportOrProgram.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        name: teamForm.sportOrProgram.trim(),
+        emoji: '🏅',
+        positions: ['Individual'],
+        sortOrder: sportOptions.length,
+      },
+    ];
+  }, [sportOptions, teamForm.sportOrProgram]);
   const clinicianProfileById = useMemo(
     () => new Map(clinicianProfiles.map((profile) => [profile.id, profile])),
     [clinicianProfiles]
@@ -472,13 +491,22 @@ const PulseCheckProvisioningPage: React.FC = () => {
     setLoading(true);
     setMessage(null);
     try {
-      const [organizationResults, teamResults, pilotResults, pilotCohortResults, clinicianProfileResults, inviteLinkResults] = await Promise.all([
+      const [
+        organizationResults,
+        teamResults,
+        pilotResults,
+        pilotCohortResults,
+        clinicianProfileResults,
+        inviteLinkResults,
+        sportConfigurationResults,
+      ] = await Promise.all([
         pulseCheckProvisioningService.listOrganizations(),
         pulseCheckProvisioningService.listTeams(),
         pulseCheckProvisioningService.listPilots(),
         pulseCheckProvisioningService.listPilotCohorts(),
         pulseCheckProvisioningService.listClinicianProfiles(),
         pulseCheckProvisioningService.listInviteLinks(),
+        fetchPulseCheckSportConfiguration(),
       ]);
       setOrganizations(organizationResults);
       setTeams(teamResults);
@@ -486,6 +514,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
       setPilotCohorts(pilotCohortResults);
       setClinicianProfiles(clinicianProfileResults);
       setInviteLinks(inviteLinkResults);
+      setSportOptions(sportConfigurationResults);
       setTeamForm((current) => ({
         ...current,
         organizationId: current.organizationId || organizationResults[0]?.id || '',
@@ -873,7 +902,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const handleCreateTeam = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!teamForm.organizationId || !teamForm.displayName.trim() || !teamForm.sportOrProgram.trim()) {
-      setMessage({ type: 'error', text: 'Organization, team name, and sport or program are required.' });
+      setMessage({ type: 'error', text: 'Organization, team name, and sport are required.' });
       return;
     }
 
@@ -1583,13 +1612,20 @@ const PulseCheckProvisioningPage: React.FC = () => {
                   </label>
 
                   <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Sport or Program</span>
-                    <input
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Sport</span>
+                    <select
                       value={teamForm.sportOrProgram}
                       onChange={(event) => handleTeamFieldChange('sportOrProgram', event.target.value)}
                       className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
-                      placeholder="Basketball"
-                    />
+                    >
+                      <option value="">Select a sport</option>
+                      {teamSportOptions.map((sport) => (
+                        <option key={sport.id} value={sport.name}>
+                          {sport.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-zinc-500">Managed from PulseCheck Sport Configuration.</p>
                   </label>
 
                   <label className="space-y-2">
