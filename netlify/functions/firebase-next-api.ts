@@ -257,12 +257,13 @@ export function createFirebaseNextApiHandler(routeEntries: RouteEntry[]): Handle
 
 const ROUTE_ENTRIES: RouteEntry[] = [
   { pattern: '/api/admin/group-meet', loadHandler: () => import('../../src/pages/api/admin/group-meet/index.ts') },
+  { pattern: '/api/admin/group-meet/contacts', loadHandler: () => import('../../src/pages/api/admin/group-meet/contacts/index.ts') },
+  { pattern: '/api/admin/group-meet/test-email', loadHandler: () => import('../../src/pages/api/admin/group-meet/test-email.ts') },
   { pattern: '/api/admin/group-meet/[requestId]', loadHandler: () => import('../../src/pages/api/admin/group-meet/[requestId].ts') },
   { pattern: '/api/admin/group-meet/[requestId]/finalize', loadHandler: () => import('../../src/pages/api/admin/group-meet/[requestId]/finalize.ts') },
   { pattern: '/api/admin/group-meet/[requestId]/invites/[token]/resend', loadHandler: () => import('../../src/pages/api/admin/group-meet/[requestId]/invites/[token]/resend.ts') },
   { pattern: '/api/admin/group-meet/[requestId]/recommend', loadHandler: () => import('../../src/pages/api/admin/group-meet/[requestId]/recommend.ts') },
   { pattern: '/api/admin/group-meet/[requestId]/schedule', loadHandler: () => import('../../src/pages/api/admin/group-meet/[requestId]/schedule.ts') },
-  { pattern: '/api/admin/group-meet/contacts', loadHandler: () => import('../../src/pages/api/admin/group-meet/contacts/index.ts') },
   { pattern: '/api/admin/pulsecheck/pilot-research-readout/generate', loadHandler: () => import('../../src/pages/api/admin/pulsecheck/pilot-research-readout/generate.ts') },
   { pattern: '/api/admin/pulsecheck/pilot-research-readout/review', loadHandler: () => import('../../src/pages/api/admin/pulsecheck/pilot-research-readout/review.ts') },
   { pattern: '/api/admin/system-overview/share-links', loadHandler: () => import('../../src/pages/api/admin/system-overview/share-links/index.ts') },
@@ -298,5 +299,8 @@ export const __test = {
   matchRoutePattern,
   normalizeOriginalPath,
   createFirebaseNextApiHandler,
+  resolveRoutePattern(actualPath: string) {
+    return ROUTE_ENTRIES.find((entry) => matchRoutePattern(entry.pattern, actualPath))?.pattern || null;
+  },
   routeCount: ROUTE_ENTRIES.length,
 };

@@ -205,38 +205,44 @@ function createRequestDetailHandlerRuntime({ requestData, inviteDocs, setupStatu
     },
   };
 
-  const firebaseAdminMock = {
-    firestore() {
+  const firestoreInstance = {
+    collection(name) {
+      if (name !== 'groupMeetRequests') {
+        throw new Error(`Unexpected top-level collection: ${name}`);
+      }
+
       return {
-        collection(name) {
-          if (name !== 'groupMeetRequests') {
-            throw new Error(`Unexpected top-level collection: ${name}`);
+        doc(id) {
+          if (id !== 'request-1') {
+            throw new Error(`Unexpected request id: ${id}`);
           }
 
-          return {
-            doc(id) {
-              if (id !== 'request-1') {
-                throw new Error(`Unexpected request id: ${id}`);
-              }
-
-              return requestRef;
-            },
-          };
-        },
-        FieldValue: {
-          serverTimestamp() {
-            return { __serverTimestamp: true };
-          },
-        },
-        Timestamp: {
-          fromDate(date) {
-            return makeTimestamp(date.toISOString());
-          },
+          return requestRef;
         },
       };
     },
+    FieldValue: {
+      serverTimestamp() {
+        return { __serverTimestamp: true };
+      },
+    },
+    Timestamp: {
+      fromDate(date) {
+        return makeTimestamp(date.toISOString());
+      },
+    },
   };
 
+  function firestore() {
+    return firestoreInstance;
+  }
+
+  const firebaseAdminMock = {
+    firestore,
+    getFirebaseAdminApp() {
+      return { firestore };
+    },
+  };
   firebaseAdminMock.firestore.FieldValue = {
     serverTimestamp() {
       return { __serverTimestamp: true };
@@ -459,7 +465,12 @@ function createGroupMeetCreateHandlerRuntime({
     },
   };
 
-  const firebaseAdminMock = { firestore };
+  const firebaseAdminMock = {
+    firestore,
+    getFirebaseAdminApp() {
+      return { firestore };
+    },
+  };
 
   const groupMeetAdminMock = {
     GROUP_MEET_CONTACTS_COLLECTION: 'groupMeetContacts',

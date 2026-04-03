@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import admin from '../../../../../lib/firebase-admin';
+import admin, { getFirebaseAdminApp } from '../../../../../lib/firebase-admin';
 import type { GroupMeetContact } from '../../../../../lib/groupMeet';
 import {
   GROUP_MEET_CONTACTS_COLLECTION,
@@ -13,8 +13,8 @@ type ContactBody = {
   imageUrl?: string;
 };
 
-async function listContacts(): Promise<GroupMeetContact[]> {
-  const snapshot = await admin
+async function listContacts(forceDevFirebase: boolean): Promise<GroupMeetContact[]> {
+  const snapshot = await getFirebaseAdminApp(forceDevFirebase)
     .firestore()
     .collection(GROUP_MEET_CONTACTS_COLLECTION)
     .orderBy('updatedAt', 'desc')
@@ -30,9 +30,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  const forceDevFirebase =
+    req.headers?.['x-force-dev-firebase'] === 'true' ||
+    req.headers?.['x-force-dev-firebase'] === '1';
+  const db = getFirebaseAdminApp(forceDevFirebase).firestore();
+
   if (req.method === 'GET') {
     try {
-      return res.status(200).json({ contacts: await listContacts() });
+      return res.status(200).json({ contacts: await listContacts(forceDevFirebase) });
     } catch (error: any) {
       console.error('[group-meet-contacts] Failed to list contacts:', error);
       return res.status(500).json({ error: error?.message || 'Failed to load contacts.' });
@@ -53,7 +58,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Contact name is required.' });
     }
 
-    const contactsRef = admin.firestore().collection(GROUP_MEET_CONTACTS_COLLECTION);
+    const contactsRef = db.collection(GROUP_MEET_CONTACTS_COLLECTION);
     let contactRef: FirebaseFirestore.DocumentReference;
 
     if (email) {

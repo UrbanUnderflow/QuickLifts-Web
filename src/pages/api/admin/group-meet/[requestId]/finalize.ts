@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import admin from '../../../../../lib/firebase-admin';
+import admin, { getFirebaseAdminApp } from '../../../../../lib/firebase-admin';
 import { requireAdminRequest } from '../../_auth';
 import {
   buildGroupMeetCandidateKey,
@@ -56,6 +56,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Request id is required.' });
   }
 
+  const forceDevFirebase =
+    req.headers?.['x-force-dev-firebase'] === 'true' ||
+    req.headers?.['x-force-dev-firebase'] === '1';
+
   const body = (req.body || {}) as FinalizeBody;
   const candidateKey = typeof body.candidateKey === 'string' ? body.candidateKey.trim() : '';
   const hostNote = typeof body.hostNote === 'string' ? body.hostNote.trim() : '';
@@ -65,7 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const requestRef = admin.firestore().collection(REQUESTS_COLLECTION).doc(requestId);
+    const requestRef = getFirebaseAdminApp(forceDevFirebase).firestore().collection(REQUESTS_COLLECTION).doc(requestId);
     const requestDoc = await requestRef.get();
     if (!requestDoc.exists) {
       return res.status(404).json({ error: 'Group Meet request not found.' });
@@ -114,4 +118,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: error?.message || 'Failed to save final meeting block.' });
   }
 }
-

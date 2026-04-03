@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import admin from '../../../../lib/firebase-admin';
+import admin, { getFirebaseAdminApp } from '../../../../lib/firebase-admin';
 import { getGoogleCalendarSetupStatus } from '../../../../lib/googleCalendar';
 import {
   computeGroupMeetAnalysis,
@@ -73,7 +73,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Request id is required.' });
   }
 
-  const requestRef = admin.firestore().collection(GROUP_MEET_REQUESTS_COLLECTION).doc(requestId);
+  const forceDevFirebase =
+    req.headers?.['x-force-dev-firebase'] === 'true' ||
+    req.headers?.['x-force-dev-firebase'] === '1';
+  const requestRef = getFirebaseAdminApp(forceDevFirebase)
+    .firestore()
+    .collection(GROUP_MEET_REQUESTS_COLLECTION)
+    .doc(requestId);
 
   if (req.method === 'GET') {
     try {

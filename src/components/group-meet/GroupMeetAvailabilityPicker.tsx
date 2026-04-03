@@ -32,6 +32,20 @@ type GroupMeetAvailabilityPickerProps = {
   className?: string;
 };
 
+function sortAvailabilitySlots(slots: GroupMeetAvailabilitySlot[]) {
+  return [...slots].sort((left, right) => {
+    if (left.date !== right.date) {
+      return left.date.localeCompare(right.date);
+    }
+
+    if (left.startMinutes !== right.startMinutes) {
+      return left.startMinutes - right.startMinutes;
+    }
+
+    return left.endMinutes - right.endMinutes;
+  });
+}
+
 function buildCalendarDays(targetMonth: string) {
   const firstDay = startOfMonth(parse(`${targetMonth}-01`, 'yyyy-MM-dd', new Date()));
   const lastDay = endOfMonth(firstDay);
@@ -57,6 +71,7 @@ export default function GroupMeetAvailabilityPicker({
 }: GroupMeetAvailabilityPickerProps) {
   const [activeDate, setActiveDate] = useState<string | null>(null);
   const [draftRanges, setDraftRanges] = useState<DayRangeDraft[]>([]);
+  const [duplicateDates, setDuplicateDates] = useState<string[]>([]);
 
   const calendarDays = useMemo(() => {
     if (!/^\d{4}-\d{2}$/.test(targetMonth || '')) {
@@ -76,10 +91,23 @@ export default function GroupMeetAvailabilityPicker({
   }, [availabilityEntries]);
 
   const selectedDateCount = slotsByDate.size;
+  const duplicableDates = useMemo(
+    () =>
+      calendarDays
+        .filter((day) => isSameMonth(day, parse(`${targetMonth}-01`, 'yyyy-MM-dd', new Date())))
+        .map((day) => ({
+          date: format(day, 'yyyy-MM-dd'),
+          label: format(day, 'EEE, MMM d'),
+          dayOfWeek: day.getDay(),
+        }))
+        .filter((entry) => entry.date !== activeDate),
+    [activeDate, calendarDays, targetMonth]
+  );
 
   const openDayEditor = (date: string) => {
     const slots = slotsByDate.get(date) || [];
     setActiveDate(date);
+    setDuplicateDates([]);
     setDraftRanges(
       slots.length
         ? slots.map((slot) => ({
@@ -93,6 +121,7 @@ export default function GroupMeetAvailabilityPicker({
   const closeEditor = () => {
     setActiveDate(null);
     setDraftRanges([]);
+    setDuplicateDates([]);
   };
 
   const updateDraftRange = (index: number, field: keyof DayRangeDraft, value: string) => {
@@ -109,6 +138,25 @@ export default function GroupMeetAvailabilityPicker({
     setDraftRanges((current) => (current.length === 1 ? [] : current.filter((_, rangeIndex) => rangeIndex !== index)));
   };
 
+  const toggleDuplicateDate = (date: string) => {
+    setDuplicateDates((current) =>
+      current.includes(date)
+        ? current.filter((entry) => entry !== date)
+        : [...current, date]
+    );
+  };
+
+  const selectMatchingWeekdayDates = () => {
+    if (!activeDate) return;
+
+    const activeDay = parse(activeDate, 'yyyy-MM-dd', new Date()).getDay();
+    setDuplicateDates(
+      duplicableDates
+        .filter((entry) => entry.dayOfWeek === activeDay)
+        .map((entry) => entry.date)
+    );
+  };
+
   const saveDayRanges = () => {
     if (!activeDate) return;
 
@@ -121,10 +169,22 @@ export default function GroupMeetAvailabilityPicker({
       nextSlots.push({ date: activeDate, startMinutes, endMinutes });
     }
 
-    onChange([
-      ...availabilityEntries.filter((slot) => slot.date !== activeDate),
-      ...nextSlots,
-    ]);
+    const datesToCopy = nextSlots.length ? duplicateDates : [];
+    const targetDates = [activeDate, ...datesToCopy];
+    const duplicatedSlots = datesToCopy.flatMap((date) =>
+      nextSlots.map((slot) => ({
+        ...slot,
+        date,
+      }))
+    );
+
+    onChange(
+      sortAvailabilitySlots([
+        ...availabilityEntries.filter((slot) => !targetDates.includes(slot.date)),
+        ...nextSlots,
+        ...duplicatedSlots,
+      ])
+    );
     closeEditor();
   };
 
@@ -245,6 +305,62 @@ export default function GroupMeetAvailabilityPicker({
               )}
             </div>
 
+            {Boolean(duplicableDates.length) && (
+              <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="text-sm font-medium text-white">Duplicate to dates</div>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      Save these same time ranges onto any other dates in this month.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={selectMatchingWeekdayDates}
+                      className="rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5"
+                    >
+                      Same weekday
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDuplicateDates([])}
+                      className="rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5"
+                    >
+                      Clear copies
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {duplicableDates.map((entry) => {
+                    const selected = duplicateDates.includes(entry.date);
+                    return (
+                      <button
+                        key={entry.date}
+                        type="button"
+                        onClick={() => toggleDuplicateDate(entry.date)}
+                        className={`rounded-full border px-3 py-2 text-sm transition-colors ${
+                          selected
+                            ? 'border-[#E0FE10]/60 bg-[#E0FE10]/15 text-[#F4FF8A]'
+                            : 'border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.08]'
+                        }`}
+                      >
+                        {entry.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-3 text-xs text-zinc-500">
+                  {duplicateDates.length
+                    ? `These dates will be overwritten with the same time ranges when you save.`
+                    : 'Pick any dates you want to copy this day onto.'}
+                </div>
+              </div>
+            )}
+
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <button
                 type="button"
@@ -272,7 +388,7 @@ export default function GroupMeetAvailabilityPicker({
                   className="inline-flex items-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-3 text-sm font-semibold text-black hover:bg-lime-300"
                 >
                   <Clock className="w-4 h-4" />
-                  Save day
+                  {duplicateDates.length ? `Save + copy to ${duplicateDates.length}` : 'Save day'}
                 </button>
               </div>
             </div>

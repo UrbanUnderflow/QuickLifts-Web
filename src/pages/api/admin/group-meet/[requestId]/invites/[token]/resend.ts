@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import admin from '../../../../../../../lib/firebase-admin';
+import admin, { getFirebaseAdminApp } from '../../../../../../../lib/firebase-admin';
 import {
   GROUP_MEET_INVITES_SUBCOLLECTION,
   GROUP_MEET_REQUESTS_COLLECTION,
@@ -27,8 +27,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Request id and invite token are required.' });
   }
 
+  const forceDevFirebase =
+    req.headers?.['x-force-dev-firebase'] === 'true' ||
+    req.headers?.['x-force-dev-firebase'] === '1';
+
   try {
-    const requestRef = admin.firestore().collection(GROUP_MEET_REQUESTS_COLLECTION).doc(requestId);
+    const requestRef = getFirebaseAdminApp(forceDevFirebase)
+      .firestore()
+      .collection(GROUP_MEET_REQUESTS_COLLECTION)
+      .doc(requestId);
     const requestDoc = await requestRef.get();
 
     if (!requestDoc.exists) {

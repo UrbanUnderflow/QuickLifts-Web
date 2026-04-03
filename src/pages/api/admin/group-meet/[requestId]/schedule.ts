@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import admin from '../../../../../lib/firebase-admin';
+import admin, { getFirebaseAdminApp } from '../../../../../lib/firebase-admin';
 import { requireAdminRequest } from '../../_auth';
 import { convertLocalDateMinutesToUtcIso, getGoogleCalendarAuth, getGoogleCalendarId } from '../../../../../lib/googleCalendar';
 import {
@@ -68,8 +68,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Request id is required.' });
   }
 
+  const forceDevFirebase =
+    req.headers?.['x-force-dev-firebase'] === 'true' ||
+    req.headers?.['x-force-dev-firebase'] === '1';
+
   try {
-    const requestRef = admin.firestore().collection(REQUESTS_COLLECTION).doc(requestId);
+    const requestRef = getFirebaseAdminApp(forceDevFirebase).firestore().collection(REQUESTS_COLLECTION).doc(requestId);
     const requestDoc = await requestRef.get();
     if (!requestDoc.exists) {
       return res.status(404).json({ error: 'Group Meet request not found.' });
@@ -190,4 +194,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: error?.message || 'Failed to create Google Calendar invite.' });
   }
 }
-
