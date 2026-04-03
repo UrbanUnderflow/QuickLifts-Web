@@ -460,11 +460,15 @@ class ReviewContextService {
     options?: {
       reviewType?: DraftReviewType;
       formatStyle?: DraftReviewFormat;
+      author?: string;
+      authorTitle?: string;
     }
   ): Promise<DraftReview> {
     try {
       const reviewType = options?.reviewType || 'month';
       const formatStyle = options?.formatStyle || 'investor-update';
+      const author = options?.author || 'Pulse Team';
+      const authorTitle = options?.authorTitle || '';
       const quarter = Math.ceil(month / 3);
       const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'];
@@ -576,6 +580,8 @@ class ReviewContextService {
         businessHighlights,
         productHighlights,
         lookingAhead,
+        author,
+        authorTitle,
         status: 'draft',
         weeklyContextIds: contexts.map(c => c.id),
       };
@@ -594,10 +600,14 @@ class ReviewContextService {
     rawArticleContent: string,
     options?: {
       reviewType?: DraftReviewType;
+      author?: string;
+      authorTitle?: string;
     }
   ): Promise<DraftReview> {
     try {
       const reviewType = options?.reviewType || 'month';
+      const author = options?.author || 'Pulse Team';
+      const authorTitle = options?.authorTitle || '';
       const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'];
       const monthNamesUpper = monthNames.map(m => m.toUpperCase());
@@ -629,6 +639,8 @@ class ReviewContextService {
         subtitle,
         description: parsed.description,
         articleContent: parsed.articleContent,
+        author,
+        authorTitle,
         featuredHighlights: [],
         metrics: [],
         businessHighlights: [],

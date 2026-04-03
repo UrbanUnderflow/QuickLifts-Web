@@ -28,6 +28,8 @@ interface SigningRequest {
   documentContent?: string;
   signingGroupId?: string;
   legalDocumentId?: string;
+  invalidatedAt?: Timestamp | Date;
+  invalidatedReason?: string;
 }
 
 // Signature fonts available
@@ -74,6 +76,11 @@ const SignDocument: React.FC = () => {
       }
 
       const data = docSnap.data() as SigningRequest;
+      if (data.invalidatedAt) {
+        setError(data.invalidatedReason || 'This signing link is no longer valid because the document was revised. Please use the latest signature email or request a new link.');
+        return;
+      }
+
       setRequest({ ...data, id: docSnap.id });
 
       // Mark as viewed if not already signed
@@ -105,7 +112,6 @@ const SignDocument: React.FC = () => {
     if (downloadTriggeredRef.current) return;
     downloadTriggeredRef.current = true;
     generateSignedPdf();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [download, request, signed]);
 
   const handleSign = async () => {
@@ -732,6 +738,4 @@ const SignDocument: React.FC = () => {
 };
 
 export default SignDocument;
-
-
 
