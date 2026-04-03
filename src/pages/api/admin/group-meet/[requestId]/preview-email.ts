@@ -87,7 +87,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: result.error || 'Failed to send preview email.' });
     }
 
-    return res.status(200).json({ success: true });
+    return res.status(200).json({
+      success: true,
+      skipped: Boolean(result.skipped),
+      messageId: result.messageId || null,
+    });
   } catch (error: any) {
     console.error('[group-meet-preview-email] Failed to send preview email:', error);
     return res.status(500).json({ error: error?.message || 'Failed to send preview email.' });

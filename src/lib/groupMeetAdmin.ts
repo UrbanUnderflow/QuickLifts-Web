@@ -125,6 +125,7 @@ export async function sendGroupMeetInviteEmail(args: {
   recipientEmail: string;
   shareUrl: string;
   mode?: 'live' | 'test' | 'preview';
+  bypassDeliveryGuards?: boolean;
 }) {
   const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
   if (!apiKey) {
@@ -135,6 +136,9 @@ export async function sendGroupMeetInviteEmail(args: {
   }
 
   const mode = args.mode || 'live';
+  const bypassDeliveryGuards = Boolean(
+    args.bypassDeliveryGuards || mode === 'preview' || mode === 'test'
+  );
   const senderEmail = process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
   const senderName = process.env.BREVO_SENDER_NAME || 'Pulse';
   const subject =
@@ -199,24 +203,31 @@ export async function sendGroupMeetInviteEmail(args: {
     htmlContent,
     sender: { email: senderEmail, name: senderName },
     replyTo: { email: senderEmail, name: senderName },
-    idempotencyKey: buildEmailDedupeKey([
-      'group-meet-invite-v1',
-      args.shareUrl,
-      args.recipientEmail,
-      mode,
-    ]),
-    idempotencyMetadata: {
-      sequence: 'group-meet-invite',
-      shareUrl: args.shareUrl,
-      recipientEmail: args.recipientEmail,
-      mode,
-    },
+    idempotencyKey: bypassDeliveryGuards
+      ? undefined
+      : buildEmailDedupeKey([
+          'group-meet-invite-v1',
+          args.shareUrl,
+          args.recipientEmail,
+          mode,
+        ]),
+    idempotencyMetadata: bypassDeliveryGuards
+      ? undefined
+      : {
+          sequence: 'group-meet-invite',
+          shareUrl: args.shareUrl,
+          recipientEmail: args.recipientEmail,
+          mode,
+        },
+    bypassDailyRecipientLimit: bypassDeliveryGuards,
     dailyRecipientLimit: mode === 'test' ? 2 : 1,
-    dailyRecipientMetadata: {
-      sequence: 'group-meet-invite',
-      shareUrl: args.shareUrl,
-      mode,
-    },
+    dailyRecipientMetadata: bypassDeliveryGuards
+      ? undefined
+      : {
+          sequence: 'group-meet-invite',
+          shareUrl: args.shareUrl,
+          mode,
+        },
   });
 
   if (!sendResult.success) {
@@ -226,7 +237,11 @@ export async function sendGroupMeetInviteEmail(args: {
     };
   }
 
-  return { success: true };
+  return {
+    success: true,
+    skipped: Boolean(sendResult.skipped),
+    messageId: sendResult.messageId || null,
+  };
 }
 
 export async function createGroupMeetInviteRecord(args: {
