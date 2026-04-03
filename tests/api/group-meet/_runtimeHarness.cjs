@@ -72,6 +72,7 @@ function compileGroupMeetRuntime() {
     '--outDir', outDir,
     path.join(repoRoot, 'src/lib/groupMeet.ts'),
     path.join(repoRoot, 'src/lib/googleCalendar.ts'),
+    path.join(repoRoot, 'src/pages/api/group-meet/[token].ts'),
     path.join(repoRoot, 'src/pages/api/admin/group-meet/index.ts'),
     path.join(repoRoot, 'src/pages/api/admin/group-meet/[requestId].ts'),
   ];
@@ -83,16 +84,20 @@ function compileGroupMeetRuntime() {
 
   const groupMeetPath = findFileRecursive(outDir, 'groupMeet.js');
   const googleCalendarPath = findFileRecursive(outDir, 'googleCalendar.js');
+  const publicInviteHandlerPath = findFileRecursiveBySuffix(outDir, 'pages/api/group-meet/[token].js');
   const createHandlerPath = findFileRecursiveBySuffix(outDir, 'pages/api/admin/group-meet/index.js');
   const requestHandlerPath = findFileRecursive(outDir, '[requestId].js');
 
-  if ((!groupMeetPath || !googleCalendarPath || !createHandlerPath || !requestHandlerPath) && result.status !== 0) {
+  if (
+    (!groupMeetPath || !googleCalendarPath || !publicInviteHandlerPath || !createHandlerPath || !requestHandlerPath) &&
+    result.status !== 0
+  ) {
     throw new Error(
       `Failed to compile Group Meet runtime:\n${result.stderr || result.stdout || 'Unknown tsc failure'}`
     );
   }
 
-  if (!groupMeetPath || !googleCalendarPath || !createHandlerPath || !requestHandlerPath) {
+  if (!groupMeetPath || !googleCalendarPath || !publicInviteHandlerPath || !createHandlerPath || !requestHandlerPath) {
     throw new Error('Compiled Group Meet runtime files were not emitted to the temp directory.');
   }
 
@@ -100,11 +105,21 @@ function compileGroupMeetRuntime() {
     outDir,
     groupMeetPath,
     googleCalendarPath,
+    publicInviteHandlerPath,
     createHandlerPath,
     requestHandlerPath,
   };
 
   return compiledRuntimeCache;
+}
+
+function clearCompiledRuntimeModuleCache() {
+  const { outDir } = compileGroupMeetRuntime();
+  for (const cacheKey of Object.keys(require.cache)) {
+    if (cacheKey.startsWith(outDir)) {
+      delete require.cache[cacheKey];
+    }
+  }
 }
 
 function withModuleMocks(mocks, loadFn) {
@@ -126,13 +141,13 @@ function withModuleMocks(mocks, loadFn) {
 
 function loadGroupMeetRuntime() {
   const { groupMeetPath } = compileGroupMeetRuntime();
-  delete require.cache[groupMeetPath];
+  clearCompiledRuntimeModuleCache();
   return require(groupMeetPath);
 }
 
 function loadGoogleCalendarRuntime({ secretManagerMock } = {}) {
   const { googleCalendarPath } = compileGroupMeetRuntime();
-  delete require.cache[googleCalendarPath];
+  clearCompiledRuntimeModuleCache();
 
   return withModuleMocks(
     {
@@ -161,7 +176,7 @@ function makeTimestamp(isoString) {
 
 function createRequestDetailHandlerRuntime({ requestData, inviteDocs, setupStatus }) {
   const { requestHandlerPath } = compileGroupMeetRuntime();
-  delete require.cache[requestHandlerPath];
+  clearCompiledRuntimeModuleCache();
 
   const state = {
     requestData: clone(requestData),
@@ -316,7 +331,7 @@ function createGroupMeetCreateHandlerRuntime({
   },
 } = {}) {
   const { createHandlerPath } = compileGroupMeetRuntime();
-  delete require.cache[createHandlerPath];
+  clearCompiledRuntimeModuleCache();
 
   const state = {
     requestData: null,
@@ -548,9 +563,175 @@ function createApiResponseRecorder() {
   };
 }
 
+function createPublicInviteHandlerRuntime({
+  requestData = {
+    title: 'Group Meet',
+    targetMonth: '2026-04',
+    deadlineAt: makeTimestamp('2026-04-08T21:00:00.000Z'),
+    timezone: 'America/New_York',
+    meetingDurationMinutes: 60,
+    status: 'draft',
+  },
+  inviteDocs = [
+    {
+      id: 'guest-token',
+      data: {
+        token: 'guest-token',
+        name: 'Avery',
+        email: 'avery@example.com',
+        imageUrl: 'https://images.example.com/avery.png',
+        participantType: 'participant',
+        shareUrl: 'https://fitwithpulse.ai/group-meet/guest-token',
+        availabilityEntries: [],
+        responseSubmittedAt: null,
+        hasResponse: false,
+      },
+    },
+  ],
+} = {}) {
+  const { publicInviteHandlerPath } = compileGroupMeetRuntime();
+  clearCompiledRuntimeModuleCache();
+
+  const state = {
+    requestData: clone(requestData),
+    inviteDocs: new Map(inviteDocs.map((inviteDoc) => [inviteDoc.id, clone(inviteDoc.data)])),
+    firebaseAppSelections: [],
+  };
+
+  function createInviteSnapshot(id, data) {
+    return {
+      id,
+      data: () => clone(data),
+      ref: {
+        id,
+        parent: {
+          parent: requestRef,
+        },
+        async set(payload, options = {}) {
+          const existing = state.inviteDocs.get(id) || {};
+          const nextPayload = clone(payload);
+          state.inviteDocs.set(id, options && options.merge ? { ...existing, ...nextPayload } : nextPayload);
+        },
+      },
+    };
+  }
+
+  const requestRef = {
+    id: 'request-1',
+    async get() {
+      return {
+        exists: true,
+        id: 'request-1',
+        ref: requestRef,
+        data: () => clone(state.requestData),
+      };
+    },
+    async set(payload, options = {}) {
+      const nextPayload = clone(payload);
+      state.requestData = options && options.merge
+        ? { ...state.requestData, ...nextPayload }
+        : nextPayload;
+    },
+    collection(name) {
+      if (name !== 'groupMeetInvites') {
+        throw new Error(`Unexpected collection: ${name}`);
+      }
+
+      return {
+        where(field, operator, value) {
+          return {
+            async get() {
+              if (field !== 'hasResponse' || operator !== '==' || value !== true) {
+                throw new Error(`Unexpected invite query: ${field} ${operator} ${value}`);
+              }
+
+              const docs = Array.from(state.inviteDocs.entries())
+                .filter(([, inviteData]) => Boolean(inviteData.hasResponse))
+                .map(([id, inviteData]) => createInviteSnapshot(id, inviteData));
+
+              return { docs, size: docs.length, empty: docs.length === 0 };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const firestoreInstance = {
+    collectionGroup(name) {
+      if (name !== 'groupMeetInvites') {
+        throw new Error(`Unexpected collection group: ${name}`);
+      }
+
+      const queryState = {
+        token: null,
+      };
+
+      return {
+        where(field, operator, value) {
+          if (field !== 'token' || operator !== '==') {
+            throw new Error(`Unexpected collection group query: ${field} ${operator}`);
+          }
+          queryState.token = value;
+          return this;
+        },
+        limit() {
+          return this;
+        },
+        async get() {
+          let docs = Array.from(state.inviteDocs.entries()).map(([id, inviteData]) =>
+            createInviteSnapshot(id, inviteData)
+          );
+
+          if (queryState.token) {
+            docs = docs.filter((docSnap) => {
+              const data = docSnap.data() || {};
+              return data.token === queryState.token || docSnap.id === queryState.token;
+            });
+          }
+
+          return { docs, size: docs.length, empty: docs.length === 0 };
+        },
+      };
+    },
+  };
+
+  function firestore() {
+    return firestoreInstance;
+  }
+
+  firestore.FieldValue = {
+    serverTimestamp() {
+      return { __serverTimestamp: true };
+    },
+  };
+
+  const firebaseAdminMock = {
+    firestore,
+    getFirebaseAdminApp(forceDevProject = false) {
+      state.firebaseAppSelections.push(Boolean(forceDevProject));
+      return { firestore };
+    },
+  };
+  firebaseAdminMock.firestore.FieldValue = firestore.FieldValue;
+
+  const handlerModule = withModuleMocks(
+    {
+      '../../../lib/firebase-admin': firebaseAdminMock,
+    },
+    () => require(publicInviteHandlerPath)
+  );
+
+  return {
+    handler: handlerModule.default,
+    state,
+  };
+}
+
 module.exports = {
   createApiResponseRecorder,
   createGroupMeetCreateHandlerRuntime,
+  createPublicInviteHandlerRuntime,
   createRequestDetailHandlerRuntime,
   loadGoogleCalendarRuntime,
   loadGroupMeetRuntime,
