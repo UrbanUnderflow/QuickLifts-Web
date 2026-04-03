@@ -13,6 +13,8 @@ interface EquityDocument {
   createdAt: Timestamp | Date;
   requiresSignature?: boolean;
   signingRequestId?: string;
+  needsResendSignature?: boolean;
+  autoSigned?: boolean;
 }
 
 const formatDate = (date: Timestamp | Date | undefined): string => {
@@ -239,7 +241,7 @@ const EquityDocSharePage: React.FC = () => {
                   <p className="text-zinc-500 text-sm">Created: {formatDate(document.createdAt)}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {document.requiresSignature && document.signingRequestId && (
+                  {document.requiresSignature && document.documentType !== 'board_consent' && document.signingRequestId && (
                     <button
                       onClick={() => window.open(`/sign/${document.signingRequestId}`, '_blank')}
                       className="px-4 py-2 rounded-xl bg-orange-600 text-white font-medium hover:bg-orange-500 transition-colors"
@@ -271,4 +273,3 @@ const EquityDocSharePage: React.FC = () => {
 };
 
 export default EquityDocSharePage;
-

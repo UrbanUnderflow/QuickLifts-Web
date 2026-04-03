@@ -6,7 +6,9 @@ import { ArrowRight, Calendar, Edit3, FileText, Loader2, Plus } from 'lucide-rea
 import { JSDOM } from 'jsdom';
 import fs from 'fs';
 import path from 'path';
+import { collection, getDocs } from 'firebase/firestore';
 import PageHead from '../../components/PageHead';
+import { db } from '../../api/firebase/config';
 import { reviewContextService } from '../../api/firebase/reviewContext/service';
 import { DraftReview } from '../../api/firebase/reviewContext/types';
 import type { DraftReviewFormat } from '../../api/firebase/reviewContext/types';
@@ -25,6 +27,12 @@ interface Review {
 
 interface ReviewsIndexProps {
   reviews: Review[];
+}
+
+interface AuthorProfileOption {
+  id: string;
+  name: string;
+  title: string;
 }
 
 type ReviewFilter = 'All' | 'Year in Review' | 'Quarterly' | 'Monthly' | 'Drafts';
@@ -150,6 +158,9 @@ const getDraftTypeLabel = (reviewType: CreateReviewType): string => {
 
 const getDraftFormatLabel = (formatStyle: DraftReviewFormat): string =>
   formatStyle === 'article' ? 'Article' : 'Investor Update';
+
+const getPreferredAuthorProfile = (profiles: AuthorProfileOption[]): AuthorProfileOption | null =>
+  profiles.find((profile) => profile.name === 'Tremaine') || profiles[0] || null;
 
 const getYearOptions = (): string[] => {
   const currentYear = new Date().getFullYear();

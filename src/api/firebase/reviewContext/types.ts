@@ -44,6 +44,8 @@ export interface DraftReviewData {
   subtitle?: string; // e.g., "DECEMBER 2025" or "Q4 2025 • OCTOBER - DECEMBER"
   description: string;
   articleContent?: string; // Raw article body for article-mode drafts
+  author?: string;
+  authorTitle?: string;
   
   // Featured highlights (Key Milestones)
   featuredHighlights: ReviewHighlight[];
@@ -161,6 +163,8 @@ export class DraftReview {
   subtitle?: string;
   description: string;
   articleContent?: string;
+  author?: string;
+  authorTitle?: string;
   featuredHighlights: ReviewHighlight[];
   metrics: ReviewMetric[];
   metricsNote?: string;
@@ -184,6 +188,8 @@ export class DraftReview {
     this.subtitle = data.subtitle;
     this.description = data.description;
     this.articleContent = data.articleContent;
+    this.author = data.author;
+    this.authorTitle = data.authorTitle;
     this.featuredHighlights = data.featuredHighlights || [];
     this.metrics = data.metrics || [];
     this.metricsNote = data.metricsNote;
@@ -209,6 +215,8 @@ export class DraftReview {
       subtitle: data.subtitle,
       description: data.description,
       articleContent: data.articleContent,
+      author: data.author,
+      authorTitle: data.authorTitle,
       featuredHighlights: data.featuredHighlights || [],
       metrics: data.metrics || [],
       metricsNote: data.metricsNote,
@@ -234,6 +242,8 @@ export class DraftReview {
       subtitle: this.subtitle,
       description: this.description,
       articleContent: this.articleContent,
+      author: this.author,
+      authorTitle: this.authorTitle,
       featuredHighlights: this.featuredHighlights,
       metrics: this.metrics,
       businessHighlights: this.businessHighlights,

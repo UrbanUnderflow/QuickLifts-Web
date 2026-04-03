@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, where, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, where, serverTimestamp, getDoc, deleteField } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -143,6 +143,11 @@ interface EquityDocument {
   revisionHistory?: { prompt: string; timestamp: Timestamp | Date }[];
   // Exhibits - other documents attached as exhibits
   exhibits?: string[];
+  needsResendSignature?: boolean;
+  autoSigned?: boolean;
+  autoSignedAt?: Timestamp | Date;
+  originalDocumentId?: string;
+  isAmendment?: boolean;
 }
 
 interface SigningRequest {
@@ -161,6 +166,8 @@ interface SigningRequest {
   stakeholderId?: string;
   signingGroupId?: string;
   signingOrder?: number;
+  invalidatedAt?: Timestamp | Date;
+  invalidatedReason?: string;
 }
 
 type SignerRow = {
@@ -292,6 +299,9 @@ const getDateValue = (date?: Timestamp | Date): number => {
   const parsed = new Date(date as any).getTime();
   return Number.isNaN(parsed) ? 0 : parsed;
 };
+
+const isBoardConsentDoc = (document?: Pick<EquityDocument, 'documentType'> | null): boolean =>
+  Boolean(document && document.documentType === 'board_consent');
 
 // Improved content formatter that properly handles markdown
 const formatContentForPdf = (content: string): string => {
@@ -829,7 +839,7 @@ const EquityAdminPage: React.FC = () => {
     // Reasonable defaults (user can override):
     // - Most people-facing agreements should be signable.
     // - Company-wide EIP usually doesn't require e-sign inside this tool.
-    const defaultOn = ['option_agreement', 'fast_agreement', 'board_consent', 'stockholder_consent'].includes(selectedDocType);
+    const defaultOn = ['option_agreement', 'fast_agreement', 'stockholder_consent'].includes(selectedDocType);
     const defaultForType = selectedDocType === 'eip' ? false : defaultOn;
     setRequiresSignatureChecked(defaultForType);
   }, [selectedDocType]);
@@ -1314,9 +1324,23 @@ const EquityAdminPage: React.FC = () => {
       if (existingBoardConsent) {
         // Update existing document instead of creating a new one
         documentId = existingBoardConsent.id;
+
+        const existingBoardSigningRequests = getSigningRequestsForEquityDoc(existingBoardConsent.id);
+        if (existingBoardSigningRequests.length > 0) {
+          await invalidateSigningRequestsForDoc(
+            existingBoardConsent,
+            `Invalidated because the Board Consent for ${stakeholder.name} was regenerated as an auto-executed sole-director consent.`
+          );
+        }
         
         // Update the existing document to generating status
         await updateDoc(doc(db, 'equity-documents', documentId), {
+          requiresSignature: false,
+          autoSigned: true,
+          autoSignedAt: Timestamp.now(),
+          signingRequestId: deleteField(),
+          signingRequestIds: deleteField(),
+          needsResendSignature: false,
           status: 'generating',
           updatedAt: Timestamp.now(),
         });
@@ -1329,12 +1353,14 @@ const EquityAdminPage: React.FC = () => {
           prompt: `Generate a Board Consent approving equity grant for ${stakeholder.name}: ${grantDetails.numberOfShares} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
           content: '',
           documentType: 'board_consent',
-          requiresSignature: true,
+          requiresSignature: false,
           stakeholderId: stakeholder.id,
           stakeholderName: stakeholder.name,
           stakeholderEmail: stakeholder.email,
           stakeholderType: 'advisor',
           grantDetails,
+          autoSigned: true,
+          autoSignedAt: Timestamp.now(),
           createdAt: Timestamp.now(),
           status: 'generating',
         });
@@ -1352,7 +1378,7 @@ const EquityAdminPage: React.FC = () => {
           stakeholderEmail: stakeholder.email,
           stakeholderType: 'advisor',
           documentType: 'board_consent',
-          requiresSignature: true,
+          requiresSignature: false,
           prompt: `Generate a Board Consent (Written Consent of the Board of Directors in Lieu of Meeting) approving equity grant for ${stakeholder.name}: ${grantDetails.numberOfShares} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
           grantDetails,
         }),
@@ -1364,6 +1390,12 @@ const EquityAdminPage: React.FC = () => {
         await updateDoc(doc(db, 'equity-documents', documentId), {
           content: result.content,
           title: result.title || docTitle,
+          requiresSignature: false,
+          autoSigned: true,
+          autoSignedAt: Timestamp.now(),
+          signingRequestId: deleteField(),
+          signingRequestIds: deleteField(),
+          needsResendSignature: false,
           status: 'completed',
           updatedAt: Timestamp.now(),
         });
@@ -1400,7 +1432,7 @@ const EquityAdminPage: React.FC = () => {
           }
         }, 300);
         
-        setMessage({ type: 'success', text: existingBoardConsent ? 'Board Consent regenerated and attached! Verifying...' : 'Board Consent generated and attached! Verifying...' });
+        setMessage({ type: 'success', text: existingBoardConsent ? 'Board Consent regenerated, auto-executed, and attached! Verifying...' : 'Board Consent generated, auto-executed, and attached! Verifying...' });
       } else {
         await updateDoc(doc(db, 'equity-documents', documentId), {
           status: 'error',
@@ -1529,6 +1561,8 @@ const EquityAdminPage: React.FC = () => {
     setGenerating(true);
     try {
       const docTypeConfig = DOCUMENT_TYPES.find(d => d.id === selectedDocType);
+      const effectiveRequiresSignature = selectedDocType === 'board_consent' ? false : Boolean(requiresSignatureChecked);
+      const isAutoSignedBoardConsent = selectedDocType === 'board_consent';
 
       // Create placeholder doc in Firestore (like legalDocuments.tsx)
       const placeholder = await addDoc(collection(db, 'equity-documents'), {
@@ -1536,12 +1570,13 @@ const EquityAdminPage: React.FC = () => {
         prompt: generationPrompt,
         content: '',
         documentType: selectedDocType,
-        requiresSignature: Boolean(requiresSignatureChecked),
+        requiresSignature: effectiveRequiresSignature,
         stakeholderId: selectedStakeholder?.id ?? null,
         stakeholderName: selectedStakeholder?.name ?? null,
         stakeholderEmail: selectedStakeholder?.email ?? null,
         stakeholderType: selectedStakeholder?.type ?? null,
         grantDetails: newGrant,
+        ...(isAutoSignedBoardConsent ? { autoSigned: true, autoSignedAt: Timestamp.now() } : {}),
         createdAt: Timestamp.now(),
         status: 'generating',
       });
@@ -1557,7 +1592,7 @@ const EquityAdminPage: React.FC = () => {
           stakeholderType: selectedStakeholder?.type,
           documentType: selectedDocType,
           prompt: generationPrompt,
-          requiresSignature: Boolean(requiresSignatureChecked),
+          requiresSignature: effectiveRequiresSignature,
           grantDetails: newGrant,
           documentId: placeholder.id,
         })
@@ -1573,12 +1608,18 @@ const EquityAdminPage: React.FC = () => {
       await updateDoc(doc(db, 'equity-documents', placeholder.id), {
         title: result.title || `${docTypeConfig?.label || 'Equity Document'} - ${new Date().toLocaleDateString()}`,
         content: result.content,
-        requiresSignature: Boolean(requiresSignatureChecked),
+        requiresSignature: effectiveRequiresSignature,
+        ...(isAutoSignedBoardConsent ? { autoSigned: true, autoSignedAt: Timestamp.now() } : {}),
         status: 'completed',
         updatedAt: Timestamp.now(),
       });
 
-      setMessage({ type: 'success', text: `${docTypeConfig?.label || 'Document'} generated successfully!` });
+      setMessage({
+        type: 'success',
+        text: isAutoSignedBoardConsent
+          ? `${docTypeConfig?.label || 'Document'} generated and auto-executed successfully!`
+          : `${docTypeConfig?.label || 'Document'} generated successfully!`,
+      });
       setGenerationPrompt('');
       loadData();
     } catch (error) {
@@ -1692,7 +1733,65 @@ const EquityAdminPage: React.FC = () => {
   };
 
   const getSigningRequestsForEquityDoc = (equityDocId: string) => {
-    return signingRequests.filter(r => (r as any).equityDocumentId === equityDocId);
+    return signingRequests.filter(r => (r as any).equityDocumentId === equityDocId && !r.invalidatedAt);
+  };
+
+  const requiresExternalSignature = (equityDoc: EquityDocument) => {
+    return Boolean(equityDoc.requiresSignature) && !isBoardConsentDoc(equityDoc);
+  };
+
+  const getEquityDocSignatureState = (equityDoc: EquityDocument) => {
+    const activeRequests = getSigningRequestsForEquityDoc(equityDoc.id);
+    const hasSignatureFlow = activeRequests.length > 0;
+    const isFullyExecuted = hasSignatureFlow && activeRequests.every(r => r.status === 'signed');
+    const hasBeenSent = activeRequests.some(r => ['sent', 'viewed', 'signed'].includes(r.status));
+
+    return {
+      activeRequests,
+      hasSignatureFlow,
+      isFullyExecuted,
+      hasBeenSent,
+      needsResend: Boolean(equityDoc.needsResendSignature),
+    };
+  };
+
+  const getEquityDocStatusBadge = (equityDoc: EquityDocument) => {
+    const state = getEquityDocSignatureState(equityDoc);
+
+    if (isBoardConsentDoc(equityDoc) && (equityDoc.autoSigned || equityDoc.autoSignedAt)) {
+      return { label: 'Auto-executed', className: 'bg-emerald-900/40 text-emerald-300 border border-emerald-700' };
+    }
+
+    if (state.needsResend) {
+      return { label: 'Needs Resend', className: 'bg-amber-900/40 text-amber-300 border border-amber-700' };
+    }
+
+    if (state.isFullyExecuted) {
+      return { label: 'Signed', className: 'bg-green-900/50 text-green-400 border border-green-700' };
+    }
+
+    if (state.hasBeenSent) {
+      return { label: 'Sent for Signature', className: 'bg-blue-900/50 text-blue-400 border border-blue-700' };
+    }
+
+    if (state.hasSignatureFlow) {
+      return { label: 'Pending Signature', className: 'bg-zinc-800 text-zinc-400 border border-zinc-600' };
+    }
+
+    return null;
+  };
+
+  const invalidateSigningRequestsForDoc = async (equityDoc: EquityDocument, reason: string) => {
+    const activeRequests = getSigningRequestsForEquityDoc(equityDoc.id);
+    await Promise.all(
+      activeRequests.map(request =>
+        updateDoc(doc(db, 'signingRequests', request.id), {
+          invalidatedAt: serverTimestamp(),
+          invalidatedReason: reason,
+        })
+      )
+    );
+    return activeRequests.length;
   };
 
   const getDefaultCompanySigner = (): { stakeholderId?: string; name: string; email: string } => {
@@ -1813,6 +1912,7 @@ const EquityAdminPage: React.FC = () => {
         signingRequestId: signingRequestIds[0],
         signingRequestIds,
         requiresSignature: true,
+        needsResendSignature: false,
         updatedAt: Timestamp.now(),
       });
 
@@ -2379,21 +2479,6 @@ const EquityAdminPage: React.FC = () => {
     };
   };
 
-  // Check if a stakeholder has any documents that have been sent for signature
-  const hasDocumentsSent = (stakeholder: Stakeholder): boolean => {
-    // Get all equity documents for this stakeholder
-    const stakeholderDocs = equityDocuments.filter(d => d.stakeholderId === stakeholder.id);
-    
-    // Check if any document has a signing request that's been sent or signed
-    for (const doc of stakeholderDocs) {
-      const signingRequest = signingRequests.find(r => r.equityDocumentId === doc.id);
-      if (signingRequest && ['sent', 'viewed', 'signed'].includes(signingRequest.status)) {
-        return true;
-      }
-    }
-    return false;
-  };
-
   const getStakeholderCompletedDocuments = (stakeholderId: string) => {
     return equityDocuments.filter(d => d.stakeholderId === stakeholderId && d.status === 'completed');
   };
@@ -2407,7 +2492,7 @@ const EquityAdminPage: React.FC = () => {
     };
 
     return getStakeholderCompletedDocuments(stakeholder.id)
-      .filter(d => d.requiresSignature)
+      .filter(requiresExternalSignature)
       .sort((a, b) => {
         const priorityDiff = (signaturePriority[a.documentType] ?? 99) - (signaturePriority[b.documentType] ?? 99);
         if (priorityDiff !== 0) return priorityDiff;
@@ -2522,14 +2607,12 @@ const EquityAdminPage: React.FC = () => {
       );
 
       if (boardConsentDoc) {
-        const boardSigningRequest = signingRequests.find(r => r.equityDocumentId === boardConsentDoc.id);
-        const boardDocSigned = boardSigningRequest?.status === 'signed';
-        const boardDocSent = boardSigningRequest && ['sent', 'viewed', 'signed'].includes(boardSigningRequest.status);
+        const boardDocState = getEquityDocSignatureState(boardConsentDoc);
+        const boardConsentExecuted = Boolean(boardConsentDoc.autoSigned || boardConsentDoc.autoSignedAt) || boardDocState.isFullyExecuted;
 
-        if (boardDocSigned) {
-          // Document is SIGNED - create a NEW amendment document
-          console.log('[saveGrantOptions] Board Consent is signed, creating amendment');
-          setMessage({ type: 'info', text: 'Creating Board Consent Amendment for new options amount...' });
+        if (boardConsentExecuted) {
+          console.log('[saveGrantOptions] Board Consent is executed, creating amendment');
+          setMessage({ type: 'info', text: 'Creating auto-executed Board Consent Amendment...' });
 
           try {
             const amendmentTitle = `Board Consent Amendment - ${stakeholder.name} (Options: ${formatNumber(editGrantOptionsValue)})`;
@@ -2538,7 +2621,7 @@ const EquityAdminPage: React.FC = () => {
               prompt: `Generate a Board Consent Amendment to update the previously approved equity grant for ${stakeholder.name} from ${formatNumber(oldOptions)} options to ${formatNumber(editGrantOptionsValue)} options.`,
               content: '',
               documentType: 'board_consent',
-              requiresSignature: true,
+              requiresSignature: false,
               stakeholderId: stakeholder.id,
               stakeholderName: stakeholder.name,
               stakeholderEmail: stakeholder.email,
@@ -2546,6 +2629,8 @@ const EquityAdminPage: React.FC = () => {
               grantDetails,
               isAmendment: true,
               originalDocumentId: boardConsentDoc.id,
+              autoSigned: true,
+              autoSignedAt: Timestamp.now(),
               createdAt: Timestamp.now(),
               status: 'generating',
             });
@@ -2559,7 +2644,7 @@ const EquityAdminPage: React.FC = () => {
                 stakeholderEmail: stakeholder.email,
                 stakeholderType: stakeholder.type,
                 documentType: 'board_consent',
-                requiresSignature: true,
+                requiresSignature: false,
                 isAmendment: true,
                 previousOptionsAmount: oldOptions,
                 newOptionsAmount: editGrantOptionsValue,
@@ -2574,6 +2659,9 @@ const EquityAdminPage: React.FC = () => {
               await updateDoc(doc(db, 'equity-documents', placeholder.id), {
                 content: result.content,
                 title: result.title || amendmentTitle,
+                requiresSignature: false,
+                autoSigned: true,
+                autoSignedAt: serverTimestamp(),
                 status: 'completed',
                 updatedAt: serverTimestamp(),
               });
@@ -2589,14 +2677,26 @@ const EquityAdminPage: React.FC = () => {
           } catch (amendError) {
             console.error('[saveGrantOptions] Error creating Board Consent Amendment:', amendError);
           }
-        } else if (!boardDocSent) {
-          // Document NOT sent - regenerate the existing document
-          console.log('[saveGrantOptions] Regenerating Board Consent with new options');
-          setMessage({ type: 'info', text: 'Updating Board Consent with new options amount...' });
+        } else {
+          console.log('[saveGrantOptions] Updating in-flight Board Consent with new options');
+          setMessage({ type: 'info', text: 'Updating Board Consent with the new options amount...' });
 
           try {
+            if (boardDocState.hasSignatureFlow) {
+              await invalidateSigningRequestsForDoc(
+                boardConsentDoc,
+                `Invalidated because ${stakeholder.name}'s equity terms changed before the Board Consent was fully executed.`
+              );
+            }
+
             await updateDoc(doc(db, 'equity-documents', boardConsentDoc.id), {
               grantDetails,
+              requiresSignature: false,
+              autoSigned: true,
+              autoSignedAt: serverTimestamp(),
+              signingRequestId: deleteField(),
+              signingRequestIds: deleteField(),
+              needsResendSignature: false,
               status: 'generating',
               updatedAt: serverTimestamp(),
             });
@@ -2610,7 +2710,7 @@ const EquityAdminPage: React.FC = () => {
                 stakeholderEmail: stakeholder.email,
                 stakeholderType: stakeholder.type,
                 documentType: 'board_consent',
-                requiresSignature: boardConsentDoc.requiresSignature || true,
+                requiresSignature: false,
                 prompt: `Generate a Board Consent approving equity grants. For ${stakeholder.name}: ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
                 grantDetails,
               }),
@@ -2622,6 +2722,9 @@ const EquityAdminPage: React.FC = () => {
               await updateDoc(doc(db, 'equity-documents', boardConsentDoc.id), {
                 content: result.content,
                 title: result.title || boardConsentDoc.title,
+                requiresSignature: false,
+                autoSigned: true,
+                autoSignedAt: serverTimestamp(),
                 status: 'completed',
                 grantDetails,
                 updatedAt: serverTimestamp(),
@@ -2637,8 +2740,6 @@ const EquityAdminPage: React.FC = () => {
           } catch (docError) {
             console.error('[saveGrantOptions] Error regenerating Board Consent:', docError);
           }
-        } else {
-          console.log('[saveGrantOptions] Board Consent sent but not signed, skipping');
         }
       }
 
@@ -2652,9 +2753,9 @@ const EquityAdminPage: React.FC = () => {
       );
 
       for (const equityDoc of stakeholderDocs) {
-        const signingRequest = signingRequests.find(r => r.equityDocumentId === equityDoc.id);
-        const isSigned = signingRequest?.status === 'signed';
-        const hasBeenSent = signingRequest && ['sent', 'viewed', 'signed'].includes(signingRequest.status);
+        const docSigningState = getEquityDocSignatureState(equityDoc);
+        const isSigned = docSigningState.isFullyExecuted;
+        const hasBeenSent = docSigningState.hasBeenSent;
 
         if (isSigned) {
           // Document is SIGNED - create a NEW amendment document
@@ -2676,6 +2777,7 @@ const EquityAdminPage: React.FC = () => {
               grantDetails,
               isAmendment: true,
               originalDocumentId: equityDoc.id,
+              needsResendSignature: true,
               createdAt: Timestamp.now(),
               status: 'generating',
             });
@@ -2705,6 +2807,7 @@ const EquityAdminPage: React.FC = () => {
               await updateDoc(doc(db, 'equity-documents', placeholder.id), {
                 content: result.content,
                 title: result.title || amendmentTitle,
+                needsResendSignature: true,
                 status: 'completed',
                 updatedAt: serverTimestamp(),
               });
@@ -2719,10 +2822,15 @@ const EquityAdminPage: React.FC = () => {
           } catch (amendError) {
             console.error('[saveGrantOptions] Error creating Advisor Agreement Amendment:', amendError);
           }
-        } else if (!hasBeenSent) {
-          // Document NOT sent - regenerate the existing document
+        } else {
+          // Document not fully executed - regenerate the existing document and force a resend
           console.log('[saveGrantOptions] Regenerating Advisor Agreement');
-          setMessage({ type: 'info', text: 'Regenerating Advisor Agreement with updated options...' });
+          setMessage({
+            type: 'info',
+            text: hasBeenSent
+              ? 'Invalidating old signature links and regenerating the Advisor Agreement...'
+              : 'Regenerating Advisor Agreement with updated options...',
+          });
 
           try {
             const updatedGrantDetails = {
@@ -2730,8 +2838,19 @@ const EquityAdminPage: React.FC = () => {
               numberOfShares: editGrantOptionsValue,
             };
 
+            let invalidatedRequestCount = 0;
+            if (docSigningState.hasSignatureFlow) {
+              invalidatedRequestCount = await invalidateSigningRequestsForDoc(
+                equityDoc,
+                `Invalidated because ${stakeholder.name}'s equity grant changed before the document was fully executed.`
+              );
+            }
+
             await updateDoc(doc(db, 'equity-documents', equityDoc.id), {
               grantDetails: updatedGrantDetails,
+              signingRequestId: deleteField(),
+              signingRequestIds: deleteField(),
+              needsResendSignature: invalidatedRequestCount > 0,
               status: 'generating',
               updatedAt: serverTimestamp(),
             });
@@ -2745,7 +2864,7 @@ const EquityAdminPage: React.FC = () => {
                 stakeholderEmail: stakeholder.email,
                 stakeholderType: stakeholder.type,
                 documentType: 'advisor_nso_agreement',
-                requiresSignature: equityDoc.requiresSignature || true,
+                requiresSignature: true,
                 boardApprovalDate: boardApprovalDate || undefined,
                 prompt: `Generate a combined Advisor Services Agreement and Non-Qualified Stock Option Grant for ${stakeholder.name}. The grant is for ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options.`,
                 grantDetails,
@@ -2760,6 +2879,7 @@ const EquityAdminPage: React.FC = () => {
                 title: result.title || equityDoc.title,
                 status: 'completed',
                 grantDetails: updatedGrantDetails,
+                needsResendSignature: invalidatedRequestCount > 0,
                 updatedAt: serverTimestamp(),
               });
               console.log('[saveGrantOptions] Advisor Agreement regenerated:', equityDoc.id);
@@ -2775,8 +2895,6 @@ const EquityAdminPage: React.FC = () => {
           } catch (docError: any) {
             console.error('[saveGrantOptions] Error regenerating document:', docError);
           }
-        } else {
-          console.log('[saveGrantOptions] Document sent but not signed, skipping:', equityDoc.id);
         }
       }
 
@@ -3103,9 +3221,7 @@ const EquityAdminPage: React.FC = () => {
                                     Options Granted
                                   </h5>
                                   <p className="text-xs text-zinc-500 mt-1">
-                                    {hasDocumentsSent(stakeholder) 
-                                      ? 'Locked once signature packets have been sent so approved paperwork stays in sync.'
-                                      : 'Adjust the number of options before sending. Draft equity docs will regenerate with the updated amount.'}
+                                    Update the grant at any time. Pending signature links will be invalidated and marked for resend; fully executed docs will produce a new amendment.
                                   </p>
                                 </div>
                                 
@@ -3142,20 +3258,13 @@ const EquityAdminPage: React.FC = () => {
                                     <span className="text-white font-semibold text-lg">
                                       {formatNumber(stakeholder.optionsGranted || stakeholder.grants?.[0]?.numberOfShares || stakeholder.totalShares || 0)}
                                     </span>
-                                    {!hasDocumentsSent(stakeholder) && (
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); startEditingGrantOptions(stakeholder); }}
-                                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/40 rounded-lg text-xs transition-colors"
-                                      >
-                                        <Edit3 className="w-3 h-3" />
-                                        Edit
-                                      </button>
-                                    )}
-                                    {hasDocumentsSent(stakeholder) && (
-                                      <span className="px-2 py-1 rounded-full text-xs bg-zinc-700 text-zinc-400 border border-zinc-600">
-                                        🔒 Locked
-                                      </span>
-                                    )}
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); startEditingGrantOptions(stakeholder); }}
+                                      className="flex items-center gap-1 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/40 rounded-lg text-xs transition-colors"
+                                    >
+                                      <Edit3 className="w-3 h-3" />
+                                      Edit
+                                    </button>
                                   </div>
                                 )}
                               </div>
@@ -3297,8 +3406,11 @@ const EquityAdminPage: React.FC = () => {
                                 <div className="space-y-3 mb-4">
                                   <h5 className="text-zinc-400 text-sm font-medium">Documents</h5>
                                   {stakeholderDocs.map((edoc) => {
-                                    const signingRequest = signingRequests.find(r => r.equityDocumentId === edoc.id);
-                                    const canManageSignature = edoc.requiresSignature && signingRequest?.status !== 'signed';
+                                    const docState = getEquityDocSignatureState(edoc);
+                                    const signingRequest = docState.activeRequests[0];
+                                    const statusBadge = getEquityDocStatusBadge(edoc);
+                                    const needsSignature = requiresExternalSignature(edoc);
+                                    const canManageSignature = needsSignature && !docState.isFullyExecuted;
                                     return (
                                       <div key={edoc.id} className="p-4 rounded-xl bg-zinc-800/50 border border-zinc-700">
                                         <div className="flex items-start justify-between gap-4 mb-3">
@@ -3308,20 +3420,19 @@ const EquityAdminPage: React.FC = () => {
                                               <span className="px-2 py-0.5 rounded-full text-xs bg-green-900/50 text-green-400 border border-green-700">
                                                 ✓ Completed
                                               </span>
-                                              {edoc.requiresSignature && (
+                                              {edoc.isAmendment && (
+                                                <span className="px-2 py-0.5 rounded-full text-xs bg-fuchsia-900/40 text-fuchsia-300 border border-fuchsia-700">
+                                                  Amendment
+                                                </span>
+                                              )}
+                                              {needsSignature && (
                                                 <span className="px-2 py-0.5 rounded-full text-xs bg-orange-900/50 text-orange-400 border border-orange-700">
                                                   Signature Required
                                                 </span>
                                               )}
-                                              {signingRequest && (
-                                                <span className={`px-2 py-0.5 rounded-full text-xs ${
-                                                  signingRequest.status === 'signed' 
-                                                    ? 'bg-green-900/50 text-green-400 border border-green-700'
-                                                    : signingRequest.status === 'sent'
-                                                    ? 'bg-blue-900/50 text-blue-400 border border-blue-700'
-                                                    : 'bg-zinc-800 text-zinc-400 border border-zinc-600'
-                                                }`}>
-                                                  {signingRequest.status === 'signed' ? '✓ Signed' : signingRequest.status === 'sent' ? 'Sent' : 'Pending'}
+                                              {statusBadge && (
+                                                <span className={`px-2 py-0.5 rounded-full text-xs ${statusBadge.className}`}>
+                                                  {statusBadge.label}
                                                 </span>
                                               )}
                                             </div>
@@ -3348,10 +3459,10 @@ const EquityAdminPage: React.FC = () => {
                                               className="flex items-center gap-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs transition-colors"
                                             >
                                               <Send className="w-3 h-3" />
-                                              {signingRequest ? 'Resend Signature Email' : 'Send for Signature'}
+                                              {docState.needsResend || signingRequest ? 'Resend Signature Email' : 'Send for Signature'}
                                             </button>
                                           )}
-                                          {signingRequest && signingRequest.status !== 'signed' && (
+                                          {signingRequest && needsSignature && !docState.isFullyExecuted && (
                                             <button
                                               onClick={(e) => { e.stopPropagation(); window.open(`/sign/${signingRequest.id}`, '_blank'); }}
                                               className="flex items-center gap-1 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-xs transition-colors"
@@ -3360,7 +3471,7 @@ const EquityAdminPage: React.FC = () => {
                                               View Signing Page
                                             </button>
                                           )}
-                                          {signingRequest && (
+                                          {signingRequest && needsSignature && (
                                             <button
                                               onClick={(e) => { e.stopPropagation(); copySigningLink(signingRequest.id); }}
                                               className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs transition-colors"
@@ -3369,7 +3480,7 @@ const EquityAdminPage: React.FC = () => {
                                               Copy Link
                                             </button>
                                           )}
-                                          {signingRequest && signingRequest.status === 'signed' && (
+                                          {signingRequest && needsSignature && docState.isFullyExecuted && (
                                             <button
                                               onClick={(e) => { e.stopPropagation(); window.open(`/sign/${signingRequest.id}?download=true`, '_blank'); }}
                                               className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-xs transition-colors"
@@ -3430,9 +3541,10 @@ const EquityAdminPage: React.FC = () => {
                               const primarySignatureDoc = getPrimaryStakeholderSignatureDoc(stakeholder);
                               if (!primarySignatureDoc) return null;
 
-                              const signingRequest = signingRequests.find(r => r.equityDocumentId === primarySignatureDoc.id);
+                              const signingState = getEquityDocSignatureState(primarySignatureDoc);
+                              const signingRequest = signingState.activeRequests[0];
 
-                              if (signingRequest?.status === 'signed') {
+                              if (signingState.isFullyExecuted && signingRequest) {
                                 return (
                                   <button
                                     onClick={(e) => {
@@ -3456,7 +3568,7 @@ const EquityAdminPage: React.FC = () => {
                                   className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-500 transition-colors"
                                 >
                                   <Send className="w-4 h-4" />
-                                  {signingRequest ? 'Resend Signature Doc' : 'Send Signature Doc'}
+                                  {signingState.needsResend || signingRequest ? 'Resend Signature Doc' : 'Send Signature Doc'}
                                 </button>
                               );
                             })()}
@@ -3754,9 +3866,11 @@ const EquityAdminPage: React.FC = () => {
           <div className="space-y-4">
             {equityDocuments.map((edoc) => {
               const isExpanded = expandedEquityDoc === edoc.id;
-              const signingRequestsForDoc = getSigningRequestsForEquityDoc(edoc.id);
+              const signingState = getEquityDocSignatureState(edoc);
+              const signingRequestsForDoc = signingState.activeRequests;
               const signingRequest = signingRequestsForDoc[0]; // For backwards-compatible UI
-              const needsSignature = Boolean(edoc.requiresSignature);
+              const needsSignature = requiresExternalSignature(edoc);
+              const statusBadge = getEquityDocStatusBadge(edoc);
               return (
                 <GlassCard key={edoc.id} accentColor="#3B82F6">
                   <div className="p-5">
@@ -3785,10 +3899,16 @@ const EquityAdminPage: React.FC = () => {
                               Error
                             </span>
                           )}
-                          {signingRequest && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-zinc-800 text-zinc-200 rounded-full text-xs border border-zinc-700">
-                              {signingRequest.status === 'signed' ? <Check className="w-3 h-3" /> : signingRequest.status === 'viewed' ? <Eye className="w-3 h-3" /> : signingRequest.status === 'sent' ? <Mail className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                              {signingRequest.status.charAt(0).toUpperCase() + signingRequest.status.slice(1)}
+                          {edoc.isAmendment && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-fuchsia-900/30 text-fuchsia-300 rounded-full text-xs border border-fuchsia-800">
+                              <RefreshCw className="w-3 h-3" />
+                              Amendment
+                            </span>
+                          )}
+                          {statusBadge && (
+                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${statusBadge.className}`}>
+                              {statusBadge.label === 'Signed' ? <Check className="w-3 h-3" /> : statusBadge.label === 'Sent for Signature' ? <Mail className="w-3 h-3" /> : statusBadge.label === 'Pending Signature' ? <Clock className="w-3 h-3" /> : statusBadge.label === 'Needs Resend' ? <AlertTriangle className="w-3 h-3" /> : <PenTool className="w-3 h-3" />}
+                              {statusBadge.label}
                             </span>
                           )}
                           {needsSignature && !signingRequest && edoc.status === 'completed' && (
@@ -3843,7 +3963,7 @@ const EquityAdminPage: React.FC = () => {
                             </button>
 
                             {/* Signing Actions */}
-                            {signingRequest?.status === 'signed' ? (
+                            {signingState.isFullyExecuted && signingRequest ? (
                               <button
                                 onClick={() => window.open(`/sign/${signingRequest.id}?download=true`, '_blank')}
                                 className="flex items-center gap-1 px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition-colors"
@@ -3857,9 +3977,9 @@ const EquityAdminPage: React.FC = () => {
                                 className="flex items-center gap-1 px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm font-medium transition-colors"
                               >
                                 <Send className="w-4 h-4" />
-                                {signingRequest ? 'Resend Signature Email' : 'Send for Signature'}
+                                {signingState.needsResend || signingRequest ? 'Resend Signature Email' : 'Send for Signature'}
                               </button>
-                            ) : signingRequest ? (
+                            ) : signingRequest && needsSignature ? (
                               <button
                                 onClick={() => window.open(`/sign/${signingRequest.id}`, '_blank')}
                                 className="flex items-center gap-1 px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm transition-colors"
@@ -3869,7 +3989,7 @@ const EquityAdminPage: React.FC = () => {
                               </button>
                             ) : null}
 
-                            {signingRequest && (
+                            {signingRequest && needsSignature && (
                               <button
                                 onClick={() => copySigningLink(signingRequest.id)}
                                 className="flex items-center gap-1 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"

@@ -79,6 +79,7 @@ CRITICAL REQUIREMENTS:
 2. Reference DGCL §141(f) for written consent authority.
 3. Include explicit Plan incorporation language.
 4. Do NOT include a separate "FURTHER RESOLVED" for fair market value determination - establish FMV in the recitals only, not as a redundant resolution.
+5. This board consent should appear ALREADY EXECUTED by the sole director. Do NOT use blank signature lines, underscores, or placeholder signature fields.
 
 MANDATORY DATE REQUIREMENTS (CRITICAL - VERIFICATION WILL FAIL WITHOUT THESE):
 - You MUST include the approval date in at least TWO places:
@@ -140,11 +141,11 @@ DOCUMENT STRUCTURE REQUIREMENTS:
    - CRITICAL: The date "${currentDate}" MUST be written out in full - DO NOT use placeholders, underscores, or leave blank
 
 6. SIGNATURE BLOCK - CRITICAL FORMAT (SOLE DIRECTOR ONLY):
-   Use this EXACT format - do NOT add multiple director signature lines:
+   Use this EXACT format - do NOT add multiple director signature lines and do NOT leave any blank signature line:
 
    IN WITNESS WHEREOF, the undersigned, being the sole member of the Board of Directors of Pulse Intelligence Labs, Inc., has executed this Written Consent as of the date set forth below.
 
-   ______________________________
+   /s/ Tremaine Grant
    Tremaine Grant
    Sole Director
 
@@ -160,6 +161,7 @@ DOCUMENT STRUCTURE REQUIREMENTS:
    - All three dates must be the same: "${currentDate}"
    - Write the date in full text format like "January 23, 2026" - do not abbreviate
    - If any date is missing or left blank, the document verification will fail
+   - The signature should appear already executed as "/s/ Tremaine Grant" and must not be left blank
 
 EXAMPLE OF CORRECT DATE USAGE:
 - Header: "Dated as of January 23, 2026"
