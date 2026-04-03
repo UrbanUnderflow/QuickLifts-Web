@@ -19,6 +19,47 @@ function normalizeOriginalPath(value: string | undefined) {
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }
 
+function resolveOriginalPath(event: HandlerEvent) {
+  const fromQuery = normalizeOriginalPath(event.queryStringParameters?.originalPath);
+  if (fromQuery) {
+    return fromQuery;
+  }
+
+  const headerCandidates = [
+    event.headers['x-original-path'],
+    event.headers['x-nf-original-path'],
+  ];
+
+  for (const candidate of headerCandidates) {
+    const normalized = normalizeOriginalPath(candidate);
+    if (normalized.startsWith('/api/')) {
+      return normalized;
+    }
+  }
+
+  const pathCandidates = [
+    typeof event.path === 'string' ? event.path : '',
+    typeof (event as HandlerEvent & { rawUrl?: string }).rawUrl === 'string'
+      ? (() => {
+          try {
+            return new URL((event as HandlerEvent & { rawUrl?: string }).rawUrl as string).pathname;
+          } catch (_error) {
+            return '';
+          }
+        })()
+      : '',
+  ];
+
+  for (const candidate of pathCandidates) {
+    const normalized = normalizeOriginalPath(candidate);
+    if (normalized.startsWith('/api/')) {
+      return normalized;
+    }
+  }
+
+  return '';
+}
+
 function matchRoutePattern(pattern: string, actualPath: string) {
   const patternSegments = pattern.split('/').filter(Boolean);
   const actualSegments = actualPath.split('/').filter(Boolean);
@@ -90,7 +131,7 @@ function buildQuery(event: HandlerEvent, params: Record<string, string>) {
 }
 
 function createRequest(event: HandlerEvent, params: Record<string, string>) {
-  const originalPath = normalizeOriginalPath(event.queryStringParameters?.originalPath);
+  const originalPath = resolveOriginalPath(event);
   const search = new URLSearchParams();
 
   for (const [key, value] of Object.entries(event.queryStringParameters || {})) {
@@ -214,7 +255,7 @@ function toHandlerResponse(
 
 export function createFirebaseNextApiHandler(routeEntries: RouteEntry[]): Handler {
   return async (event) => {
-    const originalPath = normalizeOriginalPath(event.queryStringParameters?.originalPath);
+    const originalPath = resolveOriginalPath(event);
     const matchedEntry = routeEntries.find((entry) => matchRoutePattern(entry.pattern, originalPath));
 
     if (!matchedEntry) {
@@ -300,6 +341,7 @@ export const handler = createFirebaseNextApiHandler(ROUTE_ENTRIES);
 export const __test = {
   matchRoutePattern,
   normalizeOriginalPath,
+  resolveOriginalPath,
   createFirebaseNextApiHandler,
   resolveRoutePattern(actualPath: string) {
     return ROUTE_ENTRIES.find((entry) => matchRoutePattern(entry.pattern, actualPath))?.pattern || null;
