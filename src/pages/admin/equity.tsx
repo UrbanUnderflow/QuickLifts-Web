@@ -5093,9 +5093,9 @@ const EquityAdminPage: React.FC = () => {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-md overflow-hidden"
+              className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col"
             >
-              <div className="flex items-center justify-between p-6 border-b border-zinc-700">
+              <div className="flex items-center justify-between p-6 border-b border-zinc-700 shrink-0">
                 <div>
                   <h2 className="text-xl font-semibold text-white flex items-center gap-2">
                     <Send className="w-5 h-5 text-orange-400" />
@@ -5111,7 +5111,7 @@ const EquityAdminPage: React.FC = () => {
                 </button>
               </div>
 
-              <div className="p-6 space-y-4">
+              <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
                 {signingModalStatus && (
                   <div
                     className={`rounded-xl border p-4 text-sm ${
@@ -5241,7 +5241,7 @@ const EquityAdminPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 p-6 border-t border-zinc-700">
+              <div className="flex items-center justify-end gap-3 p-6 border-t border-zinc-700 shrink-0">
                 <button
                   onClick={closeSigningModal}
                   className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
