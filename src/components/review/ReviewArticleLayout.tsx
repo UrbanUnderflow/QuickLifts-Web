@@ -40,6 +40,7 @@ interface ReviewArticleLayoutProps {
   pageOgUrl?: string;
   downloadHref?: string;
   downloadLabel?: string;
+  headerActions?: React.ReactNode;
 }
 
 const ReviewArticleLayout: React.FC<ReviewArticleLayoutProps> = ({
@@ -53,6 +54,7 @@ const ReviewArticleLayout: React.FC<ReviewArticleLayoutProps> = ({
   pageOgUrl,
   downloadHref = '/PulseDeck12_9.pdf',
   downloadLabel = 'Download PDF',
+  headerActions,
 }) => (
   <>
     <PageHead
@@ -134,21 +136,24 @@ const ReviewArticleLayout: React.FC<ReviewArticleLayoutProps> = ({
           </p>
         </motion.div>
 
-        {downloadHref && (
+        {(downloadHref || headerActions) && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.14, ease: [0.22, 1, 0.36, 1] }}
-            className="mt-8"
+            className="mt-8 flex flex-wrap items-center gap-3"
           >
-            <a
-              href={downloadHref}
-              download
-              className="inline-flex items-center gap-2 rounded-full bg-stone-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-stone-700"
-            >
-              <Download size={16} />
-              {downloadLabel}
-            </a>
+            {downloadHref && (
+              <a
+                href={downloadHref}
+                download
+                className="inline-flex items-center gap-2 rounded-full bg-stone-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-stone-700"
+              >
+                <Download size={16} />
+                {downloadLabel}
+              </a>
+            )}
+            {headerActions}
           </motion.div>
         )}
       </header>

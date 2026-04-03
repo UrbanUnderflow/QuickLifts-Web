@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { GetStaticProps, NextPage } from 'next';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { motion } from 'framer-motion';
 import { ArrowRight, Calendar, Edit3, FileText, Loader2, Plus } from 'lucide-react';
 import { JSDOM } from 'jsdom';
@@ -326,8 +327,10 @@ const ReviewListItem: React.FC<{ review: Review; index: number }> = ({ review, i
 );
 
 const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) => {
+  const router = useRouter();
   const user = useUser();
   const [drafts, setDrafts] = useState<DraftReview[]>([]);
+  const [publishedDraftReviews, setPublishedDraftReviews] = useState<Review[]>([]);
   const [allReviews, setAllReviews] = useState<Review[]>(staticReviews);
   const [activeFilter, setActiveFilter] = useState<ReviewFilter>('All');
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
@@ -335,6 +338,7 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [showCreateReviewModal, setShowCreateReviewModal] = useState(false);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState<DraftReview | null>(null);
   const [createReviewType, setCreateReviewType] = useState<CreateReviewType>('month');
   const [createReviewFormat, setCreateReviewFormat] = useState<CreateReviewFormat>('investor-update');
   const [authorProfiles, setAuthorProfiles] = useState<AuthorProfileOption[]>([]);
@@ -347,32 +351,31 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
   const [creatingReview, setCreatingReview] = useState(false);
   const [adminSurfaceError, setAdminSurfaceError] = useState<string | null>(null);
 
-  const applyDraftsToState = (draftData: DraftReview[]) => {
-    const unpublishedDrafts = draftData.filter((draft) => draft.status !== 'published');
-    setDrafts(unpublishedDrafts);
-
-    const draftReviews: Review[] = unpublishedDrafts.map((draft) => {
-      const [year, month] = draft.monthYear.split('-');
-
-      return {
-        id: `draft/${draft.id}`,
-        title: draft.title,
-        description: draft.description,
-        date: `${year}-${month}-01`,
-        reviewType: draft.reviewType === 'quarter' ? 'quarter' : draft.reviewType === 'year' ? 'year' : 'month',
-        isDraft: true,
-        draftId: draft.id,
-      };
-    });
-
-    const merged = [...draftReviews, ...staticReviews];
-    merged.sort((a, b) => b.date.localeCompare(a.date));
-    setAllReviews(merged);
-  };
-
   const refreshDrafts = async () => {
     const draftData = await reviewContextService.fetchAllDrafts();
-    applyDraftsToState(draftData);
+    const unpublishedDrafts = draftData.filter((draft) => draft.status !== 'published');
+    setDrafts(unpublishedDrafts);
+  };
+
+  const loadPublishedReviews = async () => {
+    try {
+      const publishedDrafts = await reviewContextService.fetchPublishedDrafts();
+      const publishedReviews: Review[] = publishedDrafts.map((draft) => {
+        const [year, month] = draft.monthYear.split('-');
+        return {
+          id: draft.id,
+          title: draft.title,
+          description: draft.description,
+          date: `${year}-${month}-01`,
+          reviewType: draft.reviewType === 'quarter' ? 'quarter' : draft.reviewType === 'year' ? 'year' : 'month',
+        };
+      });
+
+      setPublishedDraftReviews(publishedReviews);
+    } catch (error) {
+      console.error('Error fetching published review drafts:', error);
+      setPublishedDraftReviews([]);
+    }
   };
 
   useEffect(() => {
@@ -396,6 +399,10 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
 
     checkAdminStatus();
   }, [user]);
+
+  useEffect(() => {
+    loadPublishedReviews();
+  }, []);
 
   useEffect(() => {
     const loadAuthors = async () => {
@@ -434,16 +441,40 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
 
     const fetchDrafts = async () => {
       try {
-        const draftData = await reviewContextService.fetchAllDrafts();
-        applyDraftsToState(draftData);
+        await refreshDrafts();
       } catch (err) {
         console.error('Error fetching drafts:', err);
-        setAllReviews(staticReviews);
+        setDrafts([]);
       }
     };
 
     fetchDrafts();
   }, [staticReviews, isAdmin, checkingAdmin]);
+
+  useEffect(() => {
+    const draftReviews: Review[] = drafts.map((draft) => {
+      const [year, month] = draft.monthYear.split('-');
+
+      return {
+        id: `draft/${draft.id}`,
+        title: draft.title,
+        description: draft.description,
+        date: `${year}-${month}-01`,
+        reviewType: draft.reviewType === 'quarter' ? 'quarter' : draft.reviewType === 'year' ? 'year' : 'month',
+        isDraft: true,
+        draftId: draft.id,
+      };
+    });
+
+    const merged = [
+      ...draftReviews,
+      ...publishedDraftReviews,
+      ...staticReviews,
+    ];
+
+    merged.sort((a, b) => b.date.localeCompare(a.date));
+    setAllReviews(merged);
+  }, [drafts, publishedDraftReviews, staticReviews]);
 
   useEffect(() => {
     if (activeFilter === 'Drafts' && !isAdmin) {
@@ -457,9 +488,40 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
     }
   }, [drafts, selectedDraftId]);
 
+  useEffect(() => {
+    const editDraftQuery = typeof router.query.edit === 'string' ? router.query.edit : null;
+
+    if (!router.isReady || !editDraftQuery || checkingAdmin || !isAdmin) {
+      return;
+    }
+
+    if (editingDraftId === editDraftQuery && showCreateReviewModal) {
+      return;
+    }
+
+    const openRequestedDraft = async () => {
+      try {
+        const draft = await reviewContextService.fetchDraftById(editDraftQuery);
+        if (!draft) {
+          setAdminSurfaceError('That review could not be found for editing.');
+          return;
+        }
+
+        openEditReviewModal(draft);
+        await router.replace('/review', undefined, { shallow: true });
+      } catch (error) {
+        console.error('Error opening review edit modal from query param:', error);
+        setAdminSurfaceError('That review could not be opened for editing.');
+      }
+    };
+
+    openRequestedDraft();
+  }, [router, isAdmin, checkingAdmin, editingDraftId, showCreateReviewModal]);
+
   const openCreateReviewModal = () => {
     const preferredAuthor = getPreferredAuthorProfile(authorProfiles);
     setEditingDraftId(null);
+    setEditingDraft(null);
     setCreateReviewType('month');
     setCreateReviewFormat('investor-update');
     setCreateReviewAuthor(preferredAuthor?.name || 'Tremaine');
@@ -476,6 +538,7 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
     const [year, month] = draft.monthYear.split('-').map(Number);
     const matchedProfile = authorProfiles.find((profile) => profile.name === draft.author);
     setEditingDraftId(draft.id);
+    setEditingDraft(draft);
     setCreateReviewType(draft.reviewType);
     setCreateReviewFormat(draft.formatStyle);
     setCreateReviewAuthor(draft.author || matchedProfile?.name || getPreferredAuthorProfile(authorProfiles)?.name || 'Tremaine');
@@ -491,12 +554,12 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
   const closeCreateReviewModal = () => {
     setShowCreateReviewModal(false);
     setEditingDraftId(null);
+    setEditingDraft(null);
     setMonthReviewContext('');
     setAdminSurfaceError(null);
   };
 
   const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId) || null;
-  const editingDraft = drafts.find((draft) => draft.id === editingDraftId) || null;
   const reviewFormTarget = getReviewFormTarget(createReviewType, selectedMonth, selectedQuarter, selectedYear);
   const editingTargetMonthYear = reviewFormTarget
     ? `${reviewFormTarget.year}-${String(reviewFormTarget.month).padStart(2, '0')}`
@@ -591,6 +654,7 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
         }
 
         const draft = await reviewContextService.createArticleDraftFromContent(year, month, articleSource, {
+          existingDraftId: editingDraft?.id,
           reviewType: createReviewType,
           author: createReviewAuthor,
           authorTitle: createReviewAuthorTitle,
@@ -598,6 +662,7 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
         draftIdToSelect = draft.id;
       } else if (needsStructuredRegeneration) {
         const draft = await reviewContextService.generateDraftFromContext(year, month, {
+          existingDraftId: editingDraft?.id,
           reviewType: createReviewType,
           formatStyle: createReviewFormat,
           author: createReviewAuthor,
@@ -623,6 +688,7 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
       }
 
       await refreshDrafts();
+      await loadPublishedReviews();
       closeCreateReviewModal();
       if (draftIdToSelect) {
         setSelectedDraftId(draftIdToSelect);

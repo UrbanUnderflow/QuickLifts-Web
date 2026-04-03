@@ -1178,12 +1178,10 @@ const DraftReviewPage: React.FC = () => {
   const handlePublish = async () => {
     if (!draft) return;
     
-    // For now, just mark as ready - actual publishing would create a real review page
     try {
       setPublishing(true);
-      await reviewContextService.updateDraftStatus(draft.id, 'published');
-      // Redirect to reviews page
-      router.push('/review');
+      await reviewContextService.publishDraft(draft.id);
+      router.push(`/review/${draft.id}`);
     } catch (err) {
       console.error('Error publishing:', err);
       setError('Failed to publish review');

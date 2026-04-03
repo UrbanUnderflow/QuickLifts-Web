@@ -189,6 +189,11 @@ interface AuditResult {
   strengths: string[];
 }
 
+type InlineStatus = {
+  type: 'success' | 'error' | 'info';
+  text: string;
+};
+
 // Equity Pool Interface - tracks the option pool reserve (separate from stakeholders)
 interface EquityPool {
   id?: string;
@@ -300,8 +305,50 @@ const getDateValue = (date?: Timestamp | Date): number => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
-const isBoardConsentDoc = (document?: Pick<EquityDocument, 'documentType'> | null): boolean =>
-  Boolean(document && document.documentType === 'board_consent');
+const AUTO_EXECUTED_COMPANY_DOC_TYPES = ['board_consent', 'stockholder_consent', 'eip'] as const;
+
+const isAutoExecutedCompanyDocType = (documentType?: string | null): boolean =>
+  Boolean(documentType && AUTO_EXECUTED_COMPANY_DOC_TYPES.includes(documentType as typeof AUTO_EXECUTED_COMPANY_DOC_TYPES[number]));
+
+const isAutoExecutedCompanyDoc = (document?: Pick<EquityDocument, 'documentType'> | null): boolean =>
+  Boolean(document && isAutoExecutedCompanyDocType(document.documentType));
+
+const formatLegalDate = (date?: Timestamp | Date): string => {
+  if (!date) {
+    return new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  }
+  const resolved = date instanceof Timestamp ? date.toDate() : date;
+  return resolved.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
+
+const parseFunctionResponse = async (response: Response, functionPath: string) => {
+  const contentType = response.headers.get('content-type') || '';
+  const rawBody = await response.text();
+
+  if (contentType.includes('application/json')) {
+    try {
+      return JSON.parse(rawBody);
+    } catch {
+      throw new Error(`Received invalid JSON from ${functionPath}.`);
+    }
+  }
+
+  if (!response.ok && rawBody.includes('<!DOCTYPE')) {
+    throw new Error(
+      `The Netlify function ${functionPath} is not available in this local server. You are likely running plain Next dev. Use Netlify dev and open http://localhost:8888, or run this in the deployed environment.`
+    );
+  }
+
+  throw new Error(rawBody.slice(0, 200) || `Request to ${functionPath} failed.`);
+};
 
 // Improved content formatter that properly handles markdown
 const formatContentForPdf = (content: string): string => {
@@ -788,6 +835,7 @@ const EquityAdminPage: React.FC = () => {
   const [signingDoc, setSigningDoc] = useState<EquityDocument | null>(null);
   const [signers, setSigners] = useState<SignerRow[]>([]);
   const [isSending, setIsSending] = useState(false);
+  const [signingModalStatus, setSigningModalStatus] = useState<InlineStatus | null>(null);
 
   // Exhibits Modal State
   const [isExhibitsModalOpen, setIsExhibitsModalOpen] = useState(false);
@@ -832,17 +880,18 @@ const EquityAdminPage: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [selectedDocType, setSelectedDocType] = useState('option_agreement');
   const requiresStakeholderForDoc = selectedDocType !== 'eip';
+  const selectedDocIsAutoExecuted = isAutoExecutedCompanyDocType(selectedDocType);
   const [generationPrompt, setGenerationPrompt] = useState('');
   const [requiresSignatureChecked, setRequiresSignatureChecked] = useState(false);
 
   useEffect(() => {
     // Reasonable defaults (user can override):
     // - Most people-facing agreements should be signable.
-    // - Company-wide EIP usually doesn't require e-sign inside this tool.
-    const defaultOn = ['option_agreement', 'fast_agreement', 'stockholder_consent'].includes(selectedDocType);
-    const defaultForType = selectedDocType === 'eip' ? false : defaultOn;
+    // - Internal plan approvals are auto-executed in-app and should not open e-sign.
+    const defaultOn = ['option_agreement', 'fast_agreement'].includes(selectedDocType);
+    const defaultForType = selectedDocIsAutoExecuted ? false : defaultOn;
     setRequiresSignatureChecked(defaultForType);
-  }, [selectedDocType]);
+  }, [selectedDocIsAutoExecuted, selectedDocType]);
 
   useEffect(() => {
     // EIP is company-wide; clear any previously selected stakeholder to avoid confusion.
@@ -1110,6 +1159,176 @@ const EquityAdminPage: React.FC = () => {
     loadData();
   }, [loadData]);
 
+  const createAdvisorBoardConsentDocument = async ({
+    stakeholderId,
+    stakeholderName,
+    stakeholderEmail,
+    grantDetails,
+  }: {
+    stakeholderId: string;
+    stakeholderName: string;
+    stakeholderEmail: string;
+    grantDetails: {
+      equityType: string;
+      numberOfShares: number;
+      strikePrice: number;
+      vestingSchedule: string;
+      vestingStartDate: string | Date | Timestamp;
+      cliffMonths: number;
+      vestingMonths: number;
+    };
+  }) => {
+    const docTitle = `Board Consent - ${stakeholderName}`;
+    const createdAt = Timestamp.now();
+    const boardApprovalDate = formatDate(createdAt);
+    const placeholder = await addDoc(collection(db, 'equity-documents'), {
+      title: docTitle,
+      prompt: `Generate a Board Consent approving equity grant for ${stakeholderName}: ${grantDetails.numberOfShares} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
+      content: '',
+      documentType: 'board_consent',
+      requiresSignature: false,
+      stakeholderId,
+      stakeholderName,
+      stakeholderEmail,
+      stakeholderType: 'advisor',
+      grantDetails,
+      autoSigned: true,
+      autoSignedAt: createdAt,
+      createdAt,
+      status: 'generating',
+    });
+
+    try {
+      const response = await fetch('/.netlify/functions/generate-equity-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stakeholderId,
+          stakeholderName,
+          stakeholderEmail,
+          stakeholderType: 'advisor',
+          documentType: 'board_consent',
+          requiresSignature: false,
+          prompt: `Generate a Board Consent (Written Consent of the Board of Directors in Lieu of Meeting) approving equity grant for ${stakeholderName}: ${grantDetails.numberOfShares} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
+          grantDetails,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success || !result.content) {
+        throw new Error(result.error || 'Failed to generate Board Consent');
+      }
+
+      await updateDoc(doc(db, 'equity-documents', placeholder.id), {
+        content: result.content,
+        title: result.title || docTitle,
+        requiresSignature: false,
+        autoSigned: true,
+        autoSignedAt: serverTimestamp(),
+        signingRequestId: deleteField(),
+        signingRequestIds: deleteField(),
+        needsResendSignature: false,
+        status: 'completed',
+        updatedAt: serverTimestamp(),
+      });
+
+      return {
+        id: placeholder.id,
+        title: result.title || docTitle,
+        boardApprovalDate,
+      };
+    } catch (error: any) {
+      await updateDoc(doc(db, 'equity-documents', placeholder.id), {
+        status: 'error',
+        errorMessage: error?.message || 'Failed to generate Board Consent',
+        updatedAt: serverTimestamp(),
+      });
+      throw error;
+    }
+  };
+
+  const createAdvisorAgreementDocument = async ({
+    stakeholderId,
+    stakeholderName,
+    stakeholderEmail,
+    grantDetails,
+    boardApprovalDate,
+  }: {
+    stakeholderId: string;
+    stakeholderName: string;
+    stakeholderEmail: string;
+    grantDetails: {
+      equityType: string;
+      numberOfShares: number;
+      strikePrice: number;
+      vestingSchedule: string;
+      vestingStartDate: string | Date | Timestamp;
+      cliffMonths: number;
+      vestingMonths: number;
+    };
+    boardApprovalDate?: string;
+  }) => {
+    const docTitle = `Advisor Agreement + NSO Grant - ${stakeholderName}`;
+    const placeholder = await addDoc(collection(db, 'equity-documents'), {
+      title: docTitle,
+      prompt: `Generate a combined Advisor Agreement and Non-Qualified Stock Option Grant for ${stakeholderName}`,
+      content: '',
+      documentType: 'advisor_nso_agreement',
+      requiresSignature: true,
+      stakeholderId,
+      stakeholderName,
+      stakeholderEmail,
+      stakeholderType: 'advisor',
+      grantDetails,
+      createdAt: Timestamp.now(),
+      status: 'generating',
+    });
+
+    try {
+      const response = await fetch('/.netlify/functions/generate-equity-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stakeholderId,
+          stakeholderName,
+          stakeholderEmail,
+          stakeholderType: 'advisor',
+          documentType: 'advisor_nso_agreement',
+          requiresSignature: true,
+          boardApprovalDate: boardApprovalDate || undefined,
+          prompt: `Generate a combined Advisor Services Agreement and Non-Qualified Stock Option Grant (do not label as FAST unless explicitly requested).`,
+          grantDetails,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success || !result.content) {
+        throw new Error(result.error || 'Failed to generate Advisor Agreement');
+      }
+
+      await updateDoc(doc(db, 'equity-documents', placeholder.id), {
+        content: result.content,
+        title: result.title || docTitle,
+        status: 'completed',
+        updatedAt: serverTimestamp(),
+      });
+
+      return {
+        id: placeholder.id,
+        title: result.title || docTitle,
+      };
+    } catch (error: any) {
+      await updateDoc(doc(db, 'equity-documents', placeholder.id), {
+        status: 'error',
+        errorMessage: error?.message || 'Failed to generate Advisor Agreement',
+        updatedAt: serverTimestamp(),
+      });
+      throw error;
+    }
+  };
+
   // Add Stakeholder
   const handleAddStakeholder = async () => {
     if (!newStakeholder.name.trim() || !newStakeholder.email.trim()) {
@@ -1121,6 +1340,17 @@ const EquityAdminPage: React.FC = () => {
     try {
       const isAdvisor = newStakeholder.type === 'advisor';
       const hasOptionGrant = isAdvisor && newStakeholder.advisorShares > 0;
+      const stakeholderName = newStakeholder.name.trim();
+      const stakeholderEmail = newStakeholder.email.toLowerCase().trim();
+      const grantDetails = {
+        equityType: 'nso',
+        numberOfShares: newStakeholder.advisorShares,
+        strikePrice: 0.001,
+        vestingSchedule: 'monthly',
+        vestingStartDate: newStakeholder.startDate,
+        cliffMonths: newStakeholder.advisorCliffMonths,
+        vestingMonths: newStakeholder.advisorVestingMonths,
+      };
       
       // Get board consent date if linked
       const linkedBoardConsent = newStakeholder.boardConsentDocId 
@@ -1131,20 +1361,14 @@ const EquityAdminPage: React.FC = () => {
         : null;
       
       const stakeholderData = {
-        name: newStakeholder.name.trim(),
-        email: newStakeholder.email.toLowerCase().trim(),
+        name: stakeholderName,
+        email: stakeholderEmail,
         type: newStakeholder.type,
         title: newStakeholder.title.trim(),
         startDate: new Date(newStakeholder.startDate),
         createdAt: serverTimestamp(),
         grants: hasOptionGrant ? [{
-          equityType: 'nso',
-          numberOfShares: newStakeholder.advisorShares,
-          strikePrice: 0.001,
-          vestingSchedule: 'monthly',
-          vestingStartDate: newStakeholder.startDate,
-          cliffMonths: newStakeholder.advisorCliffMonths,
-          vestingMonths: newStakeholder.advisorVestingMonths,
+          ...grantDetails,
           grantDate: newStakeholder.startDate,
           status: 'active',
         }] : [],
@@ -1175,86 +1399,42 @@ const EquityAdminPage: React.FC = () => {
         });
       }
       
-      // If advisor, auto-generate the combined Advisor Agreement + NSO Grant
-      if (isAdvisor) {
-        setMessage({ type: 'info', text: 'Stakeholder added! Generating Advisor Agreement + NSO Grant...' });
-        
-        // Create placeholder doc in Firestore
-        const docTitle = `Advisor Agreement + NSO Grant - ${newStakeholder.name.trim()}`;
-        const placeholder = await addDoc(collection(db, 'equity-documents'), {
-          title: docTitle,
-          prompt: `Generate a combined Advisor Agreement and Non-Qualified Stock Option Grant for ${newStakeholder.name.trim()}`,
-          content: '',
-          documentType: 'advisor_nso_agreement',
-          requiresSignature: true,
-          stakeholderId: stakeholderRef.id,
-          stakeholderName: newStakeholder.name.trim(),
-          stakeholderEmail: newStakeholder.email.toLowerCase().trim(),
-          stakeholderType: 'advisor',
-          grantDetails: {
-            equityType: 'nso',
-            numberOfShares: newStakeholder.advisorShares,
-            strikePrice: 0.001,
-            vestingSchedule: 'monthly',
-            vestingStartDate: newStakeholder.startDate,
-            cliffMonths: newStakeholder.advisorCliffMonths,
-            vestingMonths: newStakeholder.advisorVestingMonths,
-          },
-          createdAt: Timestamp.now(),
-          status: 'generating',
-        });
-        
-        // Call API to generate document
-        try {
-          const response = await fetch('/.netlify/functions/generate-equity-document', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              stakeholderId: stakeholderRef.id,
-              stakeholderName: newStakeholder.name.trim(),
-              stakeholderEmail: newStakeholder.email.toLowerCase().trim(),
-              stakeholderType: 'advisor',
-              documentType: 'advisor_nso_agreement',
-              requiresSignature: true,
-              boardApprovalDate: boardApprovalDate || undefined,
-              prompt: `Generate a combined Advisor Agreement and Non-Qualified Stock Option Grant for ${newStakeholder.name.trim()}`,
-              grantDetails: {
-                equityType: 'nso',
-                numberOfShares: newStakeholder.advisorShares,
-                strikePrice: 0.001,
-                vestingSchedule: 'monthly',
-                vestingStartDate: newStakeholder.startDate,
-                cliffMonths: newStakeholder.advisorCliffMonths,
-                vestingMonths: newStakeholder.advisorVestingMonths,
-              },
-            }),
+      // Advisors with grants should always have the required board consent and advisor agreement.
+      if (isAdvisor && hasOptionGrant) {
+        setMessage({ type: 'info', text: 'Stakeholder added. Generating the required advisor documents...' });
+
+        let resolvedBoardConsentId = newStakeholder.boardConsentDocId || null;
+        let resolvedBoardApprovalDate = boardApprovalDate;
+
+        if (!resolvedBoardConsentId) {
+          const generatedBoardConsent = await createAdvisorBoardConsentDocument({
+            stakeholderId: stakeholderRef.id,
+            stakeholderName,
+            stakeholderEmail,
+            grantDetails,
           });
-          
-          const result = await response.json();
-          
-          if (result.success && result.content) {
-            await updateDoc(doc(db, 'equity-documents', placeholder.id), {
-              content: result.content,
-              title: result.title || docTitle,
-              status: 'completed',
-              updatedAt: Timestamp.now(),
-            });
-            setMessage({ type: 'success', text: 'Advisor added and agreement generated! Ready for signature.' });
-          } else {
-            await updateDoc(doc(db, 'equity-documents', placeholder.id), {
-              status: 'error',
-              errorMessage: result.error || 'Failed to generate document',
-            });
-            setMessage({ type: 'error', text: 'Stakeholder added but document generation failed' });
-          }
-        } catch (apiError) {
-          console.error('Error generating advisor agreement:', apiError);
-          await updateDoc(doc(db, 'equity-documents', placeholder.id), {
-            status: 'error',
-            errorMessage: 'API request failed',
+
+          resolvedBoardConsentId = generatedBoardConsent.id;
+          resolvedBoardApprovalDate = generatedBoardConsent.boardApprovalDate;
+
+          await updateDoc(doc(db, 'equity-stakeholders', stakeholderRef.id), {
+            boardConsentDocId: resolvedBoardConsentId,
+            boardApprovalDate: resolvedBoardApprovalDate,
+            updatedAt: serverTimestamp(),
           });
-          setMessage({ type: 'error', text: 'Stakeholder added but document generation failed' });
         }
+
+        await createAdvisorAgreementDocument({
+          stakeholderId: stakeholderRef.id,
+          stakeholderName,
+          stakeholderEmail,
+          grantDetails,
+          boardApprovalDate: resolvedBoardApprovalDate || undefined,
+        });
+
+        setMessage({ type: 'success', text: 'Advisor added and required documents generated.' });
+      } else if (isAdvisor) {
+        setMessage({ type: 'success', text: 'Advisor added successfully. Add an option grant to generate the required documents.' });
       } else {
         setMessage({ type: 'success', text: 'Stakeholder added successfully!' });
       }
@@ -1561,8 +1741,9 @@ const EquityAdminPage: React.FC = () => {
     setGenerating(true);
     try {
       const docTypeConfig = DOCUMENT_TYPES.find(d => d.id === selectedDocType);
-      const effectiveRequiresSignature = selectedDocType === 'board_consent' ? false : Boolean(requiresSignatureChecked);
-      const isAutoSignedBoardConsent = selectedDocType === 'board_consent';
+      const effectiveRequiresSignature = selectedDocIsAutoExecuted ? false : Boolean(requiresSignatureChecked);
+      const shouldAutoExecuteDoc = selectedDocIsAutoExecuted;
+      const documentExecutionDate = formatLegalDate(new Date());
 
       // Create placeholder doc in Firestore (like legalDocuments.tsx)
       const placeholder = await addDoc(collection(db, 'equity-documents'), {
@@ -1576,7 +1757,7 @@ const EquityAdminPage: React.FC = () => {
         stakeholderEmail: selectedStakeholder?.email ?? null,
         stakeholderType: selectedStakeholder?.type ?? null,
         grantDetails: newGrant,
-        ...(isAutoSignedBoardConsent ? { autoSigned: true, autoSignedAt: Timestamp.now() } : {}),
+        ...(shouldAutoExecuteDoc ? { autoSigned: true, autoSignedAt: Timestamp.now() } : {}),
         createdAt: Timestamp.now(),
         status: 'generating',
       });
@@ -1593,6 +1774,8 @@ const EquityAdminPage: React.FC = () => {
           documentType: selectedDocType,
           prompt: generationPrompt,
           requiresSignature: effectiveRequiresSignature,
+          boardApprovalDate: selectedDocType === 'board_consent' ? documentExecutionDate : undefined,
+          documentDate: shouldAutoExecuteDoc ? documentExecutionDate : undefined,
           grantDetails: newGrant,
           documentId: placeholder.id,
         })
@@ -1609,14 +1792,14 @@ const EquityAdminPage: React.FC = () => {
         title: result.title || `${docTypeConfig?.label || 'Equity Document'} - ${new Date().toLocaleDateString()}`,
         content: result.content,
         requiresSignature: effectiveRequiresSignature,
-        ...(isAutoSignedBoardConsent ? { autoSigned: true, autoSignedAt: Timestamp.now() } : {}),
+        ...(shouldAutoExecuteDoc ? { autoSigned: true, autoSignedAt: Timestamp.now() } : {}),
         status: 'completed',
         updatedAt: Timestamp.now(),
       });
 
       setMessage({
         type: 'success',
-        text: isAutoSignedBoardConsent
+        text: shouldAutoExecuteDoc
           ? `${docTypeConfig?.label || 'Document'} generated and auto-executed successfully!`
           : `${docTypeConfig?.label || 'Document'} generated successfully!`,
       });
@@ -1638,8 +1821,95 @@ const EquityAdminPage: React.FC = () => {
     setEditingEquityDoc(docToEdit);
     setEditEquityDocTitle(docToEdit.title);
     setEditEquityDocPrompt('');
-    setEditRequiresSignature(Boolean(docToEdit.requiresSignature));
+    setEditRequiresSignature(isAutoExecutedCompanyDoc(docToEdit) ? false : Boolean(docToEdit.requiresSignature));
     setIsEditEquityDocModalOpen(true);
+  };
+
+  const regenerateCompanyApprovalDocCleanly = async (equityDoc: EquityDocument, nextTitle: string, additionalInstructions: string) => {
+    const founder = stakeholders.find(s => s.type === 'founder' && s.email);
+    const preservedExecutionSource = equityDoc.autoSignedAt || equityDoc.createdAt;
+    const preservedExecutionDate = formatLegalDate(preservedExecutionSource);
+    const storedPrompt = [equityDoc.prompt?.trim(), additionalInstructions.trim()].filter(Boolean).join('\n\n');
+    const generatorPrompt = [
+      storedPrompt,
+      `Clean regeneration instructions:
+- Preserve the original approval/effective date as ${preservedExecutionDate}.
+- Apply the latest approved document language and text cleanup.
+- This is a clean refresh, not a new approval or ratification event.
+- Keep the document already executed by Tremaine Grant with no blank signature lines and no e-sign workflow.`,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+    const response = await fetch('/.netlify/functions/generate-equity-document', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stakeholderId: equityDoc.stakeholderId || founder?.id,
+        stakeholderName: equityDoc.stakeholderName || founder?.name || 'Tremaine Grant',
+        stakeholderEmail: equityDoc.stakeholderEmail || founder?.email || 'tre@fitwithpulse.ai',
+        stakeholderType: equityDoc.stakeholderType || founder?.type || 'founder',
+        documentType: equityDoc.documentType,
+        prompt: generatorPrompt,
+        requiresSignature: false,
+        boardApprovalDate: equityDoc.documentType === 'board_consent' ? preservedExecutionDate : undefined,
+        documentDate: preservedExecutionDate,
+        grantDetails: equityDoc.grantDetails,
+      }),
+    });
+
+    const result = await parseFunctionResponse(response, '/.netlify/functions/generate-equity-document');
+    if (!response.ok || !result.success || !result.content) {
+      throw new Error(result.error || 'Failed to regenerate document cleanly');
+    }
+
+    const revisionHistory = equityDoc.revisionHistory || [];
+    const convertedHistory = revisionHistory.map(rev => ({
+      prompt: rev.prompt,
+      timestamp:
+        rev.timestamp instanceof Timestamp
+          ? rev.timestamp
+          : Timestamp.fromDate(rev.timestamp instanceof Date ? rev.timestamp : new Date(rev.timestamp as any)),
+    }));
+
+    let invalidatedRequestCount = 0;
+    const signingState = getEquityDocSignatureState(equityDoc);
+    if (signingState.hasSignatureFlow) {
+      invalidatedRequestCount = await invalidateSigningRequestsForDoc(
+        equityDoc,
+        `${equityDoc.title} was cleanly regenerated and is now managed as an auto-executed internal approval document.`
+      );
+    }
+
+    await updateDoc(doc(db, 'equity-documents', equityDoc.id), {
+      title: nextTitle,
+      prompt: storedPrompt,
+      content: result.content,
+      requiresSignature: false,
+      autoSigned: true,
+      autoSignedAt: preservedExecutionSource,
+      signingRequestId: deleteField(),
+      signingRequestIds: deleteField(),
+      needsResendSignature: false,
+      status: 'completed',
+      revisionHistory: [
+        ...convertedHistory,
+        {
+          prompt: additionalInstructions.trim()
+            ? `Clean regenerate: ${additionalInstructions.trim()}`
+            : 'Clean regenerate using the latest approved template language while preserving the original execution date and auto-signature.',
+          timestamp: Timestamp.now(),
+        },
+      ],
+      updatedAt: Timestamp.now(),
+    });
+
+    setMessage({
+      type: 'success',
+      text: invalidatedRequestCount > 0
+        ? 'Document regenerated cleanly. Old signature links were invalidated and the auto-executed version is now current.'
+        : 'Document regenerated cleanly with the original date and auto-executed signature preserved.',
+    });
   };
 
   const handleReviseEquityDoc = async () => {
@@ -1648,14 +1918,31 @@ const EquityAdminPage: React.FC = () => {
     const titleChanged = editEquityDocTitle.trim() !== editingEquityDoc.title;
     const hasRevisionPrompt = editEquityDocPrompt.trim().length > 0;
     const signatureChanged = Boolean(editRequiresSignature) !== Boolean(editingEquityDoc.requiresSignature);
+    const isCleanRegenerationDoc = isAutoExecutedCompanyDoc(editingEquityDoc);
 
-    if (!titleChanged && !hasRevisionPrompt && !signatureChanged) {
+    if (!isCleanRegenerationDoc && !titleChanged && !hasRevisionPrompt && !signatureChanged) {
       setMessage({ type: 'error', text: 'Enter a new title and/or revision instructions' });
       return;
     }
 
     setIsRevisingEquityDoc(true);
     try {
+      if (isCleanRegenerationDoc) {
+        await regenerateCompanyApprovalDocCleanly(
+          editingEquityDoc,
+          editEquityDocTitle.trim() || editingEquityDoc.title,
+          editEquityDocPrompt,
+        );
+
+        setIsEditEquityDocModalOpen(false);
+        setEditingEquityDoc(null);
+        setEditEquityDocTitle('');
+        setEditEquityDocPrompt('');
+        setEditRequiresSignature(false);
+        loadData();
+        return;
+      }
+
       let newContent = editingEquityDoc.content;
 
       const effectiveRevisionPrompt =
@@ -1715,9 +2002,72 @@ const EquityAdminPage: React.FC = () => {
         ];
       }
 
-      await updateDoc(doc(db, 'equity-documents', editingEquityDoc.id), updateData);
+      const signedState = getEquityDocSignatureState(editingEquityDoc);
+      const executedDoc = signedState.isFullyExecuted || Boolean(editingEquityDoc.autoSigned || editingEquityDoc.autoSignedAt);
+      const updatedRequiresExternalSignature =
+        Boolean(editRequiresSignature) && !isAutoExecutedCompanyDoc(editingEquityDoc);
 
-      setMessage({ type: 'success', text: hasRevisionPrompt ? 'Document revised successfully!' : 'Saved successfully!' });
+      if (executedDoc) {
+        const amendmentTitle = titleChanged
+          ? editEquityDocTitle.trim()
+          : `${editingEquityDoc.title} Amendment`;
+
+        await addDoc(collection(db, 'equity-documents'), {
+          title: amendmentTitle,
+          prompt: editingEquityDoc.prompt,
+          content: effectiveRevisionPrompt.trim() ? newContent : editingEquityDoc.content,
+          documentType: editingEquityDoc.documentType,
+          requiresSignature: Boolean(editRequiresSignature) && !isAutoExecutedCompanyDoc(editingEquityDoc),
+          stakeholderId: editingEquityDoc.stakeholderId ?? null,
+          stakeholderName: editingEquityDoc.stakeholderName ?? null,
+          stakeholderEmail: editingEquityDoc.stakeholderEmail ?? null,
+          stakeholderType: editingEquityDoc.stakeholderType ?? null,
+          grantDetails: editingEquityDoc.grantDetails,
+          status: 'completed',
+          isAmendment: true,
+          originalDocumentId: editingEquityDoc.id,
+          needsResendSignature: updatedRequiresExternalSignature,
+          ...(isAutoExecutedCompanyDoc(editingEquityDoc)
+            ? { autoSigned: true, autoSignedAt: Timestamp.now() }
+            : {}),
+          revisionHistory: effectiveRevisionPrompt.trim()
+            ? [
+                ...convertedHistory,
+                { prompt: effectiveRevisionPrompt, timestamp: Timestamp.now() },
+              ]
+            : convertedHistory,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+
+        setMessage({
+          type: 'success',
+          text: 'Signed original preserved. A new amendment document was created with your updates.',
+        });
+      } else {
+        let invalidatedRequestCount = 0;
+        if (signedState.hasSignatureFlow) {
+          invalidatedRequestCount = await invalidateSigningRequestsForDoc(
+            editingEquityDoc,
+            `Invalidated because ${editingEquityDoc.title} was revised before it was fully executed.`
+          );
+          updateData.signingRequestId = deleteField();
+          updateData.signingRequestIds = deleteField();
+          updateData.needsResendSignature = updatedRequiresExternalSignature && invalidatedRequestCount > 0;
+        }
+
+        await updateDoc(doc(db, 'equity-documents', editingEquityDoc.id), updateData);
+
+        setMessage({
+          type: 'success',
+          text: invalidatedRequestCount > 0
+            ? 'Document updated. Existing signature links were invalidated and the document now needs to be resent.'
+            : hasRevisionPrompt
+            ? 'Document revised successfully!'
+            : 'Saved successfully!',
+        });
+      }
+
       setIsEditEquityDocModalOpen(false);
       setEditingEquityDoc(null);
       setEditEquityDocTitle('');
@@ -1737,7 +2087,7 @@ const EquityAdminPage: React.FC = () => {
   };
 
   const requiresExternalSignature = (equityDoc: EquityDocument) => {
-    return Boolean(equityDoc.requiresSignature) && !isBoardConsentDoc(equityDoc);
+    return Boolean(equityDoc.requiresSignature) && !isAutoExecutedCompanyDoc(equityDoc);
   };
 
   const getEquityDocSignatureState = (equityDoc: EquityDocument) => {
@@ -1758,7 +2108,7 @@ const EquityAdminPage: React.FC = () => {
   const getEquityDocStatusBadge = (equityDoc: EquityDocument) => {
     const state = getEquityDocSignatureState(equityDoc);
 
-    if (isBoardConsentDoc(equityDoc) && (equityDoc.autoSigned || equityDoc.autoSignedAt)) {
+    if (isAutoExecutedCompanyDoc(equityDoc) && (equityDoc.autoSigned || equityDoc.autoSignedAt)) {
       return { label: 'Auto-executed', className: 'bg-emerald-900/40 text-emerald-300 border border-emerald-700' };
     }
 
@@ -1845,7 +2195,15 @@ const EquityAdminPage: React.FC = () => {
   const openSigningModal = (docToSign: EquityDocument) => {
     setSigningDoc(docToSign);
     setSigners(buildDefaultSignersForDoc(docToSign));
+    setSigningModalStatus(null);
     setIsSigningModalOpen(true);
+  };
+
+  const closeSigningModal = () => {
+    setIsSigningModalOpen(false);
+    setSigningDoc(null);
+    setSigners([]);
+    setSigningModalStatus(null);
   };
 
   const handleSendForSignature = async () => {
@@ -1858,11 +2216,13 @@ const EquityAdminPage: React.FC = () => {
     }));
 
     if (normalized.length === 0 || normalized.some(s => !s.name || !s.email)) {
+      setSigningModalStatus({ type: 'error', text: 'Please fill in name and email for all signers.' });
       setMessage({ type: 'error', text: 'Please fill in name and email for all signers' });
       return;
     }
 
     setIsSending(true);
+    setSigningModalStatus({ type: 'info', text: `Sending signature request${normalized.length === 1 ? '' : 's'}...` });
     try {
       const signingGroupId = `${signingDoc.id}-${Date.now()}`;
       const signingRequestIds: string[] = [];
@@ -1904,7 +2264,19 @@ const EquityAdminPage: React.FC = () => {
             recipientEmail: signer.email,
           }),
         });
-        if (!resp.ok) throw new Error(`Failed to send email to ${signer.email}`);
+        if (!resp.ok) {
+          let errorMessage = `Failed to send email to ${signer.email}`;
+          try {
+            const data = await resp.json();
+            errorMessage = data?.message || data?.error || errorMessage;
+          } catch {
+            try {
+              const text = await resp.text();
+              if (text) errorMessage = text;
+            } catch {}
+          }
+          throw new Error(errorMessage);
+        }
       }
 
       // Update equity document with signing request linkages
@@ -1916,13 +2288,22 @@ const EquityAdminPage: React.FC = () => {
         updatedAt: Timestamp.now(),
       });
 
+      setSigners(prev => prev.map((signer, idx) => ({
+        ...signer,
+        signingRequestId: signingRequestIds[idx] || signer.signingRequestId,
+      })));
+      setSigningModalStatus({
+        type: 'success',
+        text: `Signature request${signingRequestIds.length === 1 ? '' : 's'} sent successfully to ${signingRequestIds.length} signer${signingRequestIds.length === 1 ? '' : 's'}.`,
+      });
       setMessage({ type: 'success', text: `Sent for signature to ${signingRequestIds.length} signer(s)!` });
-      setIsSigningModalOpen(false);
-      setSigningDoc(null);
-      setSigners([]);
       loadData();
     } catch (error) {
       console.error('Error sending document for signature:', error);
+      setSigningModalStatus({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to send the signature request.',
+      });
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to send document' });
     } finally {
       setIsSending(false);
@@ -2063,7 +2444,23 @@ const EquityAdminPage: React.FC = () => {
     return equityDocuments.filter(d => equityDoc.exhibits?.includes(d.id));
   };
 
+  const isProtectedStakeholderDocument = (equityDoc: EquityDocument) => {
+    return Boolean(
+      equityDoc.stakeholderId &&
+      ['board_consent', 'advisor_nso_agreement'].includes(equityDoc.documentType)
+    );
+  };
+
   const handleDeleteEquityDoc = async (equityDocId: string) => {
+    const equityDoc = equityDocuments.find(d => d.id === equityDocId);
+    if (equityDoc && isProtectedStakeholderDocument(equityDoc)) {
+      setMessage({
+        type: 'error',
+        text: 'Required stakeholder documents cannot be deleted. Regenerate or amend them instead.',
+      });
+      return;
+    }
+
     if (!confirm('Are you sure you want to delete this equity document?')) return;
     setDeletingEquityDocId(equityDocId);
     try {
@@ -3425,6 +3822,11 @@ const EquityAdminPage: React.FC = () => {
                                                   Amendment
                                                 </span>
                                               )}
+                                              {isProtectedStakeholderDocument(edoc) && (
+                                                <span className="px-2 py-0.5 rounded-full text-xs bg-cyan-900/40 text-cyan-300 border border-cyan-700">
+                                                  Required
+                                                </span>
+                                              )}
                                               {needsSignature && (
                                                 <span className="px-2 py-0.5 rounded-full text-xs bg-orange-900/50 text-orange-400 border border-orange-700">
                                                   Signature Required
@@ -3503,17 +3905,19 @@ const EquityAdminPage: React.FC = () => {
                                             <Download className="w-3 h-3" />
                                             Download PDF
                                           </button>
-                                          <button
-                                            onClick={(e) => { e.stopPropagation(); handleDeleteEquityDoc(edoc.id); }}
-                                            disabled={deletingEquityDocId === edoc.id}
-                                            className="flex items-center gap-1 px-3 py-1.5 bg-red-900/50 hover:bg-red-800 text-red-400 rounded-lg text-xs transition-colors disabled:opacity-50"
-                                          >
-                                            {deletingEquityDocId === edoc.id ? (
-                                              <Loader2 className="w-3 h-3 animate-spin" />
-                                            ) : (
-                                              <Trash2 className="w-3 h-3" />
-                                            )}
-                                          </button>
+                                          {!isProtectedStakeholderDocument(edoc) && (
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); handleDeleteEquityDoc(edoc.id); }}
+                                              disabled={deletingEquityDocId === edoc.id}
+                                              className="flex items-center gap-1 px-3 py-1.5 bg-red-900/50 hover:bg-red-800 text-red-400 rounded-lg text-xs transition-colors disabled:opacity-50"
+                                            >
+                                              {deletingEquityDocId === edoc.id ? (
+                                                <Loader2 className="w-3 h-3 animate-spin" />
+                                              ) : (
+                                                <Trash2 className="w-3 h-3" />
+                                              )}
+                                            </button>
+                                          )}
                                         </div>
                                         {/* Preview content */}
                                         {expandedEquityDoc === edoc.id && (
@@ -3725,9 +4129,13 @@ const EquityAdminPage: React.FC = () => {
           {/* Signature Requirement Toggle */}
           <div className="mb-4 flex items-center justify-between gap-4 p-4 bg-zinc-900/50 rounded-xl border border-zinc-700">
             <div>
-              <p className="text-sm font-medium text-white">Requires signature</p>
+              <p className="text-sm font-medium text-white">
+                {selectedDocIsAutoExecuted ? 'Auto-executed internally' : 'Requires signature'}
+              </p>
               <p className="text-xs text-zinc-500 mt-0.5">
-                When enabled, the PDF includes signature lines and e-signing tools are available.
+                {selectedDocIsAutoExecuted
+                  ? 'This document is controlled internally, so Tremaine is rendered as already signed and no e-sign send is required.'
+                  : 'When enabled, the PDF includes signature lines and e-signing tools are available.'}
               </p>
             </div>
             <label className="inline-flex items-center cursor-pointer select-none">
@@ -3735,9 +4143,10 @@ const EquityAdminPage: React.FC = () => {
                 type="checkbox"
                 checked={requiresSignatureChecked}
                 onChange={(e) => setRequiresSignatureChecked(e.target.checked)}
+                disabled={selectedDocIsAutoExecuted}
                 className="sr-only"
               />
-              <div className={`w-12 h-7 rounded-full transition-colors ${requiresSignatureChecked ? 'bg-orange-600' : 'bg-zinc-700'}`}>
+              <div className={`w-12 h-7 rounded-full transition-colors ${selectedDocIsAutoExecuted ? 'bg-emerald-600' : requiresSignatureChecked ? 'bg-orange-600' : 'bg-zinc-700'}`}>
                 <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform mt-1 ${requiresSignatureChecked ? 'translate-x-6' : 'translate-x-1'}`} />
               </div>
             </label>
@@ -3905,6 +4314,12 @@ const EquityAdminPage: React.FC = () => {
                               Amendment
                             </span>
                           )}
+                          {isProtectedStakeholderDocument(edoc) && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-900/30 text-cyan-300 rounded-full text-xs border border-cyan-800">
+                              <Shield className="w-3 h-3" />
+                              Required
+                            </span>
+                          )}
                           {statusBadge && (
                             <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${statusBadge.className}`}>
                               {statusBadge.label === 'Signed' ? <Check className="w-3 h-3" /> : statusBadge.label === 'Sent for Signature' ? <Mail className="w-3 h-3" /> : statusBadge.label === 'Pending Signature' ? <Clock className="w-3 h-3" /> : statusBadge.label === 'Needs Resend' ? <AlertTriangle className="w-3 h-3" /> : <PenTool className="w-3 h-3" />}
@@ -4038,21 +4453,23 @@ const EquityAdminPage: React.FC = () => {
                               Download PDF
                             </button>
 
-                            <button
-                              onClick={() => handleDeleteEquityDoc(edoc.id)}
-                              disabled={deletingEquityDocId === edoc.id}
-                              className="flex items-center gap-1 px-3 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-lg text-sm transition-colors"
-                            >
-                              {deletingEquityDocId === edoc.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
-                            </button>
+                            {!isProtectedStakeholderDocument(edoc) && (
+                              <button
+                                onClick={() => handleDeleteEquityDoc(edoc.id)}
+                                disabled={deletingEquityDocId === edoc.id}
+                                className="flex items-center gap-1 px-3 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-lg text-sm transition-colors"
+                              >
+                                {deletingEquityDocId === edoc.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
+                              </button>
+                            )}
                           </>
                         )}
                         {/* Delete button for error/generating states */}
-                        {edoc.status !== 'completed' && (
+                        {edoc.status !== 'completed' && !isProtectedStakeholderDocument(edoc) && (
                           <button
                             onClick={() => handleDeleteEquityDoc(edoc.id)}
                             disabled={deletingEquityDocId === edoc.id}
@@ -4178,33 +4595,6 @@ const EquityAdminPage: React.FC = () => {
                 </p>
               </div>
             </motion.div>
-
-            {/* Message Banner */}
-            <AnimatePresence>
-              {message && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className={`mb-6 p-4 rounded-xl border flex items-center gap-3 ${
-                    message.type === 'success' 
-                      ? 'bg-green-900/20 border-green-800 text-green-400'
-                      : message.type === 'error'
-                      ? 'bg-red-900/20 border-red-800 text-red-400'
-                      : 'bg-blue-900/20 border-blue-800 text-blue-400'
-                  }`}
-                >
-                  {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
-                  {message.text}
-                  <button 
-                    onClick={() => setMessage(null)}
-                    className="ml-auto hover:opacity-70"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
 
             {/* Tabs */}
             <div className="mb-8">
@@ -4357,7 +4747,7 @@ const EquityAdminPage: React.FC = () => {
                       <span className="text-lg">🎯</span>
                       <div>
                         <h4 className="text-white font-medium">NSO Grant Details</h4>
-                        <p className="text-xs text-purple-300">A combined Advisor Agreement + NSO Grant will be auto-generated for signature</p>
+                        <p className="text-xs text-purple-300">A required Board Consent and Advisor Agreement + NSO Grant will be generated for this advisor</p>
                       </div>
                     </div>
                     
@@ -4418,7 +4808,7 @@ const EquityAdminPage: React.FC = () => {
                         }
                       </select>
                       <p className="text-xs text-purple-400 mt-1">
-                        Links this grant to a Board Consent for audit trail
+                        If you do not link one here, a new Board Consent will be auto-generated and attached.
                       </p>
                     </div>
                   </div>
@@ -4484,11 +4874,7 @@ const EquityAdminPage: React.FC = () => {
                   <p className="text-sm text-zinc-400 mt-1">{signingDoc.title}</p>
                 </div>
                 <button
-                  onClick={() => {
-                    setIsSigningModalOpen(false);
-                    setSigningDoc(null);
-                    setSigners([]);
-                  }}
+                  onClick={closeSigningModal}
                   className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-zinc-400" />
@@ -4496,6 +4882,20 @@ const EquityAdminPage: React.FC = () => {
               </div>
 
               <div className="p-6 space-y-4">
+                {signingModalStatus && (
+                  <div
+                    className={`rounded-xl border p-4 text-sm ${
+                      signingModalStatus.type === 'success'
+                        ? 'bg-green-900/20 border-green-800 text-green-300'
+                        : signingModalStatus.type === 'error'
+                        ? 'bg-red-900/20 border-red-800 text-red-300'
+                        : 'bg-blue-900/20 border-blue-800 text-blue-300'
+                    }`}
+                  >
+                    {signingModalStatus.text}
+                  </div>
+                )}
+
                 <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-700">
                   <div className="flex items-center gap-3">
                     <FileText className="w-5 h-5 text-[#E0FE10]" />
@@ -4613,14 +5013,10 @@ const EquityAdminPage: React.FC = () => {
 
               <div className="flex items-center justify-end gap-3 p-6 border-t border-zinc-700">
                 <button
-                  onClick={() => {
-                    setIsSigningModalOpen(false);
-                    setSigningDoc(null);
-                    setSigners([]);
-                  }}
+                  onClick={closeSigningModal}
                   className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
                 >
-                  Cancel
+                  {signingModalStatus?.type === 'success' ? 'Close' : 'Cancel'}
                 </button>
                 <button
                   onClick={handleSendForSignature}
@@ -4639,7 +5035,9 @@ const EquityAdminPage: React.FC = () => {
                   ) : (
                     <>
                       <Send className="w-4 h-4" />
-                      Send to {signers.length} signer{signers.length !== 1 ? 's' : ''}
+                      {signingModalStatus?.type === 'success'
+                        ? `Send Again to ${signers.length} signer${signers.length !== 1 ? 's' : ''}`
+                        : `Send to ${signers.length} signer${signers.length !== 1 ? 's' : ''}`}
                     </>
                   )}
                 </button>
@@ -4696,25 +5094,37 @@ const EquityAdminPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="flex items-center justify-between gap-4 p-4 bg-zinc-900/50 rounded-xl border border-zinc-700">
-                  <div>
-                    <p className="text-sm font-medium text-white">Requires signature</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      Toggle to require e-signature. Changing this will regenerate signature blocks if needed.
-                    </p>
-                  </div>
-                  <label className="inline-flex items-center cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={editRequiresSignature}
-                      onChange={(e) => setEditRequiresSignature(e.target.checked)}
-                      className="sr-only"
-                    />
-                    <div className={`w-12 h-7 rounded-full transition-colors ${editRequiresSignature ? 'bg-orange-600' : 'bg-zinc-700'}`}>
-                      <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform mt-1 ${editRequiresSignature ? 'translate-x-6' : 'translate-x-1'}`} />
+                {isAutoExecutedCompanyDoc(editingEquityDoc) ? (
+                  <div className="flex items-start gap-3 p-4 bg-emerald-900/20 rounded-xl border border-emerald-800">
+                    <Shield className="w-5 h-5 text-emerald-300 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-emerald-200">Auto-executed internal approval</p>
+                      <p className="text-xs text-emerald-300/80 mt-1">
+                        Regenerate cleanly to apply the latest text updates while preserving the original approval date and Tremaine&apos;s auto-signature. No signature email will be required for this document.
+                      </p>
                     </div>
-                  </label>
-                </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-4 p-4 bg-zinc-900/50 rounded-xl border border-zinc-700">
+                    <div>
+                      <p className="text-sm font-medium text-white">Requires signature</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        Toggle to require e-signature. Changing this will regenerate signature blocks if needed.
+                      </p>
+                    </div>
+                    <label className="inline-flex items-center cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={editRequiresSignature}
+                        onChange={(e) => setEditRequiresSignature(e.target.checked)}
+                        className="sr-only"
+                      />
+                      <div className={`w-12 h-7 rounded-full transition-colors ${editRequiresSignature ? 'bg-orange-600' : 'bg-zinc-700'}`}>
+                        <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform mt-1 ${editRequiresSignature ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </div>
+                    </label>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-zinc-400 mb-2">Current Document Preview</label>
@@ -4736,7 +5146,9 @@ const EquityAdminPage: React.FC = () => {
                     className="w-full h-40 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 transition-colors resize-none"
                   />
                   <p className="text-xs text-zinc-500 mt-2">
-                    This will regenerate the full document with your changes (mirrors the Legal Docs workflow).
+                    {isAutoExecutedCompanyDoc(editingEquityDoc)
+                      ? 'Use this to cleanly regenerate the document with updated language while preserving the original date and auto-executed signature.'
+                      : 'This will regenerate the full document with your changes (mirrors the Legal Docs workflow).'}
                   </p>
                 </div>
               </div>
@@ -4757,13 +5169,15 @@ const EquityAdminPage: React.FC = () => {
                   onClick={handleReviseEquityDoc}
                   disabled={
                     isRevisingEquityDoc ||
-                    (!editEquityDocPrompt.trim() &&
+                    (!isAutoExecutedCompanyDoc(editingEquityDoc) &&
+                      !editEquityDocPrompt.trim() &&
                       editEquityDocTitle.trim() === editingEquityDoc.title &&
                       Boolean(editRequiresSignature) === Boolean(editingEquityDoc.requiresSignature))
                   }
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     isRevisingEquityDoc ||
-                    (!editEquityDocPrompt.trim() &&
+                    (!isAutoExecutedCompanyDoc(editingEquityDoc) &&
+                      !editEquityDocPrompt.trim() &&
                       editEquityDocTitle.trim() === editingEquityDoc.title &&
                       Boolean(editRequiresSignature) === Boolean(editingEquityDoc.requiresSignature))
                       ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
@@ -4773,12 +5187,20 @@ const EquityAdminPage: React.FC = () => {
                   {isRevisingEquityDoc ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      {editEquityDocPrompt.trim() ? 'Revising...' : 'Saving...'}
+                      {isAutoExecutedCompanyDoc(editingEquityDoc)
+                        ? 'Regenerating...'
+                        : editEquityDocPrompt.trim()
+                        ? 'Revising...'
+                        : 'Saving...'}
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4" />
-                      {editEquityDocPrompt.trim() ? 'Apply Changes' : 'Save'}
+                      {isAutoExecutedCompanyDoc(editingEquityDoc)
+                        ? 'Regenerate Cleanly'
+                        : editEquityDocPrompt.trim()
+                        ? 'Apply Changes'
+                        : 'Save'}
                     </>
                   )}
                 </button>
@@ -5065,6 +5487,45 @@ const EquityAdminPage: React.FC = () => {
                 </button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Toast */}
+      <AnimatePresence>
+        {message && (
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-6 right-6 z-[80] w-[min(92vw,28rem)]"
+          >
+            <div
+              className={`rounded-2xl border shadow-2xl backdrop-blur-xl px-4 py-4 flex items-start gap-3 ${
+                message.type === 'success'
+                  ? 'bg-green-950/90 border-green-700 text-green-200'
+                  : message.type === 'error'
+                  ? 'bg-red-950/90 border-red-700 text-red-200'
+                  : 'bg-blue-950/90 border-blue-700 text-blue-200'
+              }`}
+            >
+              <div className="mt-0.5">
+                {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">
+                  {message.type === 'success' ? 'Success' : message.type === 'error' ? 'Something went wrong' : 'Update'}
+                </p>
+                <p className="text-sm opacity-90 mt-1">{message.text}</p>
+              </div>
+              <button
+                onClick={() => setMessage(null)}
+                className="opacity-70 hover:opacity-100 transition-opacity"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
