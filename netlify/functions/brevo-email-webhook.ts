@@ -30,6 +30,74 @@ interface BrevoWebhookEvent {
   'X-Mailin-custom'?: string; // Custom headers we set (contains friendId, emailRecordId)
 }
 
+const applyStatusUpdate = (
+  updateData: Record<string, any>,
+  eventType: BrevoWebhookEvent['event'],
+  now: Date,
+  link?: string,
+  periodKey?: string
+) => {
+  const writePeriodField = (field: string, value: any) => {
+    if (!periodKey) return;
+    updateData[`${periodKey}.${field}`] = value;
+  };
+
+  switch (eventType) {
+    case 'delivered':
+      updateData.lastEmailDeliveredAt = now;
+      updateData.emailStatus = 'delivered';
+      writePeriodField('status', 'delivered');
+      writePeriodField('deliveredAt', now);
+      break;
+    case 'opened':
+      updateData.lastEmailOpenedAt = now;
+      updateData.emailOpenCount = admin.firestore.FieldValue.increment(1);
+      updateData.emailStatus = 'opened';
+      writePeriodField('status', 'opened');
+      writePeriodField('openedAt', now);
+      writePeriodField('openCount', admin.firestore.FieldValue.increment(1));
+      break;
+    case 'click':
+      updateData.lastEmailClickedAt = now;
+      updateData.emailClickCount = admin.firestore.FieldValue.increment(1);
+      updateData.lastEmailClickedLink = link || null;
+      updateData.emailStatus = 'clicked';
+      writePeriodField('status', 'clicked');
+      writePeriodField('clickedAt', now);
+      writePeriodField('clickCount', admin.firestore.FieldValue.increment(1));
+      writePeriodField('clickedLink', link || null);
+      break;
+    case 'soft_bounce':
+      updateData.emailStatus = 'soft_bounce';
+      updateData.emailBounceType = 'soft_bounce';
+      writePeriodField('status', 'soft_bounce');
+      writePeriodField('bounceType', 'soft_bounce');
+      break;
+    case 'hard_bounce':
+      updateData.emailStatus = 'hard_bounce';
+      updateData.emailBounceType = 'hard_bounce';
+      writePeriodField('status', 'hard_bounce');
+      writePeriodField('bounceType', 'hard_bounce');
+      break;
+    case 'spam':
+      updateData.emailStatus = 'spam';
+      writePeriodField('status', 'spam');
+      break;
+    case 'unsubscribe':
+      updateData.emailStatus = 'unsubscribed';
+      writePeriodField('status', 'unsubscribed');
+      break;
+    case 'blocked':
+      updateData.emailStatus = 'blocked';
+      writePeriodField('status', 'blocked');
+      break;
+    case 'deferred':
+      updateData.emailStatus = 'deferred';
+      writePeriodField('status', 'deferred');
+      break;
+  }
+};
+
 export const handler: Handler = async (event) => {
   // Only accept POST requests
   if (event.httpMethod !== 'POST') {
@@ -76,7 +144,7 @@ export const handler: Handler = async (event) => {
     }
 
     for (const webhookEvent of events) {
-      const { event: eventType, email, 'message-id': messageId, date, link } = webhookEvent;
+      const { event: eventType, email, 'message-id': messageId, link } = webhookEvent;
       
       console.log(`[brevo-webhook] Processing event: ${eventType} for ${email}`);
 
@@ -108,63 +176,13 @@ export const handler: Handler = async (event) => {
             lastEmailEventAt: now,
           };
 
-          // Track specific events
-          switch (eventType) {
-            case 'delivered':
-              updateData.lastEmailDeliveredAt = now;
-              updateData.emailStatus = 'delivered';
-              break;
-            case 'opened':
-              updateData.lastEmailOpenedAt = now;
-              updateData.emailOpenCount = admin.firestore.FieldValue.increment(1);
-              updateData.emailStatus = 'opened';
-              break;
-            case 'click':
-              updateData.lastEmailClickedAt = now;
-              updateData.emailClickCount = admin.firestore.FieldValue.increment(1);
-              updateData.lastEmailClickedLink = link || null;
-              updateData.emailStatus = 'clicked';
-              break;
-            case 'soft_bounce':
-            case 'hard_bounce':
-              updateData.emailStatus = 'bounced';
-              updateData.emailBounceType = eventType;
-              break;
-            case 'spam':
-              updateData.emailStatus = 'spam';
-              break;
-            case 'unsubscribe':
-              updateData.emailStatus = 'unsubscribed';
-              break;
-          }
-
-          // Also update the per-update period tracking if we have an updatePeriodId
-          if (updatePeriodId) {
-            const periodKey = `emailUpdates.${updatePeriodId}`;
-            switch (eventType) {
-              case 'delivered':
-                updateData[`${periodKey}.status`] = 'delivered';
-                updateData[`${periodKey}.deliveredAt`] = now;
-                break;
-              case 'opened':
-                updateData[`${periodKey}.status`] = 'opened';
-                updateData[`${periodKey}.openedAt`] = now;
-                updateData[`${periodKey}.openCount`] = admin.firestore.FieldValue.increment(1);
-                break;
-              case 'click':
-                updateData[`${periodKey}.status`] = 'clicked';
-                updateData[`${periodKey}.clickedAt`] = now;
-                updateData[`${periodKey}.clickCount`] = admin.firestore.FieldValue.increment(1);
-                break;
-              case 'soft_bounce':
-              case 'hard_bounce':
-                updateData[`${periodKey}.status`] = 'bounced';
-                break;
-              case 'spam':
-                updateData[`${periodKey}.status`] = 'spam';
-                break;
-            }
-          }
+          applyStatusUpdate(
+            updateData,
+            eventType,
+            now,
+            link,
+            updatePeriodId ? `emailUpdates.${updatePeriodId}` : undefined
+          );
 
           await friendRef.update(updateData);
           console.log(`[brevo-webhook] Updated friend ${friendId} with event ${eventType}${updatePeriodId ? ` for period ${updatePeriodId}` : ''}`);
@@ -225,30 +243,7 @@ export const handler: Handler = async (event) => {
             lastEmailEventAt: now,
           };
 
-          switch (eventType) {
-            case 'delivered':
-              updateData.lastEmailDeliveredAt = now;
-              updateData.emailStatus = 'delivered';
-              break;
-            case 'opened':
-              updateData.lastEmailOpenedAt = now;
-              updateData.emailOpenCount = admin.firestore.FieldValue.increment(1);
-              updateData.emailStatus = 'opened';
-              break;
-            case 'click':
-              updateData.lastEmailClickedAt = now;
-              updateData.emailClickCount = admin.firestore.FieldValue.increment(1);
-              updateData.lastEmailClickedLink = link || null;
-              updateData.emailStatus = 'clicked';
-              break;
-            case 'soft_bounce':
-            case 'hard_bounce':
-              updateData.emailStatus = 'bounced';
-              break;
-            case 'spam':
-              updateData.emailStatus = 'spam';
-              break;
-          }
+          applyStatusUpdate(updateData, eventType, now, link);
 
           await friendDoc.ref.update(updateData);
           console.log(`[brevo-webhook] Updated friend by email lookup with event ${eventType}`);

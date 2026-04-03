@@ -1,13 +1,55 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, addDoc, getDocs, orderBy, query, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, orderBy, query, updateDoc, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { Check, User, Mail, Loader2, X, Sparkles, Link, Eye, MousePointer, AlertTriangle, Clock, Send } from 'lucide-react';
 import { convertFirestoreTimestamp, formatDate } from '../../utils/formatDate';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { showToast } from '../../redux/toastSlice';
+
+type EmailStatus =
+  | 'sent'
+  | 'delivered'
+  | 'opened'
+  | 'clicked'
+  | 'soft_bounce'
+  | 'hard_bounce'
+  | 'spam'
+  | 'unsubscribed'
+  | 'blocked'
+  | 'deferred'
+  | 'error'
+  | 'bounced';
+
+interface EmailUpdateRecord {
+  updatePeriodId: string;
+  sentAt: any;
+  status: EmailStatus;
+  deliveredAt?: any;
+  openedAt?: any;
+  clickedAt?: any;
+  openCount?: number;
+  clickCount?: number;
+  messageId?: string;
+  clickedLink?: string | null;
+  bounceType?: 'soft_bounce' | 'hard_bounce';
+}
+
+interface BusinessUpdate {
+  id: string;
+  label: string;
+  url?: string;
+  month?: string;
+  highlights: string[];
+  templateSubject?: string;
+  templateBody?: string;
+  createdAt?: any;
+  updatedAt?: any;
+  createdBy?: string;
+  legacyOrder?: number;
+}
 
 interface FriendOfBusiness {
   id?: string;
@@ -20,6 +62,7 @@ interface FriendOfBusiness {
   updatedAt?: any;
   createdBy?: string;
   lastUpdatedBy?: string;
+  emailDraftUpdatePeriodId?: string | null;
   emailDraftSubject?: string;
   emailDraftBody?: string;
   lastEmailSubject?: string;
@@ -27,7 +70,7 @@ interface FriendOfBusiness {
   lastEmailSentAt?: any;
   lastEmailMessageId?: string;
   // Email tracking fields (updated via Brevo webhook)
-  emailStatus?: 'sent' | 'delivered' | 'opened' | 'clicked' | 'soft_bounce' | 'hard_bounce' | 'spam' | 'unsubscribed' | 'blocked' | 'deferred' | 'error';
+  emailStatus?: EmailStatus;
   lastEmailEvent?: string;
   lastEmailEventAt?: any;
   lastEmailDeliveredAt?: any;
@@ -49,17 +92,145 @@ const emptyFriend: FriendOfBusiness = {
   notes: ''
 };
 
+const legacyReviewPeriods: BusinessUpdate[] = [
+  {
+    id: 'jan-26',
+    label: 'January 2026 Update',
+    url: 'fitwithpulse.ai/review/jan-26',
+    month: 'January',
+    highlights: [
+      'New year kickoff',
+      'Q1 goals',
+      'Product roadmap'
+    ],
+    legacyOrder: 0,
+  },
+  {
+    id: 'year2025',
+    label: 'Year 2025 Review',
+    url: 'fitwithpulse.ai/review/year2025',
+    month: 'December',
+    highlights: [
+      'Founder University graduate',
+      'LAUNCH investment',
+      '2K users',
+      'AI Round Builder shipped'
+    ],
+    legacyOrder: 1,
+  },
+  {
+    id: 'q4-25',
+    label: 'Q4 2025',
+    url: 'fitwithpulse.ai/review/q4-25',
+    month: 'December',
+    highlights: [
+      'Graduated Founder University',
+      'Incorporated as Delaware C-Corp',
+      'AI Round Builder & Templates shipped'
+    ],
+    legacyOrder: 2,
+  },
+  {
+    id: 'q3-25',
+    label: 'Q3 2025',
+    url: 'fitwithpulse.ai/review/q3-25',
+    month: 'September',
+    highlights: [
+      'Product development milestone',
+      'User growth',
+      'Platform improvements'
+    ],
+    legacyOrder: 3,
+  }
+];
+
+const parseHighlights = (value: string): string[] =>
+  value
+    .split(/\n|,/)
+    .map(item => item.trim())
+    .filter(Boolean);
+
+const normalizeHighlights = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.map(item => String(item).trim()).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return parseHighlights(value);
+  }
+  return [];
+};
+
+const buildUpdateId = (label: string, existingIds: string[]) => {
+  const base = label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || `update-${Date.now()}`;
+
+  let candidate = base;
+  let suffix = 2;
+  while (existingIds.includes(candidate)) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+};
+
+const timestampToMs = (value: any): number => {
+  const converted = convertFirestoreTimestamp(value);
+  if (converted instanceof Date && !Number.isNaN(converted.getTime())) return converted.getTime();
+  return 0;
+};
+
+const ensureAbsoluteUrl = (value?: string) => {
+  if (!value) return '';
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+};
+
+const mergeBusinessUpdates = (remoteUpdates: BusinessUpdate[]) => {
+  const byId = new Map(remoteUpdates.map(update => [update.id, update]));
+  const mergedLegacy = legacyReviewPeriods.map((legacy, index) => ({
+    ...legacy,
+    ...byId.get(legacy.id),
+    highlights: normalizeHighlights(byId.get(legacy.id)?.highlights ?? legacy.highlights),
+    legacyOrder: index,
+  }));
+
+  const legacyIds = new Set(legacyReviewPeriods.map(update => update.id));
+  const extras = remoteUpdates
+    .filter(update => !legacyIds.has(update.id))
+    .map((update, index) => ({
+      ...update,
+      highlights: normalizeHighlights(update.highlights),
+      legacyOrder: legacyReviewPeriods.length + index,
+    }));
+
+  return [...mergedLegacy, ...extras].sort((a, b) => {
+    const timeDiff = timestampToMs(b.updatedAt || b.createdAt) - timestampToMs(a.updatedAt || a.createdAt);
+    if (timeDiff !== 0) return timeDiff;
+    return (a.legacyOrder ?? Number.MAX_SAFE_INTEGER) - (b.legacyOrder ?? Number.MAX_SAFE_INTEGER);
+  });
+};
+
 // Email status display component
-const EmailStatusBadge: React.FC<{ friend: FriendOfBusiness; filterPeriod?: string }> = ({ friend, filterPeriod }) => {
-  // If filtering by a specific update period, show that period's status
-  const updateRecord = filterPeriod && friend.emailUpdates?.[filterPeriod];
+const EmailStatusBadge: React.FC<{ friend: FriendOfBusiness; selectedUpdateId?: string }> = ({ friend, selectedUpdateId }) => {
+  const updateRecord = selectedUpdateId ? friend.emailUpdates?.[selectedUpdateId] : undefined;
+  const selectedMatchesLatest = !!selectedUpdateId && friend.lastEmailUpdatePeriodId === selectedUpdateId;
+  const scopedRecord = updateRecord || (selectedMatchesLatest
+    ? {
+        status: friend.emailStatus,
+        sentAt: friend.lastEmailSentAt,
+        openCount: friend.emailOpenCount,
+        clickCount: friend.emailClickCount,
+      }
+    : undefined);
   
-  const emailStatus = updateRecord ? updateRecord.status : friend.emailStatus;
-  const lastEmailSentAt = updateRecord ? updateRecord.sentAt : friend.lastEmailSentAt;
-  const emailOpenCount = updateRecord ? updateRecord.openCount : friend.emailOpenCount;
-  const emailClickCount = updateRecord ? updateRecord.clickCount : friend.emailClickCount;
+  const emailStatus = selectedUpdateId ? scopedRecord?.status : friend.emailStatus;
+  const lastEmailSentAt = selectedUpdateId ? scopedRecord?.sentAt : friend.lastEmailSentAt;
+  const emailOpenCount = selectedUpdateId ? scopedRecord?.openCount : friend.emailOpenCount;
+  const emailClickCount = selectedUpdateId ? scopedRecord?.clickCount : friend.emailClickCount;
   
-  // If no email has been sent (for this period if filtering)
+  // In an update view, only show statuses that belong to that update.
   if (!lastEmailSentAt && !emailStatus) {
     return <span className="text-zinc-500 text-xs">—</span>;
   }
@@ -102,6 +273,14 @@ const EmailStatusBadge: React.FC<{ friend: FriendOfBusiness; filterPeriod?: stri
         return {
           icon: <AlertTriangle className="w-3 h-3" />,
           label: 'Hard Bounce',
+          bgColor: 'bg-red-500/20',
+          textColor: 'text-red-400',
+          borderColor: 'border-red-500/30',
+        };
+      case 'bounced':
+        return {
+          icon: <AlertTriangle className="w-3 h-3" />,
+          label: 'Bounced',
           bgColor: 'bg-red-500/20',
           textColor: 'text-red-400',
           borderColor: 'border-red-500/30',
@@ -176,67 +355,6 @@ const EmailStatusBadge: React.FC<{ friend: FriendOfBusiness; filterPeriod?: stri
   );
 };
 
-// Review periods for investor update generator
-const reviewPeriods = [
-  {
-    id: 'jan-26',
-    label: 'January 2026 Update',
-    url: 'fitwithpulse.ai/review/jan-26',
-    month: 'January',
-    highlights: [
-      'New year kickoff',
-      'Q1 goals',
-      'Product roadmap'
-    ]
-  },
-  {
-    id: 'year2025',
-    label: 'Year 2025 Review',
-    url: 'fitwithpulse.ai/review/year2025',
-    month: 'December',
-    highlights: [
-      'Founder University graduate',
-      'LAUNCH investment',
-      '2K users',
-      'AI Round Builder shipped'
-    ]
-  },
-  {
-    id: 'q4-25',
-    label: 'Q4 2025',
-    url: 'fitwithpulse.ai/review/q4-25',
-    month: 'December',
-    highlights: [
-      'Graduated Founder University',
-      'Incorporated as Delaware C-Corp',
-      'AI Round Builder & Templates shipped'
-    ]
-  },
-  {
-    id: 'q3-25',
-    label: 'Q3 2025',
-    url: 'fitwithpulse.ai/review/q3-25',
-    month: 'September',
-    highlights: [
-      'Product development milestone',
-      'User growth',
-      'Platform improvements'
-    ]
-  }
-];
-
-// Email update history type - tracks status per update period
-interface EmailUpdateRecord {
-  updatePeriodId: string;
-  sentAt: any;
-  status: 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'spam';
-  openedAt?: any;
-  clickedAt?: any;
-  openCount?: number;
-  clickCount?: number;
-  messageId?: string;
-}
-
 const FriendsOfBusinessPage: React.FC = () => {
   const [form, setForm] = useState<FriendOfBusiness>(emptyFriend);
   const [saving, setSaving] = useState(false);
@@ -259,22 +377,28 @@ const FriendsOfBusinessPage: React.FC = () => {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleDate, setScheduleDate] = useState<string>('');
   const [scheduleTime, setScheduleTime] = useState<string>('');
+  const [updates, setUpdates] = useState<BusinessUpdate[]>([]);
+  const [updatesLoading, setUpdatesLoading] = useState(true);
+  const [selectedUpdateId, setSelectedUpdateId] = useState<string>('');
+  const [createUpdateOpen, setCreateUpdateOpen] = useState(false);
+  const [creatingUpdate, setCreatingUpdate] = useState(false);
+  const [newUpdateForm, setNewUpdateForm] = useState({
+    label: '',
+    month: '',
+    url: '',
+    highlights: '',
+  });
 
   // Email template state
   const [emailTemplateSubject, setEmailTemplateSubject] = useState('');
   const [emailTemplateBody, setEmailTemplateBody] = useState('');
   const [templateSaving, setTemplateSaving] = useState(false);
-  const [templateLoading, setTemplateLoading] = useState(true);
 
   // Investor update generator state
-  const [selectedReviewPeriod, setSelectedReviewPeriod] = useState<string>('');
   const [generatingUpdate, setGeneratingUpdate] = useState(false);
   
   // Email update period selection (for tagging emails)
   const [emailUpdatePeriod, setEmailUpdatePeriod] = useState<string>('');
-  
-  // Table filter by update period
-  const [filterUpdatePeriod, setFilterUpdatePeriod] = useState<string>('');
 
   // Refs for text selection
   const templateBodyRef = React.useRef<HTMLTextAreaElement>(null);
@@ -282,56 +406,146 @@ const FriendsOfBusinessPage: React.FC = () => {
   const dispatch = useDispatch();
   const [initialEmailDraft, setInitialEmailDraft] = useState<{ subject: string; body: string } | null>(null);
   const emailDraftWasOpen = useRef(false);
+  const selectedUpdate = useMemo(
+    () => updates.find(update => update.id === selectedUpdateId) ?? null,
+    [updates, selectedUpdateId]
+  );
+  const templateLoading = updatesLoading;
 
-  // Load email template from Firestore
   useEffect(() => {
-    const loadTemplate = async () => {
-      setTemplateLoading(true);
+    const fetchUpdates = async () => {
+      setUpdatesLoading(true);
       try {
-        const templateDoc = await getDocs(collection(db, 'friends-email-template'));
-        if (!templateDoc.empty) {
-          const data = templateDoc.docs[0].data();
-          setEmailTemplateSubject(data.subject || '');
-          setEmailTemplateBody(data.body || '');
-        }
+        const snap = await getDocs(collection(db, 'friends-business-updates'));
+        const rows: BusinessUpdate[] = snap.docs.map(updateDoc => {
+          const data = updateDoc.data() as any;
+          return {
+            id: updateDoc.id,
+            label: data.label || updateDoc.id,
+            url: data.url || '',
+            month: data.month || '',
+            highlights: normalizeHighlights(data.highlights),
+            templateSubject: data.templateSubject || '',
+            templateBody: data.templateBody || '',
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            createdBy: data.createdBy,
+          };
+        });
+        setUpdates(mergeBusinessUpdates(rows));
       } catch (e) {
-        console.error('Failed to load template', e);
+        console.error('Failed to load updates', e);
+        setUpdates(mergeBusinessUpdates([]));
       } finally {
-        setTemplateLoading(false);
+        setUpdatesLoading(false);
       }
     };
-    loadTemplate();
+    fetchUpdates();
   }, []);
 
-  // Save email template to Firestore
+  useEffect(() => {
+    if (!selectedUpdateId && updates.length > 0) {
+      setSelectedUpdateId(updates[0].id);
+      return;
+    }
+    if (selectedUpdateId && !updates.some(update => update.id === selectedUpdateId) && updates.length > 0) {
+      setSelectedUpdateId(updates[0].id);
+    }
+  }, [updates, selectedUpdateId]);
+
+  useEffect(() => {
+    if (!selectedUpdate) {
+      setEmailTemplateSubject('');
+      setEmailTemplateBody('');
+      return;
+    }
+    setEmailTemplateSubject(selectedUpdate.templateSubject || '');
+    setEmailTemplateBody(selectedUpdate.templateBody || '');
+  }, [selectedUpdate?.id, selectedUpdate?.templateSubject, selectedUpdate?.templateBody]);
+
   const saveTemplate = async () => {
+    if (!selectedUpdate) {
+      dispatch(showToast({ message: 'Select an update view first', type: 'error' }));
+      return;
+    }
+
     setTemplateSaving(true);
     try {
-      const templateCollection = collection(db, 'friends-email-template');
-      const existing = await getDocs(templateCollection);
-      
-      if (!existing.empty) {
-        // Update existing template
-        await updateDoc(doc(db, 'friends-email-template', existing.docs[0].id), {
-          subject: emailTemplateSubject,
-          body: emailTemplateBody,
-          updatedAt: new Date()
-        });
-      } else {
-        // Create new template
-        await addDoc(templateCollection, {
-          subject: emailTemplateSubject,
-          body: emailTemplateBody,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
-      }
-      dispatch(showToast({ message: 'Email template saved', type: 'success' }));
+      const now = new Date();
+      await setDoc(doc(db, 'friends-business-updates', selectedUpdate.id), {
+        label: selectedUpdate.label,
+        url: selectedUpdate.url || '',
+        month: selectedUpdate.month || '',
+        highlights: selectedUpdate.highlights || [],
+        templateSubject: emailTemplateSubject,
+        templateBody: emailTemplateBody,
+        updatedAt: now,
+        createdAt: selectedUpdate.createdAt || now,
+        createdBy: selectedUpdate.createdBy || (currentUser?.username || currentUser?.displayName || currentUser?.email || 'admin'),
+      }, { merge: true });
+
+      setUpdates(prev => prev.map(update => update.id === selectedUpdate.id
+        ? {
+            ...update,
+            templateSubject: emailTemplateSubject,
+            templateBody: emailTemplateBody,
+            updatedAt: now,
+          }
+        : update));
+      dispatch(showToast({ message: `Template saved for ${selectedUpdate.label}`, type: 'success' }));
     } catch (e) {
       console.error('Save template failed', e);
       dispatch(showToast({ message: 'Failed to save template', type: 'error' }));
     } finally {
       setTemplateSaving(false);
+    }
+  };
+
+  const createUpdate = async () => {
+    if (!newUpdateForm.label.trim()) {
+      dispatch(showToast({ message: 'Add a name for the update', type: 'error' }));
+      return;
+    }
+
+    setCreatingUpdate(true);
+    try {
+      const now = new Date();
+      const id = buildUpdateId(newUpdateForm.label, updates.map(update => update.id));
+      const payload: BusinessUpdate = {
+        id,
+        label: newUpdateForm.label.trim(),
+        month: newUpdateForm.month.trim(),
+        url: newUpdateForm.url.trim(),
+        highlights: parseHighlights(newUpdateForm.highlights),
+        templateSubject: '',
+        templateBody: '',
+        createdAt: now,
+        updatedAt: now,
+        createdBy: (currentUser?.username || currentUser?.displayName || currentUser?.email || 'admin') as string,
+      };
+
+      await setDoc(doc(db, 'friends-business-updates', id), {
+        label: payload.label,
+        month: payload.month,
+        url: payload.url,
+        highlights: payload.highlights,
+        templateSubject: '',
+        templateBody: '',
+        createdAt: now,
+        updatedAt: now,
+        createdBy: payload.createdBy,
+      });
+
+      setUpdates(prev => mergeBusinessUpdates([...prev.filter(update => update.id !== id), payload]));
+      setSelectedUpdateId(id);
+      setCreateUpdateOpen(false);
+      setNewUpdateForm({ label: '', month: '', url: '', highlights: '' });
+      dispatch(showToast({ message: `${payload.label} added`, type: 'success' }));
+    } catch (e) {
+      console.error('Create update failed', e);
+      dispatch(showToast({ message: 'Failed to create update', type: 'error' }));
+    } finally {
+      setCreatingUpdate(false);
     }
   };
 
@@ -425,10 +639,12 @@ const FriendsOfBusinessPage: React.FC = () => {
 
   const openEmail = (row: FriendOfBusiness) => {
     setEmailFriend(row);
-    // Prefer previously saved draft values if present
     const savedSubject = row.emailDraftSubject;
     const savedBody = row.emailDraftBody;
-    if (savedSubject && savedBody) {
+    const draftMatchesCurrentUpdate =
+      !selectedUpdateId || !row.emailDraftUpdatePeriodId || row.emailDraftUpdatePeriodId === selectedUpdateId;
+
+    if (savedSubject && savedBody && draftMatchesCurrentUpdate) {
       setEmailSubject(savedSubject);
       setEmailBody(savedBody);
     } else {
@@ -436,8 +652,7 @@ const FriendsOfBusinessPage: React.FC = () => {
       setEmailSubject(subject);
       setEmailBody(body);
     }
-    // Auto-select the update period if one was selected in the generator
-    setEmailUpdatePeriod(selectedReviewPeriod || '');
+    setEmailUpdatePeriod(selectedUpdateId || '');
     setEmailOpen(true);
   };
 
@@ -450,10 +665,20 @@ const FriendsOfBusinessPage: React.FC = () => {
       await updateDoc(doc(db, 'friends-of-business', emailFriend.id), {
         emailDraftSubject: emailSubject,
         emailDraftBody: emailBody,
+        emailDraftUpdatePeriodId: emailUpdatePeriod || null,
         updatedAt: now,
         lastUpdatedBy: actor
       } as any);
-      setFriends(prev => prev.map(p => p.id === emailFriend.id ? { ...p, emailDraftSubject: emailSubject, emailDraftBody: emailBody, lastUpdatedBy: actor, updatedAt: now } : p));
+      setFriends(prev => prev.map(p => p.id === emailFriend.id
+        ? {
+            ...p,
+            emailDraftSubject: emailSubject,
+            emailDraftBody: emailBody,
+            emailDraftUpdatePeriodId: emailUpdatePeriod || null,
+            lastUpdatedBy: actor,
+            updatedAt: now,
+          }
+        : p));
       setDraftSavedAt(now);
       setInitialEmailDraft({ subject: emailSubject, body: emailBody });
       setTimeout(() => setDraftSavedAt(null), 2000);
@@ -476,8 +701,8 @@ const FriendsOfBusinessPage: React.FC = () => {
           to: { email: emailFriend.email, name: `${emailFriend.firstName || ''} ${emailFriend.lastName || ''}`.trim() || emailFriend.email },
           subject: emailSubject,
           textContent: emailBody,
-          friendId: emailFriend.id, // Pass friendId for tracking
-          updatePeriodId: emailUpdatePeriod || null // Pass update period for filtering
+          friendId: emailFriend.id,
+          updatePeriodId: emailUpdatePeriod || null
         })
       });
       const raw = await res.text();
@@ -494,7 +719,6 @@ const FriendsOfBusinessPage: React.FC = () => {
         const actor = (currentUser?.username || currentUser?.displayName || currentUser?.email || 'admin') as string;
         const now = new Date();
         
-        // Build update data
         const updateData: any = {
           lastEmailSubject: emailSubject,
           lastEmailBody: emailBody,
@@ -507,7 +731,6 @@ const FriendsOfBusinessPage: React.FC = () => {
           lastUpdatedBy: actor
         };
         
-        // If tagged with an update period, also save to emailUpdates map
         if (emailUpdatePeriod) {
           updateData.lastEmailUpdatePeriodId = emailUpdatePeriod;
           updateData[`emailUpdates.${emailUpdatePeriod}`] = {
@@ -522,7 +745,6 @@ const FriendsOfBusinessPage: React.FC = () => {
         
         await updateDoc(doc(db, 'friends-of-business', emailFriend.id), updateData);
         
-        // Update local state
         setFriends(prev => prev.map(p => {
           if (p.id !== emailFriend.id) return p;
           const updated = { 
@@ -551,7 +773,7 @@ const FriendsOfBusinessPage: React.FC = () => {
           return updated;
         }));
       }
-      const periodLabel = emailUpdatePeriod ? ` (${reviewPeriods.find(p => p.id === emailUpdatePeriod)?.label})` : '';
+      const periodLabel = emailUpdatePeriod ? ` (${updates.find(update => update.id === emailUpdatePeriod)?.label})` : '';
       dispatch(showToast({ message: `Email sent successfully${periodLabel}`, type: 'success' }));
       setEmailOpen(false);
     } catch (e) {
@@ -578,7 +800,8 @@ const FriendsOfBusinessPage: React.FC = () => {
           subject: emailSubject,
           textContent: emailBody,
           scheduledAt: when.toISOString(),
-          friendId: emailFriend.id // Pass friendId for tracking
+          friendId: emailFriend.id,
+          updatePeriodId: emailUpdatePeriod || null
         })
       });
       const raw = await res.text();
@@ -591,7 +814,8 @@ const FriendsOfBusinessPage: React.FC = () => {
       })();
       if (!json) throw new Error('Failed to schedule (invalid server response)');
       if (!res.ok || !json.success) throw new Error(json.error || 'Failed to schedule');
-      dispatch(showToast({ message: 'Email scheduled successfully', type: 'success' }));
+      const periodLabel = emailUpdatePeriod ? ` (${updates.find(update => update.id === emailUpdatePeriod)?.label})` : '';
+      dispatch(showToast({ message: `Email scheduled successfully${periodLabel}`, type: 'success' }));
       setEmailOpen(false);
       setScheduleOpen(false);
     } catch (e) {
@@ -678,28 +902,36 @@ const FriendsOfBusinessPage: React.FC = () => {
   };
 
   const generateInvestorUpdate = () => {
-    const period = reviewPeriods.find(p => p.id === selectedReviewPeriod);
-    if (!period) return;
+    if (!selectedUpdate) {
+      dispatch(showToast({ message: 'Select an update before generating a template', type: 'error' }));
+      return;
+    }
 
-    const subject = `Pulse ${period.month} Update – ${period.label}`;
+    const monthLabel = selectedUpdate.month?.trim() || 'Investor';
+    const reviewUrl = ensureAbsoluteUrl(selectedUpdate.url);
+    const highlightsLine = selectedUpdate.highlights.length
+      ? `Highlights: ${selectedUpdate.highlights.join(', ')}.`
+      : 'Highlights: Product progress, momentum, and next milestones.';
+    const viewLine = reviewUrl ? `View here: ${reviewUrl}` : '';
+
+    const subject = `Pulse ${monthLabel} Update – ${selectedUpdate.label}`;
     const body = `Hi {{firstName}},
 
-Our ${period.label.toLowerCase()} is live with Q4 metrics, product launches, and 2026 roadmap.
+Our ${selectedUpdate.label.toLowerCase()} is live with traction, product progress, and what is coming next.
 
-View here: https://${period.url}
+${viewLine}
 
-Highlights: ${period.highlights.join(', ')}.
+${highlightsLine}
 
 Best,
-Tremaine`;
+Tremaine`.replace(/\n{3,}/g, '\n\n');
 
     setEmailTemplateSubject(subject);
     setEmailTemplateBody(body);
     setGeneratingUpdate(true);
     
-    // Show feedback
     dispatch(showToast({ 
-      message: `Generated investor update for ${period.label}`, 
+      message: `Generated investor update for ${selectedUpdate.label}`, 
       type: 'success' 
     }));
     
@@ -756,73 +988,112 @@ Tremaine`;
             <p className="text-zinc-400">Manage friends and send personalized emails.</p>
           </div>
 
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="space-y-3">
+                <div>
+                  <h2 className="text-xl font-semibold">Update View</h2>
+                  <p className="text-sm text-zinc-400">
+                    Pick the update you want to work in. Template editing, delivery status, and email tracking all follow this selection.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div>
+                    <label className="text-xs text-zinc-400 mb-2 block">Current Update</label>
+                    <select
+                      className="w-full sm:w-80 bg-zinc-800 rounded-lg px-3 py-2 border border-zinc-700"
+                      value={selectedUpdateId}
+                      onChange={e => setSelectedUpdateId(e.target.value)}
+                      disabled={updatesLoading || updates.length === 0}
+                    >
+                      {updates.length === 0 ? (
+                        <option value="">No updates yet</option>
+                      ) : (
+                        updates.map(update => (
+                          <option key={update.id} value={update.id}>
+                            {update.label}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      onClick={() => setCreateUpdateOpen(true)}
+                      className="inline-flex items-center gap-2 bg-[#E0FE10] text-black font-semibold px-4 py-2 rounded-lg hover:bg-lime-400"
+                    >
+                      <Check className="w-4 h-4" /> New Update
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {selectedUpdate && (
+                <div className="bg-zinc-950/70 border border-zinc-800 rounded-xl p-4 min-w-[280px]">
+                  <div className="text-xs uppercase tracking-[0.18em] text-zinc-500 mb-2">Current View</div>
+                  <div className="text-lg font-semibold text-white">{selectedUpdate.label}</div>
+                  <div className="text-sm text-zinc-400 mt-1">
+                    {selectedUpdate.month || 'No month set'}
+                    {selectedUpdate.url ? ` • ${selectedUpdate.url}` : ''}
+                  </div>
+                  <div className="text-xs text-zinc-500 mt-3">
+                    {selectedUpdate.highlights.length > 0
+                      ? selectedUpdate.highlights.join(' • ')
+                      : 'No highlights added yet'}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Investor Update Generator */}
           <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 border border-purple-500/30 rounded-xl p-6 mb-10">
             <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-purple-400" /> Investor Update Generator
             </h2>
             <p className="text-sm text-zinc-300 mb-4">
-              Automatically generate concise investor update emails from your monthly review pages.
+              Generate the working email template for the selected update view.
             </p>
             
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-zinc-400 mb-2 block">Select Review Period</label>
-                <select
-                  className="w-full md:w-96 bg-zinc-800 rounded-lg px-3 py-2 border border-zinc-700"
-                  value={selectedReviewPeriod}
-                  onChange={e => setSelectedReviewPeriod(e.target.value)}
-                >
-                  <option value="">Choose a review period...</option>
-                  {reviewPeriods.map(period => (
-                    <option key={period.id} value={period.id}>
-                      {period.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              {selectedReviewPeriod && (
+            {selectedUpdate ? (
+              <div className="space-y-4">
                 <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
                   <h4 className="text-sm font-semibold text-white mb-2">Preview</h4>
-                  {(() => {
-                    const period = reviewPeriods.find(p => p.id === selectedReviewPeriod);
-                    if (!period) return null;
-                    return (
-                      <div className="text-sm text-zinc-300 space-y-2">
-                        <p><strong>Subject:</strong> Pulse {period.month} Update – {period.label}</p>
-                        <p className="text-xs text-zinc-400 mt-2">
-                          <strong>Body:</strong><br/>
-                          Our {period.label.toLowerCase()} is live with Q4 metrics, product launches, and 2026 roadmap.<br/>
-                          View here: {period.url}<br/>
-                          Highlights: {period.highlights.join(', ')}.
-                        </p>
-                      </div>
-                    );
-                  })()}
+                  <div className="text-sm text-zinc-300 space-y-2">
+                    <p><strong>Update:</strong> {selectedUpdate.label}</p>
+                    <p><strong>Subject:</strong> Pulse {selectedUpdate.month || 'Investor'} Update – {selectedUpdate.label}</p>
+                    <p className="text-xs text-zinc-400 mt-2">
+                      <strong>Body:</strong><br/>
+                      Our {selectedUpdate.label.toLowerCase()} is live with traction, product progress, and what is coming next.<br/>
+                      {selectedUpdate.url ? `View here: ${ensureAbsoluteUrl(selectedUpdate.url)}\n` : ''}
+                      Highlights: {selectedUpdate.highlights.length > 0 ? selectedUpdate.highlights.join(', ') : 'Product progress, momentum, and next milestones'}.
+                    </p>
+                  </div>
                 </div>
-              )}
-              
-              <div className="flex justify-end">
-                <button
-                  onClick={generateInvestorUpdate}
-                  disabled={!selectedReviewPeriod || generatingUpdate}
-                  className="inline-flex items-center gap-2 bg-purple-600 text-white font-semibold px-5 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {generatingUpdate ? (
-                    <>
-                      <Check className="w-4 h-4" />
-                      Generated!
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      Generate Email Template
-                    </>
-                  )}
-                </button>
+                
+                <div className="flex justify-end">
+                  <button
+                    onClick={generateInvestorUpdate}
+                    disabled={!selectedUpdate || generatingUpdate}
+                    className="inline-flex items-center gap-2 bg-purple-600 text-white font-semibold px-5 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {generatingUpdate ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        Generated!
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        Generate Template for This Update
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="text-sm text-zinc-400">Create or select an update to generate its template.</div>
+            )}
           </div>
 
           {/* Email Template Section */}
@@ -831,10 +1102,14 @@ Tremaine`;
               <Mail className="w-5 h-5 text-[#E0FE10]" /> Email Template
             </h2>
             <p className="text-sm text-zinc-400 mb-4">
-              Create an email template that will be personalized for each friend. Use placeholders: {'{{'}name{'}}'}, {'{{'}firstName{'}}'}, {'{{'}lastName{'}}'}, {'{{'}email{'}}'}, {'{{'}titleOrCompany{'}}'}
+              {selectedUpdate
+                ? `This template is attached to ${selectedUpdate.label}. Use placeholders: {{name}}, {{firstName}}, {{lastName}}, {{email}}, {{titleOrCompany}}`
+                : 'Select an update to attach and edit its template.'}
             </p>
             {templateLoading ? (
               <div className="text-zinc-400">Loading template...</div>
+            ) : !selectedUpdate ? (
+              <div className="text-zinc-400">No update selected.</div>
             ) : (
               <>
                 <div className="space-y-4">
@@ -946,7 +1221,7 @@ Tremaine`;
             </div>
           </div>
 
-          {/* Search and Filter */}
+          {/* Search and Update View */}
           <div className="mb-4 flex flex-col sm:flex-row gap-3">
             <input
               placeholder="Search name, email, title..."
@@ -955,36 +1230,34 @@ Tremaine`;
               onChange={e => setSearch(e.target.value)}
             />
             <div className="flex items-center gap-2">
-              <label className="text-sm text-zinc-400 whitespace-nowrap">Filter by Update:</label>
+              <label className="text-sm text-zinc-400 whitespace-nowrap">Showing Update:</label>
               <select
                 className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm min-w-[200px]"
-                value={filterUpdatePeriod}
-                onChange={e => setFilterUpdatePeriod(e.target.value)}
+                value={selectedUpdateId}
+                onChange={e => setSelectedUpdateId(e.target.value)}
+                disabled={updatesLoading || updates.length === 0}
               >
-                <option value="">All emails (latest status)</option>
-                {reviewPeriods.map(period => (
-                  <option key={period.id} value={period.id}>
-                    {period.label}
+                {updates.map(update => (
+                  <option key={update.id} value={update.id}>
+                    {update.label}
                   </option>
                 ))}
               </select>
-              {filterUpdatePeriod && (
-                <button
-                  onClick={() => setFilterUpdatePeriod('')}
-                  className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded bg-zinc-800 border border-zinc-700"
-                >
-                  Clear
-                </button>
-              )}
+              <button
+                onClick={() => setCreateUpdateOpen(true)}
+                className="text-xs text-zinc-300 hover:text-white px-3 py-2 rounded bg-zinc-800 border border-zinc-700"
+              >
+                New Update
+              </button>
             </div>
           </div>
           
-          {/* Filter indicator */}
-          {filterUpdatePeriod && (
+          {/* View indicator */}
+          {selectedUpdate && (
             <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center gap-2">
               <Eye className="w-4 h-4 text-blue-400" />
               <span className="text-sm text-blue-300">
-                Showing email status for: <strong>{reviewPeriods.find(p => p.id === filterUpdatePeriod)?.label}</strong>
+                Viewing delivery status for: <strong>{selectedUpdate.label}</strong>
               </span>
             </div>
           )}
@@ -1043,7 +1316,7 @@ Tremaine`;
                           )}
                         </td>
                         <td className="p-3">
-                          <EmailStatusBadge friend={row} filterPeriod={filterUpdatePeriod} />
+                          <EmailStatusBadge friend={row} selectedUpdateId={selectedUpdateId} />
                         </td>
                         <td className="p-3 text-zinc-300">{row.createdBy || '—'}</td>
                         <td className="p-3 text-zinc-300">{row.lastUpdatedBy || '—'}</td>
@@ -1074,6 +1347,76 @@ Tremaine`;
               </tbody>
             </table>
           </div>
+
+          {createUpdateOpen && (
+            <div
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={() => setCreateUpdateOpen(false)}
+            >
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-2xl" onClick={e => e.stopPropagation()}>
+                <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+                  <h3 className="text-xl font-semibold">Add Update View</h3>
+                  <button className="text-zinc-400 hover:text-white" onClick={() => setCreateUpdateOpen(false)}>
+                    ✕
+                  </button>
+                </div>
+                <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="text-xs text-zinc-400 mb-1 block">Update Name</label>
+                    <input
+                      className="w-full bg-zinc-800 rounded-lg px-3 py-2"
+                      placeholder="Q1 Update 2026"
+                      value={newUpdateForm.label}
+                      onChange={e => setNewUpdateForm(prev => ({ ...prev, label: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400 mb-1 block">Month / Period Label</label>
+                    <input
+                      className="w-full bg-zinc-800 rounded-lg px-3 py-2"
+                      placeholder="March"
+                      value={newUpdateForm.month}
+                      onChange={e => setNewUpdateForm(prev => ({ ...prev, month: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400 mb-1 block">Review URL</label>
+                    <input
+                      className="w-full bg-zinc-800 rounded-lg px-3 py-2"
+                      placeholder="fitwithpulse.ai/review/q1-2026"
+                      value={newUpdateForm.url}
+                      onChange={e => setNewUpdateForm(prev => ({ ...prev, url: e.target.value }))}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-xs text-zinc-400 mb-1 block">Highlights</label>
+                    <textarea
+                      className="w-full bg-zinc-800 rounded-lg px-3 py-3 h-32 resize-y"
+                      placeholder={'One highlight per line\nOr separate with commas'}
+                      value={newUpdateForm.highlights}
+                      onChange={e => setNewUpdateForm(prev => ({ ...prev, highlights: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="p-4 border-t border-zinc-800 flex justify-end gap-3">
+                  <button
+                    className="px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300"
+                    onClick={() => setCreateUpdateOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="px-4 py-2 rounded-md bg-[#E0FE10] text-black font-semibold hover:bg-lime-400 inline-flex items-center gap-2 disabled:opacity-60"
+                    onClick={createUpdate}
+                    disabled={creatingUpdate}
+                  >
+                    {creatingUpdate && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Create Update
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Detail/Edit Modal */}
           {detailOpen && editing && (
@@ -1169,22 +1512,22 @@ Tremaine`;
                   
                   {/* Update Period Tag */}
                   <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3">
-                    <label className="text-xs text-zinc-400 mb-2 block">Tag this email with an update period (for tracking)</label>
+                    <label className="text-xs text-zinc-400 mb-2 block">Track this email under an update</label>
                     <select
                       className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm"
                       value={emailUpdatePeriod}
                       onChange={e => setEmailUpdatePeriod(e.target.value)}
                     >
                       <option value="">No tag (general email)</option>
-                      {reviewPeriods.map(period => (
-                        <option key={period.id} value={period.id}>
-                          📊 {period.label}
+                      {updates.map(update => (
+                        <option key={update.id} value={update.id}>
+                          {update.label}
                         </option>
                       ))}
                     </select>
                     {emailUpdatePeriod && (
                       <p className="text-xs text-green-400 mt-2">
-                        ✓ This email will be tracked under "{reviewPeriods.find(p => p.id === emailUpdatePeriod)?.label}"
+                        ✓ This email will be tracked under "{updates.find(update => update.id === emailUpdatePeriod)?.label}"
                       </p>
                     )}
                   </div>
