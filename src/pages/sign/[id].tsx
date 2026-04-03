@@ -14,22 +14,23 @@ interface SigningRequest {
   recipientEmail: string;
   companyName?: string;  // Which company issued this document
   status: 'pending' | 'sent' | 'viewed' | 'signed';
-  createdAt: Timestamp;
-  sentAt?: Timestamp;
-  viewedAt?: Timestamp;
-  signedAt?: Timestamp;
+  createdAt: Timestamp | Date | string;
+  sentAt?: Timestamp | Date | string;
+  viewedAt?: Timestamp | Date | string;
+  signedAt?: Timestamp | Date | string;
   signatureData?: {
     typedName: string;
     signatureFont: string;
     ipAddress: string;
     userAgent: string;
-    timestamp: Timestamp;
+    timestamp: Timestamp | Date | string;
   };
   documentContent?: string;
   signingGroupId?: string;
   legalDocumentId?: string;
   invalidatedAt?: Timestamp | Date;
   invalidatedReason?: string;
+  previewMode?: boolean;
 }
 
 // Signature fonts available
@@ -39,9 +40,12 @@ const signatureFonts = [
   { name: 'Lucida Handwriting', class: 'font-lucida' },
 ];
 
+const getMockSigningStorageKey = (documentId: string) => `mock-signing-request:${documentId}`;
+
 const SignDocument: React.FC = () => {
   const router = useRouter();
-  const { id, download } = router.query;
+  const { id, download, preview } = router.query;
+  const isPreviewMode = preview === '1';
 
   const [request, setRequest] = useState<SigningRequest | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,14 +63,35 @@ const SignDocument: React.FC = () => {
   }, [request?.recipientName, request?.signatureData?.typedName, typedName]);
 
   useEffect(() => {
-    if (id) {
-      fetchSigningRequest(id as string);
+    if (router.isReady && id) {
+      fetchSigningRequest(id as string, isPreviewMode);
     }
-  }, [id]);
+  }, [router.isReady, id, isPreviewMode]);
 
-  const fetchSigningRequest = async (documentId: string) => {
+  const fetchSigningRequest = async (documentId: string, previewMode: boolean) => {
     try {
       setLoading(true);
+
+      if (previewMode) {
+        const raw = window.localStorage.getItem(getMockSigningStorageKey(documentId));
+        if (!raw) {
+          setError('Preview signing request not found. Open the preview again from the signature modal.');
+          return;
+        }
+
+        const data = JSON.parse(raw) as SigningRequest;
+        setRequest({ ...data, id: documentId, previewMode: true });
+        if (data.status === 'signed') {
+          setSigned(true);
+          setTypedName(data.signatureData?.typedName || '');
+          const fontIdx = signatureFonts.findIndex(f => f.name === data.signatureData?.signatureFont);
+          if (fontIdx >= 0) setSelectedFont(fontIdx);
+        } else {
+          setSigned(false);
+        }
+        return;
+      }
+
       const docRef = doc(db, 'signingRequests', documentId);
       const docSnap = await getDoc(docRef);
 
@@ -120,6 +145,32 @@ const SignDocument: React.FC = () => {
     setSigning(true);
 
     try {
+      if (isPreviewMode || request.previewMode) {
+        const previewSignatureData = {
+          typedName: typedName.trim(),
+          signatureFont: signatureFonts[selectedFont].name,
+          ipAddress: 'Preview Mode',
+          userAgent: navigator.userAgent,
+          timestamp: new Date().toISOString(),
+        };
+
+        const updatedPreviewRequest: SigningRequest = {
+          ...request,
+          status: 'signed',
+          signedAt: new Date().toISOString(),
+          signatureData: previewSignatureData,
+          previewMode: true,
+        };
+
+        window.localStorage.setItem(
+          getMockSigningStorageKey(request.id),
+          JSON.stringify(updatedPreviewRequest)
+        );
+        setRequest(updatedPreviewRequest);
+        setSigned(true);
+        return;
+      }
+
       // Get IP address (client-side approximation - in production use a server endpoint)
       let ipAddress = 'Unknown';
       try {
@@ -588,6 +639,14 @@ const SignDocument: React.FC = () => {
         </div>
 
         <div className="max-w-4xl mx-auto p-6">
+          {(isPreviewMode || request.previewMode) && (
+            <div className="bg-blue-900/20 border border-blue-800 rounded-2xl p-4 mb-6">
+              <p className="text-blue-300 text-sm">
+                Preview Mode: this is a mock signing session for testing. No email will be sent, and the real document status will not change.
+              </p>
+            </div>
+          )}
+
           {/* Document Info */}
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 mb-6">
             <div className="flex items-center gap-4 mb-4">
@@ -635,7 +694,9 @@ const SignDocument: React.FC = () => {
               </div>
               <h2 className="text-2xl font-semibold mb-2">Document Signed Successfully</h2>
               <p className="text-zinc-400 mb-6">
-                Thank you for signing. A confirmation email has been sent to all parties.
+                {isPreviewMode || request.previewMode
+                  ? 'Preview signature complete. This was a mock signing run and did not notify anyone or update the live request.'
+                  : 'Thank you for signing. A confirmation email has been sent to all parties.'}
               </p>
 
               <div className="bg-zinc-800/50 rounded-xl p-4 mb-6 inline-block">
@@ -738,4 +799,3 @@ const SignDocument: React.FC = () => {
 };
 
 export default SignDocument;
-

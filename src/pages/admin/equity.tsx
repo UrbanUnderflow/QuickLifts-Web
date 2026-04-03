@@ -329,6 +329,14 @@ const getDocumentFamilyHistory = (anchorDoc: EquityDocument, documents: EquityDo
     documents.filter(doc => getEquityDocumentFamilyKey(doc) === getEquityDocumentFamilyKey(anchorDoc) && doc.id !== anchorDoc.id)
   );
 
+const getEquityDocumentRevisionEntries = (equityDoc: EquityDocument) =>
+  [...(equityDoc.revisionHistory || [])].sort(
+    (a, b) => getDateValue(b.timestamp) - getDateValue(a.timestamp)
+  );
+
+const getEquityDocumentHistoryCount = (equityDoc: EquityDocument, documents: EquityDocument[]) =>
+  getDocumentFamilyHistory(equityDoc, documents).length + getEquityDocumentRevisionEntries(equityDoc).length;
+
 const AUTO_EXECUTED_COMPANY_DOC_TYPES = ['board_consent', 'stockholder_consent', 'eip'] as const;
 const LOCAL_EQUITY_FUNCTION_FALLBACK_ORIGIN = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
 
@@ -2434,6 +2442,58 @@ const EquityAdminPage: React.FC = () => {
     }
   };
 
+  const handlePreviewSignatureFlow = () => {
+    if (!signingDoc) return;
+
+    const normalized = signers.map(s => ({
+      ...s,
+      name: (s.name || '').trim(),
+      email: (s.email || '').trim().toLowerCase(),
+    }));
+
+    const previewSigner =
+      normalized.find(s => s.role !== 'Company' && s.name && s.email) ||
+      normalized.find(s => s.name && s.email);
+
+    if (!previewSigner) {
+      setSigningModalStatus({ type: 'error', text: 'Add at least one signer with a name and email before previewing the signing flow.' });
+      setMessage({ type: 'error', text: 'Add at least one signer with a name and email to preview the signing flow.' });
+      return;
+    }
+
+    const previewId = `mock-${signingDoc.id}-${Date.now()}`;
+    const company = getDefaultCompanySigner();
+    const previewPayload = {
+      id: previewId,
+      documentType: signingDoc.documentType,
+      documentName: `${signingDoc.title} (Preview)`,
+      recipientName: previewSigner.name,
+      recipientEmail: previewSigner.email,
+      companyName: company.name || 'Pulse Intelligence Labs, Inc.',
+      status: 'sent',
+      createdAt: new Date().toISOString(),
+      sentAt: new Date().toISOString(),
+      documentContent: signingDoc.content,
+      signerRole: previewSigner.role,
+      equityDocumentId: signingDoc.id,
+      previewMode: true,
+    };
+
+    try {
+      window.localStorage.setItem(`mock-signing-request:${previewId}`, JSON.stringify(previewPayload));
+      window.open(`/sign/${previewId}?preview=1`, '_blank', 'noopener,noreferrer');
+      setSigningModalStatus({
+        type: 'success',
+        text: `Preview opened for ${previewSigner.name}. This is a mock signing flow and will not send email or update the real document.`,
+      });
+      setMessage({ type: 'info', text: 'Opened mock signature preview in a new tab.' });
+    } catch (error) {
+      console.error('Error opening signature preview:', error);
+      setSigningModalStatus({ type: 'error', text: 'Failed to open the mock signing preview.' });
+      setMessage({ type: 'error', text: 'Failed to open the mock signing preview.' });
+    }
+  };
+
   const copySigningLink = async (signingRequestId: string) => {
     const shareUrl = `${window.location.origin}/sign/${signingRequestId}`;
     try {
@@ -3940,6 +4000,8 @@ const EquityAdminPage: React.FC = () => {
                                   <h5 className="text-zinc-400 text-sm font-medium">Documents</h5>
                                   {stakeholderDocs.map((edoc) => {
                                     const historyDocs = getDocumentFamilyHistory(edoc, getStakeholderCompletedDocuments(stakeholder.id));
+                                    const revisionEntries = getEquityDocumentRevisionEntries(edoc);
+                                    const historyCount = historyDocs.length + revisionEntries.length;
                                     const docState = getEquityDocSignatureState(edoc);
                                     const signingRequest = docState.activeRequests[0];
                                     const statusBadge = getEquityDocStatusBadge(edoc);
@@ -4035,13 +4097,13 @@ const EquityAdminPage: React.FC = () => {
                                             <Share2 className="w-3 h-3" />
                                             Share
                                           </button>
-                                          {historyDocs.length > 0 && (
+                                          {historyCount > 0 && (
                                             <button
                                               onClick={(e) => { e.stopPropagation(); openDocHistoryModal(edoc); }}
                                               className="flex items-center gap-1 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-xs transition-colors"
                                             >
                                               <Clock className="w-3 h-3" />
-                                              History ({historyDocs.length})
+                                              History ({historyCount})
                                             </button>
                                           )}
                                           <button
@@ -4430,6 +4492,8 @@ const EquityAdminPage: React.FC = () => {
               const needsSignature = requiresExternalSignature(edoc);
               const statusBadge = getEquityDocStatusBadge(edoc);
               const historyDocs = getDocumentFamilyHistory(edoc, equityDocuments);
+              const revisionEntries = getEquityDocumentRevisionEntries(edoc);
+              const historyCount = historyDocs.length + revisionEntries.length;
               return (
                 <GlassCard key={edoc.id} accentColor="#3B82F6">
                   <div className="p-5">
@@ -4588,13 +4652,13 @@ const EquityAdminPage: React.FC = () => {
                               )}
                             </button>
 
-                            {historyDocs.length > 0 && (
+                            {historyCount > 0 && (
                               <button
                                 onClick={() => openDocHistoryModal(edoc)}
                                 className="flex items-center gap-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors"
                               >
                                 <Clock className="w-4 h-4" />
-                                History ({historyDocs.length})
+                                History ({historyCount})
                               </button>
                             )}
 
@@ -5185,6 +5249,18 @@ const EquityAdminPage: React.FC = () => {
                   {signingModalStatus?.type === 'success' ? 'Close' : 'Cancel'}
                 </button>
                 <button
+                  onClick={handlePreviewSignatureFlow}
+                  disabled={isSending || signers.length === 0 || signers.every(s => !s.name.trim() || !s.email.trim())}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    isSending || signers.length === 0 || signers.every(s => !s.name.trim() || !s.email.trim())
+                      ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                      : 'bg-blue-900/40 text-blue-300 hover:bg-blue-900/60'
+                  }`}
+                >
+                  <Eye className="w-4 h-4" />
+                  Preview Sign
+                </button>
+                <button
                   onClick={handleSendForSignature}
                   disabled={isSending || signers.length === 0 || signers.some(s => !s.name.trim() || !s.email.trim())}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -5379,6 +5455,12 @@ const EquityAdminPage: React.FC = () => {
       {/* Document History Modal */}
       <AnimatePresence>
         {isDocHistoryModalOpen && docHistoryAnchor && (
+          (() => {
+            const familyHistoryDocs = getDocumentFamilyHistory(docHistoryAnchor, equityDocuments);
+            const revisionEntries = getEquityDocumentRevisionEntries(docHistoryAnchor);
+            const hasAnyHistory = familyHistoryDocs.length > 0 || revisionEntries.length > 0;
+
+            return (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -5411,72 +5493,102 @@ const EquityAdminPage: React.FC = () => {
               </div>
 
               <div className="p-6 overflow-y-auto max-h-[70vh]">
-                {getDocumentFamilyHistory(docHistoryAnchor, equityDocuments).length === 0 ? (
+                {!hasAnyHistory ? (
                   <div className="text-center py-12">
                     <Clock className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-                    <p className="text-zinc-400">No older versions for this document family.</p>
+                    <p className="text-zinc-400">No history is available for this document yet.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {getDocumentFamilyHistory(docHistoryAnchor, equityDocuments).map((historyDoc) => {
-                      const statusBadge = getEquityDocStatusBadge(historyDoc);
-                      return (
-                        <div key={historyDoc.id} className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-700">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-white font-medium truncate">{historyDoc.title}</p>
-                                {historyDoc.isAmendment && (
-                                  <span className="px-2 py-0.5 rounded-full text-xs bg-fuchsia-900/40 text-fuchsia-300 border border-fuchsia-700">
-                                    Amendment
-                                  </span>
-                                )}
-                                {statusBadge && (
-                                  <span className={`px-2 py-0.5 rounded-full text-xs ${statusBadge.className}`}>
-                                    {statusBadge.label}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-3 flex-wrap mt-1 text-xs text-zinc-500">
-                                <span>{formatDate(historyDoc.updatedAt || historyDoc.createdAt)}</span>
-                                <span>{DOCUMENT_TYPES.find(t => t.id === historyDoc.documentType)?.label || historyDoc.documentType}</span>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 flex-wrap justify-end">
-                              <button
-                                onClick={() => window.open(`/equity-doc/${historyDoc.id}`, '_blank')}
-                                className="flex items-center gap-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
-                              >
-                                <Eye className="w-4 h-4" />
-                                Preview
-                              </button>
-                              {historyDoc.status === 'completed' && (
-                                <button
-                                  onClick={() => generatePdfFromEquityDoc(historyDoc, getExhibitDocuments(historyDoc.id))}
-                                  className="flex items-center gap-1 px-3 py-2 bg-[#E0FE10] text-black hover:bg-[#d4f00f] rounded-lg text-sm font-medium transition-colors"
-                                >
-                                  <Download className="w-4 h-4" />
-                                  Download PDF
-                                </button>
-                              )}
-                              <button
-                                onClick={() => handleDeleteEquityDoc(historyDoc.id)}
-                                disabled={deletingEquityDocId === historyDoc.id}
-                                className="flex items-center gap-1 px-3 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-lg text-sm transition-colors disabled:opacity-50"
-                              >
-                                {deletingEquityDocId === historyDoc.id ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <Trash2 className="w-4 h-4" />
-                                )}
-                                Delete
-                              </button>
-                            </div>
-                          </div>
+                    {familyHistoryDocs.length > 0 && (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">Older Document Versions</p>
+                          <p className="text-xs text-zinc-500 mt-1">
+                            These are older document records for the same grant/document family.
+                          </p>
                         </div>
-                      );
-                    })}
+                        {familyHistoryDocs.map((historyDoc) => {
+                          const statusBadge = getEquityDocStatusBadge(historyDoc);
+                          return (
+                            <div key={historyDoc.id} className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-700">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-white font-medium truncate">{historyDoc.title}</p>
+                                    {historyDoc.isAmendment && (
+                                      <span className="px-2 py-0.5 rounded-full text-xs bg-fuchsia-900/40 text-fuchsia-300 border border-fuchsia-700">
+                                        Amendment
+                                      </span>
+                                    )}
+                                    {statusBadge && (
+                                      <span className={`px-2 py-0.5 rounded-full text-xs ${statusBadge.className}`}>
+                                        {statusBadge.label}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 flex-wrap mt-1 text-xs text-zinc-500">
+                                    <span>{formatDate(historyDoc.updatedAt || historyDoc.createdAt)}</span>
+                                    <span>{DOCUMENT_TYPES.find(t => t.id === historyDoc.documentType)?.label || historyDoc.documentType}</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 flex-wrap justify-end">
+                                  <button
+                                    onClick={() => window.open(`/equity-doc/${historyDoc.id}`, '_blank')}
+                                    className="flex items-center gap-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                    Preview
+                                  </button>
+                                  {historyDoc.status === 'completed' && (
+                                    <button
+                                      onClick={() => generatePdfFromEquityDoc(historyDoc, getExhibitDocuments(historyDoc.id))}
+                                      className="flex items-center gap-1 px-3 py-2 bg-[#E0FE10] text-black hover:bg-[#d4f00f] rounded-lg text-sm font-medium transition-colors"
+                                    >
+                                      <Download className="w-4 h-4" />
+                                      Download PDF
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleDeleteEquityDoc(historyDoc.id)}
+                                    disabled={deletingEquityDocId === historyDoc.id}
+                                    className="flex items-center gap-1 px-3 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-lg text-sm transition-colors disabled:opacity-50"
+                                  >
+                                    {deletingEquityDocId === historyDoc.id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="w-4 h-4" />
+                                    )}
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {revisionEntries.length > 0 && (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">In-Place Revision Log</p>
+                          <p className="text-xs text-zinc-500 mt-1">
+                            These revisions were applied directly to the current document version, so there is not a separate file for each log entry.
+                          </p>
+                        </div>
+                        {revisionEntries.map((revision, idx) => (
+                          <div key={`${docHistoryAnchor.id}-revision-${idx}`} className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-700">
+                            <div className="flex items-center justify-between gap-4 mb-2">
+                              <p className="text-sm font-medium text-white">Revision {revisionEntries.length - idx}</p>
+                              <span className="text-xs text-zinc-500">{formatDate(revision.timestamp)}</span>
+                            </div>
+                            <p className="text-sm text-zinc-300 whitespace-pre-wrap">{revision.prompt}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -5494,6 +5606,8 @@ const EquityAdminPage: React.FC = () => {
               </div>
             </motion.div>
           </motion.div>
+            );
+          })()
         )}
       </AnimatePresence>
 
