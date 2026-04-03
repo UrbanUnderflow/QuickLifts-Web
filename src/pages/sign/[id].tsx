@@ -74,22 +74,19 @@ const SignDocument: React.FC = () => {
 
       if (previewMode) {
         const raw = window.localStorage.getItem(getMockSigningStorageKey(documentId));
-        if (!raw) {
-          setError('Preview signing request not found. Open the preview again from the signature modal.');
+        if (raw) {
+          const data = JSON.parse(raw) as SigningRequest;
+          setRequest({ ...data, id: documentId, previewMode: true });
+          if (data.status === 'signed') {
+            setSigned(true);
+            setTypedName(data.signatureData?.typedName || '');
+            const fontIdx = signatureFonts.findIndex(f => f.name === data.signatureData?.signatureFont);
+            if (fontIdx >= 0) setSelectedFont(fontIdx);
+          } else {
+            setSigned(false);
+          }
           return;
         }
-
-        const data = JSON.parse(raw) as SigningRequest;
-        setRequest({ ...data, id: documentId, previewMode: true });
-        if (data.status === 'signed') {
-          setSigned(true);
-          setTypedName(data.signatureData?.typedName || '');
-          const fontIdx = signatureFonts.findIndex(f => f.name === data.signatureData?.signatureFont);
-          if (fontIdx >= 0) setSelectedFont(fontIdx);
-        } else {
-          setSigned(false);
-        }
-        return;
       }
 
       const docRef = doc(db, 'signingRequests', documentId);
@@ -106,7 +103,7 @@ const SignDocument: React.FC = () => {
         return;
       }
 
-      setRequest({ ...data, id: docSnap.id });
+      setRequest({ ...data, id: docSnap.id, previewMode: previewMode || data.previewMode });
 
       // Mark as viewed if not already signed
       if (data.status !== 'signed' && data.status !== 'viewed') {
@@ -145,7 +142,9 @@ const SignDocument: React.FC = () => {
     setSigning(true);
 
     try {
-      if (isPreviewMode || request.previewMode) {
+      const isLocalPreviewRequest = request.id.startsWith('mock-');
+
+      if ((isPreviewMode || request.previewMode) && isLocalPreviewRequest) {
         const previewSignatureData = {
           typedName: typedName.trim(),
           signatureFont: signatureFonts[selectedFont].name,
@@ -224,6 +223,8 @@ const SignDocument: React.FC = () => {
           recipientEmail: request.recipientEmail,
           signedAt: new Date().toISOString(),
           typedName: typedName.trim(),
+          companyName: request.companyName,
+          previewMode: Boolean(request.previewMode || isPreviewMode),
           isFullyExecuted,
           allSigners: allSigners.map(s => ({ name: s.recipientName || s.name, email: s.recipientEmail || s.email }))
         }),

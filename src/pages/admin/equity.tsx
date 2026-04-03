@@ -168,6 +168,7 @@ interface SigningRequest {
   signingOrder?: number;
   invalidatedAt?: Timestamp | Date;
   invalidatedReason?: string;
+  previewMode?: boolean;
 }
 
 type SignerRow = {
@@ -974,6 +975,8 @@ const EquityAdminPage: React.FC = () => {
   const [signers, setSigners] = useState<SignerRow[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [signingModalStatus, setSigningModalStatus] = useState<InlineStatus | null>(null);
+  const [previewRecipientName, setPreviewRecipientName] = useState('');
+  const [previewRecipientEmail, setPreviewRecipientEmail] = useState('');
 
   // Exhibits Modal State
   const [isExhibitsModalOpen, setIsExhibitsModalOpen] = useState(false);
@@ -2325,8 +2328,11 @@ const EquityAdminPage: React.FC = () => {
   };
 
   const openSigningModal = (docToSign: EquityDocument) => {
+    const company = getDefaultCompanySigner();
     setSigningDoc(docToSign);
     setSigners(buildDefaultSignersForDoc(docToSign));
+    setPreviewRecipientName(company.name || 'Preview Tester');
+    setPreviewRecipientEmail(company.email || '');
     setSigningModalStatus(null);
     setIsSigningModalOpen(true);
   };
@@ -2336,6 +2342,8 @@ const EquityAdminPage: React.FC = () => {
     setSigningDoc(null);
     setSigners([]);
     setSigningModalStatus(null);
+    setPreviewRecipientName('');
+    setPreviewRecipientEmail('');
   };
 
   const handleSendForSignature = async () => {
@@ -2442,55 +2450,80 @@ const EquityAdminPage: React.FC = () => {
     }
   };
 
-  const handlePreviewSignatureFlow = () => {
+  const handlePreviewSignatureFlow = async () => {
     if (!signingDoc) return;
 
-    const normalized = signers.map(s => ({
-      ...s,
-      name: (s.name || '').trim(),
-      email: (s.email || '').trim().toLowerCase(),
-    }));
+    const previewName = previewRecipientName.trim();
+    const previewEmail = previewRecipientEmail.trim().toLowerCase();
 
-    const previewSigner =
-      normalized.find(s => s.role !== 'Company' && s.name && s.email) ||
-      normalized.find(s => s.name && s.email);
-
-    if (!previewSigner) {
-      setSigningModalStatus({ type: 'error', text: 'Add at least one signer with a name and email before previewing the signing flow.' });
-      setMessage({ type: 'error', text: 'Add at least one signer with a name and email to preview the signing flow.' });
+    if (!previewName || !previewEmail) {
+      setSigningModalStatus({ type: 'error', text: 'Enter a preview recipient name and email before sending the preview.' });
+      setMessage({ type: 'error', text: 'Enter a preview recipient name and email before sending the preview.' });
       return;
     }
 
-    const previewId = `mock-${signingDoc.id}-${Date.now()}`;
     const company = getDefaultCompanySigner();
-    const previewPayload = {
-      id: previewId,
-      documentType: signingDoc.documentType,
-      documentName: `${signingDoc.title} (Preview)`,
-      recipientName: previewSigner.name,
-      recipientEmail: previewSigner.email,
-      companyName: company.name || 'Pulse Intelligence Labs, Inc.',
-      status: 'sent',
-      createdAt: new Date().toISOString(),
-      sentAt: new Date().toISOString(),
-      documentContent: signingDoc.content,
-      signerRole: previewSigner.role,
-      equityDocumentId: signingDoc.id,
-      previewMode: true,
-    };
+
+    setIsSending(true);
+    setSigningModalStatus({ type: 'info', text: `Sending preview email to ${previewEmail}...` });
 
     try {
-      window.localStorage.setItem(`mock-signing-request:${previewId}`, JSON.stringify(previewPayload));
-      window.open(`/sign/${previewId}?preview=1`, '_blank', 'noopener,noreferrer');
+      const previewRequestRef = await addDoc(collection(db, 'signingRequests'), {
+        documentType: signingDoc.documentType,
+        documentName: `${signingDoc.title} (Preview)`,
+        recipientName: previewName,
+        recipientEmail: previewEmail,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        documentContent: signingDoc.content,
+        signerRole: 'Preview Recipient',
+        companyName: company.name || 'Pulse Intelligence Labs, Inc.',
+        previewMode: true,
+        previewSourceEquityDocumentId: signingDoc.id,
+      });
+
+      const resp = await fetch('/.netlify/functions/send-signing-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentId: previewRequestRef.id,
+          documentName: `${signingDoc.title} (Preview)`,
+          documentType: signingDoc.documentType,
+          recipientName: previewName,
+          recipientEmail: previewEmail,
+          companyName: company.name || 'Pulse Intelligence Labs, Inc.',
+          previewMode: true,
+        }),
+      });
+
+      if (!resp.ok) {
+        let errorMessage = `Failed to send preview email to ${previewEmail}`;
+        try {
+          const data = await resp.json();
+          errorMessage = data?.message || data?.error || errorMessage;
+        } catch {
+          try {
+            const text = await resp.text();
+            if (text) errorMessage = text;
+          } catch {}
+        }
+        throw new Error(errorMessage);
+      }
+
       setSigningModalStatus({
         type: 'success',
-        text: `Preview opened for ${previewSigner.name}. This is a mock signing flow and will not send email or update the real document.`,
+        text: `Preview email sent to ${previewEmail}. The link opens a sandbox signing flow and will not change the live document state.`,
       });
-      setMessage({ type: 'info', text: 'Opened mock signature preview in a new tab.' });
+      setMessage({ type: 'success', text: `Preview email sent to ${previewEmail}.` });
     } catch (error) {
-      console.error('Error opening signature preview:', error);
-      setSigningModalStatus({ type: 'error', text: 'Failed to open the mock signing preview.' });
-      setMessage({ type: 'error', text: 'Failed to open the mock signing preview.' });
+      console.error('Error sending preview signature email:', error);
+      setSigningModalStatus({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to send preview email.',
+      });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to send preview email.' });
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -5239,6 +5272,37 @@ const EquityAdminPage: React.FC = () => {
                     </span>
                   </p>
                 </div>
+
+                <div className="p-4 bg-zinc-900/50 border border-zinc-700 rounded-xl space-y-3">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-300">Preview Email</p>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Send a sandbox signing email to yourself or another address to test the full email-to-sign experience without affecting the live document packet.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3">
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">Preview Recipient Name</label>
+                      <input
+                        type="text"
+                        value={previewRecipientName}
+                        onChange={(e) => setPreviewRecipientName(e.target.value)}
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 transition-colors"
+                        placeholder="Your name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">Preview Recipient Email</label>
+                      <input
+                        type="email"
+                        value={previewRecipientEmail}
+                        onChange={(e) => setPreviewRecipientEmail(e.target.value)}
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 transition-colors"
+                        placeholder="you@example.com"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-3 p-6 border-t border-zinc-700 shrink-0">
@@ -5250,15 +5314,15 @@ const EquityAdminPage: React.FC = () => {
                 </button>
                 <button
                   onClick={handlePreviewSignatureFlow}
-                  disabled={isSending || signers.length === 0 || signers.every(s => !s.name.trim() || !s.email.trim())}
+                  disabled={isSending || !previewRecipientName.trim() || !previewRecipientEmail.trim()}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    isSending || signers.length === 0 || signers.every(s => !s.name.trim() || !s.email.trim())
+                    isSending || !previewRecipientName.trim() || !previewRecipientEmail.trim()
                       ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
                       : 'bg-blue-900/40 text-blue-300 hover:bg-blue-900/60'
                   }`}
                 >
                   <Eye className="w-4 h-4" />
-                  Preview Sign
+                  Send Preview Email
                 </button>
                 <button
                   onClick={handleSendForSignature}
