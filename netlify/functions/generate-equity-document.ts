@@ -14,6 +14,7 @@ interface RequestBody {
   prompt?: string;
   requiresSignature?: boolean;
   boardApprovalDate?: string;
+  documentDate?: string;
   grantDetails?: {
     equityType: string;
     numberOfShares: number;
@@ -24,6 +25,73 @@ interface RequestBody {
     vestingMonths: number;
   };
 }
+
+const formatHumanDate = (value?: string) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
+
+const getGrantDate = (data: RequestBody) => {
+  return data.boardApprovalDate || formatHumanDate(data.grantDetails?.vestingStartDate) || formatHumanDate(new Date().toISOString());
+};
+
+const getCurrentHumanDate = () =>
+  new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+const getDocumentDate = (data: RequestBody) => {
+  return data.documentDate || data.boardApprovalDate || getCurrentHumanDate();
+};
+
+const getVestingInstructionBlock = (grantDetails?: RequestBody['grantDetails']) => {
+  const numberOfShares = Math.max(0, grantDetails?.numberOfShares || 0);
+  const vestingMonths = Math.max(1, grantDetails?.vestingMonths || 24);
+  const cliffMonths = Math.max(0, Math.min(grantDetails?.cliffMonths || 0, vestingMonths));
+  const vestingStartDate = formatHumanDate(grantDetails?.vestingStartDate) || 'the Vesting Commencement Date';
+
+  if (!numberOfShares) {
+    return `- State the vesting mechanics clearly, including cliff treatment, monthly vesting cadence, and how any rounding remainder is handled on the final vesting date.`;
+  }
+
+  const perMonthInstallment = numberOfShares / vestingMonths;
+  const cliffShares = Math.round(perMonthInstallment * cliffMonths);
+  const remainingMonths = Math.max(vestingMonths - cliffMonths, 0);
+  const remainingShares = numberOfShares - cliffShares;
+  const monthlyPostCliff = remainingMonths > 0 ? Math.floor(remainingShares / remainingMonths) : 0;
+  const finalInstallment = remainingMonths > 0
+    ? remainingShares - (monthlyPostCliff * Math.max(remainingMonths - 1, 0))
+    : remainingShares;
+
+  if (cliffMonths === 0) {
+    const monthlyInstallment = Math.floor(numberOfShares / vestingMonths);
+    const finalMonthlyInstallment = numberOfShares - (monthlyInstallment * Math.max(vestingMonths - 1, 0));
+    return [
+      `- Vesting Commencement Date: ${vestingStartDate}`,
+      `- State the vesting schedule explicitly as ${numberOfShares.toLocaleString()} option shares vesting in ${vestingMonths} monthly installments beginning on the Vesting Commencement Date.`,
+      `- Use exact numbers: ${monthlyInstallment.toLocaleString()} shares vest on each monthly vesting date for the first ${Math.max(vestingMonths - 1, 0)} month(s), and ${finalMonthlyInstallment.toLocaleString()} shares vest on the final vesting date.`,
+      `- If you describe the schedule in prose, make clear there is no cliff.`,
+    ].join('\n');
+  }
+
+  return [
+    `- Vesting Commencement Date: ${vestingStartDate}`,
+    `- State the vesting schedule explicitly, not directionally. Do not say only "monthly vesting after cliff."`,
+    `- Use exact numbers: ${cliffShares.toLocaleString()} shares vest on the ${cliffMonths}-month cliff date, representing the first ${cliffMonths} monthly installments.`,
+    remainingMonths > 0
+      ? `- After the cliff, ${monthlyPostCliff.toLocaleString()} shares vest monthly for the next ${Math.max(remainingMonths - 1, 0)} month(s), and ${finalInstallment.toLocaleString()} shares vest on the final vesting date so that the total vested equals ${numberOfShares.toLocaleString()} shares over ${vestingMonths} months.`
+      : `- All ${numberOfShares.toLocaleString()} shares vest on the cliff date because the cliff equals the full vesting period.`,
+    `- Make clear that the Grant Date / Board Approval Date and the Vesting Commencement Date may be the same, but if both are shown they must be labeled distinctly and consistently.`,
+  ].join('\n');
+};
 
 const formatAdditionalContext = (prompt?: string) => {
   const trimmed = (prompt ?? '').trim();
@@ -92,12 +160,7 @@ MANDATORY DATE REQUIREMENTS (CRITICAL - VERIFICATION WILL FAIL WITHOUT THESE):
 - The approval date and signature date must be the SAME date and must be explicitly written out
 - If you fail to include these dates, the document will fail verification`,
     userPrompt: (data: RequestBody) => {
-      // Get current date in the format "January 23, 2026"
-      const currentDate = new Date().toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
+      const currentDate = data.boardApprovalDate || getCurrentHumanDate();
       
       return `Generate a Board Consent document (Written Consent of the Board of Directors in Lieu of Meeting) for:
 
@@ -132,8 +195,9 @@ DOCUMENT STRUCTURE REQUIREMENTS:
    - Resolution approving the grant of the ${data.grantDetails?.equityType === 'nso' ? 'Non-Qualified Stock Option' : data.grantDetails?.equityType === 'iso' ? 'Incentive Stock Option' : 'equity award'} to ${data.stakeholderName}
    - CRITICAL: Include this exact sentence in the grant resolution: "The Option is granted pursuant to, and subject in all respects to, the terms and conditions of the Pulse Intelligence Labs, Inc. Equity Incentive Plan (the 'Plan')."
    - Resolution authorizing officers to execute the Option Agreement and any related documents
-   - Resolution ratifying prior actions taken in connection with this grant
+   - Do NOT say the Board is ratifying prior actions or approving the grant retroactively unless the prompt explicitly asks for ratification
    - Do NOT include a separate FMV resolution - the FMV is already established in the recitals
+   ${getVestingInstructionBlock(data.grantDetails)}
 
 5. EFFECTIVENESS AND DATE (MANDATORY - VERIFICATION WILL FAIL WITHOUT THIS):
    - You MUST include this EXACT text with the date filled in: "This Written Consent shall be effective as of ${currentDate} and may be executed in counterparts."
@@ -174,21 +238,52 @@ Make it formal and suitable for corporate records. This document will be investo
 
   stockholder_consent: {
     title: 'Stockholder Consent',
-    systemPrompt: `You are an expert corporate attorney. Generate a Stockholder Consent document for corporate actions requiring stockholder approval.`,
-    userPrompt: (data: RequestBody) => `Generate a Written Consent of Stockholders for:
+    systemPrompt: `You are an expert corporate attorney. Generate a Stockholder Consent document for corporate actions requiring stockholder approval.
+
+CRITICAL REQUIREMENTS:
+1. This is for a SOLE STOCKHOLDER company context. Tremaine Grant is the sole holder of the Company's outstanding voting stock for purposes of this consent.
+2. The document must appear ALREADY EXECUTED. Do NOT use blank signature lines, placeholders, or underscore fields.
+3. Use the same execution date consistently in the header/recitals, effectiveness clause, and signature block.
+4. The signature should appear already executed as "/s/ Tremaine Grant".`,
+    userPrompt: (data: RequestBody) => {
+      const currentDate = getDocumentDate(data);
+      const stockholderName = data.stakeholderName || 'Tremaine Grant';
+
+      return `Generate a Written Consent of Stockholders for:
 
 COMPANY: Pulse Intelligence Labs, Inc., a Delaware corporation
+SOLE STOCKHOLDER: ${stockholderName}
+CONSENT DATE: ${currentDate}
 
 This consent is for ratifying equity grants and/or adopting/amending the Equity Incentive Plan.
 ${formatAdditionalContext(data.prompt)}
 
 Please include:
-1. Recitals establishing authority
-2. Resolution to adopt/ratify the Equity Incentive Plan
-3. Resolution to approve share reserve
-4. Waiver of notice provisions
-5. Effectiveness clause
-6. Signature block with space for percentage of outstanding shares`,
+1. Title: "WRITTEN CONSENT OF THE SOLE STOCKHOLDER OF PULSE INTELLIGENCE LABS, INC. IN LIEU OF MEETING"
+2. Recitals establishing authority and confirming that the undersigned is the sole holder of the Company's outstanding capital stock entitled to vote on these matters
+3. Resolution to adopt/ratify the Equity Incentive Plan
+4. Resolution to approve the share reserve and related equity actions
+5. Waiver of notice provisions
+6. Effectiveness clause using this exact date: ${currentDate}
+7. Already-executed signature block showing ownership approval, not a blank e-sign section
+
+MANDATORY DATE AND EXECUTION REQUIREMENTS:
+- Include the date "${currentDate}" in the header or opening recital, in the effectiveness clause, and in the signature block
+- Do NOT use a different approval/effective date anywhere else in the document
+- Make clear this is a clean, finalized consent, not a draft awaiting signature
+
+SIGNATURE BLOCK REQUIREMENTS:
+Use an already-executed stockholder signature block in substantially this form, with no blanks:
+
+/s/ Tremaine Grant
+Tremaine Grant
+Sole Stockholder
+Holder of 100% of the outstanding voting shares
+
+Date: ${currentDate}
+
+Make it formal, diligence-ready, and internally consistent.`;
+    },
   },
 
   fast_agreement: {
@@ -232,7 +327,8 @@ Keep it concise (FAST agreements are meant to be simple) but comprehensive.`,
 COMPANY: Pulse Intelligence Labs, Inc., a Delaware corporation
 ADVISOR: ${data.stakeholderName}
 EMAIL: ${data.stakeholderEmail}
-GRANT DATE: ${data.grantDetails?.vestingStartDate || new Date().toISOString().split('T')[0]}
+GRANT DATE: ${getGrantDate(data)}
+${data.grantDetails?.vestingStartDate ? `VESTING COMMENCEMENT DATE: ${formatHumanDate(data.grantDetails.vestingStartDate)}` : ''}
 
 GRANT DETAILS:
 - Option Type: Non-Qualified Stock Option (NSO)
@@ -258,8 +354,10 @@ SECTION 1 - ADVISOR SERVICES AGREEMENT:
 
 SECTION 2 - GRANT OF NON-QUALIFIED STOCK OPTIONS:
 2.1 Grant - NSO to purchase the specified shares pursuant to the Pulse Intelligence Labs, Inc. Equity Incentive Plan (the "Plan"). CRITICAL: Include this exact sentence: "This Option is granted pursuant to, and subject in all respects to, the terms and conditions of the Pulse Intelligence Labs, Inc. Equity Incentive Plan (the 'Plan'), which is hereby incorporated by reference."${data.boardApprovalDate ? ` CRITICAL: Also include this exact sentence: "The Option was approved by the Board of Directors pursuant to written consent dated ${data.boardApprovalDate}."` : ''}
+2.1A Date Consistency - The Grant Date / Effective Date for the option grant must be ${getGrantDate(data)}.${data.boardApprovalDate ? ` Do NOT use a different grant date elsewhere in the document.` : ''}${data.grantDetails?.vestingStartDate && formatHumanDate(data.grantDetails.vestingStartDate) !== getGrantDate(data) ? ` If you mention ${formatHumanDate(data.grantDetails.vestingStartDate)} anywhere, label it as the "Vesting Commencement Date," not the Grant Date.` : ''}
 2.2 Exercise Price - Fair market value as determined by the Board
-2.3 Vesting Schedule - Use this EXACT vesting language (adapt months/values as needed): "The Option shall vest over ${data.grantDetails?.vestingMonths || 24} months, with no vesting until the completion of the first ${data.grantDetails?.cliffMonths || 3} months following the Grant Date. After the completion of the cliff, the remaining Option shall vest in equal monthly installments over the remainder of the vesting period."
+2.3 Vesting Schedule
+${getVestingInstructionBlock(data.grantDetails)}
 2.4 Term of Option - 10 years from Grant Date
 2.5 Termination of Service - Unvested options terminate. For advisors, set the post-termination exercise window to six (6) months for vested options (not 90 days). Include clear mechanics and any Plan override language.
 2.6 No Stockholder Rights - Until Option is exercised
@@ -294,9 +392,13 @@ Format this as a professional legal document ready for e-signature. Use clear se
   eip: {
     title: 'Equity Incentive Plan',
     systemPrompt: `You are an expert corporate attorney specializing in executive compensation and equity plans. Generate a comprehensive Equity Incentive Plan for a Delaware corporation.`,
-    userPrompt: (data: RequestBody) => `Generate a comprehensive Equity Incentive Plan for:
+    userPrompt: (data: RequestBody) => {
+      const currentDate = getDocumentDate(data);
+
+      return `Generate a comprehensive Equity Incentive Plan for:
 
 COMPANY: Pulse Intelligence Labs, Inc., a Delaware corporation
+PLAN EFFECTIVE DATE: ${currentDate}
 ${formatAdditionalContext(data.prompt)}
 
 Please create a full Equity Incentive Plan that includes:
@@ -316,7 +418,8 @@ Please create a full Equity Incentive Plan that includes:
    - Adjustments for corporate events
 
 4. ELIGIBILITY
-   - Employees, Directors, Consultants
+   - Employees, Directors, Consultants, and Advisors
+   - Make clear that advisors are expressly eligible service providers under the Plan and are not left to implication
    - ISO limitations (employees only)
 
 5. TYPES OF AWARDS
@@ -357,9 +460,20 @@ Please create a full Equity Incentive Plan that includes:
     - No right to employment
     - Governing law (Delaware)
     - Amendment and termination
-    - Effective date
+    - Effective date, which must be stated as ${currentDate}
 
-Make it comprehensive and suitable for a venture-backed startup. Include standard 409A compliance language.`,
+11. ADOPTION FOOTER
+    - Add a short final adoption section confirming the Plan was adopted and approved effective as of ${currentDate}
+    - Show it as already executed by the sole company approver, not pending signature
+    - Use this exact executed signature format:
+      /s/ Tremaine Grant
+      Tremaine Grant
+      Founder & Sole Director
+      Sole Stockholder
+      Date: ${currentDate}
+
+Make it comprehensive and suitable for a venture-backed startup. Include standard 409A compliance language. Do not leave blank signature lines or placeholder dates.`;
+    },
   },
 };
 

@@ -33,6 +33,7 @@ class ReviewContextService {
   private static instance: ReviewContextService;
   private readonly weeklyContextCollection = 'reviewWeeklyContext';
   private readonly draftReviewCollection = 'reviewDrafts';
+  private readonly publishedReviewCollection = 'publishedReviews';
 
   /**
    * Draft reviews are admin-only. Enforce that at the service layer so we don't
@@ -246,20 +247,46 @@ class ReviewContextService {
    * Create or update a draft review with structured data
    */
   async saveDraftReview(
-    draftData: Omit<DraftReviewData, 'id' | 'createdAt' | 'updatedAt' | 'generatedAt'>
+    draftData: Omit<DraftReviewData, 'id' | 'createdAt' | 'updatedAt' | 'generatedAt'>,
+    options?: {
+      existingDraftId?: string;
+    }
   ): Promise<DraftReview> {
     try {
-      // Check if draft already exists for this month
-      const existing = await this.fetchDraftByMonthYear(draftData.monthYear);
+      const existing = options?.existingDraftId
+        ? await this.fetchDraftById(options.existingDraftId)
+        : await this.fetchDraftByMonthYear(draftData.monthYear);
       const now = new Date();
 
       if (existing) {
         // Update existing draft
         const draftRef = doc(db, this.draftReviewCollection, existing.id);
+        const publicReviewRef = doc(db, this.publishedReviewCollection, existing.id);
+        const publicReviewDoc = await getDoc(publicReviewRef);
+        const publishedPublicReview = publicReviewDoc.exists()
+          ? DraftReview.fromFirestore(publicReviewDoc.data(), publicReviewDoc.id)
+          : null;
+        const shouldRemainPublished =
+          existing.status === 'published' || publishedPublicReview?.status === 'published';
+        const preservedStatus =
+          shouldRemainPublished && draftData.status === 'draft'
+            ? 'published'
+            : draftData.status;
+        const preservedPublishedAt =
+          preservedStatus === 'published'
+            ? existing.publishedAt || publishedPublicReview?.publishedAt || now
+            : undefined;
+        const mergedDraft = new DraftReview({
+          ...existing,
+          ...draftData,
+          status: preservedStatus,
+          publishedAt: preservedPublishedAt,
+          updatedAt: now,
+        } as DraftReviewData);
         
         // Filter out undefined values (Firestore doesn't accept undefined)
         const cleanData: Record<string, any> = {};
-        for (const [key, value] of Object.entries(draftData)) {
+        for (const [key, value] of Object.entries(mergedDraft.toDictionary())) {
           if (value !== undefined) {
             cleanData[key] = value;
           }
@@ -267,13 +294,13 @@ class ReviewContextService {
         cleanData.updatedAt = now;
         
         await updateDoc(draftRef, cleanData);
-        
+
+        if (mergedDraft.status === 'published') {
+          await setDoc(publicReviewRef, mergedDraft.toDictionary());
+        }
+
         console.log('[ReviewContextService] Draft review updated:', existing.id);
-        return new DraftReview({
-          ...existing,
-          ...draftData,
-          updatedAt: now,
-        } as DraftReviewData);
+        return mergedDraft;
       } else {
         // Create new draft
         const draftRef = doc(collection(db, this.draftReviewCollection));
@@ -288,6 +315,11 @@ class ReviewContextService {
 
         const draft = new DraftReview(fullDraftData);
         await setDoc(draftRef, draft.toDictionary());
+
+        if (draft.status === 'published') {
+          const publicReviewRef = doc(db, this.publishedReviewCollection, draft.id);
+          await setDoc(publicReviewRef, draft.toDictionary());
+        }
         
         console.log('[ReviewContextService] Draft review created:', draft.id);
         return draft;
@@ -344,6 +376,119 @@ class ReviewContextService {
         return [];
       }
       console.error('[ReviewContextService] Error fetching all drafts:', error);
+      throw error;
+    }
+  }
+
+  async fetchPublishedDrafts(): Promise<DraftReview[]> {
+    try {
+      const publishedDraftsMap = new Map<string, DraftReview>();
+
+      const publicRef = collection(db, this.publishedReviewCollection);
+      const publicSnapshot = await getDocs(publicRef);
+
+      publicSnapshot.docs.forEach((snapshot) => {
+        const publishedReview = DraftReview.fromFirestore(snapshot.data(), snapshot.id);
+        if (publishedReview.status === 'published') {
+          publishedDraftsMap.set(publishedReview.id, publishedReview);
+        }
+      });
+
+      const draftRef = collection(db, this.draftReviewCollection);
+      const q = query(draftRef, where('status', '==', 'published'));
+      const querySnapshot = await getDocs(q);
+
+      querySnapshot.docs.forEach((snapshot) => {
+        const publishedDraft = DraftReview.fromFirestore(snapshot.data(), snapshot.id);
+        if (!publishedDraftsMap.has(publishedDraft.id)) {
+          publishedDraftsMap.set(publishedDraft.id, publishedDraft);
+        }
+      });
+
+      const drafts = Array.from(publishedDraftsMap.values()).sort((a, b) => {
+        const aTime = a.publishedAt?.getTime() || a.updatedAt.getTime();
+        const bTime = b.publishedAt?.getTime() || b.updatedAt.getTime();
+        return bTime - aTime;
+      });
+
+      console.log(`[ReviewContextService] Fetched ${drafts.length} published reviews`);
+      return drafts;
+    } catch (error: any) {
+      if (error?.code === 'failed-precondition' || error?.code === 'permission-denied') {
+        console.log('[ReviewContextService] Published drafts unavailable, returning empty array');
+        return [];
+      }
+      console.error('[ReviewContextService] Error fetching published drafts:', error);
+      throw error;
+    }
+  }
+
+  async fetchPublishedDraftById(id: string): Promise<DraftReview | null> {
+    try {
+      const publicReviewRef = doc(db, this.publishedReviewCollection, id);
+      const publicReviewDoc = await getDoc(publicReviewRef);
+
+      if (publicReviewDoc.exists()) {
+        const publishedReview = DraftReview.fromFirestore(publicReviewDoc.data(), publicReviewDoc.id);
+        if (publishedReview.status === 'published') {
+          return publishedReview;
+        }
+      }
+
+      const draftRef = doc(db, this.draftReviewCollection, id);
+      const draftDoc = await getDoc(draftRef);
+
+      if (!draftDoc.exists()) {
+        return null;
+      }
+
+      const draft = DraftReview.fromFirestore(draftDoc.data(), draftDoc.id);
+      return draft.status === 'published' ? draft : null;
+    } catch (error: any) {
+      if (error?.code === 'permission-denied') {
+        console.log('[ReviewContextService] Published draft lookup not permitted, returning null');
+        return null;
+      }
+      console.error('[ReviewContextService] Error fetching published draft by ID:', error);
+      throw error;
+    }
+  }
+
+  async publishDraft(id: string): Promise<DraftReview> {
+    try {
+      await this.assertAdminAccess('publish draft review');
+
+      const draftRef = doc(db, this.draftReviewCollection, id);
+      const draftDoc = await getDoc(draftRef);
+
+      if (!draftDoc.exists()) {
+        throw new Error('Draft not found');
+      }
+
+      const existingDraft = DraftReview.fromFirestore(draftDoc.data(), draftDoc.id);
+      const now = new Date();
+      const publishedAt = existingDraft.publishedAt || now;
+
+      await updateDoc(draftRef, {
+        status: 'published',
+        publishedAt,
+        updatedAt: now,
+      });
+
+      const publishedDraft = new DraftReview({
+        ...existingDraft,
+        status: 'published',
+        publishedAt,
+        updatedAt: now,
+      });
+
+      const publicReviewRef = doc(db, this.publishedReviewCollection, id);
+      await setDoc(publicReviewRef, publishedDraft.toDictionary());
+
+      console.log('[ReviewContextService] Draft published to public reviews:', id);
+      return publishedDraft;
+    } catch (error) {
+      console.error('[ReviewContextService] Error publishing draft:', error);
       throw error;
     }
   }
@@ -458,6 +603,7 @@ class ReviewContextService {
     year: number,
     month: number,
     options?: {
+      existingDraftId?: string;
       reviewType?: DraftReviewType;
       formatStyle?: DraftReviewFormat;
       author?: string;
@@ -586,7 +732,9 @@ class ReviewContextService {
         weeklyContextIds: contexts.map(c => c.id),
       };
 
-      const draft = await this.saveDraftReview(draftData);
+      const draft = await this.saveDraftReview(draftData, {
+        existingDraftId: options?.existingDraftId,
+      });
       return draft;
     } catch (error) {
       console.error('[ReviewContextService] Error generating draft from context:', error);
@@ -599,6 +747,7 @@ class ReviewContextService {
     month: number,
     rawArticleContent: string,
     options?: {
+      existingDraftId?: string;
       reviewType?: DraftReviewType;
       author?: string;
       authorTitle?: string;
@@ -650,7 +799,9 @@ class ReviewContextService {
         weeklyContextIds: [],
       };
 
-      return this.saveDraftReview(draftData);
+      return this.saveDraftReview(draftData, {
+        existingDraftId: options?.existingDraftId,
+      });
     } catch (error) {
       console.error('[ReviewContextService] Error creating article draft from content:', error);
       throw error;
@@ -1024,11 +1175,32 @@ Return ONLY valid JSON, no markdown or explanation.`;
    */
   async updateDraft(id: string, updates: Partial<DraftReviewData>): Promise<void> {
     try {
-      const draftRef = doc(db, this.draftReviewCollection, id);
-      await updateDoc(draftRef, {
+      const existing = await this.fetchDraftById(id);
+      if (!existing) {
+        throw new Error('Draft not found');
+      }
+
+      const publicReviewRef = doc(db, this.publishedReviewCollection, id);
+      const publicReviewDoc = await getDoc(publicReviewRef);
+      const publishedPublicReview = publicReviewDoc.exists()
+        ? DraftReview.fromFirestore(publicReviewDoc.data(), publicReviewDoc.id)
+        : null;
+      const shouldRemainPublished =
+        existing.status === 'published' || publishedPublicReview?.status === 'published';
+
+      const mergedDraft = new DraftReview({
+        ...existing,
         ...updates,
+        status: shouldRemainPublished ? 'published' : (updates.status || existing.status),
+        publishedAt: shouldRemainPublished ? (existing.publishedAt || publishedPublicReview?.publishedAt || new Date()) : updates.publishedAt,
         updatedAt: new Date(),
-      });
+      } as DraftReviewData);
+      const draftRef = doc(db, this.draftReviewCollection, id);
+      await updateDoc(draftRef, mergedDraft.toDictionary());
+
+      if (mergedDraft.status === 'published') {
+        await setDoc(publicReviewRef, mergedDraft.toDictionary());
+      }
       console.log('[ReviewContextService] Draft updated:', id);
     } catch (error) {
       console.error('[ReviewContextService] Error updating draft:', error);

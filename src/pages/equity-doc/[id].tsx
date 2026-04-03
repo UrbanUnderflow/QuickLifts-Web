@@ -17,6 +17,11 @@ interface EquityDocument {
   autoSigned?: boolean;
 }
 
+const AUTO_EXECUTED_DOC_TYPES = ['board_consent', 'stockholder_consent', 'eip'];
+
+const isAutoExecutedCompanyDoc = (document?: Pick<EquityDocument, 'documentType'> | null) =>
+  Boolean(document?.documentType && AUTO_EXECUTED_DOC_TYPES.includes(document.documentType));
+
 const formatDate = (date: Timestamp | Date | undefined): string => {
   if (!date) return 'N/A';
   const d = date instanceof Timestamp ? date.toDate() : date;
@@ -241,7 +246,7 @@ const EquityDocSharePage: React.FC = () => {
                   <p className="text-zinc-500 text-sm">Created: {formatDate(document.createdAt)}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {document.requiresSignature && document.documentType !== 'board_consent' && document.signingRequestId && (
+                  {document.requiresSignature && !isAutoExecutedCompanyDoc(document) && document.signingRequestId && (
                     <button
                       onClick={() => window.open(`/sign/${document.signingRequestId}`, '_blank')}
                       className="px-4 py-2 rounded-xl bg-orange-600 text-white font-medium hover:bg-orange-500 transition-colors"
