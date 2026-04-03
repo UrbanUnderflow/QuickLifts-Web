@@ -36,6 +36,8 @@ const getYearOptions = (): string[] => {
 const getDraftFormatLabel = (formatStyle: DraftReviewFormat): string =>
   formatStyle === 'article' ? 'Article' : 'Investor Update';
 
+const citationPattern = /\[\[\[([\s\S]*?)\]\]\]/g;
+
 const getReviewFormTarget = (
   reviewType: CreateReviewType,
   monthValue: string,
@@ -122,6 +124,172 @@ const parseInlineMarkdown = (text: string): React.ReactNode[] => {
   return parts.length > 0 ? parts : [text];
 };
 
+interface CitationSource {
+  url: string;
+  label: string;
+  hostLabel: string;
+}
+
+const getHostLabelFromUrl = (url: string): string => {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, '');
+    const parts = hostname.split('.').filter(Boolean);
+    const domainToken = parts.length >= 2 ? parts[parts.length - 2] : parts[0] || hostname;
+    return domainToken
+      .split('-')
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  } catch {
+    return 'Source';
+  }
+};
+
+const getCitationTitleFromUrl = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    const path = decodeURIComponent(parsed.pathname)
+      .replace(/[-_]+/g, ' ')
+      .replace(/\.[a-z0-9]+$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!path || path === '/') {
+      return parsed.hostname.replace(/^www\./, '');
+    }
+
+    return path
+      .split('/')
+      .filter(Boolean)
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' / ');
+  } catch {
+    return url;
+  }
+};
+
+const parseCitationSources = (rawCitationPayload: string): CitationSource[] => {
+  const trimmed = rawCitationPayload.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const normalizedPayload = trimmed.startsWith('[') ? trimmed : `[${trimmed}]`;
+  let rawUrls: string[] = [];
+
+  try {
+    const parsed = JSON.parse(normalizedPayload);
+    if (Array.isArray(parsed)) {
+      rawUrls = parsed.filter((value): value is string => typeof value === 'string');
+    }
+  } catch {
+    rawUrls = normalizedPayload
+      .replace(/^\[/, '')
+      .replace(/\]$/, '')
+      .split(',')
+      .map((value) => value.trim().replace(/^['"]|['"]$/g, ''))
+      .filter(Boolean);
+  }
+
+  return rawUrls.map((url) => ({
+    url,
+    label: getCitationTitleFromUrl(url),
+    hostLabel: getHostLabelFromUrl(url),
+  }));
+};
+
+const stripCitationMarkup = (text: string): string =>
+  text.replace(citationPattern, '').replace(/\s{2,}/g, ' ').trim();
+
+const CitationPill: React.FC<{ sources: CitationSource[] }> = ({ sources }) => {
+  if (sources.length === 0) {
+    return null;
+  }
+
+  const primaryLabel = sources[0].hostLabel;
+  const secondaryCount = sources.length - 1;
+
+  return (
+    <span className="group relative mx-1 inline-flex align-middle">
+      <button
+        type="button"
+        className="inline-flex items-center rounded-full bg-stone-900/90 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-300"
+      >
+        <span>{primaryLabel}</span>
+        {secondaryCount > 0 && <span className="ml-1 text-stone-300">+{secondaryCount}</span>}
+      </button>
+
+      <div className="pointer-events-none invisible absolute left-1/2 top-[calc(100%+12px)] z-30 w-[320px] -translate-x-1/2 opacity-0 transition-all duration-150 group-hover:visible group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+        <div className="overflow-hidden rounded-[24px] border border-stone-700 bg-[#2B2B2B] text-white shadow-2xl">
+          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+            <div className="text-sm font-medium text-stone-200">Sources</div>
+            <div className="text-sm text-stone-400">1/{sources.length}</div>
+          </div>
+
+          <div className="space-y-3 p-4">
+            {sources.map((source, index) => (
+              <a
+                key={`${source.url}-${index}`}
+                href={source.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block rounded-2xl border border-white/10 bg-white/5 p-3 transition-colors hover:bg-white/10"
+              >
+                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
+                  {source.hostLabel}
+                </div>
+                <div className="text-base leading-snug text-white">
+                  {source.label}
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+    </span>
+  );
+};
+
+const renderInlineArticleContent = (text: string, keyPrefix: string): React.ReactNode[] => {
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let segmentIndex = 0;
+  citationPattern.lastIndex = 0;
+
+  while ((match = citationPattern.exec(text)) !== null) {
+    const before = text.slice(lastIndex, match.index);
+    if (before) {
+      nodes.push(
+        <React.Fragment key={`${keyPrefix}-text-${segmentIndex}`}>
+          {parseInlineMarkdown(before)}
+        </React.Fragment>,
+      );
+      segmentIndex += 1;
+    }
+
+    const sources = parseCitationSources(match[1]);
+    if (sources.length > 0) {
+      nodes.push(
+        <CitationPill key={`${keyPrefix}-citation-${segmentIndex}`} sources={sources} />,
+      );
+      segmentIndex += 1;
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  const remaining = text.slice(lastIndex);
+  if (remaining) {
+    nodes.push(
+      <React.Fragment key={`${keyPrefix}-tail-${segmentIndex}`}>
+        {parseInlineMarkdown(remaining)}
+      </React.Fragment>,
+    );
+  }
+
+  return nodes.length > 0 ? nodes : [text];
+};
+
 const getArticleBodyParagraphs = (draft: DraftReview): string[] => {
   const paragraphs = (draft.articleContent || '')
     .replace(/\r\n/g, '\n')
@@ -161,9 +329,9 @@ const getArticleExcerpt = (draft: DraftReview): string => {
 const getArticleTocItems = (draft: DraftReview): Array<{ id: string; label: string }> =>
   getArticleBodyParagraphs(draft)
     .map((paragraph) => {
-      const boldHeading = paragraph.match(/^\*\*(.+)\*\*$/)?.[1]?.trim();
-      const hashHeading = paragraph.startsWith('# ') ? paragraph.slice(2).trim() : null;
-      const subHeading = paragraph.startsWith('## ') ? paragraph.slice(3).trim() : null;
+      const boldHeading = stripCitationMarkup(paragraph.match(/^\*\*(.+)\*\*$/)?.[1]?.trim() || '');
+      const hashHeading = paragraph.startsWith('# ') ? stripCitationMarkup(paragraph.slice(2).trim()) : null;
+      const subHeading = paragraph.startsWith('## ') ? stripCitationMarkup(paragraph.slice(3).trim()) : null;
       const heading = boldHeading || hashHeading || subHeading;
 
       if (!heading) {
@@ -197,7 +365,7 @@ const renderRawArticleContent = (draft: DraftReview): React.ReactNode[] => {
 
   return paragraphs.map((paragraph, index) => {
     const key = `article-${index}`;
-    const boldHeading = paragraph.match(/^\*\*(.+)\*\*$/)?.[1]?.trim();
+    const boldHeading = stripCitationMarkup(paragraph.match(/^\*\*(.+)\*\*$/)?.[1]?.trim() || '');
 
     if (boldHeading) {
       const id = boldHeading
@@ -219,7 +387,7 @@ const renderRawArticleContent = (draft: DraftReview): React.ReactNode[] => {
     }
 
     if (paragraph.startsWith('## ')) {
-      const heading = paragraph.slice(3).trim();
+      const heading = stripCitationMarkup(paragraph.slice(3).trim());
       const id = heading
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, '')
@@ -239,7 +407,7 @@ const renderRawArticleContent = (draft: DraftReview): React.ReactNode[] => {
     }
 
     if (paragraph.startsWith('# ')) {
-      const heading = paragraph.slice(2).trim();
+      const heading = stripCitationMarkup(paragraph.slice(2).trim());
       const id = heading
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, '')
@@ -263,7 +431,7 @@ const renderRawArticleContent = (draft: DraftReview): React.ReactNode[] => {
       return (
         <ul key={key} className="list-disc list-inside text-lg text-stone-700 leading-[1.85] mb-6 space-y-2">
           {items.map((item, itemIndex) => (
-            <li key={`${key}-${itemIndex}`}>{parseInlineMarkdown(item.substring(2))}</li>
+            <li key={`${key}-${itemIndex}`}>{renderInlineArticleContent(item.substring(2), `${key}-bullet-${itemIndex}`)}</li>
           ))}
         </ul>
       );
@@ -271,7 +439,7 @@ const renderRawArticleContent = (draft: DraftReview): React.ReactNode[] => {
 
     return (
       <p key={key} className="text-lg text-stone-700 leading-[1.85] mb-6">
-        {parseInlineMarkdown(paragraph)}
+        {renderInlineArticleContent(paragraph, key)}
       </p>
     );
   });
@@ -527,7 +695,7 @@ const PublishedArticleReview: React.FC<{ draft: DraftReview; isAdmin: boolean; o
             style={{ fontFamily: "'Georgia', 'Times New Roman', 'Noto Serif', serif" }}
           >
             <p className="text-xl text-stone-600 leading-[1.85] font-medium">
-              {excerpt}
+              {renderInlineArticleContent(excerpt, `excerpt-${draft.id}`)}
             </p>
           </div>
 
@@ -989,7 +1157,7 @@ const PublishedReviewPage: NextPage = () => {
             />
             <p className="mt-2 text-xs text-stone-500">
               {editReviewFormat === 'article'
-                ? 'Article mode preserves your prose and applies the research-style reading layout around it.'
+                ? 'Article mode preserves your prose and applies the research-style reading layout around it. Add inline citations with [[[\"https://source-one.com\", \"https://source-two.com\"]]] exactly where you want the source pill to appear.'
                 : 'You can change the type or format without adding more context. Paste new notes only when you want the review copy regenerated.'}
             </p>
           </div>
