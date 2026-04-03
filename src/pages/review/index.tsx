@@ -1291,7 +1291,7 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
                   />
                   <p className="mt-2 text-xs text-stone-500">
                     {createReviewFormat === 'article'
-                      ? 'Article mode preserves your prose and applies the research-style reading layout around it.'
+                      ? 'Article mode preserves your prose and applies the research-style reading layout around it. Add inline citations with [[[\"https://source-one.com\", \"https://source-two.com\"]]] exactly where you want the source pill to appear.'
                       : editingDraft
                         ? 'You can change the type or format without adding more context. Paste new notes only when you want the draft copy regenerated.'
                         : 'Tip: bullets are fine. Include numbers, partnerships, launches, and what mattered most. The selected format only changes presentation, not what source context is saved.'}
