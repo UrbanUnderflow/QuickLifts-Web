@@ -1,4 +1,5 @@
 import { Handler } from '@netlify/functions';
+import { resolveOpenAIApiKey } from './utils/resolveOpenAIApiKey';
 
 // ============================================================================
 // SECTION-BASED DOCUMENT EDITING
@@ -182,13 +183,13 @@ const handler: Handler = async (event) => {
       };
     }
 
-    const openaiApiKey = process.env.OPEN_AI_SECRET_KEY;
+    const openaiApiKey = resolveOpenAIApiKey();
     
     if (!openaiApiKey) {
       return { 
         statusCode: 500, 
         headers, 
-        body: JSON.stringify({ error: 'OpenAI API key not configured' }) 
+        body: JSON.stringify({ error: 'OpenAI API key not configured. Set OPENAI_API_KEY or OPEN_AI_SECRET_KEY.' }) 
       };
     }
 

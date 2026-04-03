@@ -1,4 +1,5 @@
 import { Handler } from '@netlify/functions';
+import { resolveOpenAIApiKey } from './utils/resolveOpenAIApiKey';
 
 const OPENAI_MODEL = process.env.OPENAI_LEGAL_DOCUMENT_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const OPENAI_TIMEOUT_MS = 22_000;
@@ -215,9 +216,9 @@ const handler: Handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required fields: prompt and documentType' }) };
     }
 
-    const openaiApiKey = process.env.OPEN_AI_SECRET_KEY;
+    const openaiApiKey = resolveOpenAIApiKey();
     if (!openaiApiKey) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'OpenAI API key not configured' }) };
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'OpenAI API key not configured. Set OPENAI_API_KEY or OPEN_AI_SECRET_KEY.' }) };
     }
 
     const template = DOCUMENT_TEMPLATES[documentType] || DOCUMENT_TEMPLATES.custom;
