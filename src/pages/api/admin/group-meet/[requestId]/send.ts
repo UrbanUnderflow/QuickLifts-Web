@@ -81,11 +81,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           shareUrl: inviteData.shareUrl || '',
         });
 
-        const emailStatus = result.success ? 'sent' : 'failed';
-        const emailError = result.success ? null : result.error || 'Failed to send';
+        const emailStatus = result.success
+          ? result.skipped
+            ? currentEmailStatus || 'not_sent'
+            : 'sent'
+          : 'failed';
+        const emailError = result.success
+          ? result.skipped
+            ? 'Invite send was skipped by the delivery guard.'
+            : null
+          : result.error || 'Failed to send';
 
-        if (result.success) {
+        if (result.success && !result.skipped) {
           sentCount += 1;
+        } else if (result.skipped) {
+          skippedCount += 1;
         } else {
           failedCount += 1;
         }
@@ -94,7 +104,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           {
             emailStatus,
             emailError,
-            emailedAt: result.success ? admin.firestore.FieldValue.serverTimestamp() : null,
+            emailedAt: result.success && !result.skipped ? admin.firestore.FieldValue.serverTimestamp() : null,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           },
           { merge: true }

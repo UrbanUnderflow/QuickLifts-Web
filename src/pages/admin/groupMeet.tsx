@@ -68,6 +68,8 @@ type ApiSendInvitesResponse = {
 
 type ApiPreviewEmailResponse = {
   success?: boolean;
+  skipped?: boolean;
+  messageId?: string | null;
 };
 
 const buildDefaultDeadlineValue = () => {
@@ -615,8 +617,11 @@ const GroupMeetAdminPage: React.FC = () => {
         throw new Error(payload.error || 'Failed to send preview email.');
       }
 
-      setMessage({ type: 'success', text: `Preview email sent to ${previewRecipientEmail}.` });
-      setRequestModalMessage({ type: 'success', text: `Preview email sent to ${previewRecipientEmail}.` });
+      const successText = payload.skipped
+        ? `Preview email was skipped for ${previewRecipientEmail}.`
+        : `Preview email sent to ${previewRecipientEmail}.`;
+      setMessage({ type: 'success', text: successText });
+      setRequestModalMessage({ type: 'success', text: successText });
     } catch (error: any) {
       setMessage({ type: 'error', text: error?.message || 'Failed to send preview email.' });
       setRequestModalMessage({ type: 'error', text: error?.message || 'Failed to send preview email.' });

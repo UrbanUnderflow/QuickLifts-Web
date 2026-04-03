@@ -70,17 +70,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       recipientName: inviteData.name || 'there',
       recipientEmail,
       shareUrl,
+      bypassDeliveryGuards: true,
     });
 
-    const emailStatus = result.success ? 'sent' : 'failed';
-    const emailError = result.success ? null : result.error || 'Failed to send';
+    const emailStatus = result.success && !result.skipped ? 'sent' : 'failed';
+    const emailError = result.success
+      ? result.skipped
+        ? 'Invite resend was skipped.'
+        : null
+      : result.error || 'Failed to send';
 
     await inviteRef.set(
       {
         shareUrl,
         emailStatus,
         emailError,
-        emailedAt: result.success ? admin.firestore.FieldValue.serverTimestamp() : null,
+        emailedAt: result.success && !result.skipped ? admin.firestore.FieldValue.serverTimestamp() : null,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         lastResentByEmail: adminUser.email || null,
       },
