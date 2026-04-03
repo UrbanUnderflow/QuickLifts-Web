@@ -24,7 +24,7 @@ type HostDraft = {
   imageUrl: string;
 };
 
-type ComposerTab = 'create' | 'contacts';
+type ComposerTab = 'create' | 'contacts' | 'requests';
 
 type ApiRequestListResponse = {
   requests: GroupMeetRequestSummary[];
@@ -57,6 +57,13 @@ type ApiContactSaveResponse = {
 
 type ApiSimpleSuccessResponse = {
   success?: boolean;
+};
+
+type ApiSendInvitesResponse = {
+  sentCount: number;
+  failedCount: number;
+  skippedCount: number;
+  status: GroupMeetRequestSummary['status'];
 };
 
 const buildDefaultDeadlineValue = () => {
@@ -151,7 +158,6 @@ const GroupMeetAdminPage: React.FC = () => {
   const [deadlineAt, setDeadlineAt] = useState(buildDefaultDeadlineValue);
   const [meetingDurationMinutes, setMeetingDurationMinutes] = useState(30);
   const [timezone, setTimezone] = useState('America/New_York');
-  const [sendEmails, setSendEmails] = useState(true);
   const [host, setHost] = useState<HostDraft>(buildEmptyHost);
   const [hostAvailabilityEntries, setHostAvailabilityEntries] = useState<GroupMeetAvailabilitySlot[]>([]);
   const [selectedParticipantContactIds, setSelectedParticipantContactIds] = useState<string[]>([]);
@@ -167,7 +173,6 @@ const GroupMeetAdminPage: React.FC = () => {
   const [testEmailRecipient, setTestEmailRecipient] = useState('');
   const [testEmailSending, setTestEmailSending] = useState(false);
   const [requests, setRequests] = useState<GroupMeetRequestSummary[]>([]);
-  const [createdRequest, setCreatedRequest] = useState<GroupMeetRequestSummary | null>(null);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<GroupMeetRequestDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -176,6 +181,7 @@ const GroupMeetAdminPage: React.FC = () => {
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [savingEdits, setSavingEdits] = useState(false);
   const [resendingInviteToken, setResendingInviteToken] = useState<string | null>(null);
+  const [sendingRequestId, setSendingRequestId] = useState<string | null>(null);
   const [hostNoteDraft, setHostNoteDraft] = useState('');
   const [editTitle, setEditTitle] = useState('');
   const [editDeadlineAt, setEditDeadlineAt] = useState('');
@@ -417,7 +423,6 @@ const GroupMeetAdminPage: React.FC = () => {
           deadlineAt: new Date(deadlineAt).toISOString(),
           timezone,
           meetingDurationMinutes,
-          sendEmails,
           host: {
             contactId: host.contactId,
             availabilityEntries: hostAvailabilityEntries,
@@ -433,9 +438,9 @@ const GroupMeetAdminPage: React.FC = () => {
         throw new Error(payload.error || 'Failed to create Group Meet request.');
       }
 
-      setCreatedRequest(payload.request);
       setSelectedRequestId(payload.request.id);
-      setMessage({ type: 'success', text: 'Group Meet request created.' });
+      setActiveTab('requests');
+      setMessage({ type: 'success', text: 'Group Meet draft saved. Open Requests to send invitations when you are ready.' });
       setSelectedParticipantContactIds([]);
       setHostAvailabilityEntries([]);
       await loadRequests();
@@ -443,6 +448,53 @@ const GroupMeetAdminPage: React.FC = () => {
       setMessage({ type: 'error', text: error?.message || 'Failed to create Group Meet request.' });
     } finally {
       setCreating(false);
+    }
+  };
+
+  const sendDraftInvites = async (requestId: string) => {
+    setSendingRequestId(requestId);
+    setMessage(null);
+
+    try {
+      const headers = await getAdminHeaders();
+      const response = await fetch(`/api/admin/group-meet/${encodeURIComponent(requestId)}/send`, {
+        method: 'POST',
+        headers,
+      });
+      const payload = (await response.json().catch(() => ({}))) as Partial<ApiSendInvitesResponse> & {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to send Group Meet invitations.');
+      }
+
+      await Promise.all([
+        loadRequests(),
+        selectedRequestId === requestId ? loadRequestDetail(requestId) : Promise.resolve(),
+      ]);
+
+      const sentCount = Number(payload.sentCount) || 0;
+      const failedCount = Number(payload.failedCount) || 0;
+      const skippedCount = Number(payload.skippedCount) || 0;
+      const summary = [
+        `${sentCount} sent`,
+        failedCount ? `${failedCount} failed` : null,
+        skippedCount ? `${skippedCount} skipped` : null,
+      ]
+        .filter(Boolean)
+        .join(' • ');
+
+      setMessage({
+        type: failedCount ? 'error' : 'success',
+        text: failedCount
+          ? `Invite send finished with issues: ${summary}.`
+          : `Invitations sent. ${summary}.`,
+      });
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.message || 'Failed to send Group Meet invitations.' });
+    } finally {
+      setSendingRequestId(null);
     }
   };
 
@@ -822,6 +874,17 @@ const GroupMeetAdminPage: React.FC = () => {
             >
               Contact list
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('requests')}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                activeTab === 'requests'
+                  ? 'bg-[#E0FE10] text-black'
+                  : 'border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900'
+              }`}
+            >
+              Requests
+            </button>
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-8">
@@ -833,8 +896,8 @@ const GroupMeetAdminPage: React.FC = () => {
                       <Calendar className="w-5 h-5" />
                     </div>
                     <div>
-                      <h2 className="text-xl font-semibold">Create request</h2>
-                      <p className="text-zinc-400 text-sm">Choose the host and guests from your saved contacts, then collect availability from there.</p>
+                      <h2 className="text-xl font-semibold">Create draft</h2>
+                      <p className="text-zinc-400 text-sm">Set up the meeting, save it as a draft, and send invitations later from the Requests tab.</p>
                     </div>
                   </div>
 
@@ -895,20 +958,14 @@ const GroupMeetAdminPage: React.FC = () => {
                     />
                   </label>
 
-                  <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-black/60 px-4 py-4">
+                  <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-[#E0FE10]/15 bg-[#E0FE10]/5 px-4 py-4">
                     <div>
-                      <div className="font-medium">Email invites now</div>
-                      <div className="text-sm text-zinc-400">If an email is present, Group Meet will send the participant their personal link right away.</div>
+                      <div className="font-medium">Draft-first flow</div>
+                      <div className="text-sm text-zinc-400">Saving here does not email anyone yet. Drafts move into Requests, where you can review the setup and send invitations when ready.</div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setSendEmails((current) => !current)}
-                      className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                        sendEmails ? 'bg-[#E0FE10] text-black' : 'bg-zinc-900 text-zinc-200 border border-zinc-700'
-                      }`}
-                    >
-                      {sendEmails ? 'Enabled' : 'Disabled'}
-                    </button>
+                    <div className="rounded-full bg-[#E0FE10] px-4 py-2 text-sm font-semibold text-black">
+                      Saves as draft
+                    </div>
                   </div>
 
                   <div className="mt-8 rounded-3xl border border-zinc-800 bg-black/50 p-5">
@@ -1047,11 +1104,11 @@ const GroupMeetAdminPage: React.FC = () => {
                       disabled={creating}
                       className="rounded-xl bg-[#E0FE10] px-5 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
                     >
-                      {creating ? 'Creating…' : 'Create Group Meet request'}
+                      {creating ? 'Saving…' : 'Save draft'}
                     </button>
                   </div>
                 </>
-              ) : (
+              ) : activeTab === 'contacts' ? (
                 <>
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-11 h-11 rounded-2xl bg-white/5 text-white flex items-center justify-center">
@@ -1194,6 +1251,94 @@ const GroupMeetAdminPage: React.FC = () => {
                     )}
                   </div>
                 </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-300 flex items-center justify-center">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-semibold">Requests</h2>
+                      <p className="text-sm text-zinc-400">Open drafts, send invitations, and monitor replies after the meeting is live.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {requests.map((request) => (
+                      <div key={request.id} className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
+                        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="font-semibold text-white">{request.title}</div>
+                              <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+                                request.status === 'draft'
+                                  ? 'border border-amber-500/30 bg-amber-500/10 text-amber-200'
+                                  : request.status === 'closed'
+                                    ? 'border border-zinc-700 bg-zinc-900 text-zinc-300'
+                                    : 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                              }`}>
+                                {request.status}
+                              </span>
+                            </div>
+                            <div className="text-sm text-zinc-400 mt-1">
+                              Month {request.targetMonth} • Deadline {toReadableDateTime(request.deadlineAt, request.timezone)}
+                            </div>
+                            <div className="flex flex-wrap gap-3 mt-3 text-xs text-zinc-400">
+                              <span>{request.participantCount} participants</span>
+                              <span>{request.responseCount} responded</span>
+                              <span>{request.meetingDurationMinutes} min</span>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            {request.status === 'draft' && (
+                              <button
+                                type="button"
+                                onClick={() => sendDraftInvites(request.id)}
+                                disabled={sendingRequestId === request.id}
+                                className="inline-flex items-center gap-2 rounded-xl bg-[#E0FE10] px-3 py-2 text-sm font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                              >
+                                <Mail className="w-4 h-4" />
+                                {sendingRequestId === request.id ? 'Sending…' : 'Send invitations'}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedRequestId(request.id);
+                                if (request.id !== selectedRequestId) {
+                                  setSelectedRequest(null);
+                                }
+                              }}
+                              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+                                selectedRequestId === request.id
+                                  ? 'border-[#E0FE10]/40 bg-[#E0FE10]/10 text-[#E0FE10]'
+                                  : 'border-zinc-800 hover:bg-zinc-900'
+                              }`}
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              Open request
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => copyAllLinks(request)}
+                              className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 px-3 py-2 text-sm hover:bg-zinc-900"
+                            >
+                              <Copy className="w-4 h-4" />
+                              Copy links
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {!requests.length && !loading && (
+                      <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-10 text-center text-sm text-zinc-500">
+                        No Group Meet requests yet.
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </section>
 
@@ -1237,186 +1382,24 @@ const GroupMeetAdminPage: React.FC = () => {
                 </div>
               </div>
 
-              {createdRequest && (
-                <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-6">
-                  <div className="flex items-center justify-between gap-4 mb-4">
-                    <div>
-                      <h2 className="text-xl font-semibold">Latest request</h2>
-                      <p className="text-sm text-emerald-100/80">
-                        {createdRequest.title} for {createdRequest.targetMonth}
-                      </p>
+              {activeTab !== 'requests' && (
+                <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-11 h-11 rounded-2xl bg-[#E0FE10]/10 text-[#E0FE10] flex items-center justify-center">
+                      <Calendar className="w-5 h-5" />
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => copyAllLinks(createdRequest)}
-                      className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-sm hover:bg-white/15"
-                    >
-                      <Copy className="w-4 h-4" />
-                      Copy all links
-                    </button>
+                    <div>
+                      <h2 className="text-xl font-semibold">Draft workflow</h2>
+                      <p className="text-sm text-zinc-400">Build first, send later. Once you save a draft, switch to Requests to activate the meeting and track replies.</p>
+                    </div>
                   </div>
-
-                  <div className="space-y-3">
-                    {createdRequest.invites.map((invite) => (
-                      <div key={invite.token} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex items-start gap-3">
-                            <AvatarBubble name={invite.name} imageUrl={invite.imageUrl} />
-                            <div>
-                            <div className="font-medium">
-                              {invite.name}
-                              {invite.participantType === 'host' && (
-                                <span className="ml-2 rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-zinc-300">
-                                  Host
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-sm text-zinc-300">{invite.email || 'Manual link only'}</div>
-                            <div className="text-xs text-zinc-400 mt-2">
-                              {invite.emailStatus === 'sent'
-                                ? 'Invite emailed'
-                                : invite.emailStatus === 'failed'
-                                  ? `Email failed: ${invite.emailError || 'Unknown error'}`
-                                  : invite.emailStatus === 'manual_only'
-                                    ? 'Email sending disabled for this batch'
-                                    : invite.emailStatus === 'no_email'
-                                      ? 'No email stored'
-                                      : 'Awaiting send'}
-                            </div>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => copyText(invite.shareUrl, `Copied ${invite.name}'s link`)}
-                            className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm hover:bg-white/10"
-                          >
-                            <LinkIcon className="w-4 h-4" />
-                            Copy link
-                          </button>
-                        </div>
-                        {invite.email && (
-                          <button
-                            type="button"
-                            onClick={() => resendInvite(invite)}
-                            disabled={resendingInviteToken === invite.token}
-                            className="mt-3 inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs hover:bg-white/10 disabled:opacity-50"
-                          >
-                            <Mail className="w-4 h-4" />
-                            {resendingInviteToken === invite.token ? 'Sending…' : 'Resend invite'}
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                  <div className="rounded-2xl border border-zinc-800 bg-black/40 px-4 py-4 text-sm text-zinc-400">
+                    Requests stay inactive until you explicitly send invitations. That keeps your link setup, host availability, and guest list editable while you are still preparing.
                   </div>
                 </div>
               )}
 
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-300 flex items-center justify-center">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold">Recent requests</h2>
-                    <p className="text-sm text-zinc-400">Quick visibility into deadlines, response counts, and link status.</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  {requests.map((request) => (
-                    <div key={request.id} className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div>
-                          <div className="font-semibold text-white">{request.title}</div>
-                          <div className="text-sm text-zinc-400 mt-1">
-                            Month {request.targetMonth} • Deadline {toReadableDateTime(request.deadlineAt, request.timezone)}
-                          </div>
-                          <div className="flex flex-wrap gap-3 mt-3 text-xs text-zinc-400">
-                            <span>{request.participantCount} participants</span>
-                            <span>{request.responseCount} responded</span>
-                            <span>{request.meetingDurationMinutes} min</span>
-                            <span>{request.status}</span>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedRequestId(request.id);
-                            if (request.id !== selectedRequestId) {
-                              setSelectedRequest(null);
-                            }
-                          }}
-                          className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
-                            selectedRequestId === request.id
-                              ? 'border-[#E0FE10]/40 bg-[#E0FE10]/10 text-[#E0FE10]'
-                              : 'border-zinc-800 hover:bg-zinc-900'
-                          }`}
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          View overlap
-                        </button>
-                      </div>
-
-                      <div className="mt-3">
-                        <button
-                          type="button"
-                          onClick={() => copyAllLinks(request)}
-                          className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900"
-                        >
-                          <Copy className="w-4 h-4" />
-                          Copy links
-                        </button>
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-1 gap-2">
-                        {request.invites.map((invite) => (
-                          <div key={invite.token} className="flex flex-col gap-2 rounded-xl border border-zinc-800/70 bg-zinc-950/80 px-3 py-3 md:flex-row md:items-center md:justify-between">
-                            <div className="flex items-center gap-3">
-                              <AvatarBubble name={invite.name} imageUrl={invite.imageUrl} size="h-9 w-9" />
-                              <div>
-                              <div className="text-sm font-medium">
-                                {invite.name}
-                                {invite.participantType === 'host' ? ' • Host' : ''}
-                              </div>
-                              <div className="text-xs text-zinc-500">
-                                {invite.email || 'Manual link'} • {invite.respondedAt ? 'Responded' : 'Waiting'} • {invite.emailStatus}
-                              </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {invite.email && <Mail className="w-4 h-4 text-zinc-500" />}
-                              {invite.email && (
-                                <button
-                                  type="button"
-                                  onClick={() => resendInvite(invite)}
-                                  disabled={resendingInviteToken === invite.token}
-                                  className="rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900 disabled:opacity-50"
-                                >
-                                  {resendingInviteToken === invite.token ? 'Sending…' : 'Resend'}
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => copyText(invite.shareUrl, `Copied ${invite.name}'s link`)}
-                                className="rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900"
-                              >
-                                Copy link
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-
-                  {!requests.length && !loading && (
-                    <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-10 text-center text-sm text-zinc-500">
-                      No Group Meet requests yet.
-                    </div>
-                  )}
-                </div>
-              </div>
-
+              {activeTab === 'requests' && (
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-300 flex items-center justify-center">
@@ -1451,6 +1434,15 @@ const GroupMeetAdminPage: React.FC = () => {
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2 text-xs">
+                          <span className={`rounded-full border px-3 py-1.5 ${
+                            selectedRequest.status === 'draft'
+                              ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                              : selectedRequest.status === 'closed'
+                                ? 'border-zinc-800 bg-zinc-900'
+                                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                          }`}>
+                            {selectedRequest.status}
+                          </span>
                           <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1.5">
                             {selectedRequest.analysis.respondedParticipantCount}/{selectedRequest.analysis.totalParticipants} responded
                           </span>
@@ -1462,6 +1454,23 @@ const GroupMeetAdminPage: React.FC = () => {
                           </span>
                         </div>
                       </div>
+
+                      {selectedRequest.status === 'draft' && (
+                        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-4 md:flex-row md:items-center md:justify-between">
+                          <div className="text-sm text-amber-100">
+                            This request is still a draft. Guests have not been emailed yet, so responses will not start coming in until you send the invitations.
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => selectedRequestId && sendDraftInvites(selectedRequestId)}
+                            disabled={sendingRequestId === selectedRequestId}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-2.5 text-sm font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                          >
+                            <Mail className="w-4 h-4" />
+                            {sendingRequestId === selectedRequestId ? 'Sending…' : 'Send invitations'}
+                          </button>
+                        </div>
+                      )}
 
                       {selectedRequest.analysis.pendingParticipantNames.length > 0 && (
                         <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
@@ -1925,6 +1934,7 @@ const GroupMeetAdminPage: React.FC = () => {
                   </div>
                 )}
               </div>
+              )}
             </section>
           </div>
         </div>

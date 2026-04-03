@@ -37,6 +37,8 @@ export type GroupMeetInviteDetail = GroupMeetInviteSummary & {
   availabilityEntries: GroupMeetAvailabilitySlot[];
 };
 
+export type GroupMeetRequestStatus = 'draft' | 'collecting' | 'closed';
+
 export type GroupMeetRequestSummary = {
   id: string;
   title: string;
@@ -48,7 +50,7 @@ export type GroupMeetRequestSummary = {
   createdAt: string | null;
   participantCount: number;
   responseCount: number;
-  status: 'collecting' | 'closed';
+  status: GroupMeetRequestStatus;
   invites: GroupMeetInviteSummary[];
 };
 
@@ -157,8 +159,22 @@ export function isValidGroupMeetMonth(value: string): boolean {
   return /^\d{4}-\d{2}$/.test((value || '').trim());
 }
 
-export function resolveGroupMeetStatus(deadlineAt: string | null): 'collecting' | 'closed' {
-  if (!deadlineAt) return 'collecting';
+export function resolveGroupMeetStatus(
+  deadlineAt: string | null,
+  rawStatus?: string | null
+): GroupMeetRequestStatus {
+  if (rawStatus === 'draft') {
+    return 'draft';
+  }
+
+  if (rawStatus === 'closed') {
+    return 'closed';
+  }
+
+  if (!deadlineAt) {
+    return 'collecting';
+  }
+
   return new Date(deadlineAt).getTime() <= Date.now() ? 'closed' : 'collecting';
 }
 

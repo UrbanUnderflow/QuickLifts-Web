@@ -52,7 +52,7 @@ async function buildRequestDetail(
     createdAt: toIso(requestData.createdAt),
     participantCount: Number(requestData.participantCount) || invites.length,
     responseCount: invites.filter((invite) => invite.respondedAt).length,
-    status: resolveGroupMeetStatus(deadlineAt),
+    status: resolveGroupMeetStatus(deadlineAt, requestData.status),
     invites,
     analysis: computeGroupMeetAnalysis(invites, meetingDurationMinutes),
     aiRecommendation: (requestData.aiRecommendation || null) as GroupMeetAiRecommendation | null,
@@ -141,7 +141,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       deadlineAt: admin.firestore.Timestamp.fromDate(deadline),
       timezone,
       meetingDurationMinutes,
-      status: resolveGroupMeetStatus(deadline.toISOString()),
+      status: resolveGroupMeetStatus(deadline.toISOString(), requestData.status),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedByEmail: adminUser.email || null,
     };
