@@ -642,7 +642,9 @@ const FriendsOfBusinessPage: React.FC = () => {
     const savedSubject = row.emailDraftSubject;
     const savedBody = row.emailDraftBody;
     const draftMatchesCurrentUpdate =
-      !selectedUpdateId || !row.emailDraftUpdatePeriodId || row.emailDraftUpdatePeriodId === selectedUpdateId;
+      selectedUpdateId
+        ? row.emailDraftUpdatePeriodId === selectedUpdateId
+        : !row.emailDraftUpdatePeriodId;
 
     if (savedSubject && savedBody && draftMatchesCurrentUpdate) {
       setEmailSubject(savedSubject);
