@@ -119,3 +119,42 @@ test('firebase-next-api handler adapts Netlify events into Next API req/res sema
     remoteAddress: '203.0.113.44',
   });
 });
+
+test('firebase-next-api resolves the public api path when originalPath is missing', async () => {
+  const proxyModule = loadProxyModule();
+  const handler = proxyModule.__test.createFirebaseNextApiHandler([
+    {
+      pattern: '/api/example/[token]',
+      async loadHandler() {
+        return {
+          default: async (req, res) => res.status(200).json({
+            token: req.query.token,
+            query: req.query.mode,
+            url: req.url,
+          }),
+        };
+      },
+    },
+  ]);
+
+  const response = await handler({
+    httpMethod: 'GET',
+    path: '/api/example/probe-456',
+    rawUrl: 'https://fitwithpulse.ai/api/example/probe-456?mode=live',
+    headers: {
+      host: 'fitwithpulse.ai',
+    },
+    queryStringParameters: {
+      mode: 'live',
+    },
+    body: null,
+    isBase64Encoded: false,
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(JSON.parse(response.body), {
+    token: 'probe-456',
+    query: 'live',
+    url: '/api/example/probe-456?mode=live',
+  });
+});
