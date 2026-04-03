@@ -533,6 +533,8 @@ const DraftArticleView: React.FC<{
   const hasRawArticleContent = Boolean(draft.articleContent?.trim());
   const articleTocItems = hasRawArticleContent ? getArticleTocItems(draft) : [];
   const articleExcerpt = hasRawArticleContent ? getArticleExcerpt(draft) : draft.description;
+  const authorName = draft.author || 'Pulse Team';
+  const authorTitle = draft.authorTitle || '';
 
   const sections = [
     {
@@ -702,11 +704,11 @@ const DraftArticleView: React.FC<{
 
         <div className="flex items-center gap-4 flex-wrap">
           <div className="w-10 h-10 rounded-full bg-stone-900 flex items-center justify-center flex-shrink-0">
-            <span className="text-sm font-bold text-[#E0FE10]">P</span>
+            <span className="text-sm font-bold text-[#E0FE10]">{authorName.charAt(0).toUpperCase()}</span>
           </div>
           <div className="mr-2">
-            <p className="text-sm font-semibold text-stone-800">Pulse Team</p>
-            <p className="text-xs text-stone-400">{estimateDraftReadTime(draft)}</p>
+            <p className="text-sm font-semibold text-stone-800">{authorName}</p>
+            <p className="text-xs text-stone-400">{authorTitle || estimateDraftReadTime(draft)}</p>
           </div>
         </div>
       </header>
@@ -805,20 +807,20 @@ const DraftArticleView: React.FC<{
             <div className="mt-16 pt-10 border-t border-stone-200">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-full bg-stone-900 flex items-center justify-center flex-shrink-0">
-                  <span className="text-base font-bold text-[#E0FE10]">P</span>
+                  <span className="text-base font-bold text-[#E0FE10]">{authorName.charAt(0).toUpperCase()}</span>
                 </div>
                 <div>
                   <p
                     className="text-base font-bold text-stone-900 mb-1"
                     style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
                   >
-                    Pulse Team
+                    {authorName}
                   </p>
                   <p
                     className="text-sm text-stone-500 leading-relaxed"
                     style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
                   >
-                    Investor updates and company research from Pulse Intelligence Labs.
+                    {authorTitle || 'Investor updates from Pulse Intelligence Labs.'}
                   </p>
                 </div>
               </div>
@@ -1219,6 +1221,8 @@ const DraftReviewPage: React.FC = () => {
       const updatedDraft = await reviewContextService.generateDraftFromContext(year, month, {
         reviewType: draft.reviewType,
         formatStyle: draft.formatStyle,
+        author: draft.author,
+        authorTitle: draft.authorTitle,
       });
       setDraft(updatedDraft);
     } catch (err: any) {
@@ -1264,6 +1268,8 @@ const DraftReviewPage: React.FC = () => {
       const updatedDraft = await reviewContextService.generateDraftFromContext(year, month, {
         reviewType: draft.reviewType,
         formatStyle: draft.formatStyle,
+        author: draft.author,
+        authorTitle: draft.authorTitle,
       });
       setDraft(updatedDraft);
       

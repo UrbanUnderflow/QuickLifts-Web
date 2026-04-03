@@ -337,6 +337,9 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [createReviewType, setCreateReviewType] = useState<CreateReviewType>('month');
   const [createReviewFormat, setCreateReviewFormat] = useState<CreateReviewFormat>('investor-update');
+  const [authorProfiles, setAuthorProfiles] = useState<AuthorProfileOption[]>([]);
+  const [createReviewAuthor, setCreateReviewAuthor] = useState('Tremaine');
+  const [createReviewAuthorTitle, setCreateReviewAuthorTitle] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthValue());
   const [selectedQuarter, setSelectedQuarter] = useState(getCurrentQuarterValue());
   const [selectedYear, setSelectedYear] = useState(getCurrentYearValue());
@@ -395,6 +398,33 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
   }, [user]);
 
   useEffect(() => {
+    const loadAuthors = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'authorProfiles'));
+        const profiles = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          name: doc.data().name || doc.id,
+          title: doc.data().title || '',
+        })) as AuthorProfileOption[];
+
+        setAuthorProfiles(profiles);
+
+        const preferredAuthor = getPreferredAuthorProfile(profiles);
+        if (preferredAuthor && !createReviewAuthorTitle) {
+          const matchingCurrentAuthor = profiles.find((profile) => profile.name === createReviewAuthor);
+          const authorToApply = matchingCurrentAuthor || preferredAuthor;
+          setCreateReviewAuthor(authorToApply.name);
+          setCreateReviewAuthorTitle(authorToApply.title);
+        }
+      } catch (error) {
+        console.error('Error loading author profiles for reviews:', error);
+      }
+    };
+
+    loadAuthors();
+  }, []);
+
+  useEffect(() => {
     if (checkingAdmin || !isAdmin) {
       if (!checkingAdmin && !isAdmin) {
         setAllReviews(staticReviews);
@@ -428,9 +458,12 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
   }, [drafts, selectedDraftId]);
 
   const openCreateReviewModal = () => {
+    const preferredAuthor = getPreferredAuthorProfile(authorProfiles);
     setEditingDraftId(null);
     setCreateReviewType('month');
     setCreateReviewFormat('investor-update');
+    setCreateReviewAuthor(preferredAuthor?.name || 'Tremaine');
+    setCreateReviewAuthorTitle(preferredAuthor?.title || '');
     setSelectedMonth(getCurrentMonthValue());
     setSelectedQuarter(getCurrentQuarterValue());
     setSelectedYear(getCurrentYearValue());
@@ -441,9 +474,12 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
 
   const openEditReviewModal = (draft: DraftReview) => {
     const [year, month] = draft.monthYear.split('-').map(Number);
+    const matchedProfile = authorProfiles.find((profile) => profile.name === draft.author);
     setEditingDraftId(draft.id);
     setCreateReviewType(draft.reviewType);
     setCreateReviewFormat(draft.formatStyle);
+    setCreateReviewAuthor(draft.author || matchedProfile?.name || getPreferredAuthorProfile(authorProfiles)?.name || 'Tremaine');
+    setCreateReviewAuthorTitle(draft.authorTitle || matchedProfile?.title || '');
     setSelectedMonth(`${year}-${String(month).padStart(2, '0')}`);
     setSelectedQuarter(String(Math.ceil(month / 3)));
     setSelectedYear(String(year));
@@ -471,7 +507,9 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
       (
         editingDraft.reviewType !== createReviewType ||
         editingDraft.formatStyle !== createReviewFormat ||
-        editingDraft.monthYear !== editingTargetMonthYear
+        editingDraft.monthYear !== editingTargetMonthYear ||
+        (editingDraft.author || '') !== createReviewAuthor ||
+        (editingDraft.authorTitle || '') !== createReviewAuthorTitle
       ),
   );
   const canSubmitReviewForm = creatingReview
@@ -554,17 +592,30 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
 
         const draft = await reviewContextService.createArticleDraftFromContent(year, month, articleSource, {
           reviewType: createReviewType,
+          author: createReviewAuthor,
+          authorTitle: createReviewAuthorTitle,
         });
         draftIdToSelect = draft.id;
       } else if (needsStructuredRegeneration) {
         const draft = await reviewContextService.generateDraftFromContext(year, month, {
           reviewType: createReviewType,
           formatStyle: createReviewFormat,
+          author: createReviewAuthor,
+          authorTitle: createReviewAuthorTitle,
         });
         draftIdToSelect = draft.id;
-      } else if (editingDraft && editingDraft.formatStyle !== createReviewFormat) {
+      } else if (
+        editingDraft &&
+        (
+          editingDraft.formatStyle !== createReviewFormat ||
+          (editingDraft.author || '') !== createReviewAuthor ||
+          (editingDraft.authorTitle || '') !== createReviewAuthorTitle
+        )
+      ) {
         await reviewContextService.updateDraft(editingDraft.id, {
           formatStyle: createReviewFormat,
+          author: createReviewAuthor,
+          authorTitle: createReviewAuthorTitle,
         });
       } else if (editingDraft) {
         closeCreateReviewModal();
@@ -829,6 +880,11 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
                         <p className="mt-2 text-sm leading-relaxed text-stone-500">
                           {selectedDraft.getMonthYearLabel()} · {getDraftTypeLabel(selectedDraft.reviewType)} · {getDraftFormatLabel(selectedDraft.formatStyle)}
                         </p>
+                        {selectedDraft.author && (
+                          <p className="mt-1 text-sm leading-relaxed text-stone-400">
+                            By {selectedDraft.author}
+                          </p>
+                        )}
                       </div>
                       <span className={`rounded-full border px-3 py-1 text-xs font-medium ${getDraftStatusClasses(selectedDraft.status)}`}>
                         {selectedDraft.status.charAt(0).toUpperCase() + selectedDraft.status.slice(1)}
@@ -1033,6 +1089,37 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
                   <p className="mt-2 text-xs text-stone-500">
                     Investor Update keeps the milestone-and-metrics layout. Article renders the draft in the same editorial reading style as Research.
                   </p>
+                </div>
+
+                <div>
+                  <label htmlFor="review-author" className="mb-2 block text-sm font-medium text-stone-700">
+                    Author
+                  </label>
+                  <select
+                    id="review-author"
+                    value={createReviewAuthor}
+                    onChange={(event) => {
+                      const nextAuthor = authorProfiles.find((profile) => profile.name === event.target.value);
+                      setCreateReviewAuthor(event.target.value);
+                      setCreateReviewAuthorTitle(nextAuthor?.title || '');
+                    }}
+                    className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 focus:border-stone-500 focus:outline-none focus:ring-2 focus:ring-stone-200"
+                  >
+                    {authorProfiles.length > 0 ? (
+                      authorProfiles.map((author) => (
+                        <option key={author.id} value={author.name}>
+                          {author.name}{author.title ? ` — ${author.title}` : ''}
+                        </option>
+                      ))
+                    ) : (
+                      <option value={createReviewAuthor}>{createReviewAuthor || 'Tremaine'}</option>
+                    )}
+                  </select>
+                  {createReviewAuthorTitle && (
+                    <p className="mt-2 text-xs text-stone-500">
+                      {createReviewAuthorTitle}
+                    </p>
+                  )}
                 </div>
 
                 <div>
