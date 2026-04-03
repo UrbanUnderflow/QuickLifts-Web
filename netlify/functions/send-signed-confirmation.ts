@@ -12,13 +12,13 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   }
 
   try {
-    const { documentId, documentName, recipientName, recipientEmail, signedAt, typedName } = JSON.parse(event.body || "{}");
+    const { documentId, documentName, recipientName, recipientEmail, signedAt, typedName, companyName, previewMode } = JSON.parse(event.body || "{}");
 
     if (!documentId || !recipientEmail) {
       return { statusCode: 400, body: JSON.stringify({ message: "Missing required fields." }) };
     }
 
-    const viewUrl = `${BASE_URL}/sign/${documentId}?download=true`;
+    const viewUrl = `${BASE_URL}/sign/${documentId}?download=true${previewMode ? '&preview=1' : ''}`;
     const adminUrl = `${BASE_URL}/admin/documentSigning`;
     const formattedDate = new Date(signedAt).toLocaleString('en-US', {
       weekday: 'long',
@@ -31,7 +31,9 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     });
 
     // Email to Admin (Tremaine)
-    const adminSubject = `✅ Document Signed: "${documentName}" by ${recipientName}`;
+    const adminSubject = previewMode
+      ? `🧪 Preview Signed: "${documentName}" by ${recipientName}`
+      : `✅ Document Signed: "${documentName}" by ${recipientName}`;
     const adminHtmlContent = `
       <!DOCTYPE html>
       <html>
@@ -148,8 +150,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           <div style="padding: 20px; background-color: #09090b;">
             <div class="container">
               <div class="header">
-                <h1>✓ Document Signed</h1>
-                <p>A document has been signed successfully</p>
+                <h1>${previewMode ? '🧪 Preview Signed' : '✓ Document Signed'}</h1>
+                <p>${previewMode ? 'A preview signing flow has been completed' : 'A document has been signed successfully'}</p>
               </div>
               
               <div class="content">
@@ -178,7 +180,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
                 
                 <div style="text-align: center; margin-top: 30px;">
                   <a href="${viewUrl}" class="cta-button">
-                    Download Signed Document
+                    ${previewMode ? 'Download Preview Signed Document' : 'Download Signed Document'}
                   </a>
                   <a href="${adminUrl}" class="secondary-button">
                     View All Documents
@@ -196,7 +198,9 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     `;
 
     // Email to Signer (Confirmation)
-    const signerSubject = `✅ You've Signed: "${documentName}"`;
+    const signerSubject = previewMode
+      ? `🧪 Preview Complete: "${documentName}"`
+      : `✅ You've Signed: "${documentName}"`;
     const signerHtmlContent = `
       <!DOCTYPE html>
       <html>
@@ -290,7 +294,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           <div style="padding: 20px; background-color: #09090b;">
             <div class="container">
               <div class="header">
-                <h1>✓ Document Signed Successfully</h1>
+                <h1>${previewMode ? '🧪 Preview Signed Successfully' : '✓ Document Signed Successfully'}</h1>
               </div>
               
               <div class="content">
@@ -298,7 +302,9 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
                   Hi ${recipientName},
                 </p>
                 <p class="message">
-                  Thank you for signing the document. This email confirms that your signature has been recorded successfully.
+                  ${previewMode
+                    ? 'You completed the preview signing flow successfully. This email confirms the sandbox signature was recorded for testing.'
+                    : 'Thank you for signing the document. This email confirms that your signature has been recorded successfully.'}
                 </p>
                 
                 <div class="details-box">
@@ -317,12 +323,14 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
                 </div>
                 
                 <p class="message" style="font-size: 14px;">
-                  Please keep this email for your records. You can download a copy of the signed document using the button below.
+                  ${previewMode
+                    ? 'This was a preview-only signing test. You can still download the preview signed version below.'
+                    : 'Please keep this email for your records. You can download a copy of the signed document using the button below.'}
                 </p>
                 
                 <div style="text-align: center; margin-top: 30px;">
                   <a href="${viewUrl}" class="cta-button">
-                    Download Signed Document
+                    ${previewMode ? 'Download Preview Signed Document' : 'Download Signed Document'}
                   </a>
                 </div>
               </div>
@@ -388,7 +396,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     // --- NEW LOGIC: Fully Executed Email for Multiple Signers ---
     const { isFullyExecuted, allSigners } = JSON.parse(event.body || "{}");
 
-    if (isFullyExecuted && allSigners && allSigners.length > 1) {
+    if (!previewMode && isFullyExecuted && allSigners && allSigners.length > 1) {
       console.log(`Document [${documentId}] is fully executed. Notifying all ${allSigners.length} signers.`);
 
       const executedSubject = `📜 FULLY EXECUTED: "${documentName}"`;
@@ -492,6 +500,5 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 };
 
 export { handler };
-
 
 

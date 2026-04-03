@@ -26,7 +26,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   }
 
   try {
-    const { documentId, documentName, documentType, recipientName, recipientEmail, companyName } = JSON.parse(event.body || "{}");
+    const { documentId, documentName, documentType, recipientName, recipientEmail, companyName, previewMode } = JSON.parse(event.body || "{}");
 
     if (!documentId || !recipientEmail) {
       return { statusCode: 400, body: JSON.stringify({ message: "Missing required fields." }) };
@@ -34,8 +34,10 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     const branding = resolveBranding(companyName || '');
 
-    const signingUrl = `${BASE_URL}/sign/${documentId}`;
-    const subject = `📝 Action Required: Please Sign "${documentName}"`;
+    const signingUrl = `${BASE_URL}/sign/${documentId}${previewMode ? '?preview=1' : ''}`;
+    const subject = previewMode
+      ? `🧪 Preview Signature Test: "${documentName}"`
+      : `📝 Action Required: Please Sign "${documentName}"`;
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -150,7 +152,9 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
                 <p class="greeting">Hi ${recipientName},</p>
                 
                 <p class="message">
-                  <strong>${branding.requestedBy}</strong> from ${branding.requestedByCompany} has requested your signature on the following document:
+                  ${previewMode
+                    ? `<strong>${branding.requestedBy}</strong> from ${branding.requestedByCompany} sent you a preview signing test for the following document:`
+                    : `<strong>${branding.requestedBy}</strong> from ${branding.requestedByCompany} has requested your signature on the following document:`}
                 </p>
                 
                 <div class="document-box">
@@ -159,17 +163,21 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
                 </div>
                 
                 <p class="message">
-                  Please review and sign this document at your earliest convenience. The signing process takes less than a minute.
+                  ${previewMode
+                    ? 'This is a sandbox preview of the signing flow. You can click through, sign, and test the full experience without affecting the live document packet.'
+                    : 'Please review and sign this document at your earliest convenience. The signing process takes less than a minute.'}
                 </p>
                 
                 <div style="text-align: center;">
                   <a href="${signingUrl}" class="cta-button">
-                    Review & Sign Document →
+                    ${previewMode ? 'Open Preview Signing Flow →' : 'Review & Sign Document →'}
                   </a>
                 </div>
                 
                 <p class="message" style="font-size: 14px; color: #71717a;">
-                  This is a secure, legally-binding electronic signature request. Your signature will be recorded along with timestamp and verification details for compliance purposes.
+                  ${previewMode
+                    ? 'This preview email is for testing only. It uses a sandbox signing request and will not update the actual live document status.'
+                    : 'This is a secure, legally-binding electronic signature request. Your signature will be recorded along with timestamp and verification details for compliance purposes.'}
                 </p>
               </div>
               
@@ -242,5 +250,4 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 };
 
 export { handler };
-
 
