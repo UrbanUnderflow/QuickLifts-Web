@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
-import { format, parse } from 'date-fns';
+import { addDays, endOfMonth, endOfWeek, format, isSameMonth, parse, startOfMonth, startOfWeek } from 'date-fns';
 import { Calendar, CheckCircle2, Copy, Link as LinkIcon, Mail, RefreshCw, Sparkles, Upload, Users } from 'lucide-react';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
@@ -66,6 +66,10 @@ type ApiSendInvitesResponse = {
   status: GroupMeetRequestSummary['status'];
 };
 
+type ApiPreviewEmailResponse = {
+  success?: boolean;
+};
+
 const buildDefaultDeadlineValue = () => {
   const date = new Date();
   date.setDate(date.getDate() + 5);
@@ -110,6 +114,20 @@ const formatMonthDate = (value: string) => {
   } catch (_error) {
     return value;
   }
+};
+
+const buildCalendarDays = (targetMonth: string) => {
+  const firstDay = startOfMonth(parse(`${targetMonth}-01`, 'yyyy-MM-dd', new Date()));
+  const lastDay = endOfMonth(firstDay);
+  const calendarStart = startOfWeek(firstDay, { weekStartsOn: 0 });
+  const calendarEnd = endOfWeek(lastDay, { weekStartsOn: 0 });
+  const days: Date[] = [];
+
+  for (let current = calendarStart; current <= calendarEnd; current = addDays(current, 1)) {
+    days.push(current);
+  }
+
+  return days;
 };
 
 const buildAvatarUrl = (name: string, imageUrl?: string | null) =>
@@ -175,6 +193,7 @@ const GroupMeetAdminPage: React.FC = () => {
   const [requests, setRequests] = useState<GroupMeetRequestSummary[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<GroupMeetRequestDetail | null>(null);
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [recommendLoading, setRecommendLoading] = useState(false);
   const [finalizeLoading, setFinalizeLoading] = useState(false);
@@ -182,6 +201,13 @@ const GroupMeetAdminPage: React.FC = () => {
   const [savingEdits, setSavingEdits] = useState(false);
   const [resendingInviteToken, setResendingInviteToken] = useState<string | null>(null);
   const [sendingRequestId, setSendingRequestId] = useState<string | null>(null);
+  const [previewInviteToken, setPreviewInviteToken] = useState('');
+  const [previewRecipientName, setPreviewRecipientName] = useState('');
+  const [previewRecipientEmail, setPreviewRecipientEmail] = useState('');
+  const [previewSending, setPreviewSending] = useState(false);
+  const [requestModalMessage, setRequestModalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(
+    null
+  );
   const [hostNoteDraft, setHostNoteDraft] = useState('');
   const [editTitle, setEditTitle] = useState('');
   const [editDeadlineAt, setEditDeadlineAt] = useState('');
@@ -204,6 +230,27 @@ const GroupMeetAdminPage: React.FC = () => {
   const availableGuestContacts = useMemo(
     () => contacts.filter((contact) => contact.id !== host.contactId),
     [contacts, host.contactId]
+  );
+
+  const requestCalendarDays = useMemo(() => {
+    if (!selectedRequest?.targetMonth || !/^\d{4}-\d{2}$/.test(selectedRequest.targetMonth)) {
+      return [];
+    }
+
+    return buildCalendarDays(selectedRequest.targetMonth);
+  }, [selectedRequest?.targetMonth]);
+
+  const respondedInvites = useMemo(
+    () =>
+      (selectedRequest?.invites || []).filter(
+        (invite) => Boolean(invite.respondedAt) || invite.availabilityEntries.length > 0
+      ),
+    [selectedRequest]
+  );
+
+  const previewGuestInvites = useMemo(
+    () => (selectedRequest?.invites || []).filter((invite) => invite.participantType !== 'host'),
+    [selectedRequest]
   );
 
   const getAdminHeaders = async () => {
@@ -324,6 +371,19 @@ const GroupMeetAdminPage: React.FC = () => {
     loadRequestDetail(selectedRequestId);
   }, [selectedRequestId]);
 
+  useEffect(() => {
+    if (!selectedRequest) return;
+
+    const defaultInvite = selectedRequest.invites.find((invite) => invite.participantType !== 'host') || null;
+    setPreviewInviteToken((current) =>
+      current && selectedRequest.invites.some((invite) => invite.token === current)
+        ? current
+        : defaultInvite?.token || ''
+    );
+    setPreviewRecipientName(auth.currentUser?.displayName || 'Preview Recipient');
+    setPreviewRecipientEmail(auth.currentUser?.email || '');
+  }, [selectedRequest]);
+
   const useContactAsHost = (contact: GroupMeetContact) => {
     setHost({
       contactId: contact.id,
@@ -391,6 +451,20 @@ const GroupMeetAdminPage: React.FC = () => {
     } catch (_error) {
       setMessage({ type: 'error', text: 'Copy failed.' });
     }
+  };
+
+  const openRequestModal = (requestId: string) => {
+    setSelectedRequestId(requestId);
+    if (requestId !== selectedRequestId) {
+      setSelectedRequest(null);
+    }
+    setRequestModalMessage(null);
+    setRequestModalOpen(true);
+  };
+
+  const closeRequestModal = () => {
+    setRequestModalOpen(false);
+    setRequestModalMessage(null);
   };
 
   const createRequest = async () => {
@@ -491,10 +565,63 @@ const GroupMeetAdminPage: React.FC = () => {
           ? `Invite send finished with issues: ${summary}.`
           : `Invitations sent. ${summary}.`,
       });
+      setRequestModalMessage({
+        type: failedCount ? 'error' : 'success',
+        text: failedCount
+          ? `Invite send finished with issues: ${summary}.`
+          : `Invitations sent. ${summary}.`,
+      });
     } catch (error: any) {
       setMessage({ type: 'error', text: error?.message || 'Failed to send Group Meet invitations.' });
+      setRequestModalMessage({ type: 'error', text: error?.message || 'Failed to send Group Meet invitations.' });
     } finally {
       setSendingRequestId(null);
+    }
+  };
+
+  const sendPreviewEmail = async () => {
+    if (!selectedRequestId) return;
+
+    if (!previewInviteToken) {
+      setMessage({ type: 'error', text: 'Choose a guest link to preview.' });
+      setRequestModalMessage({ type: 'error', text: 'Choose a guest link to preview.' });
+      return;
+    }
+
+    if (!previewRecipientEmail.trim()) {
+      setMessage({ type: 'error', text: 'Add an email address for the preview send.' });
+      setRequestModalMessage({ type: 'error', text: 'Add an email address for the preview send.' });
+      return;
+    }
+
+    setPreviewSending(true);
+    setMessage(null);
+    setRequestModalMessage(null);
+
+    try {
+      const headers = await getAdminHeaders();
+      const response = await fetch(`/api/admin/group-meet/${encodeURIComponent(selectedRequestId)}/preview-email`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          recipientName: previewRecipientName || 'Preview Recipient',
+          recipientEmail: previewRecipientEmail,
+          inviteToken: previewInviteToken,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as ApiPreviewEmailResponse & { error?: string };
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || 'Failed to send preview email.');
+      }
+
+      setMessage({ type: 'success', text: `Preview email sent to ${previewRecipientEmail}.` });
+      setRequestModalMessage({ type: 'success', text: `Preview email sent to ${previewRecipientEmail}.` });
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.message || 'Failed to send preview email.' });
+      setRequestModalMessage({ type: 'error', text: error?.message || 'Failed to send preview email.' });
+    } finally {
+      setPreviewSending(false);
     }
   };
 
@@ -887,7 +1014,7 @@ const GroupMeetAdminPage: React.FC = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-8">
+          <div>
             <section className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6">
               {activeTab === 'create' ? (
                 <>
@@ -1304,14 +1431,9 @@ const GroupMeetAdminPage: React.FC = () => {
                             )}
                             <button
                               type="button"
-                              onClick={() => {
-                                setSelectedRequestId(request.id);
-                                if (request.id !== selectedRequestId) {
-                                  setSelectedRequest(null);
-                                }
-                              }}
+                              onClick={() => openRequestModal(request.id)}
                               className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
-                                selectedRequestId === request.id
+                                selectedRequestId === request.id && requestModalOpen
                                   ? 'border-[#E0FE10]/40 bg-[#E0FE10]/10 text-[#E0FE10]'
                                   : 'border-zinc-800 hover:bg-zinc-900'
                               }`}
@@ -1342,149 +1464,290 @@ const GroupMeetAdminPage: React.FC = () => {
               )}
             </section>
 
-            <section className="space-y-6">
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-11 h-11 rounded-2xl bg-amber-500/10 text-amber-200 flex items-center justify-center">
-                    <Mail className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold">Send test email</h2>
-                    <p className="text-sm text-zinc-400">Send a standalone delivery preview without creating a real Group Meet request.</p>
-                  </div>
-                </div>
+          </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
-                  <input
-                    value={testEmailName}
-                    onChange={(event) => setTestEmailName(event.target.value)}
-                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                    placeholder="Recipient name"
-                  />
-                  <input
-                    value={testEmailRecipient}
-                    onChange={(event) => setTestEmailRecipient(event.target.value)}
-                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                    placeholder="Recipient email"
-                  />
+          {requestModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/80 p-4 sm:p-6">
+              <div className="mx-auto flex h-full max-w-[1500px] flex-col overflow-hidden rounded-[32px] border border-zinc-800 bg-[#090c11] shadow-2xl">
+                <div className="flex items-start justify-between gap-4 border-b border-zinc-800 px-6 py-5">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">Request detail</div>
+                    <h2 className="mt-2 text-3xl font-semibold text-white">
+                      {selectedRequest?.title || 'Loading request…'}
+                    </h2>
+                    {selectedRequest && (
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
+                        <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5">
+                          {selectedRequest.targetMonth}
+                        </span>
+                        <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5">
+                          {selectedRequest.meetingDurationMinutes} min
+                        </span>
+                        <span className={`rounded-full border px-3 py-1.5 ${
+                          selectedRequest.status === 'draft'
+                            ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                            : selectedRequest.status === 'closed'
+                              ? 'border-zinc-700 bg-zinc-900 text-zinc-300'
+                              : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                        }`}>
+                          {selectedRequest.status}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
                   <button
                     type="button"
-                    onClick={sendStandaloneTestEmail}
-                    disabled={testEmailSending}
-                    className="rounded-xl bg-[#E0FE10] px-4 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                    onClick={closeRequestModal}
+                    className="rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
                   >
-                    {testEmailSending ? 'Sending…' : 'Send test email'}
+                    Close
                   </button>
                 </div>
 
-                <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/40 px-4 py-4 text-sm text-zinc-400">
-                  This uses the current draft values for title, month, deadline, and timezone. The email is clearly marked as a test and routes back to the internal Group Meet tool.
-                </div>
-              </div>
-
-              {activeTab !== 'requests' && (
-                <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-11 h-11 rounded-2xl bg-[#E0FE10]/10 text-[#E0FE10] flex items-center justify-center">
-                      <Calendar className="w-5 h-5" />
+                <div className="flex-1 overflow-y-auto px-6 py-6">
+                  {requestModalMessage && (
+                    <div
+                      className={`mb-6 rounded-2xl border px-4 py-3 text-sm ${
+                        requestModalMessage.type === 'success'
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
+                          : 'border-red-500/30 bg-red-500/10 text-red-100'
+                      }`}
+                    >
+                      {requestModalMessage.text}
                     </div>
-                    <div>
-                      <h2 className="text-xl font-semibold">Draft workflow</h2>
-                      <p className="text-sm text-zinc-400">Build first, send later. Once you save a draft, switch to Requests to activate the meeting and track replies.</p>
+                  )}
+
+                  {detailLoading && (
+                    <div className="rounded-2xl border border-zinc-800 px-4 py-10 text-center text-sm text-zinc-400">
+                      Loading request details…
                     </div>
-                  </div>
-                  <div className="rounded-2xl border border-zinc-800 bg-black/40 px-4 py-4 text-sm text-zinc-400">
-                    Requests stay inactive until you explicitly send invitations. That keeps your link setup, host availability, and guest list editable while you are still preparing.
-                  </div>
-                </div>
-              )}
+                  )}
 
-              {activeTab === 'requests' && (
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-300 flex items-center justify-center">
-                    <CheckCircle2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold">Overlap results</h2>
-                    <p className="text-sm text-zinc-400">Deterministic candidate windows based on the meeting length and everyone’s submitted ranges.</p>
-                  </div>
-                </div>
+                  {!detailLoading && !selectedRequest && (
+                    <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-10 text-center text-sm text-zinc-500">
+                      Select a request to inspect the full scheduling view.
+                    </div>
+                  )}
 
-                {detailLoading && (
-                  <div className="rounded-2xl border border-zinc-800 px-4 py-10 text-center text-sm text-zinc-400">
-                    Loading overlap results…
-                  </div>
-                )}
+                  {!detailLoading && selectedRequest && (
+                    <div className="space-y-6">
+                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                          <div>
+                            <div className="text-sm text-zinc-400">
+                              Deadline {toReadableDateTime(selectedRequest.deadlineAt, selectedRequest.timezone)}
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                              <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5">
+                                {selectedRequest.analysis.respondedParticipantCount}/{selectedRequest.analysis.totalParticipants} responded
+                              </span>
+                              <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5">
+                                {selectedRequest.analysis.fullMatchCandidates.length} full-match windows
+                              </span>
+                              <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5">
+                                {selectedRequest.analysis.bestCandidates.length} ranked candidates
+                              </span>
+                            </div>
+                          </div>
 
-                {!detailLoading && !selectedRequest && (
-                  <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-10 text-center text-sm text-zinc-500">
-                    Select a request to inspect the best meeting times.
-                  </div>
-                )}
-
-                {!detailLoading && selectedRequest && (
-                  <div className="space-y-6">
-                    <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
-                      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-                        <div>
-                          <div className="text-lg font-semibold">{selectedRequest.title}</div>
-                          <div className="text-sm text-zinc-400 mt-1">
-                            {selectedRequest.targetMonth} • {selectedRequest.meetingDurationMinutes} min • Deadline {toReadableDateTime(selectedRequest.deadlineAt, selectedRequest.timezone)}
+                          <div className="flex flex-wrap gap-2">
+                            {selectedRequest.status === 'draft' && (
+                              <button
+                                type="button"
+                                onClick={() => selectedRequestId && sendDraftInvites(selectedRequestId)}
+                                disabled={sendingRequestId === selectedRequestId}
+                                className="inline-flex items-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-2.5 text-sm font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                              >
+                                <Mail className="w-4 h-4" />
+                                {sendingRequestId === selectedRequestId ? 'Sending…' : 'Send invitations'}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => copyAllLinks(selectedRequest)}
+                              className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 px-4 py-2.5 text-sm hover:bg-zinc-900"
+                            >
+                              <Copy className="w-4 h-4" />
+                              Copy all links
+                            </button>
                           </div>
                         </div>
-                        <div className="flex flex-wrap gap-2 text-xs">
-                          <span className={`rounded-full border px-3 py-1.5 ${
-                            selectedRequest.status === 'draft'
-                              ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
-                              : selectedRequest.status === 'closed'
-                                ? 'border-zinc-800 bg-zinc-900'
-                                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                          }`}>
-                            {selectedRequest.status}
-                          </span>
-                          <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1.5">
-                            {selectedRequest.analysis.respondedParticipantCount}/{selectedRequest.analysis.totalParticipants} responded
-                          </span>
-                          <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1.5">
-                            {selectedRequest.analysis.fullMatchCandidates.length} full-match windows
-                          </span>
-                          <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1.5">
-                            {selectedRequest.analysis.bestCandidates.length} ranked candidates
-                          </span>
+
+                        {selectedRequest.status === 'draft' && (
+                          <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
+                            This request is still a draft. Guests have not been emailed yet, so nothing is live until you click send.
+                          </div>
+                        )}
+
+                        {selectedRequest.analysis.pendingParticipantNames.length > 0 && (
+                          <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
+                            Waiting on: {selectedRequest.analysis.pendingParticipantNames.join(', ')}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                          <div>
+                            <h3 className="text-xl font-semibold">Send preview email</h3>
+                            <p className="mt-1 text-sm text-zinc-400">
+                              Email yourself a real guest link so you can walk through the recipient flow before you send the full batch.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1fr_1.1fr_auto]">
+                          <input
+                            value={previewRecipientName}
+                            onChange={(event) => setPreviewRecipientName(event.target.value)}
+                            className="rounded-xl border border-zinc-800 bg-zinc-950/90 px-4 py-3 text-white"
+                            placeholder="Preview recipient name"
+                          />
+                          <input
+                            value={previewRecipientEmail}
+                            onChange={(event) => setPreviewRecipientEmail(event.target.value)}
+                            className="rounded-xl border border-zinc-800 bg-zinc-950/90 px-4 py-3 text-white"
+                            placeholder="Preview recipient email"
+                          />
+                          <select
+                            value={previewInviteToken}
+                            onChange={(event) => setPreviewInviteToken(event.target.value)}
+                            className="rounded-xl border border-zinc-800 bg-zinc-950/90 px-4 py-3 text-white"
+                          >
+                            <option value="">Choose guest link to preview</option>
+                            {previewGuestInvites.map((invite) => (
+                              <option key={invite.token} value={invite.token}>
+                                {invite.name}{invite.email ? ` • ${invite.email}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={sendPreviewEmail}
+                            disabled={previewSending}
+                            className="rounded-xl bg-[#E0FE10] px-4 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                          >
+                            {previewSending ? 'Sending…' : 'Send preview'}
+                          </button>
+                        </div>
+
+                        <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-4 text-sm text-zinc-400">
+                          The preview email uses the selected participant’s real scheduling link. If you submit availability through it, that response will count for that guest on this request.
                         </div>
                       </div>
 
-                      {selectedRequest.status === 'draft' && (
-                        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-4 md:flex-row md:items-center md:justify-between">
-                          <div className="text-sm text-amber-100">
-                            This request is still a draft. Guests have not been emailed yet, so responses will not start coming in until you send the invitations.
+                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                        <h3 className="text-xl font-semibold">Everyone who has entered availability</h3>
+                        <div className="mt-1 text-sm text-zinc-400">
+                          These are the people currently contributing to the overlap view.
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-3">
+                          {respondedInvites.map((invite) => (
+                            <div key={invite.token} className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/80 px-4 py-3">
+                              <AvatarBubble name={invite.name} imageUrl={invite.imageUrl} />
+                              <div>
+                                <div className="font-medium">
+                                  {invite.name}
+                                  {invite.participantType === 'host' ? ' • Host' : ''}
+                                </div>
+                                <div className="text-xs text-zinc-500">
+                                  {invite.availabilityCount} slot{invite.availabilityCount === 1 ? '' : 's'}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+
+                          {!respondedInvites.length && (
+                            <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                              No one has submitted availability yet.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <h3 className="text-xl font-semibold">Full availability calendar</h3>
+                            <p className="mt-1 text-sm text-zinc-400">
+                              Each date shows the people who have supplied availability for that day.
+                            </p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => selectedRequestId && sendDraftInvites(selectedRequestId)}
-                            disabled={sendingRequestId === selectedRequestId}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-2.5 text-sm font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
-                          >
-                            <Mail className="w-4 h-4" />
-                            {sendingRequestId === selectedRequestId ? 'Sending…' : 'Send invitations'}
-                          </button>
                         </div>
-                      )}
 
-                      {selectedRequest.analysis.pendingParticipantNames.length > 0 && (
-                        <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                          Waiting on: {selectedRequest.analysis.pendingParticipantNames.join(', ')}
+                        <div className="mt-5 grid grid-cols-7 gap-2 text-center text-xs uppercase tracking-[0.18em] text-zinc-500">
+                          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                            <div key={day} className="py-2">
+                              {day}
+                            </div>
+                          ))}
                         </div>
-                      )}
-                    </div>
 
-                    <div className="grid grid-cols-1 gap-4">
-                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
+                        <div className="mt-3 grid grid-cols-7 gap-2">
+                          {requestCalendarDays.map((day) => {
+                            const dateKey = format(day, 'yyyy-MM-dd');
+                            const inTargetMonth = isSameMonth(
+                              day,
+                              parse(`${selectedRequest.targetMonth}-01`, 'yyyy-MM-dd', new Date())
+                            );
+                            const dayInvites = resolveSelectedInvitesForDate(dateKey);
+
+                            return (
+                              <div
+                                key={dateKey}
+                                className={`min-h-[145px] rounded-2xl border p-3 ${
+                                  inTargetMonth
+                                    ? dayInvites.length
+                                      ? 'border-[#E0FE10]/30 bg-[#E0FE10]/6'
+                                      : 'border-zinc-800 bg-zinc-950/60'
+                                    : 'border-zinc-900 bg-zinc-950/30 text-zinc-700'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="text-sm font-medium">{format(day, 'd')}</div>
+                                  {inTargetMonth && dayInvites.length > 0 && (
+                                    <div className="rounded-full border border-zinc-800 bg-black px-2 py-1 text-[10px] text-zinc-300">
+                                      {dayInvites.length}/{selectedRequest.analysis.totalParticipants}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {inTargetMonth && dayInvites.length > 0 && (
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {dayInvites.slice(0, 6).map((invite) => (
+                                      <AvatarBubble
+                                        key={`${dateKey}-${invite.token}`}
+                                        name={invite.name}
+                                        imageUrl={invite.imageUrl}
+                                        size="h-8 w-8"
+                                      />
+                                    ))}
+                                    {dayInvites.length > 6 && (
+                                      <div className="flex h-8 min-w-[32px] items-center justify-center rounded-full border border-zinc-800 bg-black px-2 text-xs text-zinc-300">
+                                        +{dayInvites.length - 6}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {inTargetMonth && dayInvites.length > 0 && (
+                                  <div className="mt-3 text-[11px] text-zinc-400">
+                                    {dayInvites.map((invite) => invite.name).join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div>
-                            <h3 className="text-lg font-semibold">Request settings</h3>
-                            <p className="text-sm text-zinc-400 mt-1">
+                            <h3 className="text-xl font-semibold">Request settings</h3>
+                            <p className="mt-1 text-sm text-zinc-400">
                               Update the live request without rebuilding the links. If you change the meeting length or timezone, Group Meet clears the final choice and calendar invite so you can recompute cleanly.
                             </p>
                           </div>
@@ -1499,7 +1762,7 @@ const GroupMeetAdminPage: React.FC = () => {
                           </button>
                         </div>
 
-                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
                           <label className="block">
                             <span className="block text-sm text-zinc-300 mb-2">Meeting title</span>
                             <input
@@ -1546,11 +1809,11 @@ const GroupMeetAdminPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
+                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div>
-                            <h3 className="text-lg font-semibold">AI recommendation</h3>
-                            <p className="text-sm text-zinc-400 mt-1">
+                            <h3 className="text-xl font-semibold">AI recommendation</h3>
+                            <p className="mt-1 text-sm text-zinc-400">
                               The AI summarizes the current overlap picture and suggests a few host-ready options. The host still chooses the final block.
                             </p>
                           </div>
@@ -1587,42 +1850,6 @@ const GroupMeetAdminPage: React.FC = () => {
                                 </div>
                               </div>
                             )}
-
-                            <div className="space-y-3">
-                              {selectedRequest.aiRecommendation.recommendations.map((recommendation) => (
-                                <div key={recommendation.candidateKey} className="rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-4">
-                                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                    <div>
-                                      <div className="font-medium">
-                                        AI Pick #{recommendation.rank} • {formatMonthDate(recommendation.date)} • {formatMinutesAsTime(recommendation.startMinutes)} - {formatMinutesAsTime(recommendation.endMinutes)}
-                                      </div>
-                                      <div className="text-sm text-zinc-400 mt-1">
-                                        {recommendation.participantCount}/{recommendation.totalParticipants} available
-                                        {recommendation.allAvailable ? ' • works for everyone' : ''}
-                                      </div>
-                                      <div className="text-sm text-zinc-200 mt-3">{recommendation.reason}</div>
-                                      <div className="text-xs text-zinc-500 mt-2">
-                                        Available: {recommendation.participantNames.join(', ') || 'None'}
-                                      </div>
-                                      <div className="text-xs text-zinc-500 mt-1">
-                                        {recommendation.missingParticipantNames.length
-                                          ? `Missing: ${recommendation.missingParticipantNames.join(', ')}`
-                                          : 'Missing: none'}
-                                      </div>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => finalizeCandidate(recommendation.candidateKey)}
-                                      disabled={finalizeLoading}
-                                      className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-2 text-xs hover:bg-zinc-900 disabled:opacity-50"
-                                    >
-                                      <CheckCircle2 className="w-4 h-4" />
-                                      Choose this block
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
                           </div>
                         ) : (
                           <div className="mt-4 rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
@@ -1631,11 +1858,68 @@ const GroupMeetAdminPage: React.FC = () => {
                         )}
                       </div>
 
-                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
+                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                        <h3 className="text-xl font-semibold mb-3">Best candidate windows</h3>
+                        <div className="space-y-3">
+                          {selectedRequest.analysis.bestCandidates.map((candidate, index) => (
+                            <div key={`${candidate.date}-${candidate.earliestStartMinutes}-${index}`} className="rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-4">
+                              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <div>
+                                  <div className="font-medium">
+                                    #{index + 1} • {formatCandidateLabel(candidate)}
+                                  </div>
+                                  <div className="text-sm text-zinc-400 mt-1">
+                                    {candidate.participantCount}/{candidate.totalParticipants} participants available
+                                    {candidate.flexibilityMinutes > 0
+                                      ? ` • start anytime from ${formatMinutesAsTime(candidate.earliestStartMinutes)} to ${formatMinutesAsTime(candidate.latestStartMinutes)}`
+                                      : ''}
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => copyCandidateSummary(candidate)}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900"
+                                  >
+                                    <Copy className="w-4 h-4" />
+                                    Copy
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => finalizeCandidate(buildGroupMeetCandidateKey(candidate.date, candidate.suggestedStartMinutes))}
+                                    disabled={finalizeLoading}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900 disabled:opacity-50"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    Select final block
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {resolveSelectedInvitesForCandidate(candidate).map((invite) => (
+                                  <div key={`${candidate.date}-${candidate.earliestStartMinutes}-${invite.token}`} className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-black px-3 py-1.5 text-xs text-zinc-300">
+                                    <AvatarBubble name={invite.name} imageUrl={invite.imageUrl} size="h-6 w-6" />
+                                    <span>{invite.name}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+
+                          {!selectedRequest.analysis.bestCandidates.length && (
+                            <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                              No candidate meeting windows yet. We either need more responses or the current ranges do not overlap for the selected duration.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div>
-                            <h3 className="text-lg font-semibold">Host final decision</h3>
-                            <p className="text-sm text-zinc-400 mt-1">Save the final block the host wants to move forward with. This is the handoff point before calendar invite automation.</p>
+                            <h3 className="text-xl font-semibold">Host final decision</h3>
+                            <p className="mt-1 text-sm text-zinc-400">Save the final block the host wants to move forward with. This is the handoff point before calendar invite automation.</p>
                           </div>
                         </div>
 
@@ -1658,20 +1942,6 @@ const GroupMeetAdminPage: React.FC = () => {
                             <div className="text-sm text-emerald-50/90 mt-2">
                               Selected by {selectedRequest.finalSelection.selectedByEmail || 'host'} on {toReadableDateTime(selectedRequest.finalSelection.selectedAt, selectedRequest.timezone)}
                             </div>
-                            <div className="text-xs text-emerald-50/80 mt-2">
-                              Available: {selectedRequest.finalSelection.participantNames.join(', ') || 'None'}
-                            </div>
-                            <div className="text-xs text-emerald-50/80 mt-1">
-                              {selectedRequest.finalSelection.missingParticipantNames.length
-                                ? `Missing: ${selectedRequest.finalSelection.missingParticipantNames.join(', ')}`
-                                : 'Missing: none'}
-                            </div>
-                            {selectedRequest.finalSelection.hostNote && (
-                              <div className="mt-3 text-sm text-emerald-50/95">
-                                Note: {selectedRequest.finalSelection.hostNote}
-                              </div>
-                            )}
-
                             <div className="mt-4 flex flex-wrap gap-3">
                               <button
                                 type="button"
@@ -1697,17 +1967,6 @@ const GroupMeetAdminPage: React.FC = () => {
                                   Open event
                                 </a>
                               )}
-                              {selectedRequest.calendarInvite?.meetLink && (
-                                <a
-                                  href={selectedRequest.calendarInvite.meetLink}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 px-4 py-2.5 text-sm hover:bg-zinc-900"
-                                >
-                                  <Mail className="w-4 h-4" />
-                                  Open Meet link
-                                </a>
-                              )}
                             </div>
                           </div>
                         ) : (
@@ -1715,168 +1974,10 @@ const GroupMeetAdminPage: React.FC = () => {
                             No final block selected yet.
                           </div>
                         )}
-
-                        <div
-                          className={`mt-4 rounded-2xl border px-4 py-4 ${
-                            selectedRequest.calendarSetup.ready
-                              ? 'border-emerald-500/20 bg-emerald-500/10'
-                              : 'border-amber-500/20 bg-amber-500/10'
-                          }`}
-                        >
-                          <div
-                            className={`font-medium ${
-                              selectedRequest.calendarSetup.ready ? 'text-emerald-100' : 'text-amber-100'
-                            }`}
-                          >
-                            Calendar setup: {selectedRequest.calendarSetup.ready ? 'ready' : 'needs attention'}
-                          </div>
-                          <div
-                            className={`mt-2 text-sm ${
-                              selectedRequest.calendarSetup.ready ? 'text-emerald-50/90' : 'text-amber-50/90'
-                            }`}
-                          >
-                            {selectedRequest.calendarSetup.message}
-                          </div>
-                          <div
-                            className={`mt-2 text-xs ${
-                              selectedRequest.calendarSetup.ready ? 'text-emerald-50/80' : 'text-amber-50/80'
-                            }`}
-                          >
-                            Source: {selectedRequest.calendarSetup.source} • Calendar: {selectedRequest.calendarSetup.calendarId || 'primary'} • Delegated user: {selectedRequest.calendarSetup.delegatedUserEmail || 'missing'}
-                          </div>
-                          {selectedRequest.calendarSetup.secretName && (
-                            <div
-                              className={`mt-1 text-xs ${
-                                selectedRequest.calendarSetup.ready ? 'text-emerald-50/80' : 'text-amber-50/80'
-                              }`}
-                            >
-                              Secret Manager secret: {selectedRequest.calendarSetup.secretName}
-                            </div>
-                          )}
-                        </div>
-
-                        {selectedRequest.calendarInvite && (
-                          <div className="mt-4 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
-                            <div className="font-medium text-blue-100">
-                              Calendar invite {selectedRequest.calendarInvite.status}
-                            </div>
-                            <div className="text-sm text-blue-50/90 mt-2">
-                              Organizer: {selectedRequest.calendarInvite.organizerEmail || 'Configured calendar account'}
-                            </div>
-                            <div className="text-sm text-blue-50/90 mt-1">
-                              Updated: {toReadableDateTime(selectedRequest.calendarInvite.updatedAt, selectedRequest.timezone)}
-                            </div>
-                            <div className="text-xs text-blue-50/80 mt-2">
-                              Attendees emailed: {selectedRequest.calendarInvite.attendeeEmails.join(', ') || 'None'}
-                            </div>
-                            {selectedRequest.calendarInvite.skippedParticipantNames.length > 0 && (
-                              <div className="text-xs text-blue-50/80 mt-1">
-                                No email on file: {selectedRequest.calendarInvite.skippedParticipantNames.join(', ')}
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
 
-                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
-                        <h3 className="text-lg font-semibold mb-3">Best candidate windows</h3>
-                        <div className="space-y-3">
-                          {selectedRequest.analysis.bestCandidates.map((candidate, index) => (
-                            <div key={`${candidate.date}-${candidate.earliestStartMinutes}-${index}`} className="rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-4">
-                              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                <div>
-                                  <div className="font-medium">
-                                    #{index + 1} • {formatCandidateLabel(candidate)}
-                                  </div>
-                                  <div className="text-sm text-zinc-400 mt-1">
-                                    {candidate.participantCount}/{candidate.totalParticipants} participants available
-                                    {candidate.flexibilityMinutes > 0
-                                      ? ` • start anytime from ${formatMinutesAsTime(candidate.earliestStartMinutes)} to ${formatMinutesAsTime(candidate.latestStartMinutes)}`
-                                      : ''}
-                                  </div>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => copyCandidateSummary(candidate)}
-                                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900"
-                                >
-                                  <Copy className="w-4 h-4" />
-                                  Copy
-                                </button>
-                              </div>
-
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                {resolveSelectedInvitesForCandidate(candidate).map((invite) => (
-                                  <div key={`${candidate.date}-${candidate.earliestStartMinutes}-${invite.token}`} className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-black px-3 py-1.5 text-xs text-zinc-300">
-                                    <AvatarBubble name={invite.name} imageUrl={invite.imageUrl} size="h-6 w-6" />
-                                    <span>{invite.name}</span>
-                                  </div>
-                                ))}
-                              </div>
-
-                              <div className="mt-3 text-sm text-zinc-300">
-                                Available: {candidate.participantNames.join(', ') || 'None'}
-                              </div>
-                              <div className="mt-1 text-sm text-zinc-500">
-                                {candidate.missingParticipantNames.length
-                                  ? `Missing: ${candidate.missingParticipantNames.join(', ')}`
-                                  : 'Missing: none'}
-                              </div>
-                              <div className="mt-3">
-                                <button
-                                  type="button"
-                                  onClick={() => finalizeCandidate(buildGroupMeetCandidateKey(candidate.date, candidate.suggestedStartMinutes))}
-                                  disabled={finalizeLoading}
-                                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900 disabled:opacity-50"
-                                >
-                                  <CheckCircle2 className="w-4 h-4" />
-                                  Select final block
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-
-                          {!selectedRequest.analysis.bestCandidates.length && (
-                            <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
-                              No candidate meeting windows yet. We either need more responses or the current ranges do not overlap for the selected duration.
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
-                        <h3 className="text-lg font-semibold mb-3">Best dates by response coverage</h3>
-                        <div className="space-y-2">
-                          {selectedRequest.analysis.dateSummaries.map((day) => (
-                            <div key={day.date} className="rounded-xl border border-zinc-800/70 bg-zinc-950/80 px-4 py-3">
-                              <div className="font-medium">{formatMonthDate(day.date)}</div>
-                              <div className="text-sm text-zinc-400 mt-1">
-                                {day.availableParticipantCount}/{selectedRequest.analysis.totalParticipants} participants added availability
-                              </div>
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                {resolveSelectedInvitesForDate(day.date).map((invite) => (
-                                  <div key={`${day.date}-${invite.token}`} className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-black px-3 py-1.5 text-xs text-zinc-300">
-                                    <AvatarBubble name={invite.name} imageUrl={invite.imageUrl} size="h-6 w-6" />
-                                    <span>{invite.name}</span>
-                                  </div>
-                                ))}
-                              </div>
-                              <div className="text-xs text-zinc-500 mt-2">
-                                {day.participantNames.join(', ') || 'No one yet'}
-                              </div>
-                            </div>
-                          ))}
-
-                          {!selectedRequest.analysis.dateSummaries.length && (
-                            <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
-                              No availability has been submitted yet.
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
-                        <h3 className="text-lg font-semibold mb-3">Participant breakdown</h3>
+                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                        <h3 className="text-xl font-semibold mb-3">Participant breakdown</h3>
                         <div className="space-y-2">
                           {selectedRequest.invites.map((invite) => (
                             <div key={invite.token} className="rounded-xl border border-zinc-800/70 bg-zinc-950/80 px-4 py-3">
@@ -1884,13 +1985,13 @@ const GroupMeetAdminPage: React.FC = () => {
                                 <div className="flex items-center gap-3">
                                   <AvatarBubble name={invite.name} imageUrl={invite.imageUrl} />
                                   <div>
-                                  <div className="font-medium">
-                                    {invite.name}
-                                    {invite.participantType === 'host' ? ' • Host' : ''}
-                                  </div>
-                                  <div className="text-xs text-zinc-500">
-                                    {invite.email || 'Manual link'} • {invite.respondedAt ? 'Responded' : 'Waiting'} • {invite.availabilityCount} slots
-                                  </div>
+                                    <div className="font-medium">
+                                      {invite.name}
+                                      {invite.participantType === 'host' ? ' • Host' : ''}
+                                    </div>
+                                    <div className="text-xs text-zinc-500">
+                                      {invite.email || 'Manual link'} • {invite.respondedAt ? 'Responded' : 'Waiting'} • {invite.availabilityCount} slots
+                                    </div>
                                   </div>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
@@ -1931,12 +2032,11 @@ const GroupMeetAdminPage: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-              )}
-            </section>
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </AdminRouteGuard>

@@ -21,6 +21,34 @@ Optional (already used in several functions):
 
 **Do not add new “Brevo key” env var names.** If you need a Brevo key, use `BREVO_MARKETING_KEY` (or `BREVO_API_KEY` as fallback).
 
+## Source-of-truth location (current operational reality)
+
+Brevo email code in this repo currently reads these values directly from runtime env:
+
+- `BREVO_MARKETING_KEY`
+- `BREVO_API_KEY`
+- `BREVO_SENDER_EMAIL`
+- `BREVO_SENDER_NAME`
+
+As of the Apr 3, 2026 audit:
+
+- the linked Netlify project `quickliftsapp` does not currently expose Brevo vars through `netlify env:list`
+- the documented Secret Manager projects `quicklifts-dev-01` and `quicklifts-dd3f1` do not currently contain Brevo secrets
+- the working code paths like Friends of the Business and Group Meet therefore rely on the same env contract, not a hidden alternate provider
+
+That means if Brevo works on one machine and not another, the first thing to verify is env parity rather than application logic.
+
+Recommended verification commands:
+
+```bash
+./node_modules/.bin/netlify env:list --context all --json
+gcloud secrets list --project=quicklifts-dev-01
+gcloud secrets list --project=quicklifts-dd3f1
+node env-check.js
+```
+
+For cross-machine setup, the encrypted local-machine bundle is now expected to carry the Brevo vars too. See `docs/testing/local-machine-setup.md`.
+
 ---
 
 ## The API call (existing pattern)
@@ -151,4 +179,3 @@ Coach escalation emails should:
 - **Sender domain issues**: ensure `BREVO_SENDER_EMAIL` is verified in Brevo.
 - **Silent failures**: log `resp.status` + response body text on non-2xx.
 - **Links wrong**: confirm `SITE_URL` is set for the environment (`https://fitwithpulse.ai` in production).
-

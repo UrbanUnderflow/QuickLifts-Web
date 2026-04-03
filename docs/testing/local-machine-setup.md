@@ -193,6 +193,10 @@ These are not required just to get local Playwright bootstrap working, but they 
 
 ```bash
 NEXT_PUBLIC_OPENAI_API_KEY
+BREVO_MARKETING_KEY
+BREVO_API_KEY
+BREVO_SENDER_EMAIL
+BREVO_SENDER_NAME
 OURA_CLIENT_ID
 OURA_CLIENT_SECRET
 OURA_REDIRECT_URI
@@ -213,6 +217,7 @@ SITE_URL
 ```
 
 If the goal is only "run Playwright on another machine," you do not need to block on every key in this section.
+If the goal includes testing Group Meet invite sends or preview-email flows locally, the Brevo keys in this section do need to come over to the machine.
 
 ## Playwright Bootstrap Secret
 

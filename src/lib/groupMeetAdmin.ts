@@ -124,11 +124,14 @@ export async function sendGroupMeetInviteEmail(args: {
   recipientName: string;
   recipientEmail: string;
   shareUrl: string;
-  mode?: 'live' | 'test';
+  mode?: 'live' | 'test' | 'preview';
 }) {
   const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
   if (!apiKey) {
-    return { success: false, error: 'Brevo not configured' };
+    return {
+      success: false,
+      error: 'Brevo not configured in runtime env.',
+    };
   }
 
   const mode = args.mode || 'live';
@@ -137,7 +140,9 @@ export async function sendGroupMeetInviteEmail(args: {
   const subject =
     mode === 'test'
       ? `[Test] ${args.requestTitle} availability request`
-      : `${args.requestTitle} availability request`;
+      : mode === 'preview'
+        ? `[Preview] ${args.requestTitle} availability request`
+        : `${args.requestTitle} availability request`;
   const deadlineLabel = new Date(args.deadlineAt).toLocaleString('en-US', {
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -146,15 +151,26 @@ export async function sendGroupMeetInviteEmail(args: {
   const introHtml =
     mode === 'test'
       ? `<p style="margin:0 0 14px;padding:12px 14px;border-radius:12px;background:#f4f4f5;color:#18181b;"><strong>Test email:</strong> this is a standalone Group Meet delivery preview. The button below is only for previewing the email experience.</p>`
+      : mode === 'preview'
+        ? `<p style="margin:0 0 14px;padding:12px 14px;border-radius:12px;background:#f4f4f5;color:#18181b;"><strong>Preview email:</strong> this message uses a real Group Meet guest link so you can walk through the recipient experience before sending the full batch.</p>`
       : '';
   const promptCopy =
     mode === 'test'
       ? 'This is how a Group Meet invite email will look when you send a real request.'
+      : mode === 'preview'
+        ? 'This preview opens the real guest scheduling flow for the selected participant.'
       : `Please send your availability for <strong>${escapeHtml(args.requestTitle)}</strong>.`;
-  const buttonLabel = mode === 'test' ? 'Open Group Meet admin' : 'Enter availability';
+  const buttonLabel =
+    mode === 'test'
+      ? 'Open Group Meet admin'
+      : mode === 'preview'
+        ? 'Open guest link'
+        : 'Enter availability';
   const footerCopy =
     mode === 'test'
       ? 'Because this is only a test email, the button routes back to the internal Group Meet tool.'
+      : mode === 'preview'
+        ? 'Because this is a preview email, the button opens the selected participant link directly.'
       : 'If the button does not work, use this link:';
 
   const htmlContent = `

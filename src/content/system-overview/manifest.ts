@@ -673,11 +673,12 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       name: 'Brevo',
       purpose: 'Email lifecycle sequences, waitlists, and growth communications.',
       owner: 'Growth Ops',
-      credentialSource: 'Netlify environment variables',
+      credentialSource: 'Runtime env vars (`BREVO_MARKETING_KEY` / `BREVO_API_KEY`) with local-machine bundle parity; not currently mirrored in documented Secret Manager projects',
       products: ['QuickLifts Web'],
       status: 'active',
       sourceRefs: [
         { label: 'Brevo Notes', path: 'docs/Brevo implementation do.md' },
+        { label: 'Local Machine Setup', path: 'docs/testing/local-machine-setup.md' },
         { label: 'Email Sequences Admin', path: 'src/pages/admin/emailSequences.tsx' },
       ],
     },

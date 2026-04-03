@@ -27,6 +27,14 @@ const GROUP_MEET_ROWS = [
   ['Meet / Calendar creation', 'Google Calendar API via service account + domain-wide delegation', 'Host picks final block, backend creates or updates the event, Google distributes attendee invites.'],
 ];
 
+const BREVO_ROWS = [
+  ['Transactional API key', '`BREVO_MARKETING_KEY` preferred, `BREVO_API_KEY` fallback', 'These are the only approved Brevo key env names across the repo. Shared helpers and working email flows already read this pair.'],
+  ['Sender identity', '`BREVO_SENDER_EMAIL` + `BREVO_SENDER_NAME`', 'Optional overrides used by many functions. If omitted, individual flows fall back to hardcoded sender defaults.'],
+  ['Current runtime contract', 'Netlify runtime env or local `.env.local`', 'All audited Brevo send helpers currently read plain env vars at runtime; there is no existing Brevo-specific Secret Manager bridge in code today.'],
+  ['Cross-machine bootstrap', '`scripts/export-local-machine-setup.cjs`', 'The local machine setup bundle now carries Brevo envs so a new machine can inherit the same email setup instead of silently losing it.'],
+  ['Current audit finding', 'Documentation gap previously hid the real source', 'As of Apr 3, 2026, the linked Netlify project `quickliftsapp` exposes only `NODE_VERSION`, and the documented GCP projects `quicklifts-dev-01` / `quicklifts-dd3f1` do not currently hold Brevo secrets in Secret Manager.'],
+];
+
 const OPERATING_STEPS = [
   {
     title: 'Decide where a new secret belongs before shipping',
@@ -56,7 +64,7 @@ export default function InfrastructureSecretsStackTab() {
       <DocHeader
         eyebrow="Infrastructure Handbook"
         title="Infrastructure & Secrets Stack"
-        version="Updated Mar 19, 2026"
+        version="Updated Apr 3, 2026"
         summary="Source-of-truth reference for how QuickLifts Web, Firebase, Netlify, Google Cloud, Google Workspace, and Secret Manager relate to each other operationally, with explicit rules for where sensitive credentials should live."
         highlights={[
           {
@@ -70,6 +78,10 @@ export default function InfrastructureSecretsStackTab() {
           {
             title: 'Secret Manager Owns High-Sensitivity Machine Secrets',
             body: 'Large or infrastructure-grade credentials such as Google service-account JSON blobs belong in Secret Manager rather than Netlify env vars or Firebase.',
+          },
+          {
+            title: 'Brevo Is Env-Backed Today',
+            body: 'Brevo email sends currently depend on `BREVO_MARKETING_KEY` or `BREVO_API_KEY` from runtime env, and that source must be documented and carried forward explicitly.',
           },
         ]}
       />
@@ -124,6 +136,40 @@ export default function InfrastructureSecretsStackTab() {
             body="Because meetings@fitwithpulse.ai is currently an alias of tre@fitwithpulse.ai, the delegated calendar owner must remain the real mailbox until a standalone scheduler user exists."
           />
         </CardGrid>
+      </SectionBlock>
+
+      <SectionBlock icon={KeyRound} title="Brevo Email Credential Contract">
+        <DataTable columns={['Concern', 'Canonical Home', 'Notes']} rows={BREVO_ROWS} />
+        <CardGrid columns="xl:grid-cols-2">
+          <InfoCard
+            title="Current Reality"
+            accent="amber"
+            body="Friends of the Business, Group Meet, welcome emails, and other transactional flows all reuse the same Brevo env pattern. They are not pulling from a hidden alternate key source today."
+          />
+          <InfoCard
+            title="Verification Checklist"
+            accent="blue"
+            body={
+              <>
+                Verify the actual runtime source before debugging app code:
+                <br />
+                <code className="text-xs">./node_modules/.bin/netlify env:list --context all --json</code>
+                <br />
+                <code className="text-xs">gcloud secrets list --project=quicklifts-dev-01</code>
+                <br />
+                <code className="text-xs">gcloud secrets list --project=quicklifts-dd3f1</code>
+              </>
+            }
+          />
+        </CardGrid>
+        <BulletList
+          items={[
+            'If Brevo works on one machine and fails on another, first compare `BREVO_MARKETING_KEY`, `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, and `BREVO_SENDER_NAME` before changing application code.',
+            'Do not invent new Brevo env names. Shared helpers and handbook docs are standardized on `BREVO_MARKETING_KEY` with `BREVO_API_KEY` as fallback.',
+            'If a future decision moves Brevo into Secret Manager, add one documented bridge in shared runtime code and update this handbook at the same time.',
+            'Until that bridge exists, local machine bootstrap and Netlify env parity are the operational source of truth for Brevo sends.',
+          ]}
+        />
       </SectionBlock>
 
       <SectionBlock icon={Server} title="Runtime Boundary">
