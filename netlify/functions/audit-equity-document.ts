@@ -1,4 +1,5 @@
 import { Handler } from '@netlify/functions';
+import { resolveOpenAIApiKey } from './utils/resolveOpenAIApiKey';
 
 const AUDIT_CRITERIA: Record<string, string[]> = {
   option_agreement: [
@@ -107,9 +108,9 @@ const handler: Handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required field: content' }) };
     }
 
-    const openaiApiKey = process.env.OPEN_AI_SECRET_KEY;
+    const openaiApiKey = resolveOpenAIApiKey();
     if (!openaiApiKey) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'OpenAI API key not configured' }) };
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'OpenAI API key not configured. Set OPENAI_API_KEY or OPEN_AI_SECRET_KEY.' }) };
     }
 
     const criteria = AUDIT_CRITERIA[documentType] || AUDIT_CRITERIA.default;

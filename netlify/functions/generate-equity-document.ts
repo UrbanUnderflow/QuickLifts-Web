@@ -1,9 +1,6 @@
 import { Handler } from '@netlify/functions';
 import OpenAI from 'openai';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPEN_AI_SECRET_KEY,
-});
+import { resolveOpenAIApiKey } from './utils/resolveOpenAIApiKey';
 
 interface RequestBody {
   stakeholderId?: string;
@@ -41,6 +38,10 @@ const getGrantDate = (data: RequestBody) => {
   return data.boardApprovalDate || formatHumanDate(data.grantDetails?.vestingStartDate) || formatHumanDate(new Date().toISOString());
 };
 
+const getVestingCommencementDate = (data: RequestBody) => {
+  return data.boardApprovalDate || formatHumanDate(data.grantDetails?.vestingStartDate) || getGrantDate(data);
+};
+
 const getCurrentHumanDate = () =>
   new Date().toLocaleDateString('en-US', {
     year: 'numeric',
@@ -52,11 +53,14 @@ const getDocumentDate = (data: RequestBody) => {
   return data.documentDate || data.boardApprovalDate || getCurrentHumanDate();
 };
 
-const getVestingInstructionBlock = (grantDetails?: RequestBody['grantDetails']) => {
+const getVestingInstructionBlock = (
+  grantDetails?: RequestBody['grantDetails'],
+  vestingCommencementDate?: string
+) => {
   const numberOfShares = Math.max(0, grantDetails?.numberOfShares || 0);
   const vestingMonths = Math.max(1, grantDetails?.vestingMonths || 24);
   const cliffMonths = Math.max(0, Math.min(grantDetails?.cliffMonths || 0, vestingMonths));
-  const vestingStartDate = formatHumanDate(grantDetails?.vestingStartDate) || 'the Vesting Commencement Date';
+  const vestingStartDate = vestingCommencementDate || formatHumanDate(grantDetails?.vestingStartDate) || 'the Vesting Commencement Date';
 
   if (!numberOfShares) {
     return `- State the vesting mechanics clearly, including cliff treatment, monthly vesting cadence, and how any rounding remainder is handled on the final vesting date.`;
@@ -197,7 +201,7 @@ DOCUMENT STRUCTURE REQUIREMENTS:
    - Resolution authorizing officers to execute the Option Agreement and any related documents
    - Do NOT say the Board is ratifying prior actions or approving the grant retroactively unless the prompt explicitly asks for ratification
    - Do NOT include a separate FMV resolution - the FMV is already established in the recitals
-   ${getVestingInstructionBlock(data.grantDetails)}
+   ${getVestingInstructionBlock(data.grantDetails, currentDate)}
 
 5. EFFECTIVENESS AND DATE (MANDATORY - VERIFICATION WILL FAIL WITHOUT THIS):
    - You MUST include this EXACT text with the date filled in: "This Written Consent shall be effective as of ${currentDate} and may be executed in counterparts."
@@ -328,7 +332,7 @@ COMPANY: Pulse Intelligence Labs, Inc., a Delaware corporation
 ADVISOR: ${data.stakeholderName}
 EMAIL: ${data.stakeholderEmail}
 GRANT DATE: ${getGrantDate(data)}
-${data.grantDetails?.vestingStartDate ? `VESTING COMMENCEMENT DATE: ${formatHumanDate(data.grantDetails.vestingStartDate)}` : ''}
+VESTING COMMENCEMENT DATE: ${getVestingCommencementDate(data)}
 
 GRANT DETAILS:
 - Option Type: Non-Qualified Stock Option (NSO)
@@ -354,10 +358,10 @@ SECTION 1 - ADVISOR SERVICES AGREEMENT:
 
 SECTION 2 - GRANT OF NON-QUALIFIED STOCK OPTIONS:
 2.1 Grant - NSO to purchase the specified shares pursuant to the Pulse Intelligence Labs, Inc. Equity Incentive Plan (the "Plan"). CRITICAL: Include this exact sentence: "This Option is granted pursuant to, and subject in all respects to, the terms and conditions of the Pulse Intelligence Labs, Inc. Equity Incentive Plan (the 'Plan'), which is hereby incorporated by reference."${data.boardApprovalDate ? ` CRITICAL: Also include this exact sentence: "The Option was approved by the Board of Directors pursuant to written consent dated ${data.boardApprovalDate}."` : ''}
-2.1A Date Consistency - The Grant Date / Effective Date for the option grant must be ${getGrantDate(data)}.${data.boardApprovalDate ? ` Do NOT use a different grant date elsewhere in the document.` : ''}${data.grantDetails?.vestingStartDate && formatHumanDate(data.grantDetails.vestingStartDate) !== getGrantDate(data) ? ` If you mention ${formatHumanDate(data.grantDetails.vestingStartDate)} anywhere, label it as the "Vesting Commencement Date," not the Grant Date.` : ''}
+2.1A Date Consistency - The Grant Date / Effective Date for the option grant must be ${getGrantDate(data)}. The Vesting Commencement Date must also be ${getVestingCommencementDate(data)}.${data.boardApprovalDate ? ` Do NOT use a different board approval date, grant date, or vesting commencement date elsewhere in the document.` : ''}
 2.2 Exercise Price - Fair market value as determined by the Board
 2.3 Vesting Schedule
-${getVestingInstructionBlock(data.grantDetails)}
+${getVestingInstructionBlock(data.grantDetails, getVestingCommencementDate(data))}
 2.4 Term of Option - 10 years from Grant Date
 2.5 Termination of Service - Unvested options terminate. For advisors, set the post-termination exercise window to six (6) months for vested options (not 90 days). Include clear mechanics and any Plan override language.
 2.6 No Stockholder Rights - Until Option is exercised
@@ -496,6 +500,17 @@ const handler: Handler = async (event) => {
   try {
     const body = JSON.parse(event.body || '{}') as RequestBody;
     const { documentType, stakeholderName } = body;
+    const openaiApiKey = resolveOpenAIApiKey();
+
+    if (!openaiApiKey) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'OpenAI API key not configured. Set OPENAI_API_KEY or OPEN_AI_SECRET_KEY.' }),
+      };
+    }
+
+    const openai = new OpenAI({ apiKey: openaiApiKey });
 
     const template = DOCUMENT_TEMPLATES[documentType];
     

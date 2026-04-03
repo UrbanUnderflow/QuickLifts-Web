@@ -1,9 +1,6 @@
 import { Handler } from '@netlify/functions';
 import OpenAI from 'openai';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPEN_AI_SECRET_KEY,
-});
+import { resolveOpenAIApiKey } from './utils/resolveOpenAIApiKey';
 
 interface RequestBody {
   documentId: string;
@@ -44,6 +41,7 @@ const handler: Handler = async (event) => {
 
   try {
     const body = JSON.parse(event.body || '{}') as RequestBody;
+    const openaiApiKey = resolveOpenAIApiKey();
 
     if (!body.documentId || !body.documentType) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing documentId or documentType' }) };
@@ -56,6 +54,16 @@ const handler: Handler = async (event) => {
     if (!body.revisionPrompt?.trim()) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing revisionPrompt' }) };
     }
+
+    if (!openaiApiKey) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'OpenAI API key not configured. Set OPENAI_API_KEY or OPEN_AI_SECRET_KEY.' }),
+      };
+    }
+
+    const openai = new OpenAI({ apiKey: openaiApiKey });
 
     const contextualHeader = [
       `COMPANY: Pulse Intelligence Labs, Inc., a Delaware corporation`,

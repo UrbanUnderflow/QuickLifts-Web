@@ -305,7 +305,32 @@ const getDateValue = (date?: Timestamp | Date): number => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
+const sortEquityDocumentsNewest = (documents: EquityDocument[]) =>
+  [...documents].sort((a, b) => getDateValue(b.updatedAt || b.createdAt) - getDateValue(a.updatedAt || a.createdAt));
+
+const getEquityDocumentFamilyKey = (equityDoc: EquityDocument) =>
+  `${equityDoc.stakeholderId || 'company'}::${equityDoc.documentType}`;
+
+const getLatestRelevantDocuments = (documents: EquityDocument[]) => {
+  const latestByFamily = new Map<string, EquityDocument>();
+
+  for (const equityDoc of sortEquityDocumentsNewest(documents)) {
+    const familyKey = getEquityDocumentFamilyKey(equityDoc);
+    if (!latestByFamily.has(familyKey)) {
+      latestByFamily.set(familyKey, equityDoc);
+    }
+  }
+
+  return sortEquityDocumentsNewest(Array.from(latestByFamily.values()));
+};
+
+const getDocumentFamilyHistory = (anchorDoc: EquityDocument, documents: EquityDocument[]) =>
+  sortEquityDocumentsNewest(
+    documents.filter(doc => getEquityDocumentFamilyKey(doc) === getEquityDocumentFamilyKey(anchorDoc) && doc.id !== anchorDoc.id)
+  );
+
 const AUTO_EXECUTED_COMPANY_DOC_TYPES = ['board_consent', 'stockholder_consent', 'eip'] as const;
+const LOCAL_EQUITY_FUNCTION_FALLBACK_ORIGIN = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
 
 const isAutoExecutedCompanyDocType = (documentType?: string | null): boolean =>
   Boolean(documentType && AUTO_EXECUTED_COMPANY_DOC_TYPES.includes(documentType as typeof AUTO_EXECUTED_COMPANY_DOC_TYPES[number]));
@@ -329,25 +354,128 @@ const formatLegalDate = (date?: Timestamp | Date): string => {
   });
 };
 
-const parseFunctionResponse = async (response: Response, functionPath: string) => {
+const isLocalEquityRuntime = () =>
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const getEquityFunctionOverrideOrigin = (): string | null => {
+  if (typeof window === 'undefined') return null;
+
+  const localStorageOverride = window.localStorage.getItem('equity_functions_origin');
+  if (localStorageOverride) {
+    return localStorageOverride.replace(/\/+$/, '');
+  }
+
+  const runtimeOverride = (window as typeof window & {
+    __EQUITY_FUNCTIONS_ORIGIN__?: string;
+  }).__EQUITY_FUNCTIONS_ORIGIN__;
+
+  return runtimeOverride ? runtimeOverride.replace(/\/+$/, '') : null;
+};
+
+const getEquityFunctionFallbackOrigin = (): string | null => {
+  if (!isLocalEquityRuntime()) return null;
+  return getEquityFunctionOverrideOrigin() || LOCAL_EQUITY_FUNCTION_FALLBACK_ORIGIN;
+};
+
+const readFunctionPayload = async (response: Response, functionPath: string) => {
   const contentType = response.headers.get('content-type') || '';
   const rawBody = await response.text();
+  let parsed: any = null;
 
-  if (contentType.includes('application/json')) {
+  if (contentType.includes('application/json') && rawBody) {
     try {
-      return JSON.parse(rawBody);
+      parsed = JSON.parse(rawBody);
     } catch {
-      throw new Error(`Received invalid JSON from ${functionPath}.`);
+      if (response.ok) {
+        throw new Error(`Received invalid JSON from ${functionPath}.`);
+      }
     }
   }
 
-  if (!response.ok && rawBody.includes('<!DOCTYPE')) {
-    throw new Error(
+  return { contentType, rawBody, parsed };
+};
+
+const buildFunctionPayloadError = (
+  response: Response,
+  functionPath: string,
+  payload: { contentType: string; rawBody: string; parsed: any }
+) => {
+  if (payload.parsed && typeof payload.parsed.error === 'string') {
+    return new Error(payload.parsed.error);
+  }
+
+  if (!response.ok && payload.rawBody.includes('<!DOCTYPE')) {
+    return new Error(
       `The Netlify function ${functionPath} is not available in this local server. You are likely running plain Next dev. Use Netlify dev and open http://localhost:8888, or run this in the deployed environment.`
     );
   }
 
-  throw new Error(rawBody.slice(0, 200) || `Request to ${functionPath} failed.`);
+  return new Error(payload.rawBody.slice(0, 200) || `Request to ${functionPath} failed.`);
+};
+
+const shouldRetryEquityFunctionRemotely = (
+  functionPath: string,
+  response: Response,
+  payload: { contentType: string; rawBody: string; parsed: any }
+) => {
+  if (!isLocalEquityRuntime()) return false;
+  if (!functionPath.startsWith('/.netlify/functions/')) return false;
+  if (response.ok) return false;
+
+  const errorText = [
+    payload.rawBody,
+    typeof payload.parsed?.error === 'string' ? payload.parsed.error : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return (
+    response.status === 404 ||
+    payload.rawBody.includes('<!DOCTYPE') ||
+    /Function not found/i.test(errorText) ||
+    /OpenAI API key not configured/i.test(errorText) ||
+    /missing OPENAI_API_KEY or OPEN_AI_SECRET_KEY/i.test(errorText) ||
+    /OPEN_AI_SECRET_KEY not configured/i.test(errorText) ||
+    /OPENAI_API_KEY is not configured/i.test(errorText)
+  );
+};
+
+const postEquityFunctionJson = async <T = any>(functionPath: string, requestBody: unknown) => {
+  const requestInit: RequestInit = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody),
+  };
+
+  let response = await fetch(functionPath, requestInit);
+  let payload = await readFunctionPayload(response, functionPath);
+  let usedFallback = false;
+
+  if (shouldRetryEquityFunctionRemotely(functionPath, response, payload)) {
+    const fallbackOrigin = getEquityFunctionFallbackOrigin();
+    if (fallbackOrigin) {
+      const fallbackResponse = await fetch(`${fallbackOrigin}${functionPath}`, requestInit);
+      const fallbackPayload = await readFunctionPayload(fallbackResponse, `${fallbackOrigin}${functionPath}`);
+
+      if (fallbackResponse.ok || fallbackPayload.parsed) {
+        response = fallbackResponse;
+        payload = fallbackPayload;
+        usedFallback = true;
+      }
+    }
+  }
+
+  if (!payload.parsed) {
+    throw buildFunctionPayloadError(response, functionPath, payload);
+  }
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    result: payload.parsed as T,
+    usedFallback,
+  };
 };
 
 // Improved content formatter that properly handles markdown
@@ -831,6 +959,8 @@ const EquityAdminPage: React.FC = () => {
   const [auditingEquityDoc, setAuditingEquityDoc] = useState<EquityDocument | null>(null);
   const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
+  const [isDocHistoryModalOpen, setIsDocHistoryModalOpen] = useState(false);
+  const [docHistoryAnchor, setDocHistoryAnchor] = useState<EquityDocument | null>(null);
   const [isSigningModalOpen, setIsSigningModalOpen] = useState(false);
   const [signingDoc, setSigningDoc] = useState<EquityDocument | null>(null);
   const [signers, setSigners] = useState<SignerRow[]>([]);
@@ -1199,22 +1329,16 @@ const EquityAdminPage: React.FC = () => {
     });
 
     try {
-      const response = await fetch('/.netlify/functions/generate-equity-document', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stakeholderId,
-          stakeholderName,
-          stakeholderEmail,
-          stakeholderType: 'advisor',
-          documentType: 'board_consent',
-          requiresSignature: false,
-          prompt: `Generate a Board Consent (Written Consent of the Board of Directors in Lieu of Meeting) approving equity grant for ${stakeholderName}: ${grantDetails.numberOfShares} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
-          grantDetails,
-        }),
+      const { result } = await postEquityFunctionJson('/.netlify/functions/generate-equity-document', {
+        stakeholderId,
+        stakeholderName,
+        stakeholderEmail,
+        stakeholderType: 'advisor',
+        documentType: 'board_consent',
+        requiresSignature: false,
+        prompt: `Generate a Board Consent (Written Consent of the Board of Directors in Lieu of Meeting) approving equity grant for ${stakeholderName}: ${grantDetails.numberOfShares} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
+        grantDetails,
       });
-
-      const result = await response.json();
 
       if (!result.success || !result.content) {
         throw new Error(result.error || 'Failed to generate Board Consent');
@@ -1286,23 +1410,17 @@ const EquityAdminPage: React.FC = () => {
     });
 
     try {
-      const response = await fetch('/.netlify/functions/generate-equity-document', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stakeholderId,
-          stakeholderName,
-          stakeholderEmail,
-          stakeholderType: 'advisor',
-          documentType: 'advisor_nso_agreement',
-          requiresSignature: true,
-          boardApprovalDate: boardApprovalDate || undefined,
-          prompt: `Generate a combined Advisor Services Agreement and Non-Qualified Stock Option Grant (do not label as FAST unless explicitly requested).`,
-          grantDetails,
-        }),
+      const { result } = await postEquityFunctionJson('/.netlify/functions/generate-equity-document', {
+        stakeholderId,
+        stakeholderName,
+        stakeholderEmail,
+        stakeholderType: 'advisor',
+        documentType: 'advisor_nso_agreement',
+        requiresSignature: true,
+        boardApprovalDate: boardApprovalDate || undefined,
+        prompt: `Generate a combined Advisor Services Agreement and Non-Qualified Stock Option Grant (do not label as FAST unless explicitly requested).`,
+        grantDetails,
       });
-
-      const result = await response.json();
 
       if (!result.success || !result.content) {
         throw new Error(result.error || 'Failed to generate Advisor Agreement');
@@ -1549,22 +1667,16 @@ const EquityAdminPage: React.FC = () => {
       }
 
       // Call API to generate document
-      const response = await fetch('/.netlify/functions/generate-equity-document', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stakeholderId: stakeholder.id,
-          stakeholderName: stakeholder.name,
-          stakeholderEmail: stakeholder.email,
-          stakeholderType: 'advisor',
-          documentType: 'board_consent',
-          requiresSignature: false,
-          prompt: `Generate a Board Consent (Written Consent of the Board of Directors in Lieu of Meeting) approving equity grant for ${stakeholder.name}: ${grantDetails.numberOfShares} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
-          grantDetails,
-        }),
+      const { result } = await postEquityFunctionJson('/.netlify/functions/generate-equity-document', {
+        stakeholderId: stakeholder.id,
+        stakeholderName: stakeholder.name,
+        stakeholderEmail: stakeholder.email,
+        stakeholderType: 'advisor',
+        documentType: 'board_consent',
+        requiresSignature: false,
+        prompt: `Generate a Board Consent (Written Consent of the Board of Directors in Lieu of Meeting) approving equity grant for ${stakeholder.name}: ${grantDetails.numberOfShares} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
+        grantDetails,
       });
-
-      const result = await response.json();
 
       if (result.success && result.content) {
         await updateDoc(doc(db, 'equity-documents', documentId), {
@@ -1688,23 +1800,17 @@ const EquityAdminPage: React.FC = () => {
       setMessage({ type: 'info', text: 'Generating Advisor Agreement + NSO Grant...' });
 
       // Call API to generate document
-      const response = await fetch('/.netlify/functions/generate-equity-document', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stakeholderId: stakeholder.id,
-          stakeholderName: stakeholder.name,
-          stakeholderEmail: stakeholder.email,
-          stakeholderType: 'advisor',
-          documentType: 'advisor_nso_agreement',
-          requiresSignature: true,
-          boardApprovalDate: boardApprovalDate || undefined,
-          prompt: `Generate a combined Advisor Services Agreement and Non-Qualified Stock Option Grant (do not label as FAST unless explicitly requested).`,
-          grantDetails,
-        }),
+      const { result } = await postEquityFunctionJson('/.netlify/functions/generate-equity-document', {
+        stakeholderId: stakeholder.id,
+        stakeholderName: stakeholder.name,
+        stakeholderEmail: stakeholder.email,
+        stakeholderType: 'advisor',
+        documentType: 'advisor_nso_agreement',
+        requiresSignature: true,
+        boardApprovalDate: boardApprovalDate || undefined,
+        prompt: `Generate a combined Advisor Services Agreement and Non-Qualified Stock Option Grant (do not label as FAST unless explicitly requested).`,
+        grantDetails,
       });
-
-      const result = await response.json();
 
       if (result.success && result.content) {
         await updateDoc(doc(db, 'equity-documents', placeholder.id), {
@@ -1763,27 +1869,21 @@ const EquityAdminPage: React.FC = () => {
       });
       
       // Call API to generate document
-      const response = await fetch('/.netlify/functions/generate-equity-document', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stakeholderId: selectedStakeholder?.id,
-          stakeholderName: selectedStakeholder?.name,
-          stakeholderEmail: selectedStakeholder?.email,
-          stakeholderType: selectedStakeholder?.type,
-          documentType: selectedDocType,
-          prompt: generationPrompt,
-          requiresSignature: effectiveRequiresSignature,
-          boardApprovalDate: selectedDocType === 'board_consent' ? documentExecutionDate : undefined,
-          documentDate: shouldAutoExecuteDoc ? documentExecutionDate : undefined,
-          grantDetails: newGrant,
-          documentId: placeholder.id,
-        })
+      const { ok, result } = await postEquityFunctionJson('/.netlify/functions/generate-equity-document', {
+        stakeholderId: selectedStakeholder?.id,
+        stakeholderName: selectedStakeholder?.name,
+        stakeholderEmail: selectedStakeholder?.email,
+        stakeholderType: selectedStakeholder?.type,
+        documentType: selectedDocType,
+        prompt: generationPrompt,
+        requiresSignature: effectiveRequiresSignature,
+        boardApprovalDate: selectedDocType === 'board_consent' ? documentExecutionDate : undefined,
+        documentDate: shouldAutoExecuteDoc ? documentExecutionDate : undefined,
+        grantDetails: newGrant,
+        documentId: placeholder.id,
       });
 
-      const result = await response.json();
-
-      if (!response.ok) {
+      if (!ok) {
         throw new Error(result.error || 'Failed to generate document');
       }
 
@@ -1818,6 +1918,14 @@ const EquityAdminPage: React.FC = () => {
   };
 
   const openEditEquityDocModal = (docToEdit: EquityDocument) => {
+    if (isEquityDocLockedForEditing(docToEdit)) {
+      setMessage({
+        type: 'info',
+        text: 'This signed advisor document is locked. To change economics after signature, create a separate new equity grant for this stakeholder.',
+      });
+      return;
+    }
+
     setEditingEquityDoc(docToEdit);
     setEditEquityDocTitle(docToEdit.title);
     setEditEquityDocPrompt('');
@@ -1841,25 +1949,20 @@ const EquityAdminPage: React.FC = () => {
       .filter(Boolean)
       .join('\n\n');
 
-    const response = await fetch('/.netlify/functions/generate-equity-document', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        stakeholderId: equityDoc.stakeholderId || founder?.id,
-        stakeholderName: equityDoc.stakeholderName || founder?.name || 'Tremaine Grant',
-        stakeholderEmail: equityDoc.stakeholderEmail || founder?.email || 'tre@fitwithpulse.ai',
-        stakeholderType: equityDoc.stakeholderType || founder?.type || 'founder',
-        documentType: equityDoc.documentType,
-        prompt: generatorPrompt,
-        requiresSignature: false,
-        boardApprovalDate: equityDoc.documentType === 'board_consent' ? preservedExecutionDate : undefined,
-        documentDate: preservedExecutionDate,
-        grantDetails: equityDoc.grantDetails,
-      }),
+    const { ok, result } = await postEquityFunctionJson('/.netlify/functions/generate-equity-document', {
+      stakeholderId: equityDoc.stakeholderId || founder?.id,
+      stakeholderName: equityDoc.stakeholderName || founder?.name || 'Tremaine Grant',
+      stakeholderEmail: equityDoc.stakeholderEmail || founder?.email || 'tre@fitwithpulse.ai',
+      stakeholderType: equityDoc.stakeholderType || founder?.type || 'founder',
+      documentType: equityDoc.documentType,
+      prompt: generatorPrompt,
+      requiresSignature: false,
+      boardApprovalDate: equityDoc.documentType === 'board_consent' ? preservedExecutionDate : undefined,
+      documentDate: preservedExecutionDate,
+      grantDetails: equityDoc.grantDetails,
     });
 
-    const result = await parseFunctionResponse(response, '/.netlify/functions/generate-equity-document');
-    if (!response.ok || !result.success || !result.content) {
+    if (!ok || !result.success || !result.content) {
       throw new Error(result.error || 'Failed to regenerate document cleanly');
     }
 
@@ -1927,6 +2030,9 @@ const EquityAdminPage: React.FC = () => {
 
     setIsRevisingEquityDoc(true);
     try {
+      const revisionReferenceDate = new Date();
+      const revisionReferenceDateLabel = formatLegalDate(revisionReferenceDate);
+
       if (isCleanRegenerationDoc) {
         await regenerateCompanyApprovalDocCleanly(
           editingEquityDoc,
@@ -1943,6 +2049,10 @@ const EquityAdminPage: React.FC = () => {
         return;
       }
 
+      if (isEquityDocLockedForEditing(editingEquityDoc)) {
+        throw new Error('This signed advisor document is locked. Create a separate new grant for this stakeholder instead of revising the executed document.');
+      }
+
       let newContent = editingEquityDoc.content;
 
       const effectiveRevisionPrompt =
@@ -1954,27 +2064,34 @@ const EquityAdminPage: React.FC = () => {
             : 'Remove signature lines/blocks and any signature section, unless strictly required.'
           : '';
 
-      if (effectiveRevisionPrompt.trim()) {
-        const response = await fetch('/.netlify/functions/revise-equity-document', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            documentId: editingEquityDoc.id,
-            documentType: editingEquityDoc.documentType,
-            currentContent: editingEquityDoc.content,
-            revisionPrompt: effectiveRevisionPrompt,
-            originalPrompt: editingEquityDoc.prompt,
-            requiresSignature: Boolean(editRequiresSignature),
-            stakeholderName: editingEquityDoc.stakeholderName,
-            stakeholderEmail: editingEquityDoc.stakeholderEmail,
-            stakeholderType: editingEquityDoc.stakeholderType,
-            grantDetails: editingEquityDoc.grantDetails,
-          }),
+      const advisorDateAlignmentPrompt =
+        editingEquityDoc.documentType === 'advisor_nso_agreement'
+          ? `Date alignment instructions:
+- Update the Grant Date, Effective Date, Board approval written consent date, and Vesting Commencement Date so they all match exactly.
+- Use ${revisionReferenceDateLabel} as the single controlling date everywhere in the document.
+- Do not leave any prior grant-date or vesting-start-date references behind.`
+          : '';
+
+      const finalRevisionPrompt = [effectiveRevisionPrompt.trim(), advisorDateAlignmentPrompt]
+        .filter(Boolean)
+        .join('\n\n');
+
+      if (finalRevisionPrompt.trim()) {
+        const { ok, status, result } = await postEquityFunctionJson('/.netlify/functions/revise-equity-document', {
+          documentId: editingEquityDoc.id,
+          documentType: editingEquityDoc.documentType,
+          currentContent: editingEquityDoc.content,
+          revisionPrompt: finalRevisionPrompt,
+          originalPrompt: editingEquityDoc.prompt,
+          requiresSignature: Boolean(editRequiresSignature),
+          stakeholderName: editingEquityDoc.stakeholderName,
+          stakeholderEmail: editingEquityDoc.stakeholderEmail,
+          stakeholderType: editingEquityDoc.stakeholderType,
+          grantDetails: editingEquityDoc.grantDetails,
         });
 
-        const result = await response.json();
-        if (!response.ok) {
-          throw new Error(result.error || `Failed to revise document (HTTP ${response.status})`);
+        if (!ok) {
+          throw new Error(result.error || `Failed to revise document (HTTP ${status})`);
         }
         newContent = result.content;
       }
@@ -1994,11 +2111,18 @@ const EquityAdminPage: React.FC = () => {
         updatedAt: Timestamp.now(),
       };
 
-      if (effectiveRevisionPrompt.trim()) {
+      if (editingEquityDoc.documentType === 'advisor_nso_agreement' && editingEquityDoc.grantDetails) {
+        updateData.grantDetails = {
+          ...editingEquityDoc.grantDetails,
+          vestingStartDate: revisionReferenceDate.toISOString(),
+        };
+      }
+
+      if (finalRevisionPrompt.trim()) {
         updateData.content = newContent;
         updateData.revisionHistory = [
           ...convertedHistory,
-          { prompt: effectiveRevisionPrompt, timestamp: Timestamp.now() },
+          { prompt: finalRevisionPrompt, timestamp: Timestamp.now() },
         ];
       }
 
@@ -2030,10 +2154,10 @@ const EquityAdminPage: React.FC = () => {
           ...(isAutoExecutedCompanyDoc(editingEquityDoc)
             ? { autoSigned: true, autoSignedAt: Timestamp.now() }
             : {}),
-          revisionHistory: effectiveRevisionPrompt.trim()
+          revisionHistory: finalRevisionPrompt.trim()
             ? [
                 ...convertedHistory,
-                { prompt: effectiveRevisionPrompt, timestamp: Timestamp.now() },
+                { prompt: finalRevisionPrompt, timestamp: Timestamp.now() },
               ]
             : convertedHistory,
           createdAt: Timestamp.now(),
@@ -2389,18 +2513,13 @@ const EquityAdminPage: React.FC = () => {
     try {
       const expectedOptions = stakeholder.optionsGranted || stakeholder.totalShares || stakeholder.grants?.[0]?.numberOfShares;
 
-      const resp = await fetch('/.netlify/functions/verify-board-consent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          boardConsentContent: consentDoc.content,
-          expectedStakeholderName: stakeholder.name,
-          expectedNumberOfOptions: typeof expectedOptions === 'number' ? expectedOptions : undefined,
-        }),
+      const { ok, result: data } = await postEquityFunctionJson('/.netlify/functions/verify-board-consent', {
+        boardConsentContent: consentDoc.content,
+        expectedStakeholderName: stakeholder.name,
+        expectedNumberOfOptions: typeof expectedOptions === 'number' ? expectedOptions : undefined,
       });
 
-      const data = await resp.json();
-      if (!resp.ok || !data?.success) {
+      if (!ok || !data?.success) {
         throw new Error(data?.error || 'Failed to verify board consent');
       }
 
@@ -2444,10 +2563,17 @@ const EquityAdminPage: React.FC = () => {
     return equityDocuments.filter(d => equityDoc.exhibits?.includes(d.id));
   };
 
+  const isLatestDocumentInFamily = (equityDoc: EquityDocument) => {
+    return getLatestRelevantDocuments(
+      equityDocuments.filter(doc => getEquityDocumentFamilyKey(doc) === getEquityDocumentFamilyKey(equityDoc))
+    ).some(doc => doc.id === equityDoc.id);
+  };
+
   const isProtectedStakeholderDocument = (equityDoc: EquityDocument) => {
     return Boolean(
       equityDoc.stakeholderId &&
-      ['board_consent', 'advisor_nso_agreement'].includes(equityDoc.documentType)
+      ['board_consent', 'advisor_nso_agreement'].includes(equityDoc.documentType) &&
+      isLatestDocumentInFamily(equityDoc)
     );
   };
 
@@ -2466,6 +2592,10 @@ const EquityAdminPage: React.FC = () => {
     try {
       await deleteDoc(doc(db, 'equity-documents', equityDocId));
       setEquityDocuments(prev => prev.filter(d => d.id !== equityDocId));
+      if (docHistoryAnchor?.id === equityDocId) {
+        setDocHistoryAnchor(null);
+        setIsDocHistoryModalOpen(false);
+      }
       setMessage({ type: 'success', text: 'Document deleted successfully' });
     } catch (error) {
       console.error('Error deleting equity document:', error);
@@ -2481,20 +2611,15 @@ const EquityAdminPage: React.FC = () => {
     setIsAuditModalOpen(true);
     setIsAuditing(true);
     try {
-      const response = await fetch('/.netlify/functions/audit-equity-document', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentId: documentToAudit.id,
-          content: documentToAudit.content,
-          documentType: documentToAudit.documentType,
-          title: documentToAudit.title,
-          requiresSignature: Boolean(documentToAudit.requiresSignature),
-        }),
+      const { ok, result } = await postEquityFunctionJson('/.netlify/functions/audit-equity-document', {
+        documentId: documentToAudit.id,
+        content: documentToAudit.content,
+        documentType: documentToAudit.documentType,
+        title: documentToAudit.title,
+        requiresSignature: Boolean(documentToAudit.requiresSignature),
       });
 
-      const result = await response.json();
-      if (!response.ok) {
+      if (!ok) {
         throw new Error(result.error || 'Failed to audit document');
       }
       setAuditResult(result.audit);
@@ -2880,6 +3005,19 @@ const EquityAdminPage: React.FC = () => {
     return equityDocuments.filter(d => d.stakeholderId === stakeholderId && d.status === 'completed');
   };
 
+  const getStakeholderVisibleDocuments = (stakeholderId: string) => {
+    return getLatestRelevantDocuments(getStakeholderCompletedDocuments(stakeholderId));
+  };
+
+  const getVisibleGeneratedDocuments = () => {
+    return getLatestRelevantDocuments(equityDocuments);
+  };
+
+  const openDocHistoryModal = (equityDoc: EquityDocument) => {
+    setDocHistoryAnchor(equityDoc);
+    setIsDocHistoryModalOpen(true);
+  };
+
   const getStakeholderSignatureDocuments = (stakeholder: Stakeholder) => {
     const signaturePriority: Record<string, number> = {
       advisor_nso_agreement: 0,
@@ -2901,8 +3039,38 @@ const EquityAdminPage: React.FC = () => {
     return getStakeholderSignatureDocuments(stakeholder)[0] || null;
   };
 
+  const getCurrentAdvisorAgreementDoc = (stakeholderId: string) => {
+    return getLatestRelevantDocuments(
+      equityDocuments.filter(
+        d =>
+          d.stakeholderId === stakeholderId &&
+          d.documentType === 'advisor_nso_agreement' &&
+          d.status === 'completed'
+      )
+    )[0] || null;
+  };
+
+  const isStakeholderGrantLocked = (stakeholder: Stakeholder) => {
+    if (stakeholder.type !== 'advisor') return false;
+    const advisorAgreement = getCurrentAdvisorAgreementDoc(stakeholder.id);
+    if (!advisorAgreement) return false;
+    return getEquityDocSignatureState(advisorAgreement).isFullyExecuted;
+  };
+
+  const isEquityDocLockedForEditing = (equityDoc: EquityDocument) => {
+    return requiresExternalSignature(equityDoc) && getEquityDocSignatureState(equityDoc).isFullyExecuted;
+  };
+
   // Start editing grant options for a stakeholder
   const startEditingGrantOptions = (stakeholder: Stakeholder) => {
+    if (isStakeholderGrantLocked(stakeholder)) {
+      setMessage({
+        type: 'info',
+        text: 'This advisor grant is locked because the signature is complete. To issue more equity, create a separate new grant for this stakeholder.',
+      });
+      return;
+    }
+
     const currentOptions = stakeholder.optionsGranted || 
       stakeholder.grants?.[0]?.numberOfShares || 
       stakeholder.totalShares || 0;
@@ -2919,10 +3087,22 @@ const EquityAdminPage: React.FC = () => {
       return;
     }
 
+    if (isStakeholderGrantLocked(stakeholder)) {
+      setMessage({
+        type: 'error',
+        text: 'This advisor grant is fully executed and can no longer be edited. Add a separate new grant for any additional equity.',
+      });
+      setEditingGrantStakeholderId(null);
+      return;
+    }
+
     setIsSavingGrantOptions(true);
     try {
       const oldOptions = stakeholder.optionsGranted || stakeholder.grants?.[0]?.numberOfShares || stakeholder.totalShares || 0;
       const difference = editGrantOptionsValue - oldOptions;
+      const revisedGrantDate = new Date();
+      const revisedGrantTimestamp = Timestamp.fromDate(revisedGrantDate);
+      const revisedGrantDateIso = revisedGrantDate.toISOString();
 
       console.log('[saveGrantOptions] Starting update:', {
         stakeholderId: stakeholder.id,
@@ -2937,6 +3117,10 @@ const EquityAdminPage: React.FC = () => {
         optionsUnvested: editGrantOptionsValue - (stakeholder.optionsVested || 0),
         updatedAt: serverTimestamp(),
       };
+
+      if (stakeholder.type === 'advisor') {
+        stakeholderUpdate.startDate = revisedGrantTimestamp;
+      }
 
       // Also update totalShares for backward compatibility
       if (!stakeholder.optionsGranted && stakeholder.totalShares) {
@@ -2959,6 +3143,7 @@ const EquityAdminPage: React.FC = () => {
           await updateDoc(doc(db, 'equity-grants', grantId), {
             numberOfShares: editGrantOptionsValue,
             unvestedShares: editGrantOptionsValue - (stakeholder.grants[0].vestedShares || 0),
+            ...(stakeholder.type === 'advisor' ? { vestingStartDate: revisedGrantTimestamp } : {}),
             updatedAt: serverTimestamp(),
           });
           console.log('[saveGrantOptions] Grant updated:', grantId);
@@ -2975,7 +3160,7 @@ const EquityAdminPage: React.FC = () => {
         numberOfShares: editGrantOptionsValue,
         strikePrice: grant.strikePrice || 0.001,
         vestingSchedule: grant.vestingSchedule || 'monthly',
-        vestingStartDate: grant.vestingStartDate || stakeholder.startDate,
+        vestingStartDate: stakeholder.type === 'advisor' ? revisedGrantDateIso : (grant.vestingStartDate || stakeholder.startDate),
         cliffMonths: grant.cliffMonths || 3,
         vestingMonths: grant.vestingMonths || 24,
       } : {
@@ -2983,14 +3168,14 @@ const EquityAdminPage: React.FC = () => {
         numberOfShares: editGrantOptionsValue,
         strikePrice: 0.001,
         vestingSchedule: 'monthly',
-        vestingStartDate: stakeholder.startDate,
+        vestingStartDate: stakeholder.type === 'advisor' ? revisedGrantDateIso : stakeholder.startDate,
         cliffMonths: 3,
         vestingMonths: 24,
       };
 
-      // Get board approval date if available
-      const boardApprovalDate = stakeholder.boardApprovalDate || 
-        (boardConsentVerification[stakeholder.id]?.approvalDate);
+      const revisedBoardApprovalDate = formatLegalDate(new Date());
+      let effectiveBoardApprovalDate = revisedBoardApprovalDate;
+      let effectiveBoardConsentDocId = stakeholder.boardConsentDocId || null;
 
       let regeneratedDocCount = 0;
       let newDocsCreated = 0;
@@ -3032,25 +3217,21 @@ const EquityAdminPage: React.FC = () => {
               status: 'generating',
             });
 
-            const response = await fetch('/.netlify/functions/generate-equity-document', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                stakeholderId: stakeholder.id,
-                stakeholderName: stakeholder.name,
-                stakeholderEmail: stakeholder.email,
-                stakeholderType: stakeholder.type,
-                documentType: 'board_consent',
-                requiresSignature: false,
-                isAmendment: true,
-                previousOptionsAmount: oldOptions,
-                newOptionsAmount: editGrantOptionsValue,
-                prompt: `Generate a Board Consent Amendment to update the previously approved equity grant for ${stakeholder.name}. The original grant was for ${formatNumber(oldOptions)} Non-Qualified Stock Options. This amendment approves increasing the grant to ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options. Include all standard board consent language and signature lines.`,
-                grantDetails,
-              }),
+            const { result } = await postEquityFunctionJson('/.netlify/functions/generate-equity-document', {
+              stakeholderId: stakeholder.id,
+              stakeholderName: stakeholder.name,
+              stakeholderEmail: stakeholder.email,
+              stakeholderType: stakeholder.type,
+              documentType: 'board_consent',
+              requiresSignature: false,
+              isAmendment: true,
+              previousOptionsAmount: oldOptions,
+              newOptionsAmount: editGrantOptionsValue,
+              prompt: `Generate a Board Consent Amendment to update the previously approved equity grant for ${stakeholder.name}. The original grant was for ${formatNumber(oldOptions)} Non-Qualified Stock Options. This amendment approves increasing the grant to ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options. Include all standard board consent language and signature lines.`,
+              boardApprovalDate: revisedBoardApprovalDate,
+              documentDate: revisedBoardApprovalDate,
+              grantDetails,
             });
-
-            const result = await response.json();
 
             if (result.success && result.content) {
               await updateDoc(doc(db, 'equity-documents', placeholder.id), {
@@ -3062,6 +3243,8 @@ const EquityAdminPage: React.FC = () => {
                 status: 'completed',
                 updatedAt: serverTimestamp(),
               });
+              effectiveBoardApprovalDate = revisedBoardApprovalDate;
+              effectiveBoardConsentDocId = placeholder.id;
               console.log('[saveGrantOptions] Board Consent Amendment created:', placeholder.id);
               newDocsCreated++;
             } else {
@@ -3098,22 +3281,18 @@ const EquityAdminPage: React.FC = () => {
               updatedAt: serverTimestamp(),
             });
 
-            const response = await fetch('/.netlify/functions/generate-equity-document', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                stakeholderId: stakeholder.id,
-                stakeholderName: stakeholder.name,
-                stakeholderEmail: stakeholder.email,
-                stakeholderType: stakeholder.type,
-                documentType: 'board_consent',
-                requiresSignature: false,
-                prompt: `Generate a Board Consent approving equity grants. For ${stakeholder.name}: ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
-                grantDetails,
-              }),
+            const { result } = await postEquityFunctionJson('/.netlify/functions/generate-equity-document', {
+              stakeholderId: stakeholder.id,
+              stakeholderName: stakeholder.name,
+              stakeholderEmail: stakeholder.email,
+              stakeholderType: stakeholder.type,
+              documentType: 'board_consent',
+              requiresSignature: false,
+              prompt: `Generate a Board Consent approving equity grants. For ${stakeholder.name}: ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
+              boardApprovalDate: revisedBoardApprovalDate,
+              documentDate: revisedBoardApprovalDate,
+              grantDetails,
             });
-
-            const result = await response.json();
 
             if (result.success && result.content) {
               await updateDoc(doc(db, 'equity-documents', boardConsentDoc.id), {
@@ -3126,6 +3305,8 @@ const EquityAdminPage: React.FC = () => {
                 grantDetails,
                 updatedAt: serverTimestamp(),
               });
+              effectiveBoardApprovalDate = revisedBoardApprovalDate;
+              effectiveBoardConsentDocId = boardConsentDoc.id;
               console.log('[saveGrantOptions] Board Consent regenerated:', boardConsentDoc.id);
               regeneratedDocCount++;
             } else {
@@ -3140,13 +3321,23 @@ const EquityAdminPage: React.FC = () => {
         }
       }
 
+      if (effectiveBoardApprovalDate !== stakeholder.boardApprovalDate || effectiveBoardConsentDocId !== stakeholder.boardConsentDocId) {
+        await updateDoc(doc(db, 'equity-stakeholders', stakeholder.id), {
+          boardApprovalDate: effectiveBoardApprovalDate,
+          boardConsentDocId: effectiveBoardConsentDocId,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
       // ============================================
       // 2. Handle Advisor Agreement / NSO Grant Document
       // ============================================
-      const stakeholderDocs = equityDocuments.filter(d => 
-        d.stakeholderId === stakeholder.id && 
-        d.documentType === 'advisor_nso_agreement' &&
-        d.status === 'completed'
+      const stakeholderDocs = getLatestRelevantDocuments(
+        equityDocuments.filter(d => 
+          d.stakeholderId === stakeholder.id && 
+          d.documentType === 'advisor_nso_agreement' &&
+          d.status === 'completed'
+        )
       );
 
       for (const equityDoc of stakeholderDocs) {
@@ -3155,70 +3346,7 @@ const EquityAdminPage: React.FC = () => {
         const hasBeenSent = docSigningState.hasBeenSent;
 
         if (isSigned) {
-          // Document is SIGNED - create a NEW amendment document
-          console.log('[saveGrantOptions] Advisor Agreement is signed, creating amendment');
-          setMessage({ type: 'info', text: 'Creating Advisor Agreement Amendment...' });
-
-          try {
-            const amendmentTitle = `Advisor Agreement Amendment - ${stakeholder.name} (Options: ${formatNumber(editGrantOptionsValue)})`;
-            const placeholder = await addDoc(collection(db, 'equity-documents'), {
-              title: amendmentTitle,
-              prompt: `Generate an amendment to the Advisor Agreement for ${stakeholder.name} updating the options granted from ${formatNumber(oldOptions)} to ${formatNumber(editGrantOptionsValue)}.`,
-              content: '',
-              documentType: 'advisor_nso_agreement',
-              requiresSignature: true,
-              stakeholderId: stakeholder.id,
-              stakeholderName: stakeholder.name,
-              stakeholderEmail: stakeholder.email,
-              stakeholderType: stakeholder.type,
-              grantDetails,
-              isAmendment: true,
-              originalDocumentId: equityDoc.id,
-              needsResendSignature: true,
-              createdAt: Timestamp.now(),
-              status: 'generating',
-            });
-
-            const response = await fetch('/.netlify/functions/generate-equity-document', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                stakeholderId: stakeholder.id,
-                stakeholderName: stakeholder.name,
-                stakeholderEmail: stakeholder.email,
-                stakeholderType: stakeholder.type,
-                documentType: 'advisor_nso_agreement',
-                requiresSignature: true,
-                isAmendment: true,
-                previousOptionsAmount: oldOptions,
-                newOptionsAmount: editGrantOptionsValue,
-                boardApprovalDate: boardApprovalDate || undefined,
-                prompt: `Generate an Amendment to the Advisor Services Agreement and Non-Qualified Stock Option Grant for ${stakeholder.name}. The original grant was for ${formatNumber(oldOptions)} options. This amendment increases the grant to ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options. All other terms remain unchanged. Include signature lines for both the Company and the Advisor.`,
-                grantDetails,
-              }),
-            });
-
-            const result = await response.json();
-
-            if (result.success && result.content) {
-              await updateDoc(doc(db, 'equity-documents', placeholder.id), {
-                content: result.content,
-                title: result.title || amendmentTitle,
-                needsResendSignature: true,
-                status: 'completed',
-                updatedAt: serverTimestamp(),
-              });
-              console.log('[saveGrantOptions] Advisor Agreement Amendment created:', placeholder.id);
-              newDocsCreated++;
-            } else {
-              await updateDoc(doc(db, 'equity-documents', placeholder.id), {
-                status: 'error',
-                errorMessage: result.error || 'Failed to generate amendment',
-              });
-            }
-          } catch (amendError) {
-            console.error('[saveGrantOptions] Error creating Advisor Agreement Amendment:', amendError);
-          }
+          throw new Error('This advisor grant has already been signed. Add a separate new grant for this stakeholder instead of editing the executed grant.');
         } else {
           // Document not fully executed - regenerate the existing document and force a resend
           console.log('[saveGrantOptions] Regenerating Advisor Agreement');
@@ -3233,6 +3361,7 @@ const EquityAdminPage: React.FC = () => {
             const updatedGrantDetails = {
               ...(equityDoc.grantDetails || {}),
               numberOfShares: editGrantOptionsValue,
+              ...(stakeholder.type === 'advisor' ? { vestingStartDate: revisedGrantDateIso } : {}),
             };
 
             let invalidatedRequestCount = 0;
@@ -3252,23 +3381,17 @@ const EquityAdminPage: React.FC = () => {
               updatedAt: serverTimestamp(),
             });
 
-            const response = await fetch('/.netlify/functions/generate-equity-document', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                stakeholderId: stakeholder.id,
-                stakeholderName: stakeholder.name,
-                stakeholderEmail: stakeholder.email,
-                stakeholderType: stakeholder.type,
-                documentType: 'advisor_nso_agreement',
-                requiresSignature: true,
-                boardApprovalDate: boardApprovalDate || undefined,
-                prompt: `Generate a combined Advisor Services Agreement and Non-Qualified Stock Option Grant for ${stakeholder.name}. The grant is for ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options.`,
-                grantDetails,
-              }),
+            const { result } = await postEquityFunctionJson('/.netlify/functions/generate-equity-document', {
+              stakeholderId: stakeholder.id,
+              stakeholderName: stakeholder.name,
+              stakeholderEmail: stakeholder.email,
+              stakeholderType: stakeholder.type,
+              documentType: 'advisor_nso_agreement',
+              requiresSignature: true,
+              boardApprovalDate: effectiveBoardApprovalDate,
+              prompt: `Generate a combined Advisor Services Agreement and Non-Qualified Stock Option Grant for ${stakeholder.name}. The grant is for ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options.`,
+              grantDetails: updatedGrantDetails,
             });
-
-            const result = await response.json();
 
             if (result.success && result.content) {
               await updateDoc(doc(db, 'equity-documents', equityDoc.id), {
@@ -3611,6 +3734,9 @@ const EquityAdminPage: React.FC = () => {
                           {/* Edit Options Granted (only for option holders, and only if documents haven't been sent) */}
                           {['advisor', 'employee', 'contractor'].includes(stakeholder.type) && (
                             <div className="mb-6 p-4 rounded-xl bg-zinc-800/50 border border-zinc-700">
+                              {(() => {
+                                const grantLocked = isStakeholderGrantLocked(stakeholder);
+                                return (
                               <div className="flex items-center justify-between gap-4">
                                 <div>
                                   <h5 className="text-sm font-semibold text-white flex items-center gap-2">
@@ -3618,7 +3744,9 @@ const EquityAdminPage: React.FC = () => {
                                     Options Granted
                                   </h5>
                                   <p className="text-xs text-zinc-500 mt-1">
-                                    Update the grant at any time. Pending signature links will be invalidated and marked for resend; fully executed docs will produce a new amendment.
+                                    {grantLocked
+                                      ? 'This grant is locked because the advisor agreement has already been signed. Issue any additional equity as a separate new grant for this stakeholder.'
+                                      : 'Before signature, editing the grant will regenerate the active documents and align all grant dates consistently.'}
                                   </p>
                                 </div>
                                 
@@ -3657,14 +3785,21 @@ const EquityAdminPage: React.FC = () => {
                                     </span>
                                     <button
                                       onClick={(e) => { e.stopPropagation(); startEditingGrantOptions(stakeholder); }}
-                                      className="flex items-center gap-1 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/40 rounded-lg text-xs transition-colors"
+                                      disabled={grantLocked}
+                                      className={`flex items-center gap-1 px-3 py-1.5 border rounded-lg text-xs transition-colors ${
+                                        grantLocked
+                                          ? 'bg-zinc-800 text-zinc-500 border-zinc-700 cursor-not-allowed'
+                                          : 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border-blue-500/40'
+                                      }`}
                                     >
                                       <Edit3 className="w-3 h-3" />
-                                      Edit
+                                      {grantLocked ? 'Locked After Signature' : 'Edit'}
                                     </button>
                                   </div>
                                 )}
                               </div>
+                                );
+                              })()}
                             </div>
                           )}
 
@@ -3706,8 +3841,9 @@ const EquityAdminPage: React.FC = () => {
                                       className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-amber-500"
                                     >
                                       <option value="">Select Board Consent…</option>
-                                      {equityDocuments
-                                        .filter(d => d.documentType === 'board_consent' && d.status === 'completed')
+                                      {getLatestRelevantDocuments(
+                                        equityDocuments.filter(d => d.documentType === 'board_consent' && d.status === 'completed')
+                                      )
                                         .map(d => (
                                           <option key={d.id} value={d.id}>
                                             {d.title} ({formatDate(d.createdAt)})
@@ -3796,13 +3932,14 @@ const EquityAdminPage: React.FC = () => {
                           
                           {/* Attached Documents for this stakeholder */}
                           {(() => {
-                            const stakeholderDocs = getStakeholderCompletedDocuments(stakeholder.id);
+                            const stakeholderDocs = getStakeholderVisibleDocuments(stakeholder.id);
                             
                             if (stakeholderDocs.length > 0) {
                               return (
                                 <div className="space-y-3 mb-4">
                                   <h5 className="text-zinc-400 text-sm font-medium">Documents</h5>
                                   {stakeholderDocs.map((edoc) => {
+                                    const historyDocs = getDocumentFamilyHistory(edoc, getStakeholderCompletedDocuments(stakeholder.id));
                                     const docState = getEquityDocSignatureState(edoc);
                                     const signingRequest = docState.activeRequests[0];
                                     const statusBadge = getEquityDocStatusBadge(edoc);
@@ -3898,6 +4035,15 @@ const EquityAdminPage: React.FC = () => {
                                             <Share2 className="w-3 h-3" />
                                             Share
                                           </button>
+                                          {historyDocs.length > 0 && (
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); openDocHistoryModal(edoc); }}
+                                              className="flex items-center gap-1 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-xs transition-colors"
+                                            >
+                                              <Clock className="w-3 h-3" />
+                                              History ({historyDocs.length})
+                                            </button>
+                                          )}
                                           <button
                                             onClick={(e) => { e.stopPropagation(); generatePdfFromEquityDoc(edoc, getExhibitDocuments(edoc.id)); }}
                                             className="flex items-center gap-1 px-3 py-1.5 bg-[#E0FE10] text-black hover:bg-[#d4f00f] rounded-lg text-xs font-medium transition-colors"
@@ -4054,7 +4200,10 @@ const EquityAdminPage: React.FC = () => {
   );
 
   // Render Documents Tab
-  const renderDocuments = () => (
+  const renderDocuments = () => {
+    const visibleDocuments = getVisibleGeneratedDocuments();
+
+    return (
     <div className="space-y-8">
       {/* Generate New Document - Legal Docs Style */}
       <GlassCard accentColor="#8B5CF6">
@@ -4258,12 +4407,12 @@ const EquityAdminPage: React.FC = () => {
             <Clock className="w-5 h-5 text-zinc-400" />
             Generated Documents
             <span className="ml-2 px-2 py-0.5 bg-zinc-800 rounded-full text-xs text-zinc-400">
-              {equityDocuments.length}
+              {visibleDocuments.length}
             </span>
           </h3>
         </div>
 
-        {equityDocuments.length === 0 ? (
+        {visibleDocuments.length === 0 ? (
           <GlassCard accentColor="#3B82F6">
             <div className="p-10 text-center">
               <FileText className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
@@ -4273,13 +4422,14 @@ const EquityAdminPage: React.FC = () => {
           </GlassCard>
         ) : (
           <div className="space-y-4">
-            {equityDocuments.map((edoc) => {
+            {visibleDocuments.map((edoc) => {
               const isExpanded = expandedEquityDoc === edoc.id;
               const signingState = getEquityDocSignatureState(edoc);
               const signingRequestsForDoc = signingState.activeRequests;
               const signingRequest = signingRequestsForDoc[0]; // For backwards-compatible UI
               const needsSignature = requiresExternalSignature(edoc);
               const statusBadge = getEquityDocStatusBadge(edoc);
+              const historyDocs = getDocumentFamilyHistory(edoc, equityDocuments);
               return (
                 <GlassCard key={edoc.id} accentColor="#3B82F6">
                   <div className="p-5">
@@ -4363,10 +4513,15 @@ const EquityAdminPage: React.FC = () => {
                             </button>
                             <button
                               onClick={() => openEditEquityDocModal(edoc)}
-                              className="flex items-center gap-1 px-3 py-2 bg-blue-900/30 hover:bg-blue-900/50 text-blue-400 rounded-lg text-sm transition-colors"
+                              disabled={isEquityDocLockedForEditing(edoc)}
+                              className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm transition-colors ${
+                                isEquityDocLockedForEditing(edoc)
+                                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                                  : 'bg-blue-900/30 hover:bg-blue-900/50 text-blue-400'
+                              }`}
                             >
                               <Edit3 className="w-4 h-4" />
-                              Edit
+                              {isEquityDocLockedForEditing(edoc) ? 'Locked' : 'Edit'}
                             </button>
 
                             <button
@@ -4432,6 +4587,16 @@ const EquityAdminPage: React.FC = () => {
                                 </>
                               )}
                             </button>
+
+                            {historyDocs.length > 0 && (
+                              <button
+                                onClick={() => openDocHistoryModal(edoc)}
+                                className="flex items-center gap-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors"
+                              >
+                                <Clock className="w-4 h-4" />
+                                History ({historyDocs.length})
+                              </button>
+                            )}
 
                             <button
                               onClick={() => openExhibitsModal(edoc)}
@@ -4525,6 +4690,7 @@ const EquityAdminPage: React.FC = () => {
       </div>
     </div>
   );
+  };
 
   return (
     <AdminRouteGuard>
@@ -5203,6 +5369,127 @@ const EquityAdminPage: React.FC = () => {
                         : 'Save'}
                     </>
                   )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Document History Modal */}
+      <AnimatePresence>
+        {isDocHistoryModalOpen && docHistoryAnchor && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-3xl max-h-[90vh] overflow-hidden"
+            >
+              <div className="flex items-center justify-between p-6 border-b border-zinc-700">
+                <div>
+                  <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-zinc-300" />
+                    Document History
+                  </h2>
+                  <p className="text-sm text-zinc-400 mt-1">{docHistoryAnchor.title}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsDocHistoryModalOpen(false);
+                    setDocHistoryAnchor(null);
+                  }}
+                  className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-zinc-400" />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto max-h-[70vh]">
+                {getDocumentFamilyHistory(docHistoryAnchor, equityDocuments).length === 0 ? (
+                  <div className="text-center py-12">
+                    <Clock className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
+                    <p className="text-zinc-400">No older versions for this document family.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {getDocumentFamilyHistory(docHistoryAnchor, equityDocuments).map((historyDoc) => {
+                      const statusBadge = getEquityDocStatusBadge(historyDoc);
+                      return (
+                        <div key={historyDoc.id} className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-700">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-white font-medium truncate">{historyDoc.title}</p>
+                                {historyDoc.isAmendment && (
+                                  <span className="px-2 py-0.5 rounded-full text-xs bg-fuchsia-900/40 text-fuchsia-300 border border-fuchsia-700">
+                                    Amendment
+                                  </span>
+                                )}
+                                {statusBadge && (
+                                  <span className={`px-2 py-0.5 rounded-full text-xs ${statusBadge.className}`}>
+                                    {statusBadge.label}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 flex-wrap mt-1 text-xs text-zinc-500">
+                                <span>{formatDate(historyDoc.updatedAt || historyDoc.createdAt)}</span>
+                                <span>{DOCUMENT_TYPES.find(t => t.id === historyDoc.documentType)?.label || historyDoc.documentType}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-wrap justify-end">
+                              <button
+                                onClick={() => window.open(`/equity-doc/${historyDoc.id}`, '_blank')}
+                                className="flex items-center gap-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
+                              >
+                                <Eye className="w-4 h-4" />
+                                Preview
+                              </button>
+                              {historyDoc.status === 'completed' && (
+                                <button
+                                  onClick={() => generatePdfFromEquityDoc(historyDoc, getExhibitDocuments(historyDoc.id))}
+                                  className="flex items-center gap-1 px-3 py-2 bg-[#E0FE10] text-black hover:bg-[#d4f00f] rounded-lg text-sm font-medium transition-colors"
+                                >
+                                  <Download className="w-4 h-4" />
+                                  Download PDF
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteEquityDoc(historyDoc.id)}
+                                disabled={deletingEquityDocId === historyDoc.id}
+                                className="flex items-center gap-1 px-3 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-lg text-sm transition-colors disabled:opacity-50"
+                              >
+                                {deletingEquityDocId === historyDoc.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-3 p-6 border-t border-zinc-700">
+                <button
+                  onClick={() => {
+                    setIsDocHistoryModalOpen(false);
+                    setDocHistoryAnchor(null);
+                  }}
+                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
+                >
+                  Close
                 </button>
               </div>
             </motion.div>

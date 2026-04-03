@@ -81,6 +81,11 @@ CORE_FUNCTIONS=(
   fix-null-creator
   get-user-videos
   get-all-workout-summaries
+  generate-equity-document
+  revise-equity-document
+  audit-equity-document
+  generate-legal-document
+  revise-legal-document
 
   # KPI / Press
   generateKpiSnapshot
