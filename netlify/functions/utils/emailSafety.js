@@ -3,8 +3,13 @@ const DEFAULT_EMAIL_LOCK_STALE_MS = 2 * 60 * 60 * 1000;
 function normalizeDedupePart(value) {
   if (value === null || value === undefined) return '';
   if (typeof value === 'number' && Number.isFinite(value)) return String(Math.trunc(value));
-  if (typeof value === 'string') return value.trim().toLowerCase();
-  return String(value).trim().toLowerCase();
+  const normalized = typeof value === 'string'
+    ? value.trim().toLowerCase()
+    : String(value).trim().toLowerCase();
+
+  // Firestore document IDs cannot contain forward slashes. Some email flows
+  // intentionally use URLs inside dedupe keys, so normalize them here.
+  return normalized.replace(/\//g, '%2f');
 }
 
 function buildEmailDedupeKey(parts) {
