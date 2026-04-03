@@ -271,8 +271,12 @@ async function sendBrevoTransactionalEmail(args) {
     subject: args.subject,
     htmlContent: args.htmlContent,
     replyTo,
-    tags: (args.tags || []).filter(Boolean),
   };
+
+  const tags = (args.tags || []).filter(Boolean);
+  if (tags.length > 0) {
+    payload.tags = tags;
+  }
 
   if (args.headers && Object.keys(args.headers).length > 0) {
     payload.headers = args.headers;
