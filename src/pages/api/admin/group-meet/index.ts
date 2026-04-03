@@ -16,7 +16,6 @@ import {
   getGroupMeetBaseUrl,
   mapGroupMeetContact,
   mapGroupMeetInviteSummary,
-  sendGroupMeetInviteEmail,
   toIso,
 } from '../../../../lib/groupMeetAdmin';
 import { requireAdminRequest } from '../_auth';
@@ -37,7 +36,6 @@ type CreateGroupMeetRequestBody = {
   meetingDurationMinutes?: number;
   participants?: ParticipantInput[];
   host?: HostInput;
-  sendEmails?: boolean;
 };
 
 function mapInvite(docSnap: FirebaseFirestore.QueryDocumentSnapshot): GroupMeetInviteSummary {
@@ -60,7 +58,7 @@ async function mapRequest(docSnap: FirebaseFirestore.QueryDocumentSnapshot): Pro
     createdAt: toIso(data.createdAt),
     participantCount: Number(data.participantCount) || invitesSnapshot.size,
     responseCount: Number(data.responseCount) || 0,
-    status: resolveGroupMeetStatus(deadlineAt),
+    status: resolveGroupMeetStatus(deadlineAt, data.status),
     invites: invitesSnapshot.docs.map(mapInvite),
   };
 }
@@ -101,7 +99,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const targetMonth = (body.targetMonth || '').trim();
     const timezone = (body.timezone || 'America/New_York').trim() || 'America/New_York';
     const meetingDurationMinutes = Math.max(15, Math.min(240, Number(body.meetingDurationMinutes) || 30));
-    const sendEmails = body.sendEmails !== false;
     const deadline = new Date(body.deadlineAt || '');
 
     if (!isValidGroupMeetMonth(targetMonth)) {
@@ -190,20 +187,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       participantCount: totalParticipants,
       responseCount: 1,
-      status: deadline.getTime() <= Date.now() ? 'closed' : 'collecting',
+      status: 'draft',
     });
 
     const allInviteInputs = [
       {
         ...normalizedHost,
         participantType: 'host' as const,
-        sendEmail: false,
       },
       ...dedupedParticipants.map((participant) => ({
         ...participant,
         availabilityEntries: [],
         participantType: 'participant' as const,
-        sendEmail: sendEmails,
       })),
     ];
 
@@ -211,11 +206,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const token = randomBytes(24).toString('hex');
       const shareUrl = buildGroupMeetShareUrl(baseUrl, token);
       const inviteRef = requestRef.collection(GROUP_MEET_INVITES_SUBCOLLECTION).doc(token);
-      const emailStatus: GroupMeetInviteSummary['emailStatus'] = participant.email
-        ? participant.sendEmail
-          ? 'not_sent'
-          : 'manual_only'
-        : 'no_email';
+      const emailStatus: GroupMeetInviteSummary['emailStatus'] =
+        participant.participantType === 'host'
+          ? 'manual_only'
+          : participant.email
+            ? 'not_sent'
+            : 'no_email';
       const hasResponse = participant.availabilityEntries.length > 0;
 
       batch.set(inviteRef, {
@@ -258,37 +254,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await batch.commit();
 
-    if (sendEmails) {
-      await Promise.all(
-        createdInvites.map(async (invite) => {
-          if (!invite.email || invite.participantType === 'host') return;
-
-          const result = await sendGroupMeetInviteEmail({
-            requestTitle: title,
-            targetMonth,
-            deadlineAt: deadline.toISOString(),
-            timezone,
-            recipientName: invite.summary.name,
-            recipientEmail: invite.email,
-            shareUrl: invite.summary.shareUrl,
-          });
-
-          invite.summary.emailStatus = result.success ? 'sent' : 'failed';
-          invite.summary.emailError = result.success ? null : result.error || 'Failed to send';
-
-          await invite.ref.set(
-            {
-              emailStatus: invite.summary.emailStatus,
-              emailError: invite.summary.emailError,
-              emailedAt: result.success ? admin.firestore.FieldValue.serverTimestamp() : null,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            },
-            { merge: true }
-          );
-        })
-      );
-    }
-
     const request: GroupMeetRequestSummary = {
       id: requestRef.id,
       title,
@@ -300,7 +265,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       createdAt: new Date().toISOString(),
       participantCount: createdInvites.length,
       responseCount: createdInvites.filter((invite) => invite.summary.respondedAt).length,
-      status: resolveGroupMeetStatus(deadline.toISOString()),
+      status: 'draft',
       invites: createdInvites.map((invite) => invite.summary),
     };
 

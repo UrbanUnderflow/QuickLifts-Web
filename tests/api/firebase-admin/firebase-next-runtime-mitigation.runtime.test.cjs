@@ -25,7 +25,7 @@ function loadProxyModule() {
 test('firebase-next-api exposes the full migrated route count and matches dynamic patterns', () => {
   const proxyModule = loadProxyModule();
 
-  assert.equal(proxyModule.__test.routeCount, 35);
+  assert.equal(proxyModule.__test.routeCount, 36);
   assert.equal(
     proxyModule.__test.resolveRoutePattern('/api/admin/group-meet/contacts'),
     '/api/admin/group-meet/contacts'
@@ -37,6 +37,10 @@ test('firebase-next-api exposes the full migrated route count and matches dynami
   assert.equal(
     proxyModule.__test.resolveRoutePattern('/api/admin/group-meet/request-123'),
     '/api/admin/group-meet/[requestId]'
+  );
+  assert.equal(
+    proxyModule.__test.resolveRoutePattern('/api/admin/group-meet/request-123/send'),
+    '/api/admin/group-meet/[requestId]/send'
   );
   assert.deepEqual(
     proxyModule.__test.matchRoutePattern(

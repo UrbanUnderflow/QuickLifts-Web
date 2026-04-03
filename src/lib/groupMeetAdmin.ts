@@ -111,7 +111,7 @@ export async function mapGroupMeetRequestSummary(
     createdAt: toIso(data.createdAt),
     participantCount: Number(data.participantCount) || invitesSnapshot.size,
     responseCount: Number(data.responseCount) || 0,
-    status: resolveGroupMeetStatus(deadlineAt),
+    status: resolveGroupMeetStatus(deadlineAt, data.status),
     invites: invitesSnapshot.docs.map(mapGroupMeetInviteSummary),
   };
 }

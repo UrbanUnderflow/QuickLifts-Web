@@ -264,6 +264,7 @@ const ROUTE_ENTRIES: RouteEntry[] = [
   { pattern: '/api/admin/group-meet/[requestId]/invites/[token]/resend', loadHandler: () => import('../../src/pages/api/admin/group-meet/[requestId]/invites/[token]/resend.ts') },
   { pattern: '/api/admin/group-meet/[requestId]/recommend', loadHandler: () => import('../../src/pages/api/admin/group-meet/[requestId]/recommend.ts') },
   { pattern: '/api/admin/group-meet/[requestId]/schedule', loadHandler: () => import('../../src/pages/api/admin/group-meet/[requestId]/schedule.ts') },
+  { pattern: '/api/admin/group-meet/[requestId]/send', loadHandler: () => import('../../src/pages/api/admin/group-meet/[requestId]/send.ts') },
   { pattern: '/api/admin/pulsecheck/pilot-research-readout/generate', loadHandler: () => import('../../src/pages/api/admin/pulsecheck/pilot-research-readout/generate.ts') },
   { pattern: '/api/admin/pulsecheck/pilot-research-readout/review', loadHandler: () => import('../../src/pages/api/admin/pulsecheck/pilot-research-readout/review.ts') },
   { pattern: '/api/admin/system-overview/share-links', loadHandler: () => import('../../src/pages/api/admin/system-overview/share-links/index.ts') },

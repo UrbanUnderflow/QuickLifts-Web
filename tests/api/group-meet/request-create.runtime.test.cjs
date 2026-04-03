@@ -69,7 +69,7 @@ test('POST on Group Meet create rejects requests that are not built from saved c
   assert.equal(res.payload.error, 'Choose the host from your contact list.');
 });
 
-test('POST on Group Meet create stores the host as a responded invite and emails only the guests', async () => {
+test('POST on Group Meet create stores a draft request and leaves guest invites unsent', async () => {
   const { handler } = createGroupMeetCreateHandlerRuntime({
     baseUrl: 'https://admin.fitwithpulse.ai',
   });
@@ -82,7 +82,6 @@ test('POST on Group Meet create stores the host as a responded invite and emails
       deadlineAt: '2026-03-26T17:00:00.000Z',
       timezone: 'America/New_York',
       meetingDurationMinutes: 30,
-      sendEmails: true,
       host: {
         contactId: 'contact-host',
         availabilityEntries: [
@@ -111,6 +110,7 @@ test('POST on Group Meet create stores the host as a responded invite and emails
   assert.equal(res.payload.request.title, 'April sync');
   assert.equal(res.payload.request.participantCount, 2);
   assert.equal(res.payload.request.responseCount, 1);
+  assert.equal(res.payload.request.status, 'draft');
   assert.equal(res.payload.request.invites.length, 2);
 
   const hostInvite = res.payload.request.invites.find((invite) => invite.participantType === 'host');
@@ -130,7 +130,7 @@ test('POST on Group Meet create stores the host as a responded invite and emails
   assert.equal(guestInvite.imageUrl, 'https://images.example.com/avery.png');
   assert.equal(guestInvite.contactId, 'contact-avery');
   assert.equal(guestInvite.availabilityCount, 0);
-  assert.equal(guestInvite.emailStatus, 'sent');
+  assert.equal(guestInvite.emailStatus, 'not_sent');
   assert.match(guestInvite.shareUrl, /^https:\/\/.+\/group-meet\//);
 
 });
