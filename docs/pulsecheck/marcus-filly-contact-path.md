@@ -20,7 +20,7 @@ Use the official media inquiries form as the first outreach channel. It is the o
 
 ## Fallback Route
 
-Pending verification.
+Secondary channel: support@functional-bodybuilding.com via the official Functional Bodybuilding contact page. Use this fallback only if the media inquiries form receives no reply within 5 business days of the initial send, or if the form is unavailable at submission time. When using the fallback, reference the original outreach date and note that the request was first submitted through the official collaboration form. [SOT: LEAD-0007, EVID-0006]
 
 ## Last Verified At
 
