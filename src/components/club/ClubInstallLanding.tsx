@@ -5,12 +5,11 @@ import { ClubLandingPageProps, RoundPreview } from '../../api/firebase/club/land
 import ClubInvitePage, { ClubInvite } from './ClubInvitePage';
 import { CLUB_TYPE_LABELS } from './theme';
 import {
-  buildClubAppDeepLink,
   buildClubInstallPath,
   buildClubOneLink,
   buildClubWebFallbackUrl,
 } from '../../utils/clubLinks';
-import { appLinks, openIOSAppOrStore, platformDetection } from '../../utils/platformDetection';
+import { platformDetection } from '../../utils/platformDetection';
 import {
   trackClubInstallPageViewed,
   trackClubInstallStoreTapped,
@@ -165,10 +164,6 @@ const ClubInstallLanding: React.FC<ClubInstallLandingProps> = ({
     description: tagline,
     imageUrl: coverImageURL,
   });
-  const appDeepLink = buildClubAppDeepLink(clubData.id, {
-    sharedBy: sharedBy || undefined,
-    eventId: eventId || undefined,
-  });
 
   const clubInvite: ClubInvite = {
     name: clubName,
@@ -227,12 +222,12 @@ const ClubInstallLanding: React.FC<ClubInstallLandingProps> = ({
     });
 
     if (typeof window !== 'undefined') {
-      if (platform === 'ios') {
-        openIOSAppOrStore(appDeepLink, appLinks.appStoreUrl);
-        return;
-      }
+      const targetUrl =
+        platform === 'desktop'
+          ? clubInvite.inviteDeepLink
+          : clubInvite.openInviteDeepLink || clubInvite.inviteDeepLink;
 
-      window.location.href = platform === 'desktop' ? clubInvite.inviteDeepLink : clubInvite.openInviteDeepLink || clubInvite.inviteDeepLink;
+      window.location.href = targetUrl;
     }
   };
 
