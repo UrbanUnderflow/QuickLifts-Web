@@ -2,7 +2,8 @@ import type { ClubLandingPageProps, RoundPreview } from './landingPage';
 
 const isClubLandingFixtureEnabled = (): boolean => process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true';
 
-const E2E_HERO_IMAGE = 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=2070&auto=format&fit=crop';
+const E2E_HERO_IMAGE =
+  'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/groupChat%2F07DKCy5qnETYlmwn49NOupCsWKa2%2F83ADC15C-DBBE-4F67-BE2B-0E627709264F.jpg?alt=media&token=dcd172b6-20d1-431b-971c-4c732b096983';
 const E2E_LOGO_IMAGE = 'https://images.unsplash.com/photo-1541534401786-2077eed87a72?q=80&w=800&auto=format&fit=crop';
 
 const E2E_ROUNDS: RoundPreview[] = [
@@ -52,40 +53,42 @@ export const getClubLandingPageFixture = ({
   return {
     clubData: {
       id: resolvedClubId,
-      name: 'E2E Creator Club',
-      description: 'A premium creator club designed to validate mobile install-first onboarding.',
+      name: 'Fitness With Benefits(FWB)',
+      description:
+        'A social track club built to elevate your workouts and connect you with motivated peers. Expert guidance, social accountability, and results-driven challenges - all in one app.',
       coverImageURL: E2E_HERO_IMAGE,
       logoURL: E2E_LOGO_IMAGE,
       creatorId: 'e2e-creator',
       creatorInfo: {
         id: 'e2e-creator',
-        displayName: 'Coach Nova',
-        username: 'coachnova',
+        displayName: 'Nile Jones',
+        username: 'nilejones1',
       },
-      memberCount: 128,
-      accentColor: '#22D3EE',
+      memberCount: 1,
+      accentColor: '#FF6B35',
       secondaryColor: '#0B1120',
       pinnedRoundIds: ['e2e-round-strength'],
       features: {},
-      tagline: 'Train together. Stay locked in. Open the club in Pulse.',
-      clubType: 'creator',
+      tagline: 'Fitness with the benefit of community',
+      clubType: 'trackClub',
       landingPageConfig: {
-        heroTitle: 'E2E Creator Club',
-        heroSubtitle: 'Install Pulse to unlock the creator club experience on your phone.',
+        heroTitle: 'Fitness With Benefits(FWB)',
+        heroSubtitle: 'Fitness with the benefit of community',
         heroImage: E2E_HERO_IMAGE,
-        aboutText: 'This fixture mirrors the branded install-first creator club path we want for mobile shares.',
+        aboutText:
+          'A social track club built to elevate your workouts and connect you with motivated peers. Expert guidance, social accountability, and results-driven challenges - all in one app.',
         features: ['Chat', 'Challenges', 'Leaderboard', 'Community'],
       },
     },
     creatorData: {
       id: 'e2e-creator',
-      displayName: 'Coach Nova',
-      username: 'coachnova',
+      displayName: 'Nile Jones',
+      username: 'nilejones1',
       profileImage: {
         profileImageURL: E2E_LOGO_IMAGE,
       },
     },
-    totalWorkoutsCompleted: 482,
+    totalWorkoutsCompleted: 1,
     allRounds: E2E_ROUNDS,
   };
 };

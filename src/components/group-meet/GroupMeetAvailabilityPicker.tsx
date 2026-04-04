@@ -658,10 +658,10 @@ export default function GroupMeetAvailabilityPicker({
   };
 
   return (
-    <section className={`rounded-[28px] border border-white/10 bg-white/[0.03] p-4 sm:p-6 ${className}`.trim()}>
+    <section className={`rounded-[24px] border border-white/10 bg-white/[0.03] p-3 sm:rounded-[28px] sm:p-6 ${className}`.trim()}>
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-5">
         <div>
-          <h2 className="text-xl font-semibold">{title}</h2>
+          <h2 className="text-lg font-semibold sm:text-xl">{title}</h2>
           <p className="text-sm text-zinc-400 mt-1">
             {selectedDateCount} day{selectedDateCount === 1 ? '' : 's'} selected
           </p>
@@ -669,15 +669,16 @@ export default function GroupMeetAvailabilityPicker({
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-2 text-center text-xs uppercase tracking-[0.18em] text-zinc-500 mb-3">
+      <div className="mb-3 grid grid-cols-7 gap-1 text-center text-[10px] uppercase tracking-[0.18em] text-zinc-500 sm:gap-2 sm:text-xs">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
           <div key={day} className="py-2">
-            {day}
+            <span className="sm:hidden">{day[0]}</span>
+            <span className="hidden sm:inline">{day}</span>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-7 gap-1 sm:gap-2">
         {calendarDays.map((day) => {
           const dateKey = format(day, 'yyyy-MM-dd');
           const inTargetMonth = isSameMonth(
@@ -693,7 +694,7 @@ export default function GroupMeetAvailabilityPicker({
               type="button"
               onClick={() => inTargetMonth && !disabled && openDayEditor(dateKey)}
               disabled={!inTargetMonth || disabled}
-              className={`min-h-[92px] rounded-2xl border p-2 text-left transition-colors ${
+              className={`min-h-[84px] rounded-[18px] border p-1.5 text-left transition-colors sm:min-h-[92px] sm:rounded-2xl sm:p-2 ${
                 inTargetMonth
                   ? slots.length
                     ? 'border-[#E0FE10]/50 bg-[#E0FE10]/10 hover:bg-[#E0FE10]/15'
@@ -703,33 +704,54 @@ export default function GroupMeetAvailabilityPicker({
                   : 'border-white/5 bg-white/[0.02] text-zinc-700'
               } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
             >
-              <div className="text-sm font-medium">{format(day, 'd')}</div>
+              <div className="text-xs font-medium sm:text-sm">{format(day, 'd')}</div>
               {Boolean(peerParticipants.length) && (
-                <div className="mt-2">
-                  <div className="flex flex-wrap gap-1">
-                    {peerParticipants.slice(0, 3).map((peer) => (
-                      <PeerAvatar key={`${dateKey}-${peer.token}`} peer={peer} size="sm" />
-                    ))}
-                    {peerParticipants.length > 3 && (
-                      <div className="flex h-7 min-w-[1.75rem] items-center justify-center rounded-xl border border-white/10 bg-black/35 px-1 text-[10px] font-medium text-zinc-200">
-                        +{peerParticipants.length - 3}
+                <>
+                  <div className="mt-2 flex items-center gap-1 sm:hidden">
+                    <PeerAvatar key={`${dateKey}-${peerParticipants[0].token}`} peer={peerParticipants[0]} size="sm" />
+                    {peerParticipants.length > 1 && (
+                      <div className="flex h-6 min-w-[1.5rem] items-center justify-center rounded-full border border-white/10 bg-black/35 px-1 text-[10px] font-medium text-zinc-200">
+                        +{peerParticipants.length - 1}
                       </div>
                     )}
                   </div>
-                  <div className="mt-1 text-[10px] uppercase tracking-[0.14em] text-zinc-400">
-                    {peerParticipants.length} available
+
+                  <div className="mt-2 hidden sm:block">
+                    <div className="flex flex-wrap gap-1">
+                      {peerParticipants.slice(0, 3).map((peer) => (
+                        <PeerAvatar key={`${dateKey}-${peer.token}`} peer={peer} size="sm" />
+                      ))}
+                      {peerParticipants.length > 3 && (
+                        <div className="flex h-7 min-w-[1.75rem] items-center justify-center rounded-xl border border-white/10 bg-black/35 px-1 text-[10px] font-medium text-zinc-200">
+                          +{peerParticipants.length - 3}
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-1 text-[10px] uppercase tracking-[0.14em] text-zinc-400">
+                      {peerParticipants.length} available
+                    </div>
                   </div>
-                </div>
+                </>
               )}
-              <div className="mt-2 space-y-1">
-                {slots.slice(0, 2).map((slot) => (
-                  <div key={`${slot.date}-${slot.startMinutes}-${slot.endMinutes}`} className="rounded-lg bg-black/35 px-2 py-1 text-[11px] text-zinc-200">
-                    {formatMinutesAsTime(slot.startMinutes)} - {formatMinutesAsTime(slot.endMinutes)}
+              <div className="mt-2">
+                {slots.length > 0 && (
+                  <div className="sm:hidden">
+                    <div className="inline-flex items-center rounded-full border border-[#E0FE10]/20 bg-black/35 px-1.5 py-1 text-[9px] font-medium text-zinc-200">
+                      {slots.length} slot{slots.length === 1 ? '' : 's'}
+                    </div>
                   </div>
-                ))}
-                {slots.length > 2 && (
-                  <div className="text-[11px] text-zinc-300">+{slots.length - 2} more</div>
                 )}
+
+                <div className="hidden space-y-1 sm:block">
+                  {slots.slice(0, 2).map((slot) => (
+                    <div key={`${slot.date}-${slot.startMinutes}-${slot.endMinutes}`} className="rounded-lg bg-black/35 px-2 py-1 text-[11px] text-zinc-200">
+                      {formatMinutesAsTime(slot.startMinutes)} - {formatMinutesAsTime(slot.endMinutes)}
+                    </div>
+                  ))}
+                  {slots.length > 2 && (
+                    <div className="text-[11px] text-zinc-300">+{slots.length - 2} more</div>
+                  )}
+                </div>
               </div>
             </button>
           );

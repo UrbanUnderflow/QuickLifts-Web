@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildClubCanonicalUrl, buildClubInstallPath, buildClubOneLink } from '../../src/utils/clubLinks';
+import {
+  buildClubCanonicalUrl,
+  buildClubInstallPath,
+  buildClubOneLink,
+  buildClubWebFallbackUrl,
+} from '../../src/utils/clubLinks';
 
 test('buildClubInstallPath preserves share context and optional web override', () => {
   assert.equal(
@@ -20,6 +25,16 @@ test('buildClubCanonicalUrl preserves share context on the canonical club url', 
       eventId: 'event_9',
     }),
     'https://fitwithpulse.ai/club/club_123?sharedBy=coach_1&eventId=event_9'
+  );
+});
+
+test('buildClubWebFallbackUrl preserves share context and forces the web override', () => {
+  assert.equal(
+    buildClubWebFallbackUrl('club_123', {
+      sharedBy: 'coach_1',
+      eventId: 'event_9',
+    }),
+    'https://fitwithpulse.ai/club/club_123?sharedBy=coach_1&eventId=event_9&web=1'
   );
 });
 
