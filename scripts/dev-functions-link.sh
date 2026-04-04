@@ -72,8 +72,6 @@ CORE_FUNCTIONS=(
   # Coach
   create-coach-checkout-session
   get-coach-profile
-  create-partner-profile
-  notify-coach-connection
 
   # Admin tools
   firebase-next-api

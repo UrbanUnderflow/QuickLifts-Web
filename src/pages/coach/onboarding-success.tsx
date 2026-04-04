@@ -25,17 +25,17 @@ const CoachOnboardingSuccess: NextPage = () => {
     router.push('/');
   };
 
-  const referralCode = 'COACH123'; // This would come from the user's data in practice
+  const shareUrl = 'https://fitwithpulse.ai/PulseCheck/coach';
 
-  const shareMessage = `Join me on Pulse as my athlete! I'm your coach on the platform and you'll get access to Pulse + PulseCheck. Use my coach code: ${referralCode}`;
+  const shareMessage = `Join my PulseCheck program through the coach-led organization flow. Start here: ${shareUrl}`;
 
   const handleShare = async () => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'Join me on Pulse!',
+          title: 'Join me on PulseCheck',
           text: shareMessage,
-          url: `https://fitwithpulse.ai/coach/${referralCode}`
+          url: shareUrl
         });
       } catch (error) {
         console.log('Error sharing:', error);
@@ -43,7 +43,7 @@ const CoachOnboardingSuccess: NextPage = () => {
     } else {
       // Fallback: copy to clipboard
       navigator.clipboard.writeText(shareMessage);
-      alert('Coach referral message copied to clipboard!');
+      alert('PulseCheck coach-led organization link copied to clipboard!');
     }
   };
 
@@ -162,18 +162,18 @@ const CoachOnboardingSuccess: NextPage = () => {
               </div>
               <h3 className="text-xl font-bold text-white mb-4">2. Invite Your Athletes</h3>
               <p className="text-zinc-400 mb-6">
-                Share your coach code with athletes. They get access to Pulse + PulseCheck, and you earn 40% revenue share.
+                Athlete access is now issued through PulseCheck team invite links. Start new coach-led organizations from the canonical PulseCheck coach page, then issue the right team invites from there.
               </p>
               <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4 mb-4">
-                <div className="text-white font-mono text-sm">Coach Code:</div>
-                <div className="text-[#E0FE10] font-mono text-lg font-bold">{referralCode}</div>
+                <div className="text-white font-mono text-sm">Coach-Led Organization Entry:</div>
+                <div className="text-[#E0FE10] font-mono text-sm font-bold break-all">{shareUrl}</div>
               </div>
               <button
                 onClick={handleShare}
                 className="inline-flex items-center gap-2 bg-zinc-700 text-white px-6 py-3 rounded-xl font-semibold hover:bg-zinc-600 transition-colors"
               >
                 <FaShare className="h-4 w-4" />
-                Share Code
+                Share Coach Setup Link
               </button>
             </div>
 

@@ -10,7 +10,6 @@ import { FaBars, FaTimes } from 'react-icons/fa';
 const CoachTopNav: React.FC = () => {
   const router = useRouter();
   const currentUser = useUser();
-  const [referralCode, setReferralCode] = useState<string>('');
   const [canSeeEarnings, setCanSeeEarnings] = useState<boolean>(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -21,7 +20,6 @@ const CoachTopNav: React.FC = () => {
         const snap = await getDoc(doc(db, 'coaches', currentUser.id));
         if (snap.exists()) {
           const data: any = snap.data();
-          setReferralCode(data?.referralCode || '');
           // Earnings tab should only show for partnership coaches.
           // Primary flag: `earningsAccess === true`. Fallback: partners.
           setCanSeeEarnings(!!(data?.earningsAccess === true || data?.userType === 'partner'));
@@ -40,7 +38,7 @@ const CoachTopNav: React.FC = () => {
 
   const items = [
     { href: '/coach/dashboard', label: 'Dashboard' },
-    { href: '/coach/referrals', label: 'Referrals' },
+    { href: '/coach/referrals', label: 'Invites' },
     ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
     { href: '/coach/staff', label: 'Staff' },
     { href: '/coach/inbox', label: 'Inbox' },
@@ -66,11 +64,6 @@ const CoachTopNav: React.FC = () => {
             );
           })}
         </nav>
-
-        <div className="ml-4 hidden md:block text-right">
-          <div className="text-xs text-zinc-400">Referral Code</div>
-          <div className="text-lg font-bold text-[#E0FE10]">{referralCode || '—'}</div>
-        </div>
 
         <button
           onClick={handleSignOut}
@@ -121,8 +114,9 @@ const CoachTopNav: React.FC = () => {
               })}
             </div>
             <div className="mt-auto pt-6 border-t border-zinc-800">
-              <div className="text-xs text-zinc-400 mb-2">Referral Code</div>
-              <div className="text-lg font-bold text-[#E0FE10] mb-4">{referralCode || '—'}</div>
+              <div className="text-xs text-zinc-400 mb-4">
+                PulseCheck team invites and admin activation links now handle onboarding.
+              </div>
               <button
                 onClick={() => { setMobileOpen(false); handleSignOut(); }}
                 className="w-full bg-zinc-800 text-white px-4 py-2 rounded-lg border border-zinc-700 hover:bg-zinc-700 transition-colors"
@@ -138,5 +132,4 @@ const CoachTopNav: React.FC = () => {
 };
 
 export default CoachTopNav;
-
 

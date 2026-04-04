@@ -15,7 +15,6 @@ interface Props {
 const CoachProductModal: React.FC<Props> = ({ isOpen, closeModal }) => {
   const currentUser = useUser();
   const [planType, setPlanType] = useState<'monthly' | 'annual'>('monthly');
-  const [partnerCode, setPartnerCode] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'auth' | 'plan'>('auth');
@@ -44,7 +43,6 @@ const CoachProductModal: React.FC<Props> = ({ isOpen, closeModal }) => {
       console.log('[CoachSubscription] Creating coach checkout session for:', { 
         userId: currentUser.id, 
         priceId,
-        partnerCode
       });
 
       const response = await fetch('/.netlify/functions/create-coach-checkout-session', {
@@ -55,7 +53,6 @@ const CoachProductModal: React.FC<Props> = ({ isOpen, closeModal }) => {
         body: JSON.stringify({ 
           priceId,
           userId: currentUser.id,
-          partnerCode: partnerCode || undefined,
           userType: 'coach' // Standard coach, not partner
         }),
       });
@@ -100,7 +97,6 @@ const CoachProductModal: React.FC<Props> = ({ isOpen, closeModal }) => {
     setError(null);
     setIsLoading(false);
     setPlanType('monthly');
-    setPartnerCode('');
   };
 
   const handleClose = () => {
@@ -245,23 +241,12 @@ const CoachProductModal: React.FC<Props> = ({ isOpen, closeModal }) => {
                 </ul>
               </div>
 
-              {/* Partner Code Field */}
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="partnerCode" className="block text-white font-medium mb-2">
-                    Partner Code (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    id="partnerCode"
-                    value={partnerCode}
-                    onChange={(e) => setPartnerCode(e.target.value.toUpperCase())}
-                    className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-400 focus:outline-none focus:border-purple-500 transition-colors"
-                    placeholder="e.g., COACH123"
-                    maxLength={8}
-                  />
-                  <p className="text-zinc-400 text-xs mt-1">Enter a partner coach's code to share revenue with them</p>
-                </div>
+              <div className="rounded-xl border border-zinc-700 bg-zinc-800/70 p-4">
+                <p className="text-sm font-medium text-white">Commercial setup now lives on your team</p>
+                <p className="mt-2 text-xs leading-6 text-zinc-400">
+                  Team-plan billing, paywall bypass, and athlete referral kickbacks are configured from PulseCheck team
+                  commercial settings. There is no separate partner code at checkout anymore.
+                </p>
               </div>
 
             </div>

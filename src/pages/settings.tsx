@@ -65,8 +65,8 @@ const SettingsPage: NextPage = () => {
     router.push('/subscribe');
   };
 
-  const handleTrainerBadge = () => {
-    router.push('/partner/apply');
+  const handleCoachSetup = () => {
+    router.push('/PulseCheck/coach');
   };
 
   const handleTutorial = () => {
@@ -115,11 +115,11 @@ const SettingsPage: NextPage = () => {
             subtitle={email}
           />
 
-          {/* Request Personal Trainer Badge */}
+          {/* Coach-led organization setup */}
           <SettingRow
-            title="Request Personal Trainer Badge"
-            subtitle=""
-            onClick={handleTrainerBadge}
+            title="Coach-Led Organization Setup"
+            subtitle="Start the canonical org, team, and admin-activation flow"
+            onClick={handleCoachSetup}
           />
 
           {/* Show Tutorial Modal */}
@@ -183,7 +183,6 @@ const SettingsPage: NextPage = () => {
 };
 
 export default SettingsPage;
-
 
 
 

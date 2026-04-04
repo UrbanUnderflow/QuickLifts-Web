@@ -14,7 +14,7 @@ This doc captures what fixed mobile redirect issues (Safari and in‑app browser
    - The functions create a Checkout Session and immediately 302 to `session.url`.
 
 3) Trigger navigation via real anchors on the calling pages (best for Safari):
-   - `connect/[referralCode].tsx` and `/subscribe` now render `<a href="/checkout-redirect?...">` links.
+   - PulseCheck invite and subscribe surfaces render `<a href="/checkout-redirect?...">` links.
    - JS `onClick` remains as a backup but the anchor alone is sufficient.
 
 Why this works: Safari (and many in‑app browsers) aggressively block `window.open` after async work. Using a top‑level anchor + same‑tab server redirect avoids pop‑up blockers and about:blank flicker.
@@ -22,7 +22,7 @@ Why this works: Safari (and many in‑app browsers) aggressively block `window.o
 ## How to Launch
 
 ```
-/checkout-redirect?type=athlete&userId={USER_ID}&priceId={PRICE_ID}&email={EMAIL}&coachReferralCode={REF}
+/checkout-redirect?type=athlete&userId={USER_ID}&priceId={PRICE_ID}&email={EMAIL}&organizationId={ORG_ID}&teamId={TEAM_ID}&inviteToken={TOKEN}
 /checkout-redirect?type=subscribe&userId={USER_ID}&priceId={PRICE_ID}
 ```
 
@@ -42,7 +42,7 @@ Common causes when a 500 is returned:
 ## File References
 
 - `src/pages/checkout-redirect.tsx` – launcher page (same‑tab nav + fallback button).
-- `src/pages/connect/[referralCode].tsx` – renders anchor link for athlete subscription.
+- `src/pages/PulseCheck/team-invite/[token].tsx` – renders the canonical invite-aware athlete onboarding path.
 - `src/pages/subscribe.tsx` – renders anchor links for monthly/yearly.
 - `netlify/functions/create-athlete-checkout-session.js` – GET handler 302 to Stripe; supports `debug=1`.
 - `netlify/functions/create-checkout-session.js` – GET handler 302 to Stripe; supports `debug=1`.
@@ -52,6 +52,5 @@ Common causes when a 500 is returned:
 - Always prefer same‑tab navigation for mobile Checkout.
 - Keep the anchor hrefs up‑to‑date; they are the primary trigger path.
 - For critical incidents, temporarily expose a Stripe Payment Link as a last resort fallback.
-
 
 

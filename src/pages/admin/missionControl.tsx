@@ -35,6 +35,23 @@ interface MissionStatus {
     canary?: boolean;
     plannerState?: string;
     quarantinedTaskCount?: number;
+    plannedOutcomeCount?: number;
+    observingOutcomeCount?: number;
+    confirmedOutcomeCount?: number;
+    reversedOutcomeCount?: number;
+    waivedOutcomeCount?: number;
+    canceledOutcomeCount?: number;
+    supersededOutcomeCount?: number;
+    guardrailFailureCount?: number;
+    terminalOutcomeScore?: number;
+    enablingOutcomeScore?: number;
+    learningOutcomeScore?: number;
+    invalidationOutcomeScore?: number;
+    constraintOutcomeScore?: number;
+    creditedOutcomeScore?: number;
+    netOutcomeScore?: number;
+    businessDebtScore?: number;
+    waivedCreditedScore?: number;
     objectiveProgress?: Record<string, {
         title?: string;
         verifiedDeliverableCount?: number;
@@ -81,6 +98,41 @@ interface AgentTask {
     taskClass?: string;
     objectiveId?: string;
     quarantineReason?: string;
+    outcomeId?: string;
+    outcomeStatus?: string;
+    outcomeClass?: string;
+    outcomeDomain?: string;
+    expectedCreditedScore?: number;
+    expectedNetScore?: number;
+    expectedOutcomeScore?: number;
+    proofCompileStatus?: string;
+}
+
+interface MissionOutcome {
+    id: string;
+    missionId?: string;
+    objectiveId?: string;
+    title?: string;
+    summary?: string;
+    status?: string;
+    outcomeClass?: string;
+    outcomeDomain?: string;
+    outcomeRole?: string;
+    guardrailStatus?: string;
+    creditedOutcomeScore?: number;
+    netOutcomeScore?: number;
+    businessDebtScore?: number;
+    sourceEvidence?: unknown[];
+    primaryTaskIds?: string[];
+    deliverableIds?: string[];
+    artifactVerifiedAt?: Timestamp;
+    outcomeObservationStartedAt?: Timestamp;
+    confirmedAt?: Timestamp;
+    reversedAt?: Timestamp;
+    waivedAt?: Timestamp;
+    canceledAt?: Timestamp;
+    supersededAt?: Timestamp;
+    updatedAt?: Timestamp;
 }
 
 /* ─── Constants ─────────────────────────────────────── */
@@ -158,6 +210,68 @@ function formatAutoApproveCountdown(autoApproveAt?: { seconds: number }): string
     const m = Math.floor((ms % 3600000) / 60000);
     return `Auto-approves in ${h}h ${m}m`;
 }
+
+const normalizeOutcomeStatus = (value?: string) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized || normalized === 'planned') return 'planned';
+    if (normalized === 'executing') return 'executing';
+    if (normalized === 'observing') return 'observing';
+    if (normalized === 'confirmed') return 'confirmed';
+    if (normalized === 'reversed') return 'reversed';
+    if (normalized === 'waived') return 'waived';
+    if (normalized === 'canceled' || normalized === 'cancelled') return 'canceled';
+    if (normalized === 'superseded') return 'superseded';
+    if (normalized === 'failed' || normalized === 'guardrail-failed') return 'failed';
+    return normalized;
+};
+
+const formatSignedScore = (value?: number) => {
+    if (value === undefined || value === null || Number.isNaN(Number(value))) return '0';
+    const formatted = Number(value).toFixed(Number.isInteger(Number(value)) ? 0 : 1);
+    return Number(value) > 0 ? `+${formatted}` : formatted;
+};
+
+const outcomeStatusBadge = (status?: string) => {
+    const normalized = normalizeOutcomeStatus(status);
+    switch (normalized) {
+        case 'planned':
+            return { className: 'planned', label: 'PLANNED' };
+        case 'executing':
+            return { className: 'observing', label: 'EXECUTING' };
+        case 'observing':
+            return { className: 'observing', label: 'OBSERVING' };
+        case 'confirmed':
+            return { className: 'confirmed', label: 'CONFIRMED' };
+        case 'reversed':
+            return { className: 'reversed', label: 'REVERSED' };
+        case 'waived':
+            return { className: 'waived', label: 'WAIVED' };
+        case 'canceled':
+            return { className: 'canceled', label: 'CANCELED' };
+        case 'superseded':
+            return { className: 'superseded', label: 'SUPERSEDED' };
+        case 'failed':
+            return { className: 'failed', label: 'FAILED' };
+        default:
+            return { className: 'planned', label: normalized.toUpperCase() || 'PLANNED' };
+    }
+};
+
+const outcomeClassBadge = (outcomeClass?: string) => {
+    const normalized = String(outcomeClass || '').trim().toLowerCase();
+    if (normalized === 'terminal') return { className: 'terminal', label: 'TERMINAL' };
+    if (normalized === 'enabling') return { className: 'enabling', label: 'ENABLING' };
+    if (normalized === 'learning') return { className: 'learning', label: 'LEARNING' };
+    if (normalized === 'invalidation') return { className: 'invalidation', label: 'INVALIDATION' };
+    if (normalized === 'constraint') return { className: 'constraint', label: 'CONSTRAINT' };
+    return { className: 'unknown', label: normalized ? normalized.toUpperCase() : 'UNKNOWN' };
+};
+
+const formatOutcomeScore = (value?: number) => {
+    if (value === undefined || value === null || Number.isNaN(Number(value))) return '0';
+    const rounded = Math.round(Number(value) * 100) / 100;
+    return Number.isInteger(rounded) ? `${rounded}` : `${rounded.toFixed(2)}`;
+};
 
 /* ─── Styles ─────────────────────────────────────────── */
 
@@ -308,6 +422,55 @@ const S: Record<string, CSSProperties> = {
         background: 'rgba(34,197,94,0.1)',
         color: '#22c55e', flexShrink: 0,
     },
+    outcomeSummaryRow: { display: 'flex', flexWrap: 'wrap' as const, gap: 8, marginTop: 14 },
+    outcomeSummaryChip: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '6px 10px',
+        borderRadius: 999,
+        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'rgba(255,255,255,0.03)',
+        color: '#cbd5e1',
+        fontSize: 11,
+        fontWeight: 600,
+    },
+    outcomeLedgerCard: {
+        marginTop: 18,
+        borderRadius: 16,
+        padding: 16,
+        border: '1px solid rgba(99,102,241,0.12)',
+        background: 'rgba(99,102,241,0.03)',
+    },
+    outcomeLedgerHeader: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        marginBottom: 12,
+    },
+    outcomeLedgerTitle: { fontSize: 13, fontWeight: 700, color: '#c4b5fd', margin: 0 },
+    outcomeLedgerSubtitle: { fontSize: 11, color: '#71717a', margin: '3px 0 0' },
+    outcomeLedgerScoreRow: { display: 'flex', flexWrap: 'wrap' as const, gap: 6 },
+    outcomeLedgerItem: {
+        padding: '10px 12px',
+        borderRadius: 12,
+        border: '1px solid rgba(255,255,255,0.06)',
+        background: 'rgba(255,255,255,0.02)',
+        marginBottom: 8,
+    },
+    outcomeLedgerItemHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+    outcomeLedgerItemTitle: { fontSize: 13, fontWeight: 700, color: '#e4e4e7', margin: 0 },
+    outcomeLedgerItemMeta: { fontSize: 11, color: '#71717a', marginTop: 3, lineHeight: 1.4 },
+    outcomeMetaRow: { display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginTop: 8 },
+    outcomeBadge: {
+        fontSize: 9,
+        fontWeight: 700,
+        borderRadius: 999,
+        padding: '1px 7px',
+        border: '1px solid rgba(255,255,255,0.08)',
+        fontFamily: 'JetBrains Mono, monospace',
+    },
     // Section header
     sectionHeader: {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -376,6 +539,7 @@ export default function MissionControlPage() {
     const [northStar, setNorthStar] = useState<NorthStar | null>(null);
     const [proposedObjectives, setProposedObjectives] = useState<ProposedObjective[]>([]);
     const [agentTasks, setAgentTasks] = useState<Record<string, AgentTask[]>>({});
+    const [missionOutcomes, setMissionOutcomes] = useState<MissionOutcome[]>([]);
     const [launching, setLaunching] = useState(false);
     const [pausing, setPausing] = useState(false);
     const [queueingModelUpgrade, setQueueingModelUpgrade] = useState(false);
@@ -413,6 +577,32 @@ export default function MissionControlPage() {
         });
         return unsub;
     }, []);
+
+    // Live mission outcomes for the active mission
+    useEffect(() => {
+        if (!mission?.missionId) {
+            setMissionOutcomes([]);
+            return;
+        }
+
+        const q = query(
+            collection(db, 'agent-outcomes'),
+            where('missionId', '==', mission.missionId),
+            limit(200)
+        );
+
+        const unsub = onSnapshot(q, (snap) => {
+            const items = snap.docs.map((d) => ({ ...(d.data() as MissionOutcome), id: d.id }));
+            items.sort((a, b) => {
+                const aTime = (a.updatedAt?.toMillis?.() ?? 0) || (a.confirmedAt?.toMillis?.() ?? 0) || (a.artifactVerifiedAt?.toMillis?.() ?? 0);
+                const bTime = (b.updatedAt?.toMillis?.() ?? 0) || (b.confirmedAt?.toMillis?.() ?? 0) || (b.artifactVerifiedAt?.toMillis?.() ?? 0);
+                return bTime - aTime;
+            });
+            setMissionOutcomes(items);
+        });
+
+        return unsub;
+    }, [mission?.missionId]);
 
     // Live proposed objectives
     useEffect(() => {
@@ -556,6 +746,27 @@ export default function MissionControlPage() {
     const objectiveProgressEntries = Object.entries(mission?.objectiveProgress || {});
     const missionMode = mission?.mode || ((mission?.systemVersion || 0) >= 2 ? 'execute' : 'legacy');
     const plannerStateLabel = mission?.plannerState || (mission?.plannerMode ? `${mission.plannerMode} planner` : 'legacy');
+    const outcomeCountSummary = {
+        planned: mission?.plannedOutcomeCount || 0,
+        observing: mission?.observingOutcomeCount || 0,
+        confirmed: mission?.confirmedOutcomeCount || 0,
+        reversed: mission?.reversedOutcomeCount || 0,
+        waived: mission?.waivedOutcomeCount || 0,
+        canceled: mission?.canceledOutcomeCount || 0,
+        superseded: mission?.supersededOutcomeCount || 0,
+        guardrail: mission?.guardrailFailureCount || 0,
+    };
+    const outcomeScoreSummary = {
+        terminal: mission?.terminalOutcomeScore || 0,
+        enabling: mission?.enablingOutcomeScore || 0,
+        learning: mission?.learningOutcomeScore || 0,
+        invalidation: mission?.invalidationOutcomeScore || 0,
+        constraint: mission?.constraintOutcomeScore || 0,
+        credited: mission?.creditedOutcomeScore || 0,
+        net: mission?.netOutcomeScore || 0,
+        debt: mission?.businessDebtScore || 0,
+    };
+    const recentOutcomes = missionOutcomes.slice(0, 6);
 
     return (
         <>
@@ -632,6 +843,72 @@ export default function MissionControlPage() {
                                                     Stall window: {mission?.stallWindowMinutes || 30}m · WIP {mission?.maxActiveTasksPerAgent || 1} active / {mission?.maxQueuedExecuteTasksPerAgent || 1} execute queued / {mission?.maxQueuedExploreTasksPerAgent || 1} explore queued
                                                     {mission?.lastVerifiedDeliverableAt ? ` · last verified ${formatTimeAgo(mission.lastVerifiedDeliverableAt)}` : ''}
                                                 </p>
+                                                {(missionOutcomes.length > 0 || Object.values(outcomeCountSummary).some((value) => value > 0) || Object.values(outcomeScoreSummary).some((value) => value !== 0)) && (
+                                                    <>
+                                                        <div style={S.outcomeSummaryRow}>
+                                                            <span style={S.outcomeSummaryChip}>
+                                                                Planned <strong>{outcomeCountSummary.planned}</strong>
+                                                            </span>
+                                                            <span style={S.outcomeSummaryChip}>
+                                                                Observing <strong>{outcomeCountSummary.observing}</strong>
+                                                            </span>
+                                                            <span style={S.outcomeSummaryChip}>
+                                                                Confirmed <strong>{outcomeCountSummary.confirmed}</strong>
+                                                            </span>
+                                                            {outcomeCountSummary.reversed > 0 && (
+                                                                <span style={S.outcomeSummaryChip}>
+                                                                    Reversed <strong>{outcomeCountSummary.reversed}</strong>
+                                                                </span>
+                                                            )}
+                                                            {outcomeCountSummary.waived > 0 && (
+                                                                <span style={S.outcomeSummaryChip}>
+                                                                    Waived <strong>{outcomeCountSummary.waived}</strong>
+                                                                </span>
+                                                            )}
+                                                            {outcomeCountSummary.canceled > 0 && (
+                                                                <span style={S.outcomeSummaryChip}>
+                                                                    Canceled <strong>{outcomeCountSummary.canceled}</strong>
+                                                                </span>
+                                                            )}
+                                                            {outcomeCountSummary.superseded > 0 && (
+                                                                <span style={S.outcomeSummaryChip}>
+                                                                    Superseded <strong>{outcomeCountSummary.superseded}</strong>
+                                                                </span>
+                                                            )}
+                                                            {outcomeCountSummary.guardrail > 0 && (
+                                                                <span style={S.outcomeSummaryChip}>
+                                                                    Guardrails <strong>{outcomeCountSummary.guardrail}</strong>
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div style={S.outcomeSummaryRow}>
+                                                            <span style={S.outcomeSummaryChip}>
+                                                                Credited <strong>{formatOutcomeScore(outcomeScoreSummary.credited)}</strong>
+                                                            </span>
+                                                            <span style={S.outcomeSummaryChip}>
+                                                                Net <strong>{formatOutcomeScore(outcomeScoreSummary.net)}</strong>
+                                                            </span>
+                                                            <span style={S.outcomeSummaryChip}>
+                                                                Debt <strong>{formatOutcomeScore(outcomeScoreSummary.debt)}</strong>
+                                                            </span>
+                                                            <span style={S.outcomeSummaryChip}>
+                                                                Terminal <strong>{formatOutcomeScore(outcomeScoreSummary.terminal)}</strong>
+                                                            </span>
+                                                            <span style={S.outcomeSummaryChip}>
+                                                                Enabling <strong>{formatOutcomeScore(outcomeScoreSummary.enabling)}</strong>
+                                                            </span>
+                                                            <span style={S.outcomeSummaryChip}>
+                                                                Learning <strong>{formatOutcomeScore(outcomeScoreSummary.learning)}</strong>
+                                                            </span>
+                                                            <span style={S.outcomeSummaryChip}>
+                                                                Invalidation <strong>{formatOutcomeScore(outcomeScoreSummary.invalidation)}</strong>
+                                                            </span>
+                                                            <span style={S.outcomeSummaryChip}>
+                                                                Constraint <strong>{formatOutcomeScore(outcomeScoreSummary.constraint)}</strong>
+                                                            </span>
+                                                        </div>
+                                                    </>
+                                                )}
                                                 {mission?.autopauseReason && (
                                                     <p style={{ ...S.missionMetaText, color: '#fbbf24', marginTop: 6 }}>
                                                         Auto-pause: {mission.autopauseReason}
@@ -853,6 +1130,94 @@ export default function MissionControlPage() {
                                     ))}
                                 </div>
                             )}
+
+                            {!missionIsIdle && (
+                                <div style={S.outcomeLedgerCard}>
+                                    <div style={S.outcomeLedgerHeader}>
+                                        <div>
+                                            <p style={S.outcomeLedgerTitle}>Outcome Ledger</p>
+                                            <p style={S.outcomeLedgerSubtitle}>
+                                                Verified movement lives here. Older docs still render if these fields are missing.
+                                            </p>
+                                        </div>
+                                        <div style={S.outcomeLedgerScoreRow}>
+                                            <span style={S.outcomeSummaryChip}>Credited <strong>{formatOutcomeScore(outcomeScoreSummary.credited)}</strong></span>
+                                            <span style={S.outcomeSummaryChip}>Net <strong>{formatOutcomeScore(outcomeScoreSummary.net)}</strong></span>
+                                            <span style={S.outcomeSummaryChip}>Debt <strong>{formatOutcomeScore(outcomeScoreSummary.debt)}</strong></span>
+                                        </div>
+                                    </div>
+
+                                    {recentOutcomes.length === 0 ? (
+                                        <div style={{ ...S.emptyState, padding: '18px 8px' }}>
+                                            <Zap size={18} style={{ opacity: 0.2, marginBottom: 6 }} />
+                                            <span>No outcome records yet</span>
+                                        </div>
+                                    ) : (
+                                        recentOutcomes.map((outcome) => {
+                                            const statusBadge = outcomeStatusBadge(outcome.status);
+                                            const classBadge = outcomeClassBadge(outcome.outcomeClass);
+                                            return (
+                                                <div key={outcome.id} style={S.outcomeLedgerItem}>
+                                                    <div style={S.outcomeLedgerItemHeader}>
+                                                        <div>
+                                                            <p style={S.outcomeLedgerItemTitle}>
+                                                                {outcome.title || outcome.summary || outcome.id}
+                                                            </p>
+                                                            <p style={S.outcomeLedgerItemMeta}>
+                                                                {outcome.outcomeDomain || 'general'} · {outcome.outcomeRole || 'unassigned'}
+                                                                {outcome.updatedAt ? ` · updated ${formatTimeAgo(outcome.updatedAt)}` : ''}
+                                                            </p>
+                                                        </div>
+                                                        <div style={S.outcomeLedgerScoreRow}>
+                                                            {outcome.creditedOutcomeScore !== undefined && (
+                                                                <span style={S.outcomeSummaryChip}>Credited <strong>{formatOutcomeScore(outcome.creditedOutcomeScore)}</strong></span>
+                                                            )}
+                                                            {outcome.netOutcomeScore !== undefined && (
+                                                                <span style={S.outcomeSummaryChip}>Net <strong>{formatOutcomeScore(outcome.netOutcomeScore)}</strong></span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div style={S.outcomeMetaRow}>
+                                                        <span style={{ ...S.outcomeBadge, borderColor: 'rgba(255,255,255,0.12)', color: '#e5e7eb', background: 'rgba(255,255,255,0.04)' }}>
+                                                            OUTCOME
+                                                        </span>
+                                                        <span
+                                                            style={{
+                                                                ...S.outcomeBadge,
+                                                                borderColor: statusBadge.className === 'confirmed' ? 'rgba(34,197,94,0.25)' : statusBadge.className === 'observing' ? 'rgba(34,211,238,0.25)' : statusBadge.className === 'planned' ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.12)',
+                                                                color: statusBadge.className === 'confirmed' ? '#4ade80' : statusBadge.className === 'observing' ? '#22d3ee' : statusBadge.className === 'planned' ? '#a5b4fc' : '#cbd5e1',
+                                                                background: statusBadge.className === 'confirmed' ? 'rgba(34,197,94,0.12)' : statusBadge.className === 'observing' ? 'rgba(34,211,238,0.12)' : statusBadge.className === 'planned' ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.04)',
+                                                            }}
+                                                        >
+                                                            {statusBadge.label}
+                                                        </span>
+                                                        <span
+                                                            style={{
+                                                                ...S.outcomeBadge,
+                                                                borderColor: classBadge.className === 'terminal' ? 'rgba(34,197,94,0.25)' : classBadge.className === 'enabling' ? 'rgba(59,130,246,0.25)' : classBadge.className === 'learning' ? 'rgba(251,191,36,0.25)' : classBadge.className === 'invalidation' ? 'rgba(244,63,94,0.25)' : 'rgba(255,255,255,0.12)',
+                                                                color: classBadge.className === 'terminal' ? '#4ade80' : classBadge.className === 'enabling' ? '#60a5fa' : classBadge.className === 'learning' ? '#fbbf24' : classBadge.className === 'invalidation' ? '#fb7185' : '#cbd5e1',
+                                                                background: classBadge.className === 'terminal' ? 'rgba(34,197,94,0.12)' : classBadge.className === 'enabling' ? 'rgba(59,130,246,0.12)' : classBadge.className === 'learning' ? 'rgba(251,191,36,0.12)' : classBadge.className === 'invalidation' ? 'rgba(244,63,94,0.12)' : 'rgba(255,255,255,0.04)',
+                                                            }}
+                                                        >
+                                                            {classBadge.label}
+                                                        </span>
+                                                        {outcome.guardrailStatus && (
+                                                            <span style={{ ...S.outcomeBadge, borderColor: 'rgba(251,191,36,0.2)', color: '#fbbf24', background: 'rgba(251,191,36,0.08)' }}>
+                                                                {outcome.guardrailStatus}
+                                                            </span>
+                                                        )}
+                                                        {outcome.primaryTaskIds?.length ? (
+                                                            <span style={{ ...S.outcomeBadge, borderColor: 'rgba(148,163,184,0.2)', color: '#cbd5e1', background: 'rgba(255,255,255,0.04)' }}>
+                                                                {outcome.primaryTaskIds.length} task{outcome.primaryTaskIds.length === 1 ? '' : 's'}
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {/* Right column: Proposed objectives */}
@@ -974,6 +1339,41 @@ export default function MissionControlPage() {
                                                     {task.taskClass && (
                                                         <span style={{ ...S.scoreChip, background: 'rgba(99,102,241,0.08)', color: '#a5b4fc' }}>
                                                             {task.taskClass}
+                                                        </span>
+                                                    )}
+                                                    {task.outcomeStatus && (
+                                                        <span
+                                                            style={{
+                                                                ...S.scoreChip,
+                                                                background: task.outcomeStatus === 'confirmed' ? 'rgba(34,197,94,0.1)' : task.outcomeStatus === 'observing' ? 'rgba(34,211,238,0.1)' : task.outcomeStatus === 'planned' ? 'rgba(99,102,241,0.1)' : 'rgba(148,163,184,0.1)',
+                                                                color: task.outcomeStatus === 'confirmed' ? '#22c55e' : task.outcomeStatus === 'observing' ? '#22d3ee' : task.outcomeStatus === 'planned' ? '#a5b4fc' : '#cbd5e1',
+                                                            }}
+                                                        >
+                                                            {outcomeStatusBadge(task.outcomeStatus).label}
+                                                        </span>
+                                                    )}
+                                                    {(task.outcomeClass || task.outcomeDomain) && (
+                                                        <span style={{ ...S.scoreChip, background: 'rgba(251,191,36,0.08)', color: '#fbbf24' }}>
+                                                            {task.outcomeClass || task.outcomeDomain}
+                                                        </span>
+                                                    )}
+                                                    {task.proofCompileStatus && (
+                                                        <span style={{
+                                                            ...S.scoreChip,
+                                                            background: task.proofCompileStatus === 'dry-run-passed' ? 'rgba(34,197,94,0.08)' : task.proofCompileStatus === 'compile-passed' ? 'rgba(59,130,246,0.08)' : 'rgba(244,63,94,0.08)',
+                                                            color: task.proofCompileStatus === 'dry-run-passed' ? '#4ade80' : task.proofCompileStatus === 'compile-passed' ? '#60a5fa' : '#f87171',
+                                                        }}>
+                                                            Proof {task.proofCompileStatus}
+                                                        </span>
+                                                    )}
+                                                    {task.expectedCreditedScore !== undefined && (
+                                                        <span style={{ ...S.scoreChip, background: 'rgba(34,197,94,0.08)', color: '#4ade80' }}>
+                                                            Cr {formatOutcomeScore(task.expectedCreditedScore)}
+                                                        </span>
+                                                    )}
+                                                    {task.expectedNetScore !== undefined && (
+                                                        <span style={{ ...S.scoreChip, background: 'rgba(34,211,238,0.08)', color: '#22d3ee' }}>
+                                                            Net {formatOutcomeScore(task.expectedNetScore)}
                                                         </span>
                                                     )}
                                                     {task.northStarScore && (

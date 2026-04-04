@@ -184,12 +184,6 @@ const CoachDashboard: React.FC = () => {
   const [pendingInvites, setPendingInvites] = useState<{ coachId: string; coachName?: string; permission: 'full'|'limited'; allowedAthletes?: string[] }[]>([]);
   const [coachNotifications, setCoachNotifications] = useState<CoachNotificationDoc[]>([]);
 
-  const handleCopyCode = async () => {
-    if (coachProfile?.referralCode) {
-      await navigator.clipboard.writeText(coachProfile.referralCode);
-    }
-  };
-  
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -634,10 +628,10 @@ const CoachDashboard: React.FC = () => {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-              onClick={() => router.push('/coach/sign-up')}
+              onClick={() => router.push('/PulseCheck/coach')}
                   className="w-full px-6 py-4 rounded-xl bg-[#E0FE10] text-black font-semibold shadow-lg shadow-[#E0FE10]/20 hover:shadow-[#E0FE10]/40 transition-shadow"
             >
-              Create Coach Account
+              Open Coach-Led Org Setup
                 </motion.button>
                 
                 <div className="text-sm text-zinc-500 pt-2">
@@ -1037,17 +1031,17 @@ const CoachDashboard: React.FC = () => {
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-2">No athletes connected yet</h3>
                 <p className="text-zinc-400 mb-8 max-w-md mx-auto">
-                  Share your referral code <span className="text-[#E0FE10] font-semibold">{coachProfile?.referralCode}</span> with athletes to get started.
+                  Athlete access now comes from PulseCheck team invite links. Use your team workspace or provisioning flow to issue current invites instead of sharing legacy coach referral codes.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={handleCopyCode}
+                    onClick={() => router.push('/coach/referrals')}
                     className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[#E0FE10] text-black font-semibold shadow-lg shadow-[#E0FE10]/20"
                   >
                     <Copy className="w-4 h-4" />
-                    Copy Referral Code
+                    Open Invite Guidance
                   </motion.button>
                   <motion.button
                     whileHover={{ scale: 1.02 }}

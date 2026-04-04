@@ -6,10 +6,13 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const {
     DEFAULT_STALL_WINDOW_MINUTES,
     MISSION_SYSTEM_VERSION,
+    OUTCOME_COLLECTION,
+    advanceOutcomeObservation,
     buildObjectiveId,
     isExecuteMissionActive,
     normalizeMissionPolicy,
     recordMissionRunEvent,
+    summarizeMissionOutcomes,
     toMillis,
 } = require('./missionOsV2');
 
@@ -132,10 +135,11 @@ async function releaseBlockedExecuteTasks(tasks, missionPolicy) {
     return releasedCount;
 }
 
-async function updateMissionState(mission, tasks) {
+async function updateMissionState(mission, tasks, outcomes = []) {
     const missionPolicy = normalizeMissionPolicy(mission);
     const objectiveProgress = computeObjectiveProgress(mission, tasks);
     const quarantinedTaskCount = tasks.filter((task) => String(task?.status || '').toLowerCase() === 'quarantined').length;
+    const outcomeSummary = summarizeMissionOutcomes(outcomes);
     const lastVerifiedAtMs = toMillis(mission?.lastVerifiedDeliverableAt || mission?.startedAt || mission?.updatedAt);
     const stallWindowMs = (missionPolicy.stallWindowMinutes || DEFAULT_STALL_WINDOW_MINUTES) * 60 * 1000;
     const nowMs = Date.now();
@@ -143,7 +147,7 @@ async function updateMissionState(mission, tasks) {
 
     if (stalled) {
         const lastVerifiedAtIso = new Date(lastVerifiedAtMs).toISOString();
-        await db.doc(MISSION_DOC).set({
+        const pausedPatch = {
             status: 'paused',
             missionPhase: 'paused',
             plannerState: 'paused-stalled',
@@ -151,6 +155,15 @@ async function updateMissionState(mission, tasks) {
             updatedAt: FieldValue.serverTimestamp(),
             objectiveProgress,
             quarantinedTaskCount,
+            ...outcomeSummary,
+        };
+        await db.doc(MISSION_DOC).set(pausedPatch, { merge: true });
+        await db.collection('mission-runs').doc(MISSION_ID).set({
+            missionId: MISSION_ID,
+            updatedAt: FieldValue.serverTimestamp(),
+            objectiveProgress,
+            quarantinedTaskCount,
+            ...outcomeSummary,
         }, { merge: true });
         await recordMissionRunEvent(db, FieldValue, MISSION_ID, 'stall-pause', {
             lastVerifiedDeliverableAt: lastVerifiedAtIso,
@@ -160,13 +173,22 @@ async function updateMissionState(mission, tasks) {
     }
 
     const releasedCount = await releaseBlockedExecuteTasks(tasks, missionPolicy);
-    await db.doc(MISSION_DOC).set({
+    const activePatch = {
         plannerState: releasedCount > 0 ? 'releasing-work' : 'supervising',
         updatedAt: FieldValue.serverTimestamp(),
         objectiveProgress,
         quarantinedTaskCount,
         supervisorHeartbeatAt: FieldValue.serverTimestamp(),
         missionPhase: 'execution',
+        ...outcomeSummary,
+    };
+    await db.doc(MISSION_DOC).set(activePatch, { merge: true });
+    await db.collection('mission-runs').doc(MISSION_ID).set({
+        missionId: MISSION_ID,
+        updatedAt: FieldValue.serverTimestamp(),
+        objectiveProgress,
+        quarantinedTaskCount,
+        ...outcomeSummary,
     }, { merge: true });
     return 'active';
 }
@@ -176,6 +198,31 @@ async function loadMissionTasks(missionId) {
         .where('missionId', '==', missionId)
         .get();
     return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+}
+
+async function loadMissionOutcomes(missionId) {
+    const snap = await db.collection(OUTCOME_COLLECTION)
+        .where('missionId', '==', missionId)
+        .get();
+    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+}
+
+async function advanceObservingOutcomes(outcomes) {
+    let confirmedCount = 0;
+    for (const outcome of outcomes) {
+        const patch = advanceOutcomeObservation(outcome, Date.now());
+        if (!patch) continue;
+        await db.collection(OUTCOME_COLLECTION).doc(outcome.id).set({
+            ...patch,
+        }, { merge: true });
+        confirmedCount += 1;
+        await recordMissionRunEvent(db, FieldValue, MISSION_ID, 'confirmed-outcome', {
+            outcomeId: outcome.id,
+            objectiveId: outcome.objectiveId || '',
+            previousStatus: outcome.status || 'observing',
+        });
+    }
+    return confirmedCount;
 }
 
 async function run() {
@@ -205,7 +252,9 @@ async function run() {
             }
 
             const tasks = await loadMissionTasks(MISSION_ID);
-            const result = await updateMissionState(mission, tasks);
+            await advanceObservingOutcomes(await loadMissionOutcomes(MISSION_ID));
+            const outcomes = await loadMissionOutcomes(MISSION_ID);
+            const result = await updateMissionState(mission, tasks, outcomes);
             if (result === 'paused') break;
         } catch (err) {
             console.error(`Mission supervisor loop failed: ${err.message}`);

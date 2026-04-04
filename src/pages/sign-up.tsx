@@ -2,18 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, limit, query, runTransaction, serverTimestamp, where } from 'firebase/firestore';
+import { doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../api/firebase/config';
 import { User, SubscriptionType, SubscriptionPlatform, UserLevel } from '../api/firebase/user';
 import { userService } from '../api/firebase/user';
 import { firebaseStorageService } from '../api/firebase/storage/service';
-import { coachService } from '../api/firebase/coach';
 import { Camera, Eye, EyeOff, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 // import { FaGoogle, FaApple } from 'react-icons/fa';
 
 const SignUpPage: React.FC = () => {
   const router = useRouter();
-  const { type, coach, redirect, invite, partnerType, partnerId } = router.query; // Get the type, coach, redirect, invite, and partner attribution parameters
+  const { type, redirect, partnerType, partnerId } = router.query; // Get the type, redirect, and partner attribution parameters
   
   const [formData, setFormData] = useState({
     email: '',
@@ -283,53 +282,6 @@ const SignUpPage: React.FC = () => {
         console.warn('[SignUp] Failed to send welcome email (non-blocking):', e);
       }
 
-      // If coach signup came from the team-owned /coach-onboard invite link, persist attribution for monitoring.
-      // NOTE: We intentionally use a separate param name (`invite`) to avoid colliding with coach-to-coach referral kickback logic.
-      if (isCoachSignUp && invite && typeof invite === 'string') {
-        const code = invite.trim();
-        if (code) {
-          try {
-            // Enrich with admin-configured metadata from `coach-onboard-invites` if present.
-            let inviteMeta: any = null;
-            try {
-              const invRef = collection(db, 'coach-onboard-invites');
-              const invQ = query(invRef, where('code', '==', code.toUpperCase()), limit(1));
-              const invSnap = await getDocs(invQ);
-              if (!invSnap.empty) inviteMeta = invSnap.docs[0].data();
-            } catch (_) {
-              inviteMeta = null;
-            }
-
-            await userService.updateUser(firebaseUser.uid, {
-              onboardInvite: {
-                source: 'coach-onboard',
-                code: code.toUpperCase(),
-                capturedAt: Math.floor(Date.now() / 1000),
-                label: inviteMeta?.label ?? null,
-                coachType: inviteMeta?.coachType ?? null,
-                earningsAccess: typeof inviteMeta?.earningsAccess === 'boolean' ? inviteMeta.earningsAccess : null,
-              },
-            });
-          } catch (e) {
-            // Non-blocking: do not fail signup if attribution write fails
-            console.warn('[SignUp] Failed to persist onboard invite attribution:', e);
-          }
-        }
-      }
-      
-      // If user came from a coach invite link, auto-connect them
-      if (coach && typeof coach === 'string' && !isCoachSignUp) {
-        try {
-          console.log('[SignUp] Auto-connecting athlete to coach:', coach);
-          await coachService.connectAthleteToCoach(firebaseUser.uid, coach);
-          console.log('[SignUp] Successfully connected athlete to coach');
-        } catch (connectError) {
-          console.error('[SignUp] Failed to auto-connect to coach:', connectError);
-          // Don't fail the sign-up process if connection fails
-          // User can still manually connect later
-        }
-      }
-      
       setSuccess(true);
       
       // Redirect after success

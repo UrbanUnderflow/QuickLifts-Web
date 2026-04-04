@@ -1,16 +1,18 @@
-# Coach Team Invite Tracking (Coach Onboard Links)
+# Coach Team Invite Tracking
 
-This doc explains how **Pulse team invites** differ from **coach referral (kickback) links**, and how we store each one during signup.
+This doc explains the canonical coach-led organization invite path and the legacy route cleanup that replaced the old coach referral-code flow.
 
 ## TL;DR (what to send)
 
-- **Team-owned coach invite link (for Tre/team outreach)**:
-  - `https://fitwithpulse.ai/coach-onboard?invite=TEAM_CODE`
+- **Canonical coach invite link**:
+  - `https://fitwithpulse.ai/sign-up?type=coach&invite=TEAM_CODE`
 
-- **Coach-to-coach referral link (kickback/connected coaches)**:
-  - `https://fitwithpulse.ai/coach/sign-up?ref=COACH_REFERRAL_CODE`
+- **Legacy redirects still accepted temporarily**:
+  - `/coach-onboard?invite=TEAM_CODE` → redirects to `/sign-up?type=coach&invite=TEAM_CODE`
+  - `/coach/sign-up` → redirects to `/sign-up?type=coach&invite=...` when invite data exists, otherwise to `/PulseCheck/coach`
+  - `/coach-invite/{referralCode}` and `/connect/{referralCode}` no longer provision access and now redirect into PulseCheck login with a retirement notice
 
-> Important: `invite` and `ref` are intentionally separate so we don’t mix **team attribution** with **coach kickback attribution**.
+> Important: team attribution now lives on PulseCheck org/team invite data. Legacy coach referral-code entrypoints are retired.
 
 ## Last Updated
 
@@ -20,8 +22,8 @@ This doc explains how **Pulse team invites** differ from **coach referral (kickb
 
 ### `invite` (team-owned attribution)
 
-- **Where used**: `/coach-onboard?invite=...` → redirects CTA into `/sign-up?type=coach&invite=...`
-- **Purpose**: attribute coach signups to **team outreach** (campaign/channel/person).
+- **Where used**: `/sign-up?type=coach&invite=...`
+- **Purpose**: attribute coach signups to team outreach or campaign ownership while the old invite-code registry is being retired.
 - **Examples**:
   - `invite=DEC_2025_OUTREACH`
   - `invite=IG_DM`
@@ -34,18 +36,9 @@ This doc explains how **Pulse team invites** differ from **coach referral (kickb
 - When the coach profile is created, we copy the same object onto:
   - `coaches/{uid}.onboardInvite`
 
-### `ref` (coach referral / kickback)
-
-- **Where used**: `/coach/sign-up?ref=...`
-- **Purpose**: connect coach-to-coach via referral code (kickback / network graph).
-- **Persistence**:
-  - Stored temporarily in localStorage as `pulse_referring_coach_code`
-  - Used to call `coachService.connectCoachToCoachByReferralCode(...)`
-
 ## Notes / conventions
 
-- Use `invite` for anything **team-owned** (internal attribution).
-- Use `ref` for anything **coach-owned** (referral/kickback).
+- Use `invite` for coach-led organization attribution during signup.
+- Use PulseCheck team invites and admin activation links for downstream staff, coach, and athlete access.
 - If you want attribution you can query directly on the coach doc, use `coaches/{uid}.onboardInvite.code`.
-
 

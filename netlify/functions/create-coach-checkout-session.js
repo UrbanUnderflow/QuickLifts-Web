@@ -7,6 +7,11 @@
 
 const Stripe = require('stripe');
 const { db, headers } = require('./config/firebase');
+const {
+  resolvePulseCheckCommercialContext,
+  normalizeCommercialConfig,
+  normalizeString,
+} = require('./utils/pulsecheck-revenue');
 
 // Helper to determine if the request is from localhost
 const isLocalhostRequest = (event) => {
@@ -62,9 +67,7 @@ const handler = async (event) => {
 
   const { 
     priceId, 
-    userId, 
-    referralCode,
-    partnerCode
+    userId
   } = body;
 
   if (!priceId || !userId) {
@@ -111,25 +114,26 @@ const handler = async (event) => {
     
     console.log(`[CoachCheckout] Using baseUrl: ${baseUrl}, isLocalhost: ${isLocalhost}`);
 
-    // Check if referral code is unique (if provided)
-    if (referralCode) {
-      const existingCoach = await db.collection('coaches')
-        .where('referralCode', '==', referralCode)
-        .limit(1)
-        .get();
-
-      if (!existingCoach.empty) {
-        return {
-          statusCode: 400,
-          headers,
-          body: JSON.stringify({ 
-            message: 'Referral code already exists. Please choose a different code.' 
-          })
-        };
-      }
-    }
+    const context = await resolvePulseCheckCommercialContext({
+      db,
+      userId,
+      metadata: {},
+    });
+    const commercialConfig = normalizeCommercialConfig(context?.commercialConfig);
     
     // Create a Checkout Session with coach-specific metadata
+    const metadata = {
+      userId: userId,
+      userType: 'coach',
+      pulsecheckOrganizationId: normalizeString(context?.organizationId),
+      pulsecheckTeamId: normalizeString(context?.teamId),
+      pulsecheckCommercialModel: 'team-plan',
+      pulsecheckTeamPlanStatus: commercialConfig.teamPlanStatus,
+      pulsecheckRevenueRecipientUserId: commercialConfig.revenueRecipientUserId || '',
+      pulsecheckRevenueRecipientRole: commercialConfig.revenueRecipientRole || '',
+      createdAt: Date.now().toString(),
+    };
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
@@ -142,20 +146,9 @@ const handler = async (event) => {
       client_reference_id: userId,
       success_url: `${baseUrl}/coach/onboarding-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/PulseCheck/coach`,
-      metadata: {
-        userId: userId,
-        userType: 'coach',
-        referralCode: referralCode || '',
-        partnerCode: partnerCode || '',
-        createdAt: Date.now().toString()
-      },
+      metadata,
       subscription_data: {
-        metadata: {
-          userId: userId,
-          userType: 'coach',
-          referralCode: referralCode || '',
-          partnerCode: partnerCode || ''
-        }
+        metadata
       }
     });
 

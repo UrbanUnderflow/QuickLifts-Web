@@ -233,6 +233,7 @@ export class User {
  
  export enum SubscriptionType {
    unsubscribed = "Unsubscribed",
+   teamPlan = "Team Plan Access",
    beta = "Beta User",
    monthly = "Monthly Subscriber",
    annual = "Annual Subscriber",

@@ -1,6 +1,11 @@
 const { admin } = require('./config/firebase');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const {
+  upsertPulseCheckRevenueEvent,
+  recalculatePulseCheckRevenueSummaries,
+  readPulseCheckAttributionFromMetadata,
+} = require('./utils/pulsecheck-revenue');
 
 // Subscription type mappings
 const SubscriptionType = {
@@ -18,6 +23,33 @@ const SubscriptionPlatform = {
 };
 
 const db = admin.firestore();
+
+async function syncPulseCheckRevenueFromAthleteSubscription(subscription, userId) {
+  const pulseCheckAttribution = readPulseCheckAttributionFromMetadata(subscription?.metadata || {});
+  if (!pulseCheckAttribution.teamId) {
+    return;
+  }
+
+  const revenueEvent = await upsertPulseCheckRevenueEvent({
+    db,
+    admin,
+    subscription,
+    source: 'stripe-athlete-subscription',
+    userId,
+    metadata: subscription?.metadata || {},
+  });
+
+  if (!revenueEvent?.teamId) {
+    return;
+  }
+
+  await recalculatePulseCheckRevenueSummaries({
+    db,
+    admin,
+    teamIds: [revenueEvent.teamId],
+    userIds: revenueEvent.revenueRecipientUserId ? [revenueEvent.revenueRecipientUserId] : [],
+  });
+}
 
 // Price ID to subscription type mapping
 function mapPriceIdToSubscriptionType(priceId) {
@@ -239,6 +271,8 @@ async function handleSubscriptionCreated(subscription) {
       }
     }
 
+    await syncPulseCheckRevenueFromAthleteSubscription(subscription, userId);
+
     console.log(`[Webhook] Successfully processed subscription created for user: ${userId}`);
 
   } catch (error) {
@@ -362,6 +396,8 @@ async function handleSubscriptionUpdated(subscription) {
       }
     }
 
+    await syncPulseCheckRevenueFromAthleteSubscription(subscription, userId);
+
     console.log(`[Webhook] Successfully processed subscription updated for user: ${userId}`);
 
   } catch (error) {
@@ -406,6 +442,8 @@ async function handleSubscriptionDeleted(subscription) {
     };
 
     await db.collection('subscriptions').doc(userId).update(subscriptionData);
+
+    await syncPulseCheckRevenueFromAthleteSubscription(subscription, userId);
 
     console.log(`[Webhook] Successfully processed subscription deleted for user: ${userId}`);
 

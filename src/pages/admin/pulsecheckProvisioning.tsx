@@ -8,6 +8,10 @@ import { useUser } from '../../hooks/useUser';
 import { storage } from '../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import { fetchPulseCheckSportConfiguration, getDefaultPulseCheckSports } from '../../api/firebase/pulsecheckSportConfig';
+import {
+  derivePulseCheckTeamPlanBypass,
+  getDefaultPulseCheckTeamCommercialConfig,
+} from '../../api/firebase/pulsecheckProvisioning/types';
 import type {
   PulseCheckAdminContact,
   CreatePulseCheckPilotCohortInput,
@@ -25,8 +29,12 @@ import type {
   PulseCheckPilotCohort,
   PulseCheckPilotCohortStatus,
   PulseCheckPilotStudyMode,
+  PulseCheckRevenueRecipientRole,
   PulseCheckStudyPosture,
   PulseCheckTeam,
+  PulseCheckTeamCommercialConfig,
+  PulseCheckTeamCommercialModel,
+  PulseCheckTeamPlanStatus,
   PulseCheckTeamStatus,
 } from '../../api/firebase/pulsecheckProvisioning/types';
 import { resolvePulseCheckInvitePreviewImage } from '../../utils/pulsecheckInviteLinks';
@@ -64,6 +72,7 @@ const defaultTeamForm: CreatePulseCheckTeamInput = {
   defaultAdminName: '',
   defaultAdminEmail: '',
   defaultInvitePolicy: 'admin-and-staff',
+  commercialConfig: getDefaultPulseCheckTeamCommercialConfig(),
   defaultClinicianProfileId: '',
   defaultClinicianProfileName: '',
   defaultClinicianProfileType: 'group',
@@ -106,6 +115,22 @@ const TEAM_TYPE_OPTIONS = [
   { value: 'brand-athlete-group', label: 'Brand Athlete Group' },
   { value: 'research-group', label: 'Research Group' },
   { value: 'other', label: 'Other' },
+];
+
+const TEAM_COMMERCIAL_MODEL_OPTIONS: Array<{ value: PulseCheckTeamCommercialModel; label: string }> = [
+  { value: 'athlete-pay', label: 'Athlete Pay' },
+  { value: 'team-plan', label: 'Team Plan' },
+];
+
+const TEAM_PLAN_STATUS_OPTIONS: Array<{ value: PulseCheckTeamPlanStatus; label: string }> = [
+  { value: 'inactive', label: 'Inactive' },
+  { value: 'active', label: 'Active' },
+];
+
+const TEAM_REVENUE_RECIPIENT_ROLE_OPTIONS: Array<{ value: PulseCheckRevenueRecipientRole; label: string }> = [
+  { value: 'team-admin', label: 'Team Admin' },
+  { value: 'coach', label: 'Coach' },
+  { value: 'organization-owner', label: 'Organization Owner' },
 ];
 
 const PILOT_STUDY_MODE_OPTIONS: Array<{ value: PulseCheckPilotStudyMode; label: string }> = [
@@ -296,6 +321,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [activationCreatingTeamId, setActivationCreatingTeamId] = useState<string | null>(null);
   const [clinicianLinkCreatingProfileId, setClinicianLinkCreatingProfileId] = useState<string | null>(null);
   const [adminLinkCreatingEmail, setAdminLinkCreatingEmail] = useState<string | null>(null);
+  const [teamCommercialSavingId, setTeamCommercialSavingId] = useState<string | null>(null);
   const [onboardingModal, setOnboardingModal] = useState<OnboardingModalState | null>(null);
   const [additionalAdminForm, setAdditionalAdminForm] = useState({ name: '', email: '' });
   const [additionalAdminSubmitting, setAdditionalAdminSubmitting] = useState(false);
@@ -303,6 +329,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [organizationImageUploadingId, setOrganizationImageUploadingId] = useState<string | null>(null);
   const [teamImageUploadingId, setTeamImageUploadingId] = useState<string | null>(null);
   const [sportOptions, setSportOptions] = useState(() => getDefaultPulseCheckSports());
+  const [teamCommercialDrafts, setTeamCommercialDrafts] = useState<Record<string, PulseCheckTeamCommercialConfig>>({});
 
   const selectedOrganization = useMemo(
     () => organizations.find((organization) => organization.id === teamForm.organizationId) || null,
@@ -510,6 +537,13 @@ const PulseCheckProvisioningPage: React.FC = () => {
       ]);
       setOrganizations(organizationResults);
       setTeams(teamResults);
+      setTeamCommercialDrafts((current) => {
+        const next = { ...current };
+        teamResults.forEach((team) => {
+          next[team.id] = current[team.id] || team.commercialConfig;
+        });
+        return next;
+      });
       setPilots(pilotResults);
       setPilotCohorts(pilotCohortResults);
       setClinicianProfiles(clinicianProfileResults);
@@ -706,6 +740,41 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
       return { ...current, [field]: value };
     });
+    setMessage(null);
+  };
+
+  const handleTeamCommercialFieldChange = (
+    field: keyof PulseCheckTeamCommercialConfig,
+    value: string | boolean
+  ) => {
+    setTeamForm((current) => ({
+      ...current,
+      commercialConfig: {
+        ...current.commercialConfig,
+        [field]:
+          field === 'referralRevenueSharePct'
+            ? Math.max(0, Math.min(100, Number(value) || 0))
+            : value,
+      },
+    }));
+    setMessage(null);
+  };
+
+  const handleExistingTeamCommercialFieldChange = (
+    teamId: string,
+    field: keyof PulseCheckTeamCommercialConfig,
+    value: string | boolean
+  ) => {
+    setTeamCommercialDrafts((current) => ({
+      ...current,
+      [teamId]: {
+        ...(current[teamId] || getDefaultPulseCheckTeamCommercialConfig()),
+        [field]:
+          field === 'referralRevenueSharePct'
+            ? Math.max(0, Math.min(100, Number(value) || 0))
+            : value,
+      },
+    }));
     setMessage(null);
   };
 
@@ -963,6 +1032,26 @@ const PulseCheckProvisioningPage: React.FC = () => {
       setMessage({ type: 'error', text: 'Failed to create team.' });
     } finally {
       setTeamSubmitting(false);
+    }
+  };
+
+  const handleSaveTeamCommercialConfig = async (team: PulseCheckTeam) => {
+    const draft = teamCommercialDrafts[team.id] || team.commercialConfig;
+    setTeamCommercialSavingId(team.id);
+    setMessage(null);
+
+    try {
+      await pulseCheckProvisioningService.updateTeamCommercialConfig(team.id, draft);
+      await loadData();
+      setMessage({
+        type: 'success',
+        text: `${team.displayName} commercial config updated.`,
+      });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to update team commercial config:', error);
+      setMessage({ type: 'error', text: 'Failed to update team commercial config.' });
+    } finally {
+      setTeamCommercialSavingId((current) => (current === team.id ? null : current));
     }
   };
 
@@ -1677,6 +1766,91 @@ const PulseCheckProvisioningPage: React.FC = () => {
                     </select>
                   </label>
 
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Commercial Model</span>
+                    <select
+                      value={teamForm.commercialConfig.commercialModel}
+                      onChange={(event) => handleTeamCommercialFieldChange('commercialModel', event.target.value as PulseCheckTeamCommercialModel)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
+                    >
+                      {TEAM_COMMERCIAL_MODEL_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Team Plan Status</span>
+                    <select
+                      value={teamForm.commercialConfig.teamPlanStatus}
+                      onChange={(event) => handleTeamCommercialFieldChange('teamPlanStatus', event.target.value as PulseCheckTeamPlanStatus)}
+                      disabled={teamForm.commercialConfig.commercialModel !== 'team-plan'}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {TEAM_PLAN_STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Revenue Recipient Role</span>
+                    <select
+                      value={teamForm.commercialConfig.revenueRecipientRole}
+                      onChange={(event) => handleTeamCommercialFieldChange('revenueRecipientRole', event.target.value as PulseCheckRevenueRecipientRole)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
+                    >
+                      {TEAM_REVENUE_RECIPIENT_ROLE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Referral Revenue Share %</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.5"
+                      value={teamForm.commercialConfig.referralRevenueSharePct}
+                      onChange={(event) => handleTeamCommercialFieldChange('referralRevenueSharePct', event.target.value)}
+                      disabled={!teamForm.commercialConfig.referralKickbackEnabled}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </label>
+
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Commercial Rules</span>
+                    <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-4">
+                      <label className="flex items-start gap-3 text-sm text-zinc-300">
+                        <input
+                          type="checkbox"
+                          checked={teamForm.commercialConfig.referralKickbackEnabled}
+                          onChange={(event) => handleTeamCommercialFieldChange('referralKickbackEnabled', event.target.checked)}
+                          className="mt-1 h-4 w-4 rounded border-zinc-700 bg-black/20 text-green-400"
+                        />
+                        <span>
+                          Enable referral kickback for athlete-paid subscriptions tied to this team.
+                        </span>
+                      </label>
+                      <div className="mt-3 rounded-xl border border-zinc-800 bg-[#0b1220] px-3 py-3 text-xs leading-6 text-zinc-400">
+                        {derivePulseCheckTeamPlanBypass(teamForm.commercialConfig)
+                          ? 'Active team plan: athletes invited through this team bypass the paywall and land with team-sponsored access.'
+                          : 'Athlete-paid flow: invited athletes remain unsubscribed until they purchase, and any configured referral share stays attached to the team invite attribution.'}
+                        {teamForm.commercialConfig.revenueRecipientRole === 'team-admin'
+                          ? ' The first redeemed team admin becomes the default revenue recipient unless you set a recipient user explicitly later.'
+                          : ''}
+                      </div>
+                    </div>
+                  </label>
+
                   <div className="space-y-2 md:col-span-2">
                     <span className="text-xs uppercase tracking-wide text-zinc-500">Selected Team Clinical Profile</span>
                     <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3">
@@ -2279,6 +2453,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
                               ) : (
                                 bundledTeams.map(({ team, pilots: bundledPilots, clinicianProfile, adminActivationLinks, clinicianOnboardingLink }) => {
                                   const teamStatus = getTeamStatusDisplay(team.status);
+                                  const teamCommercialDraft = teamCommercialDrafts[team.id] || team.commercialConfig;
+                                  const teamPlanBypassesPaywall = derivePulseCheckTeamPlanBypass(teamCommercialDraft);
 
                                   return (
                                     <div key={team.id} className="relative rounded-3xl border border-zinc-800 bg-black/20 p-4">
@@ -2332,6 +2508,149 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                     />
                                                   </label>
                                                 </div>
+                                              </div>
+                                            </div>
+                                            <div className="mt-4 rounded-2xl border border-green-500/20 bg-green-500/[0.05] p-4">
+                                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                                <div>
+                                                  <p className="text-xs uppercase tracking-wide text-zinc-500">Team Commercial Config</p>
+                                                  <p className="mt-2 text-sm text-zinc-300">
+                                                    Control whether this team uses athlete-paid access or an active team plan, and where referral revenue should route.
+                                                  </p>
+                                                </div>
+                                                <div className="rounded-full border border-zinc-700 bg-black/20 px-3 py-1 text-[11px] uppercase tracking-wide text-zinc-400">
+                                                  {teamPlanBypassesPaywall ? 'Team Plan Active' : 'Athlete-Paid Access'}
+                                                </div>
+                                              </div>
+
+                                              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                <label className="space-y-2">
+                                                  <span className="text-[11px] uppercase tracking-wide text-zinc-500">Commercial Model</span>
+                                                  <select
+                                                    value={teamCommercialDraft.commercialModel}
+                                                    onChange={(event) =>
+                                                      handleExistingTeamCommercialFieldChange(
+                                                        team.id,
+                                                        'commercialModel',
+                                                        event.target.value as PulseCheckTeamCommercialModel
+                                                      )
+                                                    }
+                                                    className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
+                                                  >
+                                                    {TEAM_COMMERCIAL_MODEL_OPTIONS.map((option) => (
+                                                      <option key={option.value} value={option.value}>
+                                                        {option.label}
+                                                      </option>
+                                                    ))}
+                                                  </select>
+                                                </label>
+
+                                                <label className="space-y-2">
+                                                  <span className="text-[11px] uppercase tracking-wide text-zinc-500">Team Plan Status</span>
+                                                  <select
+                                                    value={teamCommercialDraft.teamPlanStatus}
+                                                    onChange={(event) =>
+                                                      handleExistingTeamCommercialFieldChange(
+                                                        team.id,
+                                                        'teamPlanStatus',
+                                                        event.target.value as PulseCheckTeamPlanStatus
+                                                      )
+                                                    }
+                                                    disabled={teamCommercialDraft.commercialModel !== 'team-plan'}
+                                                    className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400 disabled:cursor-not-allowed disabled:opacity-60"
+                                                  >
+                                                    {TEAM_PLAN_STATUS_OPTIONS.map((option) => (
+                                                      <option key={option.value} value={option.value}>
+                                                        {option.label}
+                                                      </option>
+                                                    ))}
+                                                  </select>
+                                                </label>
+
+                                                <label className="space-y-2">
+                                                  <span className="text-[11px] uppercase tracking-wide text-zinc-500">Revenue Recipient Role</span>
+                                                  <select
+                                                    value={teamCommercialDraft.revenueRecipientRole}
+                                                    onChange={(event) =>
+                                                      handleExistingTeamCommercialFieldChange(
+                                                        team.id,
+                                                        'revenueRecipientRole',
+                                                        event.target.value as PulseCheckRevenueRecipientRole
+                                                      )
+                                                    }
+                                                    className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
+                                                  >
+                                                    {TEAM_REVENUE_RECIPIENT_ROLE_OPTIONS.map((option) => (
+                                                      <option key={option.value} value={option.value}>
+                                                        {option.label}
+                                                      </option>
+                                                    ))}
+                                                  </select>
+                                                </label>
+
+                                                <label className="space-y-2">
+                                                  <span className="text-[11px] uppercase tracking-wide text-zinc-500">Referral Revenue Share %</span>
+                                                  <input
+                                                    type="number"
+                                                    min={0}
+                                                    max={100}
+                                                    step="0.5"
+                                                    value={teamCommercialDraft.referralRevenueSharePct}
+                                                    onChange={(event) =>
+                                                      handleExistingTeamCommercialFieldChange(
+                                                        team.id,
+                                                        'referralRevenueSharePct',
+                                                        event.target.value
+                                                      )
+                                                    }
+                                                    disabled={!teamCommercialDraft.referralKickbackEnabled}
+                                                    className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400 disabled:cursor-not-allowed disabled:opacity-60"
+                                                  />
+                                                </label>
+                                              </div>
+
+                                              <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/20 px-4 py-4">
+                                                <label className="flex items-start gap-3 text-sm text-zinc-300">
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={teamCommercialDraft.referralKickbackEnabled}
+                                                    onChange={(event) =>
+                                                      handleExistingTeamCommercialFieldChange(
+                                                        team.id,
+                                                        'referralKickbackEnabled',
+                                                        event.target.checked
+                                                      )
+                                                    }
+                                                    className="mt-1 h-4 w-4 rounded border-zinc-700 bg-black/20 text-green-400"
+                                                  />
+                                                  <span>
+                                                    Enable referral kickback for athlete-paid subscriptions that originate from this team.
+                                                  </span>
+                                                </label>
+                                                <p className="mt-3 text-xs leading-6 text-zinc-400">
+                                                  {teamPlanBypassesPaywall
+                                                    ? 'Active team plan: athletes invited through this team bypass checkout and land with team-sponsored access.'
+                                                    : 'Athlete-paid flow: invited athletes keep team attribution when they purchase later, and the configured revenue share can route back to this team.'}
+                                                  {teamCommercialDraft.revenueRecipientRole === 'team-admin'
+                                                    ? ' The first redeemed team admin remains the default revenue recipient until you intentionally override it later.'
+                                                    : ''}
+                                                </p>
+                                              </div>
+
+                                              <div className="mt-4 flex justify-end">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => void handleSaveTeamCommercialConfig(team)}
+                                                  disabled={teamCommercialSavingId === team.id}
+                                                  className="inline-flex items-center gap-2 rounded-xl border border-green-400/30 px-4 py-2 text-sm font-semibold text-green-100 transition hover:border-green-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                                >
+                                                  {teamCommercialSavingId === team.id ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                  ) : (
+                                                    <Sparkles className="h-4 w-4" />
+                                                  )}
+                                                  {teamCommercialSavingId === team.id ? 'Saving...' : 'Save Commercial Config'}
+                                                </button>
                                               </div>
                                             </div>
                                           </div>
