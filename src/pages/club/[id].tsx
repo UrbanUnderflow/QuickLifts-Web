@@ -1,5 +1,4 @@
-import { GetServerSideProps, type GetServerSidePropsContext } from 'next';
-import type { ParsedUrlQuery } from 'querystring';
+import { GetServerSideProps } from 'next';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { clubService } from '../../api/firebase/club/service';
@@ -7,55 +6,15 @@ import {
   ClubLandingPageProps,
   fetchClubLandingPageProps,
 } from '../../api/firebase/club/landingPage';
+import { getClubLandingPageFixture } from '../../api/firebase/club/e2eFixtures';
 import { ClubMemberApp } from '../../components/club/ClubMemberApp';
 import { ClubPublicLanding } from '../../components/club/ClubPublicLanding';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { buildClubCheckInPath } from '../../utils/clubLinks';
+import { buildClubInstallRedirectUrl, isMobileClubRequest } from '../../utils/clubOnboardingRouting';
 
 type MembershipState = 'checking' | 'member' | 'non-member';
 type LiveClubData = ClubLandingPageProps['clubData'];
-
-const MOBILE_USER_AGENT_RE = /iphone|ipad|ipod|android|webos|blackberry|windows phone|mobile/i;
-
-const isMobileRequest = (req: GetServerSidePropsContext['req']): boolean => {
-  const userAgent = String(req.headers['user-agent'] || '');
-  if (!userAgent) {
-    return false;
-  }
-
-  if (req.headers['sec-ch-ua-mobile'] === '?1') {
-    return true;
-  }
-
-  return MOBILE_USER_AGENT_RE.test(userAgent);
-};
-
-const buildInstallRedirectUrl = (id: string, query: ParsedUrlQuery): string => {
-  const installPath = `/club/${encodeURIComponent(id)}/install`;
-  const params = new URLSearchParams();
-
-  Object.entries(query).forEach(([key, value]) => {
-    if (key === 'id' || key === 'web') {
-      return;
-    }
-
-    if (Array.isArray(value)) {
-      value.forEach((entry) => {
-        if (typeof entry === 'string' && entry) {
-          params.append(key, entry);
-        }
-      });
-      return;
-    }
-
-    if (typeof value === 'string' && value) {
-      params.set(key, value);
-    }
-  });
-
-  const queryString = params.toString();
-  return queryString ? `${installPath}?${queryString}` : installPath;
-};
 
 const ClubPage: React.FC<ClubLandingPageProps> = ({
   clubData,
@@ -242,14 +201,32 @@ const ClubPage: React.FC<ClubLandingPageProps> = ({
 export const getServerSideProps: GetServerSideProps<ClubLandingPageProps> = async ({ params, res, req, query }) => {
   const id = params?.id as string | undefined;
   const forceWeb = query.web === '1';
+  const fixtureName = typeof query.e2eFixture === 'string' ? query.e2eFixture : null;
 
-  if (id && !forceWeb && isMobileRequest(req)) {
+  if (
+    id &&
+    !forceWeb &&
+    isMobileClubRequest({
+      userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : null,
+      secChUaMobile: typeof req.headers['sec-ch-ua-mobile'] === 'string' ? req.headers['sec-ch-ua-mobile'] : null,
+    })
+  ) {
     return {
       redirect: {
-        destination: buildInstallRedirectUrl(id, query),
+        destination: buildClubInstallRedirectUrl(id, query),
         permanent: false,
       },
     };
+  }
+
+  const fixtureProps = getClubLandingPageFixture({
+    clubId: id,
+    fixtureName,
+  });
+
+  if (fixtureProps) {
+    res?.setHeader('Cache-Control', 'private, no-store, max-age=0');
+    return { props: fixtureProps };
   }
 
   const props = await fetchClubLandingPageProps({ clubId: id, res });

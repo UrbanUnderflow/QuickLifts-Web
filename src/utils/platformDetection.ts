@@ -64,7 +64,7 @@ export const platformDetection = {
  * App Store and Deep Link URLs
  */
 export const appLinks = {
-  appStoreUrl: 'https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729',
+  appStoreUrl: 'https://apps.apple.com/vn/app/fit-with-pulse/id6451497729',
   playStoreUrl: 'https://play.google.com/store/apps/details?id=ai.fitwithpulse.pulse',
   
   // Deep link schemes
