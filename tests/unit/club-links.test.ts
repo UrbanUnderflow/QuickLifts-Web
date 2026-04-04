@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildClubAppDeepLink,
   buildClubCanonicalUrl,
   buildClubInstallPath,
   buildClubOneLink,
@@ -35,6 +36,16 @@ test('buildClubWebFallbackUrl preserves share context and forces the web overrid
       eventId: 'event_9',
     }),
     'https://fitwithpulse.ai/club/club_123?sharedBy=coach_1&eventId=event_9&web=1'
+  );
+});
+
+test('buildClubAppDeepLink preserves share context for direct app open attempts', () => {
+  assert.equal(
+    buildClubAppDeepLink('club_123', {
+      sharedBy: 'coach_1',
+      eventId: 'event_9',
+    }),
+    'pulse://club?clubId=club_123&sharedBy=coach_1&eventId=event_9'
   );
 });
 

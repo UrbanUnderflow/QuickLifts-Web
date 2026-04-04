@@ -12,6 +12,7 @@ interface PageHeadProps {
   pageOgUrl: string; // Canonical URL for the current page, should be absolute
   /** Optional page-specific OG/social preview image path (e.g. /wunna-run-og.png). Takes precedence over metaData.ogImage when set. */
   pageOgImage?: string;
+  themeColor?: string;
 }
 
 const GLOBAL_DEFAULT_TITLE = "Pulse Community Fitness";
@@ -57,6 +58,7 @@ const PageHead: React.FC<PageHeadProps> = ({
   metaData,
   pageOgUrl,
   pageOgImage,
+  themeColor,
 }) => {
   const title = metaData?.pageTitle || GLOBAL_DEFAULT_TITLE;
   const description = metaData?.metaDescription || GLOBAL_DEFAULT_DESCRIPTION;
@@ -90,6 +92,8 @@ const PageHead: React.FC<PageHeadProps> = ({
     twitterImage = `https://fitwithpulse.ai${twitterImage}`;
   }
 
+  const resolvedThemeColor = themeColor || '#E0FE10';
+
   return (
     <Head>
       <title>{title}</title>
@@ -117,8 +121,8 @@ const PageHead: React.FC<PageHeadProps> = ({
 
       {/* Additional Meta Tags */}
       <link rel="canonical" href={ogUrl} />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <meta name="theme-color" content="#E0FE10" />
+      <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" key="viewport" />
+      <meta name="theme-color" content={resolvedThemeColor} key="theme-color" />
 
       {/* Apple Smart App Banner - prompts iOS users to open/download the app */}
       <meta name="apple-itunes-app" content="app-id=6451497729, app-argument=pulse://home" />
