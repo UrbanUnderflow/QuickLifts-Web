@@ -835,12 +835,12 @@ export default function GroupMeetAvailabilityPicker({
               )}
 
               <div className="mt-6">
-                <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="text-sm font-medium text-white">Your time ranges</div>
                   <button
                     type="button"
                     onClick={addDraftRange}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm hover:bg-white/[0.08]"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm hover:bg-white/[0.08] sm:w-auto"
                   >
                     <Plus className="w-4 h-4" />
                     Add time range
@@ -888,9 +888,9 @@ export default function GroupMeetAvailabilityPicker({
                             : 'border-white/10 bg-black/30'
                         }`}
                       >
-                        <div className="grid grid-cols-[1fr_1fr_auto] gap-3">
+                        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                           <label className="block">
-                            <span className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-zinc-500">
+                            <span className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-zinc-500 sm:text-xs sm:tracking-[0.18em]">
                               Start
                               {range.source === 'suggested' && (
                                 <span className="rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-2 py-0.5 text-[10px] tracking-[0.12em] text-[#F4FF8A]">
@@ -902,28 +902,30 @@ export default function GroupMeetAvailabilityPicker({
                               type="time"
                               value={range.start}
                               onChange={(event) => updateDraftRange(index, 'start', event.target.value)}
-                              className="w-full rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-white"
+                              className="w-full rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-base text-white sm:text-white"
                             />
                           </label>
 
                           <label className="block">
-                            <span className="block text-xs uppercase tracking-[0.18em] text-zinc-500 mb-2">End</span>
+                            <span className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-zinc-500 sm:text-xs sm:tracking-[0.18em]">End</span>
                             <input
                               type="time"
                               value={range.end}
                               onChange={(event) => updateDraftRange(index, 'end', event.target.value)}
-                              className="w-full rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-white"
+                              className="w-full rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-base text-white sm:text-white"
                             />
                           </label>
 
-                          <button
-                            type="button"
-                            onClick={() => removeDraftRange(index)}
-                            className="mt-7 rounded-xl border border-white/10 px-3 py-3 text-zinc-300 hover:bg-white/5"
-                            aria-label={`Remove time range ${index + 1}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex justify-end sm:block">
+                            <button
+                              type="button"
+                              onClick={() => removeDraftRange(index)}
+                              className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 sm:mt-0 sm:h-auto sm:px-3"
+                              aria-label={`Remove time range ${index + 1}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
 
                         <div className="mt-3 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs">

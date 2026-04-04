@@ -85,6 +85,26 @@ export const buildClubCheckInPath = (clubId: string, eventId?: string | null): s
   return `${basePath}?${query.toString()}`;
 };
 
+export const buildClubAppDeepLink = (
+  clubId: string,
+  options?: {
+    sharedBy?: string | null;
+    eventId?: string | null;
+  }
+): string => {
+  const deepLinkParams = new URLSearchParams({ clubId });
+
+  if (options?.sharedBy) {
+    deepLinkParams.set('sharedBy', options.sharedBy);
+  }
+
+  if (options?.eventId) {
+    deepLinkParams.set('eventId', options.eventId);
+  }
+
+  return `pulse://club?${deepLinkParams.toString()}`;
+};
+
 export const buildClubOneLink = ({
   clubId,
   fallbackPath,
@@ -110,14 +130,7 @@ export const buildClubOneLink = ({
   const fallbackUrl = fallbackPath
     ? toAbsoluteUrl(fallbackPath)
     : buildClubCanonicalUrl(clubId, { sharedBy, eventId });
-  const deepLinkParams = new URLSearchParams({ clubId });
-  if (sharedBy) {
-    deepLinkParams.set('sharedBy', sharedBy);
-  }
-  if (eventId) {
-    deepLinkParams.set('eventId', eventId);
-  }
-  const deepLinkUrl = `pulse://club?${deepLinkParams.toString()}`;
+  const deepLinkUrl = buildClubAppDeepLink(clubId, { sharedBy, eventId });
   const params = new URLSearchParams({
     pid,
     c: campaign,
