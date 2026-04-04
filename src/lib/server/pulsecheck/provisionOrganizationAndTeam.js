@@ -480,6 +480,28 @@ function buildReservedAdminPrincipal(input) {
   };
 }
 
+function buildCanaryAdminAccessInput(params = {}) {
+  const canary = buildCanaryProvisioningInput(params);
+  return {
+    actorLabel: normalizeString(params.actorLabel) || 'pulsecheck-canary-admin-access-provisioner',
+    organizationId: canary.organization.id,
+    teamId: canary.team.id,
+    handoffKey: normalizeString(params.handoffKey) || 'marcus-filly',
+    targetOwnerName: normalizeString(params.targetOwnerName) || canary.organization.primaryCustomerAdminName,
+    targetOwnerEmail: normalizeEmail(params.targetOwnerEmail) || canary.organization.primaryCustomerAdminEmail,
+    sourceBriefPath: 'docs/pulsecheck/canary-target-brief.md',
+    selectedTargetLeadId: 'LEAD-0007',
+    selectedTargetEvidenceIds: ['EVID-0004', 'EVID-0005'],
+    notes:
+      'Reserved initial admin handoff artifact before activation. Owner email remains unverified until direct confirmation.',
+  };
+}
+
+async function provisionPulseCheckCanaryAdminAccess({ adminApp, params = {} }) {
+  const input = buildCanaryAdminAccessInput(params);
+  return seedInitialPulseCheckAdminHandoff({ adminApp, input });
+}
+
 async function seedInitialPulseCheckAdminHandoff({ adminApp, input }) {
   if (!adminApp) {
     throw new Error('adminApp is required');
@@ -597,8 +619,10 @@ module.exports = {
   TEAMS_COLLECTION,
   ORGANIZATION_MEMBERSHIPS_COLLECTION,
   TEAM_MEMBERSHIPS_COLLECTION,
+  buildCanaryAdminAccessInput,
   buildCanaryProvisioningInput,
   buildProvisioningPayload,
+  provisionPulseCheckCanaryAdminAccess,
   provisionPulseCheckCanaryOrganization,
   provisionPulseCheckCanaryOrganizationAndTeam,
   provisionPulseCheckOrganizationAndTeam,
