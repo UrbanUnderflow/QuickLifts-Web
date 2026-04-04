@@ -49,6 +49,11 @@ import {
   formatCompactNumber,
   getAccentTextColor,
 } from './theme';
+import {
+  buildClubCanonicalUrl,
+  buildClubOneLink,
+} from '../../utils/clubLinks';
+import { trackClubShareLinkCopied } from '../../lib/clubShareAnalytics';
 import { platformDetection, appLinks } from '../../utils/platformDetection';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
@@ -556,7 +561,14 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
     creatorData?.profileImage?.profileImageURL ||
     'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=2070&auto=format&fit=crop';
   const clubTypeLabel = clubData.clubType ? CLUB_TYPE_LABELS[clubData.clubType] || null : null;
-  const shareUrl = `https://fitwithpulse.ai/club/${clubData.id}`;
+  const canonicalClubUrl = buildClubCanonicalUrl(clubData.id);
+  const shareUrl = buildClubOneLink({
+    clubId: clubData.id,
+    sharedBy: currentUser.id,
+    title: `${clubData.name} | Pulse Club`,
+    description: clubData.description || `Member view for ${clubData.name}.`,
+    imageUrl: heroImage,
+  });
   const features = new ClubFeatures(clubData.features || {});
   const activationConfig = useMemo(
     () => new ClubActivationConfig(clubData.activation?.toDictionary?.() ?? clubData.activation ?? {}),
@@ -1182,6 +1194,12 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
   const handleShare = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
+      trackClubShareLinkCopied({
+        clubId: clubData.id,
+        sharedBy: currentUser.id,
+        source: 'club_member_app',
+        platform: detectedPlatform,
+      });
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
@@ -1298,7 +1316,7 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
   return (
     <div className="min-h-screen overflow-y-auto font-sans text-white" style={{ backgroundColor: darkBg }}>
       <PageHead
-        pageOgUrl={shareUrl}
+        pageOgUrl={canonicalClubUrl}
         metaData={{
           pageId: clubData.id,
           pageTitle: `${clubData.name} | Pulse Club`,
@@ -1306,7 +1324,7 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
           ogTitle: `${clubData.name} | Pulse Club`,
           ogDescription: clubData.description || `Member view for ${clubData.name}.`,
           ogImage: heroImage,
-          ogUrl: shareUrl,
+          ogUrl: canonicalClubUrl,
           twitterTitle: `${clubData.name} | Pulse Club`,
           twitterDescription: clubData.description || `Member view for ${clubData.name}.`,
           twitterImage: heroImage,

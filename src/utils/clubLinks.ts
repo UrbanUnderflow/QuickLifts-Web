@@ -14,6 +14,55 @@ export const buildClubPath = (clubId: string): string => {
   return `/club/${encodeURIComponent(clubId)}`;
 };
 
+export const buildClubInstallPath = (
+  clubId: string,
+  options?: {
+    sharedBy?: string | null;
+    eventId?: string | null;
+    web?: boolean;
+  }
+): string => {
+  const path = `${buildClubPath(clubId)}/install`;
+  const query = new URLSearchParams();
+
+  if (options?.sharedBy) {
+    query.set('sharedBy', options.sharedBy);
+  }
+
+  if (options?.eventId) {
+    query.set('eventId', options.eventId);
+  }
+
+  if (options?.web) {
+    query.set('web', '1');
+  }
+
+  const queryString = query.toString();
+  return queryString ? `${path}?${queryString}` : path;
+};
+
+export const buildClubCanonicalUrl = (
+  clubId: string,
+  options?: {
+    sharedBy?: string | null;
+    eventId?: string | null;
+  }
+): string => {
+  const path = buildClubPath(clubId);
+  const query = new URLSearchParams();
+
+  if (options?.sharedBy) {
+    query.set('sharedBy', options.sharedBy);
+  }
+
+  if (options?.eventId) {
+    query.set('eventId', options.eventId);
+  }
+
+  const queryString = query.toString();
+  return toAbsoluteUrl(queryString ? `${path}?${queryString}` : path);
+};
+
 export const buildClubCheckInPath = (clubId: string, eventId?: string | null): string => {
   const basePath = `${buildClubPath(clubId)}/check-in`;
   if (!eventId) {
@@ -46,13 +95,25 @@ export const buildClubOneLink = ({
   imageUrl?: string | null;
 }): string => {
   const baseUrl = `https://${APPS_FLYER_SUBDOMAIN}/${APPS_FLYER_TEMPLATE_ID}`;
-  const fallbackUrl = toAbsoluteUrl(fallbackPath || buildClubPath(clubId));
+  const fallbackUrl = fallbackPath
+    ? toAbsoluteUrl(fallbackPath)
+    : buildClubCanonicalUrl(clubId, { sharedBy, eventId });
+  const deepLinkParams = new URLSearchParams({ clubId });
+  if (sharedBy) {
+    deepLinkParams.set('sharedBy', sharedBy);
+  }
+  if (eventId) {
+    deepLinkParams.set('eventId', eventId);
+  }
+  const deepLinkUrl = `pulse://club?${deepLinkParams.toString()}`;
   const params = new URLSearchParams({
     pid,
     c: campaign,
     deep_link_value: 'club',
     clubId,
-    af_r: encodeURIComponent(fallbackUrl),
+    af_force_deeplink: 'true',
+    af_dp: deepLinkUrl,
+    af_r: fallbackUrl,
   });
 
   if (sharedBy) {
