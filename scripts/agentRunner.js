@@ -28,6 +28,20 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { execSync, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const {
+    HIGH_IMPACT_TASK_CLASSES,
+    MISSION_SYSTEM_VERSION,
+    buildExecuteTaskContract,
+    buildExploreTaskMetadata,
+    buildObjectiveId,
+    compareTaskCandidates,
+    hasValidTaskContract,
+    isCorrectionTask,
+    isExecuteMissionActive,
+    isTaskRunnable,
+    normalizeMissionPolicy,
+    recordMissionRunEvent,
+} = require('./missionOsV2');
 
 /* ─── Configuration ───────────────────────────────────── */
 
@@ -760,6 +774,16 @@ async function loadMissionStatus(forceRefresh = false) {
     return cachedMissionStatus;
 }
 
+async function loadMissionPolicy(forceRefresh = false) {
+    const mission = await loadMissionStatus(forceRefresh);
+    return normalizeMissionPolicy(mission || {});
+}
+
+async function isExecuteMissionV2Active(forceRefresh = false) {
+    const mission = await loadMissionStatus(forceRefresh);
+    return isExecuteMissionActive(mission || {});
+}
+
 async function isMissionPaused(forceRefresh = false) {
     const mission = await loadMissionStatus(forceRefresh);
     return String(mission?.status || '').toLowerCase() === 'paused';
@@ -843,6 +867,112 @@ function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
         priority: options.fromManager ? 'high' : 'medium',
         focusObjective: focusLabel,
         objectiveCode: focusLabel,
+    };
+}
+
+async function createQueuedTask(taskInput, options = {}) {
+    const mission = options.mission || await loadMissionStatus();
+    const missionPolicy = normalizeMissionPolicy(mission || {});
+    const source = String(options.source || taskInput?.source || 'agent-runner').trim() || 'agent-runner';
+    const basePayload = {
+        name: taskInput?.name || 'Untitled task',
+        description: taskInput?.description || '',
+        assignee: taskInput?.assignee || AGENT_NAME,
+        priority: taskInput?.priority || 'medium',
+        complexity: taskInput?.complexity || 3,
+        project: taskInput?.project || 'General',
+        subtasks: Array.isArray(taskInput?.subtasks) ? taskInput.subtasks : [],
+        source,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        northStarObjective: taskInput?.northStarObjective || mission?.agentObjectives?.[AGENT_ID] || taskInput?.objectiveCode || '',
+        northStarDirectImpact: taskInput?.northStarDirectImpact || '',
+        missionId: taskInput?.missionId || mission?.missionId || '',
+        objectiveCode: taskInput?.objectiveCode || '',
+        originalTaskId: taskInput?.originalTaskId || '',
+        roundTableChatId: taskInput?.roundTableChatId || '',
+    };
+
+    let payload = { ...basePayload };
+    let status = String(options.statusOverride || taskInput?.status || 'todo').toLowerCase();
+    if (isExecuteMissionActive(mission || {})) {
+        const executeContract = buildExecuteTaskContract(
+            {
+                ...taskInput,
+                name: basePayload.name,
+                description: basePayload.description,
+                northStarObjective: basePayload.northStarObjective,
+                northStarObjectiveLink: taskInput?.northStarObjectiveLink || basePayload.northStarObjective,
+            },
+            {
+                plannerSource: options.plannerSource || taskInput?.plannerSource || (options.forceCorrection ? 'mission-supervisor' : 'worker-proposal'),
+                taskClass: options.taskClass || taskInput?.taskClass || (options.forceCorrection ? 'correction' : 'follow-up-proposal'),
+                objectiveId: taskInput?.objectiveId || basePayload.northStarObjective || basePayload.name,
+                priorityScore: taskInput?.priorityScore,
+                expiresInHours: options.expiresInHours || 72,
+            }
+        );
+        payload = {
+            ...payload,
+            specVersion: executeContract.specVersion,
+            mode: executeContract.mode,
+            plannerSource: executeContract.plannerSource,
+            taskClass: executeContract.taskClass,
+            objectiveId: executeContract.objectiveId,
+            artifactSpec: executeContract.artifactSpec,
+            acceptanceChecks: executeContract.acceptanceChecks,
+            dependencyIds: executeContract.dependencyIds,
+            verificationPolicy: executeContract.verificationPolicy,
+            priorityScore: executeContract.priorityScore,
+            expiresAt: executeContract.expiresAt,
+            verificationResult: executeContract.verificationResult,
+        };
+        if (options.forceCorrection && executeContract.hasContract) {
+            status = options.statusOverride || 'todo';
+        } else if (options.allowExecuteTodo === false) {
+            status = options.statusOverride || 'needs-spec';
+        } else if (!hasValidTaskContract(payload)) {
+            status = 'needs-spec';
+        } else {
+            status = options.statusOverride || 'needs-spec';
+        }
+    } else {
+        const exploreMetadata = buildExploreTaskMetadata(
+            {
+                ...taskInput,
+                name: basePayload.name,
+                description: basePayload.description,
+            },
+            {
+                plannerSource: options.plannerSource || taskInput?.plannerSource || 'worker-self',
+                taskClass: options.taskClass || taskInput?.taskClass || 'explore-brief',
+                objectiveId: taskInput?.objectiveId || basePayload.northStarObjective || basePayload.name,
+                priorityScore: taskInput?.priorityScore,
+                expiresInHours: options.expiresInHours || 72,
+            }
+        );
+        payload = { ...payload, ...exploreMetadata };
+        status = options.statusOverride || status || 'todo';
+    }
+
+    payload.status = status;
+    const ref = await db.collection(KANBAN_COLLECTION).add(payload);
+
+    if (payload.missionId) {
+        await recordMissionRunEvent(db, FieldValue, payload.missionId, status === 'quarantined' ? 'quarantined-task' : 'created-task', {
+            taskId: ref.id,
+            source,
+            assignee: payload.assignee,
+            status,
+            taskClass: payload.taskClass || '',
+            objectiveId: payload.objectiveId || '',
+            plannerSource: payload.plannerSource || '',
+        });
+    }
+
+    return {
+        id: ref.id,
+        ...payload,
     };
 }
 
@@ -1663,6 +1793,12 @@ async function recordDeliverables(task, steps, options = {}) {
 
     const status = String(options.status || 'work').trim() || 'work';
     const reviewReason = String(options.reviewReason || '').trim();
+    const verificationState = String(options.verificationState || status || 'work').trim() || 'work';
+    const verificationSource = String(options.verificationSource || (verificationState.startsWith('verified-') ? 'runner-auto' : 'runner')).trim() || 'runner';
+    const spotCheckRequired = options.spotCheckRequired === true;
+    const objectiveId = String(options.objectiveId || task?.objectiveId || '').trim();
+    const movementScore = Number.isFinite(Number(options.movementScore)) ? Number(options.movementScore) : 0;
+    const sampledForReview = options.sampledForReview === true;
 
     const deliverables = [];
     const batch = db.batch();
@@ -1696,6 +1832,12 @@ async function recordDeliverables(task, steps, options = {}) {
             filePath: filePath,
             changeType: item.changeType || 'unknown',
             status,
+            verificationState,
+            verificationSource,
+            spotCheckRequired,
+            objectiveId,
+            movementScore,
+            sampledForReview,
             reviewReason: reviewReason || undefined,
             createdAt: FieldValue.serverTimestamp(),
         };
@@ -1718,6 +1860,9 @@ async function recordNeedsReviewDeliverables(task, steps, reviewReason) {
     if (!normalizedReason) return [];
     return recordDeliverables(task, steps, {
         status: 'needs-review',
+        verificationState: 'needs-review',
+        verificationSource: 'runner-auto',
+        objectiveId: task?.objectiveId || '',
         reviewReason: normalizedReason,
     });
 }
@@ -2334,6 +2479,10 @@ async function checkIdleAndNudge() {
 async function selfAssignTask() {
     try {
         if (await isMissionPaused()) return null;
+        const mission = await loadMissionStatus();
+        if (isExecuteMissionActive(mission || {})) {
+            return null;
+        }
 
         // Double-check: do we really have no tasks?
         const existingDocs = await fetchTaskCandidatesForAgent(140);
@@ -2353,11 +2502,10 @@ async function selfAssignTask() {
         }
 
         // Check if mission is active — if so, use smarter North Star-aware self-assignment
+        const missionData = mission || {};
         let missionActive = false;
         let missionObjective = '';
         try {
-            const missionSnap = await db.doc('company-config/mission-status').get();
-            const missionData = missionSnap.exists ? missionSnap.data() : null;
             missionActive = missionData?.status === 'active';
             missionObjective = missionData?.agentObjectives?.[AGENT_ID] || '';
         } catch (_) { }
@@ -2452,30 +2600,33 @@ async function selfAssignTask() {
                         return null;
                     }
 
-                    const docRef = await db.collection(KANBAN_COLLECTION).add({
+                    const createdTask = await createQueuedTask({
                         name: taskResult.name,
                         description: `${taskResult.description || ''}\n\n**North Star Impact:** ${taskResult.direct_impact || ''}`,
-                        assignee: AGENT_NAME,
-                        status: 'todo',
                         priority: taskResult.priority || 'high',
                         complexity: taskResult.complexity || 3,
                         source: 'self-assigned-mission',
                         northStarObjective: missionObjective || nsTitle,
                         northStarDirectImpact: taskResult.direct_impact || '',
                         missionGenerated: true,
-                        createdAt: FieldValue.serverTimestamp(),
-                        updatedAt: FieldValue.serverTimestamp(),
+                        missionId: missionData?.missionId || '',
+                        objectiveCode: taskResult.objectiveCode || taskResult.focusObjective || missionObjective || '',
+                    }, {
+                        source: 'self-assigned-mission',
+                        plannerSource: 'worker-self',
+                        taskClass: 'explore-brief',
+                        statusOverride: 'todo',
                     });
 
-                    console.log(`🎯 Mission self-assigned: "${taskResult.name}" (${docRef.id})`);
+                    console.log(`🎯 Mission self-assigned: "${taskResult.name}" (${createdTask.id})`);
                     await postBeat('hypothesis', `🎯 Self-assigned: "${taskResult.name}" (mission mode)`, {
-                        taskId: docRef.id,
+                        taskId: createdTask.id,
                         color: 'green',
                         objectiveCode: taskResult.objectiveCode || taskResult.focusObjective || '',
                         objectiveCodeLabel: taskResult.focusObjective || taskResult.northStarObjective || '',
                         lensTag: 'mission',
                     });
-                    return docRef.id;
+                    return createdTask.id;
                 }
             } catch (gptErr) {
                 console.warn('⚠️  GPT self-assignment failed, falling back to defaults:', gptErr.message);
@@ -2490,24 +2641,27 @@ async function selfAssignTask() {
             return null;
         }
 
-        const docRef = await db.collection(KANBAN_COLLECTION).add({
+        const createdTask = await createQueuedTask({
             name: taskData.name,
             description: taskData.description,
-            assignee: AGENT_NAME,
-            status: 'todo',
             priority: taskData.priority || 'medium',
             source: 'self-assigned-idle',
             northStarObjective: taskData.focusObjective || nsTitle || '',
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+            missionId: mission?.missionId || '',
+            objectiveCode: taskData.focusObjective || '',
+        }, {
+            source: 'self-assigned-idle',
+            plannerSource: 'worker-self',
+            taskClass: 'explore-brief',
+            statusOverride: 'todo',
         });
 
-        console.log(`⭐ Self-assigned task: "${taskData.name}" (${docRef.id})`);
+        console.log(`⭐ Self-assigned task: "${taskData.name}" (${createdTask.id})`);
         await postBeat('hypothesis', `Self-assigned: "${taskData.name}" (idle — no tasks in queue)`, {
-            taskId: docRef.id, color: 'blue', objectiveCode: taskData.focusObjective || '',
+            taskId: createdTask.id, color: 'blue', objectiveCode: taskData.focusObjective || '',
             objectiveCodeLabel: taskData.focusObjective || '',
         });
-        return docRef.id;
+        return createdTask.id;
     } catch (err) {
         console.error('⚠️  Self-assign failed:', err.message);
         return null;
@@ -2585,6 +2739,8 @@ async function noraTaskManagerSweep() {
 
     try {
         if (await isMissionPaused()) return;
+        const mission = await loadMissionStatus();
+        if (isExecuteMissionActive(mission || {})) return;
 
         const allAgents = ['nora', 'scout', 'solara', 'sage'];
         const displayNames = { nora: 'Nora', scout: 'Scout', solara: 'Solara', sage: 'Sage' };
@@ -2622,19 +2778,23 @@ async function noraTaskManagerSweep() {
                 continue;
             }
 
-            await db.collection(KANBAN_COLLECTION).add({
+            const createdTask = await createQueuedTask({
                 name: taskBlueprint.name,
                 description: `Auto-assigned by Nora (task manager sweep). ${taskBlueprint.description}`,
                 assignee: displayName,
-                status: 'todo',
                 priority: taskBlueprint.priority || 'medium',
                 source: 'nora-task-manager',
                 northStarObjective: taskBlueprint.focusObjective || nsContext.title || '',
-                createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
+                missionId: mission?.missionId || '',
+                objectiveCode: taskBlueprint.focusObjective || '',
+            }, {
+                source: 'nora-task-manager',
+                plannerSource: 'worker-self',
+                taskClass: 'explore-brief',
+                statusOverride: 'todo',
             });
 
-            console.log(`📋 [Nora Task Manager] Created task for idle agent ${displayName}: "${taskBlueprint.name}"`);
+            console.log(`📋 [Nora Task Manager] Created task for idle agent ${displayName}: "${taskBlueprint.name}" (${createdTask.id})`);
 
             await postBeat('work-in-flight', `📋 Task Manager: Assigned "${taskBlueprint.name}" to ${displayName} (idle agent detected)`, {
                 color: 'blue',
@@ -2800,29 +2960,39 @@ async function processCommands() {
                 var taskConvoContext = await getRecentConversationContext();
                 var smartTask = await generateSmartTask(pContent, taskConvoContext);
                 console.log(`🧠 Smart task: "${pContent}" → title: "${smartTask.title}", desc: "${smartTask.description.substring(0, 80)}..."`);
+                var taskMission = await loadMissionStatus();
 
-                var newTask = await db.collection(KANBAN_COLLECTION).add({
+                var newTask = await createQueuedTask({
                     name: smartTask.title,
                     description: cmd.metadata?.description || smartTask.description,
-                    assignee: AGENT_NAME,
-                    status: 'todo',
                     project: cmd.metadata?.project || 'General',
                     priority: cmd.metadata?.priority || 'medium',
                     complexity: smartTask.complexity || 3,
-                    subtasks: [],
-                    createdAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp(),
+                    northStarObjective: taskMission?.agentObjectives?.[AGENT_ID] || '',
+                    missionId: taskMission?.missionId || '',
+                    objectiveCode: taskMission?.agentObjectives?.[AGENT_ID] || '',
+                }, {
+                    source: 'chat-task',
+                    plannerSource: 'worker-proposal',
+                    taskClass: 'follow-up-proposal',
+                    statusOverride: isExecuteMissionActive(taskMission || {}) ? 'needs-spec' : 'todo',
+                    allowExecuteTodo: false,
+                    mission: taskMission,
                 });
-                var taskMsg = `Task created: "${smartTask.title}" (${newTask.id}). I've added it to my queue.`;
+                var taskMsg = isExecuteMissionActive(taskMission || {})
+                    ? `Task proposal created: "${smartTask.title}" (${newTask.id}). It is waiting for planner approval before entering the Execute queue.`
+                    : `Task created: "${smartTask.title}" (${newTask.id}). I've added it to my queue.`;
                 response = response ? response + "\n" + taskMsg : taskMsg;
                 console.log(`📋 Created task: ${smartTask.title} → ${newTask.id}`);
 
                 // Immediately update status to 'working' so Virtual Office reflects the change
-                await setStatus('working', {
-                    currentTask: smartTask.title,
-                    currentTaskId: newTask.id,
-                    notes: `Received new task: ${smartTask.title}`,
-                });
+                if (!isExecuteMissionActive(taskMission || {})) {
+                    await setStatus('working', {
+                        currentTask: smartTask.title,
+                        currentTaskId: newTask.id,
+                        notes: `Received new task: ${smartTask.title}`,
+                    });
+                }
                 break;
 
             case 'command':
@@ -2880,26 +3050,36 @@ async function processCommands() {
                     var upgConvoCtx = await getRecentConversationContext();
                     var upgSmart = await generateSmartTask(pContent, upgConvoCtx);
                     console.log(`🧠 Auto-upgrade: "${pContent.substring(0, 60)}..." → "${upgSmart.title}"`);
-                    var upgTask = await db.collection(KANBAN_COLLECTION).add({
+                    var upgMission = await loadMissionStatus();
+                    var upgTask = await createQueuedTask({
                         name: upgSmart.title,
                         description: upgSmart.description,
-                        assignee: AGENT_NAME,
-                        status: 'todo',
                         project: cmd.metadata?.project || 'General',
                         priority: cmd.metadata?.priority || 'medium',
                         complexity: upgSmart.complexity || 3,
-                        subtasks: [],
-                        createdAt: FieldValue.serverTimestamp(),
-                        updatedAt: FieldValue.serverTimestamp(),
+                        northStarObjective: upgMission?.agentObjectives?.[AGENT_ID] || '',
+                        missionId: upgMission?.missionId || '',
+                        objectiveCode: upgMission?.agentObjectives?.[AGENT_ID] || '',
+                    }, {
+                        source: 'command-auto-upgrade',
+                        plannerSource: 'worker-proposal',
+                        taskClass: 'follow-up-proposal',
+                        statusOverride: isExecuteMissionActive(upgMission || {}) ? 'needs-spec' : 'todo',
+                        allowExecuteTodo: false,
+                        mission: upgMission,
                     });
-                    var upgradeMsg = `Auto-upgraded to task: "${upgSmart.title}" (${upgTask.id}). I've added it to my queue.`;
+                    var upgradeMsg = isExecuteMissionActive(upgMission || {})
+                        ? `Auto-upgraded to task proposal: "${upgSmart.title}" (${upgTask.id}). It is waiting for planner approval before entering the Execute queue.`
+                        : `Auto-upgraded to task: "${upgSmart.title}" (${upgTask.id}). I've added it to my queue.`;
                     response = response ? response + "\n" + upgradeMsg : upgradeMsg;
 
-                    await setStatus('working', {
-                        currentTask: upgSmart.title,
-                        currentTaskId: upgTask.id,
-                        notes: `Received new task (auto-upgraded from command): ${upgSmart.title}`,
-                    });
+                    if (!isExecuteMissionActive(upgMission || {})) {
+                        await setStatus('working', {
+                            currentTask: upgSmart.title,
+                            currentTaskId: upgTask.id,
+                            notes: `Received new task (auto-upgraded from command): ${upgSmart.title}`,
+                        });
+                    }
                 } else {
                     var cmdMsg = `Command received: "${pContent}". Processing...`;
                     response = response ? response + "\n" + cmdMsg : cmdMsg;
@@ -3057,19 +3237,27 @@ async function processCommands() {
                     try {
                         var safetyConvoCtx = await getRecentConversationContext();
                         var safetyTask = await generateSmartTask(cmd.content, safetyConvoCtx);
-                        var safetyRef = await db.collection(KANBAN_COLLECTION).add({
+                        var safetyMission = await loadMissionStatus();
+                        var safetyRef = await createQueuedTask({
                             name: safetyTask.title,
                             description: safetyTask.description,
-                            assignee: AGENT_NAME,
-                            status: 'todo',
                             priority: 'high',
                             complexity: safetyTask.complexity || 3,
-                            subtasks: [],
-                            createdAt: FieldValue.serverTimestamp(),
-                            updatedAt: FieldValue.serverTimestamp(),
                             source: 'chat-safety-net',
+                            northStarObjective: safetyMission?.agentObjectives?.[AGENT_ID] || '',
+                            missionId: safetyMission?.missionId || '',
+                            objectiveCode: safetyMission?.agentObjectives?.[AGENT_ID] || '',
+                        }, {
+                            source: 'chat-safety-net',
+                            plannerSource: 'worker-proposal',
+                            taskClass: 'follow-up-proposal',
+                            statusOverride: isExecuteMissionActive(safetyMission || {}) ? 'needs-spec' : 'todo',
+                            allowExecuteTodo: false,
+                            mission: safetyMission,
                         });
-                        response += `\n\n📋 Task queued: "${safetyTask.title}" (${safetyRef.id})`;
+                        response += isExecuteMissionActive(safetyMission || {})
+                            ? `\n\n📋 Task proposal created: "${safetyTask.title}" (${safetyRef.id})`
+                            : `\n\n📋 Task queued: "${safetyTask.title}" (${safetyRef.id})`;
                         console.log(`   📋 Safety net task created: ${safetyTask.title} → ${safetyRef.id}`);
                     } catch (taskErr) {
                         console.error(`   ❌ Safety net task creation failed:`, taskErr.message);
@@ -3652,15 +3840,23 @@ async function processCommands() {
                                     : gcResponse.split(/[.\n]/)[0].substring(0, 100).trim();
 
                                 // Create kanban task
-                                var taskRef = await db.collection(KANBAN_COLLECTION).add({
+                                var roundTableMission = await loadMissionStatus();
+                                var taskRef = await createQueuedTask({
                                     name: taskName,
                                     description: gcResponse.substring(0, 500),
-                                    assignee: AGENT_NAME,
-                                    status: 'todo',
                                     priority: 'high',
                                     source: 'round-table-exec',
                                     roundTableChatId: gcChatId,
-                                    createdAt: FieldValue.serverTimestamp(),
+                                    northStarObjective: roundTableMission?.agentObjectives?.[AGENT_ID] || '',
+                                    missionId: roundTableMission?.missionId || '',
+                                    objectiveCode: roundTableMission?.agentObjectives?.[AGENT_ID] || '',
+                                }, {
+                                    source: 'round-table-exec',
+                                    plannerSource: 'worker-proposal',
+                                    taskClass: 'follow-up-proposal',
+                                    statusOverride: isExecuteMissionActive(roundTableMission || {}) ? 'needs-spec' : 'todo',
+                                    allowExecuteTodo: false,
+                                    mission: roundTableMission,
                                 });
                                 console.log(`   📋 Exec mode: Created kanban task "${taskName}" (${taskRef.id})`);
 
@@ -4244,22 +4440,25 @@ async function fetchTaskCandidatesForAgent(limit) {
 
 async function fetchNextTask() {
     const candidateDocs = await fetchTaskCandidatesForAgent(100);
+    const mission = await loadMissionStatus();
+    const candidateRows = candidateDocs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const sortedCandidates = candidateRows.sort((a, b) => compareTaskCandidates(a, b, mission));
 
-    const inProgressDoc = candidateDocs.find((d) => (
-        d.data()?.status === 'in-progress' && !d.data()?.runnerBlocked
+    const inProgressTask = sortedCandidates.find((task) => (
+        String(task?.status || '').toLowerCase() === 'in-progress' &&
+        isTaskRunnable(task, mission)
     ));
-    if (inProgressDoc) {
-        return { id: inProgressDoc.id, ...inProgressDoc.data() };
+    if (inProgressTask) {
+        return inProgressTask;
     }
 
-    const todoDocs = candidateDocs.filter((d) => d.data()?.status === 'todo');
-    if (todoDocs.length > 0) {
+    const todoTasks = sortedCandidates.filter((task) => String(task?.status || '').toLowerCase() === 'todo');
+    if (todoTasks.length > 0) {
         const recentNeedsReviewHistory = await getRecentNeedsReviewHistory();
-        for (const doc of todoDocs) {
-            const data = doc.data();
-            if (data.runnerBlocked) continue;
+        for (const data of todoTasks) {
+            if (!isTaskRunnable(data, mission)) continue;
 
-            const allowLoopRetry = data.allowLoopRetry === true;
+            const allowLoopRetry = data.allowLoopRetry === true || isCorrectionTask(data);
             const loopMatch = allowLoopRetry
                 ? null
                 : findRecentNeedsReviewMatch(data.name, recentNeedsReviewHistory);
@@ -4267,14 +4466,14 @@ async function fetchNextTask() {
             if (loopMatch) {
                 console.log(`🛑 Loop guard: suppressing likely duplicate retry "${data.name}" (matched recent needs-review task "${loopMatch.taskName}")`);
                 try {
-                    await suppressLikelyRetryLoopTask(doc.id, data, loopMatch);
+                    await suppressLikelyRetryLoopTask(data.id, data, loopMatch);
                 } catch (err) {
-                    console.warn(`⚠️  Failed to suppress retry-loop task ${doc.id}: ${err.message}`);
+                    console.warn(`⚠️  Failed to suppress retry-loop task ${data.id}: ${err.message}`);
                 }
                 continue;
             }
 
-            await db.collection(KANBAN_COLLECTION).doc(doc.id).update({
+            await db.collection(KANBAN_COLLECTION).doc(data.id).update({
                 status: 'in-progress',
                 assignee: AGENT_NAME,  // normalize assignee to canonical name
                 runnerBlocked: FieldValue.delete(),
@@ -4282,7 +4481,7 @@ async function fetchNextTask() {
                 runnerFailureMessage: FieldValue.delete(),
                 updatedAt: FieldValue.serverTimestamp(),
             });
-            return { id: doc.id, ...data };
+            return { ...data, status: 'in-progress' };
         }
     }
 
@@ -4419,9 +4618,157 @@ async function validateTaskCompletion(task, steps) {
     }
 }
 
-async function markTaskDone(taskId) {
+function shouldSampleForSpotCheck(task) {
+    const verificationPolicy = task?.verificationPolicy || {};
+    const taskClass = String(task?.taskClass || '').toLowerCase();
+    const impactScope = String(task?.artifactSpec?.impactScope || '').toLowerCase();
+    const sampleRate = Number(verificationPolicy.sampleRate || 0);
+    if (HIGH_IMPACT_TASK_CLASSES.has(taskClass)) return true;
+    if (impactScope === 'user-facing' || impactScope === 'external') return true;
+    if (sampleRate <= 0) return false;
+    return Math.random() < sampleRate;
+}
+
+function isDangerousVerificationCommand(command) {
+    return /\b(rm|mv|dd|mkfs|shutdown|reboot|killall|launchctl\s+(bootout|remove)|git\s+(reset|checkout|clean))\b/i.test(String(command || ''));
+}
+
+async function runAcceptanceChecks(task) {
+    const checks = Array.isArray(task?.acceptanceChecks) ? task.acceptanceChecks : [];
+    const results = [];
+    let passed = true;
+
+    for (const check of checks) {
+        const kind = String(check?.kind || '').toLowerCase();
+        const label = String(check?.label || '').trim();
+        const commandOrPath = String(check?.commandOrPath || '').trim();
+        const expectedSignal = String(check?.expectedSignal || '').trim();
+        const result = {
+            kind,
+            label,
+            commandOrPath,
+            expectedSignal,
+            passed: true,
+            output: '',
+        };
+
+        try {
+            if (kind === 'manual-spot-check') {
+                result.passed = true;
+                result.output = 'Manual spot-check required.';
+                result.requiresHumanReview = true;
+            } else if (kind === 'file') {
+                const resolvedPath = path.isAbsolute(commandOrPath) ? commandOrPath : path.join(projectDir, commandOrPath);
+                const exists = fs.existsSync(resolvedPath);
+                result.passed = exists;
+                result.output = exists ? `File exists: ${resolvedPath}` : `Missing file: ${resolvedPath}`;
+            } else if (kind === 'shell') {
+                if (isDangerousVerificationCommand(commandOrPath)) {
+                    result.passed = false;
+                    result.output = 'Blocked potentially destructive verification command.';
+                } else {
+                    const shellOutput = execSync(commandOrPath, {
+                        cwd: projectDir,
+                        timeout: 20_000,
+                        encoding: 'utf-8',
+                        env: { ...process.env, PATH: `${process.env.HOME}/bin:${process.env.PATH}` },
+                    }).trim();
+                    result.output = shellOutput.substring(0, 500);
+                    result.passed = true;
+                }
+            } else if (kind === 'http') {
+                const target = /^https?:\/\//i.test(commandOrPath)
+                    ? commandOrPath
+                    : `http://127.0.0.1:3000${commandOrPath.startsWith('/') ? commandOrPath : `/${commandOrPath}`}`;
+                const resp = await fetch(target, { method: 'GET' });
+                const body = await resp.text();
+                result.passed = resp.ok;
+                result.output = `HTTP ${resp.status}: ${body.substring(0, 300)}`;
+            } else if (kind === 'firestore') {
+                const segments = commandOrPath.split('/').filter(Boolean);
+                if (segments.length >= 2 && segments.length % 2 === 0) {
+                    const snap = await db.doc(commandOrPath).get();
+                    result.passed = snap.exists;
+                    result.output = snap.exists ? 'Firestore document exists.' : 'Firestore document missing.';
+                } else {
+                    const snap = await db.collection(commandOrPath).limit(1).get();
+                    result.passed = !snap.empty;
+                    result.output = snap.empty ? 'Firestore collection empty.' : 'Firestore collection has documents.';
+                }
+            } else {
+                result.passed = false;
+                result.output = `Unsupported acceptance check kind: ${kind || 'unknown'}`;
+            }
+        } catch (err) {
+            result.passed = false;
+            result.output = String(err?.message || err).substring(0, 500);
+        }
+
+        if (!result.passed && kind !== 'manual-spot-check') {
+            passed = false;
+        }
+        results.push(result);
+    }
+
+    const spotCheckRequired = results.some((result) => result.requiresHumanReview) || shouldSampleForSpotCheck(task);
+    return {
+        passed,
+        spotCheckRequired,
+        sampledForReview: spotCheckRequired,
+        checks: results,
+        automatedCheckCount: results.filter((result) => !result.requiresHumanReview).length,
+        failedChecks: results.filter((result) => !result.passed && !result.requiresHumanReview),
+    };
+}
+
+async function createCorrectionTask(task, verificationResult) {
+    const failedEvidence = (verificationResult?.failedChecks || [])
+        .map((check) => `  • ${check.label || check.commandOrPath}: ${check.output}`)
+        .join('\n');
+    const correctionDescription = [
+        `CORRECTIVE ACTION REQUIRED`,
+        ``,
+        `Original task: "${task.name}"`,
+        `Reason: ${verificationResult?.summary || 'Acceptance checks failed.'}`,
+        ``,
+        `Failed checks:`,
+        failedEvidence || '  • Verification evidence unavailable.',
+        ``,
+        `Re-run the work and do not mark it complete until the listed acceptance checks pass.`,
+    ].join('\n');
+
+    return createQueuedTask({
+        name: `[CORRECTION] ${task.name}`,
+        description: correctionDescription,
+        assignee: task.assignee || AGENT_NAME,
+        priority: 'high',
+        complexity: Math.max(Number(task?.complexity || 3), 3),
+        source: 'validation-gate',
+        originalTaskId: task.id,
+        missionId: task.missionId || '',
+        objectiveCode: task.objectiveCode || '',
+        objectiveId: task.objectiveId || buildObjectiveId(task?.northStarObjective || task?.name, 'OBJECTIVE'),
+        northStarObjective: task.northStarObjective || '',
+        artifactSpec: task.artifactSpec || null,
+        acceptanceChecks: Array.isArray(task?.acceptanceChecks) ? task.acceptanceChecks : [],
+        dependencyIds: Array.isArray(task?.dependencyIds) ? task.dependencyIds : [],
+        verificationPolicy: task?.verificationPolicy || null,
+        priorityScore: Number(task?.priorityScore || 30) + 5,
+    }, {
+        source: 'validation-gate',
+        taskClass: 'correction',
+        plannerSource: 'mission-supervisor',
+        statusOverride: 'todo',
+        forceCorrection: true,
+        mission: task?.missionId ? await loadMissionStatus(true) : null,
+    });
+}
+
+async function markTaskDone(taskId, options = {}) {
     await db.collection(KANBAN_COLLECTION).doc(taskId).update({
         status: 'done',
+        verificationResult: options.verificationResult || FieldValue.delete(),
+        completedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
     });
 }
@@ -5845,16 +6192,19 @@ async function run() {
 
             if (!task) {
                 idleCycles++;
+                const executeMissionActive = await isExecuteMissionV2Active();
                 console.log(`💤 No tasks found (idle cycle ${idleCycles}). Waiting 30s...`);
                 await setStatus('idle', {
-                    notes: 'No tasks in queue. Waiting...',
+                    notes: executeMissionActive
+                        ? 'No runnable Execute tasks. Waiting for planner release or correction work...'
+                        : 'No tasks in queue. Waiting...',
                     executionSteps: [],
                     currentStepIndex: -1,
                     taskProgress: 0,
                 });
 
                 // After 2 consecutive idle cycles (~60s), self-assign a task
-                if (idleCycles >= 2) {
+                if (idleCycles >= 2 && !executeMissionActive) {
                     console.log(`⭐ Idle for ${idleCycles} cycles — attempting self-assignment...`);
                     const created = await selfAssignTask();
                     if (created) {
@@ -6060,6 +6410,8 @@ async function run() {
             const hasIssues = steps.some(s => s.status === 'completed-with-issues');
             const finalStatus = hasIssues ? 'completed-with-issues' : 'completed';
             let nsGate = null;
+            const isExecuteV2Task = String(task?.mode || '').toLowerCase() === 'execute' && Number(task?.specVersion || 0) >= MISSION_SYSTEM_VERSION;
+            let verificationResult = null;
 
             if (allPassed) {
                 // ─── North Star Alignment Gate ───────────────────
@@ -6256,22 +6608,36 @@ async function run() {
                         ].join('\n');
 
                         // Add corrective task to Kanban
-                        await db.collection(KANBAN_COLLECTION).add({
+                        const correctiveTask = await createQueuedTask({
                             name: `[CORRECTION] ${task.name}`,
                             description: correctiveDesc,
                             assignee: AGENT_NAME,
-                            status: 'todo',
                             priority: 'high',
-                            createdAt: new Date(),
                             source: 'validation-gate',
                             originalTaskId: task.id,
+                            missionId: task.missionId || '',
+                            objectiveCode: task.objectiveCode || '',
+                            objectiveId: task.objectiveId || buildObjectiveId(task?.northStarObjective || task?.name, 'OBJECTIVE'),
+                            northStarObjective: task.northStarObjective || '',
+                            artifactSpec: task.artifactSpec || null,
+                            acceptanceChecks: Array.isArray(task?.acceptanceChecks) ? task.acceptanceChecks : [],
+                            dependencyIds: Array.isArray(task?.dependencyIds) ? task.dependencyIds : [],
+                            verificationPolicy: task?.verificationPolicy || null,
+                            priorityScore: Number(task?.priorityScore || 30) + 5,
+                        }, {
+                            source: 'validation-gate',
+                            plannerSource: 'mission-supervisor',
+                            taskClass: 'correction',
+                            statusOverride: 'todo',
+                            forceCorrection: true,
+                            mission: task?.missionId ? await loadMissionStatus(true) : null,
                         });
 
                         // Send proactive message about the failure
                         await sendProactiveMessage(
                             `🔍 VALIDATION FAILED for "${task.name}"\n\n` +
                             `Reason: ${validation.reason}\n\n` +
-                            `A corrective task has been auto-created. I'll re-attempt with specific verification steps.`,
+                            `A corrective task has been auto-created${correctiveTask?.id ? ` (${correctiveTask.id})` : ''}. I'll re-attempt with specific verification steps.`,
                             'failed'
                         );
 
@@ -6302,7 +6668,7 @@ async function run() {
                 // ─── Verifiable artifact gate ──────────────────
                 // Tasks that produce no real file changes get flagged
                 const hasArtifacts = hasVerifiableArtifacts(steps);
-                if (!hasArtifacts && !hasIssues) {
+                if (!hasArtifacts && !hasIssues && !isExecuteV2Task) {
                     const reviewReason = 'Task completed all steps but produced no verifiable file artifacts (code, config, tests). Only meta-documents were generated.';
                     console.log(`\n⚠️  NO VERIFIABLE ARTIFACTS — task produced no substantive file changes`);
                     await saveTaskHistory(task.name, task.id, steps, 'needs-review', taskStartTime);
@@ -6360,17 +6726,106 @@ async function run() {
                     console.log(`\n✅ SOURCE-OF-TRUTH GATE PASSED — ${sourceTruthGate.reason}`);
                 }
 
+                if (isExecuteV2Task) {
+                    console.log(`\n🧪 EXECUTE V2 ACCEPTANCE CHECKS: ${task.name}`);
+                    await setStatus('working', {
+                        currentTask: task.name,
+                        currentTaskId: task.id,
+                        notes: `🧪 Running acceptance checks: ${task.name}`,
+                        taskProgress: 98,
+                    });
+                    const acceptanceResult = await runAcceptanceChecks(task);
+                    verificationResult = {
+                        status: acceptanceResult.passed ? 'verified-auto' : 'needs-review',
+                        verificationState: acceptanceResult.passed ? 'verified-auto' : 'needs-review',
+                        verificationSource: 'runner-auto',
+                        checkedAt: new Date().toISOString(),
+                        spotCheckRequired: acceptanceResult.spotCheckRequired,
+                        sampledForReview: acceptanceResult.sampledForReview,
+                        checks: acceptanceResult.checks,
+                        failedChecks: acceptanceResult.failedChecks,
+                        summary: acceptanceResult.passed
+                            ? 'Acceptance checks passed.'
+                            : `Acceptance checks failed: ${acceptanceResult.failedChecks.map((check) => check.label || check.commandOrPath).join(', ')}`,
+                    };
+
+                    if (!acceptanceResult.passed) {
+                        const reviewReason = verificationResult.summary;
+                        console.log(`\n❌ EXECUTE V2 ACCEPTANCE FAILED: ${reviewReason}`);
+                        await saveTaskHistory(task.name, task.id, steps, 'needs-review', taskStartTime);
+                        await db.collection(KANBAN_COLLECTION).doc(task.id).update({
+                            status: 'needs-review',
+                            reviewReason,
+                            verificationResult,
+                            updatedAt: FieldValue.serverTimestamp(),
+                        });
+                        await recordNeedsReviewDeliverables(task, steps, reviewReason);
+                        const correctiveTask = await createCorrectionTask(task, verificationResult);
+                        if (task.missionId) {
+                            await recordMissionRunEvent(db, FieldValue, task.missionId, 'corrective-loop', {
+                                taskId: task.id,
+                                correctiveTaskId: correctiveTask?.id || '',
+                                objectiveId: task.objectiveId || '',
+                                reason: reviewReason,
+                            });
+                        }
+                        await sendProactiveMessage(
+                            `🧪 Execute verification failed for "${task.name}"\n\n` +
+                            `${reviewReason}\n\n` +
+                            `A corrective task has been created${correctiveTask?.id ? ` (${correctiveTask.id})` : ''}.`,
+                            'needs-review'
+                        );
+                        await setStatus('idle', {
+                            currentTask: '',
+                            currentTaskId: '',
+                            notes: `🧪 Needs review (acceptance failed): ${task.name}`,
+                            taskProgress: 0,
+                        });
+                        await new Promise(r => setTimeout(r, 5_000));
+                        continue;
+                    }
+
+                    if (task.missionId) {
+                        const missionPatch = {
+                            lastVerifiedDeliverableAt: FieldValue.serverTimestamp(),
+                            verifiedDeliverableCount: FieldValue.increment(1),
+                            autopauseReason: '',
+                            updatedAt: FieldValue.serverTimestamp(),
+                        };
+                        if (task.objectiveId) {
+                            missionPatch[`objectiveProgress.${task.objectiveId}.title`] = task.northStarObjective || task.objectiveId;
+                            missionPatch[`objectiveProgress.${task.objectiveId}.verifiedDeliverableCount`] = FieldValue.increment(1);
+                        }
+                        await db.doc('company-config/mission-status').set(missionPatch, { merge: true });
+                        await recordMissionRunEvent(db, FieldValue, task.missionId, 'verified-auto', {
+                            taskId: task.id,
+                            objectiveId: task.objectiveId || '',
+                            verificationState: 'verified-auto',
+                        });
+                    }
+                }
+
                 console.log(hasIssues
                     ? `\n⚠️  Task completed with issues: ${task.name}`
                     : `\n🎉 Task completed: ${task.name}`);
                 await saveTaskHistory(task.name, task.id, steps, finalStatus, taskStartTime);
-                await markTaskDone(task.id);
+                await markTaskDone(task.id, { verificationResult });
 
                 // ─── Soul Evolution: reflect on what we learned ──
                 await proposeSoulEvolution(task, steps, hasIssues ? 'completed-with-issues' : 'success');
 
                 // Record deliverables to Firestore for the PulseCommand tray
-                const deliverables = await recordDeliverables(task, steps);
+                const deliverables = await recordDeliverables(task, steps, isExecuteV2Task
+                    ? {
+                        status: verificationResult?.verificationState || 'verified-auto',
+                        verificationState: verificationResult?.verificationState || 'verified-auto',
+                        verificationSource: verificationResult?.verificationSource || 'runner-auto',
+                        spotCheckRequired: verificationResult?.spotCheckRequired === true,
+                        objectiveId: task.objectiveId || '',
+                        movementScore: Number(nsGate?.northStarAlignment || 0),
+                        sampledForReview: verificationResult?.sampledForReview === true,
+                    }
+                    : undefined);
                 const primaryDeliverable = deliverables.find(d => d && typeof d.filePath === 'string' && d.filePath.trim().length > 0);
                 const deepLinkTaskRef = (task.id || task.objectiveCode || '').trim();
                 let resultArtifactUrl = '';

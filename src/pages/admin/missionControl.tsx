@@ -22,6 +22,27 @@ interface MissionStatus {
     kickoffChatId?: string;
     agentObjectives?: Record<string, string>;
     taskCount?: number;
+    mode?: 'explore' | 'execute';
+    plannerMode?: 'single' | string;
+    systemVersion?: number;
+    stallWindowMinutes?: number;
+    lastVerifiedDeliverableAt?: Timestamp;
+    verifiedDeliverableCount?: number;
+    maxActiveTasksPerAgent?: number;
+    maxQueuedExecuteTasksPerAgent?: number;
+    maxQueuedExploreTasksPerAgent?: number;
+    autopauseReason?: string;
+    canary?: boolean;
+    plannerState?: string;
+    quarantinedTaskCount?: number;
+    objectiveProgress?: Record<string, {
+        title?: string;
+        verifiedDeliverableCount?: number;
+        openTaskCount?: number;
+        completedTaskCount?: number;
+        blockedTaskCount?: number;
+        needsReviewTaskCount?: number;
+    }>;
     startedAt?: Timestamp;
     updatedAt?: Timestamp;
 }
@@ -50,9 +71,16 @@ interface AgentTask {
     status: string;
     assignee: string;
     priority?: string;
+    priorityScore?: number;
     northStarObjective?: string;
     northStarScore?: number;
     northStarVerdict?: string;
+    specVersion?: number;
+    mode?: string;
+    plannerSource?: string;
+    taskClass?: string;
+    objectiveId?: string;
+    quarantineReason?: string;
 }
 
 /* ─── Constants ─────────────────────────────────────── */
@@ -202,6 +230,17 @@ const S: Record<string, CSSProperties> = {
     },
     missionTitle: { fontSize: 20, fontWeight: 800, color: '#f4f4f5', margin: '0 0 6px' },
     missionSummary: { fontSize: 14, color: '#a1a1aa', lineHeight: 1.6, margin: 0 },
+    missionMetaRow: { display: 'flex', flexWrap: 'wrap' as const, gap: 8, marginTop: 12 },
+    missionMetaChip: {
+        padding: '6px 10px',
+        borderRadius: 999,
+        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'rgba(255,255,255,0.03)',
+        color: '#cbd5e1',
+        fontSize: 11,
+        fontWeight: 600,
+    },
+    missionMetaText: { fontSize: 12, color: '#71717a', marginTop: 10, lineHeight: 1.5 },
     // Start button
     startBtn: {
         display: 'flex', alignItems: 'center', gap: 10,
@@ -399,8 +438,8 @@ export default function MissionControlPage() {
     useEffect(() => {
         const q = query(
             collection(db, 'agent-tasks'),
-            where('status', 'in', ['todo', 'in-progress', 'done']),
-            limit(100)
+            where('status', 'in', ['todo', 'in-progress', 'done', 'needs-spec', 'quarantined', 'needs-review', 'blocked']),
+            limit(200)
         );
         const unsub = onSnapshot(q, (snap) => {
             // Sort client-side to avoid composite index requirement
@@ -414,9 +453,8 @@ export default function MissionControlPage() {
             for (const d of sorted) {
                 const data = d.data() as AgentTask;
                 const agent = AGENTS.find(a => a.name.toLowerCase() === (data.assignee || '').toLowerCase());
-                if (agent) {
+                if (agent && byAgent[agent.id].length < 5) {
                     byAgent[agent.id].push({ ...(data as Omit<AgentTask, 'id'>), id: d.id });
-                    if (byAgent[agent.id].length >= 5) break;
                 }
             }
             setAgentTasks(byAgent);
@@ -436,7 +474,7 @@ export default function MissionControlPage() {
             const res = await fetch('/api/agent/kickoff-mission', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ force }),
+                body: JSON.stringify({ force, mode: 'execute', systemVersion: 2, canary: true }),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Launch failed');
@@ -515,6 +553,9 @@ export default function MissionControlPage() {
     const statusColor = missionIsActive ? '#22c55e' : missionIsPaused ? '#fbbf24' : '#71717a';
     const statusLabel = missionIsActive ? '🟢 ACTIVE' : missionIsPaused ? '🟡 PAUSED' : '⚫ IDLE';
     const cardStyle = { ...S.missionCard, ...(missionIsActive ? S.missionCardActive : missionIsPaused ? S.missionCardPaused : S.missionCardIdle) };
+    const objectiveProgressEntries = Object.entries(mission?.objectiveProgress || {});
+    const missionMode = mission?.mode || ((mission?.systemVersion || 0) >= 2 ? 'execute' : 'legacy');
+    const plannerStateLabel = mission?.plannerState || (mission?.plannerMode ? `${mission.plannerMode} planner` : 'legacy');
 
     return (
         <>
@@ -576,6 +617,27 @@ export default function MissionControlPage() {
                                             <p style={{ fontSize: 12, color: '#52525b', marginTop: 8 }}>
                                                 {mission.taskCount} tasks created across {AGENTS.length} agents
                                             </p>
+                                        )}
+                                        {!missionIsIdle && (
+                                            <>
+                                                <div style={S.missionMetaRow}>
+                                                    <span style={S.missionMetaChip}>Mode: {missionMode}</span>
+                                                    <span style={S.missionMetaChip}>Planner: {plannerStateLabel}</span>
+                                                    <span style={S.missionMetaChip}>System v{mission?.systemVersion || 1}</span>
+                                                    <span style={S.missionMetaChip}>Verified: {mission?.verifiedDeliverableCount || 0}</span>
+                                                    <span style={S.missionMetaChip}>Quarantined: {mission?.quarantinedTaskCount || 0}</span>
+                                                    {mission?.canary && <span style={S.missionMetaChip}>Canary</span>}
+                                                </div>
+                                                <p style={S.missionMetaText}>
+                                                    Stall window: {mission?.stallWindowMinutes || 30}m · WIP {mission?.maxActiveTasksPerAgent || 1} active / {mission?.maxQueuedExecuteTasksPerAgent || 1} execute queued / {mission?.maxQueuedExploreTasksPerAgent || 1} explore queued
+                                                    {mission?.lastVerifiedDeliverableAt ? ` · last verified ${formatTimeAgo(mission.lastVerifiedDeliverableAt)}` : ''}
+                                                </p>
+                                                {mission?.autopauseReason && (
+                                                    <p style={{ ...S.missionMetaText, color: '#fbbf24', marginTop: 6 }}>
+                                                        Auto-pause: {mission.autopauseReason}
+                                                    </p>
+                                                )}
+                                            </>
                                         )}
                                     </>
                                 )}
@@ -764,6 +826,33 @@ export default function MissionControlPage() {
                                     })}
                                 </div>
                             )}
+
+                            {objectiveProgressEntries.length > 0 && (
+                                <div>
+                                    <div style={{ ...S.sectionTitle, marginBottom: 14 }}>
+                                        <CheckCircle2 size={14} />
+                                        Objective Progress
+                                    </div>
+                                    {objectiveProgressEntries.map(([objectiveId, progress]) => (
+                                        <div key={objectiveId} style={{
+                                            padding: '10px 14px',
+                                            borderRadius: 10,
+                                            marginBottom: 8,
+                                            background: 'rgba(255,255,255,0.02)',
+                                            border: '1px solid rgba(255,255,255,0.06)',
+                                        }}>
+                                            <p style={{ fontSize: 12, fontWeight: 700, color: '#e4e4e7', margin: 0 }}>
+                                                {progress.title || objectiveId}
+                                            </p>
+                                            <p style={{ fontSize: 11, color: '#71717a', margin: '6px 0 0', lineHeight: 1.5 }}>
+                                                Verified {progress.verifiedDeliverableCount || 0} · Open {progress.openTaskCount || 0} · Done {progress.completedTaskCount || 0}
+                                                {(progress.blockedTaskCount || 0) > 0 ? ` · Blocked ${progress.blockedTaskCount}` : ''}
+                                                {(progress.needsReviewTaskCount || 0) > 0 ? ` · Needs review ${progress.needsReviewTaskCount}` : ''}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Right column: Proposed objectives */}
@@ -843,7 +932,7 @@ export default function MissionControlPage() {
                                 const inProgress = tasks.filter(t => t.status === 'in-progress');
                                 const todo = tasks.filter(t => t.status === 'todo');
                                 const done = tasks.filter(t => t.status === 'done').slice(0, 2);
-                                const allVisible = [...inProgress, ...todo, ...done].slice(0, 5);
+                                const allVisible = [...tasks].slice(0, 5);
 
                                 return (
                                     <div key={agent.id} style={S.agentCard}>
@@ -870,14 +959,23 @@ export default function MissionControlPage() {
                                                         {task.status === 'in-progress' && <Loader2 size={11} color={agent.color} />}
                                                         {task.status === 'todo' && <div style={{ width: 8, height: 8, borderRadius: '50%', border: `1.5px solid #52525b`, marginTop: 1 }} />}
                                                         {task.status === 'done' && <CheckCircle2 size={11} color="#22c55e" />}
+                                                        {task.status === 'blocked' && <AlertTriangle size={11} color="#f59e0b" />}
+                                                        {task.status === 'needs-spec' && <Brain size={11} color="#818cf8" />}
+                                                        {task.status === 'needs-review' && <XCircle size={11} color="#fb923c" />}
+                                                        {task.status === 'quarantined' && <Square size={10} color="#71717a" />}
                                                     </div>
                                                     <span style={{
                                                         ...S.taskName,
-                                                        color: task.status === 'done' ? '#52525b' : '#d4d4d8',
+                                                        color: task.status === 'done' || task.status === 'quarantined' ? '#52525b' : '#d4d4d8',
                                                         textDecoration: task.status === 'done' ? 'line-through' : 'none',
                                                     }}>
                                                         {task.name}
                                                     </span>
+                                                    {task.taskClass && (
+                                                        <span style={{ ...S.scoreChip, background: 'rgba(99,102,241,0.08)', color: '#a5b4fc' }}>
+                                                            {task.taskClass}
+                                                        </span>
+                                                    )}
                                                     {task.northStarScore && (
                                                         <span style={{ ...S.scoreChip, background: task.northStarScore >= 7 ? 'rgba(34,197,94,0.1)' : 'rgba(251,191,36,0.1)', color: task.northStarScore >= 7 ? '#22c55e' : '#fbbf24' }}>
                                                             {task.northStarScore}/10

@@ -124,6 +124,25 @@ async function stopStrayAgentRunners() {
     }
 }
 
+async function stopStrayMissionSupervisors() {
+    try {
+        const { stdout } = await execAsync(`pgrep -af "node .*missionSupervisor.js" || true`);
+        const pids = stdout
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => Number(line.split(/\s+/)[0]))
+            .filter((pid) => Number.isFinite(pid) && pid > 1 && pid !== process.pid);
+
+        if (pids.length === 0) return;
+        await Promise.all(pids.map(async (pid) => {
+            try { await execAsync(`kill -TERM ${pid}`); } catch (_) { }
+        }));
+    } catch (_) {
+        // Non-fatal.
+    }
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     const db = getDb();
     const missionRef = db.doc('company-config/mission-status');
@@ -154,6 +173,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 await setRunnersEnabled(db, false, 'mission-paused');
                 await setRunnerServicesState('stop');
                 await stopStrayAgentRunners();
+                await stopStrayMissionSupervisors();
                 return res.status(200).json({ success: true, message: 'Mission pause enforced.' });
             }
             if (snap.data()?.status !== 'active') {
@@ -162,6 +182,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 await setRunnersEnabled(db, false, 'mission-paused');
                 await setRunnerServicesState('stop');
                 await stopStrayAgentRunners();
+                await stopStrayMissionSupervisors();
                 return res.status(200).json({ success: true, message: 'Mission already paused — runner shutdown re-enforced.' });
             }
             await missionRef.update({
@@ -172,6 +193,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             await setRunnersEnabled(db, false, 'mission-paused');
             await setRunnerServicesState('stop');
             await stopStrayAgentRunners();
+            await stopStrayMissionSupervisors();
             return res.status(200).json({ success: true, message: 'Mission paused.' });
         } catch (err: any) {
             return res.status(500).json({ error: err.message });
@@ -183,7 +205,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { force = false } = req.body || {};
+    const {
+        force = false,
+        mode = 'execute',
+        systemVersion = 2,
+        canary = true,
+    } = req.body || {};
 
     const scriptPath = path.resolve(process.cwd(), 'scripts/kickoffMission.js');
     if (!fs.existsSync(scriptPath)) {
@@ -192,10 +219,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const args = [scriptPath];
     if (force) args.push('--force');
+    args.push(`--system-version=${systemVersion}`);
+    args.push(`--mode=${String(mode).toLowerCase() === 'explore' ? 'explore' : 'execute'}`);
+    if (canary) args.push('--canary');
 
     try {
         // Prevent duplicate worker pools before we start mission services.
         await stopStrayAgentRunners();
+        await stopStrayMissionSupervisors();
 
         // Ensure all runners are explicitly re-enabled before mission kickoff.
         await setRunnersEnabled(db, true, 'mission-start');
@@ -209,6 +240,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 ...process.env,
                 // Mission kickoff should use OpenClaw OAuth by default.
                 USE_OPENCLAW: process.env.USE_OPENCLAW ?? 'true',
+                MISSION_SYSTEM_VERSION: String(systemVersion),
+                MISSION_MODE: String(mode).toLowerCase() === 'explore' ? 'explore' : 'execute',
+                MISSION_CANARY: canary ? 'true' : 'false',
             },
         });
 
