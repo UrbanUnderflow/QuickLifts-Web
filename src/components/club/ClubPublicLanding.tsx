@@ -11,6 +11,12 @@ import {
 import PageHead from '../PageHead';
 import { ClubLandingPageProps, RoundPreview } from '../../api/firebase/club/landingPage';
 import {
+  buildClubCanonicalUrl,
+  buildClubOneLink,
+} from '../../utils/clubLinks';
+import { trackClubShareLinkCopied } from '../../lib/clubShareAnalytics';
+import { platformDetection } from '../../utils/platformDetection';
+import {
   CLUB_TYPE_LABELS,
   deriveDarkBackground,
   ensureHexColor,
@@ -117,11 +123,22 @@ export const ClubPublicLanding: React.FC<ClubPublicLandingProps> = ({
       : ['Chat', 'Challenges', 'Leaderboard', 'Community'];
   const tagline = clubData.tagline || null;
   const clubTypeLabel = clubData.clubType ? CLUB_TYPE_LABELS[clubData.clubType] || null : null;
-  const shareUrl = `https://fitwithpulse.ai/club/${clubData.id}`;
+  const canonicalClubUrl = buildClubCanonicalUrl(clubData.id);
+  const shareUrl = buildClubOneLink({
+    clubId: clubData.id,
+    title,
+    description,
+    imageUrl: heroImage,
+  });
 
   const handleShare = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
+      trackClubShareLinkCopied({
+        clubId: clubData.id,
+        source: 'club_public_landing',
+        platform: platformDetection.getPlatform(),
+      });
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
@@ -141,7 +158,7 @@ export const ClubPublicLanding: React.FC<ClubPublicLandingProps> = ({
   return (
     <div className="min-h-screen overflow-y-auto font-sans text-white" style={{ backgroundColor: darkBg }}>
       <PageHead
-        pageOgUrl={shareUrl}
+        pageOgUrl={canonicalClubUrl}
         metaData={{
           pageId: clubData.id,
           pageTitle: `${title} | Pulse`,
@@ -149,7 +166,7 @@ export const ClubPublicLanding: React.FC<ClubPublicLandingProps> = ({
           ogTitle: title,
           ogDescription: description,
           ogImage: heroImage,
-          ogUrl: shareUrl,
+          ogUrl: canonicalClubUrl,
           twitterTitle: title,
           twitterDescription: description,
           twitterImage: heroImage,

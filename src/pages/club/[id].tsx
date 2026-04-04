@@ -1,4 +1,5 @@
-import { GetServerSideProps } from 'next';
+import { GetServerSideProps, type GetServerSidePropsContext } from 'next';
+import type { ParsedUrlQuery } from 'querystring';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { clubService } from '../../api/firebase/club/service';
@@ -13,6 +14,48 @@ import { buildClubCheckInPath } from '../../utils/clubLinks';
 
 type MembershipState = 'checking' | 'member' | 'non-member';
 type LiveClubData = ClubLandingPageProps['clubData'];
+
+const MOBILE_USER_AGENT_RE = /iphone|ipad|ipod|android|webos|blackberry|windows phone|mobile/i;
+
+const isMobileRequest = (req: GetServerSidePropsContext['req']): boolean => {
+  const userAgent = String(req.headers['user-agent'] || '');
+  if (!userAgent) {
+    return false;
+  }
+
+  if (req.headers['sec-ch-ua-mobile'] === '?1') {
+    return true;
+  }
+
+  return MOBILE_USER_AGENT_RE.test(userAgent);
+};
+
+const buildInstallRedirectUrl = (id: string, query: ParsedUrlQuery): string => {
+  const installPath = `/club/${encodeURIComponent(id)}/install`;
+  const params = new URLSearchParams();
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (key === 'id' || key === 'web') {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach((entry) => {
+        if (typeof entry === 'string' && entry) {
+          params.append(key, entry);
+        }
+      });
+      return;
+    }
+
+    if (typeof value === 'string' && value) {
+      params.set(key, value);
+    }
+  });
+
+  const queryString = params.toString();
+  return queryString ? `${installPath}?${queryString}` : installPath;
+};
 
 const ClubPage: React.FC<ClubLandingPageProps> = ({
   clubData,
@@ -196,8 +239,19 @@ const ClubPage: React.FC<ClubLandingPageProps> = ({
   );
 };
 
-export const getServerSideProps: GetServerSideProps<ClubLandingPageProps> = async ({ params, res }) => {
+export const getServerSideProps: GetServerSideProps<ClubLandingPageProps> = async ({ params, res, req, query }) => {
   const id = params?.id as string | undefined;
+  const forceWeb = query.web === '1';
+
+  if (id && !forceWeb && isMobileRequest(req)) {
+    return {
+      redirect: {
+        destination: buildInstallRedirectUrl(id, query),
+        permanent: false,
+      },
+    };
+  }
+
   const props = await fetchClubLandingPageProps({ clubId: id, res });
   return { props };
 };

@@ -15,6 +15,9 @@ import { setUser } from '../redux/userSlice';
 
 import LandingPageBuilder from '../components/club/LandingPageBuilder';
 import { SYSTEM_ACTIVATION_QUESTIONS } from '../api/firebase/club/activation';
+import { buildClubOneLink } from '../utils/clubLinks';
+import { trackClubShareLinkCopied } from '../lib/clubShareAnalytics';
+import { platformDetection } from '../utils/platformDetection';
 
 const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club) => void }) => {
     const router = useRouter();
@@ -167,10 +170,28 @@ const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club)
         setDraftFeatured(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
     };
 
-    const handleCopyLink = () => {
-        // TODO: copy actual link
-        navigator.clipboard.writeText(`https://fitwithpulse.ai/club/${club.id}`);
-        alert("Invite link copied!");
+    const handleCopyLink = async () => {
+        try {
+            await navigator.clipboard.writeText(
+                buildClubOneLink({
+                    clubId: club.id,
+                    sharedBy: currentUser?.id ?? undefined,
+                    title: `${club.name} | Pulse Club`,
+                    description: club.description || `Join ${club.name} on Pulse.`,
+                    imageUrl: club.coverImageURL || club.logoURL || null,
+                })
+            );
+            trackClubShareLinkCopied({
+                clubId: club.id,
+                sharedBy: currentUser?.id ?? null,
+                source: 'club_studio',
+                platform: platformDetection.getPlatform(),
+            });
+            alert("Invite link copied!");
+        } catch (error) {
+            console.error("Failed to copy invite link:", error);
+            alert("Failed to copy invite link. Please try again.");
+        }
     };
 
     const handleOpenMembers = async () => {
