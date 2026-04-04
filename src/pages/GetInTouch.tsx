@@ -3,6 +3,7 @@ import React from 'react';
 import Footer from '../components/Footer/Footer';
 import PageHead from '../components/PageHead';
 import { useScrollFade } from '../hooks/useScrollFade';
+import { appLinks } from '../utils/platformDetection';
 
 const GetInTouch: NextPage = () => {
   return (
@@ -255,7 +256,7 @@ const GetInTouch: NextPage = () => {
           {/* Download Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-5">
             <a
-              href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
+              href={appLinks.appStoreUrl}
               target="_blank"
               rel="noopener noreferrer"
               id="app-store-download"
@@ -268,14 +269,16 @@ const GetInTouch: NextPage = () => {
             </a>
 
             <a
-              href="/download"
+              href={appLinks.playStoreUrl}
+              target="_blank"
+              rel="noopener noreferrer"
               id="android-download"
               className="inline-flex items-center gap-3 border-2 border-zinc-600 text-white px-7 py-4 rounded-xl font-semibold text-lg hover:border-[#E0FE10] hover:text-[#E0FE10] transition-all duration-300 transform hover:-translate-y-1"
             >
               <svg className="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M17.523 15.341a.998.998 0 010-1.412l2.829-2.829-2.829-2.829a.998.998 0 111.412-1.412l3.535 3.535a1 1 0 010 1.414l-3.535 3.535a.997.997 0 01-1.412-.002zM6.477 15.341a.998.998 0 000-1.412L3.648 11.1l2.829-2.829a.998.998 0 10-1.412-1.412L1.53 10.394a1 1 0 000 1.414l3.535 3.535a.997.997 0 001.412-.002zM14.58 5.546l-5.656 13.418a1 1 0 001.838.776l5.656-13.418a1 1 0 00-1.838-.776z" />
               </svg>
-              Coming Soon on Android
+              Download for Android
             </a>
           </div>
         </div>

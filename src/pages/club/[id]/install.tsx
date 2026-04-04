@@ -1,6 +1,7 @@
 import type { GetServerSideProps } from 'next';
 import React from 'react';
 import { fetchClubLandingPageProps, type ClubLandingPageProps } from '../../../api/firebase/club/landingPage';
+import { getClubLandingPageFixture } from '../../../api/firebase/club/e2eFixtures';
 import ClubInstallLanding from '../../../components/club/ClubInstallLanding';
 import { pulseWebOrigin } from '../../../utils/clubLinks';
 
@@ -34,6 +35,36 @@ export const getServerSideProps: GetServerSideProps<InstallPageProps> = async ({
   const id = typeof params?.id === 'string' ? params.id : '';
   const sharedBy = normalizeValue(query.sharedBy);
   const eventId = normalizeValue(query.eventId);
+  const fixtureName = normalizeValue(query.e2eFixture) || null;
+
+  const fixtureProps = getClubLandingPageFixture({
+    clubId: id,
+    fixtureName,
+  });
+
+  if (fixtureProps) {
+    const pageQuery = new URLSearchParams();
+    if (fixtureName) {
+      pageQuery.set('e2eFixture', fixtureName);
+    }
+    if (sharedBy) {
+      pageQuery.set('sharedBy', sharedBy);
+    }
+    if (eventId) {
+      pageQuery.set('eventId', eventId);
+    }
+
+    res?.setHeader('Cache-Control', 'private, no-store, max-age=0');
+
+    return {
+      props: {
+        ...fixtureProps,
+        pageUrl: `${pulseWebOrigin}/club/${encodeURIComponent(id)}/install${pageQuery.toString() ? `?${pageQuery.toString()}` : ''}`,
+        sharedBy: sharedBy || null,
+        eventId: eventId || null,
+      },
+    };
+  }
 
   const sharedProps = await fetchClubLandingPageProps({ clubId: id, res });
   res?.setHeader('Cache-Control', 'private, no-store, max-age=0');
@@ -50,6 +81,9 @@ export const getServerSideProps: GetServerSideProps<InstallPageProps> = async ({
   }
 
   const pageQuery = new URLSearchParams();
+  if (fixtureName) {
+    pageQuery.set('e2eFixture', fixtureName);
+  }
   if (sharedBy) {
     pageQuery.set('sharedBy', sharedBy);
   }

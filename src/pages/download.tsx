@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Download, Globe } from 'lucide-react';
 import ChallengeCTA from '../components/ChallengeCTA';
+import { appLinks } from '../utils/platformDetection';
 
 const DownloadPage = () => {
   const router = useRouter();
@@ -145,18 +146,27 @@ const DownloadPage = () => {
               <img src="/pulse-logo.svg" alt="Pulse Logo" className="h-20 w-20 mb-4" />
               <h1 className="text-3xl font-bold mb-2 text-center">Download Pulse</h1>
               <p className="text-zinc-400 text-lg text-center max-w-xl">
-                Create, share, and discover workouts with the Pulse app. Join a vibrant fitness community, track your progress, and get inspired by others. Available now for iOS and on the web.
+                Create, share, and discover workouts with the Pulse app. Join a vibrant fitness community, track your progress, and get inspired by others. Available now on iOS, Android, and the web.
               </p>
             </div>
             <div className="bg-zinc-900 rounded-2xl p-8 flex flex-col items-center mb-8">
               <a
-                href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
+                href={appLinks.appStoreUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center space-x-2 bg-[#E0FE10] text-black hover:bg-[#d4e900] transition-colors px-6 py-3 rounded-xl font-semibold text-lg mb-4"
               >
                 <Download className="h-6 w-6" />
                 <span>Download for iOS</span>
+              </a>
+              <a
+                href={appLinks.playStoreUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center space-x-2 bg-zinc-800 text-white hover:bg-zinc-700 transition-colors px-6 py-3 rounded-xl font-semibold text-lg mb-4"
+              >
+                <Download className="h-6 w-6" />
+                <span>Download for Android</span>
               </a>
               <Link
                 href="/"

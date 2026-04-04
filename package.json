@@ -78,7 +78,9 @@
     "audit:firebase-next-api": "node scripts/audit-firebase-next-api-runtime-risk.js",
     "probe:firebase-next-api:live": "node scripts/probe-firebase-next-api-live.cjs",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings 0",
+    "test:unit:club-onboarding": "node --import tsx --test tests/unit/club-links.test.ts tests/unit/club-onboarding-routing.test.ts",
     "test:e2e": "playwright test",
+    "test:e2e:club-onboarding": "playwright test tests/e2e/creator-club-install.spec.ts",
     "test:e2e:smoke": "playwright test --grep @smoke",
     "test:e2e:registry": "playwright test tests/e2e/registry-build-publish.spec.ts --workers=1",
     "test:e2e:registry:write": "PLAYWRIGHT_ALLOW_WRITE_TESTS=true playwright test tests/e2e/registry-build-publish.spec.ts --grep \"registry sync-state smoke\" --workers=1 --reporter=line",
@@ -157,6 +159,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "firebase-tools": "^13.34.0",
     "globals": "^15.12.0",
-    "netlify-cli": "^24.3.0"
+    "netlify-cli": "^24.3.0",
+    "tsx": "^4.21.0"
   }
 }

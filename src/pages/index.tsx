@@ -13,6 +13,7 @@ import HomeContent from '../components/home/HomeContent';
 import { useUser } from '../hooks/useUser';
 import SignInModal from '../components/SignInModal';
 import { exerciseService } from '../api/firebase/exercise/service';
+import { appLinks } from '../utils/platformDetection';
 
 interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
   lastUpdated: string; 
@@ -43,11 +44,11 @@ const MarketingContent: React.FC<{
     },
     {
       question: "Is Pulse available for both iOS and Android?",
-      answer: "We are currently only on iOS, but you can use the web app on Android devices right here on this website."
+      answer: "Yes. Pulse is now available on both iOS and Android, and you can still use the web app right here on this website."
     },
     {
       question: "How do I get started?",
-      answer: "Getting started is as easy as just downloading the app! <br /><br /> <a className='text-blue-500 hover:text-blue-700 focus:text-blue-700' href='https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729'>Download Now</a>"
+      answer: `Getting started is as easy as just downloading the app! <br /><br /> <a className='text-blue-500 hover:text-blue-700 focus:text-blue-700' href='${appLinks.appStoreUrl}'>Download for iOS</a><br /><a className='text-blue-500 hover:text-blue-700 focus:text-blue-700' href='${appLinks.playStoreUrl}'>Download for Android</a>`
     },
     {
       question: "How do I find and follow other users?",
@@ -754,18 +755,22 @@ const MarketingContent: React.FC<{
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <a 
-                  href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
+                  href={appLinks.appStoreUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center gap-3 bg-gradient-to-r from-[#E0FE10] to-lime-400 text-black px-8 py-4 rounded-2xl font-bold text-lg hover:shadow-lg hover:shadow-[#E0FE10]/20 transition-all duration-300 group"
                 >
-                  Download Pulse
+                  Download for iOS
                   <FaArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
                 </a>
                 <a 
-                  href="/creators"
+                  href={appLinks.playStoreUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center gap-3 bg-zinc-900/80 text-white border border-zinc-700 hover:border-zinc-600 px-8 py-4 rounded-2xl font-bold text-lg hover:bg-zinc-800/80 transition-all duration-300"
                 >
-                  Become a Creator
-                  <FaCoins className="h-5 w-5" />
+                  Download for Android
+                  <FaArrowRight className="h-5 w-5" />
                 </a>
               </div>
             </div>
