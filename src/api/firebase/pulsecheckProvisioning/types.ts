@@ -208,6 +208,20 @@ export interface CreatePulseCheckOrganizationInput {
   notes?: string;
 }
 
+export interface PulseCheckTeamImplementationMetadata {
+  provisioningPath: 'pulsecheck-hierarchy' | 'legacy-coach-roster' | 'manual';
+  legacySignupPathUsed: boolean;
+  canaryTarget: boolean;
+  selectedTargetLeadId?: string;
+  selectedTargetEvidenceIds?: string[];
+  sourceBriefPath?: string;
+  routingDefaultsMode?: 'organization-default-optional' | 'organization-default-required' | 'team-clinician-profile';
+  invitePosture?: PulseCheckInvitePolicy;
+  provisionedBy?: string;
+  provisionedAt?: Timestamp | null;
+  notes?: string;
+}
+
 export interface PulseCheckTeam {
   id: string;
   organizationId: string;
@@ -228,6 +242,7 @@ export interface PulseCheckTeam {
   defaultClinicianProfileName?: string;
   defaultClinicianProfileType?: PulseCheckClinicianProfileType;
   defaultClinicianProfileSource?: PulseCheckClinicianProfileSource;
+  implementationMetadata?: PulseCheckTeamImplementationMetadata;
   notes?: string;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
@@ -252,6 +267,7 @@ export interface CreatePulseCheckTeamInput {
   defaultClinicianProfileName?: string;
   defaultClinicianProfileType?: PulseCheckClinicianProfileType;
   defaultClinicianProfileSource?: PulseCheckClinicianProfileSource;
+  implementationMetadata?: PulseCheckTeamImplementationMetadata;
   notes?: string;
 }
 

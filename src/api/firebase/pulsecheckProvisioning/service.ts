@@ -26,6 +26,7 @@ import type {
   PulseCheckOrganizationImplementationMetadata,
   PulseCheckOrganizationMembership,
   PulseCheckOrganization,
+  PulseCheckTeamImplementationMetadata,
   PulseCheckAuntEdnaClinicianProfile,
   PulseCheckInviteLinkType,
   PulseCheckRevenueRecipientRole,
@@ -423,6 +424,52 @@ const normalizeOrganizationImplementationMetadata = (
   };
 };
 
+const normalizeTeamImplementationMetadata = (
+  value: unknown,
+  fallbackInvitePosture?: PulseCheckTeamImplementationMetadata['invitePosture']
+): PulseCheckTeamImplementationMetadata | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+
+  const candidate = value as Record<string, unknown>;
+  const provisioningPath = normalizeString(typeof candidate.provisioningPath === 'string' ? candidate.provisioningPath : '');
+  const routingDefaultsMode = normalizeString(typeof candidate.routingDefaultsMode === 'string' ? candidate.routingDefaultsMode : '');
+  const invitePosture = normalizeString(typeof candidate.invitePosture === 'string' ? candidate.invitePosture : fallbackInvitePosture || '');
+  const selectedTargetEvidenceIds = Array.isArray(candidate.selectedTargetEvidenceIds)
+    ? candidate.selectedTargetEvidenceIds
+        .map((entry) => normalizeString(typeof entry === 'string' ? entry : ''))
+        .filter((entry, index, entries) => entry && entries.indexOf(entry) === index)
+    : [];
+
+  return {
+    provisioningPath:
+      provisioningPath === 'legacy-coach-roster'
+        ? 'legacy-coach-roster'
+        : provisioningPath === 'manual'
+          ? 'manual'
+          : 'pulsecheck-hierarchy',
+    legacySignupPathUsed: Boolean(candidate.legacySignupPathUsed),
+    canaryTarget: Boolean(candidate.canaryTarget),
+    selectedTargetLeadId: normalizeString(typeof candidate.selectedTargetLeadId === 'string' ? candidate.selectedTargetLeadId : ''),
+    selectedTargetEvidenceIds,
+    sourceBriefPath: normalizeString(typeof candidate.sourceBriefPath === 'string' ? candidate.sourceBriefPath : ''),
+    routingDefaultsMode:
+      routingDefaultsMode === 'team-clinician-profile'
+        ? 'team-clinician-profile'
+        : routingDefaultsMode === 'organization-default-required'
+          ? 'organization-default-required'
+          : 'organization-default-optional',
+    invitePosture:
+      invitePosture === 'admin-only'
+        ? 'admin-only'
+        : invitePosture === 'admin-and-staff'
+          ? 'admin-and-staff'
+          : 'admin-staff-and-coaches',
+    provisionedBy: normalizeString(typeof candidate.provisionedBy === 'string' ? candidate.provisionedBy : ''),
+    provisionedAt: (candidate.provisionedAt as PulseCheckTeamImplementationMetadata['provisionedAt']) || null,
+    notes: normalizeString(typeof candidate.notes === 'string' ? candidate.notes : ''),
+  };
+};
+
 const toOrganization = (id: string, data: Record<string, any>): PulseCheckOrganization => ({
   id,
   displayName: data.displayName || '',
@@ -465,6 +512,7 @@ const toTeam = (id: string, data: Record<string, any>): PulseCheckTeam => ({
   defaultClinicianProfileName: data.defaultClinicianProfileName || '',
   defaultClinicianProfileType: data.defaultClinicianProfileType || 'group',
   defaultClinicianProfileSource: data.defaultClinicianProfileSource || 'pulsecheck-local',
+  implementationMetadata: normalizeTeamImplementationMetadata(data.implementationMetadata, data.defaultInvitePolicy || 'admin-only'),
   notes: data.notes || '',
   createdAt: data.createdAt || null,
   updatedAt: data.updatedAt || null,
@@ -1628,6 +1676,14 @@ export const pulseCheckProvisioningService = {
       defaultClinicianProfileName: normalizeString(input.defaultClinicianProfileName),
       defaultClinicianProfileType: input.defaultClinicianProfileType || 'group',
       defaultClinicianProfileSource: input.defaultClinicianProfileSource || 'pulsecheck-local',
+      implementationMetadata: input.implementationMetadata
+        ? {
+            ...normalizeTeamImplementationMetadata(input.implementationMetadata, input.defaultInvitePolicy),
+            provisionedAt:
+              input.implementationMetadata.provisionedAt ||
+              (input.implementationMetadata.legacySignupPathUsed ? null : serverTimestamp()),
+          }
+        : null,
       notes: normalizeString(input.notes),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
