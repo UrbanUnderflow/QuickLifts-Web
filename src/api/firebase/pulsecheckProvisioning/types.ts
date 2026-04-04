@@ -422,6 +422,19 @@ export interface PulseCheckInviteLink {
   redeemedAt?: Timestamp | null;
 }
 
+export interface PulseCheckProvisioningHandoffMetadata {
+  state: 'reserved-pending-activation' | 'claimed';
+  handoffKey: string;
+  targetOwnerName?: string;
+  targetOwnerEmail?: string;
+  sourceBriefPath?: string;
+  selectedTargetLeadId?: string;
+  selectedTargetEvidenceIds?: string[];
+  reservedBy?: string;
+  reservedAt?: Timestamp | null;
+  notes?: string;
+}
+
 export interface PulseCheckOrganizationMembership {
   id: string;
   organizationId: string;
@@ -431,6 +444,7 @@ export interface PulseCheckOrganizationMembership {
   status: 'active';
   grantedByInviteToken?: string;
   grantedAt?: Timestamp | null;
+  handoffMetadata?: PulseCheckProvisioningHandoffMetadata;
   commercialAccess?: PulseCheckTeamCommercialSnapshot;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
@@ -458,6 +472,7 @@ export interface PulseCheckTeamMembership {
   postActivationCompletedAt?: Timestamp | null;
   grantedByInviteToken?: string;
   grantedAt?: Timestamp | null;
+  handoffMetadata?: PulseCheckProvisioningHandoffMetadata;
   commercialAccess?: PulseCheckTeamCommercialSnapshot;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
