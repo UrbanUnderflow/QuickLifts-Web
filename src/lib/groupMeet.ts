@@ -195,6 +195,26 @@ export function hasGroupMeetInviteBeenSent(invite: {
   return Boolean((invite.emailedAt || '').trim()) || invite.emailStatus === 'sent';
 }
 
+export function resolveGroupMeetStatusFromInvites(
+  deadlineAt: string | null,
+  rawStatus: string | null | undefined,
+  invites: Array<{
+    emailStatus?: string | null;
+    emailedAt?: string | null;
+  }>
+): GroupMeetRequestStatus {
+  if (rawStatus === 'closed') {
+    return 'closed';
+  }
+
+  const hasSentInvite = invites.some((invite) => hasGroupMeetInviteBeenSent(invite));
+  if (hasSentInvite) {
+    return resolveGroupMeetStatus(deadlineAt, 'collecting');
+  }
+
+  return resolveGroupMeetStatus(deadlineAt, rawStatus);
+}
+
 export function buildGroupMeetShareUrl(baseUrl: string, token: string): string {
   const trimmed = baseUrl.replace(/\/+$/, '');
   return `${trimmed}/group-meet/${encodeURIComponent(token)}`;

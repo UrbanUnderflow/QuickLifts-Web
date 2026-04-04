@@ -9,6 +9,7 @@ import {
   type GroupMeetRequestDetail,
   isValidGroupMeetMonth,
   resolveGroupMeetStatus,
+  resolveGroupMeetStatusFromInvites,
 } from '../../../../lib/groupMeet';
 import {
   GROUP_MEET_INVITES_SUBCOLLECTION,
@@ -52,7 +53,7 @@ async function buildRequestDetail(
     createdAt: toIso(requestData.createdAt),
     participantCount: Number(requestData.participantCount) || invites.length,
     responseCount: invites.filter((invite) => invite.respondedAt).length,
-    status: resolveGroupMeetStatus(deadlineAt, requestData.status),
+    status: resolveGroupMeetStatusFromInvites(deadlineAt, requestData.status, invites),
     invites,
     analysis: computeGroupMeetAnalysis(invites, meetingDurationMinutes),
     aiRecommendation: (requestData.aiRecommendation || null) as GroupMeetAiRecommendation | null,
