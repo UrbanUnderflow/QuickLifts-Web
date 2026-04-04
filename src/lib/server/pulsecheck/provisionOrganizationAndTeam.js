@@ -386,6 +386,11 @@ async function provisionPulseCheckCanaryOrganization({ adminApp, params = {} }) 
   return upsertPulseCheckOrganization({ adminApp, input });
 }
 
+async function provisionPulseCheckCanaryOrganizationAndTeam({ adminApp, params = {} }) {
+  const input = buildCanaryProvisioningInput(params);
+  return provisionPulseCheckOrganizationAndTeam({ adminApp, input });
+}
+
 async function provisionPulseCheckOrganizationAndTeam({ adminApp, input }) {
   if (!adminApp) {
     throw new Error('adminApp is required');
@@ -595,6 +600,7 @@ module.exports = {
   buildCanaryProvisioningInput,
   buildProvisioningPayload,
   provisionPulseCheckCanaryOrganization,
+  provisionPulseCheckCanaryOrganizationAndTeam,
   provisionPulseCheckOrganizationAndTeam,
   seedInitialPulseCheckAdminHandoff,
   slugify,
