@@ -264,7 +264,10 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-black-pulse font-body text-white">
+    <div
+      className="min-h-screen bg-black-pulse font-body text-white"
+      style={{ '--club-accent-color': accentColor } as React.CSSProperties}
+    >
       <Head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -272,6 +275,8 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
           href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
+        <meta name="theme-color" content="#080808" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </Head>
 
       <div className="pointer-events-none fixed inset-0 z-0">
@@ -292,13 +297,20 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
       <div
         className="pointer-events-none fixed left-1/2 top-0 z-20 w-full max-w-[430px] -translate-x-1/2"
         style={{
-          height: 'calc(env(safe-area-inset-top, 0px) + 48px)',
-          background: 'linear-gradient(180deg, rgba(8,8,8,0.82) 0%, rgba(8,8,8,0.62) 30%, rgba(8,8,8,0.22) 62%, transparent 100%)',
+          height: 'calc(env(safe-area-inset-top, 0px) + 34px)',
+          background: 'linear-gradient(180deg, rgba(8,8,8,0.74) 0%, rgba(8,8,8,0.42) 32%, rgba(8,8,8,0.12) 68%, transparent 100%)',
         }}
       />
 
-      <div className="relative z-10 mx-auto w-full max-w-[430px]">
-        <section className="relative h-[100svh] max-h-[700px] min-h-[560px] overflow-hidden">
+      <div className="relative z-10 mx-auto w-full max-w-[430px] overflow-hidden">
+        <section
+          className="relative overflow-hidden"
+          style={{
+            height: 'calc(100svh + env(safe-area-inset-top, 0px))',
+            minHeight: 'calc(560px + env(safe-area-inset-top, 0px))',
+            marginTop: 'calc(env(safe-area-inset-top, 0px) * -1)',
+          }}
+        >
           <img
             src={club.coverImageURL}
             alt={club.name}
@@ -339,15 +351,11 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
 
             <div className="mb-[10px] flex flex-wrap gap-[7px]">
               <div className="club-invite-glass rounded-full px-3 py-1.5 text-[12px] font-medium text-white">{club.clubType}</div>
-              <div className="rounded-full border border-[rgba(255,107,53,0.30)] bg-[rgba(255,107,53,0.15)] px-3 py-1.5 text-[12px] font-medium text-[rgba(255,107,53,0.95)]">
-                <span className="mr-2 inline-block h-[5px] w-[5px] rounded-full bg-orange-pulse align-middle animate-live-dot-pulse" />
-                Active Now
-              </div>
             </div>
 
-            <h1 className="font-display text-[56px] leading-[0.94] tracking-[0.01em] text-white">
-              <span className="block">{club.nameLine1}</span>
-              <span className="block" style={{ color: accentColor }}>
+            <h1 className="font-display text-[56px] leading-[0.94] tracking-[0.01em]">
+              <span className="block text-white">{club.nameLine1}</span>
+              <span className="block text-[color:var(--club-accent-color)]">
                 {club.nameLine2}
               </span>
             </h1>
@@ -360,13 +368,13 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
               onClick={openInvite}
               data-invite-deep-link={openInviteDeepLink}
               data-testid="hero-join-cta"
-              className="club-invite-cta w-full rounded-[14px] bg-lime px-4 py-4 text-left text-black-pulse shadow-[0_0_40px_rgba(197,255,0,0.18)] transition active:scale-[0.98]"
+              className="club-invite-cta w-full rounded-[14px] bg-lime px-5 py-[14px] text-center text-black-pulse shadow-[0_0_40px_rgba(197,255,0,0.18)] transition active:scale-[0.98]"
             >
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-black-pulse/10">
+              <div className="mx-auto flex w-fit items-center justify-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-black-pulse/8">
                   <PulseLayersIcon className="h-5 w-5" />
                 </div>
-                <div>
+                <div className="text-left">
                   <div className="text-[16px] font-bold leading-none">Join this club in Pulse</div>
                   <div className="mt-1 text-[10px] font-normal uppercase tracking-[0.08em] text-black-pulse/60">
                     Opens app · free to join
@@ -412,8 +420,8 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
           </div>
         </section>
 
-        <main className="relative px-5 pb-[110px]">
-          <section ref={howToJoinRef} className="pt-7">
+        <main className="relative z-20 -mt-8 rounded-t-[30px] bg-[linear-gradient(180deg,rgba(8,8,8,0.84)_0%,rgba(8,8,8,0.96)_18%,#080808_40%)] px-5 pb-[110px] pt-7">
+          <section ref={howToJoinRef}>
             <SectionDivider label="How to join" />
 
             <div className="pt-5">
