@@ -22,16 +22,25 @@ sourceOfTruthEvidence:
 
 This file locks the canary to one real external coach-led target so downstream provisioning, activation, and verification all operate against the same organization record.
 
-## Canonical Fields
+## Coach Identity
 
-- **coachIdentity:** Marcus Filly — founder of Functional Bodybuilding. [SOT: LEAD-0007, EVID-0004]
-- **externalProfileUrl:** <https://functional-bodybuilding.com/pages/about> [SOT: LEAD-0007, EVID-0004]
-- **organizationName:** Revival Strength / Functional Bodybuilding (normalized organization record for the canary). The public site footer identifies the brand relationship as `Revival Strength © 2024 / Functional Bodybuilding`. [SOT: LEAD-0007, EVID-0004]
-- **firstTeamName:** Persist (normalized initial team to provision). The public site uses `Persist` as the flagship training/program construct and lists multiple `Persist Coach` roles. [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0005]
-- **externalOwnerName:** Marcus Filly [SOT: LEAD-0007, EVID-0004]
-- **externalOwnerEmailOrHandle:** Unverified public handle; use Marcus Filly as the named external owner until direct contact data is confirmed. [SOT: LEAD-0007, EVID-0004]
-- **fitRationale:** Coach-led training business with a named founder, an active flagship program, and visible multi-coach support structure. [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0005]
-- **explicitNextStep:** Provision the canary organization as `Revival Strength / Functional Bodybuilding`, create the initial `Persist` team, and confirm Marcus Filly's preferred owner email before sending the first admin activation link. [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0005]
+Marcus Filly — founder of Functional Bodybuilding. [SOT: LEAD-0007, EVID-0004]
+
+## External Source URL
+
+<https://functional-bodybuilding.com/pages/about> [SOT: LEAD-0007, EVID-0004]
+
+## Organization Name
+
+Revival Strength / Functional Bodybuilding (normalized organization record for the canary). The public site footer identifies the brand relationship as `Revival Strength © 2024 / Functional Bodybuilding`. [SOT: LEAD-0007, EVID-0004]
+
+## First Team Name
+
+Persist (normalized initial team to provision). The public site uses `Persist` as the flagship training/program construct and lists multiple `Persist Coach` roles. [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0005]
+
+## Owner
+
+Marcus Filly is the named external owner. Contact detail remains Unverified until direct confirmation. [SOT: LEAD-0007, EVID-0004]
 
 ## Fit Rationale
 
@@ -40,6 +49,10 @@ This file locks the canary to one real external coach-led target so downstream p
 - **Clear first team candidate:** `Persist` already exists as a named training program on the public site, so it can be normalized into the first team without inventing a placeholder label or ambiguous routing target. [SOT: LEAD-0007, EVID-0005]
 - **Audience and use-case alignment:** The Persist program is presented to adults balancing training with careers, kids, and life constraints, which signals an active coached population rather than a content-only audience. [SOT: LEAD-0007, EVID-0005]
 - **Better match for the new hierarchy than legacy coach signup:** Because the public footprint shows one founder operating a branded program with multiple coaches beneath it, the organization-first PulseCheck model maps more naturally than a legacy single-coach path. [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0005]
+
+## Explicit Next Step
+
+Provision the canary organization as `Revival Strength / Functional Bodybuilding`, create the initial `Persist` team, and confirm Marcus Filly's preferred owner email before sending the first admin activation link. [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0005]
 
 ## Normalized Organization Record
 
