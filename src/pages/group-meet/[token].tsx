@@ -15,6 +15,7 @@ type InviteResponse = {
     name: string;
     email: string | null;
     imageUrl?: string | null;
+    participantType: 'host' | 'participant';
     shareUrl: string;
     responseSubmittedAt: string | null;
     availabilityEntries: GroupMeetAvailabilitySlot[];
@@ -191,6 +192,12 @@ const GroupMeetInvitePage: React.FC = () => {
                 targetMonth={invite.request.targetMonth}
                 availabilityEntries={availabilityEntries}
                 peerAvailability={invite.peerAvailability}
+                currentParticipant={{
+                  token: invite.token,
+                  name: invite.name,
+                  imageUrl: invite.imageUrl || null,
+                  participantType: invite.participantType,
+                }}
                 onChange={setAvailabilityEntries}
                 disabled={invite.deadlinePassed}
                 title="Calendar"

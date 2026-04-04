@@ -141,6 +141,10 @@ export async function sendGroupMeetInviteEmail(args: {
   );
   const senderEmail = process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
   const senderName = process.env.BREVO_SENDER_NAME || 'Pulse';
+  const internalBcc =
+    mode === 'live'
+      ? [{ email: 'info@fitwithpulse.ai', name: 'Pulse Info' }]
+      : undefined;
   const subject =
     mode === 'test'
       ? `[Test] ${args.requestTitle} availability request`
@@ -203,6 +207,7 @@ export async function sendGroupMeetInviteEmail(args: {
     htmlContent,
     sender: { email: senderEmail, name: senderName },
     replyTo: { email: senderEmail, name: senderName },
+    bcc: internalBcc,
     idempotencyKey: bypassDeliveryGuards
       ? undefined
       : buildEmailDedupeKey([
