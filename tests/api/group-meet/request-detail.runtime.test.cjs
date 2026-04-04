@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   createApiResponseRecorder,
   createRequestDetailHandlerRuntime,
+  loadGroupMeetRuntime,
   makeTimestamp,
 } = require('./_runtimeHarness.cjs');
 
@@ -117,4 +118,16 @@ test('PATCH on Group Meet detail clears derived scheduling state when timing rul
   assert.equal(state.requestData.aiRecommendation, null);
   assert.equal(state.requestData.finalSelection, null);
   assert.equal(state.requestData.calendarInvite, null);
+});
+
+test('resolveGroupMeetStatusFromInvites treats a sent invite as an active request even if raw status is draft', async () => {
+  const { resolveGroupMeetStatusFromInvites } = loadGroupMeetRuntime();
+
+  assert.equal(
+    resolveGroupMeetStatusFromInvites('2030-04-08T21:00:00.000Z', 'draft', [
+      { emailStatus: 'sent', emailedAt: null },
+      { emailStatus: 'manual_only', emailedAt: null },
+    ]),
+    'collecting'
+  );
 });

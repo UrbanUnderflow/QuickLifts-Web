@@ -3,8 +3,8 @@ import admin from './firebase-admin';
 import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from '../../netlify/functions/utils/emailSequenceHelpers';
 import {
   buildGroupMeetShareUrl,
+  resolveGroupMeetStatusFromInvites,
   normalizeGroupMeetAvailabilitySlots,
-  resolveGroupMeetStatus,
   type GroupMeetContact,
   type GroupMeetInviteDetail,
   type GroupMeetInviteSummary,
@@ -101,6 +101,7 @@ export async function mapGroupMeetRequestSummary(
     .orderBy('createdAt', 'asc')
     .get();
   const deadlineAt = toIso(data.deadlineAt);
+  const invites = invitesSnapshot.docs.map(mapGroupMeetInviteSummary);
 
   return {
     id: docSnap.id,
@@ -113,8 +114,8 @@ export async function mapGroupMeetRequestSummary(
     createdAt: toIso(data.createdAt),
     participantCount: Number(data.participantCount) || invitesSnapshot.size,
     responseCount: Number(data.responseCount) || 0,
-    status: resolveGroupMeetStatus(deadlineAt, data.status),
-    invites: invitesSnapshot.docs.map(mapGroupMeetInviteSummary),
+    status: resolveGroupMeetStatusFromInvites(deadlineAt, data.status, invites),
+    invites,
   };
 }
 

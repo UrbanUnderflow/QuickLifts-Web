@@ -10,6 +10,7 @@ import {
   buildGroupMeetCandidateKey,
   formatMinutesAsTime,
   hasGroupMeetInviteBeenSent,
+  resolveGroupMeetStatusFromInvites,
   type GroupMeetAvailabilitySlot,
   type GroupMeetCandidateWindow,
   type GroupMeetContact,
@@ -173,6 +174,9 @@ const formatCandidateLabel = (candidate: GroupMeetCandidateWindow) => {
   const end = formatMinutesAsTime(candidate.suggestedEndMinutes);
   return `${formatMonthDate(candidate.date)} • ${start} - ${end}`;
 };
+
+const getRequestStatusLabel = (status: GroupMeetRequestSummary['status']) =>
+  status === 'collecting' ? 'active' : status;
 
 const getInviteActionLabel = (invite: Pick<GroupMeetInviteSummary, 'emailStatus' | 'emailedAt'>) =>
   hasGroupMeetInviteBeenSent(invite) ? 'Resend invite' : 'Send invite';
@@ -521,28 +525,40 @@ const GroupMeetAdminPage: React.FC = () => {
     setRequests((current) =>
       current.map((request) =>
         request.id === requestId
-          ? {
-              ...request,
-              status: nextStatus || request.status,
-              invites: request.invites.map((invite) => {
+          ? (() => {
+              const nextInvites = request.invites.map((invite) => {
                 const updatedInvite = inviteByToken.get(invite.token);
                 return updatedInvite ? { ...invite, ...updatedInvite } : invite;
-              }),
-            }
+              });
+
+              return {
+                ...request,
+                status:
+                  nextStatus ||
+                  resolveGroupMeetStatusFromInvites(request.deadlineAt, request.status, nextInvites),
+                invites: nextInvites,
+              };
+            })()
           : request
       )
     );
 
     setSelectedRequest((current) =>
       current && current.id === requestId
-        ? {
-            ...current,
-            status: nextStatus || current.status,
-            invites: current.invites.map((invite) => {
+        ? (() => {
+            const nextInvites = current.invites.map((invite) => {
               const updatedInvite = inviteByToken.get(invite.token);
               return updatedInvite ? { ...invite, ...updatedInvite } : invite;
-            }),
-          }
+            });
+
+            return {
+              ...current,
+              status:
+                nextStatus ||
+                resolveGroupMeetStatusFromInvites(current.deadlineAt, current.status, nextInvites),
+              invites: nextInvites,
+            };
+          })()
         : current
     );
   };
@@ -1512,7 +1528,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                     ? 'border border-zinc-700 bg-zinc-900 text-zinc-300'
                                     : 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
                               }`}>
-                                {request.status}
+                                {getRequestStatusLabel(request.status)}
                               </span>
                             </div>
                             <div className="text-sm text-zinc-400 mt-1">
@@ -1598,7 +1614,7 @@ const GroupMeetAdminPage: React.FC = () => {
                               ? 'border-zinc-700 bg-zinc-900 text-zinc-300'
                               : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
                         }`}>
-                          {selectedRequest.status}
+                          {getRequestStatusLabel(selectedRequest.status)}
                         </span>
                       </div>
                     )}

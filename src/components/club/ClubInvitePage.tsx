@@ -292,8 +292,8 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
       <div
         className="pointer-events-none fixed left-1/2 top-0 z-20 w-full max-w-[430px] -translate-x-1/2"
         style={{
-          height: 'calc(env(safe-area-inset-top, 0px) + 76px)',
-          background: 'linear-gradient(180deg, rgba(8,8,8,0.96) 0%, rgba(8,8,8,0.86) 34%, rgba(8,8,8,0.44) 68%, transparent 100%)',
+          height: 'calc(env(safe-area-inset-top, 0px) + 48px)',
+          background: 'linear-gradient(180deg, rgba(8,8,8,0.82) 0%, rgba(8,8,8,0.62) 30%, rgba(8,8,8,0.22) 62%, transparent 100%)',
         }}
       />
 

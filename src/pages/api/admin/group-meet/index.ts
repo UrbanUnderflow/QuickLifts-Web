@@ -4,7 +4,7 @@ import admin, { getFirebaseAdminApp } from '../../../../lib/firebase-admin';
 import {
   buildGroupMeetShareUrl,
   normalizeGroupMeetAvailabilitySlots,
-  resolveGroupMeetStatus,
+  resolveGroupMeetStatusFromInvites,
   type GroupMeetInviteSummary,
   type GroupMeetRequestSummary,
   isValidGroupMeetMonth,
@@ -46,6 +46,7 @@ async function mapRequest(docSnap: FirebaseFirestore.QueryDocumentSnapshot): Pro
   const data = docSnap.data();
   const invitesSnapshot = await docSnap.ref.collection(GROUP_MEET_INVITES_SUBCOLLECTION).orderBy('createdAt', 'asc').get();
   const deadlineAt = toIso(data.deadlineAt);
+  const invites = invitesSnapshot.docs.map(mapInvite);
 
   return {
     id: docSnap.id,
@@ -58,8 +59,8 @@ async function mapRequest(docSnap: FirebaseFirestore.QueryDocumentSnapshot): Pro
     createdAt: toIso(data.createdAt),
     participantCount: Number(data.participantCount) || invitesSnapshot.size,
     responseCount: Number(data.responseCount) || 0,
-    status: resolveGroupMeetStatus(deadlineAt, data.status),
-    invites: invitesSnapshot.docs.map(mapInvite),
+    status: resolveGroupMeetStatusFromInvites(deadlineAt, data.status, invites),
+    invites,
   };
 }
 
