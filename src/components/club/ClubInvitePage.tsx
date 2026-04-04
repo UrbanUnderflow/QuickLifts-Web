@@ -18,6 +18,7 @@ export interface ClubInvite {
   creatorUsername: string;
   creatorInitials: string;
   inviteDeepLink: string;
+  openInviteDeepLink?: string;
   webFallbackURL: string;
 }
 
@@ -126,6 +127,7 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
   const memberCountLabel = `${formatCount(club.memberCount)}+`;
   const workoutsLabel = formatCount(club.workoutsCompleted);
   const stickyLabel = `Join ${club.name.replace(/\([^)]*\)/g, '').trim() || club.name}`;
+  const openInviteDeepLink = club.openInviteDeepLink || club.inviteDeepLink;
 
   const openInvite = () => {
     if (onOpenInvite) {
@@ -134,7 +136,7 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
     }
 
     if (typeof window !== 'undefined') {
-      window.location.href = club.inviteDeepLink;
+      window.location.href = openInviteDeepLink;
     }
   };
 
@@ -246,7 +248,7 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
             <button
               type="button"
               onClick={openInvite}
-              data-invite-deep-link={club.inviteDeepLink}
+              data-invite-deep-link={openInviteDeepLink}
               className="club-invite-cta w-full rounded-[14px] bg-lime px-4 py-4 text-left text-black-pulse shadow-[0_0_40px_rgba(197,255,0,0.18)] transition active:scale-[0.98]"
             >
               <div className="flex items-center gap-3">
@@ -463,7 +465,7 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
         <button
           type="button"
           onClick={openInvite}
-          data-invite-deep-link={club.inviteDeepLink}
+          data-invite-deep-link={openInviteDeepLink}
           className="club-invite-cta flex w-full items-center justify-center gap-3 rounded-[16px] bg-lime px-4 py-[17px] text-[16px] font-bold text-black-pulse shadow-[0_-4px_48px_rgba(197,255,0,0.16),0_4px_24px_rgba(0,0,0,0.5)] transition active:scale-[0.98]"
         >
           <PulseLayersIcon className="h-5 w-5" />
