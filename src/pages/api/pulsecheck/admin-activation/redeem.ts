@@ -64,6 +64,15 @@ const resolveTeamAdminCommercialConfig = (commercialConfig: PulseCheckTeamCommer
   };
 };
 
+const buildClaimedHandoffMetadata = (current: Record<string, unknown> | undefined, userId: string, userEmail: string, token: string) => ({
+  ...(current || {}),
+  state: 'claimed',
+  claimedByUserId: normalizeString(userId),
+  claimedByEmail: normalizeEmail(userEmail),
+  claimedByInviteToken: normalizeString(token),
+  claimedAt: admin.firestore.FieldValue.serverTimestamp(),
+});
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -120,14 +129,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const organizationRef = firestore.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
       const teamRef = firestore.collection(TEAMS_COLLECTION).doc(teamId);
-      const organizationMembershipRef = firestore
+      const organizationMembershipQuery = firestore
         .collection(ORGANIZATION_MEMBERSHIPS_COLLECTION)
-        .doc(`${organizationId}_${userId}`);
-      const teamMembershipRef = firestore.collection(TEAM_MEMBERSHIPS_COLLECTION).doc(`${teamId}_${userId}`);
+        .where('organizationId', '==', organizationId)
+        .where('role', '==', 'org-admin')
+        .where('handoffMetadata.state', '==', 'reserved-pending-activation')
+        .limit(1);
+      const teamMembershipQuery = firestore
+        .collection(TEAM_MEMBERSHIPS_COLLECTION)
+        .where('organizationId', '==', organizationId)
+        .where('teamId', '==', teamId)
+        .where('role', '==', 'team-admin')
+        .where('handoffMetadata.state', '==', 'reserved-pending-activation')
+        .limit(1);
 
-      const [organizationSnap, teamSnap] = await Promise.all([
+      const [organizationSnap, teamSnap, reservedOrganizationMembershipQuerySnap, reservedTeamMembershipQuerySnap] = await Promise.all([
         transaction.get(organizationRef),
         transaction.get(teamRef),
+        transaction.get(organizationMembershipQuery),
+        transaction.get(teamMembershipQuery),
       ]);
 
       if (!organizationSnap.exists) {
@@ -142,6 +162,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const teamCommercialConfig = normalizeTeamCommercialConfig(teamSnap.data()?.commercialConfig);
       const nextTeamCommercialConfig = resolveTeamAdminCommercialConfig(teamCommercialConfig, userId);
 
+      const reservedOrganizationMembershipDoc = reservedOrganizationMembershipQuerySnap.docs[0] || null;
+      const reservedTeamMembershipDoc = reservedTeamMembershipQuerySnap.docs[0] || null;
+      const organizationMembershipRef = reservedOrganizationMembershipDoc
+        ? reservedOrganizationMembershipDoc.ref
+        : firestore.collection(ORGANIZATION_MEMBERSHIPS_COLLECTION).doc(`${organizationId}_${userId}`);
+      const teamMembershipRef = reservedTeamMembershipDoc
+        ? reservedTeamMembershipDoc.ref
+        : firestore.collection(TEAM_MEMBERSHIPS_COLLECTION).doc(`${teamId}_${userId}`);
+      const reservedOrganizationMembership = (reservedOrganizationMembershipDoc?.data() || {}) as Record<string, any>;
+      const reservedTeamMembership = (reservedTeamMembershipDoc?.data() || {}) as Record<string, any>;
+
       transaction.set(
         organizationMembershipRef,
         {
@@ -151,8 +182,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           role: 'org-admin',
           status: 'active',
           grantedByInviteToken: token,
-          grantedAt: now,
-          createdAt: now,
+          grantedAt: reservedOrganizationMembership.grantedAt || now,
+          handoffMetadata: buildClaimedHandoffMetadata(reservedOrganizationMembership.handoffMetadata, userId, userEmail, token),
+          createdAt: reservedOrganizationMembership.createdAt || now,
           updatedAt: now,
         },
         { merge: true }
@@ -169,11 +201,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           title: 'Organization Admin',
           permissionSetId: 'pulsecheck-team-admin-v1',
           rosterVisibilityScope: 'team',
-          allowedAthleteIds: [],
-          onboardingStatus: 'pending-profile',
+          allowedAthleteIds: Array.isArray(reservedTeamMembership.allowedAthleteIds) ? reservedTeamMembership.allowedAthleteIds : [],
+          onboardingStatus: reservedTeamMembership.onboardingStatus || 'pending-profile',
           grantedByInviteToken: token,
-          grantedAt: now,
-          createdAt: now,
+          grantedAt: reservedTeamMembership.grantedAt || now,
+          handoffMetadata: buildClaimedHandoffMetadata(reservedTeamMembership.handoffMetadata, userId, userEmail, token),
+          createdAt: reservedTeamMembership.createdAt || now,
           updatedAt: now,
         },
         { merge: true }
