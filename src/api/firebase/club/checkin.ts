@@ -2,6 +2,10 @@ import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../config';
 import { User } from '../user';
 import { clubService } from './service';
+import type {
+  ClubEventCheckinMetadata,
+  ClubEventCheckinSource,
+} from './types';
 
 interface CheckinAttribution {
   /** ID of the user who shared the QR code / link */
@@ -18,8 +22,9 @@ interface RecordClubEventCheckinArgs {
   clubId: string;
   eventId?: string | null;
   user: User;
-  source?: string;
+  source?: ClubEventCheckinSource;
   attribution?: CheckinAttribution;
+  metadata?: ClubEventCheckinMetadata;
 }
 
 export const recordClubEventCheckin = async ({
@@ -28,6 +33,7 @@ export const recordClubEventCheckin = async ({
   user,
   source = 'event-checkin',
   attribution,
+  metadata,
 }: RecordClubEventCheckinArgs): Promise<void> => {
   if (!eventId) {
     return;
@@ -72,6 +78,32 @@ export const recordClubEventCheckin = async ({
     checkinPayload.userAgent = attribution.userAgent || null;
   }
 
+  if (metadata) {
+    if (typeof metadata.awardedPoints === 'number') {
+      checkinPayload.awardedPoints = metadata.awardedPoints;
+    }
+
+    if (typeof metadata.distanceMeters === 'number') {
+      checkinPayload.distanceMeters = metadata.distanceMeters;
+    }
+
+    if (typeof metadata.locationLatitude === 'number') {
+      checkinPayload.locationLatitude = metadata.locationLatitude;
+    }
+
+    if (typeof metadata.locationLongitude === 'number') {
+      checkinPayload.locationLongitude = metadata.locationLongitude;
+    }
+
+    if (typeof metadata.locationAccuracyMeters === 'number') {
+      checkinPayload.locationAccuracyMeters = metadata.locationAccuracyMeters;
+    }
+
+    if (metadata.checkinMode) {
+      checkinPayload.checkinMode = metadata.checkinMode;
+    }
+  }
+
   if (!checkinSnapshot.exists()) {
     checkinPayload.checkedInAt = serverTimestamp();
     checkinPayload.createdAt = serverTimestamp();
@@ -88,6 +120,8 @@ export const completeClubEventCheckin = async ({
   eventId,
   user,
   attribution,
+  metadata,
+  source = 'event-checkin',
 }: RecordClubEventCheckinArgs): Promise<void> => {
   // Build a joinedVia string that encodes the source for membership analytics
   const joinedVia = attribution?.referredBy
@@ -99,8 +133,8 @@ export const completeClubEventCheckin = async ({
     clubId,
     eventId,
     user,
-    source: 'event-checkin',
+    source,
     attribution,
+    metadata,
   });
 };
-

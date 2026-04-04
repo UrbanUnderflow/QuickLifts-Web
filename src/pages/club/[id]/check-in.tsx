@@ -250,6 +250,7 @@ const ClubCheckInPage: React.FC<ClubCheckInPageProps> = ({
       clubId: clubData.id,
       eventId,
       user,
+      source: 'qr-checkin',
       attribution,
     });
 

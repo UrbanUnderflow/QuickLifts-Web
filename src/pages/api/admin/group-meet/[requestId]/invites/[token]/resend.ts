@@ -8,6 +8,7 @@ import {
   sendGroupMeetInviteEmail,
   toIso,
 } from '../../../../../../../lib/groupMeetAdmin';
+import { resolveGroupMeetStatus } from '../../../../../../../lib/groupMeet';
 import { requireAdminRequest } from '../../../../_auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -53,6 +54,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const inviteData = inviteDoc.data() || {};
     const recipientEmail =
       typeof inviteData.email === 'string' ? inviteData.email.trim().toLowerCase() : '';
+    const deadlineAt = toIso(requestData.deadlineAt) || new Date().toISOString();
+    const currentStatus = resolveGroupMeetStatus(deadlineAt, requestData.status);
+    const previousEmailedAt = inviteData.emailedAt || null;
 
     if (!recipientEmail) {
       return res.status(400).json({ error: 'This participant does not have an email address on file.' });
@@ -73,33 +77,56 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       bypassDeliveryGuards: true,
     });
 
-    const emailStatus = result.success && !result.skipped ? 'sent' : 'failed';
+    const emailStatus = result.success
+      ? result.skipped
+        ? inviteData.emailStatus || 'not_sent'
+        : 'sent'
+      : 'failed';
     const emailError = result.success
       ? result.skipped
         ? 'Invite resend was skipped.'
         : null
       : result.error || 'Failed to send';
+    const nextStatus =
+      result.success && !result.skipped && currentStatus !== 'closed'
+        ? resolveGroupMeetStatus(deadlineAt, 'collecting')
+        : currentStatus;
 
-    await inviteRef.set(
-      {
-        shareUrl,
-        emailStatus,
-        emailError,
-        emailedAt: result.success && !result.skipped ? admin.firestore.FieldValue.serverTimestamp() : null,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastResentByEmail: adminUser.email || null,
-      },
-      { merge: true }
-    );
+    await Promise.all([
+      inviteRef.set(
+        {
+          shareUrl,
+          emailStatus,
+          emailError,
+          emailedAt:
+            result.success && !result.skipped
+              ? admin.firestore.FieldValue.serverTimestamp()
+              : previousEmailedAt,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastResentByEmail: adminUser.email || null,
+        },
+        { merge: true }
+      ),
+      result.success && !result.skipped && nextStatus !== currentStatus
+        ? requestRef.set(
+            {
+              status: nextStatus,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedByEmail: adminUser.email || null,
+            },
+            { merge: true }
+          )
+        : Promise.resolve(),
+    ]);
 
     const updatedInviteDoc = await inviteRef.get();
     const invite = mapGroupMeetInviteSummary(updatedInviteDoc);
 
     if (!result.success) {
-      return res.status(500).json({ error: emailError, invite });
+      return res.status(500).json({ error: emailError, invite, status: nextStatus });
     }
 
-    return res.status(200).json({ invite });
+    return res.status(200).json({ invite, status: nextStatus });
   } catch (error: any) {
     console.error('[group-meet-resend] Failed to resend invite:', error);
     return res.status(500).json({ error: error?.message || 'Failed to resend invite.' });

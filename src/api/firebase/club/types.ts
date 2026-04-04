@@ -507,6 +507,18 @@ export type ClubSafetyReportCategory =
   | 'pairing_mismatch'
   | 'other';
 
+export type ClubEventCheckinSource = 'event-checkin' | 'qr-checkin' | 'nearby-checkin';
+export type ClubEventCheckinMode = 'qr_only' | 'nearby_and_qr' | 'nearby_only';
+
+export interface ClubEventCheckinMetadata {
+  checkinMode?: ClubEventCheckinMode | null;
+  distanceMeters?: number | null;
+  awardedPoints?: number | null;
+  locationLatitude?: number | null;
+  locationLongitude?: number | null;
+  locationAccuracyMeters?: number | null;
+}
+
 export class ClubSafetyReport {
   id: string;
   clubId: string;
@@ -571,6 +583,12 @@ export class ClubEvent {
   locationName: string;
   address: string;
   timezoneIdentifier: string;
+  latitude: number | null;
+  longitude: number | null;
+  nearbyCheckinEnabled: boolean;
+  nearbyRadiusMeters: number | null;
+  nearbyCheckinPoints: number | null;
+  checkinMode: ClubEventCheckinMode | null;
   startDate: Date;
   endDate: Date;
   source: string;
@@ -586,6 +604,16 @@ export class ClubEvent {
     this.locationName = data.locationName || '';
     this.address = data.address || '';
     this.timezoneIdentifier = data.timezoneIdentifier || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    this.latitude = typeof data.latitude === 'number' ? data.latitude : null;
+    this.longitude = typeof data.longitude === 'number' ? data.longitude : null;
+    this.nearbyCheckinEnabled = data.nearbyCheckinEnabled === true;
+    this.nearbyRadiusMeters = typeof data.nearbyRadiusMeters === 'number' ? data.nearbyRadiusMeters : null;
+    this.nearbyCheckinPoints = typeof data.nearbyCheckinPoints === 'number' ? data.nearbyCheckinPoints : null;
+    this.checkinMode = data.checkinMode === 'qr_only'
+      || data.checkinMode === 'nearby_and_qr'
+      || data.checkinMode === 'nearby_only'
+      ? data.checkinMode
+      : null;
     this.startDate = convertFirestoreTimestamp(data.startDate);
     this.endDate = convertFirestoreTimestamp(data.endDate);
     this.source = data.source || 'event-checkin';
@@ -617,7 +645,7 @@ export class ClubEvent {
   }
 
   toDictionary(): { [key: string]: any } {
-    return {
+    const dict: { [key: string]: any } = {
       id: this.id,
       clubId: this.clubId,
       creatorId: this.creatorId,
@@ -626,11 +654,34 @@ export class ClubEvent {
       locationName: this.locationName,
       address: this.address,
       timezoneIdentifier: this.timezoneIdentifier,
+      nearbyCheckinEnabled: this.nearbyCheckinEnabled,
       startDate: dateToUnixTimestamp(this.startDate),
       endDate: dateToUnixTimestamp(this.endDate),
       source: this.source,
       createdAt: dateToUnixTimestamp(this.createdAt),
       updatedAt: dateToUnixTimestamp(this.updatedAt),
     };
+
+    if (this.latitude !== null) {
+      dict.latitude = this.latitude;
+    }
+
+    if (this.longitude !== null) {
+      dict.longitude = this.longitude;
+    }
+
+    if (this.nearbyRadiusMeters !== null) {
+      dict.nearbyRadiusMeters = this.nearbyRadiusMeters;
+    }
+
+    if (this.nearbyCheckinPoints !== null) {
+      dict.nearbyCheckinPoints = this.nearbyCheckinPoints;
+    }
+
+    if (this.checkinMode) {
+      dict.checkinMode = this.checkinMode;
+    }
+
+    return dict;
   }
 }

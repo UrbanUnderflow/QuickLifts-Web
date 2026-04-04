@@ -190,6 +190,15 @@ const SOUND_EFFECTS: {
     platform: 'community',
   },
   {
+    id: 'community-nearby-checkin-success',
+    label: 'Nearby Check-In Success',
+    description: 'Celebration cue when a member checks in nearby and earns event points.',
+    icon: <Sparkles className="w-4 h-4" />,
+    category: 'celebration',
+    file: 'nearby-checkin-success',
+    platform: 'community',
+  },
+  {
     id: 'community-start-clock',
     label: 'Start Clock',
     description: 'Beep sequence marking the beginning of a timed set.',

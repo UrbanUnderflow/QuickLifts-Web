@@ -242,6 +242,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           contactId: participant.contactId,
           shareUrl,
           emailStatus,
+          emailedAt: null,
           emailError: null,
           respondedAt: hasResponse ? new Date().toISOString() : null,
           availabilityCount: participant.availabilityEntries.length,
