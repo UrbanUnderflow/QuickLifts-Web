@@ -63,6 +63,18 @@ export const buildClubCanonicalUrl = (
   return toAbsoluteUrl(queryString ? `${path}?${queryString}` : path);
 };
 
+export const buildClubWebFallbackUrl = (
+  clubId: string,
+  options?: {
+    sharedBy?: string | null;
+    eventId?: string | null;
+  }
+): string => {
+  const fallbackUrl = new URL(buildClubCanonicalUrl(clubId, options));
+  fallbackUrl.searchParams.set('web', '1');
+  return fallbackUrl.toString();
+};
+
 export const buildClubCheckInPath = (clubId: string, eventId?: string | null): string => {
   const basePath = `${buildClubPath(clubId)}/check-in`;
   if (!eventId) {

@@ -139,3 +139,44 @@ code {
 .animate-circuit-pulse {
   animation: circuit-pulse 3s ease-in-out infinite;
 }
+
+.club-invite-glass {
+  background: rgba(255, 255, 255, 0.045);
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.club-invite-cta {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.club-invite-cta::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 58%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.club-invite-cta > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-orb-in,
+  .animate-fade-down,
+  .animate-fade-up,
+  .animate-photo-zoom,
+  .animate-live-dot-pulse,
+  .animate-ticker-move,
+  .animate-scroll-cue {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
