@@ -4,7 +4,7 @@ externalProfileUrl: https://functional-bodybuilding.com/pages/about
 organizationName: Revival Strength / Functional Bodybuilding
 firstTeamName: Persist
 externalOwnerName: Marcus Filly
-externalOwnerEmailOrHandle: Unverified public handle; use Marcus Filly pending direct owner confirmation
+externalOwnerEmailOrHandle: Preferred outreach route is the official Functional Bodybuilding media inquiries form; see docs/pulsecheck/marcus-filly-contact-path.md for the confirmed contact path and fallback route
 fitRationale: Coach-led training business with a named founder, an active flagship program, and visible multi-coach support structure [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0005]
 explicitNextStep: Provision the canary organization as "Revival Strength / Functional Bodybuilding" with an initial "Persist" team and route the first admin activation handoff to Marcus Filly after confirming the preferred owner email directly. [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0005]
 status: selected-target
@@ -14,6 +14,8 @@ sourceOfTruthLead: LEAD-0007
 sourceOfTruthEvidence:
   - EVID-0004
   - EVID-0005
+  - EVID-0006
+  - EVID-0007
 ---
 
 # PulseCheck Canary Target Brief
@@ -40,7 +42,7 @@ Persist (normalized initial team to provision). The public site uses `Persist` a
 
 ## Owner
 
-Marcus Filly is the named external owner. Contact detail remains Unverified until direct confirmation. [SOT: LEAD-0007, EVID-0004]
+Marcus Filly is the named external owner. The confirmed public owner-contact route for outreach is documented in `docs/pulsecheck/marcus-filly-contact-path.md`; use the official Functional Bodybuilding media inquiries form as the preferred first channel, not a guessed personal inbox or public social handle. [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0006] [SOT: LEAD-0007, EVID-0007]
 
 ## Fit Rationale
 
@@ -63,14 +65,16 @@ Provision the canary organization as `Revival Strength / Functional Bodybuilding
 | Normalized organization name | Revival Strength / Functional Bodybuilding | [SOT: LEAD-0007, EVID-0004] |
 | Initial team to provision | Persist | [SOT: LEAD-0007, EVID-0004], [SOT: LEAD-0007, EVID-0005] |
 | External owner | Marcus Filly | [SOT: LEAD-0007, EVID-0004] |
-| Owner contact detail | Unverified pending direct confirmation | [SOT: LEAD-0007, EVID-0004] |
+| Owner contact detail | Preferred outreach route is the official Functional Bodybuilding media inquiries form; canonical routing details live in `docs/pulsecheck/marcus-filly-contact-path.md` | [SOT: LEAD-0007, EVID-0006], [SOT: LEAD-0007, EVID-0007] |
 | Collaboration status | No confirmed collaboration interest on record | [SOT: LEAD-0007, EVID-0004] |
 
 ## Implementation Metadata
 
 - **First external owner:** Marcus Filly, founder of Functional Bodybuilding and the named external owner for the canary organization record. [SOT: LEAD-0007, EVID-0004]
-- **First team admin handoff target:** Marcus Filly as the initial org admin and first `Persist` team admin; owner contact detail remains Unverified until direct confirmation, so activation should be sent only after the preferred email is confirmed. [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0005]
-- **Exact next step sentence:** `Provision the PulseCheck canary as organization "Revival Strength / Functional Bodybuilding" with first team "Persist", then confirm Marcus Filly's preferred owner email and send the initial admin activation link to that confirmed address.` [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0005]
+- **Confirmed owner-contact route artifact:** `docs/pulsecheck/marcus-filly-contact-path.md` is the canonical routing note for this target and should be consulted before any live send. [SOT: LEAD-0007, EVID-0006] [SOT: LEAD-0007, EVID-0007]
+- **Preferred outreach channel:** Use the official Functional Bodybuilding media inquiries form as the first outreach channel because the public contact page routes collaboration requests there. [SOT: LEAD-0007, EVID-0006] [SOT: LEAD-0007, EVID-0007]
+- **First team admin handoff target:** Marcus Filly as the initial org admin and first `Persist` team admin; once direct owner confirmation is obtained through the preferred outreach route, send the activation link using the confirmed handoff details captured from that exchange. [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0006] [SOT: LEAD-0007, EVID-0007]
+- **Exact next step sentence:** `Provision the PulseCheck canary as organization "Revival Strength / Functional Bodybuilding" with first team "Persist", use the official Functional Bodybuilding media inquiries form as the preferred outreach channel, and only send the initial admin activation link after the owner-confirmed handoff details are captured.` [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0006] [SOT: LEAD-0007, EVID-0007]
 - **Implementation posture:** Treat this as an organization-first setup, not a legacy solo-coach signup, because the public footprint shows a founder-led brand with a distinct named program and multiple coach roles beneath it. [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0005]
 
 ## Notes
