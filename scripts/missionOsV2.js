@@ -1,6 +1,27 @@
 'use strict';
 
 const crypto = require('crypto');
+const {
+  buildAdmissionDecision,
+  deriveBusinessDebtScore,
+  deriveCommercialMovementScore,
+  deriveExecutionScore,
+  normalizeCreditBucket,
+  normalizeExecuteGateMode,
+  normalizeScoreGateMode,
+  normalizeSideEffectClass,
+} = require('./missionAdmissionTypes');
+const {
+  buildCanaryMissionInstancePolicy,
+  resolveMissionPlaybook,
+  resolveMissionInstancePolicy,
+} = require('./missionPolicies');
+const {
+  buildAdmissionReadinessDecision,
+  compareStagePositions,
+  normalizeCleanupState,
+  resolveStage,
+} = require('./missionReadiness');
 
 const MISSION_SYSTEM_VERSION = 2;
 const DEFAULT_MISSION_MODE = 'execute';
@@ -13,7 +34,8 @@ const DEFAULT_SPOT_CHECK_SAMPLE_RATE = 0.2;
 const DEFAULT_TASK_EXPIRY_HOURS = 72;
 const DEFAULT_PLANNER_MIN_CREDITED_SCORE = 12;
 const DEFAULT_PLANNER_MIN_NET_SCORE = 0;
-const DEFAULT_EXECUTE_GATE_MODE = 'credited-and-net';
+const DEFAULT_EXECUTE_GATE_MODE = 'strict';
+const DEFAULT_SCORE_GATE_MODE = 'credited-and-net';
 const DEFAULT_MAX_LEARNING_INVALIDATION_WIP_PCT = 0.25;
 const DEFAULT_MAX_WAIVED_CREDIT_PCT = 50;
 const DEFAULT_ALLOW_WAIVED_CREDIT = false;
@@ -114,6 +136,46 @@ const CLASS_MULTIPLIERS = {
   invalidation: 0.6,
   constraint: 1,
 };
+const ACTION_SIGNAL_EMISSIONS = Object.freeze({
+  'target-research': ['target-identity-locked'],
+  'contact-path-confirmation': ['contact-route-confirmed'],
+  'outreach-asset-creation': ['outreach-asset-ready'],
+  'send-outreach': ['outreach-sent'],
+  'confirm-interest': ['interest-confirmed'],
+  'confirm-owner-email': ['owner-email-confirmed'],
+  'create-activation-link': ['activation-link-created'],
+  'send-activation-link': ['activation-link-sent'],
+  'confirm-redemption': ['activation-link-redeemed'],
+  'verify-downstream-invite-readiness': ['downstream-invite-ready'],
+});
+const ACTION_TYPE_NAME_RULES = [
+  { actionType: 'target-research', pattern: /lock .*target|target brief|organization brief/i },
+  { actionType: 'preprovision-org-team-shell', pattern: /provision .*initial team shell|create .*organization and (?:its|the) first team|org\/team shell/i },
+  { actionType: 'verify-downstream-invite-readiness', pattern: /verify .*proof path|downstream invite readiness|readiness contract/i },
+  { actionType: 'create-activation-link', pattern: /admin activation handoff|admin-activation invite|generate .*activation/i },
+  { actionType: 'send-activation-link', pattern: /send .*activation/i },
+  { actionType: 'confirm-redemption', pattern: /confirm .*admin activation|redeem .*admin activation|real admin activation/i },
+  { actionType: 'confirm-interest', pattern: /confirm .*interest|record .*interest|interest confirmation|target .*interested/i },
+  { actionType: 'confirm-owner-email', pattern: /confirm .*owner email|owner email confirmation|verify .*owner email|bind .*owner email/i },
+  { actionType: 'contact-path-confirmation', pattern: /contact path|contact route|confirm .*email|owner email/i },
+  { actionType: 'outreach-asset-creation', pattern: /invite package|handoff package|outreach asset|messaging package/i },
+  { actionType: 'send-outreach', pattern: /send outreach|deliver outreach/i },
+  { actionType: 'reserve-admin-membership', pattern: /reserve admin membership|reserved admin/i },
+];
+const ACTION_TYPE_RULES = [
+  { actionType: 'verify-downstream-invite-readiness', pattern: /source-of-truth proof|proof path|invite readiness|readiness contract/i },
+  { actionType: 'create-activation-link', pattern: /admin-activation invite|admin activation handoff|activation link/i },
+  { actionType: 'confirm-redemption', pattern: /redeem(?:ed)? .*admin activation|confirm .*admin activation|real admin activation/i },
+  { actionType: 'preprovision-org-team-shell', pattern: /provision .*organization|organization and initial team shell|initial team shell|org\/team shell|first team with the correct team type/i },
+  { actionType: 'target-research', pattern: /lock .*target|target brief|organization brief|fit rationale/i },
+  { actionType: 'confirm-interest', pattern: /confirm .*interest|record .*interest|interest confirmation|target .*interested/i },
+  { actionType: 'confirm-owner-email', pattern: /confirm .*owner email|owner email confirmation|verify .*owner email|bind .*owner email/i },
+  { actionType: 'contact-path-confirmation', pattern: /contact path|contact route|confirm .*email|owner email/i },
+  { actionType: 'outreach-asset-creation', pattern: /invite package|handoff package|outreach asset|messaging package/i },
+  { actionType: 'send-activation-link', pattern: /send .*activation/i },
+  { actionType: 'send-outreach', pattern: /send outreach|deliver outreach/i },
+  { actionType: 'reserve-admin-membership', pattern: /reserve admin membership|reserved admin/i },
+];
 
 function toMillis(value) {
   if (!value) return 0;
@@ -186,7 +248,18 @@ function normalizeMissionPolicy(rawMission = {}, overrides = {}) {
     1
   ) || 1;
   const mode = String(overrides.mode || rawMission.mode || (systemVersion >= MISSION_SYSTEM_VERSION ? DEFAULT_MISSION_MODE : 'explore')).toLowerCase();
-  return {
+  const rawExecuteGateMode = String(overrides.executeGateMode || rawMission.executeGateMode || '').toLowerCase();
+  const rawScoreGateMode = String(overrides.scoreGateMode || rawMission.scoreGateMode || '').toLowerCase();
+  const scoreGateMode = normalizeScoreGateMode(
+    rawScoreGateMode ||
+    (['credited-and-net', 'credited-only', 'net-only'].includes(rawExecuteGateMode) ? rawExecuteGateMode : DEFAULT_SCORE_GATE_MODE)
+  );
+  const executeGateMode = normalizeExecuteGateMode(
+    ['strict', 'allow-speculative'].includes(rawExecuteGateMode)
+      ? rawExecuteGateMode
+      : (Boolean(overrides.canary ?? rawMission.canary) ? 'allow-speculative' : DEFAULT_EXECUTE_GATE_MODE)
+  );
+  const basePolicy = {
     ...rawMission,
     ...overrides,
     systemVersion,
@@ -198,7 +271,8 @@ function normalizeMissionPolicy(rawMission = {}, overrides = {}) {
     maxQueuedExploreTasksPerAgent: Number(overrides.maxQueuedExploreTasksPerAgent || rawMission.maxQueuedExploreTasksPerAgent || DEFAULT_MAX_QUEUED_EXPLORE_TASKS_PER_AGENT) || DEFAULT_MAX_QUEUED_EXPLORE_TASKS_PER_AGENT,
     plannerMinimumCreditedScore: Number(overrides.plannerMinimumCreditedScore ?? rawMission.plannerMinimumCreditedScore ?? DEFAULT_PLANNER_MIN_CREDITED_SCORE) || DEFAULT_PLANNER_MIN_CREDITED_SCORE,
     plannerMinimumNetScore: Number(overrides.plannerMinimumNetScore ?? rawMission.plannerMinimumNetScore ?? DEFAULT_PLANNER_MIN_NET_SCORE) || DEFAULT_PLANNER_MIN_NET_SCORE,
-    executeGateMode: String(overrides.executeGateMode || rawMission.executeGateMode || DEFAULT_EXECUTE_GATE_MODE).toLowerCase() || DEFAULT_EXECUTE_GATE_MODE,
+    executeGateMode,
+    scoreGateMode,
     maxLearningInvalidationWipPct: Number(overrides.maxLearningInvalidationWipPct ?? rawMission.maxLearningInvalidationWipPct ?? DEFAULT_MAX_LEARNING_INVALIDATION_WIP_PCT) || DEFAULT_MAX_LEARNING_INVALIDATION_WIP_PCT,
     allowWaivedCredit: Boolean(overrides.allowWaivedCredit ?? rawMission.allowWaivedCredit ?? DEFAULT_ALLOW_WAIVED_CREDIT),
     maxWaivedCreditPct: Number(overrides.maxWaivedCreditPct ?? rawMission.maxWaivedCreditPct ?? DEFAULT_MAX_WAIVED_CREDIT_PCT) || DEFAULT_MAX_WAIVED_CREDIT_PCT,
@@ -207,6 +281,25 @@ function normalizeMissionPolicy(rawMission = {}, overrides = {}) {
     hardFailureNetHandling: String(overrides.hardFailureNetHandling || rawMission.hardFailureNetHandling || DEFAULT_HARD_FAILURE_NET_HANDLING).toLowerCase() || DEFAULT_HARD_FAILURE_NET_HANDLING,
     hardFailureDebtFloor: Number(overrides.hardFailureDebtFloor ?? rawMission.hardFailureDebtFloor ?? DEFAULT_HARD_FAILURE_DEBT_FLOOR) || DEFAULT_HARD_FAILURE_DEBT_FLOOR,
     canary: Boolean(overrides.canary ?? rawMission.canary),
+  };
+  const instancePolicy = basePolicy.canary
+    ? buildCanaryMissionInstancePolicy(basePolicy, overrides)
+    : resolveMissionInstancePolicy(basePolicy, overrides);
+
+  return {
+    ...basePolicy,
+    playbookId: instancePolicy.playbookId || normalizeText(basePolicy.playbookId),
+    playbookVersion: Number(instancePolicy.playbookVersion || basePolicy.playbookVersion || 0) || 0,
+    playbookFamily: instancePolicy.playbookFamily || normalizeText(basePolicy.playbookFamily),
+    currentStageId: instancePolicy.currentStageId || normalizeText(basePolicy.currentStageId),
+    currentStageOrdinal: Number(instancePolicy.currentStageOrdinal || basePolicy.currentStageOrdinal || 0) || 0,
+    readinessSignals: Array.isArray(instancePolicy.readinessSignals) ? instancePolicy.readinessSignals : (Array.isArray(basePolicy.readinessSignals) ? basePolicy.readinessSignals : []),
+    speculativeActionsAllowed: Array.isArray(instancePolicy.speculativeActionsAllowed) ? instancePolicy.speculativeActionsAllowed : (Array.isArray(basePolicy.speculativeActionsAllowed) ? basePolicy.speculativeActionsAllowed : []),
+    requiredApprovals: Array.isArray(instancePolicy.requiredApprovals) ? instancePolicy.requiredApprovals : (Array.isArray(basePolicy.requiredApprovals) ? basePolicy.requiredApprovals : []),
+    commercialPrimaryDomain: instancePolicy.commercialPrimaryDomain || normalizeText(basePolicy.commercialPrimaryDomain),
+    cleanupTTLHours: Number(instancePolicy.cleanupTTLHours || basePolicy.cleanupTTLHours || 0) || 0,
+    allowSpeculative: Boolean(instancePolicy.allowSpeculative || executeGateMode === 'allow-speculative'),
+    targetEntityPolicy: instancePolicy.targetEntityPolicy || basePolicy.targetEntityPolicy || {},
   };
 }
 
@@ -295,6 +388,185 @@ function extractTargets(text) {
   }
 
   return Array.from(matches).slice(0, 6);
+}
+
+function inferTaskActionType(task = {}) {
+  const explicit = normalizeText(task?.actionType);
+  if (explicit) return explicit;
+  const name = normalizeText(task?.name);
+  for (const rule of ACTION_TYPE_NAME_RULES) {
+    if (rule.pattern.test(name)) return rule.actionType;
+  }
+  const text = [name, task?.description, task?.taskClass].filter(Boolean).join('\n');
+  for (const rule of ACTION_TYPE_RULES) {
+    if (rule.pattern.test(text)) return rule.actionType;
+  }
+  return 'unspecified-execute-action';
+}
+
+function deriveEmittedReadinessSignalIds(actionType) {
+  const key = normalizeText(actionType);
+  return Array.isArray(ACTION_SIGNAL_EMISSIONS[key]) ? ACTION_SIGNAL_EMISSIONS[key] : [];
+}
+
+function inferSideEffectClass(task, artifactSpec) {
+  const actionType = inferTaskActionType(task);
+  if (actionType === 'send-outreach' || actionType === 'send-activation-link') {
+    return 'external-durable';
+  }
+  const artifactKind = normalizeArtifactKind(artifactSpec?.kind);
+  if (artifactKind === 'external_action') return 'external-durable';
+  if (artifactKind === 'firestore_change' || artifactKind === 'runtime_change' || artifactKind === 'api_behavior') {
+    return 'internal-durable';
+  }
+  return 'reversible-prepare';
+}
+
+function resolveActionPolicy(playbook, actionType, task, missionPolicy, artifactSpec) {
+  const normalizedActionType = normalizeText(actionType) || inferTaskActionType(task);
+  const matchedPolicy = Array.isArray(playbook?.actionPolicies)
+    ? playbook.actionPolicies.find((policy) => normalizeText(policy?.actionType) === normalizedActionType)
+    : null;
+  if (matchedPolicy) return matchedPolicy;
+  return {
+    id: normalizedActionType || 'unspecified-execute-action',
+    actionType: normalizedActionType || 'unspecified-execute-action',
+    label: normalizeText(task?.name) || normalizedActionType || 'Execute action',
+    description: normalizeText(task?.description),
+    sideEffectClass: inferSideEffectClass(task, artifactSpec),
+    requiredStageId: normalizeText(missionPolicy?.currentStageId),
+    requiredReadinessSignalIds: [],
+    requiredApprovalTypes: [],
+    allowSpeculative: inferSideEffectClass(task, artifactSpec) !== 'external-durable',
+    defaultCreditMode: inferSideEffectClass(task, artifactSpec) === 'external-durable' ? 'commercial' : 'execution',
+    cleanupTTLHours: Number(missionPolicy?.cleanupTTLHours || 0) || 0,
+  };
+}
+
+function buildScoreGateStatus(taskFields, missionPolicy) {
+  return passesExecuteGate(taskFields, missionPolicy) ? 'passed' : 'failed';
+}
+
+function buildTaskAdmission(task, options = {}) {
+  const missionPolicy = normalizeMissionPolicy(options.missionPolicy || {});
+  const playbook = missionPolicy.playbookId ? resolveMissionPlaybook(missionPolicy) : null;
+  const artifactSpec = options.artifactSpec || task?.artifactSpec || inferArtifactSpec(task);
+  const actionType = normalizeText(options.actionType || task?.actionType || inferTaskActionType(task));
+  const actionPolicy = resolveActionPolicy(playbook, actionType, task, missionPolicy, artifactSpec);
+  const speculativeActionsAllowed = Array.isArray(missionPolicy.speculativeActionsAllowed)
+    ? missionPolicy.speculativeActionsAllowed.map((item) => normalizeText(item)).filter(Boolean)
+    : [];
+  const allowSpeculativeForAction = Boolean(
+    actionPolicy.allowSpeculative &&
+    (
+      missionPolicy.allowSpeculative ||
+      speculativeActionsAllowed.includes(actionType)
+    )
+  );
+  const emittedReadinessSignalIds = Array.from(new Set(
+    (Array.isArray(options.emittedReadinessSignalIds) ? options.emittedReadinessSignalIds : deriveEmittedReadinessSignalIds(actionType))
+      .map((item) => normalizeText(item))
+      .filter(Boolean)
+  ));
+  const requiredStage = resolveStage(playbook?.stageGraph || [], actionPolicy.requiredStageId).stage;
+  const currentStage = resolveStage(playbook?.stageGraph || [], missionPolicy.currentStageId).stage;
+  let effectiveRequiredStageId = normalizeText(actionPolicy.requiredStageId || missionPolicy.currentStageId);
+  if (requiredStage && currentStage && compareStagePositions(playbook?.stageGraph || [], currentStage.id, requiredStage.id) < 0) {
+    const stageEntrySignals = Array.isArray(requiredStage.entrySignalIds) ? requiredStage.entrySignalIds : [];
+    const advancesIntoRequiredStage =
+      stageEntrySignals.length > 0 &&
+      stageEntrySignals.every((signalId) => emittedReadinessSignalIds.includes(signalId)) &&
+      compareStagePositions(playbook?.stageGraph || [], currentStage.id, requiredStage.id) === -1;
+    if (advancesIntoRequiredStage) {
+      effectiveRequiredStageId = currentStage.id;
+    }
+  }
+  const requiredReadinessSignalIds = (Array.isArray(actionPolicy.requiredReadinessSignalIds) ? actionPolicy.requiredReadinessSignalIds : [])
+    .map((item) => normalizeText(item))
+    .filter((item) => item && !emittedReadinessSignalIds.includes(item));
+  const readinessDecision = buildAdmissionReadinessDecision({
+    readinessSignals: missionPolicy.readinessSignals,
+    stageGraph: playbook?.stageGraph || [],
+    currentStageId: missionPolicy.currentStageId,
+    requiredStageId: effectiveRequiredStageId,
+    requiredReadinessSignalIds,
+    approvalEvents: options.approvalEvents || missionPolicy.approvalEvents || [],
+    requiredApprovalTypes: actionPolicy.requiredApprovalTypes || [],
+    actionPolicy,
+    missionPolicy,
+    sideEffectClass: actionPolicy.sideEffectClass || inferSideEffectClass(task, artifactSpec),
+    speculative: false,
+    allowSpeculative: allowSpeculativeForAction,
+    scoreItems: [{
+      id: task?.id || normalizeText(task?.name) || actionType || 'task',
+      creditedOutcomeScore: Number(options.expectedCreditedScore ?? task?.expectedCreditedScore ?? 0) || 0,
+      netOutcomeScore: Number(options.expectedNetScore ?? task?.expectedNetScore ?? options.expectedCreditedScore ?? 0) || 0,
+      businessDebtScore: 0,
+    }],
+    creditMode: actionPolicy.defaultCreditMode,
+    commercialCreditEligible: true,
+    cleanupBy: null,
+    now: options.now instanceof Date ? options.now : new Date(),
+  });
+  const scoreGateStatus = buildScoreGateStatus(
+    {
+      expectedCreditedScore: Number(options.expectedCreditedScore ?? task?.expectedCreditedScore ?? 0) || 0,
+      expectedNetScore: Number(options.expectedNetScore ?? task?.expectedNetScore ?? 0) || 0,
+      expectedOutcomeScore: Number(options.expectedOutcomeScore ?? task?.expectedOutcomeScore ?? 0) || 0,
+      proofCompileStatus: options.proofCompileStatus || task?.proofCompileStatus,
+    },
+    missionPolicy
+  );
+  const stageGate = readinessDecision.stageGate || {};
+  const lifecycle = readinessDecision.lifecycle || {};
+  const creditBucket = normalizeCreditBucket(readinessDecision.creditBucket || 'none');
+  const speculative = Boolean(stageGate.status === 'speculative');
+  const commercialCreditEligible = creditBucket === 'commercial' && !speculative;
+  return {
+    playbookId: missionPolicy.playbookId || '',
+    playbookVersion: Number(missionPolicy.playbookVersion || 0) || 0,
+    actionType,
+    actionPolicy,
+    sideEffectClass: normalizeSideEffectClass(readinessDecision.sideEffectClass || actionPolicy.sideEffectClass || inferSideEffectClass(task, artifactSpec)),
+    creditBucket,
+    speculative,
+    commercialCreditEligible,
+    emittedReadinessSignalIds,
+    requiredReadinessSignalIds,
+    requiredStageId: effectiveRequiredStageId || '',
+    currentStageId: normalizeText(stageGate.currentStageId || missionPolicy.currentStageId),
+    stageGateStatus: normalizeText(stageGate.status || 'blocked'),
+    stageBlockReason: normalizeText(stageGate.blockReasonDetail || stageGate.blockReasonCode),
+    readinessSignals: Array.isArray(readinessDecision.readinessSignals) ? readinessDecision.readinessSignals : (Array.isArray(missionPolicy.readinessSignals) ? missionPolicy.readinessSignals : []),
+    cleanupBy: lifecycle.cleanupBy || null,
+    cleanupState: normalizeCleanupState(lifecycle.cleanupState || 'none'),
+    admissionDecision: buildAdmissionDecision({
+      missionId: normalizeText(task?.missionId || options.missionId || missionPolicy.missionId),
+      playbookId: missionPolicy.playbookId,
+      playbookVersion: missionPolicy.playbookVersion,
+      taskId: normalizeText(task?.id),
+      outcomeId: normalizeText(task?.outcomeId || options.outcomeId),
+      proofCompileStatus: String(options.proofCompileStatus || task?.proofCompileStatus || '').toLowerCase() === 'dry-run-passed' ? 'passed' : 'failed',
+      stageGateStatus: stageGate.status,
+      scoreGateStatus,
+      sideEffectClass: stageGate.sideEffectClass || actionPolicy.sideEffectClass,
+      creditBucket,
+      speculative,
+      commercialCreditEligible,
+      currentStageId: stageGate.currentStageId || missionPolicy.currentStageId,
+      requiredStageId: effectiveRequiredStageId,
+      satisfiedReadinessSignalIds: stageGate.satisfiedReadinessSignalIds,
+      missingReadinessSignalIds: stageGate.missingReadinessSignalIds,
+      requiredApprovalEventIds: stageGate.requiredApprovalEventIds,
+      cleanupBy: lifecycle.cleanupBy,
+      cleanupState: lifecycle.cleanupState,
+      admitExecuteTask: String(options.proofCompileStatus || task?.proofCompileStatus || '').toLowerCase() === 'dry-run-passed'
+        && stageGate.status !== 'blocked'
+        && scoreGateStatus === 'passed',
+      blockReasonCode: stageGate.blockReasonCode,
+      blockReasonDetail: stageGate.blockReasonDetail,
+    }),
+  };
 }
 
 function inferArtifactSpec(task) {
@@ -888,7 +1160,19 @@ function buildOutcomeRecord(task, options = {}) {
   const proofPacket = options.proofPacket || task?.proofPacket || buildOutcomeProofPacket({ ...task, artifactSpec, acceptanceChecks }, missionPolicy, outcomeClass, outcomeDomain, artifactSpec, acceptanceChecks);
   const compileResult = proofPacket.compileResult || compileProofPacket(proofPacket);
   proofPacket.compileResult = compileResult;
-  const score = options.score || calculateOutcomeScore(
+  const playbookId = normalizeText(options.playbookId || task?.playbookId || missionPolicy.playbookId);
+  const playbookVersion = Number(options.playbookVersion || task?.playbookVersion || missionPolicy.playbookVersion || 0) || 0;
+  const sideEffectClass = normalizeSideEffectClass(options.sideEffectClass || task?.sideEffectClass || inferSideEffectClass(task, artifactSpec));
+  const creditBucket = normalizeCreditBucket(options.creditBucket || task?.creditBucket || 'none');
+  const speculative = Boolean(options.speculative ?? task?.speculative);
+  const commercialCreditEligible = Boolean(
+    options.commercialCreditEligible ??
+    task?.commercialCreditEligible ??
+    (creditBucket === 'commercial' && !speculative)
+  );
+  const stageGateStatus = normalizeText(options.stageGateStatus || task?.stageGateStatus || '');
+  const stageBlockReason = normalizeText(options.stageBlockReason || task?.stageBlockReason || '');
+  const baseScore = options.score || calculateOutcomeScore(
     {
       ...task,
       acceptanceChecks,
@@ -909,6 +1193,14 @@ function buildOutcomeRecord(task, options = {}) {
       priorityScore: options.priorityScore ?? task?.priorityScore,
     }
   );
+  const score = {
+    ...baseScore,
+    creditBucket,
+    sideEffectClass,
+    stageGateStatus,
+    speculative,
+    commercialCreditEligible,
+  };
   const parentOutcomeId = normalizeText(options.parentOutcomeId || task?.parentOutcomeId);
   const dependencyEdges = Array.isArray(options.dependencyEdges) ? options.dependencyEdges : [];
   const now = options.now instanceof Date ? options.now : new Date();
@@ -920,6 +1212,23 @@ function buildOutcomeRecord(task, options = {}) {
     objectiveId,
     title: normalizeText(options.title || task?.name) || 'Untitled outcome',
     summary: normalizeText(options.summary || artifactSpec?.successDefinition || task?.description) || 'Outcome linked to execute task.',
+    playbookId: playbookId || undefined,
+    playbookVersion: playbookVersion || undefined,
+    actionType: normalizeText(options.actionType || task?.actionType) || undefined,
+    stageAtCreation: normalizeText(options.stageAtCreation || task?.currentStageId || missionPolicy.currentStageId) || undefined,
+    currentStageId: normalizeText(options.currentStageId || task?.currentStageId || missionPolicy.currentStageId) || undefined,
+    sideEffectClass,
+    creditBucket,
+    speculative,
+    commercialCreditEligible,
+    cleanupBy: options.cleanupBy || task?.cleanupBy || null,
+    cleanupState: normalizeCleanupState(options.cleanupState || task?.cleanupState || 'none'),
+    stageGateStatus: stageGateStatus || undefined,
+    stageBlockReason: stageBlockReason || undefined,
+    readinessSignals: Array.isArray(options.readinessSignals || task?.readinessSignals)
+      ? (options.readinessSignals || task.readinessSignals)
+      : [],
+    admissionDecision: options.admissionDecision || task?.admissionDecision || null,
     outcomeClass,
     outcomeDomain,
     status: normalizeOutcomeStatus(options.status || task?.outcomeStatus || 'planned'),
@@ -996,6 +1305,20 @@ function buildTaskOutcomeFields(task, executeContract, missionPolicy = {}) {
       status: executeContract.outcomeStatus,
       parentOutcomeId: executeContract.parentOutcomeId,
       supersedesOutcomeId: executeContract.supersedesOutcomeId,
+      playbookId: executeContract.playbookId,
+      playbookVersion: executeContract.playbookVersion,
+      actionType: executeContract.actionType,
+      currentStageId: executeContract.currentStageId,
+      sideEffectClass: executeContract.sideEffectClass,
+      creditBucket: executeContract.creditBucket,
+      stageGateStatus: executeContract.stageGateStatus,
+      stageBlockReason: executeContract.stageBlockReason,
+      speculative: executeContract.speculative,
+      commercialCreditEligible: executeContract.commercialCreditEligible,
+      cleanupBy: executeContract.cleanupBy,
+      cleanupState: executeContract.cleanupState,
+      readinessSignals: executeContract.readinessSignals,
+      admissionDecision: executeContract.admissionDecision,
       createdAt: new Date(),
       updatedAt: new Date(),
     }
@@ -1020,6 +1343,21 @@ function buildTaskOutcomeFields(task, executeContract, missionPolicy = {}) {
     compiledProofPacketHash: compileResult.compiledProofPacketHash,
     expectedSignalWindow: proofPacket.observationWindow,
     outcomeStatus: normalizeOutcomeStatus(executeContract.outcomeStatus || 'planned'),
+    playbookId: outcomeRecord.playbookId || '',
+    playbookVersion: outcomeRecord.playbookVersion || 0,
+    actionType: outcomeRecord.actionType || '',
+    currentStageId: outcomeRecord.currentStageId || '',
+    sideEffectClass: outcomeRecord.sideEffectClass || '',
+    creditBucket: outcomeRecord.creditBucket || '',
+    stageGateStatus: outcomeRecord.stageGateStatus || '',
+    stageBlockReason: outcomeRecord.stageBlockReason || '',
+    speculative: Boolean(outcomeRecord.speculative),
+    cleanupBy: outcomeRecord.cleanupBy || null,
+    cleanupState: outcomeRecord.cleanupState || 'none',
+    readinessSignals: Array.isArray(outcomeRecord.readinessSignals) ? outcomeRecord.readinessSignals : [],
+    commercialCreditEligible: Boolean(outcomeRecord.commercialCreditEligible),
+    admissionDecision: outcomeRecord.admissionDecision || null,
+    emittedReadinessSignalIds: Array.isArray(executeContract.emittedReadinessSignalIds) ? executeContract.emittedReadinessSignalIds : [],
     outcomeRecord,
   };
 }
@@ -1029,7 +1367,7 @@ function passesExecuteGate(task, mission) {
   if (String(task?.proofCompileStatus || '').toLowerCase() !== 'dry-run-passed') return false;
   const credited = Number(task?.expectedCreditedScore ?? task?.expectedOutcomeScore ?? 0);
   const net = Number(task?.expectedNetScore ?? credited);
-  switch (missionPolicy.executeGateMode) {
+  switch (missionPolicy.scoreGateMode || DEFAULT_SCORE_GATE_MODE) {
     case 'credited-only':
       return credited >= missionPolicy.plannerMinimumCreditedScore;
     case 'net-only':
@@ -1070,6 +1408,18 @@ function buildOutcomeEvaluation(task, outcome, options = {}) {
       spotCheckRequired,
     }
   );
+  const enrichedScore = {
+    ...score,
+    creditBucket: normalizeCreditBucket(outcome?.creditBucket || task?.creditBucket || 'none'),
+    sideEffectClass: normalizeSideEffectClass(outcome?.sideEffectClass || task?.sideEffectClass || 'reversible-prepare'),
+    stageGateStatus: normalizeText(outcome?.stageGateStatus || task?.stageGateStatus || ''),
+    speculative: Boolean(outcome?.speculative ?? task?.speculative),
+    commercialCreditEligible: Boolean(
+      outcome?.commercialCreditEligible ??
+      task?.commercialCreditEligible ??
+      normalizeCreditBucket(outcome?.creditBucket || task?.creditBucket || 'none') === 'commercial'
+    ),
+  };
 
   let status = passed ? 'artifact-verified' : 'failed';
   let confirmedAt = null;
@@ -1089,7 +1439,7 @@ function buildOutcomeEvaluation(task, outcome, options = {}) {
 
   return {
     status,
-    score,
+    score: enrichedScore,
     sourceEvidence: buildOutcomeEvidenceFromChecks(checks, status, checkedAt),
     guardrailStatus: !passed ? 'failed' : 'clear',
     artifactVerifiedAt: passed ? checkedAt : null,
@@ -1120,6 +1470,9 @@ function summarizeMissionOutcomes(outcomes = []) {
     netOutcomeScore: 0,
     businessDebtScore: 0,
     waivedCreditedScore: 0,
+    executionScore: 0,
+    commercialMovementScore: 0,
+    speculativeOutcomeCount: 0,
   };
 
   for (const outcome of outcomes) {
@@ -1141,12 +1494,17 @@ function summarizeMissionOutcomes(outcomes = []) {
     summary.netOutcomeScore += net;
     summary.businessDebtScore += debt;
     if (status === 'waived') summary.waivedCreditedScore += credited;
+    if (outcome?.speculative) summary.speculativeOutcomeCount += 1;
     if (outcomeClass === 'terminal') summary.terminalOutcomeScore += credited;
     if (outcomeClass === 'enabling') summary.enablingOutcomeScore += credited;
     if (outcomeClass === 'learning') summary.learningOutcomeScore += credited;
     if (outcomeClass === 'invalidation') summary.invalidationOutcomeScore += credited;
     if (outcomeClass === 'constraint') summary.constraintOutcomeScore += credited;
   }
+
+  summary.executionScore = deriveExecutionScore(outcomes);
+  summary.commercialMovementScore = deriveCommercialMovementScore(outcomes);
+  summary.businessDebtScore = deriveBusinessDebtScore(outcomes);
 
   return summary;
 }
@@ -1235,6 +1593,27 @@ function buildExecuteTaskContract(task, options = {}) {
   );
   const compileResult = proofPacket.compileResult || compileProofPacket(proofPacket);
   proofPacket.compileResult = compileResult;
+  const projectedScore = calculateOutcomeScore(
+    {
+      ...task,
+      acceptanceChecks,
+      artifactSpec,
+      priorityScore: options.priorityScore ?? task?.priorityScore,
+      proofCompileStatus: compileResult.status,
+      expectedAttribution,
+      outcomeClass,
+      outcomeDomain,
+      proofPacket,
+    },
+    {
+      missionPolicy,
+      outcomeClass,
+      outcomeDomain,
+      proofCompileStatus: compileResult.status,
+      observationWindow: proofPacket.observationWindow,
+      priorityScore: options.priorityScore ?? task?.priorityScore,
+    }
+  );
   const base = {
     specVersion: MISSION_SYSTEM_VERSION,
     mode: 'execute',
@@ -1268,7 +1647,49 @@ function buildExecuteTaskContract(task, options = {}) {
     compiledProofPacketHash: compileResult.compiledProofPacketHash,
     expectedSignalWindow: proofPacket.observationWindow,
     outcomeStatus: normalizeOutcomeStatus(task?.outcomeStatus || options.outcomeStatus || 'planned'),
+    expectedOutcomeScore: Math.round(projectedScore.finalOutcomeScore * 100) / 100,
+    expectedImpactScore: projectedScore.impact,
+    expectedCreditedScore: Math.round(projectedScore.creditedOutcomeScore * 100) / 100,
+    expectedNetScore: Math.round(projectedScore.netOutcomeScore * 100) / 100,
   };
+  const admission = buildTaskAdmission(
+    {
+      ...task,
+      ...base,
+      missionId: task?.missionId || options.missionId,
+      outcomeId,
+    },
+    {
+      missionPolicy,
+      missionId: task?.missionId || options.missionId,
+      artifactSpec,
+      proofCompileStatus: compileResult.status,
+      expectedCreditedScore: projectedScore.creditedOutcomeScore,
+      expectedNetScore: projectedScore.netOutcomeScore,
+      expectedOutcomeScore: projectedScore.finalOutcomeScore,
+      actionType: task?.actionType || options.actionType,
+      now: options.now instanceof Date ? options.now : new Date(),
+    }
+  );
+  Object.assign(base, {
+    playbookId: admission.playbookId,
+    playbookVersion: admission.playbookVersion,
+    actionType: admission.actionType,
+    sideEffectClass: admission.sideEffectClass,
+    creditBucket: admission.creditBucket,
+    speculative: admission.speculative,
+    commercialCreditEligible: admission.commercialCreditEligible,
+    currentStageId: admission.currentStageId,
+    requiredStageId: admission.requiredStageId,
+    requiredReadinessSignalIds: admission.requiredReadinessSignalIds,
+    emittedReadinessSignalIds: admission.emittedReadinessSignalIds,
+    stageGateStatus: admission.stageGateStatus,
+    stageBlockReason: admission.stageBlockReason,
+    readinessSignals: admission.readinessSignals,
+    cleanupBy: admission.cleanupBy,
+    cleanupState: admission.cleanupState,
+    admissionDecision: admission.admissionDecision,
+  });
   const taskOutcomeFields = buildTaskOutcomeFields(
     {
       ...task,
@@ -1286,7 +1707,7 @@ function buildExecuteTaskContract(task, options = {}) {
     acceptanceChecks: base.acceptanceChecks,
     proofPacket: base.proofPacket,
   });
-  const executeGatePassed = hasContract && passesExecuteGate(taskOutcomeFields, missionPolicy);
+  const executeGatePassed = hasContract && taskOutcomeFields.admissionDecision?.admitExecuteTask === true;
 
   return {
     ...base,
@@ -1377,6 +1798,7 @@ function isTaskRunnable(task, mission, now = Date.now()) {
   if (String(task?.mode || '').toLowerCase() !== 'execute') return false;
   if (Number(task?.specVersion || 0) < MISSION_SYSTEM_VERSION) return false;
   if (!hasValidTaskContract(task)) return false;
+  if (task?.admissionDecision && task.admissionDecision.admitExecuteTask === false) return false;
   return passesExecuteGate(task, mission);
 }
 
@@ -1466,6 +1888,7 @@ module.exports = {
   DEFAULT_PLANNER_MODE,
   DEFAULT_PLANNER_MIN_CREDITED_SCORE,
   DEFAULT_PLANNER_MIN_NET_SCORE,
+  DEFAULT_SCORE_GATE_MODE,
   DEFAULT_SPOT_CHECK_SAMPLE_RATE,
   DEFAULT_STALL_WINDOW_MINUTES,
   DEFAULT_EXECUTE_GATE_MODE,
@@ -1486,6 +1909,7 @@ module.exports = {
   buildOutcomePolicyRefs,
   buildOutcomeProofPacket,
   buildOutcomeRecord,
+  buildTaskAdmission,
   buildResolvedPolicySnapshot,
   buildTaskOutcomeFields,
   compareTaskCandidates,
@@ -1498,6 +1922,7 @@ module.exports = {
   hasValidTaskContract,
   inferAcceptanceChecks,
   inferArtifactSpec,
+  inferTaskActionType,
   isAutoGeneratedTask,
   isCorrectionTask,
   isDependencyTask,

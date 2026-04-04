@@ -30,6 +30,17 @@ interface Deliverable {
   outcomeRole?: string;
   parentOutcomeId?: string;
   supersedesOutcomeId?: string;
+  playbookId?: string;
+  playbookVersion?: number;
+  currentStageId?: string;
+  stageGateStatus?: string;
+  stageBlockReason?: string;
+  speculative?: boolean;
+  cleanupState?: string;
+  cleanupBy?: string;
+  readinessSignals?: unknown;
+  executionScore?: number;
+  commercialMovementScore?: number;
   creditedOutcomeScore?: number;
   netOutcomeScore?: number;
   businessDebtScore?: number;
@@ -165,6 +176,62 @@ const formatOutcomeScore = (value?: number) => {
   if (value === undefined || value === null || Number.isNaN(Number(value))) return '0';
   const rounded = Math.round(Number(value) * 100) / 100;
   return Number.isInteger(rounded) ? `${rounded}` : `${rounded.toFixed(2)}`;
+};
+
+const timestampLikeToDate = (value: unknown): Date | null => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === 'number') return new Date(value);
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const raw = value as { toDate?: () => Date; seconds?: number; nanos?: number };
+  if (typeof raw.toDate === 'function') return raw.toDate();
+  if (typeof raw.seconds === 'number') return new Date(raw.seconds * 1000 + Math.floor((raw.nanos || 0) / 1_000_000));
+  return null;
+};
+
+const formatCountdownLike = (value?: unknown) => {
+  const date = timestampLikeToDate(value);
+  if (!date) return '';
+  const diffMs = date.getTime() - Date.now();
+  if (Number.isNaN(diffMs)) return '';
+  if (diffMs <= 0) return `Overdue by ${Math.max(1, Math.round(Math.abs(diffMs) / 60000))}m`;
+  const hours = Math.floor(diffMs / 3_600_000);
+  const mins = Math.floor((diffMs % 3_600_000) / 60000);
+  return hours <= 0 ? `In ${Math.max(1, mins)}m` : `In ${hours}h ${mins}m`;
+};
+
+const normalizeReadinessSignalState = (value?: string) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized || normalized === 'missing') return 'missing';
+  if (normalized === 'pending') return 'pending';
+  if (normalized === 'verified' || normalized === 'ready') return 'verified';
+  if (normalized === 'failed') return 'failed';
+  if (normalized === 'waived') return 'waived';
+  if (normalized === 'expired') return 'expired';
+  if (normalized === 'revoked') return 'revoked';
+  return normalized;
+};
+
+const summarizeReadinessSignals = (value: unknown): Array<{ id: string; label: string; state: string }> => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.map((signal: any, index) => ({
+      id: signal?.id || `signal-${index}`,
+      label: signal?.label || signal?.id || `Signal ${index + 1}`,
+      state: normalizeReadinessSignalState(signal?.state),
+    }));
+  }
+  if (typeof value === 'object') {
+    return Object.entries(value as Record<string, any>).map(([id, signal]) => ({
+      id,
+      label: signal?.label || id,
+      state: normalizeReadinessSignalState(signal?.state),
+    }));
+  }
+  return [];
 };
 
 const normalizeDeliverableChangeType = (value?: string): string => {
@@ -823,6 +890,21 @@ const statusBadge = (status?: string) => {
                           </span>
                         );
                       })()}
+                      {d.playbookId && (
+                        <span className="sd-outcome-badge planned">
+                          PLAYBOOK {d.playbookId}{d.playbookVersion ? ` · v${d.playbookVersion}` : ''}
+                        </span>
+                      )}
+                      {d.currentStageId && (
+                        <span className="sd-outcome-badge executing">
+                          STAGE {d.currentStageId}
+                        </span>
+                      )}
+                      {d.speculative && (
+                        <span className="sd-outcome-badge waived">
+                          SPECULATIVE
+                        </span>
+                      )}
                       {d.completedAt && (
                         <span className="sd-date">{new Date(d.completedAt).toLocaleDateString()}</span>
                       )}
@@ -911,6 +993,42 @@ const statusBadge = (status?: string) => {
                             {d.supersedesOutcomeId ? `Supersedes ${d.supersedesOutcomeId}` : ''}
                           </p>
                         )}
+                      </div>
+                    )}
+                    {(d.playbookId || d.currentStageId || d.stageGateStatus || d.stageBlockReason || d.cleanupState || d.cleanupBy || Boolean(d.readinessSignals)) && (
+                      <div className="sd-review-note">
+                        <strong>Mission sequencing:</strong>
+                        <span>
+                          {d.playbookId ? `playbook ${d.playbookId}${d.playbookVersion ? ` · v${d.playbookVersion}` : ''}` : 'playbook —'}
+                          {d.currentStageId ? ` · stage ${d.currentStageId}` : ''}
+                          {d.stageGateStatus ? ` · gate ${d.stageGateStatus}` : ''}
+                          {d.speculative ? ' · speculative' : ''}
+                          {d.cleanupState ? ` · cleanup ${d.cleanupState}` : ''}
+                          {d.cleanupBy ? ` · ${formatCountdownLike(d.cleanupBy)}` : ''}
+                        </span>
+                        {d.stageBlockReason && (
+                          <p style={{ margin: '6px 0 0', fontSize: 11, color: '#f59e0b' }}>
+                            Blocked: {d.stageBlockReason}
+                          </p>
+                        )}
+                        {summarizeReadinessSignals(d.readinessSignals).length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                            {summarizeReadinessSignals(d.readinessSignals).map((signal) => (
+                              <span key={signal.id} className={`sd-outcome-badge ${signal.state}`}>
+                                {signal.label} · {signal.state.toUpperCase()}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {(d.executionScore !== undefined || d.commercialMovementScore !== undefined) && (
+                      <div className="sd-review-note">
+                        <strong>Mission scores:</strong>
+                        <span>
+                          {d.executionScore !== undefined ? `execution ${formatOutcomeScore(d.executionScore)}` : 'execution —'}
+                          {d.commercialMovementScore !== undefined ? ` · commercial ${formatOutcomeScore(d.commercialMovementScore)}` : ''}
+                        </span>
                       </div>
                     )}
                     {d.tags.length > 0 && (
@@ -1128,9 +1246,18 @@ const statusBadge = (status?: string) => {
           background: rgba(99,102,241,0.12); color: #a5b4fc;
           border-color: rgba(99,102,241,0.25);
         }
+        .sd-outcome-badge.verified,
+        .sd-outcome-badge.ready {
+          background: rgba(34,197,94,0.12); color: #4ade80;
+          border-color: rgba(34,197,94,0.25);
+        }
         .sd-outcome-badge.observing {
           background: rgba(34,211,238,0.12); color: #22d3ee;
           border-color: rgba(34,211,238,0.25);
+        }
+        .sd-outcome-badge.pending {
+          background: rgba(59,130,246,0.12); color: #60a5fa;
+          border-color: rgba(59,130,246,0.25);
         }
         .sd-outcome-badge.confirmed {
           background: rgba(34,197,94,0.12); color: #4ade80;
@@ -1147,6 +1274,12 @@ const statusBadge = (status?: string) => {
         }
         .sd-outcome-badge.canceled,
         .sd-outcome-badge.superseded {
+          background: rgba(148,163,184,0.12); color: #cbd5e1;
+          border-color: rgba(148,163,184,0.25);
+        }
+        .sd-outcome-badge.expired,
+        .sd-outcome-badge.missing,
+        .sd-outcome-badge.revoked {
           background: rgba(148,163,184,0.12); color: #cbd5e1;
           border-color: rgba(148,163,184,0.25);
         }

@@ -20,6 +20,34 @@ interface MissionStatus {
     northStarTitle?: string;
     missionSummary?: string;
     kickoffChatId?: string;
+    playbookId?: string;
+    playbookVersion?: number;
+    currentStageId?: string;
+    stageGateStatus?: string;
+    stageBlockReason?: string;
+    speculative?: boolean;
+    cleanupState?: string;
+    cleanupBy?: Timestamp;
+    executionScore?: number;
+    commercialMovementScore?: number;
+    readinessSignals?: Record<string, {
+        label?: string;
+        state?: string;
+        sourceOfTruth?: string;
+        successEvent?: string;
+        verifiedAt?: Timestamp;
+        expiresAt?: Timestamp;
+        evidenceRef?: string;
+    }> | Array<{
+        id?: string;
+        label?: string;
+        state?: string;
+        sourceOfTruth?: string;
+        successEvent?: string;
+        verifiedAt?: Timestamp;
+        expiresAt?: Timestamp;
+        evidenceRef?: string;
+    }>;
     agentObjectives?: Record<string, string>;
     taskCount?: number;
     mode?: 'explore' | 'execute';
@@ -103,6 +131,15 @@ interface AgentTask {
     outcomeStatus?: string;
     outcomeClass?: string;
     outcomeDomain?: string;
+    playbookId?: string;
+    playbookVersion?: number;
+    currentStageId?: string;
+    stageGateStatus?: string;
+    stageBlockReason?: string;
+    speculative?: boolean;
+    cleanupState?: string;
+    cleanupBy?: Timestamp;
+    creditBucket?: string;
     expectedCreditedScore?: number;
     expectedNetScore?: number;
     expectedOutcomeScore?: number;
@@ -119,6 +156,14 @@ interface MissionOutcome {
     outcomeClass?: string;
     outcomeDomain?: string;
     outcomeRole?: string;
+    playbookId?: string;
+    playbookVersion?: number;
+    currentStageId?: string;
+    stageGateStatus?: string;
+    stageBlockReason?: string;
+    speculative?: boolean;
+    cleanupState?: string;
+    cleanupBy?: Timestamp;
     guardrailStatus?: string;
     creditedOutcomeScore?: number;
     netOutcomeScore?: number;
@@ -213,6 +258,89 @@ function formatAutoApproveCountdown(autoApproveAt?: { seconds: number }): string
     return `Auto-approves in ${h}h ${m}m`;
 }
 
+function formatCountdownFromTimestamp(value?: Timestamp | null): string {
+    if (!value) return '';
+    const ms = value.toDate().getTime() - Date.now();
+    if (Number.isNaN(ms)) return '';
+    if (ms <= 0) {
+        const minutes = Math.max(1, Math.round(Math.abs(ms) / 60000));
+        return `Overdue by ${minutes}m`;
+    }
+    const hours = Math.floor(ms / 3600000);
+    const minutes = Math.floor((ms % 3600000) / 60000);
+    if (hours <= 0) return `In ${Math.max(1, minutes)}m`;
+    return `In ${hours}h ${minutes}m`;
+}
+
+type ReadinessSignalView = {
+    id: string;
+    label: string;
+    state: string;
+    sourceOfTruth?: string;
+    successEvent?: string;
+    verifiedAt?: Timestamp;
+    expiresAt?: Timestamp;
+    evidenceRef?: string;
+};
+
+const normalizeReadinessSignalState = (value?: string) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized || normalized === 'missing') return 'missing';
+    if (normalized === 'pending') return 'pending';
+    if (normalized === 'verified' || normalized === 'ready') return 'verified';
+    if (normalized === 'failed') return 'failed';
+    if (normalized === 'waived') return 'waived';
+    if (normalized === 'expired') return 'expired';
+    if (normalized === 'revoked') return 'revoked';
+    return normalized;
+};
+
+const getReadinessSignals = (value: MissionStatus['readinessSignals']): ReadinessSignalView[] => {
+    if (!value) return [];
+    if (Array.isArray(value)) {
+        return value.map((signal, index) => ({
+            id: signal.id || `signal-${index}`,
+            label: signal.label || signal.id || `Signal ${index + 1}`,
+            state: normalizeReadinessSignalState(signal.state),
+            sourceOfTruth: signal.sourceOfTruth,
+            successEvent: signal.successEvent,
+            verifiedAt: signal.verifiedAt,
+            expiresAt: signal.expiresAt,
+            evidenceRef: signal.evidenceRef,
+        }));
+    }
+    return Object.entries(value).map(([id, signal]) => ({
+        id,
+        label: signal?.label || id,
+        state: normalizeReadinessSignalState(signal?.state),
+        sourceOfTruth: signal?.sourceOfTruth,
+        successEvent: signal?.successEvent,
+        verifiedAt: signal?.verifiedAt,
+        expiresAt: signal?.expiresAt,
+        evidenceRef: signal?.evidenceRef,
+    }));
+};
+
+const readinessSignalBadge = (state?: string) => {
+    const normalized = normalizeReadinessSignalState(state);
+    switch (normalized) {
+        case 'verified':
+            return { label: 'VERIFIED', className: 'verified' };
+        case 'pending':
+            return { label: 'PENDING', className: 'pending' };
+        case 'failed':
+            return { label: 'FAILED', className: 'failed' };
+        case 'waived':
+            return { label: 'WAIVED', className: 'waived' };
+        case 'expired':
+            return { label: 'EXPIRED', className: 'expired' };
+        case 'revoked':
+            return { label: 'REVOKED', className: 'revoked' };
+        default:
+            return { label: 'MISSING', className: 'missing' };
+    }
+};
+
 const normalizeOutcomeStatus = (value?: string) => {
     const normalized = String(value || '').trim().toLowerCase();
     if (!normalized || normalized === 'planned') return 'planned';
@@ -273,6 +401,11 @@ const formatOutcomeScore = (value?: number) => {
     if (value === undefined || value === null || Number.isNaN(Number(value))) return '0';
     const rounded = Math.round(Number(value) * 100) / 100;
     return Number.isInteger(rounded) ? `${rounded}` : `${rounded.toFixed(2)}`;
+};
+
+const formatOptionalOutcomeScore = (value?: number) => {
+    if (value === undefined || value === null || Number.isNaN(Number(value))) return '—';
+    return formatOutcomeScore(value);
 };
 
 /* ─── Styles ─────────────────────────────────────────── */
@@ -357,6 +490,49 @@ const S: Record<string, CSSProperties> = {
         fontWeight: 600,
     },
     missionMetaText: { fontSize: 12, color: '#71717a', marginTop: 10, lineHeight: 1.5 },
+    playbookCard: {
+        marginTop: 14,
+        borderRadius: 16,
+        padding: 14,
+        border: '1px solid rgba(148,163,184,0.12)',
+        background: 'rgba(15,23,42,0.38)',
+    },
+    playbookHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 },
+    playbookTitle: { fontSize: 12, fontWeight: 800, color: '#c4b5fd', margin: 0, textTransform: 'uppercase' as const, letterSpacing: 0.6 },
+    playbookSubtitle: { fontSize: 11, color: '#94a3b8', margin: '2px 0 0', lineHeight: 1.4 },
+    playbookRow: { display: 'flex', flexWrap: 'wrap' as const, gap: 8, marginBottom: 8 },
+    playbookChip: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '5px 9px',
+        borderRadius: 999,
+        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'rgba(255,255,255,0.03)',
+        color: '#cbd5e1',
+        fontSize: 11,
+        fontWeight: 600,
+    },
+    readinessGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, marginTop: 10 },
+    readinessItem: {
+        padding: '8px 10px',
+        borderRadius: 12,
+        border: '1px solid rgba(255,255,255,0.06)',
+        background: 'rgba(255,255,255,0.02)',
+    },
+    readinessLabel: { fontSize: 12, fontWeight: 700, color: '#e4e4e7', margin: 0 },
+    readinessMeta: { fontSize: 10, color: '#94a3b8', marginTop: 4, lineHeight: 1.4 },
+    stageBlockReason: {
+        marginTop: 10,
+        padding: '8px 10px',
+        borderRadius: 10,
+        border: '1px solid rgba(251,191,36,0.16)',
+        background: 'rgba(251,191,36,0.06)',
+        color: '#fbbf24',
+        fontSize: 11,
+        lineHeight: 1.5,
+    },
+    scoreSplitRow: { display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginTop: 10 },
     // Start button
     startBtn: {
         display: 'flex', alignItems: 'center', gap: 10,
@@ -796,6 +972,7 @@ export default function MissionControlPage() {
         net: mission?.netOutcomeScore || 0,
         debt: mission?.businessDebtScore || 0,
     };
+    const readinessSignals = getReadinessSignals(mission?.readinessSignals);
     const recentOutcomes = missionOutcomes.slice(0, 6);
 
     return (
@@ -873,6 +1050,69 @@ export default function MissionControlPage() {
                                                     Stall window: {mission?.stallWindowMinutes || 30}m · WIP {mission?.maxActiveTasksPerAgent || 1} active / {mission?.maxQueuedExecuteTasksPerAgent || 1} execute queued / {mission?.maxQueuedExploreTasksPerAgent || 1} explore queued
                                                     {mission?.lastVerifiedDeliverableAt ? ` · last verified ${formatTimeAgo(mission.lastVerifiedDeliverableAt)}` : ''}
                                                 </p>
+                                                {(mission?.playbookId || mission?.currentStageId || mission?.stageGateStatus || mission?.cleanupState || mission?.executionScore !== undefined || mission?.commercialMovementScore !== undefined || mission?.speculative || readinessSignals.length > 0) && (
+                                                    <div style={S.playbookCard}>
+                                                        <div style={S.playbookHeader}>
+                                                            <div>
+                                                                <p style={S.playbookTitle}>Mission Playbook</p>
+                                                                <p style={S.playbookSubtitle}>
+                                                                    Sequencing, readiness, and speculative state are read-only here until runtime writes them.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div style={S.playbookRow}>
+                                                            <span style={S.playbookChip}>Playbook <strong>{mission?.playbookId || '—'}</strong>{mission?.playbookVersion ? ` · v${mission.playbookVersion}` : ''}</span>
+                                                            <span style={S.playbookChip}>Stage <strong>{mission?.currentStageId || '—'}</strong></span>
+                                                            <span style={S.playbookChip}>Gate <strong>{mission?.stageGateStatus || '—'}</strong></span>
+                                                            {mission?.speculative && <span style={S.playbookChip}>Speculative</span>}
+                                                            {mission?.cleanupState && <span style={S.playbookChip}>Cleanup <strong>{mission.cleanupState}</strong></span>}
+                                                            {mission?.cleanupBy && <span style={S.playbookChip}>{formatCountdownFromTimestamp(mission.cleanupBy)}</span>}
+                                                        </div>
+                                                        <div style={S.scoreSplitRow}>
+                                                            <span style={S.outcomeSummaryChip}>Execution <strong>{formatOptionalOutcomeScore(mission?.executionScore)}</strong></span>
+                                                            <span style={S.outcomeSummaryChip}>Commercial <strong>{formatOptionalOutcomeScore(mission?.commercialMovementScore)}</strong></span>
+                                                        </div>
+                                                        {mission?.stageBlockReason && (
+                                                            <div style={S.stageBlockReason}>
+                                                                Stage block: {mission.stageBlockReason}
+                                                            </div>
+                                                        )}
+                                                        {readinessSignals.length > 0 && (
+                                                            <div style={S.readinessGrid}>
+                                                                {readinessSignals.map((signal) => {
+                                                                    const badge = readinessSignalBadge(signal.state);
+                                                                    return (
+                                                                        <div key={signal.id} style={S.readinessItem}>
+                                                                            <p style={S.readinessLabel}>{signal.label}</p>
+                                                                            <div style={{ ...S.outcomeMetaRow, marginTop: 6 }}>
+                                                                                <span
+                                                                                    style={{
+                                                                                        ...S.outcomeBadge,
+                                                                                        borderColor: badge.className === 'verified' ? 'rgba(34,197,94,0.25)' : badge.className === 'pending' ? 'rgba(59,130,246,0.25)' : badge.className === 'failed' ? 'rgba(244,63,94,0.25)' : badge.className === 'waived' ? 'rgba(251,191,36,0.25)' : 'rgba(255,255,255,0.12)',
+                                                                                        color: badge.className === 'verified' ? '#4ade80' : badge.className === 'pending' ? '#60a5fa' : badge.className === 'failed' ? '#fb7185' : badge.className === 'waived' ? '#fbbf24' : '#cbd5e1',
+                                                                                        background: badge.className === 'verified' ? 'rgba(34,197,94,0.12)' : badge.className === 'pending' ? 'rgba(59,130,246,0.12)' : badge.className === 'failed' ? 'rgba(244,63,94,0.12)' : badge.className === 'waived' ? 'rgba(251,191,36,0.12)' : 'rgba(255,255,255,0.04)',
+                                                                                    }}
+                                                                                >
+                                                                                    {badge.label}
+                                                                                </span>
+                                                                                {signal.sourceOfTruth && <span style={S.outcomeBadge}>{signal.sourceOfTruth}</span>}
+                                                                                {signal.verifiedAt && <span style={S.outcomeBadge}>Verified {formatTimeAgo(signal.verifiedAt)}</span>}
+                                                                                {signal.expiresAt && <span style={S.outcomeBadge}>{formatCountdownFromTimestamp(signal.expiresAt)}</span>}
+                                                                            </div>
+                                                                            {(signal.successEvent || signal.evidenceRef) && (
+                                                                                <p style={S.readinessMeta}>
+                                                                                    {signal.successEvent ? `Success: ${signal.successEvent}` : ''}
+                                                                                    {signal.successEvent && signal.evidenceRef ? ' · ' : ''}
+                                                                                    {signal.evidenceRef ? `Evidence ${signal.evidenceRef}` : ''}
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                                 {(missionOutcomes.length > 0 || Object.values(outcomeCountSummary).some((value) => value > 0) || Object.values(outcomeScoreSummary).some((value) => value !== 0)) && (
                                                     <>
                                                         <div style={S.outcomeSummaryRow}>
@@ -1197,6 +1437,40 @@ export default function MissionControlPage() {
                                                                 {outcome.outcomeDomain || 'general'} · {outcome.outcomeRole || 'unassigned'}
                                                                 {outcome.updatedAt ? ` · updated ${formatTimeAgo(outcome.updatedAt)}` : ''}
                                                             </p>
+                                                            {(outcome.playbookId || outcome.currentStageId || outcome.stageGateStatus || outcome.speculative || outcome.cleanupState || outcome.cleanupBy) && (
+                                                                <div style={S.outcomeMetaRow}>
+                                                                    {outcome.playbookId && (
+                                                                        <span style={S.outcomeBadge}>
+                                                                            PLAYBOOK {outcome.playbookId}{outcome.playbookVersion ? ` · v${outcome.playbookVersion}` : ''}
+                                                                        </span>
+                                                                    )}
+                                                                    {outcome.currentStageId && (
+                                                                        <span style={S.outcomeBadge}>
+                                                                            STAGE {outcome.currentStageId}
+                                                                        </span>
+                                                                    )}
+                                                                    {outcome.stageGateStatus && (
+                                                                        <span style={S.outcomeBadge}>
+                                                                            GATE {outcome.stageGateStatus}
+                                                                        </span>
+                                                                    )}
+                                                                    {outcome.speculative && (
+                                                                        <span style={{ ...S.outcomeBadge, borderColor: 'rgba(251,191,36,0.2)', color: '#fbbf24', background: 'rgba(251,191,36,0.08)' }}>
+                                                                            SPECULATIVE
+                                                                        </span>
+                                                                    )}
+                                                                    {outcome.cleanupState && (
+                                                                        <span style={S.outcomeBadge}>
+                                                                            CLEANUP {outcome.cleanupState}
+                                                                        </span>
+                                                                    )}
+                                                                    {outcome.cleanupBy && (
+                                                                        <span style={S.outcomeBadge}>
+                                                                            {formatCountdownFromTimestamp(outcome.cleanupBy)}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         <div style={S.outcomeLedgerScoreRow}>
                                                             {outcome.creditedOutcomeScore !== undefined && (

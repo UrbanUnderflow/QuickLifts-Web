@@ -8,6 +8,7 @@ const {
     MISSION_SYSTEM_VERSION,
     OUTCOME_COLLECTION,
     advanceOutcomeObservation,
+    buildExecuteTaskContract,
     buildObjectiveId,
     isExecuteMissionActive,
     normalizeMissionPolicy,
@@ -15,6 +16,13 @@ const {
     summarizeMissionOutcomes,
     toMillis,
 } = require('./missionOsV2');
+const {
+    resolveMissionPlaybook,
+} = require('./missionPolicies');
+const {
+    evaluateStageRegression,
+    resolveReadinessSignals,
+} = require('./missionReadiness');
 
 const SERVICE_ACCOUNT = {
     type: 'service_account',
@@ -95,15 +103,103 @@ function computeObjectiveProgress(mission, tasks) {
     return progress;
 }
 
+function buildMissionStageSnapshot(mission, tasks = [], outcomes = []) {
+    const missionPolicy = normalizeMissionPolicy(mission || {});
+    const playbook = missionPolicy.playbookId ? resolveMissionPlaybook(missionPolicy) : null;
+    if (!playbook) {
+        return {
+            playbookId: missionPolicy.playbookId || '',
+            playbookVersion: missionPolicy.playbookVersion || 0,
+            currentStageId: missionPolicy.currentStageId || '',
+            readinessSignals: Array.isArray(missionPolicy.readinessSignals) ? missionPolicy.readinessSignals : [],
+            stageGateStatus: '',
+            stageBlockReason: '',
+            speculative: false,
+            cleanupState: 'none',
+            cleanupBy: null,
+        };
+    }
+
+    const resolvedReadinessSignals = resolveReadinessSignals(missionPolicy.readinessSignals, { missionPolicy });
+    const stageRegression = evaluateStageRegression({
+        stageGraph: playbook.stageGraph,
+        currentStageId: missionPolicy.currentStageId,
+        resolvedReadinessSignals,
+        now: new Date(),
+    });
+    const blockingTask = tasks.find((task) => String(task?.stageGateStatus || '').toLowerCase() === 'blocked');
+    const speculative = tasks.some((task) => task?.speculative === true) || outcomes.some((outcome) => outcome?.speculative === true);
+    const cleanupState = speculative
+        ? (tasks.find((task) => String(task?.cleanupState || '').trim())?.cleanupState
+            || outcomes.find((outcome) => String(outcome?.cleanupState || '').trim())?.cleanupState
+            || 'scheduled')
+        : 'none';
+    const cleanupBy = tasks.find((task) => task?.cleanupBy)?.cleanupBy
+        || outcomes.find((outcome) => outcome?.cleanupBy)?.cleanupBy
+        || null;
+
+    return {
+        playbookId: missionPolicy.playbookId || '',
+        playbookVersion: missionPolicy.playbookVersion || 0,
+        currentStageId: stageRegression?.toStageId || missionPolicy.currentStageId || playbook.stageGraph?.[0]?.id || '',
+        readinessSignals: resolvedReadinessSignals,
+        stageGateStatus: blockingTask ? 'blocked' : 'passed',
+        stageBlockReason: blockingTask?.stageBlockReason || '',
+        speculative,
+        cleanupState,
+        cleanupBy,
+        currentStageOrdinal: playbook.stageGraph.find((stage) => stage.id === (stageRegression?.toStageId || missionPolicy.currentStageId))?.ordinal || missionPolicy.currentStageOrdinal || 0,
+        stageTransition: stageRegression,
+    };
+}
+
 async function releaseBlockedExecuteTasks(tasks, missionPolicy) {
     const tasksById = new Map(tasks.map((task) => [task.id, task]));
     const executeTasksByAgent = {};
+    const refreshedTasks = [];
 
     for (const task of tasks) {
+        let hydratedTask = task;
+        if (missionPolicy.mode === 'execute' && String(task?.mode || '').toLowerCase() === 'execute' && Number(task?.specVersion || 0) >= MISSION_SYSTEM_VERSION) {
+            const refreshedContract = buildExecuteTaskContract(task, {
+                missionPolicy,
+                missionId: task?.missionId || MISSION_ID,
+                assignee: task?.assignee,
+                objectiveId: task?.objectiveId || task?.northStarObjective || task?.name,
+                plannerSource: task?.plannerSource,
+                taskClass: task?.taskClass,
+                actionType: task?.actionType,
+            });
+            hydratedTask = { ...task, ...refreshedContract };
+            await db.collection(KANBAN_COLLECTION).doc(task.id).set({
+                playbookId: refreshedContract.playbookId || '',
+                playbookVersion: refreshedContract.playbookVersion || 0,
+                actionType: refreshedContract.actionType || '',
+                currentStageId: refreshedContract.currentStageId || '',
+                sideEffectClass: refreshedContract.sideEffectClass || '',
+                creditBucket: refreshedContract.creditBucket || '',
+                stageGateStatus: refreshedContract.stageGateStatus || '',
+                stageBlockReason: refreshedContract.stageBlockReason || '',
+                speculative: refreshedContract.speculative === true,
+                cleanupBy: refreshedContract.cleanupBy || null,
+                cleanupState: refreshedContract.cleanupState || 'none',
+                readinessSignals: refreshedContract.readinessSignals || [],
+                commercialCreditEligible: refreshedContract.commercialCreditEligible === true,
+                admissionDecision: refreshedContract.admissionDecision || null,
+                emittedReadinessSignalIds: refreshedContract.emittedReadinessSignalIds || [],
+                requiredReadinessSignalIds: refreshedContract.requiredReadinessSignalIds || [],
+                expectedOutcomeScore: refreshedContract.expectedOutcomeScore,
+                expectedImpactScore: refreshedContract.expectedImpactScore,
+                expectedCreditedScore: refreshedContract.expectedCreditedScore,
+                expectedNetScore: refreshedContract.expectedNetScore,
+                updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+        }
+        refreshedTasks.push(hydratedTask);
         const assignee = String(task?.assignee || '').trim();
         if (!assignee) continue;
         if (!executeTasksByAgent[assignee]) executeTasksByAgent[assignee] = [];
-        executeTasksByAgent[assignee].push(task);
+        executeTasksByAgent[assignee].push(hydratedTask);
     }
 
     let releasedCount = 0;
@@ -114,6 +210,7 @@ async function releaseBlockedExecuteTasks(tasks, missionPolicy) {
         const blockedCandidates = agentTasks
             .filter((task) => String(task?.status || '').toLowerCase() === 'blocked')
             .filter((task) => dependenciesSatisfied(task, tasksById))
+            .filter((task) => task?.admissionDecision?.admitExecuteTask === true)
             .sort((a, b) => Number(b?.priorityScore || 0) - Number(a?.priorityScore || 0));
 
         const nextTask = blockedCandidates[0];
@@ -140,6 +237,7 @@ async function updateMissionState(mission, tasks, outcomes = []) {
     const objectiveProgress = computeObjectiveProgress(mission, tasks);
     const quarantinedTaskCount = tasks.filter((task) => String(task?.status || '').toLowerCase() === 'quarantined').length;
     const outcomeSummary = summarizeMissionOutcomes(outcomes);
+    const stageSnapshot = buildMissionStageSnapshot(mission, tasks, outcomes);
     const lastVerifiedAtMs = toMillis(mission?.lastVerifiedDeliverableAt || mission?.startedAt || mission?.updatedAt);
     const stallWindowMs = (missionPolicy.stallWindowMinutes || DEFAULT_STALL_WINDOW_MINUTES) * 60 * 1000;
     const nowMs = Date.now();
@@ -155,6 +253,16 @@ async function updateMissionState(mission, tasks, outcomes = []) {
             updatedAt: FieldValue.serverTimestamp(),
             objectiveProgress,
             quarantinedTaskCount,
+            playbookId: stageSnapshot.playbookId,
+            playbookVersion: stageSnapshot.playbookVersion,
+            currentStageId: stageSnapshot.currentStageId,
+            currentStageOrdinal: stageSnapshot.currentStageOrdinal || 0,
+            readinessSignals: stageSnapshot.readinessSignals,
+            stageGateStatus: stageSnapshot.stageGateStatus,
+            stageBlockReason: stageSnapshot.stageBlockReason,
+            speculative: stageSnapshot.speculative,
+            cleanupState: stageSnapshot.cleanupState,
+            cleanupBy: stageSnapshot.cleanupBy || null,
             ...outcomeSummary,
         };
         await db.doc(MISSION_DOC).set(pausedPatch, { merge: true });
@@ -163,6 +271,16 @@ async function updateMissionState(mission, tasks, outcomes = []) {
             updatedAt: FieldValue.serverTimestamp(),
             objectiveProgress,
             quarantinedTaskCount,
+            playbookId: stageSnapshot.playbookId,
+            playbookVersion: stageSnapshot.playbookVersion,
+            currentStageId: stageSnapshot.currentStageId,
+            currentStageOrdinal: stageSnapshot.currentStageOrdinal || 0,
+            readinessSignals: stageSnapshot.readinessSignals,
+            stageGateStatus: stageSnapshot.stageGateStatus,
+            stageBlockReason: stageSnapshot.stageBlockReason,
+            speculative: stageSnapshot.speculative,
+            cleanupState: stageSnapshot.cleanupState,
+            cleanupBy: stageSnapshot.cleanupBy || null,
             ...outcomeSummary,
         }, { merge: true });
         await recordMissionRunEvent(db, FieldValue, MISSION_ID, 'stall-pause', {
@@ -180,6 +298,16 @@ async function updateMissionState(mission, tasks, outcomes = []) {
         quarantinedTaskCount,
         supervisorHeartbeatAt: FieldValue.serverTimestamp(),
         missionPhase: 'execution',
+        playbookId: stageSnapshot.playbookId,
+        playbookVersion: stageSnapshot.playbookVersion,
+        currentStageId: stageSnapshot.currentStageId,
+        currentStageOrdinal: stageSnapshot.currentStageOrdinal || 0,
+        readinessSignals: stageSnapshot.readinessSignals,
+        stageGateStatus: stageSnapshot.stageGateStatus,
+        stageBlockReason: stageSnapshot.stageBlockReason,
+        speculative: stageSnapshot.speculative,
+        cleanupState: stageSnapshot.cleanupState,
+        cleanupBy: stageSnapshot.cleanupBy || null,
         ...outcomeSummary,
     };
     await db.doc(MISSION_DOC).set(activePatch, { merge: true });
@@ -188,8 +316,27 @@ async function updateMissionState(mission, tasks, outcomes = []) {
         updatedAt: FieldValue.serverTimestamp(),
         objectiveProgress,
         quarantinedTaskCount,
+        playbookId: stageSnapshot.playbookId,
+        playbookVersion: stageSnapshot.playbookVersion,
+        currentStageId: stageSnapshot.currentStageId,
+        currentStageOrdinal: stageSnapshot.currentStageOrdinal || 0,
+        readinessSignals: stageSnapshot.readinessSignals,
+        stageGateStatus: stageSnapshot.stageGateStatus,
+        stageBlockReason: stageSnapshot.stageBlockReason,
+        speculative: stageSnapshot.speculative,
+        cleanupState: stageSnapshot.cleanupState,
+        cleanupBy: stageSnapshot.cleanupBy || null,
         ...outcomeSummary,
     }, { merge: true });
+    if (stageSnapshot.stageTransition && stageSnapshot.stageTransition.direction !== 'stable' && stageSnapshot.stageTransition.toStageId) {
+        await recordMissionRunEvent(db, FieldValue, MISSION_ID, 'stage-transition', {
+            fromStageId: stageSnapshot.stageTransition.fromStageId || '',
+            toStageId: stageSnapshot.stageTransition.toStageId || '',
+            direction: stageSnapshot.stageTransition.direction,
+            triggerSignalId: stageSnapshot.stageTransition.triggerSignalId || '',
+            reason: stageSnapshot.stageTransition.reason || '',
+        });
+    }
     return 'active';
 }
 
