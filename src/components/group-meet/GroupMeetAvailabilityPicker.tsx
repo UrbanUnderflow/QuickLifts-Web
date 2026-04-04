@@ -27,6 +27,12 @@ type GroupMeetAvailabilityPickerProps = {
   targetMonth: string;
   availabilityEntries: GroupMeetAvailabilitySlot[];
   peerAvailability?: GroupMeetSharedAvailabilityParticipant[];
+  currentParticipant?: {
+    token: string;
+    name: string;
+    imageUrl: string | null;
+    participantType: 'host' | 'participant';
+  } | null;
   onChange: (slots: GroupMeetAvailabilitySlot[]) => void;
   disabled?: boolean;
   title?: string;
@@ -37,6 +43,7 @@ type GroupMeetAvailabilityPickerProps = {
 type PeerAvailabilityForDate = GroupMeetSharedAvailabilityParticipant & {
   daySlots: GroupMeetAvailabilitySlot[];
   tooltip: string;
+  isCurrentUser?: boolean;
 };
 
 function sortAvailabilitySlots(slots: GroupMeetAvailabilitySlot[]) {
@@ -76,8 +83,41 @@ function getParticipantInitials(name: string) {
     .join('') || '?';
 }
 
-function buildPeerTooltip(peer: GroupMeetSharedAvailabilityParticipant, slots: GroupMeetAvailabilitySlot[]) {
-  const prefix = `${peer.name}${peer.participantType === 'host' ? ' • Host' : ''}`;
+function buildParticipantLabel(peer: {
+  name: string;
+  participantType: 'host' | 'participant';
+  isCurrentUser?: boolean;
+}) {
+  const labelParts = [peer.name];
+
+  if (peer.participantType === 'host') {
+    labelParts.push('Host');
+  }
+
+  if (peer.isCurrentUser) {
+    labelParts.push('You');
+  }
+
+  return labelParts.join(' • ');
+}
+
+function sortParticipantsForDate(left: PeerAvailabilityForDate, right: PeerAvailabilityForDate) {
+  if (left.participantType !== right.participantType) {
+    return left.participantType === 'host' ? -1 : 1;
+  }
+
+  if (left.isCurrentUser !== right.isCurrentUser) {
+    return left.isCurrentUser ? -1 : 1;
+  }
+
+  return left.name.localeCompare(right.name);
+}
+
+function buildPeerTooltip(
+  peer: Pick<PeerAvailabilityForDate, 'name' | 'participantType' | 'isCurrentUser'>,
+  slots: GroupMeetAvailabilitySlot[]
+) {
+  const prefix = buildParticipantLabel(peer);
   const slotLines = slots.map(
     (slot) => `${formatMinutesAsTime(slot.startMinutes)} - ${formatMinutesAsTime(slot.endMinutes)}`
   );
@@ -85,7 +125,26 @@ function buildPeerTooltip(peer: GroupMeetSharedAvailabilityParticipant, slots: G
   return [prefix, ...slotLines].join('\n');
 }
 
-function PeerAvatar({
+function PeerTooltip({
+  peer,
+}: {
+  peer: PeerAvailabilityForDate;
+}) {
+  return (
+    <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden w-48 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#0b1016] p-3 text-[11px] text-zinc-200 shadow-2xl group-hover:block">
+      <div className="font-medium text-white">{buildParticipantLabel(peer)}</div>
+      <div className="mt-2 space-y-1">
+        {peer.daySlots.map((slot) => (
+          <div key={`${peer.token}-${slot.date}-${slot.startMinutes}-${slot.endMinutes}`} className="rounded-lg bg-white/[0.04] px-2 py-1">
+            {formatMinutesAsTime(slot.startMinutes)} - {formatMinutesAsTime(slot.endMinutes)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PeerAvatarVisual({
   peer,
   size = 'sm',
 }: {
@@ -102,36 +161,51 @@ function PeerAvatar({
       : 'h-3.5 min-w-[0.875rem] rounded-full px-1 text-[8px]';
 
   return (
-    <div className="group relative">
-      <div
-        title={peer.tooltip}
-        className={`relative flex ${wrapperClassName} items-center justify-center overflow-hidden border border-white/10 bg-[#121821] font-semibold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.03)]`}
-      >
-        {peer.imageUrl ? (
-          <img src={peer.imageUrl} alt={peer.name} className="h-full w-full object-cover" />
-        ) : (
-          <span>{getParticipantInitials(peer.name)}</span>
-        )}
-        {peer.participantType === 'host' && (
-          <span className={`absolute -bottom-1 -right-1 flex items-center justify-center border border-[#0b1016] bg-[#E0FE10] font-bold text-black ${badgeClassName}`}>
-            H
-          </span>
-        )}
-      </div>
+    <div
+      className={`relative flex ${wrapperClassName} items-center justify-center overflow-hidden border border-white/10 bg-[#121821] font-semibold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.03)]`}
+    >
+      {peer.imageUrl ? (
+        <img src={peer.imageUrl} alt={peer.name} className="h-full w-full object-cover" />
+      ) : (
+        <span>{getParticipantInitials(peer.name)}</span>
+      )}
+      {peer.participantType === 'host' && (
+        <span className={`absolute -bottom-1 -right-1 flex items-center justify-center border border-[#0b1016] bg-[#E0FE10] font-bold text-black ${badgeClassName}`}>
+          H
+        </span>
+      )}
+    </div>
+  );
+}
 
-      <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden w-48 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#0b1016] p-3 text-[11px] text-zinc-200 shadow-2xl group-hover:block">
-        <div className="font-medium text-white">
-          {peer.name}
-          {peer.participantType === 'host' ? ' • Host' : ''}
-        </div>
-        <div className="mt-2 space-y-1">
-          {peer.daySlots.map((slot) => (
-            <div key={`${peer.token}-${slot.date}-${slot.startMinutes}-${slot.endMinutes}`} className="rounded-lg bg-white/[0.04] px-2 py-1">
-              {formatMinutesAsTime(slot.startMinutes)} - {formatMinutesAsTime(slot.endMinutes)}
-            </div>
-          ))}
+function PeerAvatar({
+  peer,
+  size = 'sm',
+}: {
+  peer: PeerAvailabilityForDate;
+  size?: 'sm' | 'md';
+}) {
+  return (
+    <div className="group relative" title={peer.tooltip}>
+      <PeerAvatarVisual peer={peer} size={size} />
+      <PeerTooltip peer={peer} />
+    </div>
+  );
+}
+
+function PeerAvailabilityBadge({ peer }: { peer: PeerAvailabilityForDate }) {
+  return (
+    <div className="group relative" title={peer.tooltip}>
+      <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 transition-colors group-hover:bg-white/[0.06]">
+        <PeerAvatarVisual peer={peer} size="md" />
+        <div>
+          <div className="text-sm font-medium text-white">{buildParticipantLabel(peer)}</div>
+          <div className="text-xs text-zinc-400">
+            {peer.daySlots.length} time slot{peer.daySlots.length === 1 ? '' : 's'} saved
+          </div>
         </div>
       </div>
+      <PeerTooltip peer={peer} />
     </div>
   );
 }
@@ -140,6 +214,7 @@ export default function GroupMeetAvailabilityPicker({
   targetMonth,
   availabilityEntries,
   peerAvailability = [],
+  currentParticipant = null,
   onChange,
   disabled = false,
   title = 'Pick availability',
@@ -191,17 +266,48 @@ export default function GroupMeetAvailabilityPicker({
     }
 
     for (const peersForDate of next.values()) {
-      peersForDate.sort((left, right) => {
-        if (left.participantType !== right.participantType) {
-          return left.participantType === 'host' ? -1 : 1;
-        }
-
-        return left.name.localeCompare(right.name);
-      });
+      peersForDate.sort(sortParticipantsForDate);
     }
 
     return next;
   }, [peerAvailability]);
+  const participantAvailabilityByDate = useMemo(() => {
+    const next = new Map<string, PeerAvailabilityForDate[]>();
+
+    for (const [date, peersForDate] of peerAvailabilityByDate.entries()) {
+      next.set(date, [...peersForDate]);
+    }
+
+    if (currentParticipant?.token) {
+      for (const [date, daySlots] of slotsByDate.entries()) {
+        const sortedDaySlots = sortAvailabilitySlots(daySlots);
+        const peersForDate = next.get(date) || [];
+        const withoutCurrentUser = peersForDate.filter((peer) => peer.token !== currentParticipant.token);
+        withoutCurrentUser.push({
+          token: currentParticipant.token,
+          name: currentParticipant.name || 'You',
+          imageUrl: currentParticipant.imageUrl || null,
+          participantType: currentParticipant.participantType === 'host' ? 'host' : 'participant',
+          respondedAt: null,
+          availabilityEntries: sortedDaySlots,
+          daySlots: sortedDaySlots,
+          tooltip: buildPeerTooltip(
+            {
+              name: currentParticipant.name || 'You',
+              participantType: currentParticipant.participantType === 'host' ? 'host' : 'participant',
+              isCurrentUser: true,
+            },
+            sortedDaySlots
+          ),
+          isCurrentUser: true,
+        });
+        withoutCurrentUser.sort(sortParticipantsForDate);
+        next.set(date, withoutCurrentUser);
+      }
+    }
+
+    return next;
+  }, [currentParticipant, peerAvailabilityByDate, slotsByDate]);
 
   const selectedDateCount = slotsByDate.size;
   const duplicableDates = useMemo(
@@ -217,8 +323,8 @@ export default function GroupMeetAvailabilityPicker({
     [activeDate, calendarDays, targetMonth]
   );
   const activeDatePeerAvailability = useMemo(
-    () => (activeDate ? peerAvailabilityByDate.get(activeDate) || [] : []),
-    [activeDate, peerAvailabilityByDate]
+    () => (activeDate ? participantAvailabilityByDate.get(activeDate) || [] : []),
+    [activeDate, participantAvailabilityByDate]
   );
 
   const openDayEditor = (date: string) => {
@@ -333,7 +439,7 @@ export default function GroupMeetAvailabilityPicker({
             parse(`${targetMonth}-01`, 'yyyy-MM-dd', new Date())
           );
           const slots = slotsByDate.get(dateKey) || [];
-          const peerParticipants = peerAvailabilityByDate.get(dateKey) || [];
+          const peerParticipants = participantAvailabilityByDate.get(dateKey) || [];
 
           return (
             <button
@@ -398,27 +504,13 @@ export default function GroupMeetAvailabilityPicker({
 
             {Boolean(activeDatePeerAvailability.length) && (
               <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div className="text-sm font-medium text-white">Already available this day</div>
+                <div className="text-sm font-medium text-white">Availability on this day</div>
                 <p className="mt-1 text-sm text-zinc-400">
-                  Hover a guest image to see the time ranges they already saved.
+                  Hover any profile badge to see the time ranges already saved.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">
                   {activeDatePeerAvailability.map((peer) => (
-                    <div
-                      key={`${activeDate}-${peer.token}`}
-                      className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2"
-                    >
-                      <PeerAvatar peer={peer} size="md" />
-                      <div>
-                        <div className="text-sm font-medium text-white">
-                          {peer.name}
-                          {peer.participantType === 'host' ? ' • Host' : ''}
-                        </div>
-                        <div className="text-xs text-zinc-400">
-                          {peer.daySlots.length} time slot{peer.daySlots.length === 1 ? '' : 's'} saved
-                        </div>
-                      </div>
-                    </div>
+                    <PeerAvailabilityBadge key={`${activeDate}-${peer.token}`} peer={peer} />
                   ))}
                 </div>
               </div>
