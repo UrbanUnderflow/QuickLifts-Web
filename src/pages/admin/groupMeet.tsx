@@ -9,6 +9,7 @@ import { auth, storage } from '../../api/firebase/config';
 import {
   buildGroupMeetCandidateKey,
   formatMinutesAsTime,
+  hasGroupMeetInviteBeenSent,
   type GroupMeetAvailabilitySlot,
   type GroupMeetCandidateWindow,
   type GroupMeetContact,
@@ -45,6 +46,7 @@ type ApiUpdateResponse = {
 
 type ApiInviteResponse = {
   invite?: GroupMeetInviteSummary;
+  status?: GroupMeetRequestSummary['status'];
 };
 
 type ApiContactsResponse = {
@@ -64,6 +66,7 @@ type ApiSendInvitesResponse = {
   failedCount: number;
   skippedCount: number;
   status: GroupMeetRequestSummary['status'];
+  invites: GroupMeetInviteSummary[];
 };
 
 type ApiPreviewEmailResponse = {
@@ -169,6 +172,59 @@ const formatCandidateLabel = (candidate: GroupMeetCandidateWindow) => {
   const start = formatMinutesAsTime(candidate.suggestedStartMinutes);
   const end = formatMinutesAsTime(candidate.suggestedEndMinutes);
   return `${formatMonthDate(candidate.date)} • ${start} - ${end}`;
+};
+
+const getInviteActionLabel = (invite: Pick<GroupMeetInviteSummary, 'emailStatus' | 'emailedAt'>) =>
+  hasGroupMeetInviteBeenSent(invite) ? 'Resend invite' : 'Send invite';
+
+const getInviteDeliveryMeta = (
+  invite: Pick<GroupMeetInviteSummary, 'email' | 'emailStatus' | 'emailedAt' | 'emailError'>,
+  timezone: string
+) => {
+  if (!invite.email) {
+    return {
+      badgeText: 'No email',
+      badgeClassName: 'border-zinc-700 bg-zinc-900 text-zinc-300',
+      detailText: 'No email on file',
+    };
+  }
+
+  if (hasGroupMeetInviteBeenSent(invite)) {
+    const sentDetail = invite.emailedAt
+      ? `Invite sent ${toReadableDateTime(invite.emailedAt, timezone)}`
+      : 'Invite sent';
+
+    return {
+      badgeText: 'Invite sent',
+      badgeClassName: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+      detailText:
+        invite.emailStatus === 'failed' && invite.emailError
+          ? `${sentDetail} • latest resend failed`
+          : sentDetail,
+    };
+  }
+
+  if (invite.emailStatus === 'failed') {
+    return {
+      badgeText: 'Send failed',
+      badgeClassName: 'border-red-500/30 bg-red-500/10 text-red-200',
+      detailText: invite.emailError ? `Send failed: ${invite.emailError}` : 'Invite send failed',
+    };
+  }
+
+  if (invite.emailStatus === 'manual_only') {
+    return {
+      badgeText: 'Host link only',
+      badgeClassName: 'border-zinc-700 bg-zinc-900 text-zinc-300',
+      detailText: 'Host link only',
+    };
+  }
+
+  return {
+    badgeText: 'Invite pending',
+    badgeClassName: 'border-amber-500/30 bg-amber-500/10 text-amber-200',
+    detailText: 'Invite not sent yet',
+  };
 };
 
 const GroupMeetAdminPage: React.FC = () => {
@@ -455,6 +511,42 @@ const GroupMeetAdminPage: React.FC = () => {
     }
   };
 
+  const applyInviteSummariesToRequestState = (
+    requestId: string,
+    inviteSummaries: GroupMeetInviteSummary[],
+    nextStatus?: GroupMeetRequestSummary['status']
+  ) => {
+    const inviteByToken = new Map(inviteSummaries.map((invite) => [invite.token, invite]));
+
+    setRequests((current) =>
+      current.map((request) =>
+        request.id === requestId
+          ? {
+              ...request,
+              status: nextStatus || request.status,
+              invites: request.invites.map((invite) => {
+                const updatedInvite = inviteByToken.get(invite.token);
+                return updatedInvite ? { ...invite, ...updatedInvite } : invite;
+              }),
+            }
+          : request
+      )
+    );
+
+    setSelectedRequest((current) =>
+      current && current.id === requestId
+        ? {
+            ...current,
+            status: nextStatus || current.status,
+            invites: current.invites.map((invite) => {
+              const updatedInvite = inviteByToken.get(invite.token);
+              return updatedInvite ? { ...invite, ...updatedInvite } : invite;
+            }),
+          }
+        : current
+    );
+  };
+
   const openRequestModal = (requestId: string) => {
     setSelectedRequestId(requestId);
     if (requestId !== selectedRequestId) {
@@ -530,6 +622,7 @@ const GroupMeetAdminPage: React.FC = () => {
   const sendDraftInvites = async (requestId: string) => {
     setSendingRequestId(requestId);
     setMessage(null);
+    setRequestModalMessage(null);
 
     try {
       const headers = await getAdminHeaders();
@@ -545,10 +638,11 @@ const GroupMeetAdminPage: React.FC = () => {
         throw new Error(payload.error || 'Failed to send Group Meet invitations.');
       }
 
-      await Promise.all([
-        loadRequests(),
-        selectedRequestId === requestId ? loadRequestDetail(requestId) : Promise.resolve(),
-      ]);
+      applyInviteSummariesToRequestState(
+        requestId,
+        Array.isArray(payload.invites) ? payload.invites : [],
+        payload.status
+      );
 
       const sentCount = Number(payload.sentCount) || 0;
       const failedCount = Number(payload.failedCount) || 0;
@@ -842,6 +936,7 @@ const GroupMeetAdminPage: React.FC = () => {
 
     setResendingInviteToken(invite.token);
     setMessage(null);
+    setRequestModalMessage(null);
 
     try {
       const headers = await getAdminHeaders();
@@ -861,10 +956,18 @@ const GroupMeetAdminPage: React.FC = () => {
         throw new Error(payload.error || `Failed to resend ${invite.name}'s invite.`);
       }
 
-      await Promise.all([loadRequestDetail(selectedRequestId), loadRequests()]);
-      setMessage({ type: 'success', text: `Invite resent to ${invite.name}.` });
+      if (payload.invite) {
+        applyInviteSummariesToRequestState(selectedRequestId, [payload.invite], payload.status);
+      }
+
+      const actionLabel = hasGroupMeetInviteBeenSent(invite) ? 'resent' : 'sent';
+      const successText = `Invite ${actionLabel} to ${invite.name}.`;
+      setMessage({ type: 'success', text: successText });
+      setRequestModalMessage({ type: 'success', text: successText });
     } catch (error: any) {
-      setMessage({ type: 'error', text: error?.message || `Failed to resend ${invite.name}'s invite.` });
+      const errorText = error?.message || `Failed to send ${invite.name}'s invite.`;
+      setMessage({ type: 'error', text: errorText });
+      setRequestModalMessage({ type: 'error', text: errorText });
     } finally {
       setResendingInviteToken(null);
     }
@@ -1984,7 +2087,11 @@ const GroupMeetAdminPage: React.FC = () => {
                       <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
                         <h3 className="text-xl font-semibold mb-3">Participant breakdown</h3>
                         <div className="space-y-2">
-                          {selectedRequest.invites.map((invite) => (
+                          {selectedRequest.invites.map((invite) => {
+                            const inviteDelivery = getInviteDeliveryMeta(invite, selectedRequest.timezone);
+                            const inviteActionLabel = getInviteActionLabel(invite);
+
+                            return (
                             <div key={invite.token} className="rounded-xl border border-zinc-800/70 bg-zinc-950/80 px-4 py-3">
                               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                 <div className="flex items-center gap-3">
@@ -1995,11 +2102,14 @@ const GroupMeetAdminPage: React.FC = () => {
                                       {invite.participantType === 'host' ? ' • Host' : ''}
                                     </div>
                                     <div className="text-xs text-zinc-500">
-                                      {invite.email || 'Manual link'} • {invite.respondedAt ? 'Responded' : 'Waiting'} • {invite.availabilityCount} slots
+                                      {invite.email || 'Manual link'} • {invite.respondedAt ? 'Responded' : 'Waiting'} • {invite.availabilityCount} slots • {inviteDelivery.detailText}
                                     </div>
                                   </div>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
+                                  <div className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs ${inviteDelivery.badgeClassName}`}>
+                                    {inviteDelivery.badgeText}
+                                  </div>
                                   <button
                                     type="button"
                                     onClick={() => copyText(invite.shareUrl, `Copied ${invite.name}'s link`)}
@@ -2016,7 +2126,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                       className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900 disabled:opacity-50"
                                     >
                                       <Mail className="w-4 h-4" />
-                                      {resendingInviteToken === invite.token ? 'Sending…' : 'Resend invite'}
+                                      {resendingInviteToken === invite.token ? 'Sending…' : inviteActionLabel}
                                     </button>
                                   )}
                                 </div>
@@ -2033,7 +2143,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                 )}
                               </div>
                             </div>
-                          ))}
+                          )})}
                         </div>
                       </div>
                     </div>

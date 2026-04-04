@@ -18,6 +18,7 @@ export type GroupMeetInviteSummary = {
     | 'not_sent'
     | 'no_email'
     | 'manual_only';
+  emailedAt?: string | null;
   emailError?: string | null;
   respondedAt: string | null;
   availabilityCount: number;
@@ -185,6 +186,13 @@ export function resolveGroupMeetStatus(
   }
 
   return new Date(deadlineAt).getTime() <= Date.now() ? 'closed' : 'collecting';
+}
+
+export function hasGroupMeetInviteBeenSent(invite: {
+  emailStatus?: string | null;
+  emailedAt?: string | null;
+}) {
+  return Boolean((invite.emailedAt || '').trim()) || invite.emailStatus === 'sent';
 }
 
 export function buildGroupMeetShareUrl(baseUrl: string, token: string): string {

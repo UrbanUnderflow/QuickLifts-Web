@@ -48,11 +48,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const requestData = requestDoc.data() || {};
     const deadlineAt = toIso(requestData.deadlineAt) || new Date().toISOString();
-    const nextStatus = resolveGroupMeetStatus(deadlineAt, 'collecting');
+    const currentStatus = resolveGroupMeetStatus(deadlineAt, requestData.status);
     const invitesSnapshot = await requestRef
       .collection(GROUP_MEET_INVITES_SUBCOLLECTION)
       .orderBy('createdAt', 'asc')
       .get();
+    const hadSentInviteAlready = invitesSnapshot.docs.some((inviteDoc) => {
+      const inviteData = inviteDoc.data() || {};
+      return Boolean(toIso(inviteData.emailedAt)) || inviteData.emailStatus === 'sent';
+    });
 
     let sentCount = 0;
     let failedCount = 0;
@@ -65,6 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const recipientEmail =
           typeof inviteData.email === 'string' ? inviteData.email.trim().toLowerCase() : '';
         const currentEmailStatus = inviteData.emailStatus || 'not_sent';
+        const previousEmailedAt = inviteData.emailedAt || null;
 
         if (participantType === 'host' || !recipientEmail || currentEmailStatus === 'sent') {
           skippedCount += 1;
@@ -104,7 +109,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           {
             emailStatus,
             emailError,
-            emailedAt: result.success && !result.skipped ? admin.firestore.FieldValue.serverTimestamp() : null,
+            emailedAt:
+              result.success && !result.skipped
+                ? admin.firestore.FieldValue.serverTimestamp()
+                : previousEmailedAt,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           },
           { merge: true }
@@ -112,15 +120,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     );
 
-    await requestRef.set(
-      {
-        status: nextStatus,
-        inviteBatchSentAt: admin.firestore.FieldValue.serverTimestamp(),
-        inviteBatchSentByEmail: adminUser.email || null,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+    const hasAnySentInvite = hadSentInviteAlready || sentCount > 0;
+    const nextStatus =
+      currentStatus === 'closed'
+        ? 'closed'
+        : currentStatus === 'collecting' || hasAnySentInvite
+          ? resolveGroupMeetStatus(deadlineAt, 'collecting')
+          : 'draft';
+
+    const requestUpdatePayload: Record<string, unknown> = {
+      status: nextStatus,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    if (sentCount > 0) {
+      requestUpdatePayload.inviteBatchSentAt = admin.firestore.FieldValue.serverTimestamp();
+      requestUpdatePayload.inviteBatchSentByEmail = adminUser.email || null;
+    }
+
+    await requestRef.set(requestUpdatePayload, { merge: true });
 
     const updatedInvitesSnapshot = await requestRef
       .collection(GROUP_MEET_INVITES_SUBCOLLECTION)

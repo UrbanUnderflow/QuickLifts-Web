@@ -74,6 +74,44 @@ interface DisplayRecipient extends NotificationRecipient {
   profileImageUrl?: string;
 }
 
+type NotificationSource = 'fitwithpulse' | 'pulsecheck' | 'unknown';
+
+interface NotificationSourceMeta {
+  label: string;
+  badgeClassName: string;
+  cardClassName: string;
+  selectedCardClassName: string;
+  panelClassName: string;
+  titleClassName: string;
+}
+
+const NOTIFICATION_SOURCE_META: Record<NotificationSource, NotificationSourceMeta> = {
+  fitwithpulse: {
+    label: 'FitWithPulse',
+    badgeClassName: 'border border-[#d7ff00]/35 bg-[#d7ff00]/10 text-[#f2ff9a]',
+    cardClassName: 'bg-[#262a30] border border-[#343941] border-l-4 border-l-[#d7ff00] hover:bg-[#2a2e34] hover:border-[#48515c]',
+    selectedCardClassName: 'bg-[#2a2e34] border border-[#d7ff00] border-l-4 border-l-[#d7ff00]',
+    panelClassName: 'border border-[#d7ff00]/20',
+    titleClassName: 'text-[#d7ff00]',
+  },
+  pulsecheck: {
+    label: 'PulseCheck',
+    badgeClassName: 'border border-cyan-400/35 bg-cyan-400/10 text-cyan-200',
+    cardClassName: 'bg-[#222934] border border-cyan-500/20 border-l-4 border-l-cyan-400 hover:bg-[#26303a] hover:border-cyan-400/35',
+    selectedCardClassName: 'bg-[#26303a] border border-cyan-400 border-l-4 border-l-cyan-300',
+    panelClassName: 'border border-cyan-400/25',
+    titleClassName: 'text-cyan-300',
+  },
+  unknown: {
+    label: 'Unknown Source',
+    badgeClassName: 'border border-gray-500/35 bg-gray-500/10 text-gray-200',
+    cardClassName: 'bg-[#262a30] border border-[#40454c] hover:bg-[#2a2e34]',
+    selectedCardClassName: 'bg-[#2a2e34] border border-gray-400',
+    panelClassName: 'border border-[#40454c]',
+    titleClassName: 'text-white',
+  },
+};
+
 const chunkItems = <T,>(items: T[], size: number) => {
   const chunks: T[][] = [];
   for (let index = 0; index < items.length; index += size) {
@@ -123,6 +161,101 @@ const humanizeType = (value: string) =>
 const getLogTitle = (log: NotificationLog) => log.title || humanizeType(getLogType(log));
 
 const getLogBody = (log: NotificationLog) => log.body || 'No message body recorded for this log entry.';
+
+const normalizeProductScope = (value: unknown): NotificationSource | null => {
+  if (typeof value !== 'string') return null;
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+
+  const compact = normalized.replace(/[\s_-]+/g, '');
+  if (compact.includes('pulsecheck') || compact.includes('youra')) return 'pulsecheck';
+  if (compact === 'pulse' || compact.includes('fitwithpulse') || compact.includes('fitpulse')) return 'fitwithpulse';
+
+  return null;
+};
+
+const stringifySearchableValue = (value: unknown) => {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '';
+  }
+};
+
+const getNotificationSource = (log: NotificationLog): NotificationSource => {
+  const scopeHints = [
+    log.additionalContext?.productScope,
+    log.additionalContext?.product,
+    log.additionalContext?.sourceApp,
+    log.additionalContext?.source,
+    log.dataPayload?.productScope,
+    log.dataPayload?.product,
+    log.dataPayload?.sourceApp,
+    log.dataPayload?.source,
+  ];
+
+  for (const scopeHint of scopeHints) {
+    const source = normalizeProductScope(scopeHint);
+    if (source) return source;
+  }
+
+  const searchableContent = [
+    log.functionName,
+    getLogType(log),
+    log.title,
+    log.body,
+    stringifySearchableValue(log.dataPayload),
+    stringifySearchableValue(log.additionalContext),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  const pulseCheckMarkers = [
+    'pulsecheck',
+    'youra',
+    'oura',
+    'nora',
+    'biometric',
+    'mental_',
+    ' mental ',
+    'dmkind',
+    '/pulsecheck',
+    'pilot',
+    'protocol',
+    'readiness',
+    'recovery',
+  ];
+
+  if (pulseCheckMarkers.some((marker) => searchableContent.includes(marker))) {
+    return 'pulsecheck';
+  }
+
+  const fitWithPulseMarkers = [
+    'fitwithpulse',
+    'run_round',
+    'watch_workout',
+    'workout_completed',
+    'challenge',
+    'callout',
+    'creator_club',
+    'creator club',
+    'direct_message',
+    'round_daily_summary',
+    'new_follower',
+    'referral',
+  ];
+
+  if (fitWithPulseMarkers.some((marker) => searchableContent.includes(marker))) {
+    return 'fitwithpulse';
+  }
+
+  return 'fitwithpulse';
+};
 
 const formatTimestamp = (...values: unknown[]) => {
   for (const value of values) {
@@ -299,6 +432,18 @@ const renderRecipientStatus = (recipient: NotificationRecipient) => {
   return <span className="bg-gray-600 text-white px-2 py-1 rounded text-xs">Recorded</span>;
 };
 
+const renderSourceBadge = (source: NotificationSource) => {
+  const sourceMeta = NOTIFICATION_SOURCE_META[source];
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${sourceMeta.badgeClassName}`}
+    >
+      {sourceMeta.label}
+    </span>
+  );
+};
+
 const RecipientAvatar: React.FC<{ recipient: DisplayRecipient }> = ({ recipient }) => {
   if (recipient.profileImageUrl) {
     return (
@@ -451,15 +596,15 @@ const NotificationLogs: React.FC = () => {
       .map((key) => userDirectory[key])
       .find(Boolean);
 
-  return {
-    ...recipient,
-    profileImageUrl: recipient.profileImageUrl || directoryEntry?.profileImageUrl,
-    userId: recipient.userId || directoryEntry?.userId,
-    username: recipient.username || directoryEntry?.username,
-    displayName: recipient.displayName || directoryEntry?.displayName,
-    email: recipient.email || directoryEntry?.email,
+    return {
+      ...recipient,
+      profileImageUrl: recipient.profileImageUrl || directoryEntry?.profileImageUrl,
+      userId: recipient.userId || directoryEntry?.userId,
+      username: recipient.username || directoryEntry?.username,
+      displayName: recipient.displayName || directoryEntry?.displayName,
+      email: recipient.email || directoryEntry?.email,
+    };
   };
-};
 
   const getStatusBadge = (log: NotificationLog) => {
     if (log.multicast) {
@@ -498,6 +643,8 @@ const NotificationLogs: React.FC = () => {
   const selectedRecipients = selectedLog ? getRecipients(selectedLog).map(hydrateRecipient) : [];
   const selectedRecipient = selectedRecipientIndex !== null ? selectedRecipients[selectedRecipientIndex] || null : null;
   const selectedRecipientError = normalizeError(selectedRecipient?.error || null);
+  const selectedSource = selectedLog ? getNotificationSource(selectedLog) : 'unknown';
+  const selectedSourceMeta = NOTIFICATION_SOURCE_META[selectedSource];
 
   return (
     <div className="min-h-screen bg-[#111417] text-white py-10 px-4 sm:px-6 lg:px-8">
@@ -522,20 +669,22 @@ const NotificationLogs: React.FC = () => {
               <div className="space-y-4">
                 {logs.map((log) => {
                   const recipients = getRecipients(log).map(hydrateRecipient);
+                  const source = getNotificationSource(log);
+                  const sourceMeta = NOTIFICATION_SOURCE_META[source];
 
                   return (
                     <div
                       key={log.id}
                       className={`p-4 rounded-lg cursor-pointer transition duration-200 ${
                         selectedLog?.id === log.id
-                          ? 'bg-[#2a2e34] border border-[#d7ff00]'
-                          : 'bg-[#262a30] hover:bg-[#2a2e34]'
+                          ? sourceMeta.selectedCardClassName
+                          : sourceMeta.cardClassName
                       }`}
                       onClick={() => setSelectedLog(log)}
                     >
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex-1 min-w-0 pr-4">
-                          <h3 className="font-medium text-[#d7ff00] truncate">{getLogTitle(log)}</h3>
+                          <h3 className={`font-medium truncate ${sourceMeta.titleClassName}`}>{getLogTitle(log)}</h3>
                           <p
                             className="text-sm text-gray-300 break-words overflow-hidden"
                             style={{
@@ -551,8 +700,11 @@ const NotificationLogs: React.FC = () => {
                         {getStatusBadge(log)}
                       </div>
 
-                      <div className="flex justify-between text-xs text-gray-400">
-                        <span>{getLogType(log)}</span>
+                      <div className="flex justify-between gap-3 text-xs text-gray-400">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {renderSourceBadge(source)}
+                          <span className="truncate">{getLogType(log)}</span>
+                        </div>
                         <span>{formatTimestamp(log.timestampEpoch, log.timestamp, log.sentAt, log.createdAt)}</span>
                       </div>
 
@@ -574,13 +726,16 @@ const NotificationLogs: React.FC = () => {
             )}
           </div>
 
-          <div className="bg-[#1a1e24] rounded-xl p-6">
-            <h2 className="text-xl font-semibold mb-4">Log Details</h2>
+          <div className={`bg-[#1a1e24] rounded-xl p-6 ${selectedSourceMeta.panelClassName}`}>
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h2 className="text-xl font-semibold">Log Details</h2>
+              {selectedLog && renderSourceBadge(selectedSource)}
+            </div>
 
             {selectedLog ? (
               <div className="space-y-4">
                 <div>
-                  <h4 className="text-sm font-medium text-[#d7ff00] mb-1">Title</h4>
+                  <h4 className={`text-sm font-medium mb-1 ${selectedSourceMeta.titleClassName}`}>Title</h4>
                   <p className="text-sm break-words">{getLogTitle(selectedLog)}</p>
                 </div>
 
