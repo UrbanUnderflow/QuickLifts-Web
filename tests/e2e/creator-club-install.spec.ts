@@ -46,6 +46,7 @@ test.describe('Creator club mobile install flow', () => {
     );
     await expect(page.getByRole('heading', { name: 'Fitness With Benefits(FWB)', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: /Get in in 60 seconds/i })).toBeVisible();
+    await expect(page.getByTestId('sticky-join-cta-shell')).toHaveAttribute('data-sticky-visible', 'false');
     await expect(page.getByRole('link', { name: 'Download on iOS' })).toHaveAttribute(
       'href',
       /apps\.apple\.com/
@@ -57,6 +58,12 @@ test.describe('Creator club mobile install flow', () => {
 
     const openInPulseButton = page.getByRole('button', { name: /Join this club in Pulse/i }).first();
     await expect(openInPulseButton).toBeVisible();
+
+    await page.evaluate(() => {
+      window.scrollTo(0, window.innerHeight + 180);
+    });
+    await page.waitForTimeout(350);
+    await expect(page.getByTestId('sticky-join-cta-shell')).toHaveAttribute('data-sticky-visible', 'true');
 
     const href = await page.evaluate(() => {
       const button = Array.from(document.querySelectorAll('button')).find((candidate) =>

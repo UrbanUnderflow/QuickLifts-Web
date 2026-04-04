@@ -119,31 +119,72 @@ export const routeCreatorOnboarding = (): { action: 'deep-link' | 'app-store' | 
  */
 export const openIOSAppOrStore = (deepLinkUrl: string, fallbackUrl: string = appLinks.appStoreUrl): void => {
   if (typeof window === 'undefined') return;
-  
-  const startTime = Date.now();
-  
-  // Create a hidden iframe to attempt opening the app
-  const iframe = document.createElement('iframe');
+
+  const browserWindow = window as Window;
+  const browserDocument = document;
+  let didOpenApp = browserDocument.visibilityState === 'hidden';
+
+  const iframe = browserDocument.createElement('iframe');
   iframe.style.display = 'none';
-  iframe.src = deepLinkUrl;
-  document.body.appendChild(iframe);
-  
-  // Also try direct location change
-  window.location.href = deepLinkUrl;
-  
-  // Set up fallback to App Store
-  setTimeout(() => {
-    // If we're still on this page after 1.5 seconds, the app probably isn't installed
-    // Check if the page is still visible (user hasn't left)
-    if (document.visibilityState === 'visible' && Date.now() - startTime < 2000) {
-      window.location.href = fallbackUrl;
+  iframe.setAttribute('aria-hidden', 'true');
+
+  let fallbackTimer: number | null = null;
+
+  const cleanup = () => {
+    browserDocument.removeEventListener('visibilitychange', handleVisibilityChange);
+    browserWindow.removeEventListener('pagehide', handlePageHide);
+    browserWindow.removeEventListener('blur', handleBlur);
+
+    if (fallbackTimer !== null) {
+      browserWindow.clearTimeout(fallbackTimer);
+      fallbackTimer = null;
     }
-    
-    // Clean up iframe
+
     if (iframe.parentNode) {
       iframe.parentNode.removeChild(iframe);
     }
-  }, 1500);
+  };
+
+  const markAppOpened = () => {
+    didOpenApp = true;
+    cleanup();
+  };
+
+  const handleVisibilityChange = () => {
+    if (browserDocument.visibilityState === 'hidden') {
+      markAppOpened();
+    }
+  };
+
+  const handlePageHide = () => {
+    markAppOpened();
+  };
+
+  const handleBlur = () => {
+    browserWindow.setTimeout(() => {
+      if (browserDocument.visibilityState === 'hidden') {
+        markAppOpened();
+      }
+    }, 0);
+  };
+
+  browserDocument.addEventListener('visibilitychange', handleVisibilityChange);
+  browserWindow.addEventListener('pagehide', handlePageHide);
+  browserWindow.addEventListener('blur', handleBlur);
+
+  iframe.src = deepLinkUrl;
+  browserDocument.body.appendChild(iframe);
+  browserWindow.location.href = deepLinkUrl;
+
+  fallbackTimer = browserWindow.setTimeout(() => {
+    if (didOpenApp || browserDocument.visibilityState === 'hidden') {
+      cleanup();
+      return;
+    }
+
+    cleanup();
+    browserWindow.location.href = fallbackUrl;
+  }, 1600);
 };
 
 export default platformDetection;

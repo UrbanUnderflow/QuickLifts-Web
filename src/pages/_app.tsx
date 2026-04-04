@@ -128,6 +128,7 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
           when PersistGate blocks page rendering. Page-specific values
           come from ogMeta in pageProps (set by getServerSideProps). */}
       <Head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" key="viewport" />
         <meta property="og:site_name" content="Pulse Fitness" />
         <meta property="og:type" content={ogMeta ? 'article' : 'website'} />
         <meta property="og:title" content={ogTitle} key="og:title" />
