@@ -5,6 +5,8 @@ const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
 const ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
+const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
+const ADMIN_ACTIVATION_INVITES_COLLECTION = 'adminActivationInvites';
 
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -614,15 +616,229 @@ async function seedInitialPulseCheckAdminHandoff({ adminApp, input }) {
   });
 }
 
+
+function buildAdminActivationInviteId(input) {
+  const organizationId = normalizeString(input.organizationId);
+  const teamId = normalizeString(input.teamId);
+  const targetEmail = normalizeEmail(input.targetEmail);
+  const token = normalizeString(input.token);
+  const emailKey = slugify(targetEmail) || 'unknown-email';
+  const tokenKey = slugify(token) || 'invite';
+
+  return `${organizationId}__${teamId}__${emailKey}__${tokenKey}`;
+}
+
+function buildPulseCheckAdminActivationUrl(input = {}) {
+  const baseUrl = normalizeString(input.baseUrl || process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
+  const token = normalizeString(input.token);
+  if (!baseUrl) {
+    throw new Error('A public baseUrl is required to build the admin activation URL.');
+  }
+  if (!token) {
+    throw new Error('token is required to build the admin activation URL.');
+  }
+
+  return `${baseUrl}/PulseCheck/admin-activation/${token}`;
+}
+
+async function issuePulseCheckAdminActivationInvite({ adminApp, input }) {
+  if (!adminApp) {
+    throw new Error('adminApp is required');
+  }
+
+  const firestore = typeof adminApp.collection === 'function' ? adminApp : getFirestore(adminApp);
+  const now = FieldValue.serverTimestamp();
+  const organizationId = normalizeString(input.organizationId);
+  const teamId = normalizeString(input.teamId);
+  const targetEmail = normalizeEmail(input.targetEmail);
+  const targetOwnerName = normalizeString(input.targetOwnerName);
+  const actorLabel = normalizeString(input.actorLabel) || 'pulsecheck-admin-activation-invite-issuer';
+
+  if (!organizationId || !teamId) {
+    throw new Error('organizationId and teamId are required');
+  }
+  if (!targetEmail) {
+    throw new Error('A confirmed targetEmail is required before issuing an admin activation invite.');
+  }
+
+  const expiresInDaysRaw = Number.parseInt(String(input.expiresInDays ?? 14), 10);
+  const expiresInDays = Number.isFinite(expiresInDaysRaw) ? Math.max(1, Math.min(30, expiresInDaysRaw)) : 14;
+  const token = normalizeString(input.token) || admin.firestore().collection('_').doc().id;
+  const inviteId = normalizeString(input.inviteId) || buildAdminActivationInviteId({ organizationId, teamId, targetEmail, token });
+  const activationUrl = buildPulseCheckAdminActivationUrl({ baseUrl: input.baseUrl, token });
+  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
+
+  const organizationRef = firestore.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const teamRef = firestore.collection(TEAMS_COLLECTION).doc(teamId);
+  const adminInviteRef = firestore.collection(ADMIN_ACTIVATION_INVITES_COLLECTION).doc(inviteId);
+  const inviteLinkRef = firestore.collection(INVITE_LINKS_COLLECTION).doc(token);
+
+  return firestore.runTransaction(async (transaction) => {
+    const [organizationSnap, teamSnap] = await Promise.all([
+      transaction.get(organizationRef),
+      transaction.get(teamRef),
+    ]);
+
+    if (!organizationSnap.exists) {
+      throw new Error(`Organization not found: ${organizationId}`);
+    }
+    if (!teamSnap.exists) {
+      throw new Error(`Team not found: ${teamId}`);
+    }
+
+    const organizationData = organizationSnap.data() || {};
+    const teamData = teamSnap.data() || {};
+    if (normalizeString(teamData.organizationId) !== organizationId) {
+      throw new Error('Team is linked to a different organizationId.');
+    }
+
+    const organizationName = normalizeString(organizationData.displayName);
+    const teamName = normalizeString(teamData.displayName);
+
+    const existingInviteLinksSnap = await firestore
+      .collection(INVITE_LINKS_COLLECTION)
+      .where('organizationId', '==', organizationId)
+      .where('teamId', '==', teamId)
+      .where('inviteType', '==', 'admin-activation')
+      .where('targetEmail', '==', targetEmail)
+      .get();
+
+    existingInviteLinksSnap.docs
+      .filter((docSnap) => docSnap.id !== token && normalizeString(docSnap.data()?.status) === 'active')
+      .forEach((docSnap) => {
+        transaction.set(
+          docSnap.ref,
+          {
+            status: 'revoked',
+            revokedBy: actorLabel,
+            revokedAt: now,
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+      });
+
+    const existingAdminInvitesSnap = await firestore
+      .collection(ADMIN_ACTIVATION_INVITES_COLLECTION)
+      .where('organizationId', '==', organizationId)
+      .where('teamId', '==', teamId)
+      .where('email', '==', targetEmail)
+      .get();
+
+    existingAdminInvitesSnap.docs
+      .filter((docSnap) => docSnap.id !== inviteId && normalizeString(docSnap.data()?.status) === 'pending')
+      .forEach((docSnap) => {
+        transaction.set(
+          docSnap.ref,
+          {
+            status: 'revoked',
+            revokedBy: actorLabel,
+            revokedAt: now,
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+      });
+
+    transaction.set(
+      adminInviteRef,
+      {
+        inviteId,
+        organizationId,
+        organizationName,
+        teamId,
+        teamName,
+        recipientName: targetOwnerName,
+        email: targetEmail,
+        role: 'org_admin',
+        teamRole: 'team_admin',
+        token,
+        activationUrl,
+        expiresAt,
+        status: 'pending',
+        sourceCollection: INVITE_LINKS_COLLECTION,
+        sourceInviteLinkId: token,
+        createdBy: actorLabel,
+        createdAt: now,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+
+    transaction.set(
+      inviteLinkRef,
+      {
+        inviteType: 'admin-activation',
+        status: 'active',
+        organizationId,
+        teamId,
+        recipientName: targetOwnerName,
+        targetEmail,
+        token,
+        activationUrl,
+        createdByUserId: '',
+        createdByEmail: actorLabel,
+        createdAt: now,
+        updatedAt: now,
+        adminActivationInviteId: inviteId,
+        expiresAt,
+      },
+      { merge: true }
+    );
+
+    transaction.set(
+      organizationRef,
+      {
+        status: 'ready-for-activation',
+        primaryCustomerAdminName: targetOwnerName || normalizeString(organizationData.primaryCustomerAdminName),
+        primaryCustomerAdminEmail: targetEmail,
+        implementationMetadata: {
+          ...(organizationData.implementationMetadata || {}),
+          ownerContactStatus: 'confirmed',
+        },
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+
+    transaction.set(
+      teamRef,
+      {
+        status: 'ready-for-activation',
+        defaultAdminName: targetOwnerName || normalizeString(teamData.defaultAdminName),
+        defaultAdminEmail: targetEmail,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+
+    return {
+      inviteId,
+      token,
+      activationUrl,
+      organizationId,
+      teamId,
+      email: targetEmail,
+      expiresAt: expiresAt.toDate().toISOString(),
+      inviteLinkId: token,
+    };
+  });
+}
+
 module.exports = {
   ORGANIZATIONS_COLLECTION,
   TEAMS_COLLECTION,
   ORGANIZATION_MEMBERSHIPS_COLLECTION,
   TEAM_MEMBERSHIPS_COLLECTION,
+  INVITE_LINKS_COLLECTION,
+  ADMIN_ACTIVATION_INVITES_COLLECTION,
   buildCanaryAdminAccessInput,
   buildCanaryProvisioningInput,
   buildProvisioningPayload,
   provisionPulseCheckCanaryAdminAccess,
+  buildAdminActivationInviteId,
+  buildPulseCheckAdminActivationUrl,
+  issuePulseCheckAdminActivationInvite,
   provisionPulseCheckCanaryOrganization,
   provisionPulseCheckCanaryOrganizationAndTeam,
   provisionPulseCheckOrganizationAndTeam,
