@@ -261,6 +261,29 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
                 </div>
               </div>
             </button>
+
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <a
+                href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => onStoreTap?.('ios')}
+                className="club-invite-glass flex items-center justify-center gap-2 rounded-[14px] px-3 py-[14px] text-[13px] font-medium text-[rgba(255,255,255,0.72)] transition hover:text-white"
+              >
+                <FaApple className="h-4 w-4" />
+                Download on iOS
+              </a>
+              <a
+                href="https://play.google.com/store/apps/details?id=ai.fitwithpulse.pulse"
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => onStoreTap?.('android')}
+                className="club-invite-glass flex items-center justify-center gap-2 rounded-[14px] px-3 py-[14px] text-[13px] font-medium text-[rgba(255,255,255,0.72)] transition hover:text-white"
+              >
+                <FaGooglePlay className="h-4 w-4" />
+                Download on Android
+              </a>
+            </div>
           </div>
 
           <div className="pointer-events-none absolute bottom-[100px] left-1/2 -translate-x-1/2 animate-scroll-cue text-[rgba(255,255,255,0.4)]">
@@ -306,29 +329,6 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
                   </div>
                 </div>
               ))}
-            </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <a
-                href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => onStoreTap?.('ios')}
-                className="club-invite-glass flex items-center justify-center gap-2 rounded-[14px] px-3 py-[14px] text-[13px] font-medium text-[rgba(255,255,255,0.65)] transition hover:text-white"
-              >
-                <FaApple className="h-4 w-4" />
-                Download on iOS
-              </a>
-              <a
-                href="https://play.google.com/store/apps/details?id=ai.fitwithpulse.pulse"
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => onStoreTap?.('android')}
-                className="club-invite-glass flex items-center justify-center gap-2 rounded-[14px] px-3 py-[14px] text-[13px] font-medium text-[rgba(255,255,255,0.65)] transition hover:text-white"
-              >
-                <FaGooglePlay className="h-4 w-4" />
-                Download on Android
-              </a>
             </div>
 
             <a
