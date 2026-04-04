@@ -117,7 +117,7 @@ export const buildClubOneLink = ({
   imageUrl,
 }: {
   clubId: string;
-  fallbackPath?: string;
+  fallbackPath?: string | null;
   eventId?: string | null;
   sharedBy?: string | null;
   pid?: string;
@@ -127,9 +127,12 @@ export const buildClubOneLink = ({
   imageUrl?: string | null;
 }): string => {
   const baseUrl = `https://${APPS_FLYER_SUBDOMAIN}/${APPS_FLYER_TEMPLATE_ID}`;
-  const fallbackUrl = fallbackPath
-    ? toAbsoluteUrl(fallbackPath)
-    : buildClubCanonicalUrl(clubId, { sharedBy, eventId });
+  const fallbackUrl =
+    fallbackPath === null
+      ? null
+      : fallbackPath
+        ? toAbsoluteUrl(fallbackPath)
+        : buildClubCanonicalUrl(clubId, { sharedBy, eventId });
   const deepLinkUrl = buildClubAppDeepLink(clubId, { sharedBy, eventId });
   const params = new URLSearchParams({
     pid,
@@ -138,8 +141,11 @@ export const buildClubOneLink = ({
     clubId,
     af_force_deeplink: 'true',
     af_dp: deepLinkUrl,
-    af_r: fallbackUrl,
   });
+
+  if (fallbackUrl) {
+    params.set('af_r', fallbackUrl);
+  }
 
   if (sharedBy) {
     params.set('af_referrer_customer_id', sharedBy);

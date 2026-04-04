@@ -78,9 +78,7 @@ test.describe('Creator club mobile install flow', () => {
     expect(oneLinkUrl.searchParams.get('sharedBy')).toBe('coach_123');
     expect(oneLinkUrl.searchParams.get('eventId')).toBe('event_456');
     expect(oneLinkUrl.searchParams.get('af_force_deeplink')).toBe('true');
-    expect(oneLinkUrl.searchParams.get('af_r')).toBe(
-      `https://fitwithpulse.ai/club/${fixtureClubId}/install?sharedBy=coach_123&eventId=event_456&web=1`
-    );
+    expect(oneLinkUrl.searchParams.get('af_r')).toBeNull();
     expect(oneLinkUrl.searchParams.get('af_dp')).toBe(
       `pulse://club?clubId=${fixtureClubId}&sharedBy=coach_123&eventId=event_456`
     );
