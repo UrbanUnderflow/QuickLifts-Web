@@ -955,6 +955,22 @@ async function createQueuedTask(taskInput, options = {}) {
             compiledProofPacketHash: executeContract.compiledProofPacketHash,
             expectedSignalWindow: executeContract.expectedSignalWindow,
             outcomeStatus: executeContract.outcomeStatus,
+            playbookId: executeContract.playbookId,
+            playbookVersion: executeContract.playbookVersion,
+            actionType: executeContract.actionType,
+            currentStageId: executeContract.currentStageId,
+            sideEffectClass: executeContract.sideEffectClass,
+            creditBucket: executeContract.creditBucket,
+            stageGateStatus: executeContract.stageGateStatus,
+            stageBlockReason: executeContract.stageBlockReason,
+            speculative: executeContract.speculative,
+            cleanupBy: executeContract.cleanupBy,
+            cleanupState: executeContract.cleanupState,
+            readinessSignals: executeContract.readinessSignals,
+            commercialCreditEligible: executeContract.commercialCreditEligible,
+            admissionDecision: executeContract.admissionDecision,
+            emittedReadinessSignalIds: executeContract.emittedReadinessSignalIds,
+            requiredReadinessSignalIds: executeContract.requiredReadinessSignalIds,
         };
         if (options.forceCorrection && executeContract.hasContract && executeContract.executeGatePassed) {
             status = options.statusOverride || 'todo';
@@ -1879,6 +1895,17 @@ async function recordDeliverables(task, steps, options = {}) {
     const creditedOutcomeScore = Number.isFinite(Number(options.creditedOutcomeScore)) ? Number(options.creditedOutcomeScore) : null;
     const netOutcomeScore = Number.isFinite(Number(options.netOutcomeScore)) ? Number(options.netOutcomeScore) : null;
     const businessDebtScore = Number.isFinite(Number(options.businessDebtScore)) ? Number(options.businessDebtScore) : null;
+    const playbookId = String(options.playbookId || task?.playbookId || '').trim();
+    const playbookVersion = Number(options.playbookVersion ?? task?.playbookVersion ?? 0) || 0;
+    const currentStageId = String(options.currentStageId || task?.currentStageId || '').trim();
+    const stageGateStatus = String(options.stageGateStatus || task?.stageGateStatus || '').trim();
+    const stageBlockReason = String(options.stageBlockReason || task?.stageBlockReason || '').trim();
+    const speculative = options.speculative === true || task?.speculative === true;
+    const cleanupState = String(options.cleanupState || task?.cleanupState || '').trim();
+    const cleanupBy = options.cleanupBy || task?.cleanupBy || null;
+    const readinessSignals = options.readinessSignals || task?.readinessSignals || [];
+    const executionScore = Number.isFinite(Number(options.executionScore)) ? Number(options.executionScore) : null;
+    const commercialMovementScore = Number.isFinite(Number(options.commercialMovementScore)) ? Number(options.commercialMovementScore) : null;
 
     const deliverables = [];
     const batch = db.batch();
@@ -1927,6 +1954,17 @@ async function recordDeliverables(task, steps, options = {}) {
             creditedOutcomeScore: creditedOutcomeScore ?? undefined,
             netOutcomeScore: netOutcomeScore ?? undefined,
             businessDebtScore: businessDebtScore ?? undefined,
+            playbookId: playbookId || undefined,
+            playbookVersion: playbookVersion || undefined,
+            currentStageId: currentStageId || undefined,
+            stageGateStatus: stageGateStatus || undefined,
+            stageBlockReason: stageBlockReason || undefined,
+            speculative: speculative || undefined,
+            cleanupState: cleanupState || undefined,
+            cleanupBy: cleanupBy || undefined,
+            readinessSignals: Array.isArray(readinessSignals) && readinessSignals.length > 0 ? readinessSignals : undefined,
+            executionScore: executionScore ?? undefined,
+            commercialMovementScore: commercialMovementScore ?? undefined,
             reviewReason: reviewReason || undefined,
             createdAt: FieldValue.serverTimestamp(),
         };
@@ -4892,6 +4930,59 @@ async function markTaskDone(taskId, options = {}) {
     });
 }
 
+function mergeVerifiedReadinessSignals(existingSignals = [], emittedSignalIds = [], options = {}) {
+    const now = options.now instanceof Date ? options.now : new Date();
+    const signalIds = Array.isArray(emittedSignalIds) ? emittedSignalIds.map((value) => String(value || '').trim()).filter(Boolean) : [];
+    const signalsById = new Map(
+        (Array.isArray(existingSignals) ? existingSignals : [])
+            .map((signal) => {
+                const id = String(signal?.id || '').trim();
+                return id ? [id, { ...signal }] : null;
+            })
+            .filter(Boolean)
+    );
+
+    for (const signalId of signalIds) {
+        const current = signalsById.get(signalId) || {};
+        signalsById.set(signalId, {
+            ...current,
+            id: signalId,
+            label: current.label || signalId,
+            state: 'verified',
+            verifiedAt: now,
+            evidenceRef: options.evidenceRef || current.evidenceRef || '',
+        });
+    }
+
+    return Array.from(signalsById.values());
+}
+
+async function updateMissionSequencingAfterVerifiedTask(task, options = {}) {
+    if (!task?.missionId) return;
+    const emittedReadinessSignalIds = Array.isArray(task?.emittedReadinessSignalIds) ? task.emittedReadinessSignalIds.filter(Boolean) : [];
+    if (emittedReadinessSignalIds.length === 0) return;
+
+    const missionRef = db.doc('company-config/mission-status');
+    const missionSnap = await missionRef.get();
+    const mission = normalizeMissionPolicy(missionSnap.exists ? (missionSnap.data() || {}) : { missionId: task.missionId });
+    const readinessSignals = mergeVerifiedReadinessSignals(mission.readinessSignals, emittedReadinessSignalIds, {
+        now: new Date(),
+        evidenceRef: task.outcomeId || task.id,
+    });
+
+    await missionRef.set({
+        readinessSignals,
+        updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    await recordMissionRunEvent(db, FieldValue, task.missionId, 'readiness-signal-verified', {
+        taskId: task.id,
+        outcomeId: task.outcomeId || '',
+        objectiveId: task.objectiveId || '',
+        readinessSignalIds: emittedReadinessSignalIds,
+    });
+}
+
 async function markTaskFailed(taskId, failureMessage, options = {}) {
     await db.collection(KANBAN_COLLECTION).doc(taskId).update({
         runnerBlocked: true,
@@ -7019,6 +7110,10 @@ async function run() {
                             missionPatch[`objectiveProgress.${task.objectiveId}.verifiedDeliverableCount`] = FieldValue.increment(1);
                         }
                         await db.doc('company-config/mission-status').set(missionPatch, { merge: true });
+                        await updateMissionSequencingAfterVerifiedTask(task, {
+                            outcomeEvaluation,
+                            verificationResult,
+                        });
                         await recordMissionRunEvent(db, FieldValue, task.missionId, 'verified-auto', {
                             taskId: task.id,
                             objectiveId: task.objectiveId || '',
@@ -7079,6 +7174,19 @@ async function run() {
                         creditedOutcomeScore: outcomeEvaluation?.score?.creditedOutcomeScore,
                         netOutcomeScore: outcomeEvaluation?.score?.netOutcomeScore,
                         businessDebtScore: outcomeEvaluation?.score?.businessDebtScore,
+                        playbookId: task.playbookId || '',
+                        playbookVersion: task.playbookVersion || 0,
+                        currentStageId: task.currentStageId || '',
+                        stageGateStatus: task.stageGateStatus || '',
+                        stageBlockReason: task.stageBlockReason || '',
+                        speculative: task.speculative === true,
+                        cleanupState: task.cleanupState || '',
+                        cleanupBy: task.cleanupBy || null,
+                        readinessSignals: task.readinessSignals || [],
+                        executionScore: outcomeEvaluation?.score?.creditedOutcomeScore,
+                        commercialMovementScore: task.creditBucket === 'commercial'
+                            ? outcomeEvaluation?.score?.netOutcomeScore
+                            : 0,
                     }
                     : undefined);
                 if (isExecuteV2Task && task.outcomeId && deliverables.length > 0) {

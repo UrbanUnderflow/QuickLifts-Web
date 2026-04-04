@@ -76,6 +76,58 @@ function normalizeTaskSort(a, b) {
   return bMs - aMs;
 }
 
+function normalizeText(value) {
+  return String(value || '').trim();
+}
+
+function roundScore(value) {
+  const parsed = Number(value || 0);
+  if (!Number.isFinite(parsed)) return undefined;
+  return Math.round(parsed * 100) / 100;
+}
+
+function extractSequencingFields(record = {}) {
+  const fields = {
+    playbookId: normalizeText(record.playbookId) || undefined,
+    playbookVersion: Number(record.playbookVersion || 0) || undefined,
+    playbookFamily: normalizeText(record.playbookFamily) || undefined,
+    playbookActionType: normalizeText(record.playbookActionType || record.actionType) || undefined,
+    currentStageId: normalizeText(record.currentStageId) || undefined,
+    currentStageOrdinal: Number(record.currentStageOrdinal || 0) || undefined,
+    requiredStageId: normalizeText(record.requiredStageId) || undefined,
+    requiredStageOrdinal: Number(record.requiredStageOrdinal || 0) || undefined,
+    stageGateStatus: normalizeText(record.stageGateStatus) || undefined,
+    stageBlockReasonCode: normalizeText(record.stageBlockReasonCode || record.blockReasonCode) || undefined,
+    stageBlockReasonDetail: normalizeText(record.stageBlockReasonDetail || record.blockReasonDetail) || undefined,
+    scoreGateStatus: normalizeText(record.scoreGateStatus) || undefined,
+    admissionVersion: Number(record.admissionVersion || 0) || undefined,
+    sideEffectClass: normalizeText(record.sideEffectClass) || undefined,
+    creditBucket: normalizeText(record.creditBucket) || undefined,
+    commercialCreditEligible: typeof record.commercialCreditEligible === 'boolean' ? record.commercialCreditEligible : undefined,
+    speculative: typeof record.speculative === 'boolean' ? record.speculative : undefined,
+    speculativeLifecycleState: normalizeText(record.speculativeLifecycleState || record.lifecycleState) || undefined,
+    cleanupState: normalizeText(record.cleanupState) || undefined,
+    cleanupBy: record.cleanupBy || undefined,
+    requiredApprovalTypes: Array.isArray(record.requiredApprovalTypes)
+      ? record.requiredApprovalTypes.map(normalizeText).filter(Boolean)
+      : undefined,
+    requiredApprovalEventIds: Array.isArray(record.requiredApprovalEventIds)
+      ? record.requiredApprovalEventIds.map(normalizeText).filter(Boolean)
+      : undefined,
+    readinessSignals: Array.isArray(record.readinessSignals) ? record.readinessSignals : undefined,
+    executionScore: roundScore(record.executionScore),
+    commercialMovementScore: roundScore(record.commercialMovementScore),
+  };
+
+  return Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => {
+      if (value === undefined) return false;
+      if (Array.isArray(value) && value.length === 0) return false;
+      return true;
+    })
+  );
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const db = getFirestore(initAdminApp());
@@ -171,6 +223,7 @@ async function main() {
       compiledProofPacketHash: contract.compiledProofPacketHash,
       expectedSignalWindow: contract.expectedSignalWindow,
       outcomeStatus: contract.outcomeStatus,
+      ...extractSequencingFields(task),
       updatedAt: FieldValue.serverTimestamp(),
     };
 
@@ -214,6 +267,7 @@ async function main() {
     if (!existingOutcome.exists || args.repair) {
       batch.set(outcomeRef, {
         ...outcomeRecord,
+        ...extractSequencingFields(task),
         updatedAt: FieldValue.serverTimestamp(),
         createdAt: existingOutcome.exists ? (existingOutcome.data()?.createdAt || FieldValue.serverTimestamp()) : FieldValue.serverTimestamp(),
       }, { merge: true });

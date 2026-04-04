@@ -5,6 +5,7 @@ const {
   buildExecuteTaskContract,
   buildOutcomeEvaluation,
   advanceOutcomeObservation,
+  inferTaskActionType,
   summarizeMissionOutcomes,
 } = require('../../../scripts/missionOsV2');
 
@@ -192,4 +193,89 @@ test('summarizeMissionOutcomes rolls up counts and credited/net/debt scores by c
   assert.equal(summary.creditedOutcomeScore, 60);
   assert.equal(summary.netOutcomeScore, 53);
   assert.equal(summary.businessDebtScore, 7);
+});
+
+test('buildOutcomeEvaluation forces debt on failed verification instead of counting commercial movement', () => {
+  const task = makeTask({
+    priorityScore: 36,
+    artifactSpec: {
+      kind: 'runtime_change',
+      targets: ['mission-runs/mission-alpha'],
+      successDefinition: 'Partner activation evidence is visible in Firestore.',
+      mustTouchRepo: false,
+      impactScope: 'external',
+    },
+    acceptanceChecks: [
+      {
+        kind: 'firestore',
+        label: 'Partner activation event exists',
+        commandOrPath: 'mission-runs/mission-alpha',
+        expectedSignal: 'confirmed',
+      },
+    ],
+    proofPacket: {
+      policyRefs: {
+        missionPolicyId: 'mission-policy-execute-v2',
+        domainPolicyId: 'domain-policy-partnerships-v1',
+        scoreCalibrationPackId: 'score-pack-partnerships-terminal-v1',
+      },
+      sourceQueries: [{ id: 'source-1', sourceType: 'firestore', query: 'mission-runs/mission-alpha' }],
+      metricRefs: [{ id: 'metric-1', sourceQueryId: 'source-1', aggregation: 'latest' }],
+      successCriteria: [{ id: 'success-1', metricRefId: 'metric-1', comparator: 'exists', threshold: true }],
+      businessEffectCriteria: [],
+      evidenceRequirements: [{ id: 'evidence-1', sourceQueryId: 'source-1', minimumRecords: 1 }],
+      primaryMetricRefId: 'metric-1',
+      observationWindow: '72h',
+    },
+    proofCompileStatus: 'dry-run-passed',
+    outcomeClass: 'terminal',
+    outcomeDomain: 'partnerships',
+  });
+
+  const failed = buildOutcomeEvaluation(
+    task,
+    {
+      outcomeClass: 'terminal',
+      outcomeDomain: 'partnerships',
+      proofPacket: task.proofPacket,
+      attributionActual: 'directly-caused',
+    },
+    {
+      missionPolicy: { allowNegativeNetScore: true },
+      passed: false,
+      checks: [
+        {
+          label: 'Partner activation event exists',
+          commandOrPath: 'mission-runs/mission-alpha',
+          passed: false,
+          output: 'missing',
+        },
+      ],
+      checkedAt: new Date('2026-04-04T12:00:00.000Z'),
+    }
+  );
+
+  assert.equal(failed.status, 'failed');
+  assert.equal(failed.guardrailStatus, 'failed');
+  assert.equal(failed.score.creditedOutcomeScore, 0);
+  assert.ok(failed.score.netOutcomeScore <= 0);
+  assert.ok(failed.score.businessDebtScore >= 1);
+});
+
+test('inferTaskActionType recognizes interest and owner-email confirmation tasks', () => {
+  assert.equal(
+    inferTaskActionType({
+      name: 'Record explicit interest confirmation from the target owner',
+      description: 'Capture the warm reply and verify the target wants the activation path.',
+    }),
+    'confirm-interest'
+  );
+
+  assert.equal(
+    inferTaskActionType({
+      name: 'Confirm the owner email for activation handoff',
+      description: 'Verify and bind the owner email before creating the activation link.',
+    }),
+    'confirm-owner-email'
+  );
 });
