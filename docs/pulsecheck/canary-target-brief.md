@@ -26,11 +26,12 @@ This file locks the canary to one real external coach-led target so downstream p
 
 Marcus Filly — founder of Functional Bodybuilding. [SOT: LEAD-0007, EVID-0004]
 
-## External Source URL
+## Public Source Evidence
 
-<https://functional-bodybuilding.com/pages/about> [SOT: LEAD-0007, EVID-0004]
+- Official about page: <https://functional-bodybuilding.com/pages/about> [SOT: LEAD-0007, EVID-0004]
+- Official program page: <https://functional-bodybuilding.com/pages/persist> [SOT: LEAD-0007, EVID-0005]
 
-## Organization Name
+## Org Name
 
 Revival Strength / Functional Bodybuilding (normalized organization record for the canary). The public site footer identifies the brand relationship as `Revival Strength © 2024 / Functional Bodybuilding`. [SOT: LEAD-0007, EVID-0004]
 
