@@ -275,6 +275,8 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
           href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
+        <meta name="theme-color" content="#080808" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </Head>
 
       <div className="pointer-events-none fixed inset-0 z-0">
@@ -295,13 +297,20 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
       <div
         className="pointer-events-none fixed left-1/2 top-0 z-20 w-full max-w-[430px] -translate-x-1/2"
         style={{
-          height: 'calc(env(safe-area-inset-top, 0px) + 48px)',
-          background: 'linear-gradient(180deg, rgba(8,8,8,0.82) 0%, rgba(8,8,8,0.62) 30%, rgba(8,8,8,0.22) 62%, transparent 100%)',
+          height: 'calc(env(safe-area-inset-top, 0px) + 34px)',
+          background: 'linear-gradient(180deg, rgba(8,8,8,0.74) 0%, rgba(8,8,8,0.42) 32%, rgba(8,8,8,0.12) 68%, transparent 100%)',
         }}
       />
 
-      <div className="relative z-10 mx-auto w-full max-w-[430px]">
-        <section className="relative h-[100svh] min-h-[560px] overflow-hidden">
+      <div className="relative z-10 mx-auto w-full max-w-[430px] overflow-hidden">
+        <section
+          className="relative overflow-hidden"
+          style={{
+            height: 'calc(100svh + env(safe-area-inset-top, 0px))',
+            minHeight: 'calc(560px + env(safe-area-inset-top, 0px))',
+            marginTop: 'calc(env(safe-area-inset-top, 0px) * -1)',
+          }}
+        >
           <img
             src={club.coverImageURL}
             alt={club.name}
@@ -342,10 +351,6 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
 
             <div className="mb-[10px] flex flex-wrap gap-[7px]">
               <div className="club-invite-glass rounded-full px-3 py-1.5 text-[12px] font-medium text-white">{club.clubType}</div>
-              <div className="rounded-full border border-[rgba(255,107,53,0.30)] bg-[rgba(255,107,53,0.15)] px-3 py-1.5 text-[12px] font-medium text-[rgba(255,107,53,0.95)]">
-                <span className="mr-2 inline-block h-[5px] w-[5px] rounded-full bg-orange-pulse align-middle animate-live-dot-pulse" />
-                Active Now
-              </div>
             </div>
 
             <h1 className="font-display text-[56px] leading-[0.94] tracking-[0.01em]">
