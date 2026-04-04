@@ -227,6 +227,165 @@ function assertExistingDocCompatible(existing, expected, scopeLabel) {
   }
 }
 
+function buildCanaryProvisioningInput(params = {}) {
+  const actorLabel = normalizeString(params.actorLabel) || 'pulsecheck-canary-provisioner';
+  const organizationId = normalizeString(params.organizationId) || 'revival-strength-functional-bodybuilding';
+  const teamId = normalizeString(params.teamId) || `${organizationId}--persist`;
+  const ownerName = normalizeString(params.ownerName) || 'Marcus Filly';
+  const ownerEmail = normalizeEmail(params.ownerEmail);
+
+  return {
+    actorLabel,
+    organization: {
+      id: organizationId,
+      displayName: 'Revival Strength / Functional Bodybuilding',
+      legalName: 'Revival Strength / Functional Bodybuilding',
+      organizationType: 'brand',
+      status: 'provisioning',
+      primaryCustomerAdminName: ownerName,
+      primaryCustomerAdminEmail: ownerEmail,
+      defaultStudyPosture: 'operational',
+      defaultClinicianBridgeMode: 'optional',
+      notes:
+        'Canary PulseCheck organization shell for the selected coach-led target. Owner email remains unverified and must be confirmed directly before admin activation is generated or redeemed. Provisioned through the organization-first PulseCheck hierarchy, not the retired legacy coach signup path.',
+      implementationMetadata: {
+        provisioningPath: 'pulsecheck-hierarchy',
+        legacySignupPathUsed: false,
+        canaryTarget: true,
+        selectedTargetLeadId: 'LEAD-0007',
+        selectedTargetEvidenceIds: ['EVID-0004', 'EVID-0005'],
+        sourceBriefPath: 'docs/pulsecheck/canary-target-brief.md',
+        firstPlannedTeamName: 'Persist',
+        ownerContactStatus: ownerEmail ? 'confirmed' : 'pending-confirmation',
+        provisionedBy: actorLabel,
+        notes: 'Hierarchy-owned canary organization shell. Initial admin membership and activation handoff remain pending.',
+      },
+    },
+    team: {
+      id: teamId,
+      displayName: 'Persist',
+      teamType: 'brand-athlete-group',
+      sportOrProgram: 'Coach-led training program',
+      siteLabel: 'Functional Bodybuilding / Persist',
+      defaultAdminName: ownerName,
+      defaultAdminEmail: ownerEmail,
+      status: 'provisioning',
+      defaultInvitePolicy: 'admin-staff-and-coaches',
+      commercialConfig: {
+        commercialModel: 'athlete-pay',
+        teamPlanStatus: 'inactive',
+        referralKickbackEnabled: false,
+        referralRevenueSharePct: 0,
+        revenueRecipientRole: 'team-admin',
+        revenueRecipientUserId: '',
+        billingOwnerUserId: '',
+        billingCustomerId: '',
+        teamPlanActivatedAt: null,
+        teamPlanExpiresAt: null,
+      },
+      defaultClinicianProfileId: '',
+      defaultClinicianExternalProfileId: '',
+      defaultClinicianProfileName: '',
+      defaultClinicianProfileType: 'group',
+      defaultClinicianProfileSource: 'pulsecheck-local',
+      notes:
+        'Canary PulseCheck team shell for the Persist program under Revival Strength / Functional Bodybuilding. Invite posture allows downstream staff and coach onboarding without PulseCheck repair once the first admin is activated. Clinician routing defaults intentionally inherit the organization optional-bridge posture until a concrete clinician profile is attached.',
+      implementationMetadata: {
+        provisioningPath: 'pulsecheck-hierarchy',
+        legacySignupPathUsed: false,
+        canaryTarget: true,
+        selectedTargetLeadId: 'LEAD-0007',
+        selectedTargetEvidenceIds: ['EVID-0004', 'EVID-0005'],
+        sourceBriefPath: 'docs/pulsecheck/canary-target-brief.md',
+        routingDefaultsMode: 'organization-default-optional',
+        invitePosture: 'admin-staff-and-coaches',
+        provisionedBy: actorLabel,
+        notes: 'Hierarchy-owned initial canary team shell only. Team admin membership and activation handoff remain pending.',
+      },
+    },
+  };
+}
+
+async function upsertPulseCheckOrganization({ adminApp, input }) {
+  if (!adminApp) {
+    throw new Error('adminApp is required');
+  }
+
+  const firestore = typeof adminApp.collection === 'function' ? adminApp : getFirestore(adminApp);
+  const now = FieldValue.serverTimestamp();
+  const actorLabel = normalizeString(input.actorLabel) || 'pulsecheck-organization-provisioner';
+  const organizationId = normalizeString(input.organization.id) || slugify(input.organization.displayName);
+  if (!organizationId) {
+    throw new Error('organization.id or organization.displayName is required');
+  }
+  if (!normalizeString(input.organization.displayName)) {
+    throw new Error('organization.displayName is required');
+  }
+
+  const organizationPayload = {
+    displayName: normalizeString(input.organization.displayName),
+    legalName: normalizeString(input.organization.legalName) || normalizeString(input.organization.displayName),
+    organizationType: normalizeString(input.organization.organizationType) || 'other',
+    invitePreviewImageUrl: normalizeString(input.organization.invitePreviewImageUrl),
+    status: normalizeString(input.organization.status) || 'provisioning',
+    legacySource: input.organization.legacySource || null,
+    legacyCoachId: normalizeString(input.organization.legacyCoachId),
+    implementationOwnerUserId: normalizeString(input.organization.implementationOwnerUserId),
+    implementationOwnerEmail: normalizeEmail(input.organization.implementationOwnerEmail),
+    implementationMetadata: normalizeOrganizationImplementationMetadata(input.organization.implementationMetadata, actorLabel),
+    primaryCustomerAdminName: normalizeString(input.organization.primaryCustomerAdminName),
+    primaryCustomerAdminEmail: normalizeEmail(input.organization.primaryCustomerAdminEmail),
+    additionalAdminContacts: Array.isArray(input.organization.additionalAdminContacts)
+      ? input.organization.additionalAdminContacts
+          .map((entry) => ({ name: normalizeString(entry?.name), email: normalizeEmail(entry?.email) }))
+          .filter((entry) => entry.email)
+      : [],
+    defaultStudyPosture: normalizeString(input.organization.defaultStudyPosture) || 'operational',
+    defaultClinicianBridgeMode: normalizeString(input.organization.defaultClinicianBridgeMode) || 'none',
+    notes: normalizeString(input.organization.notes),
+  };
+
+  assertNoLegacyWrite(organizationPayload, 'organization');
+
+  const organizationRef = firestore.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  return firestore.runTransaction(async (transaction) => {
+    const organizationSnap = await transaction.get(organizationRef);
+    const organizationExists = organizationSnap.exists;
+    const organizationData = organizationSnap.data() || null;
+
+    assertExistingDocCompatible(organizationData, organizationPayload, 'organization');
+
+    const organizationWrite = {
+      ...organizationPayload,
+      implementationMetadata: {
+        ...organizationPayload.implementationMetadata,
+        provisionedAt: organizationData?.implementationMetadata?.provisionedAt || now,
+        provisionedBy:
+          normalizeString(organizationData?.implementationMetadata?.provisionedBy) ||
+          organizationPayload.implementationMetadata.provisionedBy ||
+          actorLabel,
+      },
+      createdAt: organizationData?.createdAt || now,
+      updatedAt: now,
+    };
+
+    transaction.set(organizationRef, organizationWrite, { merge: true });
+
+    return {
+      organizationId,
+      organizationCreated: !organizationExists,
+      organizationStatus: organizationWrite.status,
+      defaultClinicianBridgeMode: organizationWrite.defaultClinicianBridgeMode,
+      implementationPath: organizationWrite.implementationMetadata.provisioningPath,
+    };
+  });
+}
+
+async function provisionPulseCheckCanaryOrganization({ adminApp, params = {} }) {
+  const input = buildCanaryProvisioningInput(params);
+  return upsertPulseCheckOrganization({ adminApp, input });
+}
+
 async function provisionPulseCheckOrganizationAndTeam({ adminApp, input }) {
   if (!adminApp) {
     throw new Error('adminApp is required');
@@ -433,8 +592,11 @@ module.exports = {
   TEAMS_COLLECTION,
   ORGANIZATION_MEMBERSHIPS_COLLECTION,
   TEAM_MEMBERSHIPS_COLLECTION,
+  buildCanaryProvisioningInput,
   buildProvisioningPayload,
+  provisionPulseCheckCanaryOrganization,
   provisionPulseCheckOrganizationAndTeam,
   seedInitialPulseCheckAdminHandoff,
   slugify,
+  upsertPulseCheckOrganization,
 };
