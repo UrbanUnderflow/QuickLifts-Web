@@ -123,6 +123,7 @@ export const handler: Handler = async () => {
   let skippedSuppressed = 0;
   let failed = 0;
   const errors: Array<{ userId: string; error: string }> = [];
+  const recipients: Array<Record<string, string | boolean | null>> = [];
 
   for (const userDoc of usersSnap.docs) {
     processed++;
@@ -226,6 +227,17 @@ export const handler: Handler = async () => {
     };
 
     const result = await sendNotification(messaging, fcmToken, title, body, data);
+    recipients.push({
+      userId,
+      username: String(userData.username || ''),
+      displayName: String(userData.displayName || ''),
+      email: String(userData.email || ''),
+      tokenPreview: `${String(fcmToken).substring(0, 20)}...`,
+      deliveryChannel: 'push',
+      success: result.success,
+      messageId: result.messageId || null,
+      error: result.error || null,
+    });
     if (!result.success) {
       failed++;
       if (errors.length < 10) errors.push({ userId, error: result.error || 'Unknown error' });
@@ -262,6 +274,7 @@ export const handler: Handler = async () => {
     skippedNoAssignments,
     skippedSuppressed,
     failed,
+    recipients,
     errors: errors.slice(0, 10),
   });
 

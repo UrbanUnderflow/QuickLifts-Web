@@ -196,8 +196,10 @@ export const handler: Handler = async (event) => {
   let failCount = 0;
   let skippedSuppressed = 0;
   const errors: string[] = [];
+  const recipients: Array<Record<string, string | boolean | null>> = [];
 
     for (const userDoc of usersSnap.docs) {
+      const userId = userDoc.id;
       const userData = userDoc.data();
       const fcmToken = userData.fcmToken;
 
@@ -227,6 +229,17 @@ export const handler: Handler = async (event) => {
       }
 
       const result = await sendNotification(messaging, fcmToken, title, body, notificationData);
+      recipients.push({
+        userId,
+        username: String(userData.username || ''),
+        displayName: String(userData.displayName || ''),
+        email: String(userData.email || ''),
+        tokenPreview: `${String(fcmToken).substring(0, 20)}...`,
+        deliveryChannel: 'push',
+        success: result.success,
+        messageId: result.messageId || null,
+        error: result.error || null,
+      });
       
       if (result.success) {
         successCount++;
@@ -247,6 +260,7 @@ export const handler: Handler = async (event) => {
       failCount,
       skippedSuppressed,
       totalAttempted: successCount + failCount,
+      recipients,
       errors: errors.slice(0, 10),
       createdAt: new Date(),
     });

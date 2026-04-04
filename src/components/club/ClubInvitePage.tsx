@@ -133,7 +133,9 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
   onStoreTap,
 }) => {
   const heroCtaRef = React.useRef<HTMLButtonElement | null>(null);
+  const howToJoinRef = React.useRef<HTMLElement | null>(null);
   const [isStickyCtaVisible, setIsStickyCtaVisible] = React.useState(false);
+  const [hasStartedScrolling, setHasStartedScrolling] = React.useState(false);
   const accentColor = club.accentColor || '#FF6B35';
   const invitedByHandle = club.creatorUsername.startsWith('@') ? club.creatorUsername : `@${club.creatorUsername}`;
   const memberCountLabel = `${formatCount(club.memberCount)}+`;
@@ -179,6 +181,27 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
 
     return () => {
       observer.disconnect();
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const browserWindow = window as Window;
+
+    const updateHasStartedScrolling = () => {
+      setHasStartedScrolling(browserWindow.scrollY > 10);
+    };
+
+    updateHasStartedScrolling();
+    browserWindow.addEventListener('scroll', updateHasStartedScrolling, { passive: true });
+    browserWindow.addEventListener('resize', updateHasStartedScrolling);
+
+    return () => {
+      browserWindow.removeEventListener('scroll', updateHasStartedScrolling);
+      browserWindow.removeEventListener('resize', updateHasStartedScrolling);
     };
   }, []);
 
@@ -230,6 +253,14 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
     }
 
     await navigator.clipboard.writeText(club.inviteDeepLink);
+  };
+
+  const scrollToHowToJoin = () => {
+    setHasStartedScrolling(true);
+    howToJoinRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
   };
 
   return (
@@ -366,15 +397,23 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
                 Download on Android
               </a>
             </div>
-          </div>
 
-          <div className="pointer-events-none absolute bottom-[100px] left-1/2 -translate-x-1/2 animate-scroll-cue text-[rgba(255,255,255,0.4)]">
-            <ChevronDown className="h-5 w-5" />
+            {!hasStartedScrolling ? (
+              <button
+                type="button"
+                onClick={scrollToHowToJoin}
+                className="mx-auto mt-5 flex items-center gap-2 text-[11px] font-medium tracking-[0.08em] text-[rgba(255,255,255,0.5)] transition hover:text-[rgba(255,255,255,0.78)] animate-scroll-cue"
+                aria-label="Scroll down to see how to join"
+              >
+                <span className="uppercase">Scroll down to see how to join</span>
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
         </section>
 
         <main className="relative px-5 pb-[110px]">
-          <section className="pt-7">
+          <section ref={howToJoinRef} className="pt-7">
             <SectionDivider label="How to join" />
 
             <div className="pt-5">

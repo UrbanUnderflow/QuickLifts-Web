@@ -1,12 +1,32 @@
 const NOTIFICATION_LOGS_COLLECTION = 'notification-logs';
+
+function truncateToken(token) {
+  if (!token) return 'MISSING';
+  return `${String(token).substring(0, 20)}...`;
+}
+
+function normalizeRecipients(recipients = [], fcmToken) {
+  if (Array.isArray(recipients) && recipients.length > 0) {
+    return recipients
+      .filter((recipient) => recipient && typeof recipient === 'object')
+      .map((recipient) => ({
+        userId: recipient.userId || recipient.uid || recipient.id || null,
+        username: recipient.username || null,
+        displayName: recipient.displayName || recipient.name || null,
+        email: recipient.email || null,
+        tokenPreview: recipient.tokenPreview || truncateToken(recipient.fcmToken || recipient.token || fcmToken),
+        deliveryChannel: recipient.deliveryChannel || recipient.channel || (recipient.email ? 'email' : 'push'),
+      }))
+      .map((recipient) => Object.fromEntries(Object.entries(recipient).filter(([, value]) => value !== null && value !== '')))
+      .filter((recipient) => Object.keys(recipient).length > 0);
+  }
+
+  return fcmToken ? [{ tokenPreview: truncateToken(fcmToken), deliveryChannel: 'push' }] : [];
+}
 const {
   loadPilotOperationalState,
   resolvePilotEnrollmentContext,
 } = require('./utils/pulsecheck-pilot-metrics');
-
-function truncateToken(fcmToken) {
-  return fcmToken ? `${String(fcmToken).substring(0, 20)}...` : 'MISSING';
-}
 
 function normalizeStringMap(values = {}) {
   return Object.entries(values).reduce((result, [key, value]) => {
@@ -284,10 +304,12 @@ async function logNotification({
   messageId = null,
   error = null,
   additionalContext = {},
+  recipients = [],
 }) {
   if (!db) return null;
 
   try {
+    const normalizedRecipients = normalizeRecipients(recipients, fcmToken);
     const logEntry = {
       fcmToken: truncateToken(fcmToken),
       title,
@@ -305,6 +327,13 @@ async function logNotification({
           }
         : null,
       additionalContext,
+      recipients: normalizedRecipients,
+      recipientSummary: {
+        total: normalizedRecipients.length,
+        identifiedUsers: normalizedRecipients.filter(
+          (recipient) => recipient.userId || recipient.username || recipient.displayName || recipient.email
+        ).length,
+      },
       timestamp: new Date(),
       timestampEpoch: Math.floor(Date.now() / 1000),
       createdAt: new Date(),
@@ -350,6 +379,14 @@ async function sendLoggedNoraPush({
   });
 
   try {
+    const recipients = [{
+      userId,
+      username: additionalContext.username || additionalContext.userName || '',
+      displayName: additionalContext.displayName || '',
+      email: additionalContext.email || '',
+      fcmToken: normalizedToken,
+      deliveryChannel: 'push',
+    }];
     const messageId = await messaging.send(message);
     const logId = await logNotification({
       db,
@@ -361,6 +398,7 @@ async function sendLoggedNoraPush({
       functionName,
       success: true,
       messageId,
+      recipients,
       additionalContext: {
         userId,
         ...additionalContext,
@@ -379,6 +417,7 @@ async function sendLoggedNoraPush({
       notificationType,
       functionName,
       success: false,
+      recipients,
       error: {
         ...(error || {}),
         code: failure.errorCode,

@@ -640,6 +640,7 @@ exports.sendWorkoutStartNotification = onDocumentWritten("users/{userId}/workout
 
     // --- Find Other Participants and Send Notifications ---
     const eligibleTokens = [];
+    const recipientUsers = [];
     const skippedUserCount = { ignored: 0, missing: 0 };
     let sentCount = 0;
     let failedCount = 0;
@@ -691,6 +692,13 @@ exports.sendWorkoutStartNotification = onDocumentWritten("users/{userId}/workout
         }
         
         eligibleTokens.push(participantToken); // Collect token
+        recipientUsers.push({
+          userId: participantId,
+          username: participantData.username || '',
+          displayName: participantData.displayName || '',
+          email: participantData.email || '',
+          fcmToken: participantToken
+        });
       }
 
       // --- Send using sendEachForMulticast ---
@@ -722,7 +730,8 @@ exports.sendWorkoutStartNotification = onDocumentWritten("users/{userId}/workout
             dataPayload,
             notificationType: 'WORKOUT_STARTED',
             functionName: 'sendWorkoutStartNotification',
-            response
+            response,
+            recipients: recipientUsers
           });
           
           console.log(`Finished sending WORKOUT_STARTED notifications. Sent: ${sentCount}, Failed: ${failedCount}, Ignored: ${skippedUserCount.ignored}, Missing tokens: ${skippedUserCount.missing}.`);
