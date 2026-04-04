@@ -141,7 +141,7 @@ const PRICING_SOURCE_URLS = {
   openai: 'https://platform.openai.com/docs/pricing/',
   anthropic: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
 };
-const DEFAULT_MODEL_UPGRADE_TARGET = 'openai/gpt-5.3-codex';
+const DEFAULT_MODEL_UPGRADE_TARGET = 'openai-codex/gpt-5.4';
 
 type ModelUpgradeOption = {
   value: string;
@@ -539,7 +539,13 @@ const normalizeUpgradeModelLabel = (value: string): string => {
 
   if (trimmed.includes('/')) {
     const [provider, ...modelParts] = trimmed.split('/');
-    const providerLabel = provider === 'anthropic' ? 'Anthropic' : provider === 'openai' ? 'OpenAI' : provider || 'Model';
+    const providerLabel = provider === 'anthropic'
+      ? 'Anthropic'
+      : provider === 'openai'
+        ? 'OpenAI'
+        : provider === 'openai-codex'
+          ? 'OpenAI Codex'
+          : provider || 'Model';
     const model = modelParts.join('/') || value;
     return `${providerLabel}: ${model}`;
   }
@@ -3619,20 +3625,53 @@ const VirtualOfficeContent: React.FC = () => {
     });
   }, [agents]);
 
+  const coreAgents = useMemo(
+    () => allAgents.filter((agent) => agent.id !== 'antigravity'),
+    [allAgents]
+  );
+
   const modelUpgradeOptions = useMemo(
     () => buildModelUpgradeOptions(allAgents),
     [allAgents]
   );
 
+  const liveCoreModelValues = useMemo(() => {
+    return Array.from(new Set(
+      coreAgents
+        .map((agent) => normalizeUpgradeModelValue(agent.currentModelRaw || agent.currentModel || ''))
+        .filter(Boolean)
+    ));
+  }, [coreAgents]);
+
+  const liveCoreModelLabel = useMemo(() => {
+    if (liveCoreModelValues.length === 0) return 'Unknown';
+    if (liveCoreModelValues.length === 1) return normalizeUpgradeModelLabel(liveCoreModelValues[0]);
+    return `Mixed (${liveCoreModelValues.map((value) => normalizeUpgradeModelLabel(value)).join(' · ')})`;
+  }, [liveCoreModelValues]);
+
   useEffect(() => {
     if (modelUpgradeOptions.length === 0) return;
-    if (!modelUpgradeOptions.some((option) => option.value === allModelUpgradeTarget)) {
-      setAllModelUpgradeTarget(modelUpgradeOptions[0].value);
-    }
-  }, [allModelUpgradeTarget, modelUpgradeOptions]);
+    const liveCoreModel = liveCoreModelValues.length === 1 ? liveCoreModelValues[0] : '';
+    const preferredTarget = modelUpgradeOptions.some((option) => option.value === liveCoreModel)
+      ? liveCoreModel
+      : modelUpgradeOptions.some((option) => option.value === DEFAULT_MODEL_UPGRADE_TARGET)
+        ? DEFAULT_MODEL_UPGRADE_TARGET
+        : modelUpgradeOptions[0].value;
 
-  const workingCount = useMemo(() => allAgents.filter((a) => a.status === 'working').length, [allAgents]);
-  const idleCount = useMemo(() => allAgents.filter((a) => a.status === 'idle').length, [allAgents]);
+    setAllModelUpgradeTarget((current) => {
+      if (!modelUpgradeOptions.some((option) => option.value === current)) {
+        return preferredTarget;
+      }
+      if (current === DEFAULT_MODEL_UPGRADE_TARGET && preferredTarget !== current) {
+        return preferredTarget;
+      }
+      return current;
+    });
+  }, [liveCoreModelValues, modelUpgradeOptions]);
+
+  const workingCount = useMemo(() => coreAgents.filter((a) => a.status === 'working').length, [coreAgents]);
+  const idleCount = useMemo(() => coreAgents.filter((a) => a.status === 'idle').length, [coreAgents]);
+  const coreAgentCount = useMemo(() => coreAgents.length, [coreAgents]);
 
   // Overall progress across all working agents
   const overallProgress = useMemo(() => {
@@ -4150,11 +4189,17 @@ const VirtualOfficeContent: React.FC = () => {
                     : 'Restart Agents'}
             </button>
             <div className="flex items-center gap-2">
+              <div
+                className="text-[11px] px-2 py-1 rounded-lg border border-emerald-500/20 bg-emerald-900/20 text-emerald-200"
+                title="Live model currently reported by the core agent presence documents"
+              >
+                Live: {liveCoreModelLabel}
+              </div>
               <select
                 value={allModelUpgradeTarget}
                 onChange={(e) => setAllModelUpgradeTarget(e.target.value)}
                 disabled={queueingModelUpgrade}
-                title="Select model for upgrading Nora, Scout, Solara, and Sage"
+                title="Select upgrade target for Nora, Scout, Solara, and Sage"
                 className="text-xs h-8 px-2 rounded-lg border border-sky-500/30 bg-sky-900/25 text-sky-200"
                 style={{
                   minWidth: '220px',
@@ -4204,22 +4249,22 @@ const VirtualOfficeContent: React.FC = () => {
           <div className="stat-chip">
             <div className="stat-dot working" />
             <div>
-              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Working</p>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Core Working</p>
               <p className="text-lg font-semibold text-white">{workingCount}</p>
             </div>
           </div>
           <div className="stat-chip">
             <div className="stat-dot idle" />
             <div>
-              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Idle</p>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Core Idle</p>
               <p className="text-lg font-semibold text-white">{idleCount}</p>
             </div>
           </div>
           <div className="stat-chip">
             <div className="stat-dot total" />
             <div>
-              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Total</p>
-              <p className="text-lg font-semibold text-white">{allAgents.length}</p>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Core Agents</p>
+              <p className="text-lg font-semibold text-white">{coreAgentCount}</p>
             </div>
           </div>
           {overallProgress !== null && (

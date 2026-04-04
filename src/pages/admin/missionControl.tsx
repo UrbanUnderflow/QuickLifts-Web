@@ -87,6 +87,7 @@ interface AgentTask {
     name: string;
     status: string;
     assignee: string;
+    updatedAt?: Timestamp;
     priority?: string;
     priorityScore?: number;
     northStarObjective?: string;
@@ -148,8 +149,9 @@ type ModelUpgradeOption = {
     label: string;
 };
 
-const DEFAULT_MODEL_UPGRADE_TARGET = 'openai/gpt-5.3-codex';
+const DEFAULT_MODEL_UPGRADE_TARGET = 'openai-codex/gpt-5.4';
 const MODEL_UPGRADE_OPTIONS: ModelUpgradeOption[] = [
+    { value: 'openai-codex/gpt-5.4', label: 'OpenAI Codex: gpt-5.4' },
     { value: 'openai/gpt-5.3-codex', label: 'OpenAI: gpt-5.3-codex' },
     { value: 'openai/gpt-5.2-codex', label: 'OpenAI: gpt-5.2-codex' },
     { value: 'openai/gpt-5.1-codex-max', label: 'OpenAI: gpt-5.1-codex-max' },
@@ -624,18 +626,46 @@ export default function MissionControlPage() {
         return unsub;
     }, []);
 
-    // Live agent tasks (recent in-progress and todo)
+    // Live agent tasks
     useEffect(() => {
-        const q = query(
-            collection(db, 'agent-tasks'),
-            where('status', 'in', ['todo', 'in-progress', 'done', 'needs-spec', 'quarantined', 'needs-review', 'blocked']),
-            limit(200)
-        );
+        const q = mission?.missionId
+            ? query(
+                collection(db, 'agent-tasks'),
+                where('missionId', '==', mission.missionId),
+                limit(200)
+            )
+            : query(
+                collection(db, 'agent-tasks'),
+                where('status', 'in', ['todo', 'in-progress', 'done', 'needs-spec', 'quarantined', 'needs-review', 'blocked']),
+                limit(200)
+            );
         const unsub = onSnapshot(q, (snap) => {
+            const filteredDocs = snap.docs.filter((doc) => {
+                if (mission?.missionId) return true;
+                const status = String(doc.data()?.status || '').toLowerCase();
+                return ['todo', 'in-progress', 'done', 'needs-spec', 'quarantined', 'needs-review', 'blocked'].includes(status);
+            });
+
             // Sort client-side to avoid composite index requirement
-            const sorted = snap.docs.slice().sort((a, b) => {
-                const aTime = a.data().updatedAt?.toMillis?.() ?? 0;
-                const bTime = b.data().updatedAt?.toMillis?.() ?? 0;
+            const sorted = filteredDocs.slice().sort((a, b) => {
+                const aData = a.data() as AgentTask;
+                const bData = b.data() as AgentTask;
+                const statusRank = (value?: string) => {
+                    switch (String(value || '').toLowerCase()) {
+                        case 'in-progress': return 0;
+                        case 'todo': return 1;
+                        case 'blocked': return 2;
+                        case 'needs-spec': return 3;
+                        case 'needs-review': return 4;
+                        case 'done': return 5;
+                        case 'quarantined': return 6;
+                        default: return 7;
+                    }
+                };
+                const rankDiff = statusRank(aData.status) - statusRank(bData.status);
+                if (rankDiff !== 0) return rankDiff;
+                const aTime = aData.updatedAt?.toMillis?.() ?? 0;
+                const bTime = bData.updatedAt?.toMillis?.() ?? 0;
                 return bTime - aTime;
             });
             const byAgent: Record<string, AgentTask[]> = {};
@@ -651,7 +681,7 @@ export default function MissionControlPage() {
 
         });
         return unsub;
-    }, []);
+    }, [mission?.missionId]);
 
     const handleLaunch = useCallback(async (force = false) => {
         if (!northStar?.title) {
@@ -1296,6 +1326,7 @@ export default function MissionControlPage() {
                                 const tasks = agentTasks[agent.id] || [];
                                 const inProgress = tasks.filter(t => t.status === 'in-progress');
                                 const todo = tasks.filter(t => t.status === 'todo');
+                                const blocked = tasks.filter(t => t.status === 'blocked');
                                 const done = tasks.filter(t => t.status === 'done').slice(0, 2);
                                 const allVisible = [...tasks].slice(0, 5);
 
@@ -1307,7 +1338,8 @@ export default function MissionControlPage() {
                                                 <p style={{ ...S.agentName, color: agent.color }}>{agent.name}</p>
                                                 <p style={S.agentObjective}>
                                                     {inProgress.length > 0 ? `${inProgress.length} in progress` :
-                                                        todo.length > 0 ? `${todo.length} queued` : 'Idle'}
+                                                        todo.length > 0 ? `${todo.length} queued` :
+                                                            blocked.length > 0 ? `${blocked.length} blocked` : 'Idle'}
                                                 </p>
                                             </div>
                                         </div>

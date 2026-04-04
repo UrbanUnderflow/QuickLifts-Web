@@ -137,7 +137,7 @@ export interface TaskHistoryEntry {
 }
 
 const COLLECTION = 'agent-presence';
-const MODEL_UPGRADE_DEFAULT = 'openai/gpt-5.3-codex';
+const MODEL_UPGRADE_DEFAULT = 'openai-codex/gpt-5.4';
 const MODEL_UPGRADE_TARGETS = ['nora', 'scout', 'solara', 'sage'] as const;
 const OPENCLAW_PROFILE_IDS: Record<string, string[]> = {
   nora: ['main', 'main-light', 'main-med'],
