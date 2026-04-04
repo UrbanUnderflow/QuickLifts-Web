@@ -25,14 +25,15 @@ const messaging = admin.messaging();
  * @param {object} customData Additional data to send with the notification.
  * @returns {Promise<object>} Result object with success status and message.
  */
-async function sendNotification(fcmToken, title, body, customData = {}) {
+async function sendNotification(fcmToken, title, body, customData = {}, loggingContext = {}) {
   return await sendNotificationWithLogging(
     fcmToken, 
     title, 
     body, 
     customData, 
     'SINGLE_NOTIFICATION', 
-    'sendSingleNotification'
+    'sendSingleNotification',
+    loggingContext
   );
 }
 
@@ -61,7 +62,7 @@ const sendSingleNotification = onCall(async (request) => {
   logger.info('Received notification request with data:', JSON.stringify(inputData)); // Use Gen 2 logger
   
   // Validate input
-  const { fcmToken, payload } = inputData;
+  const { fcmToken, payload, recipient } = inputData;
   
   if (!fcmToken || !payload?.notification?.title || !payload?.notification?.body) {
     logger.error('Missing required parameters:', JSON.stringify(inputData)); // Use Gen 2 logger
@@ -77,7 +78,10 @@ const sendSingleNotification = onCall(async (request) => {
       fcmToken,
       payload.notification.title,
       payload.notification.body,
-      payload.data || {}
+      payload.data || {},
+      {
+        recipients: recipient ? [recipient] : (payload?.recipient ? [payload.recipient] : [])
+      }
     );
 
     return result; // Return data directly in Gen 2

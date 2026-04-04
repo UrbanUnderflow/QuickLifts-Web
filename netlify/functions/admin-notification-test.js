@@ -74,6 +74,30 @@ function resolveScopedFcmToken(userData, productScope) {
   };
 }
 
+function truncateToken(token) {
+  if (!token) return 'MISSING';
+  return `${String(token).substring(0, 20)}...`;
+}
+
+function normalizeRecipients(recipients = [], fcmToken) {
+  if (Array.isArray(recipients) && recipients.length > 0) {
+    return recipients
+      .filter((recipient) => recipient && typeof recipient === 'object')
+      .map((recipient) => ({
+        userId: recipient.userId || recipient.uid || recipient.id || null,
+        username: recipient.username || null,
+        displayName: recipient.displayName || recipient.name || null,
+        email: recipient.email || null,
+        tokenPreview: recipient.tokenPreview || truncateToken(recipient.fcmToken || recipient.token || fcmToken),
+        deliveryChannel: recipient.deliveryChannel || recipient.channel || (recipient.email ? 'email' : 'push'),
+      }))
+      .map((recipient) => Object.fromEntries(Object.entries(recipient).filter(([, value]) => value !== null && value !== '')))
+      .filter((recipient) => Object.keys(recipient).length > 0);
+  }
+
+  return fcmToken ? [{ tokenPreview: truncateToken(fcmToken), deliveryChannel: 'push' }] : [];
+}
+
 async function logNotification({
   fcmToken,
   title,
@@ -85,12 +109,14 @@ async function logNotification({
   messageId = null,
   error = null,
   additionalContext = {},
+  recipients = [],
 }) {
   try {
     const FieldValue = admin.firestore.FieldValue;
+    const normalizedRecipients = normalizeRecipients(recipients, fcmToken);
 
     await db.collection('notification-logs').add({
-      fcmToken: fcmToken ? `${String(fcmToken).substring(0, 20)}...` : 'MISSING',
+      fcmToken: truncateToken(fcmToken),
       title,
       body,
       dataPayload,
@@ -106,6 +132,13 @@ async function logNotification({
           }
         : null,
       additionalContext,
+      recipients: normalizedRecipients,
+      recipientSummary: {
+        total: normalizedRecipients.length,
+        identifiedUsers: normalizedRecipients.filter(
+          (recipient) => recipient.userId || recipient.username || recipient.displayName || recipient.email
+        ).length,
+      },
       timestamp: FieldValue.serverTimestamp(),
       timestampEpoch: Math.floor(Date.now() / 1000),
       createdAt: FieldValue.serverTimestamp(),
@@ -124,6 +157,7 @@ async function sendNotificationWithLogging({
   notificationType,
   functionName,
   additionalContext,
+  recipients = [],
 }) {
   const messaging = admin.messaging();
   const message = {
@@ -159,6 +193,7 @@ async function sendNotificationWithLogging({
       success: true,
       messageId,
       additionalContext,
+      recipients,
     });
 
     return { success: true, messageId };
@@ -173,6 +208,7 @@ async function sendNotificationWithLogging({
       success: false,
       error,
       additionalContext,
+      recipients,
     });
     throw error;
   }
@@ -275,6 +311,14 @@ async function handleSend(event) {
     dataPayload,
     notificationType,
     functionName: 'netlify/admin-notification-test',
+    recipients: [{
+      userId: userDoc.id,
+      username: userData.username || '',
+      displayName: userData.displayName || '',
+      email: userData.email || '',
+      fcmToken,
+      deliveryChannel: 'push',
+    }],
     additionalContext: {
       mode: 'admin-test',
       userId: userDoc.id,

@@ -421,6 +421,7 @@ export const handler: Handler = async (event) => {
         let totalFail = 0;
         let roundsProcessed = 0;
         const errors: string[] = [];
+        const recipients: Array<Record<string, string | boolean | null>> = [];
 
         for (const collDoc of activeRounds) {
             const collData = collDoc.data as any;
@@ -503,6 +504,17 @@ export const handler: Handler = async (event) => {
                 };
 
                 const result = await sendNotification(messaging, fcmToken, title, body, dataPayload);
+                recipients.push({
+                    userId: String(uc.userId || ''),
+                    username: String(uc.username || ''),
+                    displayName: String(uc.displayName || ''),
+                    email: String(uc.email || ''),
+                    tokenPreview: `${String(fcmToken).substring(0, 20)}...`,
+                    deliveryChannel: 'push',
+                    success: result.success,
+                    messageId: result.messageId || null,
+                    error: result.error || null,
+                });
 
                 if (result.success) {
                     totalSuccess++;
@@ -521,6 +533,7 @@ export const handler: Handler = async (event) => {
             totalSuccess,
             totalFail,
             totalAttempted: totalSuccess + totalFail,
+            recipients,
             errors: errors.slice(0, 20),
             createdAt: new Date(),
         });

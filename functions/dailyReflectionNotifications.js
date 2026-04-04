@@ -111,10 +111,23 @@ async function sendReflectionNotification(userId, fcmToken, prompt) {
     await db.collection('notification-logs').add({
       userId,
       type: 'MENTAL_CHECKIN',
+      notificationType: 'MENTAL_CHECKIN',
+      functionName: 'scheduledDailyReflection',
       title: prompt.title,
       body: prompt.body,
       webUrl,
       success: true,
+      fcmToken: fcmToken ? `${String(fcmToken).substring(0, 20)}...` : 'MISSING',
+      recipients: [{
+        userId,
+        tokenPreview: fcmToken ? `${String(fcmToken).substring(0, 20)}...` : 'MISSING',
+        deliveryChannel: 'push',
+      }],
+      recipientSummary: {
+        total: 1,
+        identifiedUsers: 1,
+      },
+      timestampEpoch: Math.floor(Date.now() / 1000),
       sentAt: admin.firestore.FieldValue.serverTimestamp()
     });
     
