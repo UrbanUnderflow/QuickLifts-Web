@@ -174,6 +174,34 @@ test('public guest invite endpoint resolves an invite by stored token and honors
     },
     inviteDocs: [
       {
+        id: 'host-token',
+        data: {
+          token: 'host-token',
+          name: 'Tremaine Grant',
+          email: 'tre@fitwithpulse.ai',
+          imageUrl: 'https://images.example.com/tre.png',
+          participantType: 'host',
+          shareUrl: 'https://fitwithpulse.ai/group-meet/host-token',
+          availabilityEntries: [{ date: '2026-04-01', startMinutes: 540, endMinutes: 600 }],
+          responseSubmittedAt: makeTimestamp('2026-03-31T12:00:00.000Z'),
+          hasResponse: true,
+        },
+      },
+      {
+        id: 'guest-two-token',
+        data: {
+          token: 'guest-two-token',
+          name: 'Valerie Alexander',
+          email: 'valerie@speakhappiness.com',
+          imageUrl: 'https://images.example.com/valerie.png',
+          participantType: 'participant',
+          shareUrl: 'https://fitwithpulse.ai/group-meet/guest-two-token',
+          availabilityEntries: [{ date: '2026-04-01', startMinutes: 780, endMinutes: 840 }],
+          responseSubmittedAt: makeTimestamp('2026-03-31T12:15:00.000Z'),
+          hasResponse: true,
+        },
+      },
+      {
         id: '40423acc545435231ec30c716f2f289d20c3609c67db7540',
         data: {
           token: '40423acc545435231ec30c716f2f289d20c3609c67db7540',
@@ -206,5 +234,14 @@ test('public guest invite endpoint resolves an invite by stored token and honors
     'https://fitwithpulse.ai/group-meet/40423acc545435231ec30c716f2f289d20c3609c67db7540'
   );
   assert.equal(res.payload.invite.request.title, 'Pulse Intelligence Labs Advisory Board Meeting');
+  assert.equal(res.payload.invite.peerAvailability.length, 2);
+  assert.deepEqual(
+    res.payload.invite.peerAvailability.map((participant) => participant.name),
+    ['Tremaine Grant', 'Valerie Alexander']
+  );
+  assert.deepEqual(
+    res.payload.invite.peerAvailability[0].availabilityEntries,
+    [{ date: '2026-04-01', startMinutes: 540, endMinutes: 600 }]
+  );
   assert.equal(state.firebaseAppSelections[0], true);
 });

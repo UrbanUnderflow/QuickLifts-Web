@@ -6,6 +6,7 @@ import { Calendar, CheckCircle2, Loader2 } from 'lucide-react';
 import GroupMeetAvailabilityPicker from '../../components/group-meet/GroupMeetAvailabilityPicker';
 import {
   type GroupMeetAvailabilitySlot,
+  type GroupMeetSharedAvailabilityParticipant,
 } from '../../lib/groupMeet';
 
 type InviteResponse = {
@@ -17,6 +18,7 @@ type InviteResponse = {
     shareUrl: string;
     responseSubmittedAt: string | null;
     availabilityEntries: GroupMeetAvailabilitySlot[];
+    peerAvailability: GroupMeetSharedAvailabilityParticipant[];
     deadlinePassed: boolean;
     request: {
       id: string;
@@ -188,10 +190,11 @@ const GroupMeetInvitePage: React.FC = () => {
               <GroupMeetAvailabilityPicker
                 targetMonth={invite.request.targetMonth}
                 availabilityEntries={availabilityEntries}
+                peerAvailability={invite.peerAvailability}
                 onChange={setAvailabilityEntries}
                 disabled={invite.deadlinePassed}
                 title="Calendar"
-                subtitle="Tap the days that work and add the time ranges that are actually good for you."
+                subtitle="Tap the days that work, add your times, and hover the guest images to see who has already replied."
               />
             </div>
 
