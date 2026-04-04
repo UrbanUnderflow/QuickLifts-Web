@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import { useRouter } from 'next/router';
 import { X, Package, ExternalLink, FileText, ChevronRight, RefreshCw, Check, XCircle } from 'lucide-react';
 import { MarkdownRenderer } from '../MarkdownRenderer';
-import { collection, query, orderBy, limit, getDocs, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, query, orderBy, limit, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 
 /* ─── types ─── */
@@ -17,9 +17,16 @@ interface Deliverable {
   emoji: string;
   tags: string[];
   status: string;
+  verificationState?: string;
+  verificationSource?: string;
+  spotCheckRequired?: boolean;
+  sampledForReview?: boolean;
+  movementScore?: number;
+  objectiveId?: string;
   reviewReason?: string;
   completedAt?: string;
   taskRef?: string;
+  taskId?: string;
   agentId: string;
   deliveryClass?: 'decision-grade' | 'supporting' | 'internal';
   movementSignals?: {
@@ -78,7 +85,11 @@ const normalizeDeliverableStatus = (value?: string): string => {
     return 'work';
   }
   if (normalized === 'needsreview') return 'needs-review';
-  if (normalized === 'approved' || normalized === 'reject' || normalized === 'rejected') return normalized === 'rejected' ? 'needs-review' : 'approved';
+  if (normalized === 'approved' || normalized === 'verified') return 'verified-human';
+  if (normalized === 'verified-auto' || normalized === 'verified-human' || normalized === 'needs-review' || normalized === 'rejected' || normalized === 'work') {
+    return normalized;
+  }
+  if (normalized === 'reject') return 'rejected';
   return normalized || 'work';
 };
 
@@ -305,10 +316,17 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
           emoji: ARTIFACT_EMOJI[data.artifactType] || '📄',
           tags: data.tags || [data.artifactType || 'document'].filter(Boolean),
           changeType: normalizeDeliverableChangeType(data.changeType),
-          status: normalizeDeliverableStatus(data.status),
+          status: normalizeDeliverableStatus(data.verificationState || data.status),
+          verificationState: normalizeDeliverableStatus(data.verificationState || data.status),
+          verificationSource: data.verificationSource || '',
+          spotCheckRequired: data.spotCheckRequired === true,
+          sampledForReview: data.sampledForReview === true,
+          movementScore: Number(data.movementScore || 0),
+          objectiveId: data.objectiveId || '',
           reviewReason: data.reviewReason || '',
           completedAt: data.createdAt?.toDate?.()?.toISOString?.() || undefined,
           taskRef: data.taskName || data.taskId || undefined,
+          taskId: data.taskId || '',
           agentId: data.agentId || 'unknown',
           deliveryClass: normalizeDeliveryClass(data.deliveryClass),
         } as Deliverable;
@@ -393,11 +411,11 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
 
   const statusCounts = {
     all: deliverables.length,
-    needsReview: deliverables.filter((d) => normalizeDeliverableStatus(d.status) === 'needs-review').length,
-    approved: deliverables.filter((d) => normalizeDeliverableStatus(d.status) === 'approved').length,
+    needsReview: deliverables.filter((d) => ['needs-review', 'rejected'].includes(normalizeDeliverableStatus(d.status))).length,
+    approved: deliverables.filter((d) => ['verified-auto', 'verified-human'].includes(normalizeDeliverableStatus(d.status))).length,
     work: deliverables.filter((d) => {
       const status = normalizeDeliverableStatus(d.status);
-      return status !== 'needs-review' && status !== 'approved';
+      return !['needs-review', 'rejected', 'verified-auto', 'verified-human'].includes(status);
     }).length,
   };
   const movementClassCounts = {
@@ -407,8 +425,8 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
     internal: deliverables.filter((d) => (d.deliveryClass || 'supporting') === 'internal').length,
   };
 
-  const isNeedsReview = (status?: string) => normalizeDeliverableStatus(status) === 'needs-review';
-  const isApproved = (status?: string) => normalizeDeliverableStatus(status) === 'approved';
+  const isNeedsReview = (status?: string) => ['needs-review', 'rejected'].includes(normalizeDeliverableStatus(status));
+  const isApproved = (status?: string) => ['verified-auto', 'verified-human'].includes(normalizeDeliverableStatus(status));
   const isDecisionGrade = (deliveryClass?: string) => (deliveryClass || 'supporting') === 'decision-grade';
   const isSupporting = (deliveryClass?: string) => (deliveryClass || 'supporting') === 'supporting';
   const isInternal = (deliveryClass?: string) => (deliveryClass || 'supporting') === 'internal';
@@ -432,14 +450,20 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
     });
 
 const statusBadge = (status?: string) => {
+    const normalized = normalizeDeliverableStatus(status);
     if (isNeedsReview(status)) {
-      return { className: 'needs-review', label: 'NEEDS REVIEW' };
+      return normalized === 'rejected'
+        ? { className: 'rejected', label: 'REJECTED' }
+        : { className: 'needs-review', label: 'NEEDS REVIEW' };
     }
-    if (isApproved(status)) {
-      return { className: 'approved', label: 'APPROVED' };
+    if (normalized === 'verified-auto') {
+      return { className: 'approved', label: 'VERIFIED AUTO' };
+    }
+    if (normalized === 'verified-human') {
+      return { className: 'approved', label: 'VERIFIED HUMAN' };
     }
     if (status === 'pending-recovery') return { className: 'work', label: 'WORK' };
-    if (status === 'complete') return { className: 'approved', label: 'APPROVED' };
+    if (status === 'complete') return { className: 'approved', label: 'VERIFIED HUMAN' };
     return { className: 'work', label: 'WORK' };
   };
 
@@ -468,10 +492,14 @@ const statusBadge = (status?: string) => {
   const handleApprove = async (deliverableId: string) => {
     try {
       await updateDoc(doc(db, 'agent-deliverables', deliverableId), {
-        status: 'approved',
+        status: 'verified-human',
+        verificationState: 'verified-human',
+        verificationSource: 'human-review',
         reviewedAt: serverTimestamp(),
       });
-      setDeliverables((current) => current.map((item) => item.id === deliverableId ? { ...item, status: 'approved' } : item));
+      setDeliverables((current) => current.map((item) => item.id === deliverableId
+        ? { ...item, status: 'verified-human', verificationState: 'verified-human', verificationSource: 'human-review' }
+        : item));
     } catch (err) {
       console.error('Failed to approve deliverable:', err);
     }
@@ -479,18 +507,56 @@ const statusBadge = (status?: string) => {
 
   const handleDeny = async (deliverable: Deliverable) => {
     const title = deliverable.title || deliverable.filename || 'this deliverable';
-    const confirmed = window.confirm(`Delete ${title}? This will remove it from Shared Deliverables.`);
+    const reviewReason = window.prompt(`Reject ${title}. Why does it need correction?`, deliverable.reviewReason || 'Needs correction before approval.');
+    if (reviewReason === null) return;
+    const confirmed = window.confirm(`Reject ${title} and keep it in the audit trail?`);
     if (!confirmed) return;
 
     try {
-      await deleteDoc(doc(db, 'agent-deliverables', deliverable.id));
-      setDeliverables((current) => current.filter((item) => item.id !== deliverable.id));
-      if (expandedId === deliverable.id) {
-        setExpandedId(null);
-        setFileContent('');
+      await updateDoc(doc(db, 'agent-deliverables', deliverable.id), {
+        status: 'rejected',
+        verificationState: 'rejected',
+        verificationSource: 'human-review',
+        reviewReason: reviewReason.trim() || 'Rejected in Shared Deliverables.',
+        reviewedAt: serverTimestamp(),
+      });
+
+      if (deliverable.taskId) {
+        await updateDoc(doc(db, 'agent-tasks', deliverable.taskId), {
+          status: 'needs-review',
+          reviewReason: reviewReason.trim() || 'Rejected from Shared Deliverables.',
+          updatedAt: serverTimestamp(),
+        }).catch(() => undefined);
+
+        await addDoc(collection(db, 'agent-tasks'), {
+          name: `[CORRECTION] ${deliverable.title}`,
+          description: `Human review rejected deliverable "${deliverable.title}".\n\nReason: ${reviewReason.trim() || 'Rejected from Shared Deliverables.'}\n\nOriginal deliverable path: ${deliverable.filePath || 'n/a'}`,
+          assignee: getAgent(deliverable.agentId).displayName,
+          status: 'needs-spec',
+          priority: 'high',
+          source: 'human-spot-check',
+          taskClass: 'correction',
+          plannerSource: 'mission-supervisor',
+          specVersion: 2,
+          mode: 'execute',
+          objectiveId: deliverable.objectiveId || '',
+          originalTaskId: deliverable.taskId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }).catch(() => undefined);
       }
+
+      setDeliverables((current) => current.map((item) => item.id === deliverable.id
+        ? {
+          ...item,
+          status: 'rejected',
+          verificationState: 'rejected',
+          verificationSource: 'human-review',
+          reviewReason: reviewReason.trim() || 'Rejected in Shared Deliverables.',
+        }
+        : item));
     } catch (err) {
-      console.error('Failed to delete deliverable:', err);
+      console.error('Failed to reject deliverable:', err);
     }
   };
 
@@ -710,6 +776,18 @@ const statusBadge = (status?: string) => {
                         <span>{d.reviewReason}</span>
                       </div>
                     )}
+                    {(d.spotCheckRequired || d.sampledForReview || d.verificationSource) && (
+                      <div className="sd-review-note">
+                        <strong>Verification:</strong>
+                        <span>
+                          {d.verificationState || 'work'}
+                          {d.verificationSource ? ` via ${d.verificationSource}` : ''}
+                          {d.spotCheckRequired ? ' · spot-check required' : ''}
+                          {d.sampledForReview ? ' · sampled for review' : ''}
+                          {d.movementScore ? ` · movement ${d.movementScore}` : ''}
+                        </span>
+                      </div>
+                    )}
                     {d.tags.length > 0 && (
                       <div className="sd-tags">
                         {d.tags.map((t) => (
@@ -733,21 +811,21 @@ const statusBadge = (status?: string) => {
                         </div>
                       )}
                     </div>
-                  {isNeedsReview(d.status) && (
+                  {(isNeedsReview(d.status) || d.status === 'verified-auto' || d.spotCheckRequired) && (
                     <div className="sd-review-actions">
                         <button
                           className="sd-approve-btn"
                           onClick={() => handleApprove(d.id)}
                         >
                           <Check className="w-3.5 h-3.5" />
-                          Keep
+                          Verify
                         </button>
                         <button
                           className="sd-deny-btn"
                           onClick={() => handleDeny(d)}
                         >
                           <XCircle className="w-3.5 h-3.5" />
-                          Delete
+                          Reject
                         </button>
                       </div>
                     )}
@@ -971,6 +1049,10 @@ const statusBadge = (status?: string) => {
         .sd-status-badge.approved {
           background: rgba(16,185,129,0.12); color: #34d399;
           border: 1px solid rgba(16,185,129,0.2);
+        }
+        .sd-status-badge.rejected {
+          background: rgba(239,68,68,0.12); color: #f87171;
+          border: 1px solid rgba(239,68,68,0.2);
         }
         .sd-date {
           font-size: 10px; color: #52525b;
