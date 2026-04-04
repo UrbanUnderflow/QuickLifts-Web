@@ -4,6 +4,16 @@
 
 What exact source-of-truth path proves the canary is successful, and what has to be true before we can honestly say the container is ready for downstream invites?
 
+## Method note
+
+This pass used a fallback research path after diagnosing an environment/tooling issue:
+
+- `rg`/ripgrep is not installed on this machine
+- earlier failure was operational, not analytical: the task runner error was triggered while narrating intermediate progress, not because the proof-path research was wrong
+- verification in this pass relied on `grep`, `python3`, direct file reads, and existing Firestore-facing code paths instead of retrying the missing-tool workflow
+
+That fallback was sufficient for Step 1 because this step is a contract-definition and source-of-truth mapping task, not a dependency-installation task.
+
 ## Short answer
 
 The canary is **not complete** when the org and team shells merely exist, and it is **not complete** when an activation link has merely been generated.
