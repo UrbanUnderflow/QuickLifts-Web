@@ -32,6 +32,7 @@ If a claim is not backed by an entry here, it must be written as `Unverified` (n
 | LEAD-0004 | WellnessLife | Wellness | Discovery | UNVERIFIED | 2026-02-19 | Sage | Imported from legacy synthesis docs. Primary evidence not yet logged. |
 | LEAD-0005 | WearTech | Wearables | Discovery | UNVERIFIED | 2026-02-19 | Sage | Imported from legacy synthesis docs. Primary evidence not yet logged. |
 | LEAD-0006 | MoveWear | Wearables | Discovery | UNVERIFIED | 2026-02-19 | Sage | Imported from legacy synthesis docs. Primary evidence not yet logged. |
+| LEAD-0007 | Revival Strength / Functional Bodybuilding | Coach-led fitness organization | Discovery | NO_CONFIRMED_INTEREST | 2026-04-04 | Scout | Public website confirms Marcus Filly as founder and shows a multi-coach Persist program; no verified collaboration interest logged. |
 
 ## Evidence Log
 
@@ -40,6 +41,8 @@ If a claim is not backed by an entry here, it must be written as `Unverified` (n
 | EVID-0001 | 2026-02-19 | LEAD-0002 | Operator correction | Chat instruction in this thread | User confirmed PulseFit has not expressed interest in collaborating. | Codex | CONFIRMED_BY_OWNER |
 | EVID-0002 | 2026-02-19 | LEAD-0001 | Legacy document import | docs/synthesis/strategic_partnerships_prospect_brief.md | Legacy file states "ongoing integration discussions." Source evidence not attached. | Codex | UNVERIFIED_IMPORT |
 | EVID-0003 | 2026-02-19 | LEAD-0003 | Legacy document import | docs/synthesis/prospect_qualification.md | Legacy file includes readiness/compliance claims without primary source links. | Codex | UNVERIFIED_IMPORT |
+| EVID-0004 | 2026-04-04 | LEAD-0007 | Public website | https://functional-bodybuilding.com/pages/about | Official about page identifies Marcus Filly as founder of Functional Bodybuilding and lists multiple Persist coaches under Revival Strength copyright. | Scout | PUBLIC_SOURCE |
+| EVID-0005 | 2026-04-04 | LEAD-0007 | Public website | https://functional-bodybuilding.com/pages/persist | Official Persist page describes an active training program with structured participation options, supporting use of Persist as the initial team construct. | Scout | PUBLIC_SOURCE |
 
 ## Interaction Log
 
