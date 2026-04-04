@@ -641,6 +641,7 @@ const toTeamMembership = (id: string, data: Record<string, any>): PulseCheckTeam
   postActivationCompletedAt: data.postActivationCompletedAt || null,
   grantedByInviteToken: data.grantedByInviteToken || '',
   grantedAt: data.grantedAt || null,
+  handoffMetadata: data.handoffMetadata || undefined,
   commercialAccess: data.commercialAccess
     ? buildTeamCommercialSnapshot({
         organizationId: data.organizationId || '',
@@ -662,6 +663,7 @@ const toOrganizationMembership = (id: string, data: Record<string, any>): PulseC
   status: data.status || 'active',
   grantedByInviteToken: data.grantedByInviteToken || '',
   grantedAt: data.grantedAt || null,
+  handoffMetadata: data.handoffMetadata || undefined,
   createdAt: data.createdAt || null,
   updatedAt: data.updatedAt || null,
 });

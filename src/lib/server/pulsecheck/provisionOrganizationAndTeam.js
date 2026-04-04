@@ -3,6 +3,8 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
+const ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
+const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -300,10 +302,139 @@ async function provisionPulseCheckOrganizationAndTeam({ adminApp, input }) {
   return result;
 }
 
+function buildReservedAdminPrincipal(input) {
+  const ownerName = normalizeString(input.ownerName);
+  const ownerEmail = normalizeEmail(input.ownerEmail);
+  const handoffKey = normalizeString(input.handoffKey) || slugify(ownerName || ownerEmail || 'external-owner');
+  const reservedUserId = `pending-admin:${handoffKey}`;
+
+  return {
+    handoffKey,
+    reservedUserId,
+    ownerName,
+    ownerEmail,
+  };
+}
+
+async function seedInitialPulseCheckAdminHandoff({ adminApp, input }) {
+  if (!adminApp) {
+    throw new Error('adminApp is required');
+  }
+
+  const firestore = typeof adminApp.collection === 'function' ? adminApp : getFirestore(adminApp);
+  const now = FieldValue.serverTimestamp();
+  const organizationId = normalizeString(input.organizationId);
+  const teamId = normalizeString(input.teamId);
+  if (!organizationId || !teamId) {
+    throw new Error('organizationId and teamId are required');
+  }
+
+  const principal = buildReservedAdminPrincipal({
+    handoffKey: input.handoffKey,
+    ownerName: input.targetOwnerName,
+    ownerEmail: input.targetOwnerEmail,
+  });
+  const actorLabel = normalizeString(input.actorLabel) || 'pulsecheck-admin-handoff-seeder';
+
+  const organizationRef = firestore.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const teamRef = firestore.collection(TEAMS_COLLECTION).doc(teamId);
+  const organizationMembershipRef = firestore
+    .collection(ORGANIZATION_MEMBERSHIPS_COLLECTION)
+    .doc(`${organizationId}_${principal.reservedUserId}`);
+  const teamMembershipRef = firestore
+    .collection(TEAM_MEMBERSHIPS_COLLECTION)
+    .doc(`${teamId}_${principal.reservedUserId}`);
+
+  return firestore.runTransaction(async (transaction) => {
+    const [organizationSnap, teamSnap, organizationMembershipSnap, teamMembershipSnap] = await Promise.all([
+      transaction.get(organizationRef),
+      transaction.get(teamRef),
+      transaction.get(organizationMembershipRef),
+      transaction.get(teamMembershipRef),
+    ]);
+
+    if (!organizationSnap.exists) {
+      throw new Error(`Organization not found: ${organizationId}`);
+    }
+    if (!teamSnap.exists) {
+      throw new Error(`Team not found: ${teamId}`);
+    }
+
+    const teamData = teamSnap.data() || {};
+    if (normalizeString(teamData.organizationId) !== organizationId) {
+      throw new Error('Team is linked to a different organizationId.');
+    }
+
+    const handoffMetadata = {
+      state: 'reserved-pending-activation',
+      handoffKey: principal.handoffKey,
+      targetOwnerName: principal.ownerName,
+      targetOwnerEmail: principal.ownerEmail,
+      sourceBriefPath: normalizeString(input.sourceBriefPath),
+      selectedTargetLeadId: normalizeString(input.selectedTargetLeadId),
+      selectedTargetEvidenceIds: uniqueStrings(input.selectedTargetEvidenceIds),
+      reservedBy: actorLabel,
+      reservedAt: now,
+      notes: normalizeString(input.notes),
+    };
+
+    transaction.set(
+      organizationMembershipRef,
+      {
+        organizationId,
+        userId: principal.reservedUserId,
+        email: principal.ownerEmail,
+        role: 'org-admin',
+        status: 'active',
+        grantedAt: organizationMembershipSnap.exists ? organizationMembershipSnap.data()?.grantedAt || now : now,
+        handoffMetadata,
+        createdAt: organizationMembershipSnap.exists ? organizationMembershipSnap.data()?.createdAt || now : now,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+
+    transaction.set(
+      teamMembershipRef,
+      {
+        organizationId,
+        teamId,
+        userId: principal.reservedUserId,
+        email: principal.ownerEmail,
+        role: 'team-admin',
+        title: 'Reserved External Admin',
+        permissionSetId: 'pulsecheck-team-admin-v1',
+        rosterVisibilityScope: 'team',
+        allowedAthleteIds: [],
+        onboardingStatus: 'pending-profile',
+        grantedAt: teamMembershipSnap.exists ? teamMembershipSnap.data()?.grantedAt || now : now,
+        handoffMetadata,
+        createdAt: teamMembershipSnap.exists ? teamMembershipSnap.data()?.createdAt || now : now,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+
+    return {
+      organizationMembershipId: organizationMembershipRef.id,
+      teamMembershipId: teamMembershipRef.id,
+      reservedUserId: principal.reservedUserId,
+      handoffKey: principal.handoffKey,
+      targetOwnerName: principal.ownerName,
+      targetOwnerEmail: principal.ownerEmail,
+      organizationMembershipCreated: !organizationMembershipSnap.exists,
+      teamMembershipCreated: !teamMembershipSnap.exists,
+    };
+  });
+}
+
 module.exports = {
   ORGANIZATIONS_COLLECTION,
   TEAMS_COLLECTION,
+  ORGANIZATION_MEMBERSHIPS_COLLECTION,
+  TEAM_MEMBERSHIPS_COLLECTION,
   buildProvisioningPayload,
   provisionPulseCheckOrganizationAndTeam,
+  seedInitialPulseCheckAdminHandoff,
   slugify,
 };
