@@ -53,14 +53,22 @@ const challengesCollection = "challenges"; // Assuming this is the name
  * @param {string} notificationType Type of notification for logging (optional).
  * @returns {Promise<object>} Result object with success status and message.
  */
-async function sendNotification(fcmToken, title, body, customData = {}, notificationType = 'CHALLENGE_NOTIFICATION') {
+async function sendNotification(
+    fcmToken,
+    title,
+    body,
+    customData = {},
+    notificationType = 'CHALLENGE_NOTIFICATION',
+    loggingContext = {}
+) {
   return await sendNotificationWithLogging(
     fcmToken, 
     title, 
     body, 
     customData, 
     notificationType, 
-    'challengeNotifications'
+    'challengeNotifications',
+    loggingContext
   );
 }
 
@@ -124,6 +132,7 @@ exports.sendNewUserJoinedChallengeNotification = onDocumentCreated(`${userChalle
     // const eligibleTokens = []; 
     const eligibleTokens = []; // Re-introduce for sendEachForMulticast
     const skippedUserCount = { ignored: 0, missing: 0 };
+    const recipientUsers = [];
     let sentCount = 0;
     let failedCount = 0;
     
@@ -164,6 +173,13 @@ exports.sendNewUserJoinedChallengeNotification = onDocumentCreated(`${userChalle
         }
 
         eligibleTokens.push(participantToken); // Collect token
+        recipientUsers.push({
+          userId: participantId,
+          username: participantData.username || '',
+          displayName: participantData.displayName || '',
+          email: participantData.email || '',
+          fcmToken: participantToken
+        });
       }
 
       // --- Send using sendEachForMulticast ---
@@ -200,7 +216,8 @@ exports.sendNewUserJoinedChallengeNotification = onDocumentCreated(`${userChalle
           dataPayload,
           notificationType: 'NEW_PARTICIPANT',
           functionName: 'sendNewUserJoinedChallengeNotification',
-          response
+          response,
+          recipients: recipientUsers
         });
         
         console.log(`Finished sending NEW_PARTICIPANT notifications. Sent: ${sentCount}, Failed: ${failedCount}, Missing tokens: ${skippedUserCount.missing}.`);
@@ -369,7 +386,22 @@ exports.onChallengeStatusChange = onDocumentUpdated(`${userChallengeCollection}/
                     return null;
                 }
                 console.log(`Sending ${dataPayload.type || 'notification'} to individual user ${userId} for user challenge ${userChallengeId}.`);
-                await sendNotification(fcmToken, notificationPayload.title, notificationPayload.body, dataPayload, 'CHALLENGE_COMPLETED');
+                await sendNotification(
+                    fcmToken,
+                    notificationPayload.title,
+                    notificationPayload.body,
+                    dataPayload,
+                    'CHALLENGE_COMPLETED',
+                    {
+                        recipients: [{
+                            userId,
+                            username: after.username || '',
+                            displayName: after.displayName || '',
+                            email: after.email || '',
+                            fcmToken
+                        }]
+                    }
+                );
                 console.log(`Successfully sent individual notification to user ${userId}.`);
 
             } else {
@@ -787,15 +819,24 @@ exports.onMainChallengeStatusChange = onDocumentUpdated(`sweatlist-collection/{s
                 .get();
 
             const eligibleTokens = []; 
+            const recipientUsers = [];
             let sentCount = 0;
             let failedCount = 0;
             let missingTokenCount = 0;
 
             if (!participantsSnapshot.empty) {
                 participantsSnapshot.docs.forEach(doc => { // Can use forEach here as no async inside
-                    const token = doc.data().fcmToken;
+                    const participantData = doc.data();
+                    const token = participantData.fcmToken;
                     if (token) {
                         eligibleTokens.push(token);
+                        recipientUsers.push({
+                            userId: participantData.userId || '',
+                            username: participantData.username || '',
+                            displayName: participantData.displayName || '',
+                            email: participantData.email || '',
+                            fcmToken: token
+                        });
                     } else {
                         missingTokenCount++;
                         console.warn(`Participant ${doc.id} in challenge ${challengeId} is missing an FCM token.`);
@@ -839,7 +880,8 @@ exports.onMainChallengeStatusChange = onDocumentUpdated(`sweatlist-collection/{s
                   dataPayload,
                   notificationType: dataPayload.type.toUpperCase(),
                   functionName: 'onMainChallengeStatusChange',
-                  response
+                  response,
+                  recipients: recipientUsers
                 });
                 
                 console.log(`Finished sending ${dataPayload.type} notifications. Sent: ${sentCount}, Failed: ${failedCount}, Missing tokens: ${missingTokenCount}.`);
@@ -905,10 +947,19 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
 
     // Look up the original challenger's current FCM token from their user document
     let currentOriginalChallengerFCMToken = null;
+    let originalChallengerRecipient = null;
     try {
       const originalChallengerDoc = await db.collection('users').doc(originalChallengerUserId).get();
       if (originalChallengerDoc.exists) {
-        currentOriginalChallengerFCMToken = originalChallengerDoc.data().fcmToken;
+        const originalChallengerData = originalChallengerDoc.data();
+        currentOriginalChallengerFCMToken = originalChallengerData.fcmToken;
+        originalChallengerRecipient = {
+          userId: originalChallengerUserId,
+          username: originalChallengerData.username || '',
+          displayName: originalChallengerData.displayName || '',
+          email: originalChallengerData.email || '',
+          fcmToken: currentOriginalChallengerFCMToken
+        };
         console.log(`Found current FCM token for original challenger ${originalChallengerUserId}: ${currentOriginalChallengerFCMToken ? 'Present' : 'Missing'}`);
       } else {
         console.warn(`Original challenger user document not found: ${originalChallengerUserId}`);
@@ -984,7 +1035,14 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
       }
 
       try {
-        await sendNotification(currentOriginalChallengerFCMToken, title, body, dataPayload, 'CALLOUT_ANSWERED');
+        await sendNotification(
+          currentOriginalChallengerFCMToken,
+          title,
+          body,
+          dataPayload,
+          'CALLOUT_ANSWERED',
+          { recipients: originalChallengerRecipient ? [originalChallengerRecipient] : [] }
+        );
         console.log(`Successfully sent CALLOUT_ANSWERED notification for check-in ${checkinId} to original challenger ${originalChallengerUserId}.`);
       } catch (error) {
         console.error(`Error sending CALLOUT_ANSWERED notification for check-in ${checkinId} to original challenger ${originalChallengerUserId}:`, error);
@@ -1001,10 +1059,19 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
 
     // Look up the callout user's current FCM token from their user document
     let currentCalloutUserFCMToken = null;
+    let calloutRecipient = null;
     try {
       const calloutUserDoc = await db.collection('users').doc(calloutUser.id).get();
       if (calloutUserDoc.exists) {
-        currentCalloutUserFCMToken = calloutUserDoc.data().fcmToken;
+        const calloutUserData = calloutUserDoc.data();
+        currentCalloutUserFCMToken = calloutUserData.fcmToken;
+        calloutRecipient = {
+          userId: calloutUser.id,
+          username: calloutUserData.username || '',
+          displayName: calloutUserData.displayName || '',
+          email: calloutUserData.email || '',
+          fcmToken: currentCalloutUserFCMToken
+        };
         console.log(`Found current FCM token for callout user ${calloutUser.id}: ${currentCalloutUserFCMToken ? 'Present' : 'Missing'}`);
       } else {
         console.warn(`Callout user document not found: ${calloutUser.id}`);
@@ -1032,7 +1099,14 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
       }
 
       try {
-        await sendNotification(currentCalloutUserFCMToken, title, body, dataPayload, 'CHECKIN_CALLOUT');
+        await sendNotification(
+          currentCalloutUserFCMToken,
+          title,
+          body,
+          dataPayload,
+          'CHECKIN_CALLOUT',
+          { recipients: calloutRecipient ? [calloutRecipient] : [] }
+        );
         console.log(`Successfully sent CHECKIN_CALLOUT notification for check-in ${checkinId} to user ID ${calloutUser.id}.`);
       } catch (error) {
         console.error(`Error sending CHECKIN_CALLOUT notification for check-in ${checkinId} to user ID ${calloutUser.id}:`, error);
@@ -1137,7 +1211,22 @@ exports.handleReferralBonus = onDocumentCreated(`${userChallengeCollection}/{use
             timestamp: String(Math.floor(Date.now() / 1000))
           };
           
-          await sendNotification(referrerFcmToken, title, body, dataPayload, 'REFERRAL_BONUS');
+          await sendNotification(
+            referrerFcmToken,
+            title,
+            body,
+            dataPayload,
+            'REFERRAL_BONUS',
+            {
+              recipients: [{
+                userId: referrerId,
+                username: referrerUserChallenge.username || '',
+                displayName: referrerUserChallenge.displayName || '',
+                email: referrerUserChallenge.email || '',
+                fcmToken: referrerFcmToken
+              }]
+            }
+          );
           console.log(`[Referral Bonus] Successfully sent notification to ${referrerUserChallenge.username} (${referrerId})`);
           
         } catch (notificationError) {
@@ -1213,7 +1302,8 @@ exports.sendChainReactionNotification = onDocumentCreated("daily-reflections/{da
   const eligibleTokens = [];
   let sentCount = 0;
   let failedCount = 0;
-  let missingTokenCount = 0;
+    let missingTokenCount = 0;
+    const recipientUsers = [];
 
   // Define the notification payload
   const title = `⛓️‍💥 Chain Event!`;
@@ -1248,6 +1338,13 @@ exports.sendChainReactionNotification = onDocumentCreated("daily-reflections/{da
       }
       
       eligibleTokens.push(participantToken);
+      recipientUsers.push({
+        userId: participantData.userId || '',
+        username: participantData.username || '',
+        displayName: participantData.displayName || '',
+        email: participantData.email || '',
+        fcmToken: participantToken
+      });
     }
 
     // --- Send using sendEachForMulticast ---
@@ -1287,7 +1384,8 @@ exports.sendChainReactionNotification = onDocumentCreated("daily-reflections/{da
         dataPayload,
         notificationType: 'CHAIN_REACTION',
         functionName: 'sendChainReactionNotification',
-        response
+        response,
+        recipients: recipientUsers
       });
       
       console.log(`Finished sending CHAIN_REACTION notifications. Sent: ${sentCount}, Failed: ${failedCount}, Missing tokens: ${missingTokenCount}.`);

@@ -77,6 +77,16 @@ const PulseLayersIcon = ({ className = '' }: { className?: string }) => (
   </svg>
 );
 
+const PulseWordmark = () => (
+  <img
+    src="/pulse-logo-white.svg"
+    alt="Pulse"
+    className="h-[22px] w-auto"
+    loading="eager"
+    decoding="async"
+  />
+);
+
 const featureCards = [
   {
     title: 'Live Chat',
@@ -251,8 +261,8 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
       <div
         className="pointer-events-none fixed left-1/2 top-0 z-20 w-full max-w-[430px] -translate-x-1/2"
         style={{
-          height: 'calc(env(safe-area-inset-top, 0px) + 104px)',
-          background: 'linear-gradient(180deg, #080808 0%, rgba(8,8,8,0.92) 36%, rgba(8,8,8,0.58) 62%, transparent 100%)',
+          height: 'calc(env(safe-area-inset-top, 0px) + 76px)',
+          background: 'linear-gradient(180deg, rgba(8,8,8,0.96) 0%, rgba(8,8,8,0.86) 34%, rgba(8,8,8,0.44) 68%, transparent 100%)',
         }}
       />
 
@@ -270,13 +280,10 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
 
           <div
             className="animate-fade-down absolute inset-x-0 top-0 z-30 flex items-center justify-between px-5 [animation-delay:150ms] [animation-fill-mode:both]"
-            style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}
+            style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
           >
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[10px] bg-lime text-black-pulse">
-                <PulseWaveIcon className="h-4 w-4" />
-              </div>
-              <span className="text-[16px] font-semibold tracking-[-0.01em] text-white">pulse</span>
+            <div className="flex items-center">
+              <PulseWordmark />
             </div>
 
             <button
@@ -532,13 +539,21 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
       </div>
 
       <div
+        className="pointer-events-none fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2"
+        style={{
+          height: 'calc(env(safe-area-inset-bottom, 0px) + 112px)',
+          background: 'linear-gradient(0deg, rgba(8,8,8,1) 22%, rgba(8,8,8,0.92) 48%, rgba(8,8,8,0.42) 78%, transparent 100%)',
+        }}
+      />
+
+      <div
         aria-hidden={!isStickyCtaVisible}
         data-testid="sticky-join-cta-shell"
         data-sticky-visible={isStickyCtaVisible ? 'true' : 'false'}
         className={`fixed bottom-0 left-1/2 z-50 w-full max-w-[430px] -translate-x-1/2 px-5 pt-3 transition-all duration-300 ease-out ${
           isStickyCtaVisible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'
         }`}
-        style={{ background: 'linear-gradient(0deg, #080808 50%, transparent 100%)', paddingBottom: 'max(12px, env(safe-area-inset-bottom, 0px))' }}
+        style={{ paddingBottom: 'max(14px, env(safe-area-inset-bottom, 0px))' }}
       >
         <button
           type="button"

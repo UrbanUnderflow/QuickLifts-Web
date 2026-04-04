@@ -43,7 +43,14 @@ const convertFirestoreTimestamp = (timestamp) => {
  * @param {string} notificationType Type of notification for logging
  * @returns {Promise<object>} Result object with success/failure counts
  */
-async function sendMulticastNotification(tokens, title, body, dataPayload = {}, notificationType = 'CHAT_MESSAGE') {
+async function sendMulticastNotification(
+  tokens,
+  title,
+  body,
+  dataPayload = {},
+  notificationType = 'CHAT_MESSAGE',
+  recipients = []
+) {
   if (!tokens || tokens.length === 0) {
     console.log('No tokens provided for multicast notification');
     return { successCount: 0, failureCount: 0 };
@@ -80,7 +87,8 @@ async function sendMulticastNotification(tokens, title, body, dataPayload = {}, 
       dataPayload,
       notificationType,
       functionName: 'chatNotifications',
-      response
+      response,
+      recipients
     });
 
     console.log(`Finished sending ${notificationType} notifications. Sent: ${response.successCount}, Failed: ${response.failureCount}.`);
@@ -165,6 +173,7 @@ exports.sendDirectMessageNotification = onDocumentCreated("chats/{chatId}/messag
 
     // Collect FCM tokens for participants (excluding sender)
     const eligibleTokens = [];
+    const recipientUsers = [];
     let missingTokenCount = 0;
 
     console.log(`Chat participants structure:`, participants);
@@ -196,9 +205,17 @@ exports.sendDirectMessageNotification = onDocumentCreated("chats/{chatId}/messag
       try {
         const userDoc = await db.collection('users').doc(participantId).get();
         if (userDoc.exists) {
-          const fcmToken = userDoc.data().fcmToken;
+          const userData = userDoc.data();
+          const fcmToken = userData.fcmToken;
           if (fcmToken) {
             eligibleTokens.push(fcmToken);
+            recipientUsers.push({
+              userId: participantId,
+              username: userData.username || '',
+              displayName: userData.displayName || '',
+              email: userData.email || '',
+              fcmToken
+            });
             console.log(`Added FCM token for user ${participantId}`);
           } else {
             missingTokenCount++;
@@ -244,7 +261,8 @@ exports.sendDirectMessageNotification = onDocumentCreated("chats/{chatId}/messag
         title,
         body,
         dataPayload,
-        'DIRECT_MESSAGE'
+        'DIRECT_MESSAGE',
+        recipientUsers
       );
 
       console.log(`Direct message notifications sent. Success: ${result.successCount}, Failed: ${result.failureCount}, Missing tokens: ${missingTokenCount}`);
@@ -362,15 +380,24 @@ exports.sendRoundTableNotification = onDocumentCreated("sweatlist-collection/{ch
 
     // Fetch fresh FCM tokens from the users collection (source of truth)
     const eligibleTokens = [];
+    const recipientUsers = [];
     let missingTokenCount = 0;
 
     for (const userId of participantUserIds) {
       try {
         const userDoc = await db.collection('users').doc(userId).get();
         if (userDoc.exists) {
-          const fcmToken = userDoc.data().fcmToken;
+          const userData = userDoc.data();
+          const fcmToken = userData.fcmToken;
           if (fcmToken) {
             eligibleTokens.push(fcmToken);
+            recipientUsers.push({
+              userId,
+              username: userData.username || '',
+              displayName: userData.displayName || '',
+              email: userData.email || '',
+              fcmToken
+            });
           } else {
             missingTokenCount++;
             console.warn(`User ${userId} in challenge ${challengeId} has no FCM token in users collection.`);
@@ -406,7 +433,8 @@ exports.sendRoundTableNotification = onDocumentCreated("sweatlist-collection/{ch
         title,
         body,
         dataPayload,
-        'ROUND_TABLE_MESSAGE'
+        'ROUND_TABLE_MESSAGE',
+        recipientUsers
       );
 
       console.log(`Round table notifications sent. Success: ${result.successCount}, Failed: ${result.failureCount}, Missing tokens: ${missingTokenCount}`);
@@ -580,15 +608,24 @@ exports.sendClubChatNotification = onDocumentCreated("round-chat/{clubId}/messag
 
     // Fetch fresh FCM tokens from the users collection (source of truth)
     const eligibleTokens = [];
+    const recipientUsers = [];
     let missingTokenCount = 0;
 
     for (const userId of memberUserIds) {
       try {
         const userDoc = await db.collection('users').doc(userId).get();
         if (userDoc.exists) {
-          const fcmToken = userDoc.data().fcmToken;
+          const userData = userDoc.data();
+          const fcmToken = userData.fcmToken;
           if (fcmToken) {
             eligibleTokens.push(fcmToken);
+            recipientUsers.push({
+              userId,
+              username: userData.username || '',
+              displayName: userData.displayName || '',
+              email: userData.email || '',
+              fcmToken
+            });
           } else {
             missingTokenCount++;
             console.warn(`User ${userId} in club ${clubId} has no FCM token.`);
@@ -624,7 +661,8 @@ exports.sendClubChatNotification = onDocumentCreated("round-chat/{clubId}/messag
         title,
         body,
         dataPayload,
-        'CLUB_CHAT_MESSAGE'
+        'CLUB_CHAT_MESSAGE',
+        recipientUsers
       );
 
       console.log(`Club chat notifications sent for ${clubName}. Success: ${result.successCount}, Failed: ${result.failureCount}, Missing tokens: ${missingTokenCount}`);

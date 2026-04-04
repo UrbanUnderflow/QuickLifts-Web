@@ -6,6 +6,99 @@ const db = admin.firestore();
 
 const NOTIFICATION_LOGS_COLLECTION = 'notification-logs';
 
+function truncateToken(token) {
+  if (!token) return 'MISSING';
+  return `${String(token).substring(0, 20)}...`;
+}
+
+function normalizeRecipient(recipient = {}, fallback = {}) {
+  if (!recipient || typeof recipient !== 'object') {
+    return null;
+  }
+
+  const normalized = {};
+  const userId = recipient.userId || recipient.uid || recipient.id || fallback.userId || null;
+  const username = recipient.username || fallback.username || null;
+  const displayName = recipient.displayName || recipient.name || fallback.displayName || null;
+  const email = recipient.email || fallback.email || null;
+  const tokenPreview = recipient.tokenPreview || truncateToken(recipient.fcmToken || recipient.token || fallback.fcmToken || null);
+  const deliveryChannel = recipient.deliveryChannel || recipient.channel || fallback.deliveryChannel || (email ? 'email' : 'push');
+
+  if (userId) normalized.userId = String(userId);
+  if (username) normalized.username = String(username);
+  if (displayName) normalized.displayName = String(displayName);
+  if (email) normalized.email = String(email);
+  if (tokenPreview && tokenPreview !== 'MISSING') normalized.tokenPreview = tokenPreview;
+  if (deliveryChannel) normalized.deliveryChannel = deliveryChannel;
+  if (typeof recipient.success === 'boolean') normalized.success = recipient.success;
+  if (recipient.messageId) normalized.messageId = recipient.messageId;
+  if (recipient.error) {
+    normalized.error = {
+      code: recipient.error.code || 'UNKNOWN',
+      message: recipient.error.message || 'Unknown error'
+    };
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+function buildRecipients({ recipients = [], fcmToken = null, deliveryChannel = 'push' }) {
+  const normalizedRecipients = Array.isArray(recipients)
+    ? recipients
+        .map((recipient) => normalizeRecipient(recipient, { deliveryChannel }))
+        .filter(Boolean)
+    : [];
+
+  if (normalizedRecipients.length > 0) {
+    return normalizedRecipients;
+  }
+
+  if (!fcmToken) {
+    return [];
+  }
+
+  const fallbackRecipient = normalizeRecipient({ fcmToken, deliveryChannel });
+  return fallbackRecipient ? [fallbackRecipient] : [];
+}
+
+function buildRecipientSummary(recipients = []) {
+  const deliveryChannels = Array.from(
+    new Set(
+      recipients
+        .map((recipient) => recipient.deliveryChannel)
+        .filter(Boolean)
+    )
+  );
+
+  return {
+    total: recipients.length,
+    identifiedUsers: recipients.filter(
+      (recipient) => recipient.userId || recipient.username || recipient.displayName || recipient.email
+    ).length,
+    deliveryChannels
+  };
+}
+
+function mergeRecipientsWithResults(recipients = [], tokens = [], response) {
+  const normalizedRecipients = buildRecipients({ recipients, deliveryChannel: 'push' });
+
+  return (response?.responses || []).map((resp, index) => {
+    const normalizedRecipient = normalizedRecipients[index] || {};
+
+    return {
+      ...normalizedRecipient,
+      tokenPreview: normalizedRecipient.tokenPreview || truncateToken(tokens[index]),
+      deliveryChannel: normalizedRecipient.deliveryChannel || 'push',
+      success: resp.success,
+      messageId: resp.messageId || null,
+      error: resp.error ? {
+        code: resp.error.code || 'UNKNOWN',
+        message: resp.error.message || 'Unknown error'
+      } : null
+    };
+  });
+}
+
 /**
  * Logs notification data to Firebase for debugging purposes
  * @param {string} fcmToken - The FCM token the notification was sent to
@@ -29,12 +122,14 @@ async function logNotification({
   messageId = null,
   error = null,
   functionName = 'UNKNOWN',
-  additionalContext = {}
+  additionalContext = {},
+  recipients = []
 }) {
   try {
+    const normalizedRecipients = buildRecipients({ recipients, fcmToken });
     const logEntry = {
       // Notification details
-      fcmToken: fcmToken ? fcmToken.substring(0, 20) + '...' : 'MISSING', // Truncate for privacy
+      fcmToken: truncateToken(fcmToken),
       title,
       body,
       dataPayload,
@@ -52,6 +147,8 @@ async function logNotification({
       
       // Additional context
       additionalContext,
+      recipients: normalizedRecipients,
+      recipientSummary: buildRecipientSummary(normalizedRecipients),
       
       // Timestamps
       timestamp: FieldValue.serverTimestamp(),
@@ -80,9 +177,18 @@ async function logNotification({
  * @param {object} customData - Additional data to send with the notification
  * @param {string} notificationType - Type of notification for logging
  * @param {string} functionName - Name of the calling function
+ * @param {object} loggingContext - Recipient metadata and extra logging context
  * @returns {Promise<object>} Result object with success status and message
  */
-async function sendNotificationWithLogging(fcmToken, title, body, customData = {}, notificationType = 'UNKNOWN', functionName = 'UNKNOWN') {
+async function sendNotificationWithLogging(
+  fcmToken,
+  title,
+  body,
+  customData = {},
+  notificationType = 'UNKNOWN',
+  functionName = 'UNKNOWN',
+  loggingContext = {}
+) {
   const messaging = admin.messaging();
   
   const message = {
@@ -129,7 +235,9 @@ async function sendNotificationWithLogging(fcmToken, title, body, customData = {
       success: true,
       messageId: response,
       functionName,
+      recipients: loggingContext.recipients || [],
       additionalContext: {
+        ...(loggingContext.additionalContext || {}),
         messageStructure: {
           hasApnsPayload: !!message.apns,
           hasAndroidConfig: !!message.android,
@@ -156,7 +264,9 @@ async function sendNotificationWithLogging(fcmToken, title, body, customData = {
         details: error.details
       },
       functionName,
+      recipients: loggingContext.recipients || [],
       additionalContext: {
+        ...(loggingContext.additionalContext || {}),
         errorType: error.constructor.name,
         isTokenError: error.code === 'messaging/registration-token-not-registered'
       }
@@ -191,18 +301,16 @@ async function logMulticastNotification({
   dataPayload,
   notificationType,
   functionName,
-  response
+  response,
+  recipients = []
 }) {
   try {
-    // Create detailed individual results with truncated tokens for privacy
-    const individualResults = response.responses.map((resp, index) => ({
-      tokenPreview: tokens[index] ? tokens[index].substring(0, 20) + '...' : 'MISSING_TOKEN',
-      success: resp.success,
-      messageId: resp.messageId || null,
-      error: resp.error ? {
-        code: resp.error.code || 'UNKNOWN',
-        message: resp.error.message || 'Unknown error'
-      } : null
+    const normalizedRecipients = mergeRecipientsWithResults(recipients, tokens, response);
+    const individualResults = normalizedRecipients.map((recipient) => ({
+      tokenPreview: recipient.tokenPreview || 'MISSING_TOKEN',
+      success: recipient.success === true,
+      messageId: recipient.messageId || null,
+      error: recipient.error || null
     }));
 
     const logEntry = {
@@ -222,6 +330,8 @@ async function logMulticastNotification({
       
       // Individual results with detailed breakdown
       individualResults,
+      recipients: normalizedRecipients,
+      recipientSummary: buildRecipientSummary(normalizedRecipients),
       
       // Individual results summary (keeping for backward compatibility)
       results: {
