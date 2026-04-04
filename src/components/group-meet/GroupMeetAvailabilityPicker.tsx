@@ -21,12 +21,21 @@ import {
 type DayRangeDraft = {
   start: string;
   end: string;
+  source?: 'suggested';
 };
+
+const QUICK_RANGE_PRESETS = [
+  { label: 'Morning', startMinutes: 9 * 60, endMinutes: 12 * 60 },
+  { label: 'Midday', startMinutes: 12 * 60, endMinutes: 15 * 60 },
+  { label: 'Afternoon', startMinutes: 15 * 60, endMinutes: 18 * 60 },
+  { label: 'Evening', startMinutes: 18 * 60, endMinutes: 21 * 60 },
+];
 
 type GroupMeetAvailabilityPickerProps = {
   targetMonth: string;
   availabilityEntries: GroupMeetAvailabilitySlot[];
   peerAvailability?: GroupMeetSharedAvailabilityParticipant[];
+  meetingDurationMinutes?: number;
   currentParticipant?: {
     token: string;
     name: string;
@@ -44,6 +53,13 @@ type PeerAvailabilityForDate = GroupMeetSharedAvailabilityParticipant & {
   daySlots: GroupMeetAvailabilitySlot[];
   tooltip: string;
   isCurrentUser?: boolean;
+};
+
+type SuggestedPeerRange = {
+  startMinutes: number;
+  endMinutes: number;
+  participantCount: number;
+  participantNames: string[];
 };
 
 function sortAvailabilitySlots(slots: GroupMeetAvailabilitySlot[]) {
@@ -72,6 +88,22 @@ function buildCalendarDays(targetMonth: string) {
   }
 
   return days;
+}
+
+function createDraftRange(start: string, end: string, source?: DayRangeDraft['source']): DayRangeDraft {
+  return source ? { start, end, source } : { start, end };
+}
+
+function createDraftRangeFromMinutes(
+  startMinutes: number,
+  endMinutes: number,
+  source?: DayRangeDraft['source']
+): DayRangeDraft {
+  return createDraftRange(
+    minutesToTimeInputValue(startMinutes),
+    minutesToTimeInputValue(endMinutes),
+    source
+  );
 }
 
 function getParticipantInitials(name: string) {
@@ -123,6 +155,150 @@ function buildPeerTooltip(
   );
 
   return [prefix, ...slotLines].join('\n');
+}
+
+function buildDraftSlotsForDate(
+  date: string | null,
+  draftRanges: DayRangeDraft[]
+): GroupMeetAvailabilitySlot[] {
+  if (!date) return [];
+
+  const nextSlots: GroupMeetAvailabilitySlot[] = [];
+  for (const range of draftRanges) {
+    const startMinutes = timeInputValueToMinutes(range.start);
+    const endMinutes = timeInputValueToMinutes(range.end);
+    if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) continue;
+    if (startMinutes >= endMinutes) continue;
+    nextSlots.push({ date, startMinutes, endMinutes });
+  }
+
+  return sortAvailabilitySlots(nextSlots);
+}
+
+function areAvailabilitySlotListsEqual(
+  left: GroupMeetAvailabilitySlot[],
+  right: GroupMeetAvailabilitySlot[]
+) {
+  const normalizedLeft = sortAvailabilitySlots(left);
+  const normalizedRight = sortAvailabilitySlots(right);
+
+  if (normalizedLeft.length !== normalizedRight.length) {
+    return false;
+  }
+
+  return normalizedLeft.every((slot, index) => {
+    const comparison = normalizedRight[index];
+    return (
+      slot.date === comparison?.date &&
+      slot.startMinutes === comparison?.startMinutes &&
+      slot.endMinutes === comparison?.endMinutes
+    );
+  });
+}
+
+function getMatchingPeersForRange(
+  peers: PeerAvailabilityForDate[],
+  startMinutes: number,
+  endMinutes: number
+) {
+  return peers.filter((peer) =>
+    peer.daySlots.some(
+      (slot) => slot.startMinutes <= startMinutes && slot.endMinutes >= endMinutes
+    )
+  );
+}
+
+function formatPeerMatchSummary(peers: PeerAvailabilityForDate[]) {
+  if (!peers.length) {
+    return 'No one else is free in this exact window yet';
+  }
+
+  const visibleNames = peers.slice(0, 2).map((peer) => peer.name);
+  if (peers.length <= 2) {
+    return `Matches ${visibleNames.join(' + ')}`;
+  }
+
+  return `Matches ${visibleNames.join(' + ')} + ${peers.length - 2} more`;
+}
+
+function buildSuggestedPeerRanges(
+  peers: PeerAvailabilityForDate[],
+  meetingDurationMinutes: number
+): SuggestedPeerRange[] {
+  const duration = Math.max(15, Math.min(240, Number(meetingDurationMinutes) || 30));
+  const stepMinutes = 15;
+  const candidates: Array<{
+    startMinutes: number;
+    latestStartMinutes: number;
+    participantTokens: string[];
+    participantNames: string[];
+    participantCount: number;
+    flexibilityMinutes: number;
+  }> = [];
+  let previousCandidate: (typeof candidates)[number] | null = null;
+
+  for (let startMinutes = 0; startMinutes <= 24 * 60 - duration; startMinutes += stepMinutes) {
+    const endMinutes = startMinutes + duration;
+    const availablePeers = peers.filter((peer) =>
+      peer.daySlots.some(
+        (slot) => slot.startMinutes <= startMinutes && slot.endMinutes >= endMinutes
+      )
+    );
+
+    if (!availablePeers.length) {
+      previousCandidate = null;
+      continue;
+    }
+
+    const participantTokens = availablePeers
+      .map((peer) => peer.token)
+      .sort((left, right) => left.localeCompare(right));
+
+    if (
+      previousCandidate &&
+      previousCandidate.latestStartMinutes + stepMinutes === startMinutes &&
+      previousCandidate.participantTokens.join('|') === participantTokens.join('|')
+    ) {
+      previousCandidate.latestStartMinutes = startMinutes;
+      previousCandidate.flexibilityMinutes =
+        previousCandidate.latestStartMinutes - previousCandidate.startMinutes;
+      continue;
+    }
+
+    previousCandidate = {
+      startMinutes,
+      latestStartMinutes: startMinutes,
+      participantTokens,
+      participantNames: availablePeers.map((peer) => peer.name),
+      participantCount: participantTokens.length,
+      flexibilityMinutes: 0,
+    };
+    candidates.push(previousCandidate);
+  }
+
+  return candidates
+    .sort((left, right) => {
+      if (left.participantCount !== right.participantCount) {
+        return right.participantCount - left.participantCount;
+      }
+      if (left.flexibilityMinutes !== right.flexibilityMinutes) {
+        return right.flexibilityMinutes - left.flexibilityMinutes;
+      }
+      return left.startMinutes - right.startMinutes;
+    })
+    .slice(0, 4)
+    .map((candidate) => {
+      const midpointOffset =
+        Math.floor(candidate.flexibilityMinutes / (stepMinutes * 2)) * stepMinutes;
+      const suggestedStartMinutes = candidate.startMinutes + midpointOffset;
+
+      return {
+        startMinutes: suggestedStartMinutes,
+        endMinutes: suggestedStartMinutes + duration,
+        participantCount: candidate.participantCount,
+        participantNames: candidate.participantNames,
+      };
+    });
 }
 
 function PeerTooltip({
@@ -214,6 +390,7 @@ export default function GroupMeetAvailabilityPicker({
   targetMonth,
   availabilityEntries,
   peerAvailability = [],
+  meetingDurationMinutes = 30,
   currentParticipant = null,
   onChange,
   disabled = false,
@@ -326,18 +503,52 @@ export default function GroupMeetAvailabilityPicker({
     () => (activeDate ? participantAvailabilityByDate.get(activeDate) || [] : []),
     [activeDate, participantAvailabilityByDate]
   );
+  const otherActiveDatePeerAvailability = useMemo(
+    () => activeDatePeerAvailability.filter((peer) => !peer.isCurrentUser),
+    [activeDatePeerAvailability]
+  );
+  const activeDateSuggestedRanges = useMemo(
+    () => buildSuggestedPeerRanges(otherActiveDatePeerAvailability, meetingDurationMinutes),
+    [meetingDurationMinutes, otherActiveDatePeerAvailability]
+  );
+  const activeDateOriginalSlots = useMemo(
+    () => (activeDate ? sortAvailabilitySlots(slotsByDate.get(activeDate) || []) : []),
+    [activeDate, slotsByDate]
+  );
+  const activeDateDraftSlots = useMemo(
+    () => buildDraftSlotsForDate(activeDate, draftRanges),
+    [activeDate, draftRanges]
+  );
+  const activeDateIsDirty = useMemo(
+    () =>
+      Boolean(activeDate) &&
+      (duplicateDates.length > 0 ||
+        !areAvailabilitySlotListsEqual(activeDateDraftSlots, activeDateOriginalSlots)),
+    [activeDate, activeDateDraftSlots, activeDateOriginalSlots, duplicateDates.length]
+  );
 
   const openDayEditor = (date: string) => {
     const slots = slotsByDate.get(date) || [];
+    const suggestedRanges = buildSuggestedPeerRanges(
+      (participantAvailabilityByDate.get(date) || []).filter((peer) => !peer.isCurrentUser),
+      meetingDurationMinutes
+    );
     setActiveDate(date);
     setDuplicateDates([]);
     setDraftRanges(
       slots.length
-        ? slots.map((slot) => ({
-            start: minutesToTimeInputValue(slot.startMinutes),
-            end: minutesToTimeInputValue(slot.endMinutes),
-          }))
-        : [{ start: '09:00', end: '10:00' }]
+        ? slots.map((slot) =>
+            createDraftRangeFromMinutes(slot.startMinutes, slot.endMinutes)
+          )
+        : suggestedRanges.length
+          ? [
+              createDraftRangeFromMinutes(
+                suggestedRanges[0].startMinutes,
+                suggestedRanges[0].endMinutes,
+                'suggested'
+              ),
+            ]
+          : [createDraftRange('09:00', '10:00')]
     );
   };
 
@@ -349,12 +560,46 @@ export default function GroupMeetAvailabilityPicker({
 
   const updateDraftRange = (index: number, field: keyof DayRangeDraft, value: string) => {
     setDraftRanges((current) =>
-      current.map((range, rangeIndex) => (rangeIndex === index ? { ...range, [field]: value } : range))
+      current.map((range, rangeIndex) =>
+        rangeIndex === index ? { ...range, [field]: value, source: undefined } : range
+      )
     );
   };
 
   const addDraftRange = () => {
-    setDraftRanges((current) => [...current, { start: '13:00', end: '14:00' }]);
+    setDraftRanges((current) => [...current, createDraftRange('13:00', '14:00')]);
+  };
+
+  const applyPresetRange = (startMinutes: number, endMinutes: number) => {
+    const nextRange = createDraftRangeFromMinutes(startMinutes, endMinutes);
+
+    setDraftRanges((current) => {
+      if (current.some((range) => range.start === nextRange.start && range.end === nextRange.end)) {
+        return current;
+      }
+
+      if (current.length === 1 && current[0]?.source === 'suggested') {
+        return [nextRange];
+      }
+
+      return [...current, nextRange];
+    });
+  };
+
+  const applySuggestedRange = (startMinutes: number, endMinutes: number) => {
+    const nextRange = createDraftRangeFromMinutes(startMinutes, endMinutes);
+
+    setDraftRanges((current) => {
+      if (current.some((range) => range.start === nextRange.start && range.end === nextRange.end)) {
+        return current;
+      }
+
+      if (!current.length || (current.length === 1 && current[0]?.source === 'suggested')) {
+        return [nextRange];
+      }
+
+      return [...current, nextRange];
+    });
   };
 
   const removeDraftRange = (index: number) => {
@@ -380,17 +625,18 @@ export default function GroupMeetAvailabilityPicker({
     );
   };
 
+  const selectWeekdayDates = () => {
+    setDuplicateDates(
+      duplicableDates
+        .filter((entry) => entry.dayOfWeek >= 1 && entry.dayOfWeek <= 5)
+        .map((entry) => entry.date)
+    );
+  };
+
   const saveDayRanges = () => {
     if (!activeDate) return;
 
-    const nextSlots: GroupMeetAvailabilitySlot[] = [];
-    for (const range of draftRanges) {
-      const startMinutes = timeInputValueToMinutes(range.start);
-      const endMinutes = timeInputValueToMinutes(range.end);
-      if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) continue;
-      if (startMinutes >= endMinutes) continue;
-      nextSlots.push({ date: activeDate, startMinutes, endMinutes });
-    }
+    const nextSlots = buildDraftSlotsForDate(activeDate, draftRanges);
 
     const datesToCopy = nextSlots.length ? duplicateDates : [];
     const targetDates = [activeDate, ...datesToCopy];
@@ -459,15 +705,20 @@ export default function GroupMeetAvailabilityPicker({
             >
               <div className="text-sm font-medium">{format(day, 'd')}</div>
               {Boolean(peerParticipants.length) && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {peerParticipants.slice(0, 3).map((peer) => (
-                    <PeerAvatar key={`${dateKey}-${peer.token}`} peer={peer} size="sm" />
-                  ))}
-                  {peerParticipants.length > 3 && (
-                    <div className="flex h-7 min-w-[1.75rem] items-center justify-center rounded-xl border border-white/10 bg-black/35 px-1 text-[10px] font-medium text-zinc-200">
-                      +{peerParticipants.length - 3}
-                    </div>
-                  )}
+                <div className="mt-2">
+                  <div className="flex flex-wrap gap-1">
+                    {peerParticipants.slice(0, 3).map((peer) => (
+                      <PeerAvatar key={`${dateKey}-${peer.token}`} peer={peer} size="sm" />
+                    ))}
+                    {peerParticipants.length > 3 && (
+                      <div className="flex h-7 min-w-[1.75rem] items-center justify-center rounded-xl border border-white/10 bg-black/35 px-1 text-[10px] font-medium text-zinc-200">
+                        +{peerParticipants.length - 3}
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-1 text-[10px] uppercase tracking-[0.14em] text-zinc-400">
+                    {peerParticipants.length} available
+                  </div>
                 </div>
               )}
               <div className="mt-2 space-y-1">
@@ -492,6 +743,21 @@ export default function GroupMeetAvailabilityPicker({
               <div>
                 <h3 className="text-2xl font-semibold">{format(parse(activeDate, 'yyyy-MM-dd', new Date()), 'EEEE, MMMM d')}</h3>
                 <p className="text-sm text-zinc-400 mt-1">Add one or more time ranges for this day.</p>
+                <div
+                  className={`mt-3 inline-flex items-center rounded-full border px-3 py-1 text-xs ${
+                    activeDateIsDirty
+                      ? 'border-[#E0FE10]/30 bg-[#E0FE10]/10 text-[#F4FF8A]'
+                      : activeDateOriginalSlots.length
+                        ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
+                        : 'border-white/10 bg-white/[0.03] text-zinc-400'
+                  }`}
+                >
+                  {activeDateIsDirty
+                    ? 'Unsaved changes'
+                    : activeDateOriginalSlots.length
+                      ? 'Saved for this day'
+                      : 'Nothing saved yet'}
+                </div>
               </div>
               <button
                 type="button"
@@ -516,64 +782,176 @@ export default function GroupMeetAvailabilityPicker({
               </div>
             )}
 
-            <div className="mt-6 space-y-3">
-              {draftRanges.map((range, index) => (
-                <div key={`range-${index}`} className="grid grid-cols-[1fr_1fr_auto] gap-3 rounded-2xl border border-white/10 bg-black/30 p-3">
-                  <label className="block">
-                    <span className="block text-xs uppercase tracking-[0.18em] text-zinc-500 mb-2">Start</span>
-                    <input
-                      type="time"
-                      value={range.start}
-                      onChange={(event) => updateDraftRange(index, 'start', event.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-white"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="block text-xs uppercase tracking-[0.18em] text-zinc-500 mb-2">End</span>
-                    <input
-                      type="time"
-                      value={range.end}
-                      onChange={(event) => updateDraftRange(index, 'end', event.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-white"
-                    />
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={() => removeDraftRange(index)}
-                    className="mt-7 rounded-xl border border-white/10 px-3 py-3 text-zinc-300 hover:bg-white/5"
-                    aria-label={`Remove time range ${index + 1}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+            {Boolean(activeDateSuggestedRanges.length) && (
+              <div className="mt-5 rounded-2xl border border-dashed border-[#E0FE10]/20 bg-[#E0FE10]/[0.04] p-4">
+                <div className="text-sm font-medium text-[#F4FF8A]">Suggested times from current responses</div>
+                <p className="mt-1 text-sm text-zinc-400">
+                  These windows fit the other people who have already replied for this day.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {activeDateSuggestedRanges.map((range) => (
+                    <button
+                      key={`${activeDate}-${range.startMinutes}-${range.endMinutes}`}
+                      type="button"
+                      onClick={() => applySuggestedRange(range.startMinutes, range.endMinutes)}
+                      className="rounded-2xl border border-[#E0FE10]/25 bg-[#E0FE10]/[0.08] px-3 py-2 text-left text-sm text-[#F4FF8A] transition-colors hover:bg-[#E0FE10]/[0.14]"
+                      title={range.participantNames.join(', ')}
+                    >
+                      <div className="font-medium">
+                        {formatMinutesAsTime(range.startMinutes)} - {formatMinutesAsTime(range.endMinutes)}
+                      </div>
+                      <div className="mt-1 text-[11px] text-zinc-300">
+                        Fits {range.participantCount} other {range.participantCount === 1 ? 'person' : 'people'}
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              ))}
+              </div>
+            )}
 
-              {!draftRanges.length && (
-                <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-zinc-500">
-                  No time ranges for this day yet.
+            <div className="mt-6">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="text-sm font-medium text-white">Your time ranges</div>
+                <button
+                  type="button"
+                  onClick={addDraftRange}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm hover:bg-white/[0.08]"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add time range
+                </button>
+              </div>
+
+              <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-zinc-500">Quick ranges</div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {QUICK_RANGE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => applyPresetRange(preset.startMinutes, preset.endMinutes)}
+                      className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-zinc-300 transition-colors hover:bg-white/[0.08]"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
                 </div>
-              )}
+              </div>
+
+              <div className="space-y-3">
+                {draftRanges.map((range, index) => {
+                  const startMinutes = timeInputValueToMinutes(range.start);
+                  const endMinutes = timeInputValueToMinutes(range.end);
+                  const hasValidRange =
+                    Number.isFinite(startMinutes) &&
+                    Number.isFinite(endMinutes) &&
+                    startMinutes < endMinutes;
+                  const matchingPeers = hasValidRange
+                    ? getMatchingPeersForRange(
+                        otherActiveDatePeerAvailability,
+                        startMinutes,
+                        endMinutes
+                      )
+                    : [];
+
+                  return (
+                    <div
+                      key={`range-${index}`}
+                      className={`rounded-2xl border p-3 ${
+                        range.source === 'suggested'
+                          ? 'border-[#E0FE10]/30 bg-[#E0FE10]/[0.05]'
+                          : 'border-white/10 bg-black/30'
+                      }`}
+                    >
+                      <div className="grid grid-cols-[1fr_1fr_auto] gap-3">
+                        <label className="block">
+                          <span className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-zinc-500">
+                            Start
+                            {range.source === 'suggested' && (
+                              <span className="rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-2 py-0.5 text-[10px] tracking-[0.12em] text-[#F4FF8A]">
+                                Suggested
+                              </span>
+                            )}
+                          </span>
+                          <input
+                            type="time"
+                            value={range.start}
+                            onChange={(event) => updateDraftRange(index, 'start', event.target.value)}
+                            className="w-full rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-white"
+                          />
+                        </label>
+
+                        <label className="block">
+                          <span className="block text-xs uppercase tracking-[0.18em] text-zinc-500 mb-2">End</span>
+                          <input
+                            type="time"
+                            value={range.end}
+                            onChange={(event) => updateDraftRange(index, 'end', event.target.value)}
+                            className="w-full rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-white"
+                          />
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => removeDraftRange(index)}
+                          className="mt-7 rounded-xl border border-white/10 px-3 py-3 text-zinc-300 hover:bg-white/5"
+                          aria-label={`Remove time range ${index + 1}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="mt-3 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs">
+                        {hasValidRange ? (
+                          <span
+                            className={
+                              matchingPeers.length ? 'text-emerald-100' : 'text-zinc-400'
+                            }
+                          >
+                            {formatPeerMatchSummary(matchingPeers)}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-500">
+                            Enter a valid range to see who else is free then.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {!draftRanges.length && (
+                  <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-zinc-500">
+                    No time ranges for this day yet.
+                  </div>
+                )}
+              </div>
             </div>
 
             {Boolean(duplicableDates.length) && (
               <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <div className="text-sm font-medium text-white">Duplicate to dates</div>
+                    <div className="text-sm font-medium text-white">Copy this schedule to other dates</div>
                     <p className="mt-1 text-sm text-zinc-400">
-                      Save these same time ranges onto any other dates in this month.
+                      Use this when your schedule repeats and you want to reuse the same windows quickly.
                     </p>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={selectMatchingWeekdayDates}
                       className="rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5"
                     >
-                      Same weekday
+                      Repeat weekly
+                    </button>
+                    <button
+                      type="button"
+                      onClick={selectWeekdayDates}
+                      className="rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5"
+                    >
+                      Weekdays
                     </button>
                     <button
                       type="button"
@@ -608,21 +986,19 @@ export default function GroupMeetAvailabilityPicker({
                 <div className="mt-3 text-xs text-zinc-500">
                   {duplicateDates.length
                     ? `These dates will be overwritten with the same time ranges when you save.`
-                    : 'Pick any dates you want to copy this day onto.'}
+                    : 'Choose the dates that should receive the same schedule when you save this day.'}
                 </div>
               </div>
             )}
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <button
-                type="button"
-                onClick={addDraftRange}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm hover:bg-white/[0.08]"
-              >
-                <Plus className="w-4 h-4" />
-                Add time range
-              </button>
-
+              <div className="text-sm text-zinc-400">
+                {activeDateIsDirty
+                  ? 'Unsaved changes are ready to save.'
+                  : activeDateOriginalSlots.length
+                    ? 'This day is already saved.'
+                    : 'Add one or more ranges, then save this day.'}
+              </div>
               <div className="flex gap-3">
                 <button
                   type="button"
