@@ -888,8 +888,8 @@ export default function GroupMeetAvailabilityPicker({
                             : 'border-white/10 bg-black/30'
                         }`}
                       >
-                        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                          <label className="block">
+                        <div className="grid min-w-0 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                          <label className="block min-w-0">
                             <span className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-zinc-500 sm:text-xs sm:tracking-[0.18em]">
                               Start
                               {range.source === 'suggested' && (
@@ -898,22 +898,28 @@ export default function GroupMeetAvailabilityPicker({
                                 </span>
                               )}
                             </span>
-                            <input
-                              type="time"
-                              value={range.start}
-                              onChange={(event) => updateDraftRange(index, 'start', event.target.value)}
-                              className="w-full rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-base text-white sm:text-white"
-                            />
+                            <div className="min-w-0 overflow-hidden rounded-xl">
+                              <input
+                                type="time"
+                                value={range.start}
+                                onChange={(event) => updateDraftRange(index, 'start', event.target.value)}
+                                className="block h-11 w-full min-w-0 max-w-full appearance-none rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-sm text-white [font-variant-numeric:tabular-nums] sm:h-auto sm:text-base"
+                                style={{ minWidth: 0 }}
+                              />
+                            </div>
                           </label>
 
-                          <label className="block">
+                          <label className="block min-w-0">
                             <span className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-zinc-500 sm:text-xs sm:tracking-[0.18em]">End</span>
-                            <input
-                              type="time"
-                              value={range.end}
-                              onChange={(event) => updateDraftRange(index, 'end', event.target.value)}
-                              className="w-full rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-base text-white sm:text-white"
-                            />
+                            <div className="min-w-0 overflow-hidden rounded-xl">
+                              <input
+                                type="time"
+                                value={range.end}
+                                onChange={(event) => updateDraftRange(index, 'end', event.target.value)}
+                                className="block h-11 w-full min-w-0 max-w-full appearance-none rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-sm text-white [font-variant-numeric:tabular-nums] sm:h-auto sm:text-base"
+                                style={{ minWidth: 0 }}
+                              />
+                            </div>
                           </label>
 
                           <div className="flex justify-end sm:block">

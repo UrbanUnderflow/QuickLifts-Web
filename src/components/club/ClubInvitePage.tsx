@@ -122,12 +122,72 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
   onShare,
   onStoreTap,
 }) => {
+  const heroCtaRef = React.useRef<HTMLButtonElement | null>(null);
+  const [isStickyCtaVisible, setIsStickyCtaVisible] = React.useState(false);
   const accentColor = club.accentColor || '#FF6B35';
   const invitedByHandle = club.creatorUsername.startsWith('@') ? club.creatorUsername : `@${club.creatorUsername}`;
   const memberCountLabel = `${formatCount(club.memberCount)}+`;
   const workoutsLabel = formatCount(club.workoutsCompleted);
   const stickyLabel = `Join ${club.name.replace(/\([^)]*\)/g, '').trim() || club.name}`;
   const openInviteDeepLink = club.openInviteDeepLink || club.inviteDeepLink;
+
+  React.useEffect(() => {
+    const node = heroCtaRef.current;
+    if (typeof window === 'undefined' || !node) {
+      return undefined;
+    }
+    const browserWindow = window as Window;
+
+    const updateStickyVisibility = () => {
+      const rect = node.getBoundingClientRect();
+      const isHeroCtaVisible = rect.bottom > 0 && rect.top < browserWindow.innerHeight;
+      setIsStickyCtaVisible(!isHeroCtaVisible);
+    };
+
+    updateStickyVisibility();
+
+    if (!('IntersectionObserver' in browserWindow)) {
+      browserWindow.addEventListener('scroll', updateStickyVisibility, { passive: true });
+      browserWindow.addEventListener('resize', updateStickyVisibility);
+
+      return () => {
+        browserWindow.removeEventListener('scroll', updateStickyVisibility);
+        browserWindow.removeEventListener('resize', updateStickyVisibility);
+      };
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsStickyCtaVisible(!entry.isIntersecting);
+      },
+      {
+        threshold: 0.01,
+      }
+    );
+
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof document === 'undefined') {
+      return undefined;
+    }
+
+    const previousBodyBackground = document.body.style.backgroundColor;
+    const previousHtmlBackground = document.documentElement.style.backgroundColor;
+
+    document.body.style.backgroundColor = '#080808';
+    document.documentElement.style.backgroundColor = '#080808';
+
+    return () => {
+      document.body.style.backgroundColor = previousBodyBackground;
+      document.documentElement.style.backgroundColor = previousHtmlBackground;
+    };
+  }, []);
 
   const openInvite = () => {
     if (onOpenInvite) {
@@ -188,6 +248,14 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
         />
       </div>
 
+      <div
+        className="pointer-events-none fixed left-1/2 top-0 z-20 w-full max-w-[430px] -translate-x-1/2"
+        style={{
+          height: 'calc(env(safe-area-inset-top, 0px) + 104px)',
+          background: 'linear-gradient(180deg, #080808 0%, rgba(8,8,8,0.92) 36%, rgba(8,8,8,0.58) 62%, transparent 100%)',
+        }}
+      />
+
       <div className="relative z-10 mx-auto w-full max-w-[430px]">
         <section className="relative h-[100svh] max-h-[700px] min-h-[560px] overflow-hidden">
           <img
@@ -200,7 +268,10 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
           <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(8,8,8,1)_0%,rgba(8,8,8,0.9)_12%,rgba(8,8,8,0.4)_45%,transparent_70%)]" />
           <div className="absolute inset-0 bg-[linear-gradient(130deg,rgba(255,107,53,0.18)_0%,transparent_55%)]" />
 
-          <div className="animate-fade-down absolute inset-x-0 top-0 z-20 flex items-center justify-between px-5 pt-[54px] [animation-delay:150ms] [animation-fill-mode:both]">
+          <div
+            className="animate-fade-down absolute inset-x-0 top-0 z-30 flex items-center justify-between px-5 [animation-delay:150ms] [animation-fill-mode:both]"
+            style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}
+          >
             <div className="flex items-center gap-2.5">
               <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[10px] bg-lime text-black-pulse">
                 <PulseWaveIcon className="h-4 w-4" />
@@ -246,9 +317,11 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
             <p className="mb-5 mt-2 text-[13px] italic text-[rgba(255,255,255,0.5)]">{club.tagline}</p>
 
             <button
+              ref={heroCtaRef}
               type="button"
               onClick={openInvite}
               data-invite-deep-link={openInviteDeepLink}
+              data-testid="hero-join-cta"
               className="club-invite-cta w-full rounded-[14px] bg-lime px-4 py-4 text-left text-black-pulse shadow-[0_0_40px_rgba(197,255,0,0.18)] transition active:scale-[0.98]"
             >
               <div className="flex items-center gap-3">
@@ -459,13 +532,20 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
       </div>
 
       <div
-        className="fixed bottom-0 left-1/2 z-50 w-full max-w-[430px] -translate-x-1/2 px-5 pt-3"
+        aria-hidden={!isStickyCtaVisible}
+        data-testid="sticky-join-cta-shell"
+        data-sticky-visible={isStickyCtaVisible ? 'true' : 'false'}
+        className={`fixed bottom-0 left-1/2 z-50 w-full max-w-[430px] -translate-x-1/2 px-5 pt-3 transition-all duration-300 ease-out ${
+          isStickyCtaVisible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'
+        }`}
         style={{ background: 'linear-gradient(0deg, #080808 50%, transparent 100%)', paddingBottom: 'max(12px, env(safe-area-inset-bottom, 0px))' }}
       >
         <button
           type="button"
           onClick={openInvite}
           data-invite-deep-link={openInviteDeepLink}
+          data-testid="sticky-join-cta"
+          tabIndex={isStickyCtaVisible ? 0 : -1}
           className="club-invite-cta flex w-full items-center justify-center gap-3 rounded-[16px] bg-lime px-4 py-[17px] text-[16px] font-bold text-black-pulse shadow-[0_-4px_48px_rgba(197,255,0,0.16),0_4px_24px_rgba(0,0,0,0.5)] transition active:scale-[0.98]"
         >
           <PulseLayersIcon className="h-5 w-5" />
