@@ -23,7 +23,21 @@
 
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
-const { spawnSync } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
+const path = require('path');
+const {
+    DEFAULT_MAX_ACTIVE_TASKS_PER_AGENT,
+    DEFAULT_MAX_QUEUED_EXECUTE_TASKS_PER_AGENT,
+    DEFAULT_MAX_QUEUED_EXPLORE_TASKS_PER_AGENT,
+    DEFAULT_MISSION_MODE,
+    DEFAULT_PLANNER_MODE,
+    DEFAULT_STALL_WINDOW_MINUTES,
+    MISSION_SYSTEM_VERSION,
+    buildExecuteTaskContract,
+    normalizeMissionPolicy,
+    recordMissionRunEvent,
+    shouldQuarantineTask,
+} = require('./missionOsV2');
 
 /* ─── Config ─────────────────────────────────────────── */
 
@@ -64,6 +78,17 @@ const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || 'main';
 const ALLOW_DIRECT_OPENAI = Boolean(process.env.OPENAI_API_KEY) && !USE_OPENCLAW;
 const MISSION_PLANNING_WINDOW_MS = parseInt(process.env.MISSION_PLANNING_WINDOW_MS || '90000', 10);
 const MISSION_PLANNING_POLL_MS = parseInt(process.env.MISSION_PLANNING_POLL_MS || '4000', 10);
+const SYSTEM_VERSION_ARG = process.argv.find((arg) => arg.startsWith('--system-version='));
+const MODE_ARG = process.argv.find((arg) => arg.startsWith('--mode='));
+const MISSION_SYSTEM_VERSION_OVERRIDE = parseInt(
+    process.env.MISSION_SYSTEM_VERSION || SYSTEM_VERSION_ARG?.split('=')[1] || `${MISSION_SYSTEM_VERSION}`,
+    10
+);
+const MISSION_MODE = String(process.env.MISSION_MODE || MODE_ARG?.split('=')[1] || DEFAULT_MISSION_MODE).toLowerCase() === 'explore'
+    ? 'explore'
+    : 'execute';
+const MISSION_CANARY = ['1', 'true', 'yes'].includes(String(process.env.MISSION_CANARY || '').toLowerCase()) || process.argv.includes('--canary');
+const USE_MISSION_V2 = Number.isFinite(MISSION_SYSTEM_VERSION_OVERRIDE) && MISSION_SYSTEM_VERSION_OVERRIDE >= MISSION_SYSTEM_VERSION;
 
 /* ─── Helpers ─────────────────────────────────────────── */
 
@@ -318,6 +343,9 @@ async function generateMissionPlan(northStar, primaryObjectives, approvedPropose
         `8. Complexity 1-5: 1=trivial, 3=moderate, 5=massive.`,
         `9. For agents that already have tasks, create tasks that COMPLEMENT (not duplicate) existing work.`,
         `10. Reflect at least one concrete idea from each agent's strategy response when possible.`,
+        `11. If the mission mode is execute, every task must include a concrete artifactSpec and at least 2 acceptanceChecks: one artifact existence check and one impact/behavior check.`,
+        `12. taskClass should be one of execute-unit, dependency-unblocker, correction, delivery, or explore-brief.`,
+        `13. verificationPolicy should default to automatedAuthority=true with humanSpotCheck="exceptions-and-sample" unless the task obviously requires manual review.`,
     ].filter(Boolean).join('\n');
 
     const result = await callGPT(systemPrompt, `Generate the mission plan. Return JSON with shape:
@@ -337,7 +365,31 @@ async function generateMissionPlan(northStar, primaryObjectives, approvedPropose
               "objectiveSource": "primary|agent-proposed",
               "objectiveLink": "Exact objective text this task advances",
               "proposedObjectiveId": "Required only when objectiveSource is agent-proposed, else empty string",
-              "direct_impact": "How this specifically moves the North Star"
+              "direct_impact": "How this specifically moves the North Star",
+              "taskClass": "execute-unit|dependency-unblocker|correction|delivery|explore-brief",
+              "priorityScore": 10,
+              "expiresInHours": 72,
+              "artifactSpec": {
+                "kind": "repo_file|runtime_change|firestore_change|api_behavior|external_action|content_asset",
+                "targets": ["specific file, endpoint, collection, or artifact target"],
+                "successDefinition": "What must exist when the task is actually done",
+                "mustTouchRepo": true,
+                "impactScope": "user-facing|internal|supporting"
+              },
+              "acceptanceChecks": [
+                {
+                  "kind": "shell|file|firestore|http|manual-spot-check",
+                  "label": "Check label",
+                  "commandOrPath": "command, file path, endpoint, or firestore target",
+                  "expectedSignal": "What success looks like"
+                }
+              ],
+              "dependencyIds": ["Optional task ids or dependency names"],
+              "verificationPolicy": {
+                "automatedAuthority": true,
+                "humanSpotCheck": "exceptions-and-sample",
+                "sampleRate": 0.2
+              }
             }
           ]
         }
@@ -349,15 +401,18 @@ async function generateMissionPlan(northStar, primaryObjectives, approvedPropose
 
 /* ─── Phase 2: Create Tasks in Firestore ─────────────── */
 
-async function createMissionTasks(plan, missionId, primaryObjectives, approvedProposedObjectives) {
+async function createMissionTasks(plan, missionId, primaryObjectives, approvedProposedObjectives, missionPolicy = {}) {
     const created = [];
+    const auditEvents = [];
     const batch = db.batch();
     const now = FieldValue.serverTimestamp();
+    const normalizedPolicy = normalizeMissionPolicy(missionPolicy);
 
     for (let agentIndex = 0; agentIndex < (plan.agents || []).length; agentIndex += 1) {
         const agentPlan = plan.agents[agentIndex];
         const claimedObjective = findBestPrimaryObjective(agentPlan?.claimedObjective, primaryObjectives, agentIndex);
         let secondaryTaskCount = 0;
+        let releasedExecuteCount = 0;
 
         for (const task of agentPlan.tasks || []) {
             let objectiveSource = normalizeObjectiveSource(task?.objectiveSource);
@@ -384,13 +439,38 @@ async function createMissionTasks(plan, missionId, primaryObjectives, approvedPr
             const objectiveLaneLabel = objectiveSource === 'agent-proposed'
                 ? `Agent-Proposed Objective (secondary): ${objectiveLink}`
                 : `North Star Objective (primary): ${objectiveLink}`;
+            const executeContract = USE_MISSION_V2 && normalizedPolicy.mode === 'execute'
+                ? buildExecuteTaskContract(
+                    {
+                        ...task,
+                        name: task.name,
+                        description: taskDescription,
+                        northStarObjective: claimedObjective,
+                        northStarObjectiveLink: objectiveLink,
+                    },
+                    {
+                        plannerSource: 'mission-supervisor',
+                        taskClass: task?.taskClass || 'execute-unit',
+                        objectiveId: objectiveLink,
+                        priorityScore: task?.priorityScore,
+                        expiresInHours: Number(task?.expiresInHours || 72) || 72,
+                    }
+                )
+                : null;
+            let nextStatus = executeContract && !executeContract.hasContract ? 'needs-spec' : 'todo';
+            if (executeContract && executeContract.hasContract) {
+                releasedExecuteCount += 1;
+                if (releasedExecuteCount > normalizedPolicy.maxQueuedExecuteTasksPerAgent) {
+                    nextStatus = 'blocked';
+                }
+            }
 
             const ref = db.collection(KANBAN_COLLECTION).doc();
             batch.set(ref, {
                 name: task.name,
                 description: `${taskDescription}\n\n**North Star Impact:** ${directImpact}\n**Objective Lane:** ${objectiveLaneLabel}`,
                 assignee: agentPlan.agentName,
-                status: 'todo',
+                status: nextStatus,
                 priority: task.priority || 'high',
                 complexity: task.complexity || 3,
                 source: 'mission-kickoff',
@@ -405,6 +485,22 @@ async function createMissionTasks(plan, missionId, primaryObjectives, approvedPr
                 missionKickoffAt: now,
                 createdAt: now,
                 updatedAt: now,
+                ...(executeContract ? {
+                    specVersion: executeContract.specVersion,
+                    mode: executeContract.mode,
+                    plannerSource: executeContract.plannerSource,
+                    taskClass: executeContract.taskClass,
+                    objectiveId: executeContract.objectiveId,
+                    artifactSpec: executeContract.artifactSpec,
+                    acceptanceChecks: executeContract.acceptanceChecks,
+                    dependencyIds: executeContract.dependencyIds,
+                    verificationPolicy: executeContract.verificationPolicy,
+                    priorityScore: executeContract.priorityScore,
+                    expiresAt: executeContract.expiresAt,
+                    quarantineReason: executeContract.quarantineReason,
+                    quarantinedAt: executeContract.quarantinedAt,
+                    verificationResult: executeContract.verificationResult,
+                } : {}),
             });
             created.push({
                 id: ref.id,
@@ -412,11 +508,28 @@ async function createMissionTasks(plan, missionId, primaryObjectives, approvedPr
                 name: task.name,
                 objectiveSource,
                 objectiveLink,
+                mode: executeContract?.mode || normalizedPolicy.mode || 'explore',
+                status: nextStatus,
+                objectiveId: executeContract?.objectiveId || '',
+            });
+            auditEvents.push({
+                agentId: agentPlan.agentId,
+                taskId: ref.id,
+                taskName: task.name,
+                status: nextStatus,
+                taskClass: executeContract?.taskClass || task?.taskClass || '',
+                objectiveId: executeContract?.objectiveId || '',
+                mode: executeContract?.mode || normalizedPolicy.mode || 'explore',
             });
         }
     }
 
     await batch.commit();
+    if (USE_MISSION_V2) {
+        for (const event of auditEvents) {
+            await recordMissionRunEvent(db, FieldValue, missionId, 'created-task', event);
+        }
+    }
     console.log(`✅ Created ${created.length} mission tasks in Firestore`);
     return created;
 }
@@ -639,6 +752,86 @@ async function postMissionExecutionHandoff(chatId, northStar, plan, primaryObjec
 
 /* ─── Phase 4: Mission Status ─────────────────────────── */
 
+async function loadPresenceByAgent() {
+    const snap = await db.collection('agent-presence').get();
+    return snap.docs.reduce((acc, doc) => {
+        acc[doc.id] = { id: doc.id, ...doc.data() };
+        return acc;
+    }, {});
+}
+
+async function quarantineLegacyAutoBacklog(missionId) {
+    if (!USE_MISSION_V2) return { count: 0, taskIds: [] };
+
+    const presenceByAgent = await loadPresenceByAgent();
+    const snap = await db.collection(KANBAN_COLLECTION)
+        .where('status', 'in', ['todo', 'needs-review'])
+        .get();
+
+    const nowMs = Date.now();
+    const taskIds = [];
+    let batch = db.batch();
+    let batchCount = 0;
+
+    for (const doc of snap.docs) {
+        const task = { id: doc.id, ...doc.data() };
+        if (!shouldQuarantineTask(task, presenceByAgent, nowMs)) continue;
+
+        batch.update(doc.ref, {
+            status: 'quarantined',
+            quarantineReason: 'mission-v2-backlog-cleanup',
+            quarantinedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+        batchCount += 1;
+        taskIds.push(doc.id);
+
+        if (batchCount >= 400) {
+            await batch.commit();
+            batch = db.batch();
+            batchCount = 0;
+        }
+    }
+
+    if (batchCount > 0) {
+        await batch.commit();
+    }
+
+    for (const taskId of taskIds) {
+        await recordMissionRunEvent(db, FieldValue, missionId, 'quarantined-task', {
+            taskId,
+            reason: 'mission-v2-backlog-cleanup',
+        });
+    }
+
+    return { count: taskIds.length, taskIds };
+}
+
+function buildMissionPolicyFields(overrides = {}) {
+    const policy = normalizeMissionPolicy({
+        systemVersion: MISSION_SYSTEM_VERSION_OVERRIDE,
+        mode: MISSION_MODE,
+        plannerMode: DEFAULT_PLANNER_MODE,
+        stallWindowMinutes: DEFAULT_STALL_WINDOW_MINUTES,
+        maxActiveTasksPerAgent: DEFAULT_MAX_ACTIVE_TASKS_PER_AGENT,
+        maxQueuedExecuteTasksPerAgent: DEFAULT_MAX_QUEUED_EXECUTE_TASKS_PER_AGENT,
+        maxQueuedExploreTasksPerAgent: DEFAULT_MAX_QUEUED_EXPLORE_TASKS_PER_AGENT,
+        canary: MISSION_CANARY,
+        ...overrides,
+    });
+
+    return {
+        mode: policy.mode,
+        plannerMode: policy.plannerMode,
+        systemVersion: policy.systemVersion,
+        stallWindowMinutes: policy.stallWindowMinutes,
+        maxActiveTasksPerAgent: policy.maxActiveTasksPerAgent,
+        maxQueuedExecuteTasksPerAgent: policy.maxQueuedExecuteTasksPerAgent,
+        maxQueuedExploreTasksPerAgent: policy.maxQueuedExploreTasksPerAgent,
+        canary: policy.canary,
+    };
+}
+
 async function setMissionPlanningStatus(northStar, missionId, chatId) {
     await db.doc(MISSION_DOC).set({
         status: 'active',
@@ -651,11 +844,34 @@ async function setMissionPlanningStatus(northStar, missionId, chatId) {
         createdTaskIds: [],
         startedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
+        plannerState: USE_MISSION_V2 ? 'planning' : 'legacy',
+        lastVerifiedDeliverableAt: null,
+        verifiedDeliverableCount: 0,
+        autopauseReason: '',
+        objectiveProgress: {},
+        quarantinedTaskCount: 0,
+        ...buildMissionPolicyFields(),
     }, { merge: true });
     console.log(`🎯 Mission status set to PLANNING (${missionId})`);
 }
 
-async function activateMission(northStar, plan, primaryObjectives, chatId, taskIds, missionId) {
+async function activateMission(northStar, plan, primaryObjectives, chatId, taskIds, missionId, quarantineResult = { count: 0 }) {
+    const objectiveProgress = Object.fromEntries(
+        (plan.agents || []).map((a, i) => {
+            const objective = findBestPrimaryObjective(a?.claimedObjective, primaryObjectives, i);
+            const objectiveId = objective
+                .toUpperCase()
+                .replace(/[^A-Z0-9]+/g, '_')
+                .replace(/^_+|_+$/g, '')
+                .slice(0, 48) || `OBJECTIVE_${i + 1}`;
+            return [objectiveId, {
+                title: objective,
+                verifiedDeliverableCount: 0,
+                openTaskCount: (a.tasks || []).length,
+                completedTaskCount: 0,
+            }];
+        })
+    );
     await db.doc(MISSION_DOC).set({
         status: 'active',
         missionPhase: 'execution',
@@ -668,10 +884,36 @@ async function activateMission(northStar, plan, primaryObjectives, chatId, taskI
         ),
         taskCount: taskIds.length,
         createdTaskIds: taskIds.map(t => t.id),
+        lastVerifiedDeliverableAt: null,
+        verifiedDeliverableCount: 0,
+        autopauseReason: '',
+        quarantinedTaskCount: quarantineResult?.count || 0,
+        plannerState: USE_MISSION_V2 ? 'executing' : 'legacy',
+        objectiveProgress,
         updatedAt: FieldValue.serverTimestamp(),
+        ...buildMissionPolicyFields(),
     }, { merge: true });
 
     console.log(`🎯 Mission status set to EXECUTION (${missionId})`);
+}
+
+function spawnMissionSupervisor(missionId) {
+    if (!USE_MISSION_V2) return;
+
+    const supervisorScript = path.join(__dirname, 'missionSupervisor.js');
+    const child = spawn(process.execPath, [supervisorScript, `--mission-id=${missionId}`], {
+        cwd: process.cwd(),
+        detached: true,
+        stdio: 'ignore',
+        env: {
+            ...process.env,
+            MISSION_ID: missionId,
+            MISSION_SYSTEM_VERSION: String(MISSION_SYSTEM_VERSION_OVERRIDE),
+            MISSION_MODE,
+            MISSION_CANARY: MISSION_CANARY ? 'true' : 'false',
+        },
+    });
+    child.unref();
 }
 
 /* ─── Main ────────────────────────────────────────────── */
@@ -702,6 +944,10 @@ async function main() {
         // Generate unique mission ID
         missionId = `mission-${Date.now()}`;
         console.log(`\n📋 Mission ID: ${missionId}`);
+        const missionPolicy = buildMissionPolicyFields();
+        console.log(`   Mission mode: ${missionPolicy.mode}`);
+        console.log(`   System version: ${missionPolicy.systemVersion}`);
+        console.log(`   Canary: ${missionPolicy.canary ? 'yes' : 'no'}`);
 
         // Step 1: Load North Star
         console.log('\n⭐ Loading North Star...');
@@ -729,6 +975,15 @@ async function main() {
         const planningSession = await startMissionPlanningChat(northStar, missionId);
         chatId = planningSession.chatId;
         await setMissionPlanningStatus(northStar, missionId, chatId);
+        if (USE_MISSION_V2) {
+            await recordMissionRunEvent(db, FieldValue, missionId, 'planning-started', {
+                chatId,
+                northStarTitle: northStar.title,
+                mode: missionPolicy.mode,
+                systemVersion: missionPolicy.systemVersion,
+                canary: missionPolicy.canary,
+            });
+        }
         await postTimeline(
             'system', 'Mission Control', '🧠',
             'work-in-flight',
@@ -767,9 +1022,16 @@ async function main() {
             }
         }
 
+        let quarantineResult = { count: 0, taskIds: [] };
+        if (USE_MISSION_V2) {
+            console.log('\n🧹 Quarantining stale auto-generated backlog...');
+            quarantineResult = await quarantineLegacyAutoBacklog(missionId);
+            console.log(`   Quarantined ${quarantineResult.count} legacy task${quarantineResult.count === 1 ? '' : 's'}`);
+        }
+
         // Step 7: Create tasks only AFTER planning roundtable completes
         console.log('\n✏️  Creating tasks in Firestore...');
-        const createdTasks = await createMissionTasks(plan, missionId, primaryObjectives, approvedProposedObjectives);
+        const createdTasks = await createMissionTasks(plan, missionId, primaryObjectives, approvedProposedObjectives, missionPolicy);
 
         // Step 8: Post execution handoff back to the roundtable
         console.log('\n📣 Posting mission execution handoff...');
@@ -777,7 +1039,8 @@ async function main() {
 
         // Step 9: Activate mission execution status
         console.log('\n🎯 Activating mission...');
-        await activateMission(northStar, plan, primaryObjectives, chatId, createdTasks, missionId);
+        await activateMission(northStar, plan, primaryObjectives, chatId, createdTasks, missionId, quarantineResult);
+        spawnMissionSupervisor(missionId);
 
         // Step 10: Post timeline beat
         await postTimeline(
@@ -791,6 +1054,16 @@ async function main() {
                 artifactText: `${createdTasks.length} tasks created across ${AGENTS.length} agents`,
             }
         );
+        if (USE_MISSION_V2) {
+            await recordMissionRunEvent(db, FieldValue, missionId, 'mission-activated', {
+                chatId,
+                createdTaskIds: createdTasks.map((task) => task.id),
+                quarantinedTaskCount: quarantineResult.count,
+                mode: missionPolicy.mode,
+                systemVersion: missionPolicy.systemVersion,
+                canary: missionPolicy.canary,
+            });
+        }
 
         console.log('\n' + '═'.repeat(50));
         console.log('✅ MISSION LAUNCHED SUCCESSFULLY');
