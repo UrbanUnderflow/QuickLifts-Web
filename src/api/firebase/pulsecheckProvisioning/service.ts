@@ -23,6 +23,7 @@ import type {
   CreatePulseCheckOrganizationInput,
   CreatePulseCheckTeamInput,
   PulseCheckAdminContact,
+  PulseCheckOrganizationImplementationMetadata,
   PulseCheckOrganizationMembership,
   PulseCheckOrganization,
   PulseCheckAuntEdnaClinicianProfile,
@@ -383,6 +384,45 @@ const normalizeAdminContacts = (value: unknown): PulseCheckAdminContact[] => {
   }, []);
 };
 
+const normalizeOrganizationImplementationMetadata = (
+  value: unknown
+): PulseCheckOrganizationImplementationMetadata | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+
+  const candidate = value as Record<string, unknown>;
+  const provisioningPath = normalizeString(typeof candidate.provisioningPath === 'string' ? candidate.provisioningPath : '');
+  const ownerContactStatus = normalizeString(typeof candidate.ownerContactStatus === 'string' ? candidate.ownerContactStatus : '');
+  const selectedTargetEvidenceIds = Array.isArray(candidate.selectedTargetEvidenceIds)
+    ? candidate.selectedTargetEvidenceIds
+        .map((entry) => normalizeString(typeof entry === 'string' ? entry : ''))
+        .filter((entry, index, entries) => entry && entries.indexOf(entry) === index)
+    : [];
+
+  return {
+    provisioningPath:
+      provisioningPath === 'legacy-coach-roster'
+        ? 'legacy-coach-roster'
+        : provisioningPath === 'manual'
+          ? 'manual'
+          : 'pulsecheck-hierarchy',
+    legacySignupPathUsed: Boolean(candidate.legacySignupPathUsed),
+    canaryTarget: Boolean(candidate.canaryTarget),
+    selectedTargetLeadId: normalizeString(typeof candidate.selectedTargetLeadId === 'string' ? candidate.selectedTargetLeadId : ''),
+    selectedTargetEvidenceIds,
+    sourceBriefPath: normalizeString(typeof candidate.sourceBriefPath === 'string' ? candidate.sourceBriefPath : ''),
+    firstPlannedTeamName: normalizeString(typeof candidate.firstPlannedTeamName === 'string' ? candidate.firstPlannedTeamName : ''),
+    ownerContactStatus:
+      ownerContactStatus === 'confirmed'
+        ? 'confirmed'
+        : ownerContactStatus === 'unverified'
+          ? 'unverified'
+          : 'pending-confirmation',
+    provisionedBy: normalizeString(typeof candidate.provisionedBy === 'string' ? candidate.provisionedBy : ''),
+    provisionedAt: (candidate.provisionedAt as PulseCheckOrganizationImplementationMetadata['provisionedAt']) || null,
+    notes: normalizeString(typeof candidate.notes === 'string' ? candidate.notes : ''),
+  };
+};
+
 const toOrganization = (id: string, data: Record<string, any>): PulseCheckOrganization => ({
   id,
   displayName: data.displayName || '',
@@ -394,6 +434,7 @@ const toOrganization = (id: string, data: Record<string, any>): PulseCheckOrgani
   legacyCoachId: data.legacyCoachId || '',
   implementationOwnerUserId: data.implementationOwnerUserId || '',
   implementationOwnerEmail: data.implementationOwnerEmail || '',
+  implementationMetadata: normalizeOrganizationImplementationMetadata(data.implementationMetadata),
   primaryCustomerAdminName: data.primaryCustomerAdminName || '',
   primaryCustomerAdminEmail: data.primaryCustomerAdminEmail || '',
   additionalAdminContacts: normalizeAdminContacts(data.additionalAdminContacts),
@@ -1508,6 +1549,14 @@ export const pulseCheckProvisioningService = {
       legacyCoachId: normalizeString(input.legacyCoachId),
       implementationOwnerUserId: normalizeString(input.implementationOwnerUserId),
       implementationOwnerEmail: normalizeString(input.implementationOwnerEmail),
+      implementationMetadata: input.implementationMetadata
+        ? {
+            ...normalizeOrganizationImplementationMetadata(input.implementationMetadata),
+            provisionedAt:
+              input.implementationMetadata.provisionedAt ||
+              (input.implementationMetadata.legacySignupPathUsed ? null : serverTimestamp()),
+          }
+        : null,
       primaryCustomerAdminName: normalizeString(input.primaryCustomerAdminName),
       primaryCustomerAdminEmail: normalizeString(input.primaryCustomerAdminEmail),
       additionalAdminContacts: normalizeAdminContacts(input.additionalAdminContacts),

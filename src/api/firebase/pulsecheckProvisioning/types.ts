@@ -153,6 +153,20 @@ export interface PulseCheckAdminContact {
   email: string;
 }
 
+export interface PulseCheckOrganizationImplementationMetadata {
+  provisioningPath: 'pulsecheck-hierarchy' | 'legacy-coach-roster' | 'manual';
+  legacySignupPathUsed: boolean;
+  canaryTarget: boolean;
+  selectedTargetLeadId?: string;
+  selectedTargetEvidenceIds?: string[];
+  sourceBriefPath?: string;
+  firstPlannedTeamName?: string;
+  ownerContactStatus?: 'unverified' | 'pending-confirmation' | 'confirmed';
+  provisionedBy?: string;
+  provisionedAt?: Timestamp | null;
+  notes?: string;
+}
+
 export interface PulseCheckOrganization {
   id: string;
   displayName: string;
@@ -164,6 +178,7 @@ export interface PulseCheckOrganization {
   legacyCoachId?: string;
   implementationOwnerUserId?: string;
   implementationOwnerEmail?: string;
+  implementationMetadata?: PulseCheckOrganizationImplementationMetadata;
   primaryCustomerAdminName?: string;
   primaryCustomerAdminEmail?: string;
   additionalAdminContacts?: PulseCheckAdminContact[];
@@ -184,6 +199,7 @@ export interface CreatePulseCheckOrganizationInput {
   legacyCoachId?: string;
   implementationOwnerUserId?: string;
   implementationOwnerEmail?: string;
+  implementationMetadata?: PulseCheckOrganizationImplementationMetadata;
   primaryCustomerAdminName?: string;
   primaryCustomerAdminEmail?: string;
   additionalAdminContacts?: PulseCheckAdminContact[];
