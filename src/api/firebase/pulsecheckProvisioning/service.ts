@@ -1,7 +1,12 @@
 import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { auth, db, getFirebaseModeRequestHeaders } from '../config';
 import { buildPulseCheckTeamInviteOneLink, resolvePulseCheckInvitePreviewImage } from '../../../utils/pulsecheckInviteLinks';
-import { mergePulseCheckRequiredConsents } from './types';
+import { SubscriptionPlatform, SubscriptionType } from '../user';
+import {
+  derivePulseCheckTeamPlanBypass,
+  getDefaultPulseCheckTeamCommercialConfig,
+  mergePulseCheckRequiredConsents,
+} from './types';
 import { ATHLETE_MENTAL_PROGRESS_COLLECTION } from '../mentaltraining/collections';
 import type { AthleteMentalProgress } from '../mentaltraining/types';
 import { resolvePulseCheckFunctionUrl } from '../mentaltraining/pulseCheckFunctionsUrl';
@@ -22,6 +27,7 @@ import type {
   PulseCheckOrganization,
   PulseCheckAuntEdnaClinicianProfile,
   PulseCheckInviteLinkType,
+  PulseCheckRevenueRecipientRole,
   PulseCheckPilot,
   PulseCheckPilotCohort,
   PulseCheckPilotEnrollment,
@@ -33,6 +39,8 @@ import type {
   PulseCheckResearchConsentStatus,
   PulseCheckRosterVisibilityScope,
   PulseCheckNotificationPreferences,
+  PulseCheckTeamCommercialConfig,
+  PulseCheckTeamCommercialSnapshot,
   PulseCheckOrganizationStatus,
   PulseCheckTeam,
   PulseCheckTeamMembership,
@@ -65,6 +73,9 @@ const LEGACY_ROSTER_MIGRATIONS_COLLECTION = 'pulsecheck-legacy-roster-migrations
 const USERS_COLLECTION = 'users';
 const COACHES_COLLECTION = 'coaches';
 const COACH_ATHLETES_COLLECTION = 'coachAthletes';
+const LEGACY_ROSTER_MIGRATION_VERSION = 2;
+const LEGACY_ROSTER_MIGRATION_STATUS_COMPLETED = 'completed';
+const LEGACY_ROSTER_LINK_MIGRATION_STATUS = 'migrated';
 const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
 const DEFAULT_PUBLIC_SITE_ORIGIN = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
 
@@ -112,6 +123,67 @@ const defaultNotificationPreferences = (): PulseCheckNotificationPreferences => 
   push: true,
   weeklyDigest: true,
 });
+const normalizeRevenueRecipientRole = (value: unknown): PulseCheckRevenueRecipientRole => {
+  const normalized = normalizeString(typeof value === 'string' ? value : '');
+  if (normalized === 'coach' || normalized === 'organization-owner') {
+    return normalized;
+  }
+  return 'team-admin';
+};
+const normalizeReferralRevenueSharePct = (value: unknown) => {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.min(100, Math.round(parsed * 100) / 100));
+};
+const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercialConfig => {
+  const candidate = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const defaults = getDefaultPulseCheckTeamCommercialConfig();
+  const commercialModel = normalizeString(typeof candidate.commercialModel === 'string' ? candidate.commercialModel : defaults.commercialModel);
+  const teamPlanStatus = normalizeString(typeof candidate.teamPlanStatus === 'string' ? candidate.teamPlanStatus : defaults.teamPlanStatus);
+
+  return {
+    commercialModel: commercialModel === 'team-plan' ? 'team-plan' : 'athlete-pay',
+    teamPlanStatus: teamPlanStatus === 'active' ? 'active' : 'inactive',
+    referralKickbackEnabled:
+      typeof candidate.referralKickbackEnabled === 'boolean'
+        ? candidate.referralKickbackEnabled
+        : defaults.referralKickbackEnabled,
+    referralRevenueSharePct: normalizeReferralRevenueSharePct(
+      candidate.referralRevenueSharePct ?? defaults.referralRevenueSharePct
+    ),
+    revenueRecipientRole: normalizeRevenueRecipientRole(candidate.revenueRecipientRole),
+    revenueRecipientUserId: normalizeString(typeof candidate.revenueRecipientUserId === 'string' ? candidate.revenueRecipientUserId : defaults.revenueRecipientUserId),
+    billingOwnerUserId: normalizeString(typeof candidate.billingOwnerUserId === 'string' ? candidate.billingOwnerUserId : defaults.billingOwnerUserId),
+    billingCustomerId: normalizeString(typeof candidate.billingCustomerId === 'string' ? candidate.billingCustomerId : defaults.billingCustomerId),
+    teamPlanActivatedAt: (candidate.teamPlanActivatedAt as PulseCheckTeamCommercialConfig['teamPlanActivatedAt']) || null,
+    teamPlanExpiresAt: (candidate.teamPlanExpiresAt as PulseCheckTeamCommercialConfig['teamPlanExpiresAt']) || null,
+  };
+};
+const buildTeamCommercialSnapshot = (input: {
+  organizationId: string;
+  teamId: string;
+  commercialConfig: PulseCheckTeamCommercialConfig;
+  inviteToken?: string;
+}): PulseCheckTeamCommercialSnapshot => ({
+  ...input.commercialConfig,
+  sourceOrganizationId: normalizeString(input.organizationId),
+  sourceTeamId: normalizeString(input.teamId),
+  inviteToken: normalizeString(input.inviteToken),
+  teamPlanBypassesPaywall: derivePulseCheckTeamPlanBypass(input.commercialConfig),
+});
+const resolveTeamAdminCommercialConfig = (
+  commercialConfig: PulseCheckTeamCommercialConfig,
+  userId: string
+): PulseCheckTeamCommercialConfig => {
+  if (commercialConfig.revenueRecipientRole !== 'team-admin' || commercialConfig.revenueRecipientUserId) {
+    return commercialConfig;
+  }
+
+  return {
+    ...commercialConfig,
+    revenueRecipientUserId: normalizeString(userId),
+  };
+};
 const defaultAthleteOnboardingState = () => ({
   productConsentAccepted: false,
   productConsentAcceptedAt: null,
@@ -346,6 +418,7 @@ const toTeam = (id: string, data: Record<string, any>): PulseCheckTeam => ({
   defaultAdminEmail: data.defaultAdminEmail || '',
   status: (data.status as PulseCheckTeamStatus) || 'provisioning',
   defaultInvitePolicy: data.defaultInvitePolicy || 'admin-only',
+  commercialConfig: normalizeTeamCommercialConfig(data.commercialConfig),
   defaultClinicianProfileId: data.defaultClinicianProfileId || '',
   defaultClinicianExternalProfileId: data.defaultClinicianExternalProfileId || '',
   defaultClinicianProfileName: data.defaultClinicianProfileName || '',
@@ -435,6 +508,14 @@ const toInviteLink = (id: string, data: Record<string, any>): PulseCheckInviteLi
   invitedTitle: data.invitedTitle || '',
   recipientName: data.recipientName || '',
   targetEmail: data.targetEmail || '',
+  commercialSnapshot: data.commercialSnapshot
+    ? buildTeamCommercialSnapshot({
+        organizationId: data.organizationId || '',
+        teamId: data.teamId || '',
+        commercialConfig: normalizeTeamCommercialConfig(data.commercialSnapshot),
+        inviteToken: data.commercialSnapshot?.inviteToken || data.token || id,
+      })
+    : undefined,
   token: data.token || id,
   activationUrl: normalizeInviteActivationUrl(data.activationUrl),
   createdByUserId: data.createdByUserId || '',
@@ -471,6 +552,14 @@ const toTeamMembership = (id: string, data: Record<string, any>): PulseCheckTeam
   postActivationCompletedAt: data.postActivationCompletedAt || null,
   grantedByInviteToken: data.grantedByInviteToken || '',
   grantedAt: data.grantedAt || null,
+  commercialAccess: data.commercialAccess
+    ? buildTeamCommercialSnapshot({
+        organizationId: data.organizationId || '',
+        teamId: data.teamId || '',
+        commercialConfig: normalizeTeamCommercialConfig(data.commercialAccess),
+        inviteToken: data.commercialAccess?.inviteToken || data.grantedByInviteToken || '',
+      })
+    : undefined,
   createdAt: data.createdAt || null,
   updatedAt: data.updatedAt || null,
 });
@@ -553,6 +642,28 @@ const formatLegacyCoachRosterName = (coachName: string) => {
 };
 const buildLegacyRosterOrganizationName = (coachName: string) => `${formatLegacyCoachRosterName(coachName)} Coaching`;
 const buildLegacyRosterTeamName = (coachName: string) => `${formatLegacyCoachRosterName(coachName)} Legacy Roster`;
+const buildLegacyRosterMigrationId = (coachId: string) => normalizeString(coachId);
+const buildLegacyRosterOrganizationId = (coachId: string) => `legacy-coach-org-${normalizeString(coachId)}`;
+const buildLegacyRosterTeamId = (coachId: string) => `legacy-coach-team-${normalizeString(coachId)}`;
+const toLegacyRosterMigrationResult = (
+  coachId: string,
+  fallbackCoachDisplayName: string,
+  data: Record<string, any>
+): PulseCheckLegacyCoachRosterMigrationResult => ({
+  migrationId: normalizeString(data.migrationId) || buildLegacyRosterMigrationId(coachId),
+  coachId,
+  coachDisplayName: normalizeString(data.coachDisplayName) || formatLegacyCoachRosterName(fallbackCoachDisplayName || coachId),
+  organizationId: normalizeString(data.organizationId),
+  organizationName: normalizeString(data.organizationName),
+  teamId: normalizeString(data.teamId),
+  teamName: normalizeString(data.teamName),
+  createdOrganization: Boolean(data.createdOrganization),
+  createdTeam: Boolean(data.createdTeam),
+  migratedAthleteCount: Number(data.migratedAthleteCount || 0),
+  alreadyPresentAthleteCount: Number(data.alreadyPresentAthleteCount || 0),
+  retiredLegacyConnectionCount: Number(data.retiredLegacyConnectionCount || 0),
+  unresolvedLegacyConnectionCount: Number(data.unresolvedLegacyConnectionCount || 0),
+});
 
 const withLocalRedeemFallback = async <T>(
   serverAction: () => Promise<T>,
@@ -880,7 +991,9 @@ export const pulseCheckProvisioningService = {
     const coachAthleteSnapshot = await getDocs(collection(db, COACH_ATHLETES_COLLECTION));
     const activeLinks = coachAthleteSnapshot.docs.filter((docSnap) => {
       const data = docSnap.data() as Record<string, any>;
-      return normalizeString(data.coachId) && normalizeString(data.athleteUserId) && normalizeString(data.status) !== 'disconnected';
+      const isDisconnected = normalizeString(data.status) === 'disconnected';
+      const isAlreadyMigrated = normalizeString(data.pulseCheckMigrationStatus) === LEGACY_ROSTER_LINK_MIGRATION_STATUS;
+      return normalizeString(data.coachId) && normalizeString(data.athleteUserId) && !isDisconnected && !isAlreadyMigrated;
     });
 
     const groupedByCoach = new Map<string, Array<{ id: string; data: Record<string, any> }>>();
@@ -1028,12 +1141,21 @@ export const pulseCheckProvisioningService = {
       throw new Error('Coach ID is required.');
     }
 
-    const [candidateList, coachUserSnap] = await Promise.all([
+    const migrationId = buildLegacyRosterMigrationId(coachId);
+    const migrationRef = doc(db, LEGACY_ROSTER_MIGRATIONS_COLLECTION, migrationId);
+
+    const [candidateList, coachUserSnap, migrationSnap] = await Promise.all([
       pulseCheckProvisioningService.listLegacyCoachRosterCandidates(),
       getDoc(doc(db, USERS_COLLECTION, coachId)),
+      getDoc(migrationRef),
     ]);
+    const existingMigration = migrationSnap.exists() ? (migrationSnap.data() as Record<string, any>) : {};
     const candidate = candidateList.find((entry) => entry.coachId === coachId);
+
     if (!candidate) {
+      if (migrationSnap.exists() && normalizeString(existingMigration.status) === LEGACY_ROSTER_MIGRATION_STATUS_COMPLETED) {
+        return toLegacyRosterMigrationResult(coachId, normalizeString(existingMigration.coachDisplayName), existingMigration);
+      }
       throw new Error('No active legacy roster was found for this coach.');
     }
 
@@ -1042,49 +1164,109 @@ export const pulseCheckProvisioningService = {
     const coachName = formatLegacyCoachRosterName(candidate.coachDisplayName);
     const requestedOrganizationName = normalizeString(input.organizationName);
     const requestedTeamName = normalizeString(input.teamName);
+    const [existingLegacyOrganizationsSnap, existingLegacyTeamsSnap] = await Promise.all([
+      getDocs(query(collection(db, ORGANIZATIONS_COLLECTION), where('legacyCoachId', '==', coachId))),
+      getDocs(query(collection(db, TEAMS_COLLECTION), where('legacyCoachId', '==', coachId))),
+    ]);
+    const existingLegacyOrganizationDoc =
+      existingLegacyOrganizationsSnap.docs
+        .filter((docSnap) => normalizeString((docSnap.data() as Record<string, any>).legacySource) === 'legacy-coach-roster')
+        .map((docSnap) => ({ id: docSnap.id, data: docSnap.data() as Record<string, any> }))
+        .sort((left, right) => {
+          const leftTime = toJsDate(left.data.createdAt)?.getTime() || 0;
+          const rightTime = toJsDate(right.data.createdAt)?.getTime() || 0;
+          return rightTime - leftTime;
+        })[0] || null;
+    const existingLegacyTeamDoc =
+      existingLegacyTeamsSnap.docs
+        .filter((docSnap) => normalizeString((docSnap.data() as Record<string, any>).legacySource) === 'legacy-coach-roster')
+        .map((docSnap) => ({ id: docSnap.id, data: docSnap.data() as Record<string, any> }))
+        .sort((left, right) => {
+          const leftTime = toJsDate(left.data.createdAt)?.getTime() || 0;
+          const rightTime = toJsDate(right.data.createdAt)?.getTime() || 0;
+          return rightTime - leftTime;
+        })[0] || null;
 
-    let organizationId = normalizeString(candidate.existingOrganizationId);
-    let teamId = normalizeString(candidate.existingTeamId);
-    let organizationName = normalizeString(candidate.existingOrganizationName);
-    let teamName = normalizeString(candidate.existingTeamName);
+    let organizationId =
+      normalizeString(candidate.existingOrganizationId) ||
+      normalizeString(existingMigration.organizationId) ||
+      normalizeString(existingLegacyOrganizationDoc?.id);
+    let teamId =
+      normalizeString(candidate.existingTeamId) ||
+      normalizeString(existingMigration.teamId) ||
+      normalizeString(existingLegacyTeamDoc?.id);
+    let organizationName =
+      normalizeString(candidate.existingOrganizationName) ||
+      normalizeString(existingMigration.organizationName) ||
+      normalizeString(existingLegacyOrganizationDoc?.data?.displayName as string);
+    let teamName =
+      normalizeString(candidate.existingTeamName) ||
+      normalizeString(existingMigration.teamName) ||
+      normalizeString(existingLegacyTeamDoc?.data?.displayName as string);
     let createdOrganization = false;
     let createdTeam = false;
 
     if (!organizationId) {
-      organizationName = requestedOrganizationName || buildLegacyRosterOrganizationName(coachName);
-      organizationId = await pulseCheckProvisioningService.createOrganization({
+      organizationId = buildLegacyRosterOrganizationId(coachId);
+    }
+    organizationName = organizationName || requestedOrganizationName || buildLegacyRosterOrganizationName(coachName);
+
+    const organizationRef = doc(db, ORGANIZATIONS_COLLECTION, organizationId);
+    const organizationSnap = await getDoc(organizationRef);
+    createdOrganization = !organizationSnap.exists();
+
+    await setDoc(
+      organizationRef,
+      {
         displayName: organizationName,
         legalName: organizationName,
-        organizationType: 'other',
-        status: 'active',
+        organizationType: normalizeString(organizationSnap.data()?.organizationType as string) || 'other',
+        status: organizationSnap.exists() ? organizationSnap.data()?.status || 'active' : 'active',
         legacySource: 'legacy-coach-roster',
         legacyCoachId: coachId,
-        primaryCustomerAdminName: coachName,
-        primaryCustomerAdminEmail: coachEmail,
-        defaultStudyPosture: 'operational',
-        defaultClinicianBridgeMode: 'none',
-        notes: `Auto-created from legacy coach roster migration for ${coachName}.`,
-      });
-      createdOrganization = true;
-    }
+        primaryCustomerAdminName: normalizeString(organizationSnap.data()?.primaryCustomerAdminName as string) || coachName,
+        primaryCustomerAdminEmail: normalizeString(organizationSnap.data()?.primaryCustomerAdminEmail as string) || coachEmail,
+        defaultStudyPosture: organizationSnap.exists() ? organizationSnap.data()?.defaultStudyPosture || 'operational' : 'operational',
+        defaultClinicianBridgeMode: organizationSnap.exists() ? organizationSnap.data()?.defaultClinicianBridgeMode || 'none' : 'none',
+        notes:
+          normalizeString(organizationSnap.data()?.notes as string) ||
+          `Auto-created from legacy coach roster migration for ${coachName}.`,
+        createdAt: organizationSnap.exists() ? organizationSnap.data()?.createdAt || serverTimestamp() : serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
 
     if (!teamId) {
-      teamName = requestedTeamName || buildLegacyRosterTeamName(coachName);
-      teamId = await pulseCheckProvisioningService.createTeam({
+      teamId = buildLegacyRosterTeamId(coachId);
+    }
+    teamName = teamName || requestedTeamName || buildLegacyRosterTeamName(coachName);
+
+    const teamRef = doc(db, TEAMS_COLLECTION, teamId);
+    const teamSnap = await getDoc(teamRef);
+    createdTeam = !teamSnap.exists();
+
+    await setDoc(
+      teamRef,
+      {
         organizationId,
         displayName: teamName,
-        teamType: 'other',
-        sportOrProgram: 'Legacy coach roster',
-        status: 'active',
+        teamType: normalizeString(teamSnap.data()?.teamType as string) || 'other',
+        sportOrProgram: normalizeString(teamSnap.data()?.sportOrProgram as string) || 'Legacy coach roster',
+        status: teamSnap.exists() ? teamSnap.data()?.status || 'active' : 'active',
         legacySource: 'legacy-coach-roster',
         legacyCoachId: coachId,
-        defaultAdminName: coachName,
-        defaultAdminEmail: coachEmail,
-        defaultInvitePolicy: 'admin-staff-and-coaches',
-        notes: `Auto-created from legacy coach roster migration for ${coachName}.`,
-      });
-      createdTeam = true;
-    }
+        defaultAdminName: normalizeString(teamSnap.data()?.defaultAdminName as string) || coachName,
+        defaultAdminEmail: normalizeString(teamSnap.data()?.defaultAdminEmail as string) || coachEmail,
+        defaultInvitePolicy: teamSnap.exists() ? teamSnap.data()?.defaultInvitePolicy || 'admin-staff-and-coaches' : 'admin-staff-and-coaches',
+        notes:
+          normalizeString(teamSnap.data()?.notes as string) ||
+          `Auto-created from legacy coach roster migration for ${coachName}.`,
+        createdAt: teamSnap.exists() ? teamSnap.data()?.createdAt || serverTimestamp() : serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
 
     if (!organizationName) {
       const organization = await pulseCheckProvisioningService.getOrganization(organizationId);
@@ -1153,6 +1335,8 @@ export const pulseCheckProvisioningService = {
 
     let migratedAthleteCount = 0;
     let alreadyPresentAthleteCount = 0;
+    let retiredLegacyConnectionCount = 0;
+    let unresolvedLegacyConnectionCount = 0;
 
     for (const athlete of candidate.athletes) {
       const athleteMembershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, `${teamId}_${athlete.athleteUserId}`);
@@ -1163,6 +1347,7 @@ export const pulseCheckProvisioningService = {
 
       if (athleteMembershipSnap.exists() && normalizeString(existingAthleteMembership.role) && existingAthleteMembership.role !== 'athlete') {
         alreadyPresentAthleteCount += 1;
+        unresolvedLegacyConnectionCount += 1;
         continue;
       }
 
@@ -1194,26 +1379,67 @@ export const pulseCheckProvisioningService = {
         },
         { merge: true }
       );
+
+      const legacyLinkSnapshot = await getDocs(
+        query(
+          collection(db, COACH_ATHLETES_COLLECTION),
+          where('coachId', '==', coachId),
+          where('athleteUserId', '==', athlete.athleteUserId)
+        )
+      );
+
+      const legacyLinkWrites = legacyLinkSnapshot.docs
+        .filter((docSnap) => normalizeString((docSnap.data() as Record<string, any>).status) !== 'disconnected')
+        .map((docSnap) =>
+          setDoc(
+            docSnap.ref,
+            {
+              pulseCheckMigrationId: migrationId,
+              pulseCheckMigrationVersion: LEGACY_ROSTER_MIGRATION_VERSION,
+              pulseCheckMigrationStatus: LEGACY_ROSTER_LINK_MIGRATION_STATUS,
+              pulseCheckMigratedOrganizationId: organizationId,
+              pulseCheckMigratedTeamId: teamId,
+              pulseCheckMigratedAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          )
+        );
+
+      await Promise.all(legacyLinkWrites);
+      retiredLegacyConnectionCount += legacyLinkWrites.length;
     }
 
-    await addDoc(collection(db, LEGACY_ROSTER_MIGRATIONS_COLLECTION), {
-      coachId,
-      coachDisplayName: coachName,
-      organizationId,
-      organizationName,
-      teamId,
-      teamName,
-      createdOrganization,
-      createdTeam,
-      migratedAthleteCount,
-      alreadyPresentAthleteCount,
-      source: 'coach-athletes',
-      athleteUserIds: candidate.athletes.map((athlete) => athlete.athleteUserId),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    await setDoc(
+      migrationRef,
+      {
+        migrationId,
+        status: LEGACY_ROSTER_MIGRATION_STATUS_COMPLETED,
+        migrationVersion: LEGACY_ROSTER_MIGRATION_VERSION,
+        coachId,
+        coachDisplayName: coachName,
+        organizationId,
+        organizationName,
+        teamId,
+        teamName,
+        createdOrganization,
+        createdTeam,
+        migratedAthleteCount,
+        alreadyPresentAthleteCount,
+        retiredLegacyConnectionCount,
+        unresolvedLegacyConnectionCount,
+        source: 'coach-athletes',
+        athleteUserIds: candidate.athletes.map((athlete) => athlete.athleteUserId),
+        legacyConnectionIds: candidate.athletes.map((athlete) => athlete.legacyConnectionId),
+        createdAt: migrationSnap.exists() ? existingMigration.createdAt || serverTimestamp() : serverTimestamp(),
+        completedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
 
-    return {
+    return toLegacyRosterMigrationResult(coachId, coachName, {
+      migrationId,
       coachId,
       coachDisplayName: coachName,
       organizationId,
@@ -1224,7 +1450,9 @@ export const pulseCheckProvisioningService = {
       createdTeam,
       migratedAthleteCount,
       alreadyPresentAthleteCount,
-    };
+      retiredLegacyConnectionCount,
+      unresolvedLegacyConnectionCount,
+    });
   },
 
   async createClinicianProfile(input: UpsertPulseCheckAuntEdnaClinicianProfileInput): Promise<PulseCheckAuntEdnaClinicianProfile> {
@@ -1331,6 +1559,7 @@ export const pulseCheckProvisioningService = {
   },
 
   async createTeam(input: CreatePulseCheckTeamInput): Promise<string> {
+    const commercialConfig = normalizeTeamCommercialConfig(input.commercialConfig);
     const payload = {
       organizationId: normalizeString(input.organizationId),
       displayName: normalizeString(input.displayName),
@@ -1344,6 +1573,7 @@ export const pulseCheckProvisioningService = {
       defaultAdminEmail: normalizeString(input.defaultAdminEmail),
       status: input.status || 'provisioning',
       defaultInvitePolicy: input.defaultInvitePolicy,
+      commercialConfig,
       defaultClinicianProfileId: normalizeString(input.defaultClinicianProfileId),
       defaultClinicianExternalProfileId: normalizeString(input.defaultClinicianExternalProfileId),
       defaultClinicianProfileName: normalizeString(input.defaultClinicianProfileName),
@@ -1522,14 +1752,21 @@ export const pulseCheckProvisioningService = {
     const normalizedPilotId = normalizeString(input.pilotId);
     const normalizedCohortId = normalizeString(input.cohortId);
     const shouldRevokeExistingMatchingLinks = input.revokeExistingMatchingLinks !== false;
+    const normalizedOrganizationId = normalizeString(input.organizationId);
     const baseUrl = getCurrentSiteOrigin();
     const fallbackPath = `/PulseCheck/team-invite/${token}${shouldStampDevFirebaseLinks() ? '?devFirebase=1' : ''}`;
     let activationUrl = `${baseUrl}${fallbackPath}`;
+    let commercialSnapshot = buildTeamCommercialSnapshot({
+      organizationId: normalizedOrganizationId,
+      teamId: normalizedTeamId,
+      commercialConfig: getDefaultPulseCheckTeamCommercialConfig(),
+      inviteToken: token,
+    });
 
     try {
       const [teamSnapshot, organizationSnapshot] = await Promise.all([
         getDoc(doc(db, TEAMS_COLLECTION, normalizedTeamId)),
-        getDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizeString(input.organizationId))),
+        getDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizedOrganizationId)),
       ]);
 
       const teamData = (teamSnapshot.data() || {}) as Record<string, any>;
@@ -1540,6 +1777,12 @@ export const pulseCheckProvisioningService = {
         normalizeString(teamData.invitePreviewImageUrl),
         normalizeString(organizationData.invitePreviewImageUrl)
       );
+      commercialSnapshot = buildTeamCommercialSnapshot({
+        organizationId: normalizedOrganizationId,
+        teamId: normalizedTeamId,
+        commercialConfig: normalizeTeamCommercialConfig(teamData.commercialConfig),
+        inviteToken: token,
+      });
 
       activationUrl = buildPulseCheckTeamInviteOneLink({
         token,
@@ -1583,7 +1826,7 @@ export const pulseCheckProvisioningService = {
     const payload = {
       inviteType: 'team-access',
       status: 'active',
-      organizationId: normalizeString(input.organizationId),
+      organizationId: normalizedOrganizationId,
       teamId: normalizedTeamId,
       pilotId: normalizedPilotId,
       pilotName: normalizeString(input.pilotName),
@@ -1593,6 +1836,7 @@ export const pulseCheckProvisioningService = {
       targetEmail: normalizedTargetEmail,
       recipientName: normalizeString(input.recipientName),
       invitedTitle: normalizeString(input.invitedTitle),
+      commercialSnapshot,
       token,
       activationUrl,
       createdByUserId: normalizeString(input.createdByUserId),
@@ -1973,6 +2217,14 @@ export const pulseCheckProvisioningService = {
     });
   },
 
+  async updateTeamCommercialConfig(teamId: string, commercialConfig: PulseCheckTeamCommercialConfig): Promise<void> {
+    const teamRef = doc(db, TEAMS_COLLECTION, normalizeString(teamId));
+    await updateDoc(teamRef, {
+      commercialConfig: normalizeTeamCommercialConfig(commercialConfig),
+      updatedAt: serverTimestamp(),
+    });
+  },
+
   async redeemAdminActivationInvite(token: string): Promise<RedeemPulseCheckAdminActivationResult> {
     const currentUser = auth.currentUser;
     if (!currentUser) {
@@ -2052,6 +2304,8 @@ export const pulseCheckProvisioningService = {
           const teamData = teamSnap.data() as Record<string, any>;
           const organizationName = normalizeString(organizationData.displayName) || 'PulseCheck Organization';
           const teamName = normalizeString(teamData.displayName) || 'Initial Team';
+          const teamCommercialConfig = normalizeTeamCommercialConfig(teamData.commercialConfig);
+          const nextTeamCommercialConfig = resolveTeamAdminCommercialConfig(teamCommercialConfig, userId);
 
           transaction.set(
             organizationMembershipRef,
@@ -2109,6 +2363,7 @@ export const pulseCheckProvisioningService = {
               activatedByUserId: userId,
               activatedByEmail: userEmail,
               activatedAt: serverTimestamp(),
+              commercialConfig: nextTeamCommercialConfig,
               defaultAdminUserIds: arrayUnion(userId),
               updatedAt: serverTimestamp(),
             },
@@ -2207,6 +2462,7 @@ export const pulseCheckProvisioningService = {
 
           const organizationRef = doc(db, ORGANIZATIONS_COLLECTION, organizationId);
           const teamRef = doc(db, TEAMS_COLLECTION, teamId);
+          const userRef = doc(db, USERS_COLLECTION, userId);
           const organizationMembershipRef = doc(db, ORGANIZATION_MEMBERSHIPS_COLLECTION, `${organizationId}_${userId}`);
           const teamMembershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, `${teamId}_${userId}`);
 
@@ -2214,6 +2470,7 @@ export const pulseCheckProvisioningService = {
             transaction.get(organizationRef),
             transaction.get(teamRef),
           ]);
+          const userSnap = await transaction.get(userRef);
           const existingTeamMembershipSnap = await transaction.get(teamMembershipRef);
           let pilotStudyMode: PulseCheckPilotStudyMode | null = null;
           let existingPilotEnrollment: Record<string, any> = {};
@@ -2245,6 +2502,17 @@ export const pulseCheckProvisioningService = {
           const teamData = teamSnap.data() as Record<string, any>;
           const organizationName = normalizeString(organizationData.displayName) || 'PulseCheck Organization';
           const teamName = normalizeString(teamData.displayName) || 'Team';
+          const teamCommercialConfig = normalizeTeamCommercialConfig(teamData.commercialConfig);
+          const nextTeamCommercialConfig =
+            teamMembershipRole === 'team-admin'
+              ? resolveTeamAdminCommercialConfig(teamCommercialConfig, userId)
+              : teamCommercialConfig;
+          const commercialSnapshot = buildTeamCommercialSnapshot({
+            organizationId,
+            teamId,
+            commercialConfig: nextTeamCommercialConfig,
+            inviteToken: token,
+          });
           const existingTeamMembership = existingTeamMembershipSnap.exists()
             ? (existingTeamMembershipSnap.data() as Record<string, any>)
             : {};
@@ -2287,6 +2555,7 @@ export const pulseCheckProvisioningService = {
             transaction.set(
               teamRef,
               {
+                commercialConfig: nextTeamCommercialConfig,
                 defaultAdminUserIds: arrayUnion(userId),
                 updatedAt: serverTimestamp(),
               },
@@ -2308,6 +2577,7 @@ export const pulseCheckProvisioningService = {
               allowedAthleteIds: [],
               athleteOnboarding: nextAthleteOnboarding,
               onboardingStatus: nextMembershipOnboardingStatus,
+              commercialAccess: commercialSnapshot,
               grantedByInviteToken: token,
               grantedAt: serverTimestamp(),
               createdAt: serverTimestamp(),
@@ -2315,6 +2585,40 @@ export const pulseCheckProvisioningService = {
             },
             { merge: true }
           );
+
+          if (teamMembershipRole === 'athlete') {
+            const existingUserData = userSnap.exists() ? (userSnap.data() as Record<string, any>) : {};
+            const currentSubscriptionType = normalizeString(existingUserData.subscriptionType);
+            const shouldGrantTeamPlanAccess =
+              commercialSnapshot.teamPlanBypassesPaywall &&
+              (!currentSubscriptionType || currentSubscriptionType === SubscriptionType.unsubscribed || currentSubscriptionType === SubscriptionType.teamPlan);
+
+            transaction.set(
+              userRef,
+              {
+                pulseCheckTeamCommercialAccess: commercialSnapshot,
+                onboardInvite: {
+                  ...(existingUserData.onboardInvite || {}),
+                  source: 'pulsecheck-team-invite',
+                  token,
+                  organizationId,
+                  teamId,
+                  pilotId,
+                  cohortId,
+                  teamMembershipRole,
+                  capturedAt: Math.floor(Date.now() / 1000),
+                },
+                ...(shouldGrantTeamPlanAccess
+                  ? {
+                      subscriptionType: SubscriptionType.teamPlan,
+                      subscriptionPlatform: SubscriptionPlatform.Web,
+                    }
+                  : {}),
+                updatedAt: new Date(),
+              },
+              { merge: true }
+            );
+          }
 
           if (teamMembershipRole === 'athlete' && pilotId && nextAthleteOnboarding) {
             const pilotEnrollmentRef = doc(db, PILOT_ENROLLMENTS_COLLECTION, buildPilotEnrollmentId(pilotId, userId));
@@ -2373,6 +2677,8 @@ export const pulseCheckProvisioningService = {
             teamMembershipId: teamMembershipRef.id,
             teamMembershipRole,
             invitedTitle,
+            commercialSnapshot,
+            teamPlanBypassesPaywall: commercialSnapshot.teamPlanBypassesPaywall,
           } satisfies RedeemPulseCheckTeamInviteResult;
         });
       }

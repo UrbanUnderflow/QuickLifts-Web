@@ -27,12 +27,18 @@ const { spawn, spawnSync } = require('child_process');
 const path = require('path');
 const {
     DEFAULT_MAX_ACTIVE_TASKS_PER_AGENT,
+    DEFAULT_EXECUTE_GATE_MODE,
+    DEFAULT_MAX_LEARNING_INVALIDATION_WIP_PCT,
+    DEFAULT_MAX_WAIVED_CREDIT_PCT,
     DEFAULT_MAX_QUEUED_EXECUTE_TASKS_PER_AGENT,
     DEFAULT_MAX_QUEUED_EXPLORE_TASKS_PER_AGENT,
     DEFAULT_MISSION_MODE,
     DEFAULT_PLANNER_MODE,
+    DEFAULT_PLANNER_MIN_CREDITED_SCORE,
+    DEFAULT_PLANNER_MIN_NET_SCORE,
     DEFAULT_STALL_WINDOW_MINUTES,
     MISSION_SYSTEM_VERSION,
+    OUTCOME_COLLECTION,
     buildExecuteTaskContract,
     normalizeMissionPolicy,
     recordMissionRunEvent,
@@ -454,11 +460,14 @@ async function createMissionTasks(plan, missionId, primaryObjectives, approvedPr
                         objectiveId: objectiveLink,
                         priorityScore: task?.priorityScore,
                         expiresInHours: Number(task?.expiresInHours || 72) || 72,
+                        missionPolicy: normalizedPolicy,
+                        missionId,
+                        assignee: agentPlan.agentName,
                     }
                 )
                 : null;
-            let nextStatus = executeContract && !executeContract.hasContract ? 'needs-spec' : 'todo';
-            if (executeContract && executeContract.hasContract) {
+            let nextStatus = executeContract && (!executeContract.hasContract || !executeContract.executeGatePassed) ? 'needs-spec' : 'todo';
+            if (executeContract && executeContract.hasContract && executeContract.executeGatePassed) {
                 releasedExecuteCount += 1;
                 if (releasedExecuteCount > normalizedPolicy.maxQueuedExecuteTasksPerAgent) {
                     nextStatus = 'blocked';
@@ -466,6 +475,8 @@ async function createMissionTasks(plan, missionId, primaryObjectives, approvedPr
             }
 
             const ref = db.collection(KANBAN_COLLECTION).doc();
+            const outcomeRef = executeContract ? db.collection(OUTCOME_COLLECTION).doc(executeContract.outcomeId || undefined) : null;
+            const outcomeStatus = nextStatus === 'blocked' ? 'planned' : 'planned';
             batch.set(ref, {
                 name: task.name,
                 description: `${taskDescription}\n\n**North Star Impact:** ${directImpact}\n**Objective Lane:** ${objectiveLaneLabel}`,
@@ -500,8 +511,38 @@ async function createMissionTasks(plan, missionId, primaryObjectives, approvedPr
                     quarantineReason: executeContract.quarantineReason,
                     quarantinedAt: executeContract.quarantinedAt,
                     verificationResult: executeContract.verificationResult,
+                    outcomeId: executeContract.outcomeId,
+                    parentOutcomeId: executeContract.parentOutcomeId,
+                    supersedesOutcomeId: executeContract.supersedesOutcomeId,
+                    outcomeClass: executeContract.outcomeClass,
+                    outcomeDomain: executeContract.outcomeDomain,
+                    outcomeRole: executeContract.outcomeRole,
+                    proofPacket: executeContract.proofPacket,
+                    policyRefs: executeContract.policyRefs,
+                    expectedAttribution: executeContract.expectedAttribution,
+                    expectedOutcomeScore: executeContract.expectedOutcomeScore,
+                    expectedImpactScore: executeContract.expectedImpactScore,
+                    expectedCreditedScore: executeContract.expectedCreditedScore,
+                    expectedNetScore: executeContract.expectedNetScore,
+                    proofCompileStatus: executeContract.proofCompileStatus,
+                    proofCompileErrors: executeContract.proofCompileErrors,
+                    compiledProofPacketHash: executeContract.compiledProofPacketHash,
+                    expectedSignalWindow: executeContract.expectedSignalWindow,
+                    outcomeStatus,
                 } : {}),
             });
+            if (outcomeRef && executeContract?.outcomeRecord) {
+                batch.set(outcomeRef, {
+                    ...executeContract.outcomeRecord,
+                    id: outcomeRef.id,
+                    missionId,
+                    objectiveId: executeContract.objectiveId,
+                    primaryTaskIds: [ref.id],
+                    status: outcomeStatus,
+                    createdAt: now,
+                    updatedAt: now,
+                }, { merge: true });
+            }
             created.push({
                 id: ref.id,
                 agent: agentPlan.agentName,
@@ -520,6 +561,8 @@ async function createMissionTasks(plan, missionId, primaryObjectives, approvedPr
                 taskClass: executeContract?.taskClass || task?.taskClass || '',
                 objectiveId: executeContract?.objectiveId || '',
                 mode: executeContract?.mode || normalizedPolicy.mode || 'explore',
+                outcomeId: executeContract?.outcomeId || '',
+                outcomeClass: executeContract?.outcomeClass || '',
             });
         }
     }
@@ -528,6 +571,14 @@ async function createMissionTasks(plan, missionId, primaryObjectives, approvedPr
     if (USE_MISSION_V2) {
         for (const event of auditEvents) {
             await recordMissionRunEvent(db, FieldValue, missionId, 'created-task', event);
+            if (event.outcomeId) {
+                await recordMissionRunEvent(db, FieldValue, missionId, 'planned-outcome', {
+                    outcomeId: event.outcomeId,
+                    objectiveId: event.objectiveId || '',
+                    taskId: event.taskId,
+                    outcomeClass: event.outcomeClass || '',
+                });
+            }
         }
     }
     console.log(`✅ Created ${created.length} mission tasks in Firestore`);
@@ -828,6 +879,16 @@ function buildMissionPolicyFields(overrides = {}) {
         maxActiveTasksPerAgent: policy.maxActiveTasksPerAgent,
         maxQueuedExecuteTasksPerAgent: policy.maxQueuedExecuteTasksPerAgent,
         maxQueuedExploreTasksPerAgent: policy.maxQueuedExploreTasksPerAgent,
+        plannerMinimumCreditedScore: policy.plannerMinimumCreditedScore,
+        plannerMinimumNetScore: policy.plannerMinimumNetScore,
+        executeGateMode: policy.executeGateMode || DEFAULT_EXECUTE_GATE_MODE,
+        maxLearningInvalidationWipPct: policy.maxLearningInvalidationWipPct || DEFAULT_MAX_LEARNING_INVALIDATION_WIP_PCT,
+        allowWaivedCredit: policy.allowWaivedCredit,
+        maxWaivedCreditPct: policy.maxWaivedCreditPct || DEFAULT_MAX_WAIVED_CREDIT_PCT,
+        allowNegativeNetScore: policy.allowNegativeNetScore,
+        clampCreditedScoreAtZero: policy.clampCreditedScoreAtZero,
+        hardFailureNetHandling: policy.hardFailureNetHandling,
+        hardFailureDebtFloor: policy.hardFailureDebtFloor,
         canary: policy.canary,
     };
 }
@@ -850,6 +911,23 @@ async function setMissionPlanningStatus(northStar, missionId, chatId) {
         autopauseReason: '',
         objectiveProgress: {},
         quarantinedTaskCount: 0,
+        plannedOutcomeCount: 0,
+        observingOutcomeCount: 0,
+        confirmedOutcomeCount: 0,
+        reversedOutcomeCount: 0,
+        guardrailFailureCount: 0,
+        terminalOutcomeScore: 0,
+        enablingOutcomeScore: 0,
+        learningOutcomeScore: 0,
+        invalidationOutcomeScore: 0,
+        constraintOutcomeScore: 0,
+        creditedOutcomeScore: 0,
+        netOutcomeScore: 0,
+        businessDebtScore: 0,
+        waivedOutcomeCount: 0,
+        waivedCreditedScore: 0,
+        canceledOutcomeCount: 0,
+        supersededOutcomeCount: 0,
         ...buildMissionPolicyFields(),
     }, { merge: true });
     console.log(`🎯 Mission status set to PLANNING (${missionId})`);
@@ -890,6 +968,23 @@ async function activateMission(northStar, plan, primaryObjectives, chatId, taskI
         quarantinedTaskCount: quarantineResult?.count || 0,
         plannerState: USE_MISSION_V2 ? 'executing' : 'legacy',
         objectiveProgress,
+        plannedOutcomeCount: 0,
+        observingOutcomeCount: 0,
+        confirmedOutcomeCount: 0,
+        reversedOutcomeCount: 0,
+        guardrailFailureCount: 0,
+        terminalOutcomeScore: 0,
+        enablingOutcomeScore: 0,
+        learningOutcomeScore: 0,
+        invalidationOutcomeScore: 0,
+        constraintOutcomeScore: 0,
+        creditedOutcomeScore: 0,
+        netOutcomeScore: 0,
+        businessDebtScore: 0,
+        waivedOutcomeCount: 0,
+        waivedCreditedScore: 0,
+        canceledOutcomeCount: 0,
+        supersededOutcomeCount: 0,
         updatedAt: FieldValue.serverTimestamp(),
         ...buildMissionPolicyFields(),
     }, { merge: true });

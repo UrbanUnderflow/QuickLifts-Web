@@ -6,8 +6,7 @@ import {
   query, 
   where, 
   getDocs,
-  serverTimestamp,
-  updateDoc
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../config';
 import { AthletePrivacySettings, PrivacyConsentRequest } from '../../../types/Privacy';
@@ -81,33 +80,50 @@ class PrivacyService {
 
   /**
    * Update privacy consent when connecting to a coach
-   * Privacy settings are stored in the coachAthletes record
+   * Privacy settings are stored on athlete privacy documents, scoped per coach when available.
    */
   async updatePrivacyConsent(consentRequest: PrivacyConsentRequest): Promise<void> {
     try {
       console.log(`[PrivacyService] Updating privacy consent for athlete: ${consentRequest.athleteUserId}`);
-      
-      // Update the coachAthletes record with privacy settings (single source of truth)
-      const coachAthletesRef = collection(db, 'coachAthletes');
-      const connectionQuery = query(
-        coachAthletesRef,
-        where('coachId', '==', consentRequest.coachId),
-        where('athleteUserId', '==', consentRequest.athleteUserId)
+
+      const coachPrivacyRef = doc(
+        db,
+        this.privacyCollection,
+        consentRequest.athleteUserId,
+        'coaches',
+        consentRequest.coachId
       );
-      const connectionSnapshot = await getDocs(connectionQuery);
-      
-      if (!connectionSnapshot.empty) {
-        const connectionDoc = connectionSnapshot.docs[0];
-        await updateDoc(doc(db, 'coachAthletes', connectionDoc.id), {
-          shareConversations: consentRequest.shareConversations,
-          shareSentiment: consentRequest.shareSentiment,
-          updatedAt: serverTimestamp()
-        });
-        console.log(`[PrivacyService] Updated privacy settings in coachAthletes record`);
-      } else {
-        console.error(`[PrivacyService] No connection found between athlete ${consentRequest.athleteUserId} and coach ${consentRequest.coachId}`);
-        throw new Error('Connection not found');
-      }
+      const athletePrivacyRef = doc(db, this.privacyCollection, consentRequest.athleteUserId);
+
+      await Promise.all([
+        setDoc(
+          coachPrivacyRef,
+          {
+            athleteUserId: consentRequest.athleteUserId,
+            coachId: consentRequest.coachId,
+            coachName: consentRequest.coachName,
+            shareConversations: consentRequest.shareConversations,
+            shareSentiment: consentRequest.shareSentiment,
+            consentGivenAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+          },
+          { merge: true }
+        ),
+        setDoc(
+          athletePrivacyRef,
+          {
+            athleteUserId: consentRequest.athleteUserId,
+            coachId: consentRequest.coachId,
+            shareConversationsWithCoach: consentRequest.shareConversations,
+            shareSentimentWithCoach: consentRequest.shareSentiment,
+            consentGivenAt: serverTimestamp(),
+            lastUpdatedAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+          },
+          { merge: true }
+        ),
+      ]);
       
       console.log(`[PrivacyService] Privacy consent updated successfully`);
     } catch (error) {
@@ -118,7 +134,7 @@ class PrivacyService {
 
   /**
    * Check if coach can access athlete's conversations
-   * Uses coachAthletes record as single source of truth
+   * Uses the per-coach athlete privacy document as source of truth.
    */
   async canCoachAccessConversations(athleteUserId: string, coachId: string): Promise<boolean> {
     try {
@@ -132,7 +148,7 @@ class PrivacyService {
 
   /**
    * Check if coach can access athlete's sentiment data
-   * Uses coachAthletes record as single source of truth
+   * Uses the per-coach athlete privacy document as source of truth.
    */
   async canCoachAccessSentiment(athleteUserId: string, coachId: string): Promise<boolean> {
     try {
@@ -179,29 +195,36 @@ class PrivacyService {
   }
 
   /**
-   * Get privacy settings from coachAthletes record (primary source)
+   * Get privacy settings from the per-coach athlete privacy document.
    */
   async getPrivacyFromCoachAthlete(athleteUserId: string, coachId: string): Promise<{shareConversations: boolean, shareSentiment: boolean} | null> {
     try {
-      const coachAthletesRef = collection(db, 'coachAthletes');
-      const connectionQuery = query(
-        coachAthletesRef,
-        where('coachId', '==', coachId),
-        where('athleteUserId', '==', athleteUserId)
-      );
-      const connectionSnapshot = await getDocs(connectionQuery);
-      
-      if (!connectionSnapshot.empty) {
-        const data = connectionSnapshot.docs[0].data();
+      const coachPrivacyRef = doc(db, this.privacyCollection, athleteUserId, 'coaches', coachId);
+      const coachPrivacySnap = await getDoc(coachPrivacyRef);
+
+      if (coachPrivacySnap.exists()) {
+        const data = coachPrivacySnap.data();
         return {
           shareConversations: data.shareConversations ?? true, // Default to true
           shareSentiment: data.shareSentiment ?? true // Default to true
         };
       }
+
+      const athletePrivacyRef = doc(db, this.privacyCollection, athleteUserId);
+      const athletePrivacySnap = await getDoc(athletePrivacyRef);
+      if (athletePrivacySnap.exists()) {
+        const data = athletePrivacySnap.data();
+        if (!data.coachId || data.coachId === coachId) {
+          return {
+            shareConversations: data.shareConversationsWithCoach ?? true,
+            shareSentiment: data.shareSentimentWithCoach ?? true,
+          };
+        }
+      }
       
       return null;
     } catch (error) {
-      console.error('[PrivacyService] Error fetching privacy from coachAthletes:', error);
+      console.error('[PrivacyService] Error fetching privacy from coach settings:', error);
       return null;
     }
   }

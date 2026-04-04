@@ -23,6 +23,16 @@ interface Deliverable {
   sampledForReview?: boolean;
   movementScore?: number;
   objectiveId?: string;
+  outcomeId?: string;
+  outcomeStatus?: string;
+  outcomeClass?: string;
+  outcomeDomain?: string;
+  outcomeRole?: string;
+  parentOutcomeId?: string;
+  supersedesOutcomeId?: string;
+  creditedOutcomeScore?: number;
+  netOutcomeScore?: number;
+  businessDebtScore?: number;
   reviewReason?: string;
   completedAt?: string;
   taskRef?: string;
@@ -91,6 +101,70 @@ const normalizeDeliverableStatus = (value?: string): string => {
   }
   if (normalized === 'reject') return 'rejected';
   return normalized || 'work';
+};
+
+const normalizeOutcomeStatus = (value?: string): string => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized || normalized === 'planned') return 'planned';
+  if (normalized === 'executing') return 'executing';
+  if (normalized === 'observing') return 'observing';
+  if (normalized === 'confirmed') return 'confirmed';
+  if (normalized === 'reversed') return 'reversed';
+  if (normalized === 'waived') return 'waived';
+  if (normalized === 'canceled' || normalized === 'cancelled') return 'canceled';
+  if (normalized === 'superseded') return 'superseded';
+  if (normalized === 'failed' || normalized === 'guardrail-failed') return 'failed';
+  return normalized;
+};
+
+const normalizeOutcomeClass = (value?: string): string => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (['terminal', 'enabling', 'learning', 'invalidation', 'constraint'].includes(normalized)) {
+    return normalized;
+  }
+  return normalized || 'unknown';
+};
+
+const outcomeStatusBadge = (status?: string) => {
+  const normalized = normalizeOutcomeStatus(status);
+  switch (normalized) {
+    case 'planned':
+      return { className: 'planned', label: 'PLANNED' };
+    case 'executing':
+      return { className: 'observing', label: 'EXECUTING' };
+    case 'observing':
+      return { className: 'observing', label: 'OBSERVING' };
+    case 'confirmed':
+      return { className: 'confirmed', label: 'CONFIRMED' };
+    case 'reversed':
+      return { className: 'reversed', label: 'REVERSED' };
+    case 'waived':
+      return { className: 'waived', label: 'WAIVED' };
+    case 'canceled':
+      return { className: 'canceled', label: 'CANCELED' };
+    case 'superseded':
+      return { className: 'superseded', label: 'SUPERSEDED' };
+    case 'failed':
+      return { className: 'failed', label: 'FAILED' };
+    default:
+      return { className: 'planned', label: normalized.toUpperCase() || 'PLANNED' };
+  }
+};
+
+const outcomeClassBadge = (value?: string) => {
+  const normalized = normalizeOutcomeClass(value);
+  if (normalized === 'terminal') return { className: 'terminal', label: 'TERMINAL' };
+  if (normalized === 'enabling') return { className: 'enabling', label: 'ENABLING' };
+  if (normalized === 'learning') return { className: 'learning', label: 'LEARNING' };
+  if (normalized === 'invalidation') return { className: 'invalidation', label: 'INVALIDATION' };
+  if (normalized === 'constraint') return { className: 'constraint', label: 'CONSTRAINT' };
+  return { className: 'unknown', label: normalized.toUpperCase() || 'UNKNOWN' };
+};
+
+const formatOutcomeScore = (value?: number) => {
+  if (value === undefined || value === null || Number.isNaN(Number(value))) return '0';
+  const rounded = Math.round(Number(value) * 100) / 100;
+  return Number.isInteger(rounded) ? `${rounded}` : `${rounded.toFixed(2)}`;
 };
 
 const normalizeDeliverableChangeType = (value?: string): string => {
@@ -323,6 +397,16 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
           sampledForReview: data.sampledForReview === true,
           movementScore: Number(data.movementScore || 0),
           objectiveId: data.objectiveId || '',
+          outcomeId: data.outcomeId || '',
+          outcomeStatus: data.outcomeStatus || '',
+          outcomeClass: data.outcomeClass || '',
+          outcomeDomain: data.outcomeDomain || '',
+          outcomeRole: data.outcomeRole || '',
+          parentOutcomeId: data.parentOutcomeId || '',
+          supersedesOutcomeId: data.supersedesOutcomeId || '',
+          creditedOutcomeScore: data.creditedOutcomeScore !== undefined ? Number(data.creditedOutcomeScore) : undefined,
+          netOutcomeScore: data.netOutcomeScore !== undefined ? Number(data.netOutcomeScore) : undefined,
+          businessDebtScore: data.businessDebtScore !== undefined ? Number(data.businessDebtScore) : undefined,
           reviewReason: data.reviewReason || '',
           completedAt: data.createdAt?.toDate?.()?.toISOString?.() || undefined,
           taskRef: data.taskName || data.taskId || undefined,
@@ -723,6 +807,22 @@ const statusBadge = (status?: string) => {
                           </span>
                         );
                       })()}
+                      {d.outcomeStatus && (() => {
+                        const badge = outcomeStatusBadge(d.outcomeStatus);
+                        return (
+                          <span className={`sd-outcome-badge ${badge.className}`}>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
+                      {d.outcomeClass && (() => {
+                        const badge = outcomeClassBadge(d.outcomeClass);
+                        return (
+                          <span className={`sd-outcome-badge ${badge.className}`}>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
                       {d.completedAt && (
                         <span className="sd-date">{new Date(d.completedAt).toLocaleDateString()}</span>
                       )}
@@ -786,6 +886,31 @@ const statusBadge = (status?: string) => {
                           {d.sampledForReview ? ' · sampled for review' : ''}
                           {d.movementScore ? ` · movement ${d.movementScore}` : ''}
                         </span>
+                      </div>
+                    )}
+                    {(d.outcomeId || d.outcomeStatus || d.outcomeClass || d.outcomeDomain || d.creditedOutcomeScore !== undefined || d.netOutcomeScore !== undefined || d.businessDebtScore !== undefined) && (
+                      <div className="sd-review-note">
+                        <strong>Outcome linkage:</strong>
+                        <span>
+                          {d.outcomeStatus ? outcomeStatusBadge(d.outcomeStatus).label : 'PLANNED'}
+                          {d.outcomeClass ? ` · ${outcomeClassBadge(d.outcomeClass).label}` : ''}
+                          {d.outcomeDomain ? ` · ${d.outcomeDomain}` : ''}
+                          {d.creditedOutcomeScore !== undefined ? ` · credited ${formatOutcomeScore(d.creditedOutcomeScore)}` : ''}
+                          {d.netOutcomeScore !== undefined ? ` · net ${formatOutcomeScore(d.netOutcomeScore)}` : ''}
+                          {d.businessDebtScore !== undefined ? ` · debt ${formatOutcomeScore(d.businessDebtScore)}` : ''}
+                        </span>
+                        {d.outcomeId && (
+                          <p style={{ margin: '6px 0 0', fontSize: 11, color: '#52525b', fontFamily: 'JetBrains Mono, monospace' }}>
+                            Outcome ID: {d.outcomeId}
+                          </p>
+                        )}
+                        {(d.parentOutcomeId || d.supersedesOutcomeId) && (
+                          <p style={{ margin: '6px 0 0', fontSize: 11, color: '#52525b' }}>
+                            {d.parentOutcomeId ? `Parent ${d.parentOutcomeId}` : ''}
+                            {d.parentOutcomeId && d.supersedesOutcomeId ? ' · ' : ''}
+                            {d.supersedesOutcomeId ? `Supersedes ${d.supersedesOutcomeId}` : ''}
+                          </p>
+                        )}
                       </div>
                     )}
                     {d.tags.length > 0 && (
@@ -993,6 +1118,61 @@ const statusBadge = (status?: string) => {
         .sd-status-badge {
           font-size: 9px; font-weight: 600; padding: 1px 6px;
           border-radius: 4px; font-family: 'JetBrains Mono', monospace;
+        }
+        .sd-outcome-badge {
+          font-size: 9px; font-weight: 700; padding: 1px 6px;
+          border-radius: 4px; font-family: 'JetBrains Mono', monospace;
+          border: 1px solid rgba(255,255,255,0.08);
+        }
+        .sd-outcome-badge.planned {
+          background: rgba(99,102,241,0.12); color: #a5b4fc;
+          border-color: rgba(99,102,241,0.25);
+        }
+        .sd-outcome-badge.observing {
+          background: rgba(34,211,238,0.12); color: #22d3ee;
+          border-color: rgba(34,211,238,0.25);
+        }
+        .sd-outcome-badge.confirmed {
+          background: rgba(34,197,94,0.12); color: #4ade80;
+          border-color: rgba(34,197,94,0.25);
+        }
+        .sd-outcome-badge.reversed,
+        .sd-outcome-badge.failed {
+          background: rgba(244,63,94,0.12); color: #fb7185;
+          border-color: rgba(244,63,94,0.25);
+        }
+        .sd-outcome-badge.waived {
+          background: rgba(251,191,36,0.12); color: #fbbf24;
+          border-color: rgba(251,191,36,0.25);
+        }
+        .sd-outcome-badge.canceled,
+        .sd-outcome-badge.superseded {
+          background: rgba(148,163,184,0.12); color: #cbd5e1;
+          border-color: rgba(148,163,184,0.25);
+        }
+        .sd-outcome-badge.terminal {
+          background: rgba(34,197,94,0.12); color: #4ade80;
+          border-color: rgba(34,197,94,0.25);
+        }
+        .sd-outcome-badge.enabling {
+          background: rgba(59,130,246,0.12); color: #60a5fa;
+          border-color: rgba(59,130,246,0.25);
+        }
+        .sd-outcome-badge.learning {
+          background: rgba(251,191,36,0.12); color: #fbbf24;
+          border-color: rgba(251,191,36,0.25);
+        }
+        .sd-outcome-badge.invalidation {
+          background: rgba(244,63,94,0.12); color: #fb7185;
+          border-color: rgba(244,63,94,0.25);
+        }
+        .sd-outcome-badge.constraint {
+          background: rgba(45,212,191,0.12); color: #2dd4bf;
+          border-color: rgba(45,212,191,0.25);
+        }
+        .sd-outcome-badge.unknown {
+          background: rgba(148,163,184,0.12); color: #cbd5e1;
+          border-color: rgba(148,163,184,0.25);
         }
         .sd-change-badge {
           font-size: 9px; font-weight: 600; padding: 1px 6px;

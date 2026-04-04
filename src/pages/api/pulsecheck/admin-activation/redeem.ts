@@ -1,5 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../../lib/firebase-admin';
+import {
+  getDefaultPulseCheckTeamCommercialConfig,
+  type PulseCheckTeamCommercialConfig,
+} from '../../../../api/firebase/pulsecheckProvisioning/types';
 
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
 const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
@@ -9,6 +13,56 @@ const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const normalizeEmail = (value: unknown) => normalizeString(value).toLowerCase();
+const normalizeRevenueRecipientRole = (value: unknown) => {
+  const normalized = normalizeString(value);
+  if (normalized === 'coach' || normalized === 'organization-owner') {
+    return normalized;
+  }
+  return 'team-admin';
+};
+const normalizeReferralRevenueSharePct = (value: unknown) => {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.min(100, Math.round(parsed * 100) / 100));
+};
+const normalizeTimestampLike = (
+  value: unknown
+): PulseCheckTeamCommercialConfig['teamPlanActivatedAt'] => {
+  if (!value || typeof value !== 'object') return null;
+  return value as PulseCheckTeamCommercialConfig['teamPlanActivatedAt'];
+};
+const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercialConfig => {
+  const candidate = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const defaults = getDefaultPulseCheckTeamCommercialConfig();
+  const commercialModel = normalizeString(candidate.commercialModel ?? defaults.commercialModel);
+  const teamPlanStatus = normalizeString(candidate.teamPlanStatus ?? defaults.teamPlanStatus);
+
+  return {
+    commercialModel: commercialModel === 'team-plan' ? 'team-plan' : 'athlete-pay',
+    teamPlanStatus: teamPlanStatus === 'active' ? 'active' : 'inactive',
+    referralKickbackEnabled:
+      typeof candidate.referralKickbackEnabled === 'boolean'
+        ? candidate.referralKickbackEnabled
+        : defaults.referralKickbackEnabled,
+    referralRevenueSharePct: normalizeReferralRevenueSharePct(candidate.referralRevenueSharePct ?? defaults.referralRevenueSharePct),
+    revenueRecipientRole: normalizeRevenueRecipientRole(candidate.revenueRecipientRole),
+    revenueRecipientUserId: normalizeString(candidate.revenueRecipientUserId ?? defaults.revenueRecipientUserId),
+    billingOwnerUserId: normalizeString(candidate.billingOwnerUserId ?? defaults.billingOwnerUserId),
+    billingCustomerId: normalizeString(candidate.billingCustomerId ?? defaults.billingCustomerId),
+    teamPlanActivatedAt: normalizeTimestampLike(candidate.teamPlanActivatedAt),
+    teamPlanExpiresAt: normalizeTimestampLike(candidate.teamPlanExpiresAt),
+  };
+};
+const resolveTeamAdminCommercialConfig = (commercialConfig: PulseCheckTeamCommercialConfig, userId: string): PulseCheckTeamCommercialConfig => {
+  if (commercialConfig.revenueRecipientRole !== 'team-admin' || commercialConfig.revenueRecipientUserId) {
+    return commercialConfig;
+  }
+
+  return {
+    ...commercialConfig,
+    revenueRecipientUserId: normalizeString(userId),
+  };
+};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -85,6 +139,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const organizationName = normalizeString(organizationSnap.data()?.displayName) || 'PulseCheck Organization';
       const teamName = normalizeString(teamSnap.data()?.displayName) || 'Initial Team';
+      const teamCommercialConfig = normalizeTeamCommercialConfig(teamSnap.data()?.commercialConfig);
+      const nextTeamCommercialConfig = resolveTeamAdminCommercialConfig(teamCommercialConfig, userId);
 
       transaction.set(
         organizationMembershipRef,
@@ -142,6 +198,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           activatedByUserId: userId,
           activatedByEmail: userEmail,
           activatedAt: now,
+          commercialConfig: nextTeamCommercialConfig,
           defaultAdminUserIds: admin.firestore.FieldValue.arrayUnion(userId),
           updatedAt: now,
         },

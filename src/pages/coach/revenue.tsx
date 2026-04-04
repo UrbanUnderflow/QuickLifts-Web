@@ -22,7 +22,7 @@ interface RevenueData {
   month: string;
   totalRevenue: number;
   athleteRevenue: number;
-  referralRevenue: number;
+  teamPlanRevenue: number;
 }
 
 interface PayoutHistory {
@@ -45,22 +45,31 @@ type AthleteSub = {
   monthlyCents: number;
 };
 
-type ReferredCoach = {
-  coachUserId: string;
-  username?: string;
-  email?: string;
-  totalAthletes: number;
-  activeAthletes: number;
-  estimatedMRRCents: number;
-  yourShareCents: number;
-  breakdown?: Array<{ plan: string; count: number; monthlyCents: number; subtotalCents: number }>;
-};
-
 type UnifiedEarnings = {
   totalEarned: number;
   totalBalance: number;
   recentSales: Array<{ id?: string; date?: string; amount?: number; roundTitle?: string; buyerId?: string; created?: number; source?: string }>
 } | null;
+
+type PulseCheckCommercialSummary = {
+  athleteSubscriptionMrrCents?: number;
+  teamPlanBillingMrrCents?: number;
+  totalGrossMrrCents?: number;
+  estimatedPayoutMrrCents?: number;
+  teamBreakdown?: Array<{
+    teamId: string;
+    organizationName?: string | null;
+    teamName?: string | null;
+    commercialModel?: string | null;
+    teamPlanStatus?: string | null;
+    teamPlanBypassesPaywall?: boolean;
+    activeAthleteSubscriberCount?: number;
+    coveredAthleteCount?: number;
+    athleteSubscriptionMrrCents?: number;
+    teamPlanBillingMrrCents?: number;
+    estimatedPayoutMrrCents?: number;
+  }>;
+};
 
 const CoachRevenue: React.FC = () => {
   const currentUser = useUser();
@@ -79,11 +88,8 @@ const CoachRevenue: React.FC = () => {
   const [athleteSubs, setAthleteSubs] = useState<AthleteSub[]>([]);
   const [athleteLoading, setAthleteLoading] = useState(false);
 
-  // Referred coaches summary
-  const [referred, setReferred] = useState<ReferredCoach[]>([]);
-  const [referredLoading, setReferredLoading] = useState(false);
-  const [expandedCoach, setExpandedCoach] = useState<string | null>(null);
   const [downloadingMonth, setDownloadingMonth] = useState<string | null>(null);
+  const [commercialSummary, setCommercialSummary] = useState<PulseCheckCommercialSummary | null>(null);
 
   // Unified earnings (for creator sales and payout-like info)
   const [earnings, setEarnings] = useState<UnifiedEarnings>(null);
@@ -93,18 +99,42 @@ const CoachRevenue: React.FC = () => {
   const [autoResolving, setAutoResolving] = useState(false);
   const healedTriedRef = useRef<Set<string>>(new Set());
 
-  const currentMonth = revenueData[0] || { month: '', totalRevenue: 0, athleteRevenue: 0, referralRevenue: 0 };
+  const currentMonth = revenueData[0] || { month: '', totalRevenue: 0, athleteRevenue: 0, teamPlanRevenue: 0 };
   const previousMonth = revenueData[1];
   const monthlyGrowth = previousMonth ? 
     ((currentMonth.totalRevenue - previousMonth.totalRevenue) / previousMonth.totalRevenue) * 100 : 0;
 
   const _totalEarned = revenueData.reduce((sum, month) => sum + month.totalRevenue, 0);
   const _nextPayout = currentMonth.totalRevenue; // placeholder: most recent month total
+  const attributedAthleteRevenue = (commercialSummary?.estimatedPayoutMrrCents || 0) / 100;
+  const teamPlanBillingRevenue = (commercialSummary?.teamPlanBillingMrrCents || 0) / 100;
+  const totalCommercialMrr = (commercialSummary?.totalGrossMrrCents || 0) / 100;
+  const athleteShareRate =
+    commercialSummary?.athleteSubscriptionMrrCents && commercialSummary.athleteSubscriptionMrrCents > 0
+      ? (commercialSummary.estimatedPayoutMrrCents || 0) / commercialSummary.athleteSubscriptionMrrCents
+      : 0;
 
   useEffect(() => {
     // We mark loading done once sections below have attempted fetch/render
     setLoading(false);
   }, []);
+
+  useEffect(() => {
+    const loadCommercialSummary = async () => {
+      try {
+        if (!currentUser?.id) return;
+        const summarySnap = await getDoc(doc(db, 'pulsecheck-user-revenue-summaries', currentUser.id));
+        if (summarySnap.exists()) {
+          setCommercialSummary(summarySnap.data() as PulseCheckCommercialSummary);
+        } else {
+          setCommercialSummary(null);
+        }
+      } catch (_) {
+        setCommercialSummary(null);
+      }
+    };
+    loadCommercialSummary();
+  }, [currentUser?.id]);
 
   // Gate access: only partnership coaches should see this page.
   useEffect(() => {
@@ -331,7 +361,7 @@ const CoachRevenue: React.FC = () => {
       const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
       const label = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
       const total = byMonth.get(key) || 0;
-      months.push({ month: label, totalRevenue: total, athleteRevenue: 0, referralRevenue: 0 });
+      months.push({ month: label, totalRevenue: total, athleteRevenue: 0, teamPlanRevenue: 0 });
     }
     setRevenueData(months);
 
@@ -344,7 +374,7 @@ const CoachRevenue: React.FC = () => {
       method: 'Stripe'
     }));
     setPayoutHistory(payouts);
-  }, [athleteSubs, referred, earnings, selectedPeriod]);
+  }, [athleteSubs, earnings, selectedPeriod]);
 
   // Derived summaries for cards
   const thisMonthTotal = React.useMemo(() => {
@@ -463,80 +493,6 @@ const CoachRevenue: React.FC = () => {
       setDownloadingMonth(null);
     }
   };
-
-  useEffect(() => {
-    const loadReferred = async () => {
-      try {
-        if (!currentUser?.id) return;
-        setReferredLoading(true);
-        const coaches = await coachService.getReferredCoachesForCoach(currentUser.id);
-        const _ATHLETE_MONTHLY = PRICING_INFO.ATHLETE.MONTHLY.amount;
-        const rows: ReferredCoach[] = await Promise.all(
-          coaches.map(async (c: any) => {
-            const athletes = await coachService.getConnectedAthletes(c.userId);
-            let active = 0;
-            const byPlan: Map<string, { count: number; monthlyCents: number; subtotalCents: number }> = new Map();
-            await Promise.all(
-              athletes.map(async (a: any) => {
-                try {
-                  const sref = doc(db, 'subscriptions', a.id);
-                  const sdoc = await getDoc(sref);
-                  let isActive = false;
-                  let planType: string | null = null;
-                  if (sdoc.exists()) {
-                    const sd: any = sdoc.data();
-                    const plans: any[] = Array.isArray(sd?.plans) ? sd.plans : [];
-                    plans.sort((x, y) => (y?.expiration || 0) - (x?.expiration || 0));
-                    const latest = plans[0];
-                    if (latest) {
-                      planType = latest.type || null;
-                      isActive = typeof latest.expiration === 'number' && latest.expiration > Math.floor(Date.now() / 1000);
-                    }
-                  }
-                  if (!planType) {
-                    const status = await subscriptionService.ensureActiveOrSync(a.id);
-                    isActive = !!status.isActive;
-                  }
-                  if (isActive) {
-                    active += 1;
-                    const t = (planType || '').toString().toLowerCase();
-                    let monthlyCents = 0;
-                    if (t.includes('beta_grant')) monthlyCents = 0;
-                    else if (t.startsWith('pulsecheck-')) monthlyCents = t.includes('annual') ? Math.round(PRICING_INFO.ATHLETE.ANNUAL.amount / 12) : PRICING_INFO.ATHLETE.MONTHLY.amount;
-                    else if (t.includes('pc_1y')) monthlyCents = Math.round(PRICING_INFO.ATHLETE.ANNUAL.amount / 12);
-                    else if (t.includes('pc_1m') || t.includes('pc_m') || t.includes('pc_month')) monthlyCents = PRICING_INFO.ATHLETE.MONTHLY.amount;
-                    const label = planType || 'Unknown';
-                    const prev = byPlan.get(label) || { count: 0, monthlyCents, subtotalCents: 0 };
-                    prev.count += 1;
-                    prev.monthlyCents = monthlyCents;
-                    prev.subtotalCents += monthlyCents;
-                    byPlan.set(label, prev);
-                  }
-                } catch (_) {}
-              })
-            );
-            const mrr = Array.from(byPlan.values()).reduce((s, v) => s + v.subtotalCents, 0);
-            const yourShare = Math.round(mrr * 0.08);
-            return {
-              coachUserId: c.userId,
-              username: c.username,
-              email: c.email,
-              totalAthletes: athletes.length,
-              activeAthletes: active,
-              estimatedMRRCents: mrr,
-              yourShareCents: yourShare,
-              breakdown: Array.from(byPlan.entries()).map(([plan, v]) => ({ plan, count: v.count, monthlyCents: v.monthlyCents, subtotalCents: v.subtotalCents }))
-            } as ReferredCoach;
-          })
-        );
-        rows.sort((a, b) => b.activeAthletes - a.activeAthletes);
-        setReferred(rows);
-      } finally {
-        setReferredLoading(false);
-      }
-    };
-    loadReferred();
-  }, [currentUser?.id]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -761,16 +717,16 @@ const CoachRevenue: React.FC = () => {
                   <button onClick={() => setSubsOpen(!subsOpen)} className="w-full flex items-center justify-between p-4 bg-zinc-800 rounded-lg text-left">
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 bg-[#E0FE10] rounded-full"></div>
-                      <span className="text-white">Athlete Subscriptions</span>
+                      <span className="text-white">Team-attributed athlete revenue</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className={`transition-transform ${subsOpen ? 'rotate-90' : ''}`}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 18l6-6-6-6" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       </div>
                       <div className="text-right">
-                      <p className="text-white font-semibold">${currentMonth.athleteRevenue.toFixed(2)}</p>
+                      <p className="text-white font-semibold">${attributedAthleteRevenue.toFixed(2)}</p>
                       <p className="text-zinc-400 text-sm">
-                        {currentMonth.totalRevenue > 0 ? ((currentMonth.athleteRevenue / currentMonth.totalRevenue) * 100).toFixed(1) + '%' : '—'}
+                        {totalCommercialMrr > 0 ? ((attributedAthleteRevenue / totalCommercialMrr) * 100).toFixed(1) + '%' : '—'}
                       </p>
                       </div>
                     </div>
@@ -791,12 +747,12 @@ const CoachRevenue: React.FC = () => {
                               <th className="text-left py-2 px-2">Status</th>
                               <th className="text-left py-2 px-2">Expires</th>
                               <th className="text-right py-2 px-2">Amount</th>
-                              <th className="text-right py-2 px-2">Coach 40%</th>
+                              <th className="text-right py-2 px-2">Estimated Share</th>
                             </tr>
                           </thead>
                           <tbody>
                             {athleteSubs.map(a => {
-                              const share = Math.round(a.monthlyCents * 0.4);
+                              const share = Math.round(a.monthlyCents * athleteShareRate);
                               return (
                                 <tr key={a.athleteUserId} className="border-t border-zinc-700/40">
                                   <td className="py-2 px-2 text-white">{a.displayName || a.username || a.athleteUserId.slice(0,6)}</td>
@@ -819,16 +775,16 @@ const CoachRevenue: React.FC = () => {
                   <button onClick={() => setReferralOpen(!referralOpen)} className="w-full flex items-center justify-between p-4 bg-zinc-800 rounded-lg text-left">
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
-                      <span className="text-white">Referral Bonuses</span>
+                      <span className="text-white">Team plan billing</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className={`transition-transform ${referralOpen ? 'rotate-90' : ''}`}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 18l6-6-6-6" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       </div>
                       <div className="text-right">
-                      <p className="text-white font-semibold">${currentMonth.referralRevenue.toFixed(2)}</p>
+                      <p className="text-white font-semibold">${teamPlanBillingRevenue.toFixed(2)}</p>
                       <p className="text-zinc-400 text-sm">
-                        {currentMonth.totalRevenue > 0 ? ((currentMonth.referralRevenue / currentMonth.totalRevenue) * 100).toFixed(1) + '%' : '—'}
+                        {totalCommercialMrr > 0 ? ((teamPlanBillingRevenue / totalCommercialMrr) * 100).toFixed(1) + '%' : '—'}
                       </p>
                       </div>
                     </div>
@@ -836,64 +792,42 @@ const CoachRevenue: React.FC = () => {
 
                   {referralOpen && (
                     <div className="bg-zinc-800/60 rounded-lg p-3 max-h-80 overflow-y-auto">
-                      {referredLoading ? (
-                        <div className="text-zinc-400 text-sm p-3">Loading referred coaches…</div>
-                      ) : referred.length === 0 ? (
-                        <div className="text-zinc-400 text-sm p-3">No referred coaches yet.</div>
+                      {!commercialSummary ? (
+                        <div className="text-zinc-400 text-sm p-3">No team commercial summary yet.</div>
+                      ) : !commercialSummary.teamBreakdown || commercialSummary.teamBreakdown.length === 0 ? (
+                        <div className="text-zinc-400 text-sm p-3">No attributed teams yet.</div>
                       ) : (
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="text-zinc-400">
-                              <th className="text-left py-2 px-2">Coach</th>
-                              <th className="text-left py-2 px-2">Active Athletes</th>
-                              <th className="text-left py-2 px-2">Total Athletes</th>
-                              <th className="text-right py-2 px-2">Est. MRR</th>
-                              <th className="text-right py-2 px-2">Your 20%</th>
-                              <th className="text-right py-2 px-2"></th>
+                              <th className="text-left py-2 px-2">Team</th>
+                              <th className="text-left py-2 px-2">Model</th>
+                              <th className="text-left py-2 px-2">Subscribers</th>
+                              <th className="text-left py-2 px-2">Covered</th>
+                              <th className="text-right py-2 px-2">Athlete MRR</th>
+                              <th className="text-right py-2 px-2">Team Plan Billing</th>
+                              <th className="text-right py-2 px-2">Estimated Share</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {referred.map(rc => (
-                              <>
-                              <tr key={rc.coachUserId} className="border-t border-zinc-700/40">
-                                <td className="py-2 px-2 text-white">{rc.username || rc.email || rc.coachUserId.slice(0,6)}</td>
-                                <td className="py-2 px-2 text-zinc-300">{rc.activeAthletes}</td>
-                                <td className="py-2 px-2 text-zinc-300">{rc.totalAthletes}</td>
-                                <td className="py-2 px-2 text-right text-white">${(rc.estimatedMRRCents/100).toFixed(2)}</td>
-                                <td className="py-2 px-2 text-right text-white">${(rc.yourShareCents/100).toFixed(2)}</td>
-                                <td className="py-2 px-2 text-right">
-                                  <button onClick={()=> setExpandedCoach(expandedCoach === rc.coachUserId ? null : rc.coachUserId)} className="px-2 py-1 rounded-md border border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-700/40 text-xs">{expandedCoach === rc.coachUserId ? 'Hide' : 'View details'}</button>
+                            {(commercialSummary.teamBreakdown || []).map((team) => (
+                              <tr key={team.teamId} className="border-t border-zinc-700/40">
+                                <td className="py-2 px-2 text-white">
+                                  <div>{team.teamName || team.teamId}</div>
+                                  <div className="text-xs text-zinc-500">{team.organizationName || 'Unknown org'}</div>
                                 </td>
+                                <td className="py-2 px-2 text-zinc-300">
+                                  {team.commercialModel || 'athlete-pay'}
+                                  <div className="text-xs text-zinc-500">
+                                    {team.teamPlanBypassesPaywall ? 'Bypass active' : team.teamPlanStatus || 'inactive'}
+                                  </div>
+                                </td>
+                                <td className="py-2 px-2 text-zinc-300">{team.activeAthleteSubscriberCount || 0}</td>
+                                <td className="py-2 px-2 text-zinc-300">{team.coveredAthleteCount || 0}</td>
+                                <td className="py-2 px-2 text-right text-white">${((team.athleteSubscriptionMrrCents || 0) / 100).toFixed(2)}</td>
+                                <td className="py-2 px-2 text-right text-white">${((team.teamPlanBillingMrrCents || 0) / 100).toFixed(2)}</td>
+                                <td className="py-2 px-2 text-right text-white">${((team.estimatedPayoutMrrCents || 0) / 100).toFixed(2)}</td>
                               </tr>
-                              {expandedCoach === rc.coachUserId && rc.breakdown && (
-                                <tr className="bg-zinc-900/40">
-                                  <td colSpan={6} className="p-2">
-                                    <div className="overflow-x-auto">
-                                      <table className="w-full text-xs">
-                                        <thead>
-                                          <tr className="text-zinc-400">
-                                            <th className="text-left py-2 px-2">Plan</th>
-                                            <th className="text-left py-2 px-2">Athletes</th>
-                                            <th className="text-right py-2 px-2">Price (mo)</th>
-                                            <th className="text-right py-2 px-2">Subtotal</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {rc.breakdown.map((b, i) => (
-                                            <tr key={i} className="border-t border-zinc-800">
-                                              <td className="py-2 px-2 text-white">{b.plan}</td>
-                                              <td className="py-2 px-2 text-zinc-300">{b.count}</td>
-                                              <td className="py-2 px-2 text-right text-zinc-300">${(b.monthlyCents/100).toFixed(2)}</td>
-                                              <td className="py-2 px-2 text-right text-white">${(b.subtotalCents/100).toFixed(2)}</td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
-                              </>
                             ))}
                           </tbody>
                         </table>
@@ -908,7 +842,7 @@ const CoachRevenue: React.FC = () => {
                     <div>
                       <p className="text-white text-sm font-medium">Revenue Share Model</p>
                       <p className="text-zinc-400 text-xs mt-1">
-                        You earn 40% from athlete subscriptions and 20% from referred coaches' <span className="underline decoration-dotted">subscription</span> revenue.
+                        Estimated coach payout now follows each team&apos;s commercial config. Team plans show separate billing, and athlete-pay teams apply the configured referral kickback percentage to subscribed athletes.
                       </p>
                     </div>
                   </div>

@@ -5,7 +5,6 @@ import { useRouter } from 'next/router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Bell, Brain, CheckCircle2, ChevronRight, ClipboardList, Copy, Loader2, Lock, Mail, ScanLine, Shield, Sparkles, UserRound, Users, Waves, XCircle } from 'lucide-react';
 import { collection, getDocs, limit, query, where } from 'firebase/firestore';
-import { coachService } from '../../api/firebase/coach';
 import { resolvePulseCheckAthleteTaskState } from '../../api/firebase/pulsecheckProvisioning/athleteTaskState';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import type {
@@ -98,7 +97,7 @@ type AthleteRosterEntry = {
   lastActiveDate?: Date | null;
   consentReady: boolean;
   baselineReady: boolean;
-  source: 'team-membership' | 'legacy-coach-bridge';
+  source: 'team-membership';
 };
 
 type VisionProTaskState = 'not-queued' | 'queued' | 'completed';
@@ -331,37 +330,6 @@ export default function PulseCheckTeamWorkspacePage() {
       baselineReady: entry.membership.athleteOnboarding?.baselinePathStatus === 'complete',
       source: 'team-membership',
     }));
-
-    // Bridge legacy coachAthletes data until the team roster is fully migrated.
-    if (roster.length === 0 && currentUser.id) {
-      const legacyAthletes = await coachService.getConnectedAthletes(currentUser.id);
-      roster = legacyAthletes.map((athlete: any) => ({
-        id: athlete.id,
-        displayName: athlete.displayName || 'Athlete',
-        email: athlete.email || '',
-        profileImageUrl: athlete.profileImageUrl || '',
-        onboardingStatus: 'legacy-connected',
-        workoutCount: athlete.totalSessions || 0,
-        conversationCount: athlete.conversationCount || 0,
-        lastActiveDate: athlete.lastActiveDate || null,
-        consentReady: false,
-        baselineReady: false,
-        source: 'legacy-coach-bridge',
-      }));
-    } else if (roster.length > 0 && currentUser.id) {
-      const legacyAthletes = await coachService.getConnectedAthletes(currentUser.id);
-      const legacyMap = new Map(legacyAthletes.map((athlete: any) => [athlete.id, athlete]));
-      roster = roster.map((athlete) => {
-        const legacy = legacyMap.get(athlete.id);
-        return legacy
-          ? {
-              ...athlete,
-              conversationCount: legacy.conversationCount || 0,
-              lastActiveDate: legacy.lastActiveDate || null,
-            }
-          : athlete;
-      });
-    }
 
     const scopedRoster = applyRosterScope(roster, myMembership);
 
@@ -1021,7 +989,7 @@ export default function PulseCheckTeamWorkspacePage() {
                 </div>
                 <div className="mt-4 space-y-3 text-sm leading-7 text-zinc-300">
                   <div>Team memberships and team-access invites are now the primary source of truth for staff and athlete access.</div>
-                  <div>Legacy `coachAthletes` is only used as a temporary bridge when the new team roster is still empty or to enrich athlete stats during migration.</div>
+                  <div>The roster shown here is resolved entirely from PulseCheck team memberships, not from legacy coach-connection collections.</div>
                   <div>Per-athlete staff assignment now lives on `TeamMembership.allowedAthleteIds` instead of `coach-staff`.</div>
                   <div>Current athlete invite policy: <span className="font-medium text-white">{invitePolicyLabel(team.defaultInvitePolicy)}</span>.</div>
                 </div>
@@ -1326,7 +1294,7 @@ export default function PulseCheckTeamWorkspacePage() {
                             <div className="text-sm font-semibold text-white">{athlete.displayName}</div>
                             <div className="mt-1 text-sm text-zinc-400">{athlete.email || 'Email not set'}</div>
                             <div className="mt-1 text-xs uppercase tracking-[0.16em] text-zinc-500">
-                              {athlete.source === 'team-membership' ? 'team membership' : 'legacy coach bridge'}
+                              team membership
                             </div>
                           </div>
                         </div>
