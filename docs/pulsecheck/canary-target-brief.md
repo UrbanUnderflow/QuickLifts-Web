@@ -26,10 +26,9 @@ This file locks the canary to one real external coach-led target so downstream p
 
 Marcus Filly — founder of Functional Bodybuilding. [SOT: LEAD-0007, EVID-0004]
 
-## Public Source Evidence
+## Public Source URL
 
-- Official about page: <https://functional-bodybuilding.com/pages/about> [SOT: LEAD-0007, EVID-0004]
-- Official program page: <https://functional-bodybuilding.com/pages/persist> [SOT: LEAD-0007, EVID-0005]
+<https://functional-bodybuilding.com/pages/about> [SOT: LEAD-0007, EVID-0004]
 
 ## Org Name
 
