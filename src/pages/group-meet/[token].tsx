@@ -192,6 +192,7 @@ const GroupMeetInvitePage: React.FC = () => {
                 targetMonth={invite.request.targetMonth}
                 availabilityEntries={availabilityEntries}
                 peerAvailability={invite.peerAvailability}
+                meetingDurationMinutes={invite.request.meetingDurationMinutes}
                 currentParticipant={{
                   token: invite.token,
                   name: invite.name,
