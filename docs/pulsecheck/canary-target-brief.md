@@ -53,6 +53,13 @@ This file locks the canary to one real external coach-led target so downstream p
 | Owner contact detail | Unverified pending direct confirmation | [SOT: LEAD-0007, EVID-0004] |
 | Collaboration status | No confirmed collaboration interest on record | [SOT: LEAD-0007, EVID-0004] |
 
+## Implementation Metadata
+
+- **First external owner:** Marcus Filly, founder of Functional Bodybuilding and the named external owner for the canary organization record. [SOT: LEAD-0007, EVID-0004]
+- **First team admin handoff target:** Marcus Filly as the initial org admin and first `Persist` team admin; owner contact detail remains Unverified until direct confirmation, so activation should be sent only after the preferred email is confirmed. [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0005]
+- **Exact next step sentence:** `Provision the PulseCheck canary as organization "Revival Strength / Functional Bodybuilding" with first team "Persist", then confirm Marcus Filly's preferred owner email and send the initial admin activation link to that confirmed address.` [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0005]
+- **Implementation posture:** Treat this as an organization-first setup, not a legacy solo-coach signup, because the public footprint shows a founder-led brand with a distinct named program and multiple coach roles beneath it. [SOT: LEAD-0007, EVID-0004] [SOT: LEAD-0007, EVID-0005]
+
 ## Notes
 
 - This selection is based on public-source evidence of a real coach-led organization and active program structure, not on any verified partnership or onboarding commitment. Current collaboration interest remains **not confirmed**. [SOT: LEAD-0007, EVID-0004]
