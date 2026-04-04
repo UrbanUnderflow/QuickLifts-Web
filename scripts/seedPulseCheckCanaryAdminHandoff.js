@@ -4,7 +4,7 @@ const path = require('path');
 const { initializeApp, cert, getApps } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const serviceAccount = require(path.join(__dirname, '..', 'serviceAccountKey.json'));
-const { seedInitialPulseCheckAdminHandoff } = require('../src/lib/server/pulsecheck/provisionOrganizationAndTeam');
+const { provisionPulseCheckCanaryAdminAccess } = require('../src/lib/server/pulsecheck/provisionOrganizationAndTeam');
 
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
@@ -14,19 +14,10 @@ const adminApp = getApps()[0];
 const db = getFirestore(adminApp);
 
 async function main() {
-  const result = await seedInitialPulseCheckAdminHandoff({
+  const result = await provisionPulseCheckCanaryAdminAccess({
     adminApp,
-    input: {
+    params: {
       actorLabel: 'scripts/seedPulseCheckCanaryAdminHandoff.js',
-      organizationId: 'revival-strength-functional-bodybuilding',
-      teamId: 'revival-strength-functional-bodybuilding--persist',
-      handoffKey: 'marcus-filly',
-      targetOwnerName: 'Marcus Filly',
-      targetOwnerEmail: '',
-      sourceBriefPath: 'docs/pulsecheck/canary-target-brief.md',
-      selectedTargetLeadId: 'LEAD-0007',
-      selectedTargetEvidenceIds: ['EVID-0004', 'EVID-0005'],
-      notes: 'Reserved initial admin handoff artifact before activation. Owner email remains unverified until direct confirmation.',
     },
   });
 
