@@ -37,46 +37,57 @@ const MixpanelInitializer: React.FC = () => {
   const currentUser = useSelector((state: RootState) => state.user.currentUser);
   const mixpanelToken = process.env.NEXT_PUBLIC_MIXPANEL_PROJECT_TOKEN;
   const mixpanelEnabled = Boolean(mixpanelToken);
+  const [mixpanelReady, setMixpanelReady] = React.useState(false);
 
   // Initialize Mixpanel on mount
   useEffect(() => {
     if (mixpanelEnabled && mixpanelToken) {
-      mixpanel.init(mixpanelToken, {
-        debug: process.env.NODE_ENV === 'development',
-        track_pageview: true,
-        persistence: 'localStorage',
-      });
-      console.log('[Mixpanel] Initialized');
-      // Register super properties that apply to all web events
-      mixpanel.register({
-        platform: 'web',
-        // Optionally add app version if available
-        // app_version: process.env.NEXT_PUBLIC_APP_VERSION,
-      });
+      try {
+        mixpanel.init(mixpanelToken, {
+          debug: process.env.NODE_ENV === 'development',
+          track_pageview: true,
+          persistence: 'localStorage',
+        });
+        console.log('[Mixpanel] Initialized');
+        mixpanel.register({
+          platform: 'web',
+          // Optionally add app version if available
+          // app_version: process.env.NEXT_PUBLIC_APP_VERSION,
+        });
+        setMixpanelReady(true);
+      } catch (e) {
+        console.warn('[Mixpanel] Init failed:', e);
+        setMixpanelReady(false);
+      }
     } else {
       console.warn('[Mixpanel] Project token not found. Tracking disabled.');
+      setMixpanelReady(false);
     }
   }, [mixpanelEnabled, mixpanelToken]);
 
-  // Identify user when available or changes
+  // Identify user when available or changes — only if Mixpanel was initialized
   useEffect(() => {
-    if (!mixpanelEnabled) {
+    if (!mixpanelEnabled || !mixpanelReady) {
       return;
     }
 
     if (currentUser?.id) {
-      mixpanel.identify(currentUser.id);
-      mixpanel.people?.set?.({
-        $email: currentUser.email,
-        $name: currentUser.displayName,
-        username: currentUser.username,
-        registrationComplete: currentUser.registrationComplete,
-      });
-      console.log('[Mixpanel] User identified:', currentUser.id);
+      try {
+        mixpanel.identify(currentUser.id);
+        mixpanel.people?.set?.({
+          $email: currentUser.email,
+          $name: currentUser.displayName,
+          username: currentUser.username,
+          registrationComplete: currentUser.registrationComplete,
+        });
+        console.log('[Mixpanel] User identified:', currentUser.id);
+      } catch (e) {
+        console.warn('[Mixpanel] identify failed:', e);
+      }
     } else {
       console.log('[Mixpanel] No user identified.');
     }
-  }, [currentUser, mixpanelEnabled]);
+  }, [currentUser, mixpanelEnabled, mixpanelReady]);
 
   return null;
 };
