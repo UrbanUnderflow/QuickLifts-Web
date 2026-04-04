@@ -1,0 +1,309 @@
+const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+
+const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
+const TEAMS_COLLECTION = 'pulsecheck-teams';
+
+function normalizeString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeEmail(value) {
+  return normalizeString(value).toLowerCase();
+}
+
+function slugify(value) {
+  return normalizeString(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function uniqueStrings(values) {
+  return Array.from(new Set((Array.isArray(values) ? values : []).map((entry) => normalizeString(entry)).filter(Boolean)));
+}
+
+function normalizeRevenueRecipientRole(value) {
+  const normalized = normalizeString(value);
+  if (normalized === 'coach' || normalized === 'organization-owner') {
+    return normalized;
+  }
+  return 'team-admin';
+}
+
+function normalizeReferralRevenueSharePct(value) {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.min(100, Math.round(parsed * 100) / 100));
+}
+
+function normalizeTeamCommercialConfig(value) {
+  const candidate = value && typeof value === 'object' ? value : {};
+  const commercialModel = normalizeString(candidate.commercialModel);
+  const teamPlanStatus = normalizeString(candidate.teamPlanStatus);
+
+  return {
+    commercialModel: commercialModel === 'team-plan' ? 'team-plan' : 'athlete-pay',
+    teamPlanStatus: teamPlanStatus === 'active' ? 'active' : 'inactive',
+    referralKickbackEnabled: Boolean(candidate.referralKickbackEnabled),
+    referralRevenueSharePct: normalizeReferralRevenueSharePct(candidate.referralRevenueSharePct),
+    revenueRecipientRole: normalizeRevenueRecipientRole(candidate.revenueRecipientRole),
+    revenueRecipientUserId: normalizeString(candidate.revenueRecipientUserId),
+    billingOwnerUserId: normalizeString(candidate.billingOwnerUserId),
+    billingCustomerId: normalizeString(candidate.billingCustomerId),
+    teamPlanActivatedAt: candidate.teamPlanActivatedAt || null,
+    teamPlanExpiresAt: candidate.teamPlanExpiresAt || null,
+  };
+}
+
+function normalizeOrganizationImplementationMetadata(value, actorLabel) {
+  const candidate = value && typeof value === 'object' ? value : {};
+  const provisioningPath = normalizeString(candidate.provisioningPath);
+  const ownerContactStatus = normalizeString(candidate.ownerContactStatus);
+
+  return {
+    provisioningPath:
+      provisioningPath === 'legacy-coach-roster'
+        ? 'legacy-coach-roster'
+        : provisioningPath === 'manual'
+          ? 'manual'
+          : 'pulsecheck-hierarchy',
+    legacySignupPathUsed: Boolean(candidate.legacySignupPathUsed),
+    canaryTarget: Boolean(candidate.canaryTarget),
+    selectedTargetLeadId: normalizeString(candidate.selectedTargetLeadId),
+    selectedTargetEvidenceIds: uniqueStrings(candidate.selectedTargetEvidenceIds),
+    sourceBriefPath: normalizeString(candidate.sourceBriefPath),
+    firstPlannedTeamName: normalizeString(candidate.firstPlannedTeamName),
+    ownerContactStatus:
+      ownerContactStatus === 'confirmed'
+        ? 'confirmed'
+        : ownerContactStatus === 'unverified'
+          ? 'unverified'
+          : 'pending-confirmation',
+    provisionedBy: normalizeString(candidate.provisionedBy) || actorLabel,
+    notes: normalizeString(candidate.notes),
+  };
+}
+
+function normalizeTeamImplementationMetadata(value, actorLabel, fallbackInvitePosture) {
+  const candidate = value && typeof value === 'object' ? value : {};
+  const provisioningPath = normalizeString(candidate.provisioningPath);
+  const routingDefaultsMode = normalizeString(candidate.routingDefaultsMode);
+  const invitePosture = normalizeString(candidate.invitePosture) || fallbackInvitePosture;
+
+  return {
+    provisioningPath:
+      provisioningPath === 'legacy-coach-roster'
+        ? 'legacy-coach-roster'
+        : provisioningPath === 'manual'
+          ? 'manual'
+          : 'pulsecheck-hierarchy',
+    legacySignupPathUsed: Boolean(candidate.legacySignupPathUsed),
+    canaryTarget: Boolean(candidate.canaryTarget),
+    selectedTargetLeadId: normalizeString(candidate.selectedTargetLeadId),
+    selectedTargetEvidenceIds: uniqueStrings(candidate.selectedTargetEvidenceIds),
+    sourceBriefPath: normalizeString(candidate.sourceBriefPath),
+    routingDefaultsMode:
+      routingDefaultsMode === 'team-clinician-profile'
+        ? 'team-clinician-profile'
+        : routingDefaultsMode === 'organization-default-required'
+          ? 'organization-default-required'
+          : 'organization-default-optional',
+    invitePosture:
+      invitePosture === 'admin-only'
+        ? 'admin-only'
+        : invitePosture === 'admin-and-staff'
+          ? 'admin-and-staff'
+          : 'admin-staff-and-coaches',
+    provisionedBy: normalizeString(candidate.provisionedBy) || actorLabel,
+    notes: normalizeString(candidate.notes),
+  };
+}
+
+function buildProvisioningPayload(input) {
+  const actorLabel = normalizeString(input.actorLabel) || 'pulsecheck-hierarchy-provisioner';
+  const organizationId = normalizeString(input.organization.id) || slugify(input.organization.displayName);
+  const teamId = normalizeString(input.team.id) || `${organizationId}--${slugify(input.team.displayName)}`;
+
+  if (!organizationId) throw new Error('organization.id or organization.displayName is required');
+  if (!teamId) throw new Error('team.id or team.displayName is required');
+  if (!normalizeString(input.organization.displayName)) throw new Error('organization.displayName is required');
+  if (!normalizeString(input.team.displayName)) throw new Error('team.displayName is required');
+  if (!normalizeString(input.team.teamType)) throw new Error('team.teamType is required');
+  if (!normalizeString(input.team.sportOrProgram)) throw new Error('team.sportOrProgram is required');
+
+  const orgImplementationMetadata = normalizeOrganizationImplementationMetadata(
+    input.organization.implementationMetadata,
+    actorLabel
+  );
+  const teamImplementationMetadata = normalizeTeamImplementationMetadata(
+    input.team.implementationMetadata,
+    actorLabel,
+    normalizeString(input.team.defaultInvitePolicy) || 'admin-only'
+  );
+
+  const organizationPayload = {
+    displayName: normalizeString(input.organization.displayName),
+    legalName: normalizeString(input.organization.legalName) || normalizeString(input.organization.displayName),
+    organizationType: normalizeString(input.organization.organizationType) || 'other',
+    invitePreviewImageUrl: normalizeString(input.organization.invitePreviewImageUrl),
+    status: normalizeString(input.organization.status) || 'provisioning',
+    legacySource: input.organization.legacySource || null,
+    legacyCoachId: normalizeString(input.organization.legacyCoachId),
+    implementationOwnerUserId: normalizeString(input.organization.implementationOwnerUserId),
+    implementationOwnerEmail: normalizeEmail(input.organization.implementationOwnerEmail),
+    implementationMetadata: orgImplementationMetadata,
+    primaryCustomerAdminName: normalizeString(input.organization.primaryCustomerAdminName),
+    primaryCustomerAdminEmail: normalizeEmail(input.organization.primaryCustomerAdminEmail),
+    additionalAdminContacts: Array.isArray(input.organization.additionalAdminContacts)
+      ? input.organization.additionalAdminContacts
+          .map((entry) => ({ name: normalizeString(entry?.name), email: normalizeEmail(entry?.email) }))
+          .filter((entry) => entry.email)
+      : [],
+    defaultStudyPosture: normalizeString(input.organization.defaultStudyPosture) || 'operational',
+    defaultClinicianBridgeMode: normalizeString(input.organization.defaultClinicianBridgeMode) || 'none',
+    notes: normalizeString(input.organization.notes),
+  };
+
+  const teamPayload = {
+    organizationId,
+    displayName: normalizeString(input.team.displayName),
+    teamType: normalizeString(input.team.teamType),
+    sportOrProgram: normalizeString(input.team.sportOrProgram),
+    invitePreviewImageUrl: normalizeString(input.team.invitePreviewImageUrl),
+    legacySource: input.team.legacySource || null,
+    legacyCoachId: normalizeString(input.team.legacyCoachId),
+    siteLabel: normalizeString(input.team.siteLabel),
+    defaultAdminName: normalizeString(input.team.defaultAdminName),
+    defaultAdminEmail: normalizeEmail(input.team.defaultAdminEmail),
+    status: normalizeString(input.team.status) || 'provisioning',
+    defaultInvitePolicy:
+      normalizeString(input.team.defaultInvitePolicy) === 'admin-only'
+        ? 'admin-only'
+        : normalizeString(input.team.defaultInvitePolicy) === 'admin-and-staff'
+          ? 'admin-and-staff'
+          : 'admin-staff-and-coaches',
+    commercialConfig: normalizeTeamCommercialConfig(input.team.commercialConfig),
+    defaultClinicianProfileId: normalizeString(input.team.defaultClinicianProfileId),
+    defaultClinicianExternalProfileId: normalizeString(input.team.defaultClinicianExternalProfileId),
+    defaultClinicianProfileName: normalizeString(input.team.defaultClinicianProfileName),
+    defaultClinicianProfileType: normalizeString(input.team.defaultClinicianProfileType) || 'group',
+    defaultClinicianProfileSource: normalizeString(input.team.defaultClinicianProfileSource) || 'pulsecheck-local',
+    implementationMetadata: teamImplementationMetadata,
+    notes: normalizeString(input.team.notes),
+  };
+
+  return { actorLabel, organizationId, teamId, organizationPayload, teamPayload };
+}
+
+function assertNoLegacyWrite(payload, scopeLabel) {
+  if (payload.legacySource || normalizeString(payload.legacyCoachId)) {
+    throw new Error(`${scopeLabel} payload must not use legacySource or legacyCoachId for non-legacy hierarchy provisioning.`);
+  }
+  if (payload.implementationMetadata?.legacySignupPathUsed) {
+    throw new Error(`${scopeLabel} payload marks legacy signup as used; non-legacy provisioning must keep this false.`);
+  }
+  if (payload.implementationMetadata?.provisioningPath === 'legacy-coach-roster') {
+    throw new Error(`${scopeLabel} payload points at legacy-coach-roster; use pulsecheck-hierarchy or manual.`);
+  }
+}
+
+function assertExistingDocCompatible(existing, expected, scopeLabel) {
+  if (!existing || typeof existing !== 'object') return;
+
+  if (normalizeString(existing.legacySource) || normalizeString(existing.legacyCoachId)) {
+    throw new Error(`${scopeLabel} already exists with legacy linkage and cannot be claimed by the non-legacy provisioner.`);
+  }
+
+  const existingPath = normalizeString(existing.implementationMetadata?.provisioningPath);
+  if (existingPath === 'legacy-coach-roster') {
+    throw new Error(`${scopeLabel} already exists with legacy-coach-roster provisioning metadata.`);
+  }
+
+  if (scopeLabel === 'team' && normalizeString(existing.organizationId) !== normalizeString(expected.organizationId)) {
+    throw new Error('Existing team is linked to a different organizationId.');
+  }
+}
+
+async function provisionPulseCheckOrganizationAndTeam({ adminApp, input }) {
+  if (!adminApp) {
+    throw new Error('adminApp is required');
+  }
+
+  const firestore = typeof adminApp.collection === 'function' ? adminApp : getFirestore(adminApp);
+  const now = FieldValue.serverTimestamp();
+  const { actorLabel, organizationId, teamId, organizationPayload, teamPayload } = buildProvisioningPayload(input);
+
+  assertNoLegacyWrite(organizationPayload, 'organization');
+  assertNoLegacyWrite(teamPayload, 'team');
+
+  const organizationRef = firestore.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const teamRef = firestore.collection(TEAMS_COLLECTION).doc(teamId);
+
+  const result = await firestore.runTransaction(async (transaction) => {
+    const [organizationSnap, teamSnap] = await Promise.all([
+      transaction.get(organizationRef),
+      transaction.get(teamRef),
+    ]);
+
+    const organizationExists = organizationSnap.exists;
+    const teamExists = teamSnap.exists;
+    const organizationData = organizationSnap.data() || null;
+    const teamData = teamSnap.data() || null;
+
+    assertExistingDocCompatible(organizationData, organizationPayload, 'organization');
+    assertExistingDocCompatible(teamData, teamPayload, 'team');
+
+    const organizationWrite = {
+      ...organizationPayload,
+      implementationMetadata: {
+        ...organizationPayload.implementationMetadata,
+        provisionedAt: organizationData?.implementationMetadata?.provisionedAt || now,
+        provisionedBy:
+          normalizeString(organizationData?.implementationMetadata?.provisionedBy) ||
+          organizationPayload.implementationMetadata.provisionedBy ||
+          actorLabel,
+      },
+      createdAt: organizationData?.createdAt || now,
+      updatedAt: now,
+    };
+
+    const teamWrite = {
+      ...teamPayload,
+      implementationMetadata: {
+        ...teamPayload.implementationMetadata,
+        provisionedAt: teamData?.implementationMetadata?.provisionedAt || now,
+        provisionedBy:
+          normalizeString(teamData?.implementationMetadata?.provisionedBy) ||
+          teamPayload.implementationMetadata.provisionedBy ||
+          actorLabel,
+      },
+      createdAt: teamData?.createdAt || now,
+      updatedAt: now,
+    };
+
+    transaction.set(organizationRef, organizationWrite, { merge: true });
+    transaction.set(teamRef, teamWrite, { merge: true });
+
+    return {
+      organizationId,
+      teamId,
+      organizationCreated: !organizationExists,
+      teamCreated: !teamExists,
+      organizationStatus: organizationWrite.status,
+      teamStatus: teamWrite.status,
+      teamInvitePolicy: teamWrite.defaultInvitePolicy,
+      teamRoutingDefaultsMode: teamWrite.implementationMetadata.routingDefaultsMode,
+    };
+  });
+
+  return result;
+}
+
+module.exports = {
+  ORGANIZATIONS_COLLECTION,
+  TEAMS_COLLECTION,
+  buildProvisioningPayload,
+  provisionPulseCheckOrganizationAndTeam,
+  slugify,
+};
