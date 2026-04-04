@@ -49,6 +49,23 @@ test('buildClubAppDeepLink preserves share context for direct app open attempts'
   );
 });
 
+test('buildClubOneLink can omit af_r for store-first open flows', () => {
+  const oneLink = new URL(
+    buildClubOneLink({
+      clubId: 'club_123',
+      sharedBy: 'coach_1',
+      eventId: 'event_9',
+      fallbackPath: null,
+      title: 'Creator Club Invite',
+      description: 'Open this creator club in Pulse.',
+      imageUrl: '/club-preview.png',
+    })
+  );
+
+  assert.equal(oneLink.searchParams.get('af_r'), null);
+  assert.equal(oneLink.searchParams.get('af_dp'), 'pulse://club?clubId=club_123&sharedBy=coach_1&eventId=event_9');
+});
+
 test('buildClubOneLink defaults to canonical web fallback and includes deep-link handoff', () => {
   const oneLink = new URL(
     buildClubOneLink({

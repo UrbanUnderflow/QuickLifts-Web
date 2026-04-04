@@ -5,12 +5,11 @@ import { ClubLandingPageProps, RoundPreview } from '../../api/firebase/club/land
 import ClubInvitePage, { ClubInvite } from './ClubInvitePage';
 import { CLUB_TYPE_LABELS } from './theme';
 import {
-  buildClubAppDeepLink,
   buildClubInstallPath,
   buildClubOneLink,
   buildClubWebFallbackUrl,
 } from '../../utils/clubLinks';
-import { appLinks, platformDetection } from '../../utils/platformDetection';
+import { platformDetection } from '../../utils/platformDetection';
 import {
   trackClubInstallPageViewed,
   trackClubInstallStoreTapped,
@@ -32,7 +31,6 @@ type ClubInstallLandingProps = {
 
 const DEFAULT_FWB_IMAGE =
   'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/groupChat%2F07DKCy5qnETYlmwn49NOupCsWKa2%2F83ADC15C-DBBE-4F67-BE2B-0E627709264F.jpg?alt=media&token=dcd172b6-20d1-431b-971c-4c732b096983';
-const APP_OPEN_FALLBACK_DELAY_MS = 1400;
 
 const buildNameLines = (name: string): Pick<ClubInvite, 'nameLine1' | 'nameLine2'> => {
   const normalizedName = (name || '').trim();
@@ -144,7 +142,7 @@ const ClubInstallLanding: React.FC<ClubInstallLandingProps> = ({
     web: true,
   });
 
-  const inviteDeepLink = buildClubOneLink({
+  const shareInviteDeepLink = buildClubOneLink({
     clubId: clubData.id,
     sharedBy: sharedBy || undefined,
     eventId: eventId || undefined,
@@ -155,9 +153,16 @@ const ClubInstallLanding: React.FC<ClubInstallLandingProps> = ({
     description: tagline,
     imageUrl: coverImageURL,
   });
-  const appDeepLink = buildClubAppDeepLink(clubData.id, {
+  const openInviteDeepLink = buildClubOneLink({
     sharedBy: sharedBy || undefined,
+    clubId: clubData.id,
     eventId: eventId || undefined,
+    fallbackPath: null,
+    pid: 'creator_club_install_open',
+    campaign: 'creator_club_install_open',
+    title: `Join ${clubName} on Pulse`,
+    description: tagline,
+    imageUrl: coverImageURL,
   });
 
   const clubInvite: ClubInvite = {
@@ -174,7 +179,8 @@ const ClubInstallLanding: React.FC<ClubInstallLandingProps> = ({
     creatorDisplayName,
     creatorUsername,
     creatorInitials,
-    inviteDeepLink,
+    inviteDeepLink: shareInviteDeepLink,
+    openInviteDeepLink,
     webFallbackURL: buildClubWebFallbackUrl(clubData.id, {
       sharedBy: sharedBy || undefined,
       eventId: eventId || undefined,
@@ -216,58 +222,7 @@ const ClubInstallLanding: React.FC<ClubInstallLandingProps> = ({
     });
 
     if (typeof window !== 'undefined') {
-      if (platform === 'desktop') {
-        window.location.href = clubInvite.inviteDeepLink;
-        return;
-      }
-
-      const mobilePlatform: 'ios' | 'android' = platform === 'ios' ? 'ios' : 'android';
-      const fallbackUrl = mobilePlatform === 'ios' ? appLinks.appStoreUrl : appLinks.playStoreUrl;
-      let pageHidden = document.visibilityState === 'hidden';
-
-      const handleVisibilityChange = () => {
-        pageHidden = pageHidden || document.visibilityState === 'hidden';
-      };
-
-      const cleanup = (iframe?: HTMLIFrameElement) => {
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-
-        if (iframe?.parentNode) {
-          iframe.parentNode.removeChild(iframe);
-        }
-      };
-
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.setAttribute('aria-hidden', 'true');
-      iframe.src = appDeepLink;
-      document.body.appendChild(iframe);
-
-      window.location.href = appDeepLink;
-
-      window.setTimeout(() => {
-        cleanup(iframe);
-
-        if (pageHidden || document.visibilityState === 'hidden') {
-          return;
-        }
-
-        trackClubInstallStoreTapped(
-          {
-            clubId: clubData.id,
-            sharedBy,
-            eventId,
-            source: 'club_install_page',
-            platform,
-          },
-          mobilePlatform,
-          { trigger: 'join_cta_fallback' }
-        );
-
-        window.location.href = fallbackUrl;
-      }, APP_OPEN_FALLBACK_DELAY_MS);
+      window.location.href = platform === 'desktop' ? clubInvite.inviteDeepLink : clubInvite.openInviteDeepLink || clubInvite.inviteDeepLink;
     }
   };
 
@@ -281,10 +236,10 @@ const ClubInstallLanding: React.FC<ClubInstallLandingProps> = ({
         await navigator.share({
           title: clubInvite.name,
           text: `Join ${clubInvite.name} on Pulse.`,
-          url: clubInvite.inviteDeepLink,
+          url: shareInviteDeepLink,
         });
       } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(clubInvite.inviteDeepLink);
+        await navigator.clipboard.writeText(shareInviteDeepLink);
       }
 
       trackClubShareLinkCopied({
