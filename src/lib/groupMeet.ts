@@ -37,6 +37,15 @@ export type GroupMeetInviteDetail = GroupMeetInviteSummary & {
   availabilityEntries: GroupMeetAvailabilitySlot[];
 };
 
+export type GroupMeetSharedAvailabilityParticipant = {
+  token: string;
+  name: string;
+  imageUrl: string | null;
+  participantType: 'host' | 'participant';
+  respondedAt: string | null;
+  availabilityEntries: GroupMeetAvailabilitySlot[];
+};
+
 export type GroupMeetRequestStatus = 'draft' | 'collecting' | 'closed';
 
 export type GroupMeetRequestSummary = {

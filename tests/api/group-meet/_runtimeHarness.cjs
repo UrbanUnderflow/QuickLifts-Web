@@ -638,6 +638,13 @@ function createPublicInviteHandlerRuntime({
       }
 
       return {
+        async get() {
+          const docs = Array.from(state.inviteDocs.entries()).map(([id, inviteData]) =>
+            createInviteSnapshot(id, inviteData)
+          );
+
+          return { docs, size: docs.length, empty: docs.length === 0 };
+        },
         where(field, operator, value) {
           return {
             async get() {

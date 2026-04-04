@@ -3,6 +3,7 @@ import admin, { getFirebaseAdminApp } from '../../../lib/firebase-admin';
 import {
   normalizeGroupMeetAvailabilitySlots,
   type GroupMeetAvailabilitySlot,
+  type GroupMeetSharedAvailabilityParticipant,
 } from '../../../lib/groupMeet';
 
 const REQUESTS_COLLECTION = 'groupMeetRequests';
@@ -18,6 +19,7 @@ type GroupMeetInvitePayload = {
     shareUrl: string;
     responseSubmittedAt: string | null;
     availabilityEntries: GroupMeetAvailabilitySlot[];
+    peerAvailability: GroupMeetSharedAvailabilityParticipant[];
     deadlinePassed: boolean;
     request: {
       id: string;
@@ -89,14 +91,64 @@ async function findInviteByToken(db: FirebaseFirestore.Firestore, token: string)
   return { inviteDoc, requestDoc };
 }
 
+function getNormalizedInviteAvailability(
+  inviteData: FirebaseFirestore.DocumentData,
+  targetMonth: string
+) {
+  return normalizeGroupMeetAvailabilitySlots(inviteData.availabilityEntries, targetMonth || '');
+}
+
+function hasInviteResponse(
+  inviteData: FirebaseFirestore.DocumentData,
+  targetMonth: string
+) {
+  return (
+    getNormalizedInviteAvailability(inviteData, targetMonth).length > 0 ||
+    Boolean(toIso(inviteData.responseSubmittedAt))
+  );
+}
+
+function buildPeerAvailability(args: {
+  currentToken: string;
+  inviteDocs: FirebaseFirestore.QueryDocumentSnapshot[];
+  targetMonth: string;
+}): GroupMeetSharedAvailabilityParticipant[] {
+  return args.inviteDocs
+    .map((docSnap) => {
+      const inviteData = docSnap.data() || {};
+      return {
+        token: docSnap.id,
+        name: inviteData.name || '',
+        imageUrl: inviteData.imageUrl || null,
+        participantType: inviteData.participantType === 'host' ? 'host' : 'participant',
+        respondedAt: toIso(inviteData.responseSubmittedAt),
+        availabilityEntries: getNormalizedInviteAvailability(inviteData, args.targetMonth),
+      } satisfies GroupMeetSharedAvailabilityParticipant;
+    })
+    .filter(
+      (participant) =>
+        participant.token !== args.currentToken &&
+        (participant.availabilityEntries.length > 0 || Boolean(participant.respondedAt))
+    )
+    .sort((left, right) => {
+      if (left.participantType !== right.participantType) {
+        return left.participantType === 'host' ? -1 : 1;
+      }
+
+      return left.name.localeCompare(right.name);
+    });
+}
+
 function buildInvitePayload(args: {
   token: string;
   inviteData: FirebaseFirestore.DocumentData;
   requestId: string;
   requestData: FirebaseFirestore.DocumentData;
+  peerAvailability: GroupMeetSharedAvailabilityParticipant[];
 }): GroupMeetInvitePayload {
   const deadlineAt = toIso(args.requestData.deadlineAt);
   const deadlinePassed = deadlineAt ? new Date(deadlineAt).getTime() <= Date.now() : false;
+  const targetMonth = args.requestData.targetMonth || '';
 
   return {
     invite: {
@@ -107,14 +159,13 @@ function buildInvitePayload(args: {
       participantType: args.inviteData.participantType === 'host' ? 'host' : 'participant',
       shareUrl: args.inviteData.shareUrl || '',
       responseSubmittedAt: toIso(args.inviteData.responseSubmittedAt),
-      availabilityEntries: Array.isArray(args.inviteData.availabilityEntries)
-        ? args.inviteData.availabilityEntries
-        : [],
+      availabilityEntries: getNormalizedInviteAvailability(args.inviteData, targetMonth),
+      peerAvailability: args.peerAvailability,
       deadlinePassed,
       request: {
         id: args.requestId,
         title: args.requestData.title || 'Group Meet',
-        targetMonth: args.requestData.targetMonth || '',
+        targetMonth,
         deadlineAt,
         timezone: args.requestData.timezone || 'America/New_York',
         meetingDurationMinutes: Number(args.requestData.meetingDurationMinutes) || 30,
@@ -139,6 +190,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { inviteDoc, requestDoc } = found;
   const requestData = requestDoc.data() || {};
   const inviteData = inviteDoc.data() || {};
+  const invitesSnapshot = await requestDoc.ref.collection(INVITES_SUBCOLLECTION).get();
+  const peerAvailability = buildPeerAvailability({
+    currentToken: token,
+    inviteDocs: invitesSnapshot.docs,
+    targetMonth: requestData.targetMonth || '',
+  });
   const deadlineAt = toIso(requestData.deadlineAt);
   const deadlinePassed = deadlineAt ? new Date(deadlineAt).getTime() <= Date.now() : false;
 
@@ -149,6 +206,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         inviteData,
         requestId: requestDoc.id,
         requestData,
+        peerAvailability,
       })
     );
   }
@@ -179,14 +237,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       { merge: true }
     );
 
-    const respondedSnapshot = await requestDoc.ref
-      .collection(INVITES_SUBCOLLECTION)
-      .where('hasResponse', '==', true)
-      .get();
+    const refreshedInvitesSnapshot = await requestDoc.ref.collection(INVITES_SUBCOLLECTION).get();
+    const responseCount = refreshedInvitesSnapshot.docs.filter((docSnap) =>
+      hasInviteResponse(docSnap.data() || {}, requestData.targetMonth || '')
+    ).length;
 
     await requestDoc.ref.set(
       {
-        responseCount: respondedSnapshot.size,
+        responseCount,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true }
@@ -201,8 +259,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         requestId: requestDoc.id,
         requestData: {
           ...requestData,
-          responseCount: respondedSnapshot.size,
+          responseCount,
         },
+        peerAvailability: buildPeerAvailability({
+          currentToken: token,
+          inviteDocs: refreshedInvitesSnapshot.docs,
+          targetMonth: requestData.targetMonth || '',
+        }),
       })
     );
   } catch (error: any) {
