@@ -738,286 +738,292 @@ export default function GroupMeetAvailabilityPicker({
 
       {activeDate && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center">
-          <div className="w-full max-w-lg rounded-[28px] border border-white/10 bg-[#0b1016] p-6 shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-2xl font-semibold">{format(parse(activeDate, 'yyyy-MM-dd', new Date()), 'EEEE, MMMM d')}</h3>
-                <p className="text-sm text-zinc-400 mt-1">Add one or more time ranges for this day.</p>
-                <div
-                  className={`mt-3 inline-flex items-center rounded-full border px-3 py-1 text-xs ${
-                    activeDateIsDirty
-                      ? 'border-[#E0FE10]/30 bg-[#E0FE10]/10 text-[#F4FF8A]'
+          <div className="flex h-[min(88vh,840px)] w-full max-w-lg flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#0b1016] shadow-2xl">
+            <div className="shrink-0 border-b border-white/10 px-6 py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-2xl font-semibold">{format(parse(activeDate, 'yyyy-MM-dd', new Date()), 'EEEE, MMMM d')}</h3>
+                  <p className="text-sm text-zinc-400 mt-1">Add one or more time ranges for this day.</p>
+                  <div
+                    className={`mt-3 inline-flex items-center rounded-full border px-3 py-1 text-xs ${
+                      activeDateIsDirty
+                        ? 'border-[#E0FE10]/30 bg-[#E0FE10]/10 text-[#F4FF8A]'
+                        : activeDateOriginalSlots.length
+                          ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
+                          : 'border-white/10 bg-white/[0.03] text-zinc-400'
+                    }`}
+                  >
+                    {activeDateIsDirty
+                      ? 'Unsaved changes'
                       : activeDateOriginalSlots.length
-                        ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
-                        : 'border-white/10 bg-white/[0.03] text-zinc-400'
-                  }`}
-                >
-                  {activeDateIsDirty
-                    ? 'Unsaved changes'
-                    : activeDateOriginalSlots.length
-                      ? 'Saved for this day'
-                      : 'Nothing saved yet'}
+                        ? 'Saved for this day'
+                        : 'Nothing saved yet'}
+                  </div>
                 </div>
-              </div>
-              <button
-                type="button"
-                onClick={closeEditor}
-                className="rounded-full border border-white/10 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
-              >
-                Close
-              </button>
-            </div>
-
-            {Boolean(activeDatePeerAvailability.length) && (
-              <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div className="text-sm font-medium text-white">Availability on this day</div>
-                <p className="mt-1 text-sm text-zinc-400">
-                  Hover any profile badge to see the time ranges already saved.
-                </p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {activeDatePeerAvailability.map((peer) => (
-                    <PeerAvailabilityBadge key={`${activeDate}-${peer.token}`} peer={peer} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {Boolean(activeDateSuggestedRanges.length) && (
-              <div className="mt-5 rounded-2xl border border-dashed border-[#E0FE10]/20 bg-[#E0FE10]/[0.04] p-4">
-                <div className="text-sm font-medium text-[#F4FF8A]">Suggested times from current responses</div>
-                <p className="mt-1 text-sm text-zinc-400">
-                  These windows fit the other people who have already replied for this day.
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {activeDateSuggestedRanges.map((range) => (
-                    <button
-                      key={`${activeDate}-${range.startMinutes}-${range.endMinutes}`}
-                      type="button"
-                      onClick={() => applySuggestedRange(range.startMinutes, range.endMinutes)}
-                      className="rounded-2xl border border-[#E0FE10]/25 bg-[#E0FE10]/[0.08] px-3 py-2 text-left text-sm text-[#F4FF8A] transition-colors hover:bg-[#E0FE10]/[0.14]"
-                      title={range.participantNames.join(', ')}
-                    >
-                      <div className="font-medium">
-                        {formatMinutesAsTime(range.startMinutes)} - {formatMinutesAsTime(range.endMinutes)}
-                      </div>
-                      <div className="mt-1 text-[11px] text-zinc-300">
-                        Fits {range.participantCount} other {range.participantCount === 1 ? 'person' : 'people'}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="mt-6">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="text-sm font-medium text-white">Your time ranges</div>
                 <button
                   type="button"
-                  onClick={addDraftRange}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm hover:bg-white/[0.08]"
+                  onClick={closeEditor}
+                  className="rounded-full border border-white/10 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
                 >
-                  <Plus className="w-4 h-4" />
-                  Add time range
+                  Close
                 </button>
-              </div>
-
-              <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-3">
-                <div className="text-xs uppercase tracking-[0.16em] text-zinc-500">Quick ranges</div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {QUICK_RANGE_PRESETS.map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      onClick={() => applyPresetRange(preset.startMinutes, preset.endMinutes)}
-                      className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-zinc-300 transition-colors hover:bg-white/[0.08]"
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {draftRanges.map((range, index) => {
-                  const startMinutes = timeInputValueToMinutes(range.start);
-                  const endMinutes = timeInputValueToMinutes(range.end);
-                  const hasValidRange =
-                    Number.isFinite(startMinutes) &&
-                    Number.isFinite(endMinutes) &&
-                    startMinutes < endMinutes;
-                  const matchingPeers = hasValidRange
-                    ? getMatchingPeersForRange(
-                        otherActiveDatePeerAvailability,
-                        startMinutes,
-                        endMinutes
-                      )
-                    : [];
-
-                  return (
-                    <div
-                      key={`range-${index}`}
-                      className={`rounded-2xl border p-3 ${
-                        range.source === 'suggested'
-                          ? 'border-[#E0FE10]/30 bg-[#E0FE10]/[0.05]'
-                          : 'border-white/10 bg-black/30'
-                      }`}
-                    >
-                      <div className="grid grid-cols-[1fr_1fr_auto] gap-3">
-                        <label className="block">
-                          <span className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-zinc-500">
-                            Start
-                            {range.source === 'suggested' && (
-                              <span className="rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-2 py-0.5 text-[10px] tracking-[0.12em] text-[#F4FF8A]">
-                                Suggested
-                              </span>
-                            )}
-                          </span>
-                          <input
-                            type="time"
-                            value={range.start}
-                            onChange={(event) => updateDraftRange(index, 'start', event.target.value)}
-                            className="w-full rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-white"
-                          />
-                        </label>
-
-                        <label className="block">
-                          <span className="block text-xs uppercase tracking-[0.18em] text-zinc-500 mb-2">End</span>
-                          <input
-                            type="time"
-                            value={range.end}
-                            onChange={(event) => updateDraftRange(index, 'end', event.target.value)}
-                            className="w-full rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-white"
-                          />
-                        </label>
-
-                        <button
-                          type="button"
-                          onClick={() => removeDraftRange(index)}
-                          className="mt-7 rounded-xl border border-white/10 px-3 py-3 text-zinc-300 hover:bg-white/5"
-                          aria-label={`Remove time range ${index + 1}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      <div className="mt-3 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs">
-                        {hasValidRange ? (
-                          <span
-                            className={
-                              matchingPeers.length ? 'text-emerald-100' : 'text-zinc-400'
-                            }
-                          >
-                            {formatPeerMatchSummary(matchingPeers)}
-                          </span>
-                        ) : (
-                          <span className="text-zinc-500">
-                            Enter a valid range to see who else is free then.
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {!draftRanges.length && (
-                  <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-zinc-500">
-                    No time ranges for this day yet.
-                  </div>
-                )}
               </div>
             </div>
 
-            {Boolean(duplicableDates.length) && (
-              <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <div className="text-sm font-medium text-white">Copy this schedule to other dates</div>
-                    <p className="mt-1 text-sm text-zinc-400">
-                      Use this when your schedule repeats and you want to reuse the same windows quickly.
-                    </p>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              {Boolean(activeDatePeerAvailability.length) && (
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="text-sm font-medium text-white">Availability on this day</div>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    Hover any profile badge to see the time ranges already saved.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    {activeDatePeerAvailability.map((peer) => (
+                      <PeerAvailabilityBadge key={`${activeDate}-${peer.token}`} peer={peer} />
+                    ))}
                   </div>
+                </div>
+              )}
 
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={selectMatchingWeekdayDates}
-                      className="rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5"
-                    >
-                      Repeat weekly
-                    </button>
-                    <button
-                      type="button"
-                      onClick={selectWeekdayDates}
-                      className="rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5"
-                    >
-                      Weekdays
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDuplicateDates([])}
-                      className="rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5"
-                    >
-                      Clear copies
-                    </button>
+              {Boolean(activeDateSuggestedRanges.length) && (
+                <div className="mt-5 rounded-2xl border border-dashed border-[#E0FE10]/20 bg-[#E0FE10]/[0.04] p-4">
+                  <div className="text-sm font-medium text-[#F4FF8A]">Suggested times from current responses</div>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    These windows fit the other people who have already replied for this day.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {activeDateSuggestedRanges.map((range) => (
+                      <button
+                        key={`${activeDate}-${range.startMinutes}-${range.endMinutes}`}
+                        type="button"
+                        onClick={() => applySuggestedRange(range.startMinutes, range.endMinutes)}
+                        className="rounded-2xl border border-[#E0FE10]/25 bg-[#E0FE10]/[0.08] px-3 py-2 text-left text-sm text-[#F4FF8A] transition-colors hover:bg-[#E0FE10]/[0.14]"
+                        title={range.participantNames.join(', ')}
+                      >
+                        <div className="font-medium">
+                          {formatMinutesAsTime(range.startMinutes)} - {formatMinutesAsTime(range.endMinutes)}
+                        </div>
+                        <div className="mt-1 text-[11px] text-zinc-300">
+                          Fits {range.participantCount} other {range.participantCount === 1 ? 'person' : 'people'}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-6">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-white">Your time ranges</div>
+                  <button
+                    type="button"
+                    onClick={addDraftRange}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm hover:bg-white/[0.08]"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add time range
+                  </button>
+                </div>
+
+                <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-xs uppercase tracking-[0.16em] text-zinc-500">Quick ranges</div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {QUICK_RANGE_PRESETS.map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => applyPresetRange(preset.startMinutes, preset.endMinutes)}
+                        className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-zinc-300 transition-colors hover:bg-white/[0.08]"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {duplicableDates.map((entry) => {
-                    const selected = duplicateDates.includes(entry.date);
+                <div className="space-y-3">
+                  {draftRanges.map((range, index) => {
+                    const startMinutes = timeInputValueToMinutes(range.start);
+                    const endMinutes = timeInputValueToMinutes(range.end);
+                    const hasValidRange =
+                      Number.isFinite(startMinutes) &&
+                      Number.isFinite(endMinutes) &&
+                      startMinutes < endMinutes;
+                    const matchingPeers = hasValidRange
+                      ? getMatchingPeersForRange(
+                          otherActiveDatePeerAvailability,
+                          startMinutes,
+                          endMinutes
+                        )
+                      : [];
+
                     return (
-                      <button
-                        key={entry.date}
-                        type="button"
-                        onClick={() => toggleDuplicateDate(entry.date)}
-                        className={`rounded-full border px-3 py-2 text-sm transition-colors ${
-                          selected
-                            ? 'border-[#E0FE10]/60 bg-[#E0FE10]/15 text-[#F4FF8A]'
-                            : 'border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.08]'
+                      <div
+                        key={`range-${index}`}
+                        className={`rounded-2xl border p-3 ${
+                          range.source === 'suggested'
+                            ? 'border-[#E0FE10]/30 bg-[#E0FE10]/[0.05]'
+                            : 'border-white/10 bg-black/30'
                         }`}
                       >
-                        {entry.label}
-                      </button>
+                        <div className="grid grid-cols-[1fr_1fr_auto] gap-3">
+                          <label className="block">
+                            <span className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-zinc-500">
+                              Start
+                              {range.source === 'suggested' && (
+                                <span className="rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-2 py-0.5 text-[10px] tracking-[0.12em] text-[#F4FF8A]">
+                                  Suggested
+                                </span>
+                              )}
+                            </span>
+                            <input
+                              type="time"
+                              value={range.start}
+                              onChange={(event) => updateDraftRange(index, 'start', event.target.value)}
+                              className="w-full rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-white"
+                            />
+                          </label>
+
+                          <label className="block">
+                            <span className="block text-xs uppercase tracking-[0.18em] text-zinc-500 mb-2">End</span>
+                            <input
+                              type="time"
+                              value={range.end}
+                              onChange={(event) => updateDraftRange(index, 'end', event.target.value)}
+                              className="w-full rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-white"
+                            />
+                          </label>
+
+                          <button
+                            type="button"
+                            onClick={() => removeDraftRange(index)}
+                            className="mt-7 rounded-xl border border-white/10 px-3 py-3 text-zinc-300 hover:bg-white/5"
+                            aria-label={`Remove time range ${index + 1}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div className="mt-3 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs">
+                          {hasValidRange ? (
+                            <span
+                              className={
+                                matchingPeers.length ? 'text-emerald-100' : 'text-zinc-400'
+                              }
+                            >
+                              {formatPeerMatchSummary(matchingPeers)}
+                            </span>
+                          ) : (
+                            <span className="text-zinc-500">
+                              Enter a valid range to see who else is free then.
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     );
                   })}
-                </div>
 
-                <div className="mt-3 text-xs text-zinc-500">
-                  {duplicateDates.length
-                    ? `These dates will be overwritten with the same time ranges when you save.`
-                    : 'Choose the dates that should receive the same schedule when you save this day.'}
+                  {!draftRanges.length && (
+                    <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-zinc-500">
+                      No time ranges for this day yet.
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
 
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm text-zinc-400">
-                {activeDateIsDirty
-                  ? 'Unsaved changes are ready to save.'
-                  : activeDateOriginalSlots.length
-                    ? 'This day is already saved.'
-                    : 'Add one or more ranges, then save this day.'}
-              </div>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onChange(availabilityEntries.filter((slot) => slot.date !== activeDate));
-                    closeEditor();
-                  }}
-                  className="rounded-xl border border-white/10 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5"
-                >
-                  Clear day
-                </button>
-                <button
-                  type="button"
-                  onClick={saveDayRanges}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-3 text-sm font-semibold text-black hover:bg-lime-300"
-                >
-                  <Clock className="w-4 h-4" />
-                  {duplicateDates.length ? `Save + copy to ${duplicateDates.length}` : 'Save day'}
-                </button>
+              {Boolean(duplicableDates.length) && (
+                <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="text-sm font-medium text-white">Copy this schedule to other dates</div>
+                      <p className="mt-1 text-sm text-zinc-400">
+                        Use this when your schedule repeats and you want to reuse the same windows quickly.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={selectMatchingWeekdayDates}
+                        className="rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5"
+                      >
+                        Repeat weekly
+                      </button>
+                      <button
+                        type="button"
+                        onClick={selectWeekdayDates}
+                        className="rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5"
+                      >
+                        Weekdays
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDuplicateDates([])}
+                        className="rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5"
+                      >
+                        Clear copies
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {duplicableDates.map((entry) => {
+                      const selected = duplicateDates.includes(entry.date);
+                      return (
+                        <button
+                          key={entry.date}
+                          type="button"
+                          onClick={() => toggleDuplicateDate(entry.date)}
+                          className={`rounded-full border px-3 py-2 text-sm transition-colors ${
+                            selected
+                              ? 'border-[#E0FE10]/60 bg-[#E0FE10]/15 text-[#F4FF8A]'
+                              : 'border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.08]'
+                          }`}
+                        >
+                          {entry.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-3 text-xs text-zinc-500">
+                    {duplicateDates.length
+                      ? `These dates will be overwritten with the same time ranges when you save.`
+                      : 'Choose the dates that should receive the same schedule when you save this day.'}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="shrink-0 border-t border-white/10 px-6 py-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-zinc-400">
+                  {activeDateIsDirty
+                    ? 'Unsaved changes are ready to save.'
+                    : activeDateOriginalSlots.length
+                      ? 'This day is already saved.'
+                      : 'Add one or more ranges, then save this day.'}
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange(availabilityEntries.filter((slot) => slot.date !== activeDate));
+                      closeEditor();
+                    }}
+                    className="rounded-xl border border-white/10 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5"
+                  >
+                    Clear day
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveDayRanges}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-3 text-sm font-semibold text-black hover:bg-lime-300"
+                  >
+                    <Clock className="w-4 h-4" />
+                    {duplicateDates.length ? `Save + copy to ${duplicateDates.length}` : 'Save day'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
