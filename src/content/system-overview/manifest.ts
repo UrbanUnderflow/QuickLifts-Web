@@ -9,7 +9,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Pulse architecture, products, data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-04-01',
+  lastUpdated: '2026-04-05',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -143,6 +143,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       'Upgraded the PulseCheck Check-In Integration Spec, State Signal Layer, and Nora Assignment Rules artifacts to an AI-native planning model: raw signals feed AI enrichment, Nora plans from a bounded sim/protocol candidate set, and the handbook now reflects the initial live breathing-protocol registry plus the remaining protocol-expansion backlog.',
       'Added a Firestore Index Registry artifact that turns `firestore.indexes.json` into a visible handbook source of truth and locks the operating rule that every new index must update the shared registry and be brought to both dev and prod.',
       'Added the Infrastructure & Secrets Stack artifact documenting how Netlify, Firebase, Google Cloud Secret Manager, and Google Workspace divide responsibilities, including the Group Meet Google Calendar secret setup.',
+      'Documented a separate guest Google Calendar OAuth import contract for Group Meet so invitees can import free/busy suggestions without reusing the admin final-event scheduling setup.',
       'Added the PulseCheck Device Integration Strategy artifact to the system overview, turning the device wishlist into a documented taxonomy with integration lanes, priorities, and rollout guidance.',
       'Added the PulseCheck Device Integration Partnership Matrix artifact to the system overview, showing which vendors are best suited to data access, platform compatibility, enterprise alliances, or brand-only partnerships.',
       'Added the PulseCheck School Wearable Bundle Plan artifact, locking the school-bundle recommendation for a Pulse-branded screenless band and recording the current OEM, FDA, Bluetooth, and FCC research needed before launch.',
@@ -680,6 +681,21 @@ export const systemOverviewManifest: SystemOverviewManifest = {
         { label: 'Brevo Notes', path: 'docs/Brevo implementation do.md' },
         { label: 'Local Machine Setup', path: 'docs/testing/local-machine-setup.md' },
         { label: 'Email Sequences Admin', path: 'src/pages/admin/emailSequences.tsx' },
+      ],
+    },
+    {
+      id: 'int-group-meet-guest-google-calendar',
+      name: 'Group Meet Guest Google Calendar Import',
+      purpose: 'Guest-consent Google OAuth flow that imports free/busy suggestions from a guest calendar into Group Meet.',
+      owner: 'Web Platform',
+      credentialSource:
+        'Dedicated guest OAuth envs (`GOOGLE_GUEST_CALENDAR_CLIENT_ID`, `GOOGLE_GUEST_CALENDAR_CLIENT_SECRET`, `GOOGLE_GUEST_CALENDAR_REDIRECT_URI`) plus invite-scoped secure token storage (`GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY` or equivalent)',
+      products: ['QuickLifts Web'],
+      status: 'planned',
+      sourceRefs: [
+        { label: 'Guest Google Calendar Import Spec', path: 'docs/ops/group-meet-guest-google-calendar-import-spec-2026-04-05.md' },
+        { label: 'Local Machine Setup', path: 'docs/testing/local-machine-setup.md' },
+        { label: 'Infrastructure & Secrets Stack', path: 'src/components/admin/system-overview/InfrastructureSecretsStackTab.tsx' },
       ],
     },
     {

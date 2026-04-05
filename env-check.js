@@ -81,6 +81,12 @@ console.log('STRIPE_PRODUCT_COACH:', process.env.STRIPE_PRODUCT_COACH ? '✓ Set
 console.log('\nSITE CONFIGURATION:');
 console.log('SITE_URL:', process.env.SITE_URL ? '✓ Set' : '✗ Not set');
 
+console.log('\nGUEST GOOGLE CALENDAR IMPORT VARIABLES (separate from admin scheduling):');
+console.log('GOOGLE_GUEST_CALENDAR_CLIENT_ID:', process.env.GOOGLE_GUEST_CALENDAR_CLIENT_ID ? '✓ Set' : '✗ Not set');
+console.log('GOOGLE_GUEST_CALENDAR_CLIENT_SECRET:', process.env.GOOGLE_GUEST_CALENDAR_CLIENT_SECRET ? '✓ Set' : '✗ Not set');
+console.log('GOOGLE_GUEST_CALENDAR_REDIRECT_URI:', process.env.GOOGLE_GUEST_CALENDAR_REDIRECT_URI ? '✓ Set' : '✗ Not set');
+console.log('GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY:', process.env.GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY ? '✓ Set' : '✗ Not set');
+
 console.log('\nBREVO VARIABLES:');
 console.log('BREVO_MARKETING_KEY:', process.env.BREVO_MARKETING_KEY ? '✓ Set' : '✗ Not set');
 console.log('BREVO_API_KEY:', process.env.BREVO_API_KEY ? '✓ Set' : '✗ Not set');

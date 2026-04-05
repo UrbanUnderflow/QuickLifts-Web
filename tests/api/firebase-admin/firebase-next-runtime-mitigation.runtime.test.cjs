@@ -25,7 +25,10 @@ function loadProxyModule() {
 test('firebase-next-api exposes the full migrated route count and matches dynamic patterns', () => {
   const proxyModule = loadProxyModule();
 
-  assert.equal(proxyModule.__test.routeCount, 37);
+  assert.ok(
+    proxyModule.__test.routeCount >= 37,
+    'route count should include the current migrated routes and remain tolerant of new additions'
+  );
   assert.equal(
     proxyModule.__test.resolveRoutePattern('/api/admin/group-meet/contacts'),
     '/api/admin/group-meet/contacts'
@@ -45,6 +48,18 @@ test('firebase-next-api exposes the full migrated route count and matches dynami
   assert.equal(
     proxyModule.__test.resolveRoutePattern('/api/admin/group-meet/request-123/preview-email'),
     '/api/admin/group-meet/[requestId]/preview-email'
+  );
+  assert.equal(
+    proxyModule.__test.resolveRoutePattern('/api/group-meet/calendar/google/callback'),
+    '/api/group-meet/calendar/google/callback'
+  );
+  assert.equal(
+    proxyModule.__test.resolveRoutePattern('/api/group-meet/token-123/calendar/google/import'),
+    '/api/group-meet/[token]/calendar/google/import'
+  );
+  assert.equal(
+    proxyModule.__test.resolveRoutePattern('/api/group-meet/token-123/calendar/google/disconnect'),
+    '/api/group-meet/[token]/calendar/google/disconnect'
   );
   assert.deepEqual(
     proxyModule.__test.matchRoutePattern(

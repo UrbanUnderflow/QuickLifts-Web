@@ -4,6 +4,34 @@ export type GroupMeetAvailabilitySlot = {
   endMinutes: number;
 };
 
+export type GroupMeetGuestCalendarImportProvider = 'google';
+
+export type GroupMeetGuestCalendarImportStatus =
+  | 'connected'
+  | 'disconnected'
+  | 'error';
+
+export type GroupMeetGuestCalendarImportSyncStatus =
+  | 'success'
+  | 'error'
+  | 'never';
+
+export type GroupMeetGuestCalendarImportSummary = {
+  provider: GroupMeetGuestCalendarImportProvider;
+  status: GroupMeetGuestCalendarImportStatus;
+  connectedAt: string | null;
+  disconnectedAt: string | null;
+  lastSyncedAt: string | null;
+  lastSyncStatus: GroupMeetGuestCalendarImportSyncStatus;
+  lastSyncError: string | null;
+  googleAccountEmail: string | null;
+};
+
+export type GroupMeetImportedAvailabilitySuggestion = GroupMeetAvailabilitySlot & {
+  source: 'google_calendar';
+  importedAt: string | null;
+};
+
 export type GroupMeetInviteSummary = {
   token: string;
   name: string;
@@ -19,6 +47,7 @@ export type GroupMeetInviteSummary = {
     | 'no_email'
     | 'manual_only';
   emailedAt?: string | null;
+  calendarImport?: GroupMeetGuestCalendarImportSummary | null;
   emailError?: string | null;
   respondedAt: string | null;
   availabilityCount: number;

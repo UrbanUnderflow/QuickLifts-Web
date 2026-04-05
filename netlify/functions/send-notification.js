@@ -237,6 +237,37 @@ async function sendNotification(fcmToken, title, body, customData = {}, recipien
   }
 }
 
+function normalizeIncomingNotificationRequest(body = {}) {
+  const nestedPayload = body && typeof body.payload === 'object' && body.payload !== null ? body.payload : null;
+  const rootNotification = body && typeof body.notification === 'object' && body.notification !== null ? body.notification : null;
+  const nestedNotification =
+    nestedPayload && typeof nestedPayload.notification === 'object' && nestedPayload.notification !== null
+      ? nestedPayload.notification
+      : null;
+
+  const notificationSource = nestedNotification || rootNotification || body;
+  const title = typeof notificationSource?.title === 'string' ? notificationSource.title : '';
+  const bodyText = typeof notificationSource?.body === 'string' ? notificationSource.body : '';
+
+  const nestedData = nestedPayload && typeof nestedPayload.data === 'object' && nestedPayload.data !== null ? nestedPayload.data : null;
+  const rootData = body && typeof body.data === 'object' && body.data !== null ? body.data : null;
+  const customData = nestedData || rootData || {};
+
+  const nestedRecipient =
+    nestedPayload && typeof nestedPayload.recipient === 'object' && nestedPayload.recipient !== null
+      ? nestedPayload.recipient
+      : null;
+  const rootRecipient = body && typeof body.recipient === 'object' && body.recipient !== null ? body.recipient : null;
+
+  return {
+    fcmToken: typeof body?.fcmToken === 'string' ? body.fcmToken : '',
+    title,
+    body: bodyText,
+    customData,
+    recipient: rootRecipient || nestedRecipient || null,
+  };
+}
+
 exports.handler = async (event) => {
   // Set CORS headers
   const headers = {
@@ -260,9 +291,30 @@ exports.handler = async (event) => {
     const body = JSON.parse(event.body);
     console.log('Received request body:', body); // Debug log
 
-    const { fcmToken, payload, recipient } = body;
+    const {
+      fcmToken,
+      title,
+      body: notificationBody,
+      customData,
+      recipient,
+    } = normalizeIncomingNotificationRequest(body);
     
-    if (!fcmToken || !payload?.notification?.title || !payload?.notification?.body) {
+    if (!fcmToken || !title || !notificationBody) {
+      await logNotification({
+        fcmToken,
+        title: title || 'Invalid notification request',
+        body: notificationBody || 'Notification request was rejected before send because required fields were missing.',
+        dataPayload: customData,
+        notificationType: customData?.type || 'INVALID_NOTIFICATION_REQUEST',
+        success: false,
+        error: {
+          code: 'INVALID_REQUEST',
+          message: 'Missing required parameters: fcmToken, title, or body',
+        },
+        functionName: 'netlify/send-notification',
+        recipients: recipient ? [recipient] : []
+      });
+
       return {
         statusCode: 400,
         headers,
@@ -275,10 +327,10 @@ exports.handler = async (event) => {
 
     const result = await sendNotification(
       fcmToken, 
-      payload.notification.title, 
-      payload.notification.body,
-      payload.data || {},
-      recipient ? [recipient] : (payload?.recipient ? [payload.recipient] : [])
+      title, 
+      notificationBody,
+      customData,
+      recipient ? [recipient] : []
     );
 
     return {

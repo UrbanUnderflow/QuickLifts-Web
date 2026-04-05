@@ -162,6 +162,25 @@ test('getGoogleCalendarSetupStatus blocks scheduling when delegated mailbox is m
   );
 });
 
+test('convertLocalDateMinutesToUtcIso respects timezone offsets and DST boundaries', () => {
+  const { convertLocalDateMinutesToUtcIso } = loadGoogleCalendarRuntime();
+
+  assert.equal(
+    convertLocalDateMinutesToUtcIso('2026-01-15', 9 * 60, 'America/New_York'),
+    '2026-01-15T14:00:00.000Z'
+  );
+
+  assert.equal(
+    convertLocalDateMinutesToUtcIso('2026-04-15', 9 * 60, 'America/New_York'),
+    '2026-04-15T13:00:00.000Z'
+  );
+
+  assert.equal(
+    convertLocalDateMinutesToUtcIso('2026-11-02', 9 * 60 + 30, 'America/Los_Angeles'),
+    '2026-11-02T17:30:00.000Z'
+  );
+});
+
 test('public guest invite endpoint resolves an invite by stored token and honors localhost dev firebase', async () => {
   const { handler, state } = createPublicInviteHandlerRuntime({
     requestData: {

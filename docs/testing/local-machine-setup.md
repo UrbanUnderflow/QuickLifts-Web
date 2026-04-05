@@ -187,7 +187,25 @@ FIREBASE_PRIVATE_KEY_3
 FIREBASE_PRIVATE_KEY_4
 ```
 
-### 5. Optional Broader App Integrations
+### 5. Guest Google Calendar Import OAuth For Group Meet Guests
+
+Only add these if the machine will test the guest-side Group Meet calendar import flow:
+
+```bash
+GOOGLE_GUEST_CALENDAR_CLIENT_ID
+GOOGLE_GUEST_CALENDAR_CLIENT_SECRET
+GOOGLE_GUEST_CALENDAR_REDIRECT_URI
+GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY
+```
+
+This contract is separate from the existing admin-side Group Meet scheduling setup.
+
+Use the admin-side Google Calendar service-account / delegated-user setup for host final-event creation only.
+Use these guest OAuth envs for invite-scoped free/busy import suggestions only.
+
+Do not reuse `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON` or the admin scheduling identity for the guest import path.
+
+### 6. Optional Broader App Integrations
 
 These are not required just to get local Playwright bootstrap working, but they may be needed if the new machine also needs to exercise broader product surfaces locally:
 
@@ -218,6 +236,7 @@ SITE_URL
 
 If the goal is only "run Playwright on another machine," you do not need to block on every key in this section.
 If the goal includes testing Group Meet invite sends or preview-email flows locally, the Brevo keys in this section do need to come over to the machine.
+If the goal includes testing the guest Google Calendar import flow locally, the guest Google envs in the previous section do need to come over to the machine.
 
 ## Playwright Bootstrap Secret
 

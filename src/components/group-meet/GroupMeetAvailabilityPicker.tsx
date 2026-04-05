@@ -15,13 +15,14 @@ import {
   minutesToTimeInputValue,
   timeInputValueToMinutes,
   type GroupMeetAvailabilitySlot,
+  type GroupMeetImportedAvailabilitySuggestion,
   type GroupMeetSharedAvailabilityParticipant,
 } from '../../lib/groupMeet';
 
 type DayRangeDraft = {
   start: string;
   end: string;
-  source?: 'suggested';
+  source?: 'suggested' | 'google_calendar';
 };
 
 const QUICK_RANGE_PRESETS = [
@@ -34,6 +35,7 @@ const QUICK_RANGE_PRESETS = [
 type GroupMeetAvailabilityPickerProps = {
   targetMonth: string;
   availabilityEntries: GroupMeetAvailabilitySlot[];
+  importedSuggestions?: GroupMeetImportedAvailabilitySuggestion[];
   peerAvailability?: GroupMeetSharedAvailabilityParticipant[];
   meetingDurationMinutes?: number;
   currentParticipant?: {
@@ -389,6 +391,7 @@ function PeerAvailabilityBadge({ peer }: { peer: PeerAvailabilityForDate }) {
 export default function GroupMeetAvailabilityPicker({
   targetMonth,
   availabilityEntries,
+  importedSuggestions = [],
   peerAvailability = [],
   meetingDurationMinutes = 30,
   currentParticipant = null,
@@ -418,6 +421,31 @@ export default function GroupMeetAvailabilityPicker({
     }
     return next;
   }, [availabilityEntries]);
+  const importedSuggestionsByDate = useMemo(() => {
+    const next = new Map<string, GroupMeetImportedAvailabilitySuggestion[]>();
+    const savedKeys = new Set(
+      availabilityEntries.map((slot) => `${slot.date}:${slot.startMinutes}:${slot.endMinutes}`)
+    );
+
+    for (const suggestion of importedSuggestions) {
+      const key = `${suggestion.date}:${suggestion.startMinutes}:${suggestion.endMinutes}`;
+      if (savedKeys.has(key)) continue;
+      const current = next.get(suggestion.date) || [];
+      current.push(suggestion);
+      next.set(suggestion.date, current);
+    }
+
+    for (const suggestionsForDate of next.values()) {
+      suggestionsForDate.sort((left, right) => {
+        if (left.startMinutes !== right.startMinutes) {
+          return left.startMinutes - right.startMinutes;
+        }
+        return left.endMinutes - right.endMinutes;
+      });
+    }
+
+    return next;
+  }, [availabilityEntries, importedSuggestions]);
   const peerAvailabilityByDate = useMemo(() => {
     const next = new Map<string, PeerAvailabilityForDate[]>();
 
@@ -503,6 +531,10 @@ export default function GroupMeetAvailabilityPicker({
     () => (activeDate ? participantAvailabilityByDate.get(activeDate) || [] : []),
     [activeDate, participantAvailabilityByDate]
   );
+  const activeDateImportedSuggestions = useMemo(
+    () => (activeDate ? importedSuggestionsByDate.get(activeDate) || [] : []),
+    [activeDate, importedSuggestionsByDate]
+  );
   const otherActiveDatePeerAvailability = useMemo(
     () => activeDatePeerAvailability.filter((peer) => !peer.isCurrentUser),
     [activeDatePeerAvailability]
@@ -529,6 +561,7 @@ export default function GroupMeetAvailabilityPicker({
 
   const openDayEditor = (date: string) => {
     const slots = slotsByDate.get(date) || [];
+    const importedSuggestionsForDate = importedSuggestionsByDate.get(date) || [];
     const suggestedRanges = buildSuggestedPeerRanges(
       (participantAvailabilityByDate.get(date) || []).filter((peer) => !peer.isCurrentUser),
       meetingDurationMinutes
@@ -540,7 +573,15 @@ export default function GroupMeetAvailabilityPicker({
         ? slots.map((slot) =>
             createDraftRangeFromMinutes(slot.startMinutes, slot.endMinutes)
           )
-        : suggestedRanges.length
+        : importedSuggestionsForDate.length
+          ? [
+              createDraftRangeFromMinutes(
+                importedSuggestionsForDate[0].startMinutes,
+                importedSuggestionsForDate[0].endMinutes,
+                'google_calendar'
+              ),
+            ]
+          : suggestedRanges.length
           ? [
               createDraftRangeFromMinutes(
                 suggestedRanges[0].startMinutes,
@@ -595,6 +636,26 @@ export default function GroupMeetAvailabilityPicker({
       }
 
       if (!current.length || (current.length === 1 && current[0]?.source === 'suggested')) {
+        return [nextRange];
+      }
+
+      return [...current, nextRange];
+    });
+  };
+
+  const applyImportedSuggestion = (startMinutes: number, endMinutes: number) => {
+    const nextRange = createDraftRangeFromMinutes(
+      startMinutes,
+      endMinutes,
+      'google_calendar'
+    );
+
+    setDraftRanges((current) => {
+      if (current.some((range) => range.start === nextRange.start && range.end === nextRange.end)) {
+        return current;
+      }
+
+      if (!current.length || (current.length === 1 && current[0]?.source === 'google_calendar')) {
         return [nextRange];
       }
 
@@ -686,6 +747,7 @@ export default function GroupMeetAvailabilityPicker({
             parse(`${targetMonth}-01`, 'yyyy-MM-dd', new Date())
           );
           const slots = slotsByDate.get(dateKey) || [];
+          const importedSuggestionsForDate = importedSuggestionsByDate.get(dateKey) || [];
           const peerParticipants = participantAvailabilityByDate.get(dateKey) || [];
 
           return (
@@ -698,6 +760,8 @@ export default function GroupMeetAvailabilityPicker({
                 inTargetMonth
                   ? slots.length
                     ? 'border-[#E0FE10]/50 bg-[#E0FE10]/10 hover:bg-[#E0FE10]/15'
+                    : importedSuggestionsForDate.length
+                      ? 'border-sky-400/25 bg-sky-500/[0.07] hover:bg-sky-500/[0.11]'
                     : peerParticipants.length
                       ? 'border-emerald-400/20 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.1]'
                     : 'border-white/10 bg-black/30 hover:bg-white/[0.06]'
@@ -740,6 +804,22 @@ export default function GroupMeetAvailabilityPicker({
                       {slots.length} slot{slots.length === 1 ? '' : 's'}
                     </div>
                   </div>
+                )}
+                {!slots.length && importedSuggestionsForDate.length > 0 && (
+                  <>
+                    <div className="sm:hidden">
+                      <div className="inline-flex items-center rounded-full border border-sky-400/20 bg-black/35 px-1.5 py-1 text-[9px] font-medium text-sky-100">
+                        Imported
+                      </div>
+                    </div>
+
+                    <div className="hidden sm:block">
+                      <div className="inline-flex items-center rounded-full border border-sky-400/20 bg-black/35 px-2 py-1 text-[10px] font-medium text-sky-100">
+                        {importedSuggestionsForDate.length} Google suggestion
+                        {importedSuggestionsForDate.length === 1 ? '' : 's'}
+                      </div>
+                    </div>
+                  </>
                 )}
 
                 <div className="hidden space-y-1 sm:block">
@@ -834,6 +914,30 @@ export default function GroupMeetAvailabilityPicker({
                 </div>
               )}
 
+              {Boolean(activeDateImportedSuggestions.length) && (
+                <div className="mt-5 rounded-2xl border border-dashed border-sky-400/20 bg-sky-500/[0.05] p-4">
+                  <div className="text-sm font-medium text-sky-100">Imported from Google Calendar</div>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    These open windows came from your Google Calendar. Tap one to add it to your editable draft before saving.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {activeDateImportedSuggestions.map((range) => (
+                      <button
+                        key={`${activeDate}-${range.startMinutes}-${range.endMinutes}-google`}
+                        type="button"
+                        onClick={() => applyImportedSuggestion(range.startMinutes, range.endMinutes)}
+                        className="rounded-2xl border border-sky-400/25 bg-sky-500/[0.09] px-3 py-2 text-left text-sm text-sky-100 transition-colors hover:bg-sky-500/[0.14]"
+                      >
+                        <div className="font-medium">
+                          {formatMinutesAsTime(range.startMinutes)} - {formatMinutesAsTime(range.endMinutes)}
+                        </div>
+                        <div className="mt-1 text-[11px] text-zinc-300">Imported suggestion</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="mt-6">
                 <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="text-sm font-medium text-white">Your time ranges</div>
@@ -885,6 +989,8 @@ export default function GroupMeetAvailabilityPicker({
                         className={`rounded-2xl border p-3 ${
                           range.source === 'suggested'
                             ? 'border-[#E0FE10]/30 bg-[#E0FE10]/[0.05]'
+                            : range.source === 'google_calendar'
+                              ? 'border-sky-400/30 bg-sky-500/[0.06]'
                             : 'border-white/10 bg-black/30'
                         }`}
                       >
@@ -895,6 +1001,11 @@ export default function GroupMeetAvailabilityPicker({
                               {range.source === 'suggested' && (
                                 <span className="rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-2 py-0.5 text-[10px] tracking-[0.12em] text-[#F4FF8A]">
                                   Suggested
+                                </span>
+                              )}
+                              {range.source === 'google_calendar' && (
+                                <span className="rounded-full border border-sky-400/25 bg-sky-500/[0.10] px-2 py-0.5 text-[10px] tracking-[0.12em] text-sky-100">
+                                  Imported
                                 </span>
                               )}
                             </span>
