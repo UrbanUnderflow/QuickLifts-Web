@@ -1,16 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { useUser } from '../../hooks/useUser';
 import { db } from '../../api/firebase/config';
 import {
-  addDoc,
   collection,
   getCountFromServer,
   limit,
   orderBy,
   query,
-  serverTimestamp,
   where,
   getDocs,
 } from 'firebase/firestore';
@@ -26,14 +24,6 @@ type InviteLog = {
   createdByEmail?: string;
 };
 
-const DEFAULT_CODE_HINTS = [
-  'DEC_2025_OUTREACH',
-  'IG_DM',
-  'EMAIL_OUTREACH',
-  'TREMAINE',
-  'TEAM_SALES',
-] as const;
-
 const normalizeInviteCode = (raw: string) => {
   const cleaned = raw.trim().replace(/\s+/g, '_');
   return cleaned.toUpperCase().replace(/[^A-Z0-9_]/g, '');
@@ -45,12 +35,6 @@ const getBaseUrl = () => {
 };
 
 const CoachInvitesAdminPage: React.FC = () => {
-  const currentUser = useUser();
-  const [code, setCode] = useState('');
-  const [label, setLabel] = useState('');
-  const [coachType, setCoachType] = useState<string>('partnered');
-  const [earningsAccess, setEarningsAccess] = useState<boolean>(true);
-  const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [recent, setRecent] = useState<InviteLog[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
@@ -58,17 +42,7 @@ const CoachInvitesAdminPage: React.FC = () => {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupResult, setLookupResult] = useState<{ usersCount?: number; coachesCount?: number; error?: string } | null>(null);
 
-  const inviteCode = useMemo(() => normalizeInviteCode(code), [code]);
-  const inviteUrl = useMemo(() => {
-    if (!inviteCode) return '';
-    return `${getBaseUrl()}/coach-onboard?invite=${encodeURIComponent(inviteCode)}`;
-  }, [inviteCode]);
-
-  const qrCodeUrl = useMemo(() => {
-    if (!inviteUrl) return '';
-    // We already use qrserver elsewhere in the codebase; safe for an admin convenience tool.
-    return `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(inviteUrl)}`;
-  }, [inviteUrl]);
+  const coachLedOrgUrl = useMemo(() => `${getBaseUrl()}/PulseCheck/coach`, []);
 
   const loadRecent = async () => {
     setLoadingRecent(true);
@@ -98,34 +72,6 @@ const CoachInvitesAdminPage: React.FC = () => {
     } catch (_) {
       setToast('Copy failed');
       setTimeout(() => setToast(null), 1800);
-    }
-  };
-
-  const createInvite = async () => {
-    if (!inviteCode) {
-      setToast('Enter an invite code');
-      setTimeout(() => setToast(null), 2000);
-      return;
-    }
-    setSaving(true);
-    try {
-      await addDoc(collection(db, 'coach-onboard-invites'), {
-        code: inviteCode,
-        label: label.trim() || null,
-        coachType: coachType?.trim() || null,
-        earningsAccess: !!earningsAccess,
-        createdAt: serverTimestamp(),
-        createdByUserId: currentUser?.id || null,
-        createdByEmail: currentUser?.email || null,
-      });
-      setToast('Invite saved');
-      setTimeout(() => setToast(null), 2000);
-      await loadRecent();
-    } catch (e: any) {
-      setToast(e?.message || 'Failed to save invite');
-      setTimeout(() => setToast(null), 2400);
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -162,15 +108,19 @@ const CoachInvitesAdminPage: React.FC = () => {
     <AdminRouteGuard>
       <div className="min-h-screen bg-black text-white">
         <Head>
-          <title>Coach Invite Links (Admin) | Pulse</title>
+          <title>Legacy Coach Invite Links (Admin) | Pulse</title>
         </Head>
 
         <div className="max-w-5xl mx-auto px-6 py-10">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold">Coach Invite Links</h1>
+            <h1 className="text-3xl font-bold">Legacy Coach Invite Links</h1>
             <p className="text-zinc-400 text-sm mt-1">
-              Generate team-owned coach invite links for outreach. These use <code className="text-zinc-200">invite</code> (not <code className="text-zinc-200">ref</code>).
+              Deprecated legacy invite-code registry. New links now point directly into the canonical <code className="text-zinc-200">/sign-up?type=coach&amp;invite=...</code> path while we finish cleaning up the old coach collections.
             </p>
+          </div>
+
+          <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            New coach-led organizations should be provisioned through <code className="text-amber-50">/admin/pulsecheckProvisioning</code> and activated through PulseCheck admin activation links. Use this page only for legacy cleanup or historical attribution lookups.
           </div>
 
           {toast && (
@@ -181,128 +131,54 @@ const CoachInvitesAdminPage: React.FC = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-              <div className="text-lg font-semibold mb-4">Generate a link</div>
-
-              <div className="space-y-4">
+              <div className="text-lg font-semibold mb-4">New canonical entry</div>
+              <div className="space-y-4 text-sm text-zinc-300">
+                <p>
+                  We no longer generate coach-onboard invite links from this page. New coach-led organizations should enter
+                  through the PulseCheck coach flow or be provisioned directly from the PulseCheck provisioning console.
+                </p>
                 <div>
-                  <label className="block text-sm text-zinc-300 mb-2">Invite Code (recommended: campaign/channel/person)</label>
-                  <input
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    placeholder="e.g. DEC_2025_OUTREACH"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-white"
-                  />
-                  <div className="text-xs text-zinc-500 mt-2">
-                    Normalized as: <span className="text-zinc-300">{inviteCode || '—'}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {DEFAULT_CODE_HINTS.map((h) => (
-                      <button
-                        key={h}
-                        onClick={() => setCode(h)}
-                        className="px-3 py-1.5 rounded-full text-xs bg-zinc-800 border border-zinc-700 hover:bg-zinc-700"
-                      >
-                        {h}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm text-zinc-300 mb-2">Label (optional)</label>
-                  <input
-                    value={label}
-                    onChange={(e) => setLabel(e.target.value)}
-                    placeholder="e.g. Tremaine cold outreach list"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-white"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm text-zinc-300 mb-2">Coach Type</label>
-                    <select
-                      value={coachType}
-                      onChange={(e) => setCoachType(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-white"
-                    >
-                      <option value="partnered">Partnered (earnings eligible)</option>
-                      <option value="self_serve">Self-serve</option>
-                      <option value="enterprise">Enterprise</option>
-                      <option value="other">Other</option>
-                    </select>
-                    <div className="text-xs text-zinc-500 mt-2">
-                      This is stored on the invite and copied to the coach profile on signup.
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-zinc-300 mb-2">Earnings Tab Access</label>
-                    <button
-                      type="button"
-                      onClick={() => setEarningsAccess(v => !v)}
-                      className={`w-full border rounded-lg px-4 py-3 text-sm font-semibold transition-colors ${
-                        earningsAccess
-                          ? 'bg-[#E0FE10] text-black border-[#E0FE10]'
-                          : 'bg-zinc-950 text-zinc-200 border-zinc-800 hover:bg-zinc-900'
-                      }`}
-                    >
-                      {earningsAccess ? 'Enabled' : 'Disabled'}
-                    </button>
-                    <div className="text-xs text-zinc-500 mt-2">
-                      When disabled, the coach will not see the Earnings tab or `/coach/revenue`.
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm text-zinc-300 mb-2">Generated Link</label>
+                  <label className="block text-sm text-zinc-300 mb-2">Coach-led organization entry</label>
                   <div className="flex items-center gap-2">
                     <input
-                      value={inviteUrl}
+                      value={coachLedOrgUrl}
                       readOnly
                       className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-white"
                     />
                     <button
-                      disabled={!inviteUrl}
-                      onClick={() => inviteUrl && copyToClipboard(inviteUrl)}
-                      className="bg-[#E0FE10] text-black px-4 py-3 rounded-lg font-semibold hover:bg-lime-400 disabled:opacity-50"
+                      onClick={() => coachLedOrgUrl && copyToClipboard(coachLedOrgUrl)}
+                      className="bg-[#E0FE10] text-black px-4 py-3 rounded-lg font-semibold hover:bg-lime-400"
                     >
                       Copy
                     </button>
                   </div>
-                  <div className="flex items-center gap-2 mt-3">
-                    <button
-                      disabled={!inviteUrl || saving}
-                      onClick={createInvite}
-                      className="bg-zinc-800 border border-zinc-700 px-4 py-2 rounded-lg hover:bg-zinc-700 disabled:opacity-50"
-                    >
-                      {saving ? 'Saving…' : 'Save invite'}
-                    </button>
-                    <a
-                      href={inviteUrl || '#'}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`px-4 py-2 rounded-lg border ${
-                        inviteUrl ? 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700' : 'bg-zinc-900 border-zinc-800 text-zinc-600 pointer-events-none'
-                      }`}
-                    >
-                      Open
-                    </a>
-                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3 pt-2">
+                  <Link
+                    href="/admin/pulsecheckProvisioning"
+                    className="rounded-lg bg-[#E0FE10] px-4 py-2 font-semibold text-black hover:bg-lime-400"
+                  >
+                    Open PulseCheck Provisioning
+                  </Link>
+                  <a
+                    href={coachLedOrgUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 hover:bg-zinc-700"
+                  >
+                    Open Coach Entry Page
+                  </a>
                 </div>
               </div>
             </div>
 
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-              <div className="text-lg font-semibold mb-4">QR Code</div>
-              {qrCodeUrl ? (
-                <div className="bg-white rounded-xl p-4 inline-block">
-                  <img src={qrCodeUrl} alt="Invite QR" className="w-56 h-56" />
-                </div>
-              ) : (
-                <div className="text-zinc-500 text-sm">Enter an invite code to generate a QR.</div>
-              )}
+              <div className="text-lg font-semibold mb-4">Legacy route status</div>
+              <div className="space-y-3 text-sm text-zinc-400">
+                <p><code className="text-zinc-200">/coach-onboard</code> now redirects into the canonical coach signup bridge.</p>
+                <p><code className="text-zinc-200">/coach-invite/[referralCode]</code> and <code className="text-zinc-200">/connect/[referralCode]</code> are retired and only show migration guidance.</p>
+                <p>This page is now read-only and should only be used to audit historical invite codes during migration.</p>
+              </div>
             </div>
           </div>
 
@@ -344,7 +220,7 @@ const CoachInvitesAdminPage: React.FC = () => {
 
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
-                <div className="text-lg font-semibold">Recent generated invites</div>
+                <div className="text-lg font-semibold">Recent legacy invites</div>
                 <button
                   onClick={loadRecent}
                   disabled={loadingRecent}
@@ -387,16 +263,8 @@ const CoachInvitesAdminPage: React.FC = () => {
                             onClick={() => copyToClipboard(url)}
                             className="bg-[#E0FE10] text-black px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-lime-400"
                           >
-                            Copy
+                            Copy legacy route
                           </button>
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="bg-zinc-800 border border-zinc-700 px-3 py-1.5 rounded-lg text-sm hover:bg-zinc-700"
-                          >
-                            Open
-                          </a>
                         </div>
                       </div>
                     );
@@ -412,4 +280,3 @@ const CoachInvitesAdminPage: React.FC = () => {
 };
 
 export default CoachInvitesAdminPage;
-

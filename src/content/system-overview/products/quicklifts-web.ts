@@ -13,7 +13,7 @@ export const quickliftsWebHandbook: ProductHandbook = {
   keyOutcomes: [
     'Public growth and onboarding surfaces',
     'Internal operations and admin tooling',
-    'Creator and coach business workflows',
+    'Creator workflows and PulseCheck commercial provisioning',
   ],
   featureInventory: [
     {
@@ -136,20 +136,40 @@ export const quickliftsWebHandbook: ProductHandbook = {
       ],
     },
     {
-      id: 'web-coach-partnerships',
-      name: 'Coach Partnership Funnel and Dashboard',
-      persona: 'Coaches and operator support teams',
-      outcome: 'Drive coach signup, referral attribution, and revenue visibility workflows.',
-      entryPoints: ['/coach/sign-up', '/coach/dashboard', '/partner/apply'],
-      dependentServices: ['Coach services', 'checkout session functions'],
-      firestoreCollections: ['coaches', 'coachAthletes', 'coachReferrals', 'revenue-calculations'],
-      integrations: ['Stripe', 'Netlify Functions'],
-      owner: 'Coach Platform',
+      id: 'web-pulsecheck-organization-activation',
+      name: 'PulseCheck Organization Provisioning and Admin Activation',
+      persona: 'Operators, coach-led organizations, and external program admins',
+      outcome:
+        'Provision PulseCheck organizations and teams, hand off admin activation, and prepare the container for downstream staff and athlete invites.',
+      entryPoints: [
+        '/admin/pulsecheckProvisioning',
+        '/admin/pulsecheckLegacyRosterMigration',
+        '/PulseCheck/admin-activation/[token]',
+        '/PulseCheck/team-invite/[token]',
+        '/PulseCheck/team-workspace',
+      ],
+      dependentServices: [
+        'PulseCheck provisioning service',
+        'admin activation API',
+        'team invite redemption API',
+        'migration tooling',
+      ],
+      firestoreCollections: [
+        'pulsecheck-organizations',
+        'pulsecheck-teams',
+        'pulsecheck-organization-memberships',
+        'pulsecheck-team-memberships',
+        'pulsecheck-invite-links',
+        'pulsecheck-legacy-roster-migrations',
+      ],
+      integrations: ['Firebase Auth', 'Next.js API routes'],
+      owner: 'PulseCheck Platform',
       releaseChannel: 'Production',
       status: 'active',
       sourceRefs: [
-        { label: 'Coach Signup', path: 'src/pages/coach/sign-up.tsx' },
-        { label: 'Coach Partnership Overview', path: 'docs/coach-partnership-system-overview.md' },
+        { label: 'Provisioning Console', path: 'src/pages/admin/pulsecheckProvisioning.tsx' },
+        { label: 'Legacy Roster Migration', path: 'src/pages/admin/pulsecheckLegacyRosterMigration.tsx' },
+        { label: 'Admin Activation Page', path: 'src/pages/PulseCheck/admin-activation/[token].tsx' },
       ],
     },
     {
@@ -209,7 +229,7 @@ export const quickliftsWebHandbook: ProductHandbook = {
       persona: 'Creators, finance ops, and support teams',
       outcome:
         'Expose creator earnings, payout eligibility, payout history, leaderboard score context, and monthly statement availability in one operating surface.',
-      entryPoints: ['/[username]/earnings', '/admin/adminPayouts', '/coach/revenue'],
+      entryPoints: ['/[username]/earnings', '/admin/adminPayouts'],
       dependentServices: ['get-unified-earnings', 'initiate-unified-payout', 'sync-pending-payouts', 'get-monthly-statement'],
       firestoreCollections: ['users', 'payoutRecords', 'prizeRecords', 'leaderboards'],
       integrations: ['Stripe', 'Netlify Functions'],
@@ -219,7 +239,6 @@ export const quickliftsWebHandbook: ProductHandbook = {
       sourceRefs: [
         { label: 'Unified Earnings Page', path: 'src/pages/[username]/earnings.tsx' },
         { label: 'Admin Payout Dashboard', path: 'src/pages/admin/adminPayouts.tsx' },
-        { label: 'Coach Revenue and Statements', path: 'src/pages/coach/revenue.tsx' },
         { label: 'Get Unified Earnings Function', path: 'netlify/functions/get-unified-earnings.js' },
         { label: 'Initiate Unified Payout Function', path: 'netlify/functions/initiate-unified-payout.js' },
         { label: 'Monthly Statement Function', path: 'netlify/functions/get-monthly-statement.js' },

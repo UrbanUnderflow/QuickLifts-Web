@@ -30,6 +30,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'end-to-end-flows', label: 'End-to-End Flows', description: 'Cross-product flows from trigger to failure points.' },
     { id: 'ownership-release-matrix', label: 'Ownership Matrix', description: 'Operational ownership and release cadence.' },
     { id: 'agent-infrastructure-handbook', label: 'Agent Infrastructure Handbook', description: 'Heartbeat protocol and operator playbook.' },
+    { id: 'agent-outcome-rubric-spec', label: 'Outcome Rubric v1', description: 'Frozen outcome-first runtime contract for proof, scoring, lifecycle, and business movement.' },
     { id: 'hunter-world-handbook', label: 'Hunter World Handbook', description: 'Leveling, class mechanics, and creator ecosystem chapter.' },
     { id: 'risks-gaps', label: 'Risks and Gaps', description: 'Current known risk posture and mitigations.' },
     { id: 'glossary', label: 'Glossary', description: 'Shared language for cross-functional alignment.' },
@@ -113,6 +114,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Froze the Outcome Rubric v1 spec and added it to the Agent Swarm handbook so the autonomous mission system now has a locked runtime contract for outcome-first execution.',
       'Added the Enhanced Energy Merge Spec artifact to the QuickLifts profile-health handbook stack, locking `ResolvedEnergySnapshot`, source precedence, segment provenance, coverage, acceptance gates, and Home/Profile migration rules for calories out.',
       'Added the QuickLifts Profile Health handbook artifact, pairing the story-led profile product spec with the ProfileHealthSnapshot runtime contract so profile hero, proof cards, and Health Data Story drill-down share one documented system truth.',
       'Added the Daily Task + Training Plan Alignment Spec to the PulseCheck runtime stack, locking the canonical DailyTask / TrainingPlan / PlanStep model, lifecycle rules, date-boundary behavior, event contract, and surface-coherence requirements across Home, Mental Training, and Nora chat.',

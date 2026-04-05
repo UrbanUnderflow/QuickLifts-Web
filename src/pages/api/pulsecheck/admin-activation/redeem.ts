@@ -1,5 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../../lib/firebase-admin';
+import {
+  getDefaultPulseCheckTeamCommercialConfig,
+  type PulseCheckTeamCommercialConfig,
+} from '../../../../api/firebase/pulsecheckProvisioning/types';
 
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
 const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
@@ -9,6 +13,65 @@ const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const normalizeEmail = (value: unknown) => normalizeString(value).toLowerCase();
+const normalizeRevenueRecipientRole = (value: unknown) => {
+  const normalized = normalizeString(value);
+  if (normalized === 'coach' || normalized === 'organization-owner') {
+    return normalized;
+  }
+  return 'team-admin';
+};
+const normalizeReferralRevenueSharePct = (value: unknown) => {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.min(100, Math.round(parsed * 100) / 100));
+};
+const normalizeTimestampLike = (
+  value: unknown
+): PulseCheckTeamCommercialConfig['teamPlanActivatedAt'] => {
+  if (!value || typeof value !== 'object') return null;
+  return value as PulseCheckTeamCommercialConfig['teamPlanActivatedAt'];
+};
+const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercialConfig => {
+  const candidate = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const defaults = getDefaultPulseCheckTeamCommercialConfig();
+  const commercialModel = normalizeString(candidate.commercialModel ?? defaults.commercialModel);
+  const teamPlanStatus = normalizeString(candidate.teamPlanStatus ?? defaults.teamPlanStatus);
+
+  return {
+    commercialModel: commercialModel === 'team-plan' ? 'team-plan' : 'athlete-pay',
+    teamPlanStatus: teamPlanStatus === 'active' ? 'active' : 'inactive',
+    referralKickbackEnabled:
+      typeof candidate.referralKickbackEnabled === 'boolean'
+        ? candidate.referralKickbackEnabled
+        : defaults.referralKickbackEnabled,
+    referralRevenueSharePct: normalizeReferralRevenueSharePct(candidate.referralRevenueSharePct ?? defaults.referralRevenueSharePct),
+    revenueRecipientRole: normalizeRevenueRecipientRole(candidate.revenueRecipientRole),
+    revenueRecipientUserId: normalizeString(candidate.revenueRecipientUserId ?? defaults.revenueRecipientUserId),
+    billingOwnerUserId: normalizeString(candidate.billingOwnerUserId ?? defaults.billingOwnerUserId),
+    billingCustomerId: normalizeString(candidate.billingCustomerId ?? defaults.billingCustomerId),
+    teamPlanActivatedAt: normalizeTimestampLike(candidate.teamPlanActivatedAt),
+    teamPlanExpiresAt: normalizeTimestampLike(candidate.teamPlanExpiresAt),
+  };
+};
+const resolveTeamAdminCommercialConfig = (commercialConfig: PulseCheckTeamCommercialConfig, userId: string): PulseCheckTeamCommercialConfig => {
+  if (commercialConfig.revenueRecipientRole !== 'team-admin' || commercialConfig.revenueRecipientUserId) {
+    return commercialConfig;
+  }
+
+  return {
+    ...commercialConfig,
+    revenueRecipientUserId: normalizeString(userId),
+  };
+};
+
+const buildClaimedHandoffMetadata = (current: Record<string, unknown> | undefined, userId: string, userEmail: string, token: string) => ({
+  ...(current || {}),
+  state: 'claimed',
+  claimedByUserId: normalizeString(userId),
+  claimedByEmail: normalizeEmail(userEmail),
+  claimedByInviteToken: normalizeString(token),
+  claimedAt: admin.firestore.FieldValue.serverTimestamp(),
+});
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -66,14 +129,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const organizationRef = firestore.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
       const teamRef = firestore.collection(TEAMS_COLLECTION).doc(teamId);
-      const organizationMembershipRef = firestore
+      const organizationMembershipQuery = firestore
         .collection(ORGANIZATION_MEMBERSHIPS_COLLECTION)
-        .doc(`${organizationId}_${userId}`);
-      const teamMembershipRef = firestore.collection(TEAM_MEMBERSHIPS_COLLECTION).doc(`${teamId}_${userId}`);
+        .where('organizationId', '==', organizationId)
+        .where('role', '==', 'org-admin')
+        .where('handoffMetadata.state', '==', 'reserved-pending-activation')
+        .limit(1);
+      const teamMembershipQuery = firestore
+        .collection(TEAM_MEMBERSHIPS_COLLECTION)
+        .where('organizationId', '==', organizationId)
+        .where('teamId', '==', teamId)
+        .where('role', '==', 'team-admin')
+        .where('handoffMetadata.state', '==', 'reserved-pending-activation')
+        .limit(1);
 
-      const [organizationSnap, teamSnap] = await Promise.all([
+      const [organizationSnap, teamSnap, reservedOrganizationMembershipQuerySnap, reservedTeamMembershipQuerySnap] = await Promise.all([
         transaction.get(organizationRef),
         transaction.get(teamRef),
+        transaction.get(organizationMembershipQuery),
+        transaction.get(teamMembershipQuery),
       ]);
 
       if (!organizationSnap.exists) {
@@ -85,6 +159,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const organizationName = normalizeString(organizationSnap.data()?.displayName) || 'PulseCheck Organization';
       const teamName = normalizeString(teamSnap.data()?.displayName) || 'Initial Team';
+      const teamCommercialConfig = normalizeTeamCommercialConfig(teamSnap.data()?.commercialConfig);
+      const nextTeamCommercialConfig = resolveTeamAdminCommercialConfig(teamCommercialConfig, userId);
+
+      const reservedOrganizationMembershipDoc = reservedOrganizationMembershipQuerySnap.docs[0] || null;
+      const reservedTeamMembershipDoc = reservedTeamMembershipQuerySnap.docs[0] || null;
+      const organizationMembershipRef = reservedOrganizationMembershipDoc
+        ? reservedOrganizationMembershipDoc.ref
+        : firestore.collection(ORGANIZATION_MEMBERSHIPS_COLLECTION).doc(`${organizationId}_${userId}`);
+      const teamMembershipRef = reservedTeamMembershipDoc
+        ? reservedTeamMembershipDoc.ref
+        : firestore.collection(TEAM_MEMBERSHIPS_COLLECTION).doc(`${teamId}_${userId}`);
+      const reservedOrganizationMembership = (reservedOrganizationMembershipDoc?.data() || {}) as Record<string, any>;
+      const reservedTeamMembership = (reservedTeamMembershipDoc?.data() || {}) as Record<string, any>;
 
       transaction.set(
         organizationMembershipRef,
@@ -95,8 +182,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           role: 'org-admin',
           status: 'active',
           grantedByInviteToken: token,
-          grantedAt: now,
-          createdAt: now,
+          grantedAt: reservedOrganizationMembership.grantedAt || now,
+          handoffMetadata: buildClaimedHandoffMetadata(reservedOrganizationMembership.handoffMetadata, userId, userEmail, token),
+          createdAt: reservedOrganizationMembership.createdAt || now,
           updatedAt: now,
         },
         { merge: true }
@@ -113,11 +201,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           title: 'Organization Admin',
           permissionSetId: 'pulsecheck-team-admin-v1',
           rosterVisibilityScope: 'team',
-          allowedAthleteIds: [],
-          onboardingStatus: 'pending-profile',
+          allowedAthleteIds: Array.isArray(reservedTeamMembership.allowedAthleteIds) ? reservedTeamMembership.allowedAthleteIds : [],
+          onboardingStatus: reservedTeamMembership.onboardingStatus || 'pending-profile',
           grantedByInviteToken: token,
-          grantedAt: now,
-          createdAt: now,
+          grantedAt: reservedTeamMembership.grantedAt || now,
+          handoffMetadata: buildClaimedHandoffMetadata(reservedTeamMembership.handoffMetadata, userId, userEmail, token),
+          createdAt: reservedTeamMembership.createdAt || now,
           updatedAt: now,
         },
         { merge: true }
@@ -142,6 +231,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           activatedByUserId: userId,
           activatedByEmail: userEmail,
           activatedAt: now,
+          commercialConfig: nextTeamCommercialConfig,
           defaultAdminUserIds: admin.firestore.FieldValue.arrayUnion(userId),
           updatedAt: now,
         },

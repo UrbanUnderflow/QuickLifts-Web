@@ -72,7 +72,7 @@ const adminCardsData = [
   },
   {
     title: "PulseCheck Provisioning",
-    description: "Create PulseCheck organizations and teams as the first implementation slice for provisioning and onboarding.",
+    description: "Canonical provisioning console for coach-led organizations, operating teams, and admin activation handoff.",
     icon: <Building2 className="w-5 h-5" />,
     link: "/admin/pulsecheckProvisioning"
   },
@@ -84,7 +84,7 @@ const adminCardsData = [
   },
   {
     title: "Legacy Roster Migration",
-    description: "Migrate legacy coach-athlete rosters into PulseCheck organizations and teams before removing old connection code.",
+    description: "Backfill legacy coach-athlete rosters into PulseCheck organizations and teams, then track cutover readiness before removing the old bridge.",
     icon: <Users2 className="w-5 h-5" />,
     link: "/admin/pulsecheckLegacyRosterMigration"
   },
@@ -108,8 +108,8 @@ const adminCardsData = [
     link: "/admin/virtualOffice"
   },
   {
-    title: "Coach Invite Links",
-    description: "Generate team-owned /coach-onboard invite links and monitor attribution by invite code.",
+    title: "Legacy Coach Invite Links",
+    description: "Legacy invite-code registry now pointing into the canonical coach signup path while old coach collections are retired.",
     icon: <LinkIcon className="w-5 h-5" />,
     link: "/admin/coachInvites"
   },

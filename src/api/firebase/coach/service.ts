@@ -1,8 +1,10 @@
-import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch, addDoc, deleteDoc, orderBy, limit, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, deleteDoc, orderBy, limit, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config';
 import { CoachModel, CoachFirestoreData } from '../../../types/Coach';
 import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
 import { privacyService } from '../privacy/service';
+import { pulseCheckProvisioningService } from '../pulsecheckProvisioning/service';
+import type { PulseCheckRosterVisibilityScope, PulseCheckTeamMembership, PulseCheckTeamMembershipRole } from '../pulsecheckProvisioning/types';
 
 export interface DailySentimentRecord {
   id: string;
@@ -31,7 +33,227 @@ export interface ConversationSession {
   messages: ConversationMessage[];
 }
 
+const PULSECHECK_ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
+const PULSECHECK_TEAMS_COLLECTION = 'pulsecheck-teams';
+const PULSECHECK_ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
+const PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
+
+const DIRECT_COACH_ROLES = new Set<PulseCheckTeamMembershipRole>(['team-admin', 'coach']);
+const COACH_ACCESS_ROLES = new Set<PulseCheckTeamMembershipRole>(['team-admin', 'coach', 'performance-staff', 'support-staff']);
+
+const toMembershipMillis = (value: any) => {
+  if (!value) return 0;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value?.toDate === 'function') return value.toDate().getTime();
+  if (typeof value?.seconds === 'number') return value.seconds * 1000;
+  if (typeof value === 'number') return value;
+  return 0;
+};
+
+const membershipPriority = (membership: PulseCheckTeamMembership) => {
+  switch (membership.role) {
+    case 'team-admin':
+      return 0;
+    case 'coach':
+      return 1;
+    case 'performance-staff':
+      return 2;
+    case 'support-staff':
+      return 3;
+    default:
+      return 9;
+  }
+};
+
+const choosePrimaryOperatingMembership = (memberships: PulseCheckTeamMembership[]) =>
+  [...memberships]
+    .filter((membership) => COACH_ACCESS_ROLES.has(membership.role))
+    .sort((left, right) => {
+      const roleDelta = membershipPriority(left) - membershipPriority(right);
+      if (roleDelta !== 0) return roleDelta;
+      return toMembershipMillis(right.updatedAt || right.createdAt || right.grantedAt) - toMembershipMillis(left.updatedAt || left.createdAt || left.grantedAt);
+    })[0] || null;
+
+const canCoachMembershipSeeAthlete = (
+  coachMembership: PulseCheckTeamMembership,
+  athleteMembership: PulseCheckTeamMembership
+) => {
+  const scope = (coachMembership.rosterVisibilityScope || 'team') as PulseCheckRosterVisibilityScope;
+  if (scope === 'none') return false;
+  if (scope === 'assigned') {
+    return (coachMembership.allowedAthleteIds || []).includes(athleteMembership.userId);
+  }
+  return true;
+};
+
+const defaultPulseCheckAthleteOnboarding = () => ({
+  productConsentAccepted: false,
+  productConsentAcceptedAt: null,
+  productConsentVersion: '',
+  entryOnboardingStep: 'name' as const,
+  entryOnboardingName: '',
+  researchConsentStatus: 'not-required' as const,
+  researchConsentVersion: '',
+  researchConsentRespondedAt: null,
+  eligibleForResearchDataset: false,
+  enrollmentMode: 'product-only' as const,
+  targetPilotId: '',
+  targetPilotName: '',
+  targetCohortId: '',
+  targetCohortName: '',
+  requiredConsents: [],
+  completedConsentIds: [],
+  baselinePathStatus: 'pending' as const,
+  baselinePathwayId: '',
+});
+
 class CoachService {
+  private async listCoachTeamMemberships(coachId: string): Promise<PulseCheckTeamMembership[]> {
+    const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(coachId);
+    return memberships.filter((membership) => COACH_ACCESS_ROLES.has(membership.role));
+  }
+
+  private async listPulseCheckAthleteConnectionsForCoach(
+    coachId: string
+  ): Promise<Array<{ athleteMembership: PulseCheckTeamMembership; coachMembership: PulseCheckTeamMembership; linkedAt: Date | null }>> {
+    const coachMemberships = await this.listCoachTeamMemberships(coachId);
+    if (coachMemberships.length === 0) return [];
+
+    const byAthleteId = new Map<string, { athleteMembership: PulseCheckTeamMembership; coachMembership: PulseCheckTeamMembership; linkedAt: Date | null }>();
+
+    const teamMembershipsByTeam = await Promise.all(
+      coachMemberships.map(async (coachMembership) => ({
+        coachMembership,
+        members: await pulseCheckProvisioningService.listTeamMemberships(coachMembership.teamId),
+      }))
+    );
+
+    for (const { coachMembership, members } of teamMembershipsByTeam) {
+      const athleteMembers = members.filter(
+        (membership) => membership.role === 'athlete' && canCoachMembershipSeeAthlete(coachMembership, membership)
+      );
+
+      for (const athleteMembership of athleteMembers) {
+        const linkedAt = convertFirestoreTimestamp(
+          athleteMembership.grantedAt || athleteMembership.createdAt || athleteMembership.updatedAt
+        );
+        const existing = byAthleteId.get(athleteMembership.userId);
+        const existingTime = existing?.linkedAt?.getTime() || 0;
+        const nextTime = linkedAt?.getTime() || 0;
+        if (!existing || nextTime >= existingTime) {
+          byAthleteId.set(athleteMembership.userId, {
+            athleteMembership,
+            coachMembership,
+            linkedAt,
+          });
+        }
+      }
+    }
+
+    return Array.from(byAthleteId.values());
+  }
+
+  private async ensureCoachOperatingContext(coachId: string): Promise<{ organizationId: string; teamId: string }> {
+    const existingMembership = choosePrimaryOperatingMembership(await this.listCoachTeamMemberships(coachId));
+    if (existingMembership) {
+      return {
+        organizationId: existingMembership.organizationId,
+        teamId: existingMembership.teamId,
+      };
+    }
+
+    const organizationId = `legacy-coach-org-${coachId}`;
+    const teamId = `legacy-coach-team-${coachId}`;
+    const now = serverTimestamp();
+
+    const [userSnap, coachSnap] = await Promise.all([
+      getDoc(doc(db, 'users', coachId)),
+      getDoc(doc(db, 'coaches', coachId)),
+    ]);
+
+    const userData = userSnap.exists() ? (userSnap.data() as Record<string, any>) : {};
+    const coachData = coachSnap.exists() ? (coachSnap.data() as Record<string, any>) : {};
+    const coachName =
+      String(userData.displayName || userData.username || coachData.username || userData.email || coachId).trim() || 'Coach';
+    const coachEmail = String(userData.email || coachData.email || '').trim().toLowerCase();
+
+    await Promise.all([
+      setDoc(
+        doc(db, PULSECHECK_ORGANIZATIONS_COLLECTION, organizationId),
+        {
+          displayName: `${coachName} Coaching`,
+          legalName: `${coachName} Coaching`,
+          organizationType: 'coach-led',
+          status: 'active',
+          legacySource: 'legacy-coach-roster',
+          legacyCoachId: coachId,
+          primaryCustomerAdminName: coachName,
+          primaryCustomerAdminEmail: coachEmail,
+          defaultStudyPosture: 'operational',
+          defaultClinicianBridgeMode: 'none',
+          notes: `Auto-created from coach-service bridge for ${coachName}.`,
+          createdAt: now,
+          updatedAt: now,
+        },
+        { merge: true }
+      ),
+      setDoc(
+        doc(db, PULSECHECK_TEAMS_COLLECTION, teamId),
+        {
+          organizationId,
+          displayName: `${coachName} Team`,
+          teamType: 'coach-led',
+          sportOrProgram: 'Coach-led organization',
+          status: 'active',
+          legacySource: 'legacy-coach-roster',
+          legacyCoachId: coachId,
+          defaultAdminName: coachName,
+          defaultAdminEmail: coachEmail,
+          defaultInvitePolicy: 'admin-staff-and-coaches',
+          notes: `Auto-created from coach-service bridge for ${coachName}.`,
+          createdAt: now,
+          updatedAt: now,
+        },
+        { merge: true }
+      ),
+      setDoc(
+        doc(db, PULSECHECK_ORGANIZATION_MEMBERSHIPS_COLLECTION, `${organizationId}_${coachId}`),
+        {
+          organizationId,
+          userId: coachId,
+          email: coachEmail,
+          role: 'org-admin',
+          status: 'active',
+          grantedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        },
+        { merge: true }
+      ),
+      setDoc(
+        doc(db, PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION, `${teamId}_${coachId}`),
+        {
+          organizationId,
+          teamId,
+          userId: coachId,
+          email: coachEmail,
+          role: 'team-admin',
+          title: 'Coach',
+          permissionSetId: 'pulsecheck-team-admin-v1',
+          rosterVisibilityScope: 'team',
+          allowedAthleteIds: [],
+          onboardingStatus: 'pending-profile',
+          grantedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        },
+        { merge: true }
+      ),
+    ]);
+
+    return { organizationId, teamId };
+  }
+
   /**
    * Get a coach profile by user ID
    */
@@ -93,21 +315,22 @@ class CoachService {
   }
 
   /**
-   * Disconnect athlete from coach (soft delete)
+   * Disconnect athlete from coach and remove legacy-sourced team memberships tied to that coach.
    */
   async disconnectAthleteFromCoach(coachId: string, athleteUserId: string): Promise<void> {
     try {
-      const now = dateToUnixTimestamp(new Date());
-      const coachAthletesRef = collection(db, 'coachAthletes');
-      const existingQuery = query(
-        coachAthletesRef,
-        where('coachId', '==', coachId),
-        where('athleteUserId', '==', athleteUserId)
+      const athleteMemberships = (await pulseCheckProvisioningService.listUserTeamMemberships(athleteUserId)).filter(
+        (membership) =>
+          membership.role === 'athlete' &&
+          membership.legacySource === 'coach-athletes' &&
+          membership.legacyCoachId === coachId
       );
-      const existingSnapshot = await getDocs(existingQuery);
-      await Promise.all(existingSnapshot.docs.map(async (docSnap) => {
-        await setDoc(docSnap.ref, { status: 'disconnected', disconnectedAt: now, updatedAt: now }, { merge: true });
-      }));
+
+      await Promise.all(
+        athleteMemberships.map((membership) =>
+          deleteDoc(doc(db, PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION, membership.id))
+        )
+      );
     } catch (error) {
       console.error('Error disconnecting athlete from coach:', error);
       throw error;
@@ -119,153 +342,34 @@ class CoachService {
    */
   async getConnectedCoaches(athleteUserId: string): Promise<Array<{ id: string; data: CoachFirestoreData }>> {
     try {
-      const coachAthletesRef = collection(db, 'coachAthletes');
-      const q = query(coachAthletesRef, where('athleteUserId', '==', athleteUserId));
-      const links = await getDocs(q);
-      const activeCoachIds = links.docs
-        .filter(d => (d.data() as any).status !== 'disconnected')
-        .map(d => (d.data() as any).coachId);
-      if (activeCoachIds.length === 0) return [];
+      const athleteMemberships = (await pulseCheckProvisioningService.listUserTeamMemberships(athleteUserId)).filter(
+        (membership) => membership.role === 'athlete'
+      );
+      const activeCoachIds = new Set<string>();
+
+      for (const athleteMembership of athleteMemberships) {
+        const teamMemberships = await pulseCheckProvisioningService.listTeamMemberships(athleteMembership.teamId);
+        teamMemberships
+          .filter(
+            (membership) =>
+              DIRECT_COACH_ROLES.has(membership.role) &&
+              membership.userId !== athleteUserId &&
+              canCoachMembershipSeeAthlete(membership, athleteMembership)
+          )
+          .forEach((membership) => activeCoachIds.add(membership.userId));
+      }
+
+      const coachIds = Array.from(activeCoachIds);
+      if (coachIds.length === 0) return [];
       const coachesRef = collection(db, 'coaches');
       const result: Array<{ id: string; data: CoachFirestoreData }> = [];
-      for (const coachId of activeCoachIds) {
+      for (const coachId of coachIds) {
         const cDoc = await getDoc(doc(coachesRef, coachId));
         if (cDoc.exists()) result.push({ id: cDoc.id, data: cDoc.data() as CoachFirestoreData });
       }
       return result;
     } catch (error) {
       console.error('Error getting connected coaches:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Record a coach referral using the inviter's referral code.
-   * New writes go to coachReferrals and referredByCoachId instead of the legacy connectedCoaches array.
-   */
-  async recordCoachReferralByReferralCode(inviteeUserId: string, inviteeUsername: string, inviteeEmail: string, referralCode: string): Promise<{ success: boolean; message?: string }> {
-    try {
-      const clean = referralCode.toUpperCase().trim();
-      if (!clean) return { success: false, message: 'Missing referral code' };
-
-      // Find inviter coach by referral code
-      const coachesRef = collection(db, 'coaches');
-      const q = query(coachesRef, where('referralCode', '==', clean));
-      const snap = await getDocs(q);
-      if (snap.empty) return { success: false, message: 'Invalid referral code' };
-      const inviterDoc = snap.docs[0];
-      const inviterId = inviterDoc.id;
-
-      // Prevent self-connection
-      if (inviterId === inviteeUserId) {
-        return { success: false, message: 'Cannot connect a coach to themselves' };
-      }
-
-      // Load invitee coach document (must exist)
-      const inviteeRef = doc(db, 'coaches', inviteeUserId);
-      const inviteeSnap = await getDoc(inviteeRef);
-      if (!inviteeSnap.exists()) return { success: false, message: 'Invitee coach profile missing' };
-
-      const now = dateToUnixTimestamp(new Date());
-      const referralRef = doc(db, 'coachReferrals', `${inviterId}_${inviteeUserId}`);
-      await Promise.all([
-        setDoc(
-          referralRef,
-          {
-            referrerCoachId: inviterId,
-            referredCoachId: inviteeUserId,
-            referredCoachUsername: inviteeUsername || '',
-            referredCoachEmail: inviteeEmail || '',
-            referralCode: clean,
-            createdAt: now,
-            updatedAt: now,
-          },
-          { merge: true }
-        ),
-        setDoc(inviteeRef, { referredByCoachId: inviterId, updatedAt: now }, { merge: true }),
-      ]);
-      return { success: true };
-    } catch (error: any) {
-      console.error('Error recording coach referral:', error);
-      return { success: false, message: error?.message || 'Unknown error' };
-    }
-  }
-
-  /**
-   * List coaches referred by a coach.
-   * Falls back to legacy fields while we phase out connectedCoaches.
-   */
-  async getReferredCoachesForCoach(coachId: string): Promise<Array<{ userId: string; username: string; email: string; connectedAt?: number }>> {
-    try {
-      const byId = new Map<string, { userId: string; username: string; email: string; connectedAt?: number }>();
-
-      const referralSnap = await getDocs(query(collection(db, 'coachReferrals'), where('referrerCoachId', '==', coachId)));
-      referralSnap.docs.forEach((referralDoc) => {
-        const referral = referralDoc.data() as any;
-        const referredCoachId = referral?.referredCoachId;
-        if (!referredCoachId) return;
-        byId.set(referredCoachId, {
-          userId: referredCoachId,
-          username: referral?.referredCoachUsername || '',
-          email: referral?.referredCoachEmail || '',
-          connectedAt: typeof referral?.createdAt === 'number' ? referral.createdAt : undefined,
-        });
-      });
-
-      const referredCoachSnap = await getDocs(query(collection(db, 'coaches'), where('referredByCoachId', '==', coachId)));
-      referredCoachSnap.docs.forEach((coachDoc) => {
-        const data = coachDoc.data() as any;
-        const existing = byId.get(coachDoc.id);
-        if (!existing) {
-          byId.set(coachDoc.id, {
-            userId: coachDoc.id,
-            username: data?.username || '',
-            email: data?.email || '',
-            connectedAt: typeof data?.createdAt === 'number' ? data.createdAt : undefined,
-          });
-        }
-      });
-
-      const legacyCoachSnap = await getDoc(doc(db, 'coaches', coachId));
-      if (legacyCoachSnap.exists()) {
-        const legacyData = legacyCoachSnap.data() as any;
-        const legacyList = Array.isArray(legacyData?.connectedCoaches) ? legacyData.connectedCoaches : [];
-        legacyList.forEach((entry: any) => {
-          if (!entry?.userId) return;
-          const existing = byId.get(entry.userId);
-          if (!existing || (typeof entry.connectedAt === 'number' && (existing.connectedAt || 0) < entry.connectedAt)) {
-            byId.set(entry.userId, {
-              userId: entry.userId,
-              username: entry.username || '',
-              email: entry.email || '',
-              connectedAt: entry.connectedAt,
-            });
-          }
-        });
-      }
-
-      const hydrated = await Promise.all(
-        Array.from(byId.values()).map(async (entry) => {
-          try {
-            const coachSnap = await getDoc(doc(db, 'coaches', entry.userId));
-            const userSnap = await getDoc(doc(db, 'users', entry.userId));
-            const coachData = coachSnap.exists() ? (coachSnap.data() as any) : {};
-            const userData = userSnap.exists() ? (userSnap.data() as any) : {};
-            return {
-              userId: entry.userId,
-              username: entry.username || userData?.username || userData?.displayName || coachData?.username || '',
-              email: entry.email || userData?.email || coachData?.email || '',
-              connectedAt: entry.connectedAt,
-            };
-          } catch (_) {
-            return entry;
-          }
-        })
-      );
-
-      return hydrated.sort((a, b) => (b.connectedAt || 0) - (a.connectedAt || 0));
-    } catch (error) {
-      console.error('Error reading referred coaches:', error);
       return [];
     }
   }
@@ -289,358 +393,6 @@ class CoachService {
   }
 
   /**
-   * Create a partner profile
-   */
-  async createPartnerProfile(userId: string, referralCode?: string): Promise<CoachModel> {
-    try {
-      // Check if user already has a coach profile
-      const existingProfile = await this.getCoachProfile(userId);
-      if (existingProfile) {
-        throw new Error('User already has a coach profile');
-      }
-
-      // Get user data to check for existing Stripe account
-      const userRef = doc(db, 'users', userId);
-      const userDoc = await getDoc(userRef);
-      
-      if (!userDoc.exists()) {
-        throw new Error('User not found');
-      }
-      
-      const userData = userDoc.data();
-      const existingStripeId = userData.creator?.stripeAccountId;
-      const onboardInvite = (userData as any)?.onboardInvite || null;
-      const onboardEarningsAccess = (onboardInvite as any)?.earningsAccess;
-      const onboardCoachType = (onboardInvite as any)?.coachType;
-
-      // Generate referral code if not provided
-      const finalReferralCode = referralCode || this.generateReferralCode();
-      
-      // Check if referral code already exists
-      if (await this.referralCodeExists(finalReferralCode)) {
-        throw new Error('Referral code already exists. Please try a different one.');
-      }
-
-      const batch = writeBatch(db);
-      
-      // Create coach profile using userId as document ID
-      const coachRef = doc(db, 'coaches', userId);
-      const coachData: Record<string, any> = {
-        userId,
-        referralCode: finalReferralCode,
-        userType: 'partner',
-        subscriptionStatus: 'partner',
-        stripeCustomerId: existingStripeId || '',
-        onboardInvite,
-        createdAt: dateToUnixTimestamp(new Date()),
-        updatedAt: dateToUnixTimestamp(new Date())
-      };
-      if (typeof onboardEarningsAccess === 'boolean') coachData.earningsAccess = onboardEarningsAccess;
-      if (typeof onboardCoachType === 'string' && onboardCoachType.trim()) coachData.coachType = onboardCoachType.trim();
-      
-      batch.set(coachRef, coachData);
-      
-      // Update user with activeCoachAccount flag
-      batch.update(userRef, { 
-        activeCoachAccount: true,
-        updatedAt: dateToUnixTimestamp(new Date())
-      });
-      
-      await batch.commit();
-      
-      // Add referral code to lookup table (after batch commit)
-      await this.addReferralCodeToLookup(finalReferralCode, userId);
-      
-      return new CoachModel(userId, coachData as unknown as CoachFirestoreData);
-    } catch (error) {
-      console.error('Error creating partner profile:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Create a standard coach profile (with subscription)
-   */
-  async createCoachProfile(
-    userId: string, 
-    stripeCustomerId: string,
-    subscriptionStatus: string,
-    partnerCode?: string
-  ): Promise<CoachModel> {
-    try {
-      const batch = writeBatch(db);
-      
-      let linkedPartnerId: string | undefined;
-      
-      // If partner code provided, validate and link
-      if (partnerCode) {
-        const partner = await this.getCoachByReferralCode(partnerCode);
-        if (partner && partner.userType === 'partner') {
-          linkedPartnerId = partner.id;
-        }
-      }
-      
-      // Generate referral code for coach
-      const coachReferralCode = this.generateReferralCode();
-
-      // Pull through any team-owned /coach-onboard invite attribution for monitoring
-      let onboardInvite: any = null;
-      try {
-        const userRef = doc(db, 'users', userId);
-        const userDoc = await getDoc(userRef);
-        if (userDoc.exists()) {
-          onboardInvite = (userDoc.data() as any)?.onboardInvite || null;
-        }
-      } catch (_) {
-        onboardInvite = null;
-      }
-      const onboardEarningsAccess = (onboardInvite as any)?.earningsAccess;
-      const onboardCoachType = (onboardInvite as any)?.coachType;
-      
-      // Create coach profile using userId as document ID
-      const coachRef = doc(db, 'coaches', userId);
-      const coachData: Record<string, any> = {
-        userId,
-        referralCode: coachReferralCode,
-        userType: 'coach',
-        subscriptionStatus,
-        stripeCustomerId,
-        linkedPartnerId,
-        onboardInvite,
-        createdAt: dateToUnixTimestamp(new Date()),
-        updatedAt: dateToUnixTimestamp(new Date())
-      };
-      if (typeof onboardEarningsAccess === 'boolean') coachData.earningsAccess = onboardEarningsAccess;
-      if (typeof onboardCoachType === 'string' && onboardCoachType.trim()) coachData.coachType = onboardCoachType.trim();
-      
-      batch.set(coachRef, coachData);
-      
-      // Update user with activeCoachAccount flag
-      const userRef = doc(db, 'users', userId);
-      batch.update(userRef, { 
-        activeCoachAccount: true,
-        updatedAt: dateToUnixTimestamp(new Date())
-      });
-      
-      await batch.commit();
-      
-      // Add referral code to lookup table (after batch commit)
-      await this.addReferralCodeToLookup(coachReferralCode, userId);
-      
-      return new CoachModel(userId, coachData as unknown as CoachFirestoreData);
-    } catch (error) {
-      console.error('Error creating coach profile:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get coach by referral code
-   */
-  async getCoachByReferralCode(referralCode: string): Promise<CoachModel | null> {
-    try {
-      const coachesRef = collection(db, 'coaches');
-      const q = query(coachesRef, where('referralCode', '==', referralCode.toUpperCase()));
-      const querySnapshot = await getDocs(q);
-      
-      if (querySnapshot.empty) {
-        return null;
-      }
-      
-      const doc = querySnapshot.docs[0];
-      return new CoachModel(doc.id, doc.data() as CoachFirestoreData);
-    } catch (error) {
-      console.error('Error fetching coach by referral code:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Check if referral code exists using lookup table
-   */
-  async referralCodeExists(referralCode: string): Promise<boolean> {
-    try {
-      const lookupRef = doc(db, 'referralCodeLookup', referralCode.toUpperCase());
-      const lookupDoc = await getDoc(lookupRef);
-      return lookupDoc.exists();
-    } catch (error) {
-      console.error('Error checking referral code:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Add referral code to lookup table
-   */
-  private async addReferralCodeToLookup(referralCode: string, coachId: string): Promise<void> {
-    try {
-      const lookupRef = doc(db, 'referralCodeLookup', referralCode.toUpperCase());
-      await setDoc(lookupRef, {
-        coachId,
-        referralCode: referralCode.toUpperCase(),
-        createdAt: serverTimestamp()
-      });
-    } catch (error) {
-      console.error('Error adding referral code to lookup:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Remove referral code from lookup table
-   */
-  private async removeReferralCodeFromLookup(referralCode: string): Promise<void> {
-    try {
-      const lookupRef = doc(db, 'referralCodeLookup', referralCode.toUpperCase());
-      await deleteDoc(lookupRef);
-    } catch (error) {
-      console.error('Error removing referral code from lookup:', error);
-      // Don't throw - this is cleanup, shouldn't fail the main operation
-    }
-  }
-
-  /**
-   * Generate alternative referral code suggestions when the desired one exists
-   */
-  async generateReferralCodeSuggestions(desiredCode: string): Promise<string[]> {
-    const suggestions: string[] = [];
-    const baseCode = desiredCode.toUpperCase();
-    
-    // Try appending numbers 1-9
-    for (let i = 1; i <= 9; i++) {
-      const suggestion = `${baseCode}${i}`;
-      if (!(await this.referralCodeExists(suggestion))) {
-        suggestions.push(suggestion);
-        if (suggestions.length >= 3) break; // Limit to 3 suggestions
-      }
-    }
-    
-    // If still need more suggestions, try 2-digit numbers
-    if (suggestions.length < 3) {
-      for (let i = 10; i <= 99; i++) {
-        const suggestion = `${baseCode}${i}`;
-        if (!(await this.referralCodeExists(suggestion))) {
-          suggestions.push(suggestion);
-          if (suggestions.length >= 3) break;
-        }
-      }
-    }
-    
-    // If still need more, try some random suffixes
-    if (suggestions.length < 3) {
-      const suffixes = ['X', 'Z', 'PRO', 'VIP', 'PLUS'];
-      for (const suffix of suffixes) {
-        const suggestion = `${baseCode}${suffix}`;
-        if (!(await this.referralCodeExists(suggestion))) {
-          suggestions.push(suggestion);
-          if (suggestions.length >= 3) break;
-        }
-      }
-    }
-    
-    return suggestions;
-  }
-
-  /**
-   * Validate and suggest referral codes
-   */
-  async validateReferralCode(desiredCode: string): Promise<{
-    isAvailable: boolean;
-    suggestions?: string[];
-    message?: string;
-  }> {
-    try {
-      const cleanCode = desiredCode.toUpperCase().trim();
-      
-      // Check if code is valid format (alphanumeric, 3-12 characters)
-      if (!/^[A-Z0-9]{3,12}$/.test(cleanCode)) {
-        return {
-          isAvailable: false,
-          message: 'Referral code must be 3-12 characters and contain only letters and numbers'
-        };
-      }
-      
-      // Check if code exists
-      const exists = await this.referralCodeExists(cleanCode);
-      
-      if (!exists) {
-        return {
-          isAvailable: true,
-          message: 'Referral code is available!'
-        };
-      }
-      
-      // Generate suggestions
-      const suggestions = await this.generateReferralCodeSuggestions(cleanCode);
-      
-      return {
-        isAvailable: false,
-        suggestions,
-        message: `"${cleanCode}" is already taken. Here are some available alternatives:`
-      };
-      
-    } catch (error) {
-      console.error('Error validating referral code:', error);
-      return {
-        isAvailable: false,
-        message: 'Error checking referral code availability'
-      };
-    }
-  }
-
-  /**
-   * Generate a unique referral code
-   */
-  private generateReferralCode(): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    for (let i = 0; i < 8; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-  }
-
-  /**
-   * Utility method to create lookup entries for existing referral codes
-   * This is for migrating existing coaches to the new lookup system
-   */
-  async createLookupForExistingCodes(): Promise<void> {
-    try {
-      console.log('[CoachService] Creating lookup entries for existing referral codes...');
-      
-      // Get all coaches
-      const coachesRef = collection(db, 'coaches');
-      const querySnapshot = await getDocs(coachesRef);
-      
-      const batch = writeBatch(db);
-      let count = 0;
-      
-      querySnapshot.forEach((coachDoc) => {
-        const coachData = coachDoc.data();
-        if (coachData.referralCode) {
-          const lookupRef = doc(db, 'referralCodeLookup', coachData.referralCode.toUpperCase());
-          batch.set(lookupRef, {
-            coachId: coachDoc.id,
-            referralCode: coachData.referralCode.toUpperCase(),
-            createdAt: serverTimestamp()
-          });
-          count++;
-        }
-      });
-      
-      if (count > 0) {
-        await batch.commit();
-        console.log(`[CoachService] Created ${count} lookup entries`);
-      } else {
-        console.log('[CoachService] No referral codes found to migrate');
-      }
-    } catch (error) {
-      console.error('Error creating lookup entries:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Update coach subscription status
    */
   async updateSubscriptionStatus(userId: string, status: string): Promise<void> {
@@ -661,24 +413,38 @@ class CoachService {
    */
   async linkAthleteToCoach(coachId: string, athleteUserId: string): Promise<void> {
     try {
-      const now = dateToUnixTimestamp(new Date());
-      const coachAthleteRef = doc(collection(db, 'coachAthletes'));
-      await setDoc(coachAthleteRef, {
-        coachId,
-        athleteUserId,
-        status: 'active',
-        linkedAt: now,
-        createdAt: now,
-        updatedAt: now
-      });
-      // Create default per-coach privacy doc
+      const { organizationId, teamId } = await this.ensureCoachOperatingContext(coachId);
+      await setDoc(
+        doc(db, PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION, `${teamId}_${athleteUserId}`),
+        {
+          organizationId,
+          teamId,
+          userId: athleteUserId,
+          role: 'athlete',
+          permissionSetId: 'pulsecheck-athlete-v1',
+          rosterVisibilityScope: 'none',
+          allowedAthleteIds: [],
+          legacySource: 'coach-athletes',
+          legacyCoachId: coachId,
+          athleteOnboarding: defaultPulseCheckAthleteOnboarding(),
+          onboardingStatus: 'pending-consent',
+          grantedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
       const privacyRef = doc(db, 'athlete-privacy-settings', athleteUserId, 'coaches', coachId);
       await setDoc(privacyRef, {
-        // Conservative defaults; adjust as needed
+        athleteUserId,
+        coachId,
+        shareConversations: true,
         shareSentiment: true,
         shareActivity: true,
-        createdAt: now,
-        updatedAt: now
+        consentGivenAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       }, { merge: true });
     } catch (error) {
       console.error('Error linking athlete to coach:', error);
@@ -691,13 +457,8 @@ class CoachService {
    */
   async getCoachAthletes(coachId: string): Promise<string[]> {
     try {
-      const coachAthletesRef = collection(db, 'coachAthletes');
-      const q = query(coachAthletesRef, where('coachId', '==', coachId));
-      const querySnapshot = await getDocs(q);
-      
-      return querySnapshot.docs
-        .filter(d => (d.data() as any).status !== 'disconnected')
-        .map(doc => doc.data().athleteUserId);
+      const connections = await this.listPulseCheckAthleteConnectionsForCoach(coachId);
+      return connections.map((entry) => entry.athleteMembership.userId);
     } catch (error) {
       console.error('Error fetching coach athletes:', error);
       throw error;
@@ -710,41 +471,12 @@ class CoachService {
   async getConnectedAthletes(coachId: string): Promise<any[]> {
     try {
       console.log(`[CoachService] Fetching connected athletes for coach: ${coachId}`);
+      const connections = await this.listPulseCheckAthleteConnectionsForCoach(coachId);
+      console.log(`[CoachService] Found ${connections.length} PulseCheck athlete memberships for coach`);
 
-      // Query coachAthletes collection for active connections
-      const coachAthletesRef = collection(db, 'coachAthletes');
-      const q = query(coachAthletesRef, where('coachId', '==', coachId));
-      const coachAthletesSnapshot = await getDocs(q);
-      
-      console.log(`[CoachService] Found ${coachAthletesSnapshot.docs.length} coachAthletes documents`);
-      
       const athletes = [];
-      const seenAthleteIds = new Set<string>(); // Track unique athlete IDs
-
-      for (const coachAthleteDoc of coachAthletesSnapshot.docs) {
-        const coachAthleteData = coachAthleteDoc.data();
-        const athleteUserId = coachAthleteData.athleteUserId;
-        
-        console.log(`[CoachService] Processing coachAthlete document:`, {
-          docId: coachAthleteDoc.id,
-          athleteUserId,
-          status: coachAthleteData.status,
-          linkedAt: coachAthleteData.linkedAt
-        });
-
-        // Skip if we've already processed this athlete (deduplication)
-        if (seenAthleteIds.has(athleteUserId)) {
-          console.log(`[CoachService] Skipping duplicate athlete: ${athleteUserId}`);
-          continue;
-        }
-        
-        // Only include active connections (skip disconnected ones)
-        if (coachAthleteData.status && coachAthleteData.status !== 'active') {
-          console.log(`[CoachService] Skipping inactive athlete: ${athleteUserId} (status: ${coachAthleteData.status})`);
-          continue;
-        }
-
-        seenAthleteIds.add(athleteUserId);
+      for (const connection of connections) {
+        const athleteUserId = connection.athleteMembership.userId;
 
         // Fetch user profile for each athlete
         const userRef = doc(db, 'users', athleteUserId);
@@ -758,9 +490,11 @@ class CoachService {
           const self = (this as CoachService | undefined) || coachService;
           const athleteStats = await self.getAthleteStats(athleteUserId);
 
-          // Last active should prioritize most recent conversation; fallback to coachAthletes.updatedAt/linkedAt
+          // Last active should prioritize most recent conversation; fallback to PulseCheck membership timestamps.
           const conversationDate = athleteStats.lastConversationDate;
-          const linkUpdated = convertFirestoreTimestamp(coachAthleteData.updatedAt || coachAthleteData.linkedAt);
+          const linkUpdated = convertFirestoreTimestamp(
+            connection.athleteMembership.updatedAt || connection.athleteMembership.grantedAt || connection.athleteMembership.createdAt
+          );
           const lastActive = conversationDate && !isNaN(conversationDate.getTime())
             ? conversationDate
             : linkUpdated;
@@ -770,7 +504,7 @@ class CoachService {
             displayName: userData.displayName || userData.username || 'Unknown User',
             email: userData.email || '',
             profileImageUrl: userData.profileImageUrl,
-            linkedAt: convertFirestoreTimestamp(coachAthleteData.linkedAt),
+            linkedAt: connection.linkedAt,
             lastActiveDate: lastActive,
             ...athleteStats
           });
@@ -1453,112 +1187,6 @@ class CoachService {
   }
 
   /**
-   * Connect an athlete to a coach using referral code
-   */
-  async connectAthleteToCoach(athleteUserId: string, referralCode: string): Promise<boolean> {
-    try {
-      console.log(`[CoachService] Connecting athlete ${athleteUserId} to coach with referral code: ${referralCode}`);
-      
-      // Find coach by referral code
-      const coachesRef = collection(db, 'coaches');
-      const coachQuery = query(coachesRef, where('referralCode', '==', referralCode));
-      const coachSnapshot = await getDocs(coachQuery);
-      
-      if (coachSnapshot.empty) {
-        console.error(`[CoachService] No coach found with referral code: ${referralCode}`);
-        return false;
-      }
-      
-      const coachDoc = coachSnapshot.docs[0];
-      const coachId = coachDoc.id;
-      
-      console.log(`[CoachService] Found coach: ${coachId}`);
-      
-      // Check if connection already exists
-      const coachAthletesRef = collection(db, 'coachAthletes');
-      const existingQuery = query(
-        coachAthletesRef,
-        where('coachId', '==', coachId),
-        where('athleteUserId', '==', athleteUserId)
-      );
-      const existingSnapshot = await getDocs(existingQuery);
-      
-      if (!existingSnapshot.empty) {
-        console.log(`[CoachService] Connection already exists between coach ${coachId} and athlete ${athleteUserId}`);
-        return true; // Already connected
-      }
-      
-      // Create coach-athlete relationship with default privacy settings
-      const now = dateToUnixTimestamp(new Date());
-      const connectionData = {
-        coachId,
-        athleteUserId,
-        status: 'active',
-        linkedAt: now,
-        createdAt: now,
-        updatedAt: now,
-        // Privacy settings (default: share everything)
-        shareConversations: true,
-        shareSentiment: true
-      };
-      
-      await addDoc(coachAthletesRef, connectionData);
-      
-      console.log(`[CoachService] Successfully connected athlete ${athleteUserId} to coach ${coachId}`);
-      return true;
-      
-    } catch (error) {
-      console.error('[CoachService] Error connecting athlete to coach:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Find coach by referral code (returns coach data enriched with user profile)
-   */
-  async findCoachByReferralCode(referralCode: string): Promise<any | null> {
-    try {
-      const coachesRef = collection(db, 'coaches');
-      const coachQuery = query(coachesRef, where('referralCode', '==', referralCode));
-      const coachSnapshot = await getDocs(coachQuery);
-      
-      if (coachSnapshot.empty) {
-        return null;
-      }
-      
-      const coachDoc = coachSnapshot.docs[0];
-      const coachData = coachDoc.data();
-      const coachModel = new CoachModel(coachDoc.id, coachData as CoachFirestoreData);
-      
-      // Fetch user profile to get displayName, username, etc.
-      try {
-        const userRef = doc(db, 'users', coachModel.userId);
-        const userDoc = await getDoc(userRef);
-        
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          // Return enriched coach object with user profile data
-          return {
-            ...coachModel,
-            username: userData.username,
-            displayName: userData.displayName,
-            bio: userData.bio,
-            profileImage: userData.profileImage
-          };
-        }
-      } catch (userError) {
-        console.error('[CoachService] Error fetching user profile for coach:', userError);
-        // Return coach model without user data if fetch fails
-      }
-      
-      return coachModel;
-    } catch (error) {
-      console.error('[CoachService] Error finding coach by referral code:', error);
-      return null;
-    }
-  }
-
-  /**
    * Create mock athlete data for testing (temporary method)
    */
   async createMockAthlete(coachId: string, athleteName: string, athleteEmail: string): Promise<void> {
@@ -1578,14 +1206,7 @@ class CoachService {
         updatedAt: now
       });
 
-      // Create coach-athlete relationship
-      const coachAthleteRef = doc(collection(db, 'coachAthletes'));
-      await setDoc(coachAthleteRef, {
-        coachId: coachId,
-        athleteUserId: mockUserId,
-        linkedAt: now,
-        status: 'active'
-      });
+      await this.linkAthleteToCoach(coachId, mockUserId);
 
       console.log(`[CoachService] Created mock athlete: ${athleteName} (${mockUserId})`);
     } catch (error) {

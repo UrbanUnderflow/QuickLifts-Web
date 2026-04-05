@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import { AlertTriangle, ArrowRight, Building2, CheckCircle2, Loader2, RefreshCcw, Users2 } from 'lucide-react';
+import { collection, getCountFromServer, query, where } from 'firebase/firestore';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
+import { db } from '../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import type {
   PulseCheckLegacyCoachRosterCandidate,
@@ -11,6 +13,16 @@ import type {
 type MigrationNamingDraft = {
   organizationName: string;
   teamName: string;
+};
+
+type LegacyCutoverSnapshot = {
+  coachProfilesCount: number;
+  coachAthleteLinksCount: number;
+  coachReferralEventsCount: number;
+  coachInviteDocsCount: number;
+  revenueSnapshotsCount: number;
+  migratedOrganizationsCount: number;
+  migratedTeamsCount: number;
 };
 
 const buildLegacyRosterDefaults = (coachDisplayName: string): MigrationNamingDraft => {
@@ -24,9 +36,40 @@ const buildLegacyRosterDefaults = (coachDisplayName: string): MigrationNamingDra
 const isNamingDraftValid = (draft: MigrationNamingDraft) =>
   Boolean(draft.organizationName.trim()) && Boolean(draft.teamName.trim());
 
+const loadLegacyCutoverSnapshot = async (): Promise<LegacyCutoverSnapshot> => {
+  const [
+    coachProfilesSnap,
+    coachAthleteLinksSnap,
+    coachReferralEventsSnap,
+    coachInviteDocsSnap,
+    revenueSnapshotsSnap,
+    migratedOrganizationsSnap,
+    migratedTeamsSnap,
+  ] = await Promise.all([
+    getCountFromServer(collection(db, 'coaches')),
+    getCountFromServer(collection(db, 'coachAthletes')),
+    getCountFromServer(collection(db, 'coachReferrals')),
+    getCountFromServer(collection(db, 'coach-onboard-invites')),
+    getCountFromServer(collection(db, 'revenue-calculations')),
+    getCountFromServer(query(collection(db, 'pulsecheck-organizations'), where('legacySource', '==', 'legacy-coach-roster'))),
+    getCountFromServer(query(collection(db, 'pulsecheck-teams'), where('legacySource', '==', 'legacy-coach-roster'))),
+  ]);
+
+  return {
+    coachProfilesCount: coachProfilesSnap.data().count,
+    coachAthleteLinksCount: coachAthleteLinksSnap.data().count,
+    coachReferralEventsCount: coachReferralEventsSnap.data().count,
+    coachInviteDocsCount: coachInviteDocsSnap.data().count,
+    revenueSnapshotsCount: revenueSnapshotsSnap.data().count,
+    migratedOrganizationsCount: migratedOrganizationsSnap.data().count,
+    migratedTeamsCount: migratedTeamsSnap.data().count,
+  };
+};
+
 const PulseCheckLegacyRosterMigrationPage: React.FC = () => {
   const [candidates, setCandidates] = useState<PulseCheckLegacyCoachRosterCandidate[]>([]);
   const [results, setResults] = useState<PulseCheckLegacyCoachRosterMigrationResult[]>([]);
+  const [cutoverSnapshot, setCutoverSnapshot] = useState<LegacyCutoverSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [migratingIds, setMigratingIds] = useState<string[]>([]);
@@ -39,8 +82,22 @@ const PulseCheckLegacyRosterMigrationPage: React.FC = () => {
     setError(null);
 
     try {
-      const nextCandidates = await pulseCheckProvisioningService.listLegacyCoachRosterCandidates();
-      setCandidates(nextCandidates);
+      const [candidateResult, snapshotResult] = await Promise.allSettled([
+        pulseCheckProvisioningService.listLegacyCoachRosterCandidates(),
+        loadLegacyCutoverSnapshot(),
+      ]);
+
+      if (candidateResult.status === 'rejected') {
+        throw candidateResult.reason;
+      }
+
+      setCandidates(candidateResult.value);
+
+      if (snapshotResult.status === 'fulfilled') {
+        setCutoverSnapshot(snapshotResult.value);
+      } else {
+        setCutoverSnapshot(null);
+      }
     } catch (loadError: any) {
       setError(loadError?.message || 'Failed to load legacy coach rosters.');
     } finally {
@@ -95,6 +152,25 @@ const PulseCheckLegacyRosterMigrationPage: React.FC = () => {
     const migratedCoachIds = new Set(results.map((result) => result.coachId));
     return candidates.filter((candidate) => !migratedCoachIds.has(candidate.coachId));
   }, [candidates, results]);
+
+  const cutoverReadiness = useMemo(() => {
+    if (!cutoverSnapshot) return null;
+
+    const blockingCoachAthleteLinks = cutoverSnapshot.coachAthleteLinksCount;
+    const legacyCommercialRecords =
+      cutoverSnapshot.coachReferralEventsCount + cutoverSnapshot.coachInviteDocsCount + cutoverSnapshot.revenueSnapshotsCount;
+
+    return {
+      blockingCoachAthleteLinks,
+      legacyCommercialRecords,
+      canRemoveRosterBridge: blockingCoachAthleteLinks === 0 && summary.coachCount === 0,
+      hasCommercialCleanupRemaining:
+        cutoverSnapshot.coachProfilesCount > 0 ||
+        cutoverSnapshot.coachReferralEventsCount > 0 ||
+        cutoverSnapshot.coachInviteDocsCount > 0 ||
+        cutoverSnapshot.revenueSnapshotsCount > 0,
+    };
+  }, [cutoverSnapshot, summary.coachCount]);
 
   const getNamingDraft = (candidate: PulseCheckLegacyCoachRosterCandidate) =>
     namingDrafts[candidate.coachId] || buildLegacyRosterDefaults(candidate.coachDisplayName);
@@ -218,6 +294,75 @@ const PulseCheckLegacyRosterMigrationPage: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {cutoverSnapshot ? (
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-violet-200">Cutover Readiness Snapshot</p>
+                  <h2 className="mt-2 text-xl font-medium text-white">What still exists outside the PulseCheck org and team model</h2>
+                </div>
+                <div className="rounded-full border border-white/10 bg-black/25 px-4 py-2 text-xs uppercase tracking-[0.24em] text-zinc-300">
+                  {cutoverReadiness?.canRemoveRosterBridge ? 'Roster bridge can be removed' : 'Legacy roster bridge still required'}
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                  <div className="text-xs uppercase tracking-[0.24em] text-zinc-400">Legacy Coach Profiles</div>
+                  <div className="mt-3 text-3xl font-semibold text-white">{cutoverSnapshot.coachProfilesCount}</div>
+                  <div className="mt-2 text-sm text-zinc-400">Legacy <span className="font-medium text-zinc-200">coaches</span> docs still present.</div>
+                </div>
+                <div className="rounded-3xl border border-cyan-500/20 bg-cyan-500/8 p-5">
+                  <div className="text-xs uppercase tracking-[0.24em] text-cyan-200">Legacy Coach-Athlete Links</div>
+                  <div className="mt-3 text-3xl font-semibold text-white">{cutoverSnapshot.coachAthleteLinksCount}</div>
+                  <div className="mt-2 text-sm text-cyan-100/80">This count must hit zero before the team-workspace roster bridge can be removed.</div>
+                </div>
+                <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/8 p-5">
+                  <div className="text-xs uppercase tracking-[0.24em] text-emerald-200">Migrated Organizations</div>
+                  <div className="mt-3 text-3xl font-semibold text-white">{cutoverSnapshot.migratedOrganizationsCount}</div>
+                  <div className="mt-2 text-sm text-emerald-100/80">PulseCheck organizations created from legacy rosters.</div>
+                </div>
+                <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/8 p-5">
+                  <div className="text-xs uppercase tracking-[0.24em] text-emerald-200">Migrated Teams</div>
+                  <div className="mt-3 text-3xl font-semibold text-white">{cutoverSnapshot.migratedTeamsCount}</div>
+                  <div className="mt-2 text-sm text-emerald-100/80">Operating teams already created inside the new hierarchy.</div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                  <div className="text-xs uppercase tracking-[0.24em] text-zinc-400">Legacy Referral Events</div>
+                  <div className="mt-3 text-3xl font-semibold text-white">{cutoverSnapshot.coachReferralEventsCount}</div>
+                  <div className="mt-2 text-sm text-zinc-400">Historical <span className="font-medium text-zinc-200">coachReferrals</span> records that still need org-level attribution planning.</div>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                  <div className="text-xs uppercase tracking-[0.24em] text-zinc-400">Legacy Invite Docs</div>
+                  <div className="mt-3 text-3xl font-semibold text-white">{cutoverSnapshot.coachInviteDocsCount}</div>
+                  <div className="mt-2 text-sm text-zinc-400"><span className="font-medium text-zinc-200">coach-onboard-invites</span> entries that should not stay as the canonical growth path.</div>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                  <div className="text-xs uppercase tracking-[0.24em] text-zinc-400">Legacy Revenue Snapshots</div>
+                  <div className="mt-3 text-3xl font-semibold text-white">{cutoverSnapshot.revenueSnapshotsCount}</div>
+                  <div className="mt-2 text-sm text-zinc-400">Historical <span className="font-medium text-zinc-200">revenue-calculations</span> docs to preserve until org-level finance is cut over.</div>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-3xl border border-white/10 bg-black/20 p-5 text-sm leading-7 text-zinc-300">
+                <p className="font-medium text-white">Cutover read</p>
+                <p>
+                  {cutoverReadiness?.canRemoveRosterBridge
+                    ? 'All active coach-athlete roster links are now represented in PulseCheck teams, so the temporary team-workspace roster bridge is eligible for removal.'
+                    : `The temporary team-workspace roster bridge still needs to stay in place because ${cutoverReadiness?.blockingCoachAthleteLinks ?? 0} legacy coach-athlete links still exist outside team memberships.`}
+                </p>
+                <p>
+                  {cutoverReadiness?.hasCommercialCleanupRemaining
+                    ? `${cutoverReadiness?.legacyCommercialRecords ?? 0} legacy commercial records still exist across referral, invite, and revenue collections. Those should be migrated or archived before we fully retire the old coach commercial model.`
+                    : 'Legacy commercial collections are clear enough that the remaining work is mostly route cleanup and finance cutover, not roster backfill.'}
+                </p>
+              </div>
+            </div>
+          ) : null}
 
           {error ? (
             <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-100">{error}</div>

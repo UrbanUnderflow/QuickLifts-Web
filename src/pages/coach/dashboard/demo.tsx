@@ -135,7 +135,7 @@ const demoAthletes: DemoAthlete[] = [
 ];
 
 const CoachDemoDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = React.useState<'dashboard'|'referrals'|'earnings'|'staff'|'inbox'|'profile'>('dashboard');
+  const [activeTab, setActiveTab] = React.useState<'dashboard'|'invites'|'earnings'|'staff'|'inbox'|'profile'>('dashboard');
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
   const [mockReady, setMockReady] = React.useState(false);
   const allDemoAthletes = React.useMemo(() => {
@@ -277,7 +277,7 @@ const CoachDemoDashboard: React.FC = () => {
           <nav className="mr-6 hidden md:flex items-center gap-2">
             {[
               { key: 'dashboard', label: 'Dashboard' },
-              { key: 'referrals', label: 'Referrals' },
+              { key: 'invites', label: 'Invites' },
               { key: 'earnings', label: 'Earnings' },
               { key: 'staff', label: 'Staff' },
               { key: 'inbox', label: 'Inbox' },
@@ -298,8 +298,8 @@ const CoachDemoDashboard: React.FC = () => {
             })}
           </nav>
           <div className="text-right">
-            <div className="text-sm text-zinc-400">Referral Code</div>
-            <div className="text-xl font-bold text-[#E0FE10]">DEMO1234</div>
+            <div className="text-sm text-zinc-400">Provisioning Model</div>
+            <div className="text-xl font-bold text-[#E0FE10]">Coach-Led Org</div>
             <button
               aria-label="Open navigation"
               onClick={() => setMobileNavOpen(true)}
@@ -328,7 +328,7 @@ const CoachDemoDashboard: React.FC = () => {
               <div className="flex flex-col gap-2">
                 {[
                   { key: 'dashboard', label: 'Dashboard' },
-                  { key: 'referrals', label: 'Referrals' },
+                  { key: 'invites', label: 'Invites' },
                   { key: 'earnings', label: 'Earnings' },
                   { key: 'staff', label: 'Staff' },
                   { key: 'inbox', label: 'Inbox' },
@@ -349,8 +349,8 @@ const CoachDemoDashboard: React.FC = () => {
                 })}
               </div>
               <div className="mt-auto pt-6 border-t border-zinc-800">
-                <div className="text-xs text-zinc-400 mb-2">Referral Code</div>
-                <div className="text-lg font-bold text-[#E0FE10] mb-4">DEMO1234</div>
+                <div className="text-xs text-zinc-400 mb-2">Provisioning Model</div>
+                <div className="text-lg font-bold text-[#E0FE10] mb-4">Coach-Led Org</div>
               </div>
             </div>
           </div>
@@ -388,14 +388,14 @@ const CoachDemoDashboard: React.FC = () => {
           </>
         )}
 
-        {activeTab === 'referrals' && (
+        {activeTab === 'invites' && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-            <h3 className="text-2xl font-bold mb-2">Referrals (Demo)</h3>
-            <p className="text-zinc-400 mb-4">This mirrors the Referrals tab layout using static data.</p>
+            <h3 className="text-2xl font-bold mb-2">Invites (Demo)</h3>
+            <p className="text-zinc-400 mb-4">This mirrors the invite and admin-activation layout using static data.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="rounded-lg border border-zinc-800 p-4">
-                <div className="text-zinc-300 mb-1">Your referral link</div>
-                <div className="text-[#E0FE10] break-all text-sm">https://fitwithpulse.ai/connect/DEMO1234</div>
+                <div className="text-zinc-300 mb-1">Coach-led organization entry</div>
+                <div className="text-[#E0FE10] break-all text-sm">https://fitwithpulse.ai/PulseCheck/coach</div>
               </div>
               <div className="rounded-lg border border-zinc-800 p-4">
                 <div className="text-zinc-300 mb-1">Signups</div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { motion } from 'framer-motion';
-import { Activity, Copy, Sparkles } from 'lucide-react';
+import { Activity } from 'lucide-react';
 import SideNav from './Navigation/SideNav';
 import CoachProtectedRoute from './CoachProtectedRoute';
 import { useUser } from '../hooks/useUser';
@@ -52,7 +52,6 @@ const CoachLayout: React.FC<Props> = ({
   const router = useRouter();
   const currentUser = useUser();
   const [coachProfile, setCoachProfile] = useState<CoachModel | null>(null);
-  const [copiedCode, setCopiedCode] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
   const canSeeEarnings = !!(coachProfile?.earningsAccess === true || coachProfile?.userType === 'partner');
@@ -60,7 +59,7 @@ const CoachLayout: React.FC<Props> = ({
   const navItems = [
     { href: '/coach/dashboard', label: 'Dashboard' },
     { href: '/coach/mental-training', label: 'Mental Training' },
-    { href: '/coach/referrals', label: 'Referrals' },
+    { href: '/coach/referrals', label: 'Invites' },
     ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
     { href: '/coach/staff', label: 'Staff' },
     { href: '/coach/inbox', label: 'Inbox' },
@@ -113,17 +112,6 @@ const CoachLayout: React.FC<Props> = ({
     return () => unsubscribe();
   }, [currentUser?.id]);
 
-  const handleCopyCode = async () => {
-    if (!coachProfile?.referralCode) return;
-    try {
-      await navigator.clipboard.writeText(coachProfile.referralCode);
-      setCopiedCode(true);
-      setTimeout(() => setCopiedCode(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
-  };
-
   return (
     <CoachProtectedRoute requiresActiveSubscription={requiresActiveSubscription}>
       <div className="min-h-screen bg-[#0a0a0b] text-white overflow-x-hidden">
@@ -152,9 +140,8 @@ const CoachLayout: React.FC<Props> = ({
                 className="max-w-7xl mx-auto"
               >
                 <div className="rounded-2xl backdrop-blur-xl bg-zinc-900/40 border border-white/10 px-6 py-4">
-                  {/* Top Row: Title & Referral Code */}
+                  {/* Top Row: Title */}
                   <div className="flex items-center justify-between mb-4">
-                    {/* Left: Title & Subtitle */}
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E0FE10]/20 to-[#E0FE10]/5 flex items-center justify-center border border-[#E0FE10]/20">
                         <Activity className="w-5 h-5 text-[#E0FE10]" />
@@ -167,31 +154,6 @@ const CoachLayout: React.FC<Props> = ({
                         )}
                       </div>
                     </div>
-
-                    {/* Right: Referral Code & Actions */}
-                    {coachProfile?.referralCode && (
-                      <div className="flex items-center gap-4">
-                        {/* Referral Code Badge */}
-                        <motion.div 
-                          className="flex items-center gap-2"
-                          whileHover={{ scale: 1.02 }}
-                        >
-                          <div className="text-right hidden sm:block">
-                            <div className="text-xs text-zinc-500">Referral Code</div>
-                            <div className="text-lg font-bold text-[#E0FE10]">{coachProfile.referralCode}</div>
-                          </div>
-                          <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={handleCopyCode}
-                            className="p-2 rounded-lg bg-[#E0FE10]/10 border border-[#E0FE10]/20 text-[#E0FE10] hover:bg-[#E0FE10]/20 transition-colors"
-                            title={`Copy: ${coachProfile.referralCode}`}
-                          >
-                            {copiedCode ? <Sparkles className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                          </motion.button>
-                        </motion.div>
-                      </div>
-                    )}
                   </div>
                   
                   {/* Navigation Tabs */}

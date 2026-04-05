@@ -1,6 +1,6 @@
 # Important Links
 
-Last Updated: February 5, 2026
+Last Updated: April 4, 2026
 
 ## Research Section
 
@@ -24,8 +24,18 @@ Last Updated: February 5, 2026
 |------|-------|-------------|
 | Sign Up | `/sign-up` | User registration |
 | User Dashboard | `/user-dashboard` | Authenticated user dashboard |
-| Coach Dashboard | `/coach/dashboard` | Coach management dashboard |
 | Directory | `/directory` | Trainer/coach directory |
+
+## PulseCheck Organization Activation
+
+| Page | Route | Description |
+|------|-------|-------------|
+| PulseCheck Partner | `/PulseCheck/partner` | Coach-led organization and partnership entry point |
+| PulseCheck Provisioning | `/admin/pulsecheckProvisioning` | Canonical org/team/admin activation provisioning console |
+| Legacy Roster Migration | `/admin/pulsecheckLegacyRosterMigration` | Backfill legacy coach rosters into PulseCheck organizations and teams |
+| Admin Activation | `/PulseCheck/admin-activation/{token}` | External admin activation handoff |
+| Team Invite | `/PulseCheck/team-invite/{token}` | Downstream invite redemption for staff, coaches, or athletes |
+| Team Workspace | `/PulseCheck/team-workspace?teamId={teamId}` | Live team container after activation |
 
 ## Admin Tools
 

@@ -14,14 +14,15 @@ const sections: Section[] = [
     ]
   },
   {
-    title: 'Coach & Training',
+    title: 'PulseCheck Organization Activation',
     items: [
-      { name: 'Coach Landing', url: '/coach' },
-      { name: 'Coach Sign Up', url: '/coach/sign-up' },
-      { name: 'Coach Dashboard', url: '/coach/dashboard' },
-      { name: 'Coach Dashboard Demo', url: '/coach/dashboard/demo' },
-      { name: 'Coach Invite (referralCode)', url: '/coach-invite/ABC123' },
-      { name: 'Coach Onboarding', url: '/coach-onboard' }
+      { name: 'PulseCheck Partner Page', url: '/PulseCheck/partner' },
+      { name: 'PulseCheck Provisioning (Admin)', url: '/admin/pulsecheckProvisioning' },
+      { name: 'PulseCheck Legacy Roster Migration (Admin)', url: '/admin/pulsecheckLegacyRosterMigration' },
+      { name: 'PulseCheck Admin Activation', url: '/PulseCheck/admin-activation/{token}' },
+      { name: 'PulseCheck Team Invite', url: '/PulseCheck/team-invite/{token}' },
+      { name: 'PulseCheck Post Activation', url: '/PulseCheck/post-activation' },
+      { name: 'PulseCheck Team Workspace', url: '/PulseCheck/team-workspace?teamId={teamId}' }
     ]
   },
   {
@@ -157,5 +158,3 @@ const LinksDirectory: React.FC = () => {
 };
 
 export default LinksDirectory;
-
-

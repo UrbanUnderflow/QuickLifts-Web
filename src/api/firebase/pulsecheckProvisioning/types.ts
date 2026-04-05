@@ -19,6 +19,9 @@ export type PulseCheckOperatingRole = 'admin-only' | 'admin-plus-coach' | 'admin
 export type PulseCheckRosterVisibilityScope = 'team' | 'assigned' | 'none';
 export type PulseCheckAthleteEntryOnboardingStep = 'name' | 'consent' | 'research-consent' | 'starting-point' | 'complete';
 export type PulseCheckResearchConsentStatus = 'not-required' | 'pending' | 'accepted' | 'declined';
+export type PulseCheckTeamCommercialModel = 'athlete-pay' | 'team-plan';
+export type PulseCheckTeamPlanStatus = 'inactive' | 'active';
+export type PulseCheckRevenueRecipientRole = 'team-admin' | 'coach' | 'organization-owner';
 export type PulseCheckTeamMembershipRole =
   | 'team-admin'
   | 'coach'
@@ -26,6 +29,43 @@ export type PulseCheckTeamMembershipRole =
   | 'support-staff'
   | 'clinician'
   | 'athlete';
+
+export interface PulseCheckTeamCommercialConfig {
+  commercialModel: PulseCheckTeamCommercialModel;
+  teamPlanStatus: PulseCheckTeamPlanStatus;
+  referralKickbackEnabled: boolean;
+  referralRevenueSharePct: number;
+  revenueRecipientRole: PulseCheckRevenueRecipientRole;
+  revenueRecipientUserId?: string;
+  billingOwnerUserId?: string;
+  billingCustomerId?: string;
+  teamPlanActivatedAt?: Timestamp | null;
+  teamPlanExpiresAt?: Timestamp | null;
+}
+
+export interface PulseCheckTeamCommercialSnapshot extends PulseCheckTeamCommercialConfig {
+  sourceOrganizationId: string;
+  sourceTeamId: string;
+  inviteToken?: string;
+  teamPlanBypassesPaywall: boolean;
+}
+
+export const getDefaultPulseCheckTeamCommercialConfig = (): PulseCheckTeamCommercialConfig => ({
+  commercialModel: 'athlete-pay',
+  teamPlanStatus: 'inactive',
+  referralKickbackEnabled: false,
+  referralRevenueSharePct: 0,
+  revenueRecipientRole: 'team-admin',
+  revenueRecipientUserId: '',
+  billingOwnerUserId: '',
+  billingCustomerId: '',
+  teamPlanActivatedAt: null,
+  teamPlanExpiresAt: null,
+});
+
+export const derivePulseCheckTeamPlanBypass = (
+  commercialConfig?: Partial<PulseCheckTeamCommercialConfig> | null
+): boolean => commercialConfig?.commercialModel === 'team-plan' && commercialConfig?.teamPlanStatus === 'active';
 
 export interface PulseCheckNotificationPreferences {
   email: boolean;
@@ -113,6 +153,20 @@ export interface PulseCheckAdminContact {
   email: string;
 }
 
+export interface PulseCheckOrganizationImplementationMetadata {
+  provisioningPath: 'pulsecheck-hierarchy' | 'legacy-coach-roster' | 'manual';
+  legacySignupPathUsed: boolean;
+  canaryTarget: boolean;
+  selectedTargetLeadId?: string;
+  selectedTargetEvidenceIds?: string[];
+  sourceBriefPath?: string;
+  firstPlannedTeamName?: string;
+  ownerContactStatus?: 'unverified' | 'pending-confirmation' | 'confirmed';
+  provisionedBy?: string;
+  provisionedAt?: Timestamp | null;
+  notes?: string;
+}
+
 export interface PulseCheckOrganization {
   id: string;
   displayName: string;
@@ -124,6 +178,7 @@ export interface PulseCheckOrganization {
   legacyCoachId?: string;
   implementationOwnerUserId?: string;
   implementationOwnerEmail?: string;
+  implementationMetadata?: PulseCheckOrganizationImplementationMetadata;
   primaryCustomerAdminName?: string;
   primaryCustomerAdminEmail?: string;
   additionalAdminContacts?: PulseCheckAdminContact[];
@@ -144,11 +199,26 @@ export interface CreatePulseCheckOrganizationInput {
   legacyCoachId?: string;
   implementationOwnerUserId?: string;
   implementationOwnerEmail?: string;
+  implementationMetadata?: PulseCheckOrganizationImplementationMetadata;
   primaryCustomerAdminName?: string;
   primaryCustomerAdminEmail?: string;
   additionalAdminContacts?: PulseCheckAdminContact[];
   defaultStudyPosture: PulseCheckStudyPosture;
   defaultClinicianBridgeMode: PulseCheckClinicianBridgeMode;
+  notes?: string;
+}
+
+export interface PulseCheckTeamImplementationMetadata {
+  provisioningPath: 'pulsecheck-hierarchy' | 'legacy-coach-roster' | 'manual';
+  legacySignupPathUsed: boolean;
+  canaryTarget: boolean;
+  selectedTargetLeadId?: string;
+  selectedTargetEvidenceIds?: string[];
+  sourceBriefPath?: string;
+  routingDefaultsMode?: 'organization-default-optional' | 'organization-default-required' | 'team-clinician-profile';
+  invitePosture?: PulseCheckInvitePolicy;
+  provisionedBy?: string;
+  provisionedAt?: Timestamp | null;
   notes?: string;
 }
 
@@ -166,11 +236,13 @@ export interface PulseCheckTeam {
   defaultAdminEmail?: string;
   status: PulseCheckTeamStatus;
   defaultInvitePolicy: PulseCheckInvitePolicy;
+  commercialConfig: PulseCheckTeamCommercialConfig;
   defaultClinicianProfileId?: string;
   defaultClinicianExternalProfileId?: string;
   defaultClinicianProfileName?: string;
   defaultClinicianProfileType?: PulseCheckClinicianProfileType;
   defaultClinicianProfileSource?: PulseCheckClinicianProfileSource;
+  implementationMetadata?: PulseCheckTeamImplementationMetadata;
   notes?: string;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
@@ -189,11 +261,13 @@ export interface CreatePulseCheckTeamInput {
   defaultAdminEmail?: string;
   status?: PulseCheckTeamStatus;
   defaultInvitePolicy: PulseCheckInvitePolicy;
+  commercialConfig: PulseCheckTeamCommercialConfig;
   defaultClinicianProfileId?: string;
   defaultClinicianExternalProfileId?: string;
   defaultClinicianProfileName?: string;
   defaultClinicianProfileType?: PulseCheckClinicianProfileType;
   defaultClinicianProfileSource?: PulseCheckClinicianProfileSource;
+  implementationMetadata?: PulseCheckTeamImplementationMetadata;
   notes?: string;
 }
 
@@ -336,6 +410,7 @@ export interface PulseCheckInviteLink {
   invitedTitle?: string;
   recipientName?: string;
   targetEmail?: string;
+  commercialSnapshot?: PulseCheckTeamCommercialSnapshot;
   token: string;
   activationUrl: string;
   createdByUserId?: string;
@@ -347,6 +422,19 @@ export interface PulseCheckInviteLink {
   redeemedAt?: Timestamp | null;
 }
 
+export interface PulseCheckProvisioningHandoffMetadata {
+  state: 'reserved-pending-activation' | 'claimed';
+  handoffKey: string;
+  targetOwnerName?: string;
+  targetOwnerEmail?: string;
+  sourceBriefPath?: string;
+  selectedTargetLeadId?: string;
+  selectedTargetEvidenceIds?: string[];
+  reservedBy?: string;
+  reservedAt?: Timestamp | null;
+  notes?: string;
+}
+
 export interface PulseCheckOrganizationMembership {
   id: string;
   organizationId: string;
@@ -356,6 +444,8 @@ export interface PulseCheckOrganizationMembership {
   status: 'active';
   grantedByInviteToken?: string;
   grantedAt?: Timestamp | null;
+  handoffMetadata?: PulseCheckProvisioningHandoffMetadata;
+  commercialAccess?: PulseCheckTeamCommercialSnapshot;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
 }
@@ -382,6 +472,8 @@ export interface PulseCheckTeamMembership {
   postActivationCompletedAt?: Timestamp | null;
   grantedByInviteToken?: string;
   grantedAt?: Timestamp | null;
+  handoffMetadata?: PulseCheckProvisioningHandoffMetadata;
+  commercialAccess?: PulseCheckTeamCommercialSnapshot;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
 }
@@ -417,6 +509,7 @@ export interface MigrateLegacyCoachRosterInput {
 }
 
 export interface PulseCheckLegacyCoachRosterMigrationResult {
+  migrationId: string;
   coachId: string;
   coachDisplayName: string;
   organizationId: string;
@@ -427,6 +520,8 @@ export interface PulseCheckLegacyCoachRosterMigrationResult {
   createdTeam: boolean;
   migratedAthleteCount: number;
   alreadyPresentAthleteCount: number;
+  retiredLegacyConnectionCount: number;
+  unresolvedLegacyConnectionCount: number;
 }
 
 export interface RedeemPulseCheckAdminActivationResult {
@@ -506,4 +601,6 @@ export interface RedeemPulseCheckTeamInviteResult {
   teamMembershipId: string;
   teamMembershipRole: PulseCheckTeamMembershipRole;
   invitedTitle?: string;
+  commercialSnapshot?: PulseCheckTeamCommercialSnapshot;
+  teamPlanBypassesPaywall?: boolean;
 }

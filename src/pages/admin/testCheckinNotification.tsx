@@ -968,8 +968,8 @@ export interface UserSearchInputProps {
   setSelectedUser: React.Dispatch<React.SetStateAction<User | null>>;
   selectedUser: User | null;
   isOverallLoading: boolean;
-  resultsRef: React.RefObject<HTMLDivElement>;
-  inputRef: React.RefObject<HTMLInputElement>;
+  resultsRef: React.RefObject<HTMLDivElement | null>;
+  inputRef: React.RefObject<HTMLInputElement | null>;
   clearSelectedUserAndQuery: () => void;
   allUsersCount: number;
 }
@@ -1054,8 +1054,8 @@ export interface ChallengeSearchInputProps {
   setSelectedChallenge: React.Dispatch<React.SetStateAction<SweatlistCollection | null>>;
   selectedChallenge: SweatlistCollection | null;
   isOverallLoading: boolean;
-  resultsRef: React.RefObject<HTMLDivElement>;
-  inputRef: React.RefObject<HTMLInputElement>;
+  resultsRef: React.RefObject<HTMLDivElement | null>;
+  inputRef: React.RefObject<HTMLInputElement | null>;
   clearSelectedChallengeAndQuery: () => void;
   allChallengesCount: number;
 }
