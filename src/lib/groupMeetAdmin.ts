@@ -10,6 +10,7 @@ import {
   type GroupMeetInviteSummary,
   type GroupMeetRequestSummary,
 } from './groupMeet';
+import { buildGroupMeetGuestCalendarImportSummary } from './groupMeetGuestGoogleCalendar';
 
 export const GROUP_MEET_REQUESTS_COLLECTION = 'groupMeetRequests';
 export const GROUP_MEET_INVITES_SUBCOLLECTION = 'groupMeetInvites';
@@ -48,6 +49,7 @@ export function mapGroupMeetInviteSummary(
     shareUrl: data.shareUrl || '',
     emailStatus: data.emailStatus || 'not_sent',
     emailedAt: toIso(data.emailedAt),
+    calendarImport: buildGroupMeetGuestCalendarImportSummary(data.calendarImport),
     emailError: data.emailError || null,
     respondedAt: toIso(data.responseSubmittedAt),
     availabilityCount: Array.isArray(data.availabilityEntries) ? data.availabilityEntries.length : 0,
@@ -70,6 +72,7 @@ export function mapGroupMeetInviteDetail(
     shareUrl: data.shareUrl || '',
     emailStatus: data.emailStatus || 'not_sent',
     emailedAt: toIso(data.emailedAt),
+    calendarImport: buildGroupMeetGuestCalendarImportSummary(data.calendarImport),
     emailError: data.emailError || null,
     respondedAt: toIso(data.responseSubmittedAt),
     availabilityCount: availabilityEntries.length,

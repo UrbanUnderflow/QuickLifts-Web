@@ -5,9 +5,13 @@ import {
   type GroupMeetAvailabilitySlot,
   type GroupMeetSharedAvailabilityParticipant,
 } from '../../../lib/groupMeet';
-
-const REQUESTS_COLLECTION = 'groupMeetRequests';
-const INVITES_SUBCOLLECTION = 'groupMeetInvites';
+import {
+  buildGroupMeetGuestCalendarImportSummary,
+  findGroupMeetInviteByToken,
+  GROUP_MEET_INVITES_SUBCOLLECTION,
+  shouldForceDevFirebase,
+  toIso,
+} from '../../../lib/groupMeetGuestGoogleCalendar';
 
 type GroupMeetInvitePayload = {
   invite: {
@@ -20,6 +24,7 @@ type GroupMeetInvitePayload = {
     responseSubmittedAt: string | null;
     availabilityEntries: GroupMeetAvailabilitySlot[];
     peerAvailability: GroupMeetSharedAvailabilityParticipant[];
+    calendarImport?: ReturnType<typeof buildGroupMeetGuestCalendarImportSummary> | null;
     deadlinePassed: boolean;
     request: {
       id: string;
@@ -32,64 +37,6 @@ type GroupMeetInvitePayload = {
     };
   };
 };
-
-const toIso = (value: FirebaseFirestore.Timestamp | null | undefined) =>
-  value?.toDate?.().toISOString?.() || null;
-
-function hasTruthyHeader(value: string | string[] | undefined) {
-  if (Array.isArray(value)) {
-    return value.some((entry) => entry === 'true' || entry === '1');
-  }
-
-  return value === 'true' || value === '1';
-}
-
-function shouldForceDevFirebase(req: NextApiRequest) {
-  if (hasTruthyHeader(req.headers?.['x-force-dev-firebase'])) {
-    return true;
-  }
-
-  const hostHeader = req.headers?.['x-forwarded-host'] || req.headers?.host || '';
-  const host = Array.isArray(hostHeader) ? hostHeader[0] || '' : hostHeader;
-  const normalizedHost = host.trim().toLowerCase();
-
-  return (
-    normalizedHost.startsWith('localhost:') ||
-    normalizedHost.startsWith('127.0.0.1:') ||
-    normalizedHost.startsWith('[::1]:')
-  );
-}
-
-async function findInviteByToken(db: FirebaseFirestore.Firestore, token: string) {
-  let snapshot: FirebaseFirestore.QuerySnapshot | null = null;
-
-  try {
-    snapshot = await db
-      .collectionGroup(INVITES_SUBCOLLECTION)
-      .where('token', '==', token)
-      .limit(1)
-      .get();
-  } catch (error) {
-    console.warn('[group-meet-public] Token lookup fell back to scan:', error);
-  }
-
-  let inviteDoc = snapshot?.empty ? null : snapshot?.docs?.[0] || null;
-
-  if (!inviteDoc) {
-    const fallbackSnapshot = await db.collectionGroup(INVITES_SUBCOLLECTION).get();
-    inviteDoc =
-      fallbackSnapshot.docs.find((docSnap) => docSnap.id === token || docSnap.data()?.token === token) || null;
-  }
-
-  if (!inviteDoc) return null;
-  const requestRef = inviteDoc.ref.parent.parent;
-  if (!requestRef) return null;
-
-  const requestDoc = await requestRef.get();
-  if (!requestDoc.exists) return null;
-
-  return { inviteDoc, requestDoc };
-}
 
 function getNormalizedInviteAvailability(
   inviteData: FirebaseFirestore.DocumentData,
@@ -161,6 +108,7 @@ function buildInvitePayload(args: {
       responseSubmittedAt: toIso(args.inviteData.responseSubmittedAt),
       availabilityEntries: getNormalizedInviteAvailability(args.inviteData, targetMonth),
       peerAvailability: args.peerAvailability,
+      calendarImport: buildGroupMeetGuestCalendarImportSummary(args.inviteData.calendarImport),
       deadlinePassed,
       request: {
         id: args.requestId,
@@ -182,7 +130,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const db = getFirebaseAdminApp(shouldForceDevFirebase(req)).firestore();
-  const found = await findInviteByToken(db, token);
+  const found = await findGroupMeetInviteByToken(db, token);
   if (!found) {
     return res.status(404).json({ error: 'Invite not found.' });
   }
@@ -190,7 +138,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { inviteDoc, requestDoc } = found;
   const requestData = requestDoc.data() || {};
   const inviteData = inviteDoc.data() || {};
-  const invitesSnapshot = await requestDoc.ref.collection(INVITES_SUBCOLLECTION).get();
+  const invitesSnapshot = await requestDoc.ref.collection(GROUP_MEET_INVITES_SUBCOLLECTION).get();
   const peerAvailability = buildPeerAvailability({
     currentToken: token,
     inviteDocs: invitesSnapshot.docs,
@@ -237,7 +185,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       { merge: true }
     );
 
-    const refreshedInvitesSnapshot = await requestDoc.ref.collection(INVITES_SUBCOLLECTION).get();
+    const refreshedInvitesSnapshot = await requestDoc.ref.collection(GROUP_MEET_INVITES_SUBCOLLECTION).get();
     const responseCount = refreshedInvitesSnapshot.docs.filter((docSnap) =>
       hasInviteResponse(docSnap.data() || {}, requestData.targetMonth || '')
     ).length;

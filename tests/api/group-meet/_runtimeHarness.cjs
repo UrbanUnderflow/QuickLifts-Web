@@ -727,6 +727,9 @@ function createPublicInviteHandlerRuntime({
   const handlerModule = withModuleMocks(
     {
       '../../../lib/firebase-admin': firebaseAdminMock,
+      'google-auth-library': {
+        OAuth2Client: class MockOAuth2Client {},
+      },
     },
     () => require(publicInviteHandlerPath)
   );

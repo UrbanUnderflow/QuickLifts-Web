@@ -131,3 +131,23 @@ test('resolveGroupMeetStatusFromInvites treats a sent invite as an active reques
     'collecting'
   );
 });
+
+test('hasGroupMeetInviteBeenSent treats emailedAt as sent even when emailStatus has not been updated yet', async () => {
+  const { hasGroupMeetInviteBeenSent, resolveGroupMeetStatusFromInvites } = loadGroupMeetRuntime();
+
+  assert.equal(
+    hasGroupMeetInviteBeenSent({
+      emailStatus: 'not_sent',
+      emailedAt: '2026-04-04T13:00:00.000Z',
+    }),
+    true
+  );
+
+  assert.equal(
+    resolveGroupMeetStatusFromInvites('2030-04-08T21:00:00.000Z', 'draft', [
+      { emailStatus: 'not_sent', emailedAt: '2026-04-04T13:00:00.000Z' },
+      { emailStatus: 'manual_only', emailedAt: null },
+    ]),
+    'collecting'
+  );
+});

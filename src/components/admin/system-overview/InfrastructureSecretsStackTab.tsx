@@ -9,7 +9,8 @@ const INFRA_ROWS = [
   ['Identity', 'Firebase Auth', 'Cross-surface authentication and admin role verification.'],
   ['Media / documents', 'Firebase Storage', 'Binary file storage for uploads, media assets, and exported artifacts.'],
   ['Google-integrated infra secrets', 'Google Cloud Secret Manager', 'Secure home for high-sensitivity machine credentials like the Group Meet Google service-account JSON.'],
-  ['External meeting infrastructure', 'Google Workspace + Google Calendar API', 'Scheduler mailbox identity, Calendar event creation, and Meet conference generation.'],
+  ['Admin meeting infrastructure', 'Google Workspace + Google Calendar API', 'Host final-event creation and Meet conference generation via service account + delegated scheduler identity.'],
+  ['Guest calendar import', 'Google OAuth + free/busy access', 'Invite-scoped guest import flow that suggests availability from the guest calendar without exposing private event details.'],
 ];
 
 const SECRET_ROWS = [
@@ -25,6 +26,14 @@ const GROUP_MEET_ROWS = [
   ['Delegated scheduler identity', 'Workspace user `tre@fitwithpulse.ai`', 'Current impersonated calendar owner because `meetings@fitwithpulse.ai` is an alias, not a standalone mailbox.'],
   ['Human-friendly scheduler alias', '`meetings@fitwithpulse.ai` alias', 'Useful for institutional naming, but does not create a separate calendar identity by itself.'],
   ['Meet / Calendar creation', 'Google Calendar API via service account + domain-wide delegation', 'Host picks final block, backend creates or updates the event, Google distributes attendee invites.'],
+];
+
+const GROUP_MEET_GUEST_GCAL_ROWS = [
+  ['Guest OAuth client', 'Dedicated guest-side Google OAuth app', 'Separate consent boundary from the admin scheduler. Used only for invite-scoped calendar import.'],
+  ['Guest OAuth env contract', '`GOOGLE_GUEST_CALENDAR_CLIENT_ID`, `GOOGLE_GUEST_CALENDAR_CLIENT_SECRET`, `GOOGLE_GUEST_CALENDAR_REDIRECT_URI`', 'Required for the guest-side connect/import/callback flow. Do not reuse the admin scheduler service-account contract here.'],
+  ['Token protection', '`GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY` or secure equivalent', 'Used to protect invite-scoped OAuth token material or secure references before persistence.'],
+  ['Guest import storage', 'Invite-level metadata in Firestore plus server-only credential storage', 'Store connection status, last sync metadata, and secure token references only. Do not store raw event details.'],
+  ['Guest import behavior', 'Google free/busy only', 'Import availability suggestions from busy windows; guests still review and save manually.'],
 ];
 
 const BREVO_ROWS = [
@@ -64,7 +73,7 @@ export default function InfrastructureSecretsStackTab() {
       <DocHeader
         eyebrow="Infrastructure Handbook"
         title="Infrastructure & Secrets Stack"
-        version="Updated Apr 3, 2026"
+        version="Updated Apr 5, 2026"
         summary="Source-of-truth reference for how QuickLifts Web, Firebase, Netlify, Google Cloud, Google Workspace, and Secret Manager relate to each other operationally, with explicit rules for where sensitive credentials should live."
         highlights={[
           {
@@ -82,6 +91,10 @@ export default function InfrastructureSecretsStackTab() {
           {
             title: 'Brevo Is Env-Backed Today',
             body: 'Brevo email sends currently depend on `BREVO_MARKETING_KEY` or `BREVO_API_KEY` from runtime env, and that source must be documented and carried forward explicitly.',
+          },
+          {
+            title: 'Guest Google Import Is Separate',
+            body: 'Group Meet now has a second Google contract for guest-side calendar import. It uses dedicated guest OAuth envs and invite-scoped token storage, not the admin final-event scheduler setup.',
           },
         ]}
       />
@@ -138,6 +151,22 @@ export default function InfrastructureSecretsStackTab() {
         </CardGrid>
       </SectionBlock>
 
+      <SectionBlock icon={KeyRound} title="Group Meet Guest Calendar Import">
+        <DataTable columns={['Concern', 'Canonical Home', 'Notes']} rows={GROUP_MEET_GUEST_GCAL_ROWS} />
+        <CardGrid columns="xl:grid-cols-2">
+          <InfoCard
+            title="Separate Consent Boundary"
+            accent="green"
+            body="This flow belongs to the public guest invite page and should never inherit the admin scheduler identity, delegated mailbox, or service-account JSON used for final event creation."
+          />
+          <InfoCard
+            title="Privacy Boundary"
+            accent="amber"
+            body="The guest import flow is free/busy only. It should surface availability suggestions, not raw Google event titles, attendees, locations, or conferencing links."
+          />
+        </CardGrid>
+      </SectionBlock>
+
       <SectionBlock icon={KeyRound} title="Brevo Email Credential Contract">
         <DataTable columns={['Concern', 'Canonical Home', 'Notes']} rows={BREVO_ROWS} />
         <CardGrid columns="xl:grid-cols-2">
@@ -176,7 +205,7 @@ export default function InfrastructureSecretsStackTab() {
         <BulletList
           items={[
             'Netlify/Next server code is the execution layer that reads secrets, talks to OpenAI, sends Brevo email, reads and writes Firestore, and calls the Google Calendar API.',
-            'Firestore stores operational state and audit trail for admin workflows such as Group Meet, but it should store references and outcomes rather than the raw secret material itself.',
+            'Firestore stores operational state and audit trail for admin workflows such as Group Meet, but it should store references and outcomes rather than the raw secret material itself. Guest Google import should follow the same rule and keep only invite-scoped connection metadata.',
             'Google Workspace provides the human calendar identity; Google Cloud provides the machine credential and Secret Manager; the web app bridges the two.',
           ]}
         />
