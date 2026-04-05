@@ -1,12 +1,16 @@
 import type { NextPage } from 'next';
 import React, { useState } from 'react';
+import { useRouter } from 'next/router';
 import { FaBrain, FaUsers, FaChartLine, FaArrowRight, FaCheck, FaBolt, FaHeart, FaComments, FaShield, FaMobile } from 'react-icons/fa6';
 import Footer from '../../components/Footer/Footer';
 import PageHead from '../../components/PageHead';
 import CoachProductModal from '../../components/CoachProductModal';
 
 const CoachProductPage: NextPage = () => {
+  const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const legacyFlow = typeof router.query.legacyFlow === 'string' ? router.query.legacyFlow : '';
+  const legacyRef = typeof router.query.ref === 'string' ? router.query.ref.trim() : '';
 
   return (
     <div className="min-h-screen bg-zinc-900">
@@ -20,6 +24,17 @@ const CoachProductPage: NextPage = () => {
           <div className="absolute bottom-16 right-24 w-80 h-80 bg-[#E0FE10]/10 rounded-full blur-3xl"></div>
         </div>
         <div className="relative z-10 max-w-5xl mx-auto">
+          {legacyFlow === 'coach-referral-retired' ? (
+            <div className="mx-auto mb-6 max-w-3xl rounded-2xl border border-amber-400/25 bg-amber-400/10 px-5 py-4 text-left">
+              <p className="text-sm font-semibold text-amber-100">Legacy coach referral links are retired</p>
+              <p className="mt-2 text-sm leading-7 text-amber-50/80">
+                {legacyRef
+                  ? `The old coach referral code ${legacyRef} no longer provisions new coach accounts. Use the coach-led organization flow below or ask for a current admin activation link.`
+                  : 'Use the coach-led organization flow below or ask for a current admin activation link.'}
+              </p>
+            </div>
+          ) : null}
+
           <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-purple-500/20 to-[#E0FE10]/20 backdrop-blur-sm border border-purple-500/30 rounded-full mb-6">
             <FaBrain className="h-4 w-4 text-purple-400" />
             <span className="text-purple-300 text-sm font-medium">PulseCheck for Coaches</span>

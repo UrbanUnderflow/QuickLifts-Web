@@ -1,7 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../../lib/firebase-admin';
 import { getFirebaseAdminApp } from '../../../../lib/firebase-admin';
-import { mergePulseCheckRequiredConsents } from '../../../../api/firebase/pulsecheckProvisioning/types';
+import {
+  derivePulseCheckTeamPlanBypass,
+  getDefaultPulseCheckTeamCommercialConfig,
+  mergePulseCheckRequiredConsents,
+} from '../../../../api/firebase/pulsecheckProvisioning/types';
 import {
   resolvePilotEnrollmentStatus,
   resolveTeamMembershipOnboardingStatus,
@@ -10,6 +14,8 @@ import type {
   PulseCheckRequiredConsentDocument,
   PulseCheckPilotStudyMode,
   PulseCheckResearchConsentStatus,
+  PulseCheckTeamCommercialConfig,
+  PulseCheckTeamCommercialSnapshot,
   PulseCheckTeamMembershipRole,
 } from '../../../../api/firebase/pulsecheckProvisioning/types';
 
@@ -23,7 +29,76 @@ const PILOT_ENROLLMENTS_COLLECTION = 'pulsecheck-pilot-enrollments';
 
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const normalizeEmail = (value: unknown) => normalizeString(value).toLowerCase();
+const SubscriptionType = {
+  unsubscribed: 'Unsubscribed',
+  teamPlan: 'Team Plan Access',
+};
+const SubscriptionPlatform = {
+  Web: 'Web',
+};
 const buildPilotEnrollmentId = (pilotId: string, userId: string) => `${normalizeString(pilotId)}_${normalizeString(userId)}`;
+const normalizeRevenueRecipientRole = (value: unknown) => {
+  const normalized = normalizeString(value);
+  if (normalized === 'coach' || normalized === 'organization-owner') {
+    return normalized;
+  }
+  return 'team-admin';
+};
+const normalizeReferralRevenueSharePct = (value: unknown) => {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.min(100, Math.round(parsed * 100) / 100));
+};
+const normalizeTimestampLike = (
+  value: unknown
+): PulseCheckTeamCommercialConfig['teamPlanActivatedAt'] => {
+  if (!value || typeof value !== 'object') return null;
+  return value as PulseCheckTeamCommercialConfig['teamPlanActivatedAt'];
+};
+const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercialConfig => {
+  const candidate = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const defaults = getDefaultPulseCheckTeamCommercialConfig();
+  const commercialModel = normalizeString(candidate.commercialModel ?? defaults.commercialModel);
+  const teamPlanStatus = normalizeString(candidate.teamPlanStatus ?? defaults.teamPlanStatus);
+
+  return {
+    commercialModel: commercialModel === 'team-plan' ? 'team-plan' : 'athlete-pay',
+    teamPlanStatus: teamPlanStatus === 'active' ? 'active' : 'inactive',
+    referralKickbackEnabled:
+      typeof candidate.referralKickbackEnabled === 'boolean'
+        ? candidate.referralKickbackEnabled
+        : defaults.referralKickbackEnabled,
+    referralRevenueSharePct: normalizeReferralRevenueSharePct(candidate.referralRevenueSharePct ?? defaults.referralRevenueSharePct),
+    revenueRecipientRole: normalizeRevenueRecipientRole(candidate.revenueRecipientRole),
+    revenueRecipientUserId: normalizeString(candidate.revenueRecipientUserId ?? defaults.revenueRecipientUserId),
+    billingOwnerUserId: normalizeString(candidate.billingOwnerUserId ?? defaults.billingOwnerUserId),
+    billingCustomerId: normalizeString(candidate.billingCustomerId ?? defaults.billingCustomerId),
+    teamPlanActivatedAt: normalizeTimestampLike(candidate.teamPlanActivatedAt),
+    teamPlanExpiresAt: normalizeTimestampLike(candidate.teamPlanExpiresAt),
+  };
+};
+const resolveTeamAdminCommercialConfig = (commercialConfig: PulseCheckTeamCommercialConfig, userId: string): PulseCheckTeamCommercialConfig => {
+  if (commercialConfig.revenueRecipientRole !== 'team-admin' || commercialConfig.revenueRecipientUserId) {
+    return commercialConfig;
+  }
+
+  return {
+    ...commercialConfig,
+    revenueRecipientUserId: normalizeString(userId),
+  };
+};
+const buildTeamCommercialSnapshot = (input: {
+  organizationId: string;
+  teamId: string;
+  inviteToken: string;
+  commercialConfig: PulseCheckTeamCommercialConfig;
+}): PulseCheckTeamCommercialSnapshot => ({
+  ...input.commercialConfig,
+  sourceOrganizationId: normalizeString(input.organizationId),
+  sourceTeamId: normalizeString(input.teamId),
+  inviteToken: normalizeString(input.inviteToken),
+  teamPlanBypassesPaywall: derivePulseCheckTeamPlanBypass(input.commercialConfig),
+});
 const normalizeRequiredConsentDocuments = (value: unknown): PulseCheckRequiredConsentDocument[] => {
   if (!Array.isArray(value)) return [];
 
@@ -180,6 +255,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const organizationRef = firestore.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
       const teamRef = firestore.collection(TEAMS_COLLECTION).doc(teamId);
+      const userRef = firestore.collection('users').doc(userId);
       const organizationMembershipRef = firestore
         .collection(ORGANIZATION_MEMBERSHIPS_COLLECTION)
         .doc(`${organizationId}_${userId}`);
@@ -193,6 +269,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         transaction.get(organizationRef),
         transaction.get(teamRef),
       ]);
+      const userSnap = await transaction.get(userRef);
       const existingTeamMembershipSnap = await transaction.get(teamMembershipRef);
       const pilotSnap = pilotRef ? await transaction.get(pilotRef) : null;
       const existingPilotEnrollmentSnap = pilotEnrollmentRef ? await transaction.get(pilotEnrollmentRef) : null;
@@ -209,6 +286,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const organizationName = normalizeString(organizationSnap.data()?.displayName) || 'PulseCheck Organization';
       const teamName = normalizeString(teamSnap.data()?.displayName) || 'Team';
+      const teamCommercialConfig = normalizeTeamCommercialConfig(teamSnap.data()?.commercialConfig);
+      const nextTeamCommercialConfig =
+        teamMembershipRole === 'team-admin'
+          ? resolveTeamAdminCommercialConfig(teamCommercialConfig, userId)
+          : teamCommercialConfig;
+      const commercialSnapshot = buildTeamCommercialSnapshot({
+        organizationId,
+        teamId,
+        inviteToken: token,
+        commercialConfig: nextTeamCommercialConfig,
+      });
       const existingTeamMembership = existingTeamMembershipSnap.exists ? existingTeamMembershipSnap.data() || {} : {};
       const existingPilotEnrollment = existingPilotEnrollmentSnap?.exists ? existingPilotEnrollmentSnap.data() || {} : {};
       const pilotStudyMode = pilotSnap?.data()?.studyMode as PulseCheckPilotStudyMode | undefined;
@@ -252,6 +340,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         transaction.set(
           teamRef,
           {
+            commercialConfig: nextTeamCommercialConfig,
             defaultAdminUserIds: admin.firestore.FieldValue.arrayUnion(userId),
             updatedAt: now,
           },
@@ -273,6 +362,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           allowedAthleteIds: [],
           athleteOnboarding: nextAthleteOnboarding,
           onboardingStatus: nextMembershipOnboardingStatus,
+          commercialAccess: commercialSnapshot,
           grantedByInviteToken: token,
           grantedAt: now,
           createdAt: now,
@@ -280,6 +370,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         { merge: true }
       );
+
+      if (teamMembershipRole === 'athlete') {
+        const existingUserData = userSnap.exists ? userSnap.data() || {} : {};
+        const currentSubscriptionType = normalizeString(existingUserData.subscriptionType);
+        const shouldGrantTeamPlanAccess =
+          commercialSnapshot.teamPlanBypassesPaywall &&
+          (!currentSubscriptionType ||
+            currentSubscriptionType === SubscriptionType.unsubscribed ||
+            currentSubscriptionType === SubscriptionType.teamPlan);
+
+        transaction.set(
+          userRef,
+          {
+            pulseCheckTeamCommercialAccess: commercialSnapshot,
+            onboardInvite: {
+              ...(existingUserData.onboardInvite || {}),
+              source: 'pulsecheck-team-invite',
+              token,
+              organizationId,
+              teamId,
+              pilotId,
+              cohortId,
+              teamMembershipRole,
+              capturedAt: Math.floor(Date.now() / 1000),
+            },
+            ...(shouldGrantTeamPlanAccess
+              ? {
+                  subscriptionType: SubscriptionType.teamPlan,
+                  subscriptionPlatform: SubscriptionPlatform.Web,
+                }
+              : {}),
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
+      }
 
       if (teamMembershipRole === 'athlete' && pilotId && pilotEnrollmentRef && nextAthleteOnboarding) {
         transaction.set(
@@ -336,6 +462,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         teamMembershipId: teamMembershipRef.id,
         teamMembershipRole,
         invitedTitle,
+        commercialSnapshot,
+        teamPlanBypassesPaywall: commercialSnapshot.teamPlanBypassesPaywall,
       };
     });
 

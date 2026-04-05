@@ -13,14 +13,18 @@ const CheckoutRedirectPage = () => {
     const userId = typeof params.userId === 'string' ? params.userId : '';
     const priceId = typeof params.priceId === 'string' ? params.priceId : '';
     const email = typeof params.email === 'string' ? params.email : '';
-    const coachReferralCode = typeof params.coachReferralCode === 'string' ? params.coachReferralCode : '';
+    const organizationId = typeof params.organizationId === 'string' ? params.organizationId : '';
+    const teamId = typeof params.teamId === 'string' ? params.teamId : '';
+    const inviteToken = typeof params.inviteToken === 'string' ? params.inviteToken : '';
     const debug = typeof params.debug === 'string' ? params.debug : '';
 
     const q = new URLSearchParams();
     if (userId) q.set('userId', userId);
     if (priceId) q.set('priceId', priceId);
     if (email) q.set('email', email);
-    if (coachReferralCode) q.set('coachReferralCode', coachReferralCode);
+    if (organizationId) q.set('organizationId', organizationId);
+    if (teamId) q.set('teamId', teamId);
+    if (inviteToken) q.set('inviteToken', inviteToken);
     if (debug) q.set('debug', debug);
 
     // Choose the correct Netlify function endpoint; function performs a 302 to Stripe
@@ -70,5 +74,3 @@ const CheckoutRedirectPage = () => {
 };
 
 export default CheckoutRedirectPage;
-
-

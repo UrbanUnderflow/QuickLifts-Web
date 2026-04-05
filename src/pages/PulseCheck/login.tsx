@@ -1,5 +1,5 @@
 import type { NextPage } from 'next';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import {
   signInWithPopup,
@@ -131,6 +131,8 @@ const STORAGE_KEY_PC = 'pulsecheck_has_seen_marketing';
 const PulseCheckLoginPage: NextPage = () => {
   const router = useRouter();
   const currentUser = useUser();
+  const legacyFlow = typeof router.query.legacyFlow === 'string' ? router.query.legacyFlow : '';
+  const legacyRef = typeof router.query.ref === 'string' ? router.query.ref.trim() : '';
 
   // ── form state ──
   const [view, setView] = useState<ViewState>('login');
@@ -144,6 +146,35 @@ const PulseCheckLoginPage: NextPage = () => {
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
+
+  const legacyFlowMessage = useMemo(() => {
+    if (legacyFlow === 'athlete-referral-retired') {
+      return {
+        title: 'Legacy athlete referral links are retired',
+        body: legacyRef
+          ? `The old coach referral code ${legacyRef} no longer grants athlete access. Ask your coach or team admin for a current PulseCheck team invite link.`
+          : 'Ask your coach or team admin for a current PulseCheck team invite link.',
+      };
+    }
+
+    if (legacyFlow === 'coach-referral-retired') {
+      return {
+        title: 'Legacy coach referral links are retired',
+        body: legacyRef
+          ? `The old coach referral code ${legacyRef} no longer provisions new coach accounts. New coach-led organizations should start through PulseCheck coach setup or a direct admin activation link.`
+          : 'New coach-led organizations should start through PulseCheck coach setup or a direct admin activation link.',
+      };
+    }
+
+    if (legacyFlow === 'coach-staff-migration') {
+      return {
+        title: 'Legacy staff invite flow is being retired',
+        body: 'Create your account here, then have your team admin issue the current PulseCheck team invite so your membership, commercial access, and permissions land in the right container.',
+      };
+    }
+
+    return null;
+  }, [legacyFlow, legacyRef]);
 
   // ── password validation ──
   const hasUppercase = /[A-Z]/.test(password);
@@ -498,6 +529,22 @@ const PulseCheckLoginPage: NextPage = () => {
           >
             <GlassSurface accentColor={view === 'forgot' ? '#3B82F6' : '#8B5CF6'}>
               <div className="p-7 sm:p-8">
+                {legacyFlowMessage ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mb-5 rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-200" />
+                      <div>
+                        <p className="text-sm font-semibold text-amber-50">{legacyFlowMessage.title}</p>
+                        <p className="mt-2 text-sm leading-7 text-amber-50/80">{legacyFlowMessage.body}</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : null}
+
                 {/* ── Error banner ── */}
                 <AnimatePresence>
                   {error && (

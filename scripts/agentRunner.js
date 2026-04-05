@@ -31,7 +31,10 @@ const path = require('path');
 const {
     HIGH_IMPACT_TASK_CLASSES,
     MISSION_SYSTEM_VERSION,
+    OUTCOME_COLLECTION,
+    advanceOutcomeObservation,
     buildExecuteTaskContract,
+    buildOutcomeEvaluation,
     buildExploreTaskMetadata,
     buildObjectiveId,
     compareTaskCandidates,
@@ -874,6 +877,7 @@ async function createQueuedTask(taskInput, options = {}) {
     const mission = options.mission || await loadMissionStatus();
     const missionPolicy = normalizeMissionPolicy(mission || {});
     const source = String(options.source || taskInput?.source || 'agent-runner').trim() || 'agent-runner';
+    let executeContract = null;
     const basePayload = {
         name: taskInput?.name || 'Untitled task',
         description: taskInput?.description || '',
@@ -896,7 +900,7 @@ async function createQueuedTask(taskInput, options = {}) {
     let payload = { ...basePayload };
     let status = String(options.statusOverride || taskInput?.status || 'todo').toLowerCase();
     if (isExecuteMissionActive(mission || {})) {
-        const executeContract = buildExecuteTaskContract(
+        executeContract = buildExecuteTaskContract(
             {
                 ...taskInput,
                 name: basePayload.name,
@@ -910,6 +914,13 @@ async function createQueuedTask(taskInput, options = {}) {
                 objectiveId: taskInput?.objectiveId || basePayload.northStarObjective || basePayload.name,
                 priorityScore: taskInput?.priorityScore,
                 expiresInHours: options.expiresInHours || 72,
+                missionPolicy,
+                missionId: basePayload.missionId,
+                assignee: basePayload.assignee,
+                outcomeId: taskInput?.outcomeId || options.outcomeId,
+                parentOutcomeId: taskInput?.parentOutcomeId || options.parentOutcomeId,
+                supersedesOutcomeId: taskInput?.supersedesOutcomeId || options.supersedesOutcomeId,
+                expectedAttribution: taskInput?.expectedAttribution || options.expectedAttribution,
             }
         );
         payload = {
@@ -926,12 +937,46 @@ async function createQueuedTask(taskInput, options = {}) {
             priorityScore: executeContract.priorityScore,
             expiresAt: executeContract.expiresAt,
             verificationResult: executeContract.verificationResult,
+            outcomeId: executeContract.outcomeId,
+            parentOutcomeId: executeContract.parentOutcomeId,
+            supersedesOutcomeId: executeContract.supersedesOutcomeId,
+            outcomeClass: executeContract.outcomeClass,
+            outcomeDomain: executeContract.outcomeDomain,
+            outcomeRole: executeContract.outcomeRole,
+            proofPacket: executeContract.proofPacket,
+            policyRefs: executeContract.policyRefs,
+            expectedAttribution: executeContract.expectedAttribution,
+            expectedOutcomeScore: executeContract.expectedOutcomeScore,
+            expectedImpactScore: executeContract.expectedImpactScore,
+            expectedCreditedScore: executeContract.expectedCreditedScore,
+            expectedNetScore: executeContract.expectedNetScore,
+            proofCompileStatus: executeContract.proofCompileStatus,
+            proofCompileErrors: executeContract.proofCompileErrors,
+            compiledProofPacketHash: executeContract.compiledProofPacketHash,
+            expectedSignalWindow: executeContract.expectedSignalWindow,
+            outcomeStatus: executeContract.outcomeStatus,
+            playbookId: executeContract.playbookId,
+            playbookVersion: executeContract.playbookVersion,
+            actionType: executeContract.actionType,
+            currentStageId: executeContract.currentStageId,
+            sideEffectClass: executeContract.sideEffectClass,
+            creditBucket: executeContract.creditBucket,
+            stageGateStatus: executeContract.stageGateStatus,
+            stageBlockReason: executeContract.stageBlockReason,
+            speculative: executeContract.speculative,
+            cleanupBy: executeContract.cleanupBy,
+            cleanupState: executeContract.cleanupState,
+            readinessSignals: executeContract.readinessSignals,
+            commercialCreditEligible: executeContract.commercialCreditEligible,
+            admissionDecision: executeContract.admissionDecision,
+            emittedReadinessSignalIds: executeContract.emittedReadinessSignalIds,
+            requiredReadinessSignalIds: executeContract.requiredReadinessSignalIds,
         };
-        if (options.forceCorrection && executeContract.hasContract) {
+        if (options.forceCorrection && executeContract.hasContract && executeContract.executeGatePassed) {
             status = options.statusOverride || 'todo';
         } else if (options.allowExecuteTodo === false) {
             status = options.statusOverride || 'needs-spec';
-        } else if (!hasValidTaskContract(payload)) {
+        } else if (!hasValidTaskContract(payload) || !executeContract.executeGatePassed) {
             status = 'needs-spec';
         } else {
             status = options.statusOverride || 'needs-spec';
@@ -956,7 +1001,40 @@ async function createQueuedTask(taskInput, options = {}) {
     }
 
     payload.status = status;
-    const ref = await db.collection(KANBAN_COLLECTION).add(payload);
+    const ref = db.collection(KANBAN_COLLECTION).doc();
+    const batch = db.batch();
+    batch.set(ref, payload);
+
+    let outcomeEventNeeded = false;
+    if (executeContract?.outcomeId) {
+        const outcomeRef = db.collection(OUTCOME_COLLECTION).doc(executeContract.outcomeId);
+        const isCorrectionReuse = options.forceCorrection === true && String(taskInput?.outcomeId || options.outcomeId || '').trim().length > 0;
+        if (isCorrectionReuse) {
+            batch.set(outcomeRef, {
+                id: outcomeRef.id,
+                updatedAt: FieldValue.serverTimestamp(),
+                status: 'planned',
+                proofPacket: executeContract.proofPacket,
+                policyRefs: executeContract.policyRefs,
+                proofCompileStatus: executeContract.proofCompileStatus,
+                proofCompileErrors: executeContract.proofCompileErrors,
+                compiledProofPacketHash: executeContract.compiledProofPacketHash,
+                primaryTaskIds: FieldValue.arrayUnion(ref.id),
+            }, { merge: true });
+        } else {
+            batch.set(outcomeRef, {
+                ...executeContract.outcomeRecord,
+                id: outcomeRef.id,
+                primaryTaskIds: [ref.id],
+                status: executeContract.outcomeStatus || 'planned',
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+            outcomeEventNeeded = true;
+        }
+    }
+
+    await batch.commit();
 
     if (payload.missionId) {
         await recordMissionRunEvent(db, FieldValue, payload.missionId, status === 'quarantined' ? 'quarantined-task' : 'created-task', {
@@ -968,6 +1046,15 @@ async function createQueuedTask(taskInput, options = {}) {
             objectiveId: payload.objectiveId || '',
             plannerSource: payload.plannerSource || '',
         });
+        if (outcomeEventNeeded && payload.outcomeId) {
+            await recordMissionRunEvent(db, FieldValue, payload.missionId, 'planned-outcome', {
+                taskId: ref.id,
+                outcomeId: payload.outcomeId,
+                objectiveId: payload.objectiveId || '',
+                outcomeClass: payload.outcomeClass || '',
+                outcomeDomain: payload.outcomeDomain || '',
+            });
+        }
     }
 
     return {
@@ -1799,6 +1886,26 @@ async function recordDeliverables(task, steps, options = {}) {
     const objectiveId = String(options.objectiveId || task?.objectiveId || '').trim();
     const movementScore = Number.isFinite(Number(options.movementScore)) ? Number(options.movementScore) : 0;
     const sampledForReview = options.sampledForReview === true;
+    const outcomeId = String(options.outcomeId || task?.outcomeId || '').trim();
+    const parentOutcomeId = String(options.parentOutcomeId || task?.parentOutcomeId || '').trim();
+    const outcomeStatus = String(options.outcomeStatus || task?.outcomeStatus || '').trim();
+    const artifactVerifiedAt = options.artifactVerifiedAt || null;
+    const outcomeObservationStartedAt = options.outcomeObservationStartedAt || null;
+    const outcomeConfirmedAt = options.outcomeConfirmedAt || null;
+    const creditedOutcomeScore = Number.isFinite(Number(options.creditedOutcomeScore)) ? Number(options.creditedOutcomeScore) : null;
+    const netOutcomeScore = Number.isFinite(Number(options.netOutcomeScore)) ? Number(options.netOutcomeScore) : null;
+    const businessDebtScore = Number.isFinite(Number(options.businessDebtScore)) ? Number(options.businessDebtScore) : null;
+    const playbookId = String(options.playbookId || task?.playbookId || '').trim();
+    const playbookVersion = Number(options.playbookVersion ?? task?.playbookVersion ?? 0) || 0;
+    const currentStageId = String(options.currentStageId || task?.currentStageId || '').trim();
+    const stageGateStatus = String(options.stageGateStatus || task?.stageGateStatus || '').trim();
+    const stageBlockReason = String(options.stageBlockReason || task?.stageBlockReason || '').trim();
+    const speculative = options.speculative === true || task?.speculative === true;
+    const cleanupState = String(options.cleanupState || task?.cleanupState || '').trim();
+    const cleanupBy = options.cleanupBy || task?.cleanupBy || null;
+    const readinessSignals = options.readinessSignals || task?.readinessSignals || [];
+    const executionScore = Number.isFinite(Number(options.executionScore)) ? Number(options.executionScore) : null;
+    const commercialMovementScore = Number.isFinite(Number(options.commercialMovementScore)) ? Number(options.commercialMovementScore) : null;
 
     const deliverables = [];
     const batch = db.batch();
@@ -1838,6 +1945,26 @@ async function recordDeliverables(task, steps, options = {}) {
             objectiveId,
             movementScore,
             sampledForReview,
+            outcomeId: outcomeId || undefined,
+            parentOutcomeId: parentOutcomeId || undefined,
+            outcomeStatus: outcomeStatus || undefined,
+            artifactVerifiedAt: artifactVerifiedAt || undefined,
+            outcomeObservationStartedAt: outcomeObservationStartedAt || undefined,
+            outcomeConfirmedAt: outcomeConfirmedAt || undefined,
+            creditedOutcomeScore: creditedOutcomeScore ?? undefined,
+            netOutcomeScore: netOutcomeScore ?? undefined,
+            businessDebtScore: businessDebtScore ?? undefined,
+            playbookId: playbookId || undefined,
+            playbookVersion: playbookVersion || undefined,
+            currentStageId: currentStageId || undefined,
+            stageGateStatus: stageGateStatus || undefined,
+            stageBlockReason: stageBlockReason || undefined,
+            speculative: speculative || undefined,
+            cleanupState: cleanupState || undefined,
+            cleanupBy: cleanupBy || undefined,
+            readinessSignals: Array.isArray(readinessSignals) && readinessSignals.length > 0 ? readinessSignals : undefined,
+            executionScore: executionScore ?? undefined,
+            commercialMovementScore: commercialMovementScore ?? undefined,
             reviewReason: reviewReason || undefined,
             createdAt: FieldValue.serverTimestamp(),
         };
@@ -1864,6 +1991,9 @@ async function recordNeedsReviewDeliverables(task, steps, reviewReason) {
         verificationSource: 'runner-auto',
         objectiveId: task?.objectiveId || '',
         reviewReason: normalizedReason,
+        outcomeId: task?.outcomeId || '',
+        parentOutcomeId: task?.parentOutcomeId || '',
+        outcomeStatus: task?.outcomeStatus || 'failed',
     });
 }
 
@@ -4430,12 +4560,26 @@ async function suppressLikelyRetryLoopTask(taskId, taskData, matchedHistory) {
 /* ─── Kanban Integration ──────────────────────────────── */
 
 async function fetchTaskCandidatesForAgent(limit) {
-    const snap = await db.collection(KANBAN_COLLECTION)
-        .where('assignee', 'in', AGENT_NAME_VARIANTS)
-        .limit(limit)
-        .get();
+    const snapshots = await Promise.all(
+        AGENT_NAME_VARIANTS.map((assignee) => (
+            db.collection(KANBAN_COLLECTION)
+                .where('assignee', '==', assignee)
+                .get()
+        ))
+    );
 
-    return snap.docs.sort((a, b) => toMillis(a.data()?.createdAt) - toMillis(b.data()?.createdAt));
+    const dedupedDocs = new Map();
+    snapshots.forEach((snap) => {
+        snap.docs.forEach((doc) => {
+            if (!dedupedDocs.has(doc.id)) {
+                dedupedDocs.set(doc.id, doc);
+            }
+        });
+    });
+
+    return Array.from(dedupedDocs.values())
+        .sort((a, b) => toMillis(a.data()?.createdAt) - toMillis(b.data()?.createdAt))
+        .slice(-limit);
 }
 
 async function fetchNextTask() {
@@ -4481,6 +4625,13 @@ async function fetchNextTask() {
                 runnerFailureMessage: FieldValue.delete(),
                 updatedAt: FieldValue.serverTimestamp(),
             });
+            if (data.outcomeId) {
+                await db.collection(OUTCOME_COLLECTION).doc(data.outcomeId).set({
+                    status: 'executing',
+                    updatedAt: FieldValue.serverTimestamp(),
+                    primaryTaskIds: FieldValue.arrayUnion(data.id),
+                }, { merge: true });
+            }
             return { ...data, status: 'in-progress' };
         }
     }
@@ -4754,12 +4905,17 @@ async function createCorrectionTask(task, verificationResult) {
         dependencyIds: Array.isArray(task?.dependencyIds) ? task.dependencyIds : [],
         verificationPolicy: task?.verificationPolicy || null,
         priorityScore: Number(task?.priorityScore || 30) + 5,
+        outcomeId: task?.outcomeId || '',
+        parentOutcomeId: task?.parentOutcomeId || '',
+        supersedesOutcomeId: task?.supersedesOutcomeId || '',
+        expectedAttribution: task?.expectedAttribution || 'directly-caused',
     }, {
         source: 'validation-gate',
         taskClass: 'correction',
         plannerSource: 'mission-supervisor',
         statusOverride: 'todo',
         forceCorrection: true,
+        outcomeId: task?.outcomeId || '',
         mission: task?.missionId ? await loadMissionStatus(true) : null,
     });
 }
@@ -4768,18 +4924,93 @@ async function markTaskDone(taskId, options = {}) {
     await db.collection(KANBAN_COLLECTION).doc(taskId).update({
         status: 'done',
         verificationResult: options.verificationResult || FieldValue.delete(),
+        outcomeStatus: options.verificationResult?.outcomeStatus || FieldValue.delete(),
         completedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
     });
 }
 
-async function markTaskFailed(taskId, failureMessage) {
+function mergeVerifiedReadinessSignals(existingSignals = [], emittedSignalIds = [], options = {}) {
+    const now = options.now instanceof Date ? options.now : new Date();
+    const signalIds = Array.isArray(emittedSignalIds) ? emittedSignalIds.map((value) => String(value || '').trim()).filter(Boolean) : [];
+    const signalsById = new Map(
+        (Array.isArray(existingSignals) ? existingSignals : [])
+            .map((signal) => {
+                const id = String(signal?.id || '').trim();
+                return id ? [id, { ...signal }] : null;
+            })
+            .filter(Boolean)
+    );
+
+    for (const signalId of signalIds) {
+        const current = signalsById.get(signalId) || {};
+        signalsById.set(signalId, {
+            ...current,
+            id: signalId,
+            label: current.label || signalId,
+            state: 'verified',
+            verifiedAt: now,
+            evidenceRef: options.evidenceRef || current.evidenceRef || '',
+        });
+    }
+
+    return Array.from(signalsById.values());
+}
+
+async function updateMissionSequencingAfterVerifiedTask(task, options = {}) {
+    if (!task?.missionId) return;
+    const emittedReadinessSignalIds = Array.isArray(task?.emittedReadinessSignalIds) ? task.emittedReadinessSignalIds.filter(Boolean) : [];
+    if (emittedReadinessSignalIds.length === 0) return;
+
+    const missionRef = db.doc('company-config/mission-status');
+    const missionSnap = await missionRef.get();
+    const mission = normalizeMissionPolicy(missionSnap.exists ? (missionSnap.data() || {}) : { missionId: task.missionId });
+    const readinessSignals = mergeVerifiedReadinessSignals(mission.readinessSignals, emittedReadinessSignalIds, {
+        now: new Date(),
+        evidenceRef: task.outcomeId || task.id,
+    });
+
+    await missionRef.set({
+        readinessSignals,
+        updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    await recordMissionRunEvent(db, FieldValue, task.missionId, 'readiness-signal-verified', {
+        taskId: task.id,
+        outcomeId: task.outcomeId || '',
+        objectiveId: task.objectiveId || '',
+        readinessSignalIds: emittedReadinessSignalIds,
+    });
+}
+
+async function markTaskFailed(taskId, failureMessage, options = {}) {
     await db.collection(KANBAN_COLLECTION).doc(taskId).update({
         runnerBlocked: true,
         runnerFailureAt: FieldValue.serverTimestamp(),
         runnerFailureMessage: (failureMessage || 'Unknown runner failure').slice(0, 2000),
         updatedAt: FieldValue.serverTimestamp(),
     });
+
+    const outcomeId = String(options?.outcomeId || '').trim();
+    if (outcomeId) {
+        await db.collection(OUTCOME_COLLECTION).doc(outcomeId).set({
+            status: 'failed',
+            guardrailStatus: 'failed',
+            updatedAt: FieldValue.serverTimestamp(),
+            failureReason: (failureMessage || 'Unknown runner failure').slice(0, 2000),
+            primaryTaskIds: FieldValue.arrayUnion(taskId),
+        }, { merge: true });
+    }
+
+    if (options?.missionId) {
+        await recordMissionRunEvent(db, FieldValue, options.missionId, 'guardrail-failure', {
+            taskId,
+            outcomeId,
+            objectiveId: options?.objectiveId || '',
+            reason: (failureMessage || 'Unknown runner failure').slice(0, 2000),
+            failureSource: options?.failureSource || 'runner-failure',
+        });
+    }
 }
 
 /**
@@ -6412,6 +6643,7 @@ async function run() {
             let nsGate = null;
             const isExecuteV2Task = String(task?.mode || '').toLowerCase() === 'execute' && Number(task?.specVersion || 0) >= MISSION_SYSTEM_VERSION;
             let verificationResult = null;
+            let outcomeEvaluation = null;
 
             if (allPassed) {
                 // ─── North Star Alignment Gate ───────────────────
@@ -6624,12 +6856,17 @@ async function run() {
                             dependencyIds: Array.isArray(task?.dependencyIds) ? task.dependencyIds : [],
                             verificationPolicy: task?.verificationPolicy || null,
                             priorityScore: Number(task?.priorityScore || 30) + 5,
+                            outcomeId: task?.outcomeId || '',
+                            parentOutcomeId: task?.parentOutcomeId || '',
+                            supersedesOutcomeId: task?.supersedesOutcomeId || '',
+                            expectedAttribution: task?.expectedAttribution || 'directly-caused',
                         }, {
                             source: 'validation-gate',
                             plannerSource: 'mission-supervisor',
                             taskClass: 'correction',
                             statusOverride: 'todo',
                             forceCorrection: true,
+                            outcomeId: task?.outcomeId || '',
                             mission: task?.missionId ? await loadMissionStatus(true) : null,
                         });
 
@@ -6641,9 +6878,47 @@ async function run() {
                             'failed'
                         );
 
+                        if (task.outcomeId) {
+                            const missionForOutcome = task?.missionId ? await loadMissionStatus(true) : {};
+                            const failedOutcome = buildOutcomeEvaluation(
+                                task,
+                                {
+                                    outcomeClass: task.outcomeClass,
+                                    outcomeDomain: task.outcomeDomain,
+                                    proofPacket: task.proofPacket,
+                                    attributionActual: task.expectedAttribution,
+                                },
+                                {
+                                    missionPolicy: missionForOutcome,
+                                    passed: false,
+                                    checks: validation.evidence.map((item, index) => ({
+                                        kind: 'shell',
+                                        label: `Validation evidence ${index + 1}`,
+                                        commandOrPath: item.cmd,
+                                        expectedSignal: validation.reason,
+                                        passed: item.exitCode === 0,
+                                        output: item.output,
+                                    })),
+                                    checkedAt: new Date(),
+                                }
+                            );
+                            await db.collection(OUTCOME_COLLECTION).doc(task.outcomeId).set({
+                                status: failedOutcome.status,
+                                guardrailStatus: failedOutcome.guardrailStatus,
+                                score: failedOutcome.score,
+                                sourceEvidence: failedOutcome.sourceEvidence,
+                                updatedAt: FieldValue.serverTimestamp(),
+                            }, { merge: true });
+                        }
+
                         // Mark original as failed, save history, continue
                         await saveTaskHistory(task.name, task.id, steps, 'validation-failed', taskStartTime);
-                        await markTaskFailed(task.id, `Validation failed: ${validation.reason}`);
+                        await markTaskFailed(task.id, `Validation failed: ${validation.reason}`, {
+                            missionId: task?.missionId || '',
+                            objectiveId: task?.objectiveId || '',
+                            outcomeId: task?.outcomeId || '',
+                            failureSource: 'validation-gate',
+                        });
                         await setStatus('idle', {
                             currentTask: '',
                             currentTaskId: '',
@@ -6735,6 +7010,23 @@ async function run() {
                         taskProgress: 98,
                     });
                     const acceptanceResult = await runAcceptanceChecks(task);
+                    const missionForOutcome = task?.missionId ? await loadMissionStatus(true) : {};
+                    outcomeEvaluation = buildOutcomeEvaluation(
+                        task,
+                        {
+                            outcomeClass: task.outcomeClass,
+                            outcomeDomain: task.outcomeDomain,
+                            proofPacket: task.proofPacket,
+                            attributionActual: task.expectedAttribution,
+                        },
+                        {
+                            missionPolicy: missionForOutcome,
+                            passed: acceptanceResult.passed,
+                            checks: acceptanceResult.checks,
+                            spotCheckRequired: acceptanceResult.spotCheckRequired,
+                            checkedAt: new Date(),
+                        }
+                    );
                     verificationResult = {
                         status: acceptanceResult.passed ? 'verified-auto' : 'needs-review',
                         verificationState: acceptanceResult.passed ? 'verified-auto' : 'needs-review',
@@ -6747,6 +7039,10 @@ async function run() {
                         summary: acceptanceResult.passed
                             ? 'Acceptance checks passed.'
                             : `Acceptance checks failed: ${acceptanceResult.failedChecks.map((check) => check.label || check.commandOrPath).join(', ')}`,
+                        outcomeStatus: outcomeEvaluation.status,
+                        creditedOutcomeScore: outcomeEvaluation.score?.creditedOutcomeScore || 0,
+                        netOutcomeScore: outcomeEvaluation.score?.netOutcomeScore || 0,
+                        businessDebtScore: outcomeEvaluation.score?.businessDebtScore || 0,
                     };
 
                     if (!acceptanceResult.passed) {
@@ -6757,8 +7053,25 @@ async function run() {
                             status: 'needs-review',
                             reviewReason,
                             verificationResult,
+                            outcomeStatus: outcomeEvaluation.status,
                             updatedAt: FieldValue.serverTimestamp(),
                         });
+                        if (task.outcomeId) {
+                            await db.collection(OUTCOME_COLLECTION).doc(task.outcomeId).set({
+                                status: outcomeEvaluation.status,
+                                guardrailStatus: outcomeEvaluation.guardrailStatus,
+                                score: outcomeEvaluation.score,
+                                sourceEvidence: outcomeEvaluation.sourceEvidence,
+                                updatedAt: FieldValue.serverTimestamp(),
+                                primaryTaskIds: FieldValue.arrayUnion(task.id),
+                            }, { merge: true });
+                            await recordMissionRunEvent(db, FieldValue, task.missionId, 'guardrail-failure', {
+                                taskId: task.id,
+                                outcomeId: task.outcomeId,
+                                objectiveId: task.objectiveId || '',
+                                reason: reviewReason,
+                            });
+                        }
                         await recordNeedsReviewDeliverables(task, steps, reviewReason);
                         const correctiveTask = await createCorrectionTask(task, verificationResult);
                         if (task.missionId) {
@@ -6797,11 +7110,39 @@ async function run() {
                             missionPatch[`objectiveProgress.${task.objectiveId}.verifiedDeliverableCount`] = FieldValue.increment(1);
                         }
                         await db.doc('company-config/mission-status').set(missionPatch, { merge: true });
+                        await updateMissionSequencingAfterVerifiedTask(task, {
+                            outcomeEvaluation,
+                            verificationResult,
+                        });
                         await recordMissionRunEvent(db, FieldValue, task.missionId, 'verified-auto', {
                             taskId: task.id,
                             objectiveId: task.objectiveId || '',
                             verificationState: 'verified-auto',
                         });
+                        if (task.outcomeId) {
+                            const outcomePatch = {
+                                status: outcomeEvaluation.status,
+                                guardrailStatus: outcomeEvaluation.guardrailStatus,
+                                score: outcomeEvaluation.score,
+                                sourceEvidence: outcomeEvaluation.sourceEvidence,
+                                updatedAt: FieldValue.serverTimestamp(),
+                                primaryTaskIds: FieldValue.arrayUnion(task.id),
+                            };
+                            if (outcomeEvaluation.artifactVerifiedAt) outcomePatch.artifactVerifiedAt = FieldValue.serverTimestamp();
+                            if (outcomeEvaluation.outcomeObservationStartedAt) outcomePatch.outcomeObservationStartedAt = FieldValue.serverTimestamp();
+                            if (outcomeEvaluation.outcomeConfirmedAt) outcomePatch.confirmedAt = FieldValue.serverTimestamp();
+                            if (outcomeEvaluation.expiresAt) outcomePatch.expiresAt = outcomeEvaluation.expiresAt;
+                            await db.collection(OUTCOME_COLLECTION).doc(task.outcomeId).set(outcomePatch, { merge: true });
+                            await recordMissionRunEvent(db, FieldValue, task.missionId, outcomeEvaluation.status === 'observing' ? 'observing-outcome' : 'confirmed-outcome', {
+                                taskId: task.id,
+                                outcomeId: task.outcomeId,
+                                objectiveId: task.objectiveId || '',
+                                outcomeClass: task.outcomeClass || '',
+                                creditedOutcomeScore: Number(outcomeEvaluation.score?.creditedOutcomeScore || 0),
+                                netOutcomeScore: Number(outcomeEvaluation.score?.netOutcomeScore || 0),
+                                businessDebtScore: Number(outcomeEvaluation.score?.businessDebtScore || 0),
+                            });
+                        }
                     }
                 }
 
@@ -6824,8 +7165,36 @@ async function run() {
                         objectiveId: task.objectiveId || '',
                         movementScore: Number(nsGate?.northStarAlignment || 0),
                         sampledForReview: verificationResult?.sampledForReview === true,
+                        outcomeId: task.outcomeId || '',
+                        parentOutcomeId: task.parentOutcomeId || '',
+                        outcomeStatus: outcomeEvaluation?.status || verificationResult?.outcomeStatus || '',
+                        artifactVerifiedAt: outcomeEvaluation?.artifactVerifiedAt || null,
+                        outcomeObservationStartedAt: outcomeEvaluation?.outcomeObservationStartedAt || null,
+                        outcomeConfirmedAt: outcomeEvaluation?.outcomeConfirmedAt || null,
+                        creditedOutcomeScore: outcomeEvaluation?.score?.creditedOutcomeScore,
+                        netOutcomeScore: outcomeEvaluation?.score?.netOutcomeScore,
+                        businessDebtScore: outcomeEvaluation?.score?.businessDebtScore,
+                        playbookId: task.playbookId || '',
+                        playbookVersion: task.playbookVersion || 0,
+                        currentStageId: task.currentStageId || '',
+                        stageGateStatus: task.stageGateStatus || '',
+                        stageBlockReason: task.stageBlockReason || '',
+                        speculative: task.speculative === true,
+                        cleanupState: task.cleanupState || '',
+                        cleanupBy: task.cleanupBy || null,
+                        readinessSignals: task.readinessSignals || [],
+                        executionScore: outcomeEvaluation?.score?.creditedOutcomeScore,
+                        commercialMovementScore: task.creditBucket === 'commercial'
+                            ? outcomeEvaluation?.score?.netOutcomeScore
+                            : 0,
                     }
                     : undefined);
+                if (isExecuteV2Task && task.outcomeId && deliverables.length > 0) {
+                    await db.collection(OUTCOME_COLLECTION).doc(task.outcomeId).set({
+                        deliverableIds: FieldValue.arrayUnion(...deliverables.map((item) => item.id)),
+                        updatedAt: FieldValue.serverTimestamp(),
+                    }, { merge: true });
+                }
                 const primaryDeliverable = deliverables.find(d => d && typeof d.filePath === 'string' && d.filePath.trim().length > 0);
                 const deepLinkTaskRef = (task.id || task.objectiveCode || '').trim();
                 let resultArtifactUrl = '';
@@ -6949,7 +7318,12 @@ async function run() {
                 });
 
                 // Proactively report failure to the chat
-                await markTaskFailed(task.id, failedStep?.output || 'Unknown error');
+                await markTaskFailed(task.id, failedStep?.output || 'Unknown error', {
+                    missionId: task?.missionId || '',
+                    objectiveId: task?.objectiveId || '',
+                    outcomeId: task?.outcomeId || '',
+                    failureSource: 'task-runner',
+                });
 
                 // ─── Soul Evolution: learn from failure ──
                 await proposeSoulEvolution(task, steps, 'failure');

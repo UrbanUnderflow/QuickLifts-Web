@@ -66,6 +66,78 @@ const formatDuration = (start?: Date) => {
   return `${mins}m`;
 };
 
+type MissionRuntimeSnapshot = {
+  status: 'idle' | 'active' | 'paused';
+  missionId?: string;
+  playbookId?: string;
+  playbookVersion?: number;
+  currentStageId?: string;
+  stageGateStatus?: string;
+  stageBlockReason?: string;
+  speculative?: boolean;
+  cleanupState?: string;
+  cleanupBy?: unknown;
+  executionScore?: number;
+  commercialMovementScore?: number;
+  readinessSignals?: unknown;
+};
+
+const timestampLikeToDate = (value: unknown): Date | null => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === 'number') return new Date(value);
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const raw = value as { toDate?: () => Date; seconds?: number; nanos?: number };
+  if (typeof raw.toDate === 'function') return raw.toDate();
+  if (typeof raw.seconds === 'number') return new Date(raw.seconds * 1000 + Math.floor((raw.nanos || 0) / 1_000_000));
+  return null;
+};
+
+const formatCountdownLike = (value?: unknown) => {
+  const date = timestampLikeToDate(value);
+  if (!date) return '';
+  const diffMs = date.getTime() - Date.now();
+  if (Number.isNaN(diffMs)) return '';
+  if (diffMs <= 0) return `Overdue by ${Math.max(1, Math.round(Math.abs(diffMs) / 60000))}m`;
+  const hours = Math.floor(diffMs / 3_600_000);
+  const mins = Math.floor((diffMs % 3_600_000) / 60_000);
+  return hours <= 0 ? `In ${Math.max(1, mins)}m` : `In ${hours}h ${mins}m`;
+};
+
+const normalizePlaybookReadinessState = (value?: string) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized || normalized === 'missing') return 'missing';
+  if (normalized === 'pending') return 'pending';
+  if (normalized === 'verified' || normalized === 'ready') return 'verified';
+  if (normalized === 'failed') return 'failed';
+  if (normalized === 'waived') return 'waived';
+  if (normalized === 'expired') return 'expired';
+  if (normalized === 'revoked') return 'revoked';
+  return normalized;
+};
+
+const summarizeReadinessSignals = (value: unknown): Array<{ id: string; label: string; state: string }> => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.map((signal, index) => ({
+      id: signal?.id || `signal-${index}`,
+      label: signal?.label || signal?.id || `Signal ${index + 1}`,
+      state: normalizePlaybookReadinessState(signal?.state),
+    }));
+  }
+  if (typeof value === 'object') {
+    return Object.entries(value as Record<string, any>).map(([id, signal]) => ({
+      id,
+      label: signal?.label || id,
+      state: normalizePlaybookReadinessState(signal?.state),
+    }));
+  }
+  return [];
+};
+
 const formatMs = (ms?: number) => {
   if (!ms) return '';
   if (ms < 1000) return `${ms}ms`;
@@ -141,7 +213,7 @@ const PRICING_SOURCE_URLS = {
   openai: 'https://platform.openai.com/docs/pricing/',
   anthropic: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
 };
-const DEFAULT_MODEL_UPGRADE_TARGET = 'openai/gpt-5.3-codex';
+const DEFAULT_MODEL_UPGRADE_TARGET = 'openai-codex/gpt-5.4';
 
 type ModelUpgradeOption = {
   value: string;
@@ -539,7 +611,13 @@ const normalizeUpgradeModelLabel = (value: string): string => {
 
   if (trimmed.includes('/')) {
     const [provider, ...modelParts] = trimmed.split('/');
-    const providerLabel = provider === 'anthropic' ? 'Anthropic' : provider === 'openai' ? 'OpenAI' : provider || 'Model';
+    const providerLabel = provider === 'anthropic'
+      ? 'Anthropic'
+      : provider === 'openai'
+        ? 'OpenAI'
+        : provider === 'openai-codex'
+          ? 'OpenAI Codex'
+          : provider || 'Model';
     const model = modelParts.join('/') || value;
     return `${providerLabel}: ${model}`;
   }
@@ -2929,6 +3007,7 @@ interface MissionButtonProps {
 
 const MissionButton: React.FC<MissionButtonProps> = ({ onToast }) => {
   const [status, setStatus] = React.useState<'idle' | 'active' | 'paused'>('idle');
+  const [missionSnapshot, setMissionSnapshot] = React.useState<MissionRuntimeSnapshot | null>(null);
   const [launching, setLaunching] = React.useState(false);
   const [launchResult, setLaunchResult] = React.useState<'success' | 'error' | null>(null);
   const pauseEnforcedRef = React.useRef(false);
@@ -2938,8 +3017,14 @@ const MissionButton: React.FC<MissionButtonProps> = ({ onToast }) => {
     const unsub = onSnapshot(
       doc(db, 'company-config', 'mission-status'),
       (snap) => {
-        if (snap.exists()) setStatus((snap.data()?.status as any) || 'idle');
-        else setStatus('idle');
+        if (snap.exists()) {
+          const data = snap.data() as MissionRuntimeSnapshot;
+          setStatus((data?.status as any) || 'idle');
+          setMissionSnapshot(data);
+        } else {
+          setStatus('idle');
+          setMissionSnapshot(null);
+        }
       }
     );
     return unsub;
@@ -2993,81 +3078,151 @@ const MissionButton: React.FC<MissionButtonProps> = ({ onToast }) => {
 
   const isActive = status === 'active';
   const isPaused = status === 'paused';
+  const readinessSignals = summarizeReadinessSignals(missionSnapshot?.readinessSignals);
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      {/* Main launch / status button */}
-      <div
-        onClick={isActive ? undefined : handleLaunch}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '6px 12px', borderRadius: 8, cursor: isActive ? 'default' : 'pointer',
-          background: isActive
-            ? 'rgba(34,197,94,0.12)'
-            : isPaused
-              ? 'rgba(251,191,36,0.12)'
-              : launchResult === 'success'
-                ? 'rgba(34,197,94,0.25)'
-                : launchResult === 'error'
-                  ? 'rgba(239,68,68,0.2)'
-              : 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.2))',
-          border: `1px solid ${isActive
-            ? 'rgba(34,197,94,0.3)'
-            : isPaused
-              ? 'rgba(251,191,36,0.3)'
-              : launchResult === 'success'
-                ? 'rgba(34,197,94,0.45)'
-                : launchResult === 'error'
-                  ? 'rgba(239,68,68,0.4)'
-                  : 'rgba(99,102,241,0.35)'}`,
-          color: isActive
-            ? '#4ade80'
-            : isPaused
-              ? '#fbbf24'
-              : launchResult === 'success'
-                ? '#86efac'
-                : launchResult === 'error'
-                  ? '#fca5a5'
-                  : '#a5b4fc',
-          fontSize: 12, fontWeight: 600,
-          transition: 'all 0.2s',
-          whiteSpace: 'nowrap' as const,
-          userSelect: 'none' as const,
-        }}
-        title={isActive ? 'Mission is running' : isPaused ? 'Click to resume mission' : 'Click to launch autonomous mission'}
-      >
-        {/* Status indicator */}
-        {isActive ? (
-          <span style={{
-            width: 7, height: 7, borderRadius: '50%',
-            background: '#22c55e',
-            display: 'inline-block',
-            boxShadow: '0 0 6px #22c55e',
-            animation: 'missionPulse 2s ease-in-out infinite',
-            flexShrink: 0,
-          }} />
-        ) : launching ? (
-          <Loader2 className="w-3 h-3" style={{ animation: 'spin 1s linear infinite' }} />
-        ) : launchResult === 'success' ? (
-          <CheckCircle2 className="w-3 h-3" />
-        ) : launchResult === 'error' ? (
-          <XCircle className="w-3 h-3" />
-        ) : (
-          <span style={{ fontSize: 13 }}>🚀</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {/* Main launch / status button */}
+        <div
+          onClick={isActive ? undefined : handleLaunch}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '6px 12px', borderRadius: 8, cursor: isActive ? 'default' : 'pointer',
+            background: isActive
+              ? 'rgba(34,197,94,0.12)'
+              : isPaused
+                ? 'rgba(251,191,36,0.12)'
+                : launchResult === 'success'
+                  ? 'rgba(34,197,94,0.25)'
+                  : launchResult === 'error'
+                    ? 'rgba(239,68,68,0.2)'
+                : 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.2))',
+            border: `1px solid ${isActive
+              ? 'rgba(34,197,94,0.3)'
+              : isPaused
+                ? 'rgba(251,191,36,0.3)'
+                : launchResult === 'success'
+                  ? 'rgba(34,197,94,0.45)'
+                  : launchResult === 'error'
+                    ? 'rgba(239,68,68,0.4)'
+                    : 'rgba(99,102,241,0.35)'}`,
+            color: isActive
+              ? '#4ade80'
+              : isPaused
+                ? '#fbbf24'
+                : launchResult === 'success'
+                  ? '#86efac'
+                  : launchResult === 'error'
+                    ? '#fca5a5'
+                    : '#a5b4fc',
+            fontSize: 12, fontWeight: 600,
+            transition: 'all 0.2s',
+            whiteSpace: 'nowrap' as const,
+            userSelect: 'none' as const,
+          }}
+          title={isActive ? 'Mission is running' : isPaused ? 'Click to resume mission' : 'Click to launch autonomous mission'}
+        >
+          {/* Status indicator */}
+          {isActive ? (
+            <span style={{
+              width: 7, height: 7, borderRadius: '50%',
+              background: '#22c55e',
+              display: 'inline-block',
+              boxShadow: '0 0 6px #22c55e',
+              animation: 'missionPulse 2s ease-in-out infinite',
+              flexShrink: 0,
+            }} />
+          ) : launching ? (
+            <Loader2 className="w-3 h-3" style={{ animation: 'spin 1s linear infinite' }} />
+          ) : launchResult === 'success' ? (
+            <CheckCircle2 className="w-3 h-3" />
+          ) : launchResult === 'error' ? (
+            <XCircle className="w-3 h-3" />
+          ) : (
+            <span style={{ fontSize: 13 }}>🚀</span>
+          )}
+          <span>
+            {launching
+              ? 'Launching...'
+              : isActive
+                ? 'Mission Active'
+                : launchResult === 'success'
+                  ? 'Kickoff Started'
+                  : launchResult === 'error'
+                    ? 'Failed — Retry?'
+                    : isPaused
+                      ? 'Resume Mission'
+                      : 'Start Mission'}
+          </span>
+        </div>
+
+        {(missionSnapshot?.playbookId || missionSnapshot?.currentStageId || missionSnapshot?.stageGateStatus || missionSnapshot?.cleanupState || missionSnapshot?.speculative || readinessSignals.length > 0) && (
+          <div style={{
+            minWidth: 240,
+            maxWidth: 380,
+            padding: '8px 10px',
+            borderRadius: 10,
+            border: '1px solid rgba(255,255,255,0.08)',
+            background: 'rgba(15,23,42,0.76)',
+            backdropFilter: 'blur(10px)',
+            color: '#cbd5e1',
+            fontSize: 11,
+            lineHeight: 1.45,
+          }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+              <span style={{ padding: '2px 7px', borderRadius: 999, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                Playbook <strong>{missionSnapshot?.playbookId || '—'}</strong>{missionSnapshot?.playbookVersion ? ` · v${missionSnapshot.playbookVersion}` : ''}
+              </span>
+              <span style={{ padding: '2px 7px', borderRadius: 999, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                Stage <strong>{missionSnapshot?.currentStageId || '—'}</strong>
+              </span>
+              {missionSnapshot?.stageGateStatus && (
+                <span style={{ padding: '2px 7px', borderRadius: 999, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  Gate <strong>{missionSnapshot.stageGateStatus}</strong>
+                </span>
+              )}
+              {missionSnapshot?.speculative && (
+                <span style={{ padding: '2px 7px', borderRadius: 999, background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.18)', color: '#fbbf24' }}>
+                  Speculative
+                </span>
+              )}
+              {missionSnapshot?.cleanupState && (
+                <span style={{ padding: '2px 7px', borderRadius: 999, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  Cleanup <strong>{missionSnapshot.cleanupState}</strong>
+                </span>
+              )}
+              {Boolean(missionSnapshot?.cleanupBy) && (
+                <span style={{ padding: '2px 7px', borderRadius: 999, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  {formatCountdownLike(missionSnapshot?.cleanupBy)}
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ padding: '2px 7px', borderRadius: 999, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                Execution <strong>{typeof missionSnapshot?.executionScore === 'number' ? missionSnapshot.executionScore.toFixed(2) : '—'}</strong>
+              </span>
+              <span style={{ padding: '2px 7px', borderRadius: 999, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                Commercial <strong>{typeof missionSnapshot?.commercialMovementScore === 'number' ? missionSnapshot.commercialMovementScore.toFixed(2) : '—'}</strong>
+              </span>
+              {readinessSignals.slice(0, 3).map((signal) => (
+                <span key={signal.id} style={{ padding: '2px 7px', borderRadius: 999, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  {signal.label} · <strong>{signal.state.toUpperCase()}</strong>
+                </span>
+              ))}
+              {readinessSignals.length > 3 && (
+                <span style={{ padding: '2px 7px', borderRadius: 999, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  +{readinessSignals.length - 3} more
+                </span>
+              )}
+            </div>
+            {missionSnapshot?.stageBlockReason && (
+              <div style={{ marginTop: 6, color: '#fbbf24' }}>
+                Blocked: {missionSnapshot.stageBlockReason}
+              </div>
+            )}
+          </div>
         )}
-        <span>
-          {launching
-            ? 'Launching...'
-            : isActive
-              ? 'Mission Active'
-              : launchResult === 'success'
-                ? 'Kickoff Started'
-                : launchResult === 'error'
-                  ? 'Failed — Retry?'
-                  : isPaused
-                    ? 'Resume Mission'
-                    : 'Start Mission'}
-        </span>
       </div>
 
       {/* Full dashboard link */}
@@ -3619,20 +3774,53 @@ const VirtualOfficeContent: React.FC = () => {
     });
   }, [agents]);
 
+  const coreAgents = useMemo(
+    () => allAgents.filter((agent) => agent.id !== 'antigravity'),
+    [allAgents]
+  );
+
   const modelUpgradeOptions = useMemo(
     () => buildModelUpgradeOptions(allAgents),
     [allAgents]
   );
 
+  const liveCoreModelValues = useMemo(() => {
+    return Array.from(new Set(
+      coreAgents
+        .map((agent) => normalizeUpgradeModelValue(agent.currentModelRaw || agent.currentModel || ''))
+        .filter(Boolean)
+    ));
+  }, [coreAgents]);
+
+  const liveCoreModelLabel = useMemo(() => {
+    if (liveCoreModelValues.length === 0) return 'Unknown';
+    if (liveCoreModelValues.length === 1) return normalizeUpgradeModelLabel(liveCoreModelValues[0]);
+    return `Mixed (${liveCoreModelValues.map((value) => normalizeUpgradeModelLabel(value)).join(' · ')})`;
+  }, [liveCoreModelValues]);
+
   useEffect(() => {
     if (modelUpgradeOptions.length === 0) return;
-    if (!modelUpgradeOptions.some((option) => option.value === allModelUpgradeTarget)) {
-      setAllModelUpgradeTarget(modelUpgradeOptions[0].value);
-    }
-  }, [allModelUpgradeTarget, modelUpgradeOptions]);
+    const liveCoreModel = liveCoreModelValues.length === 1 ? liveCoreModelValues[0] : '';
+    const preferredTarget = modelUpgradeOptions.some((option) => option.value === liveCoreModel)
+      ? liveCoreModel
+      : modelUpgradeOptions.some((option) => option.value === DEFAULT_MODEL_UPGRADE_TARGET)
+        ? DEFAULT_MODEL_UPGRADE_TARGET
+        : modelUpgradeOptions[0].value;
 
-  const workingCount = useMemo(() => allAgents.filter((a) => a.status === 'working').length, [allAgents]);
-  const idleCount = useMemo(() => allAgents.filter((a) => a.status === 'idle').length, [allAgents]);
+    setAllModelUpgradeTarget((current) => {
+      if (!modelUpgradeOptions.some((option) => option.value === current)) {
+        return preferredTarget;
+      }
+      if (current === DEFAULT_MODEL_UPGRADE_TARGET && preferredTarget !== current) {
+        return preferredTarget;
+      }
+      return current;
+    });
+  }, [liveCoreModelValues, modelUpgradeOptions]);
+
+  const workingCount = useMemo(() => coreAgents.filter((a) => a.status === 'working').length, [coreAgents]);
+  const idleCount = useMemo(() => coreAgents.filter((a) => a.status === 'idle').length, [coreAgents]);
+  const coreAgentCount = useMemo(() => coreAgents.length, [coreAgents]);
 
   // Overall progress across all working agents
   const overallProgress = useMemo(() => {
@@ -4150,11 +4338,17 @@ const VirtualOfficeContent: React.FC = () => {
                     : 'Restart Agents'}
             </button>
             <div className="flex items-center gap-2">
+              <div
+                className="text-[11px] px-2 py-1 rounded-lg border border-emerald-500/20 bg-emerald-900/20 text-emerald-200"
+                title="Live model currently reported by the core agent presence documents"
+              >
+                Live: {liveCoreModelLabel}
+              </div>
               <select
                 value={allModelUpgradeTarget}
                 onChange={(e) => setAllModelUpgradeTarget(e.target.value)}
                 disabled={queueingModelUpgrade}
-                title="Select model for upgrading Nora, Scout, Solara, and Sage"
+                title="Select upgrade target for Nora, Scout, Solara, and Sage"
                 className="text-xs h-8 px-2 rounded-lg border border-sky-500/30 bg-sky-900/25 text-sky-200"
                 style={{
                   minWidth: '220px',
@@ -4204,22 +4398,22 @@ const VirtualOfficeContent: React.FC = () => {
           <div className="stat-chip">
             <div className="stat-dot working" />
             <div>
-              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Working</p>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Core Working</p>
               <p className="text-lg font-semibold text-white">{workingCount}</p>
             </div>
           </div>
           <div className="stat-chip">
             <div className="stat-dot idle" />
             <div>
-              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Idle</p>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Core Idle</p>
               <p className="text-lg font-semibold text-white">{idleCount}</p>
             </div>
           </div>
           <div className="stat-chip">
             <div className="stat-dot total" />
             <div>
-              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Total</p>
-              <p className="text-lg font-semibold text-white">{allAgents.length}</p>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Core Agents</p>
+              <p className="text-lg font-semibold text-white">{coreAgentCount}</p>
             </div>
           </div>
           {overallProgress !== null && (

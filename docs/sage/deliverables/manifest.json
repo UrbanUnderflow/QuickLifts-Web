@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-02-20T21:05:00Z",
+  "lastUpdated": "2026-04-04T17:45:30Z",
   "deliverables": [
     {
       "id": "pulse-x-community-task-plan-outline",
@@ -173,6 +173,24 @@
       "emoji": "⭐",
       "completedAt": "2026-02-20T21:00:00Z",
       "taskRef": "Pulse-fit Community Partners A-list Step 5/5 — Compile structured A-list",
+      "status": "complete"
+    },
+    {
+      "id": "pulsecheck-activation-proof-path-contract",
+      "title": "PulseCheck Activation Proof Path Contract",
+      "filename": "pulsecheck-activation-proof-path-contract.md",
+      "category": "research-output",
+      "description": "Defines the exact source-of-truth activation proof path and the additional post-activation conditions required before a canary container counts as downstream invite-ready.",
+      "tags": [
+        "pulsecheck",
+        "activation",
+        "source-of-truth",
+        "invite-readiness",
+        "canary"
+      ],
+      "emoji": "🧭",
+      "completedAt": "2026-04-04T17:33:25Z",
+      "taskRef": "Verify the activation proof path and downstream invite readiness contract — Step 1/3 research and plan",
       "status": "complete"
     }
   ]

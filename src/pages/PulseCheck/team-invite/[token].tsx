@@ -8,7 +8,14 @@ import { AlertTriangle, ArrowRight, CheckCircle2, Download, Loader2, LogIn, LogO
 import { getFirestoreDocFallback } from '../../../lib/server-firestore-fallback';
 import { auth } from '../../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
-import type { PulseCheckTeamMembershipRole } from '../../../api/firebase/pulsecheckProvisioning/types';
+import {
+  derivePulseCheckTeamPlanBypass,
+  getDefaultPulseCheckTeamCommercialConfig,
+} from '../../../api/firebase/pulsecheckProvisioning/types';
+import type {
+  PulseCheckTeamCommercialSnapshot,
+  PulseCheckTeamMembershipRole,
+} from '../../../api/firebase/pulsecheckProvisioning/types';
 import { claimUsername, generateUsernameFromEmail, isUsernameAvailable, isValidUsernameFormat, normalizeUsername } from '../../../api/firebase/auth/username';
 import { SubscriptionPlatform, SubscriptionType, UserLevel, userService } from '../../../api/firebase/user';
 import { resolvePulseCheckInvitePreviewImage } from '../../../utils/pulsecheckInviteLinks';
@@ -36,6 +43,7 @@ type TeamInvitePageProps = {
     previewDescription: string;
     previewImageUrl: string;
     pageUrl: string;
+    commercialSnapshot?: PulseCheckTeamCommercialSnapshot;
   };
 };
 
@@ -61,6 +69,50 @@ const nextHrefByRole = (role: PulseCheckTeamMembershipRole, organizationId: stri
   }
 
   return `/PulseCheck/member-setup?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`;
+};
+
+const normalizeInviteCommercialSnapshot = (
+  value: unknown,
+  organizationId: string,
+  teamId: string,
+  inviteToken: string
+): PulseCheckTeamCommercialSnapshot => {
+  const candidate = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const defaults = getDefaultPulseCheckTeamCommercialConfig();
+  const commercialModel =
+    String(candidate.commercialModel || defaults.commercialModel).trim() === 'team-plan' ? 'team-plan' : 'athlete-pay';
+  const teamPlanStatus =
+    String(candidate.teamPlanStatus || defaults.teamPlanStatus).trim() === 'active' ? 'active' : 'inactive';
+  const referralRevenueSharePct = Number.isFinite(Number(candidate.referralRevenueSharePct))
+    ? Math.max(0, Math.min(100, Number(candidate.referralRevenueSharePct)))
+    : defaults.referralRevenueSharePct;
+  const snapshot: PulseCheckTeamCommercialSnapshot = {
+    commercialModel,
+    teamPlanStatus,
+    referralKickbackEnabled:
+      typeof candidate.referralKickbackEnabled === 'boolean'
+        ? candidate.referralKickbackEnabled
+        : defaults.referralKickbackEnabled,
+    referralRevenueSharePct,
+    revenueRecipientRole:
+      String(candidate.revenueRecipientRole || defaults.revenueRecipientRole).trim() === 'coach'
+        ? 'coach'
+        : String(candidate.revenueRecipientRole || defaults.revenueRecipientRole).trim() === 'organization-owner'
+          ? 'organization-owner'
+          : 'team-admin',
+    revenueRecipientUserId: String(candidate.revenueRecipientUserId || defaults.revenueRecipientUserId || ''),
+    billingOwnerUserId: String(candidate.billingOwnerUserId || defaults.billingOwnerUserId || ''),
+    billingCustomerId: String(candidate.billingCustomerId || defaults.billingCustomerId || ''),
+    teamPlanActivatedAt: null,
+    teamPlanExpiresAt: null,
+    sourceOrganizationId: organizationId,
+    sourceTeamId: teamId,
+    inviteToken,
+    teamPlanBypassesPaywall: false,
+  };
+
+  snapshot.teamPlanBypassesPaywall = derivePulseCheckTeamPlanBypass(snapshot);
+  return snapshot;
 };
 
 const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
@@ -106,6 +158,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   const normalizedTargetEmail = useMemo(() => invite.targetEmail.trim().toLowerCase(), [invite.targetEmail]);
   const normalizedAuthEmail = useMemo(() => authUser?.email?.trim().toLowerCase() || '', [authUser]);
   const authEmailMatchesInvite = !normalizedTargetEmail || !normalizedAuthEmail || normalizedTargetEmail === normalizedAuthEmail;
+  const teamPlanBypassesPaywall = invite.commercialSnapshot?.teamPlanBypassesPaywall === true;
   const shouldPreferAppDownload = invite.teamMembershipRole === 'athlete' && Boolean(invite.pilotId || invite.cohortId);
   const shouldShowDownloadFirst = shouldPreferAppDownload && !showWebOnboarding && !redeemedState;
   const inviteScopeLabel = invite.pilotName || invite.teamName;
@@ -146,7 +199,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
       displayName: normalizedName,
       role: isAthlete ? 'athlete' : 'coach',
       registrationComplete: true,
-      subscriptionType: SubscriptionType.unsubscribed,
+      subscriptionType: isAthlete && teamPlanBypassesPaywall ? SubscriptionType.teamPlan : SubscriptionType.unsubscribed,
       subscriptionPlatform: SubscriptionPlatform.Web,
       level: UserLevel.Novice,
       goal: [],
@@ -173,6 +226,11 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
         pilotId: invite.pilotId,
         cohortId: invite.cohortId,
         teamMembershipRole: invite.teamMembershipRole,
+        commercialModel: invite.commercialSnapshot?.commercialModel || 'athlete-pay',
+        teamPlanStatus: invite.commercialSnapshot?.teamPlanStatus || 'inactive',
+        teamPlanBypassesPaywall,
+        referralKickbackEnabled: invite.commercialSnapshot?.referralKickbackEnabled || false,
+        referralRevenueSharePct: invite.commercialSnapshot?.referralRevenueSharePct || 0,
         capturedAt: Math.floor(Date.now() / 1000),
       },
       createdAt: new Date(),
@@ -457,6 +515,20 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                         </>
                       ) : null}
                       . Redeeming this link joins the athlete to the team and preserves that cohort assignment automatically.
+                    </div>
+                  ) : null}
+
+                  {invite.teamMembershipRole === 'athlete' ? (
+                    <div
+                      className={`rounded-2xl border p-4 text-sm leading-7 ${
+                        teamPlanBypassesPaywall
+                          ? 'border-green-500/20 bg-green-500/[0.08] text-green-100'
+                          : 'border-amber-500/20 bg-amber-500/[0.08] text-amber-100'
+                      }`}
+                    >
+                      {teamPlanBypassesPaywall
+                        ? 'This team has an active team plan. Athlete access is sponsored through the team, so there is no separate athlete checkout after redemption.'
+                        : 'This team uses athlete-paid access. If you subscribe later, your team and invite attribution will stay attached to the subscription so the configured referral share can flow back to this team setup.'}
                     </div>
                   ) : null}
 
@@ -871,6 +943,12 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
           previewDescription,
           previewImageUrl,
           pageUrl,
+          commercialSnapshot: normalizeInviteCommercialSnapshot(
+            invite.commercialSnapshot,
+            String(invite.organizationId || ''),
+            String(invite.teamId || ''),
+            token
+          ),
         },
       },
     };

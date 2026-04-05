@@ -109,6 +109,7 @@ import PulseSystemDesignLanguageTab from "../../components/admin/system-overview
 import AuntEdnaIntegrationStrategyTab from "../../components/admin/system-overview/AuntEdnaIntegrationStrategyTab";
 import AuntEdnaExhibitATab from "../../components/admin/system-overview/AuntEdnaExhibitATab";
 import AuntEdnaExhibitBTab from "../../components/admin/system-overview/AuntEdnaExhibitBTab";
+import { AgentOutcomeRubricSpecTab } from "../../components/admin/system-overview/AgentOutcomeSystemTabs";
 import SystemTestCoverageTab from "../../components/admin/system-overview/SystemTestCoverageTab";
 import PlaywrightTestingStrategyTab from "../../components/admin/system-overview/PlaywrightTestingStrategyTab";
 import AndroidTestingStrategyTab from "../../components/admin/system-overview/AndroidTestingStrategyTab";
@@ -259,7 +260,7 @@ const SYSTEM_TABS: SystemTab[] = [
     label: "Agent Swarm",
     icon: Cpu,
     accent: "#22c55e",
-    sectionIds: ["agent-infrastructure-handbook"],
+    sectionIds: ["agent-infrastructure-handbook", "agent-outcome-rubric-spec"],
   },
   {
     id: "auntedna",
@@ -1467,6 +1468,9 @@ const SystemOverviewPage: React.FC = () => {
             </div>
           </div>
         );
+
+      case "agent-outcome-rubric-spec":
+        return <AgentOutcomeRubricSpecTab />;
 
       case "hunter-world-handbook":
         return (

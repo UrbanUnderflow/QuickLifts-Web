@@ -1,5 +1,11 @@
 const Stripe = require('stripe');
 const { admin } = require('./config/firebase');
+const {
+  TEAM_REVENUE_EVENTS_COLLECTION,
+  readPulseCheckAttributionFromMetadata,
+  upsertPulseCheckRevenueEvent,
+  recalculatePulseCheckRevenueSummaries,
+} = require('./utils/pulsecheck-revenue');
 
 // Helper to determine if the request is from localhost
 const isLocalhostRequest = (event) => {
@@ -12,6 +18,7 @@ const db = admin.firestore();
 // Subscription type mappings
 const SubscriptionType = {
   unsubscribed: "Unsubscribed",
+  teamPlan: "Team Plan Access",
   monthly: "Monthly Subscriber",
   annual: "Annual Subscriber",
 };
@@ -20,6 +27,23 @@ const SubscriptionPlatform = {
   Web: "Web",
   iOS: "iOS",
 };
+
+const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
+const normalizeBoolean = (value) => {
+  if (typeof value === 'boolean') return value;
+  const normalized = normalizeString(String(value || '')).toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes';
+};
+const normalizeRevenueSharePct = (value) => {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.min(100, Math.round(parsed * 100) / 100));
+};
+const readPulseCheckSubscriptionAttribution = (session) =>
+  readPulseCheckAttributionFromMetadata({
+    ...(session.subscription?.metadata || {}),
+    ...(session.metadata || {}),
+  });
 
 // Price ID mappings
 const mapPriceIdToSubscriptionType = (priceId, isTestMode) => {
@@ -111,6 +135,7 @@ const handler = async (event) => {
     const stripeSubscriptionId = typeof session.subscription === 'object' ? session.subscription?.id : session.subscription;
     const stripeCustomerId = typeof session.customer === 'object' ? session.customer?.id : session.customer;
     const priceId = session.line_items?.data[0]?.price?.id;
+    const pulseCheckAttribution = readPulseCheckSubscriptionAttribution(session);
 
     if (!stripeSubscriptionId || !stripeCustomerId || !priceId) {
         console.error('[VerifySubscription] Missing critical Stripe data:', { stripeSubscriptionId, stripeCustomerId, priceId });
@@ -156,6 +181,13 @@ const handler = async (event) => {
         stripeSubscriptionId: stripeSubscriptionId,
         isTrialing: isTrialing,
         trialEndDate: trialEnd,
+        pulseCheckLatestPaidSubscriptionAttribution:
+          pulseCheckAttribution.teamId
+            ? {
+                ...pulseCheckAttribution,
+                verifiedAt: now,
+              }
+            : admin.firestore.FieldValue.delete(),
         updatedAt: now,
     };
     batch.update(userRef, userUpdateData);
@@ -172,6 +204,15 @@ const handler = async (event) => {
         platform: SubscriptionPlatform.Web,
         stripeSubscriptionId: stripeSubscriptionId,
         stripeCustomerId: stripeCustomerId,
+        pulseCheckOrganizationId: pulseCheckAttribution.organizationId || null,
+        pulseCheckTeamId: pulseCheckAttribution.teamId || null,
+        pulseCheckInviteToken: pulseCheckAttribution.inviteToken || null,
+        pulseCheckCommercialModel: pulseCheckAttribution.commercialModel || null,
+        pulseCheckTeamPlanStatus: pulseCheckAttribution.teamPlanStatus || null,
+        pulseCheckReferralKickbackEnabled: pulseCheckAttribution.referralKickbackEnabled,
+        pulseCheckReferralRevenueSharePct: pulseCheckAttribution.referralRevenueSharePct || 0,
+        pulseCheckRevenueRecipientUserId: pulseCheckAttribution.revenueRecipientUserId || null,
+        pulseCheckRevenueRecipientRole: pulseCheckAttribution.revenueRecipientRole || null,
         updatedAt: now,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
@@ -220,11 +261,56 @@ const handler = async (event) => {
     await batch.commit();
     console.log('[VerifySubscription] Firestore updates committed successfully.');
 
-    // 8. If this subscription came from a coach connection, notify the coach and create a DM
+    if (pulseCheckAttribution.teamId) {
+      try {
+        await upsertPulseCheckRevenueEvent({
+          db,
+          admin,
+          subscription: session.subscription,
+          sessionId,
+          source: 'stripe-athlete-subscription',
+          userId,
+          metadata: {
+            ...(session.subscription?.metadata || {}),
+            ...(session.metadata || {}),
+            planType,
+          },
+          context: {
+            userId,
+            organizationId: pulseCheckAttribution.organizationId || null,
+            teamId: pulseCheckAttribution.teamId || null,
+            inviteToken: pulseCheckAttribution.inviteToken || null,
+            commercialConfig: {
+              commercialModel: pulseCheckAttribution.commercialModel || null,
+              teamPlanStatus: pulseCheckAttribution.teamPlanStatus || null,
+              referralKickbackEnabled: pulseCheckAttribution.referralKickbackEnabled,
+              referralRevenueSharePct: pulseCheckAttribution.referralRevenueSharePct || 0,
+              revenueRecipientUserId: pulseCheckAttribution.revenueRecipientUserId || null,
+              revenueRecipientRole: pulseCheckAttribution.revenueRecipientRole || null,
+              billingCustomerId: stripeCustomerId || null,
+            },
+          },
+        });
+        await recalculatePulseCheckRevenueSummaries({
+          db,
+          admin,
+          teamIds: [pulseCheckAttribution.teamId],
+          userIds: pulseCheckAttribution.revenueRecipientUserId ? [pulseCheckAttribution.revenueRecipientUserId] : [],
+        });
+      } catch (revenueEventError) {
+        console.warn('[VerifySubscription] Failed to persist PulseCheck revenue event (non-blocking):', revenueEventError);
+      }
+    }
+
+    // 8. If this subscription came from an attributed team or legacy coach connection, notify the recipient and create a DM.
     try {
       const linkedCoachId = session.metadata?.linkedCoachId || session.subscription?.metadata?.linkedCoachId || null;
       const coachReferralCode = session.metadata?.coachReferralCode || session.subscription?.metadata?.coachReferralCode || null;
-      let coachUserId = linkedCoachId || null;
+      let coachUserId = pulseCheckAttribution.revenueRecipientUserId || null;
+
+      if (!coachUserId && linkedCoachId) {
+        coachUserId = linkedCoachId;
+      }
 
       if (!coachUserId && coachReferralCode) {
         const coachSnap = await db.collection('coaches').where('referralCode', '==', coachReferralCode).limit(1).get();
@@ -260,12 +346,14 @@ const handler = async (event) => {
         if (chatId) {
           await db.collection('chats').doc(chatId).collection('messages').add({
             senderId: userId,
-            content: 'Hi coach! I just connected with you via PulseCheck. You can now view my mindset notes and message me here.',
+            content: pulseCheckAttribution.teamId
+              ? 'Hi! I just activated my PulseCheck subscription through your team invite. You can now see that this subscription is attributed to your team setup.'
+              : 'Hi coach! I just connected with you via PulseCheck. You can now view my mindset notes and message me here.',
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
             readBy: { [userId]: admin.firestore.FieldValue.serverTimestamp() }
           });
         }
-        console.log('[VerifySubscription] DM notification created for coach connection');
+        console.log('[VerifySubscription] DM notification created for attributed subscription');
 
         // Send Brevo email to coach (non-blocking)
         try {
@@ -276,7 +364,15 @@ const handler = async (event) => {
             await fetch(process.env.SITE_URL ? `${process.env.SITE_URL}/.netlify/functions/send-coach-connection-email` : 'http://localhost:8888/.netlify/functions/send-coach-connection-email', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ coachEmail, coachName: coachDoc.data()?.displayName || coachDoc.data()?.username, coachUserId, athleteName, athleteId: userId }),
+              body: JSON.stringify({
+                coachEmail,
+                coachName: coachDoc.data()?.displayName || coachDoc.data()?.username,
+                coachUserId,
+                athleteName,
+                athleteId: userId,
+                teamId: pulseCheckAttribution.teamId || undefined,
+                organizationId: pulseCheckAttribution.organizationId || undefined,
+              }),
             }).catch(() => {});
           }
         } catch (emailErr) {

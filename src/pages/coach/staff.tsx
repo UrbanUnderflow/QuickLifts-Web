@@ -127,53 +127,17 @@ const StaffPage: React.FC = () => {
     const loadAthletes = async () => {
       if (!currentUser?.id) return;
       try {
-        // Prefer coachService if available, otherwise query coachAthletes + users
-        try {
-          // If a helper exists, use it (wrapped in try to avoid hard errors)
-          const getter: any = (coachService as any).getConnectedAthletes;
-          const list = typeof getter === 'function' ? await getter(currentUser.id) : null;
-          if (Array.isArray(list) && list.length) {
-            const mapped: AthleteSummary[] = list.map((a: any) => ({
-              id: a.id || a.userId || '',
-              username: a.username || '',
-              email: a.email || '',
-              displayName: a.displayName || '',
-              profileImageURL: a.profileImage?.profileImageURL || a.profileImageURL || ''
-            })).filter(a => a.id);
-            setAthletes(mapped);
-            return;
-          }
-        } catch (_) {}
-
-        // Fallback: query Firestore directly
-        const relQ = query(
-          collection(db, 'coachAthletes'),
-          where('coachId', '==', currentUser.id)
-        );
-        const relSnap = await getDocs(relQ);
-        const athleteIds = relSnap.docs
-          .map(d => (d.data() as any))
-          .filter(r => (r.status || 'active') !== 'disconnected')
-          .map(r => r.athleteUserId || r.athleteId)
-          .filter(Boolean);
-        const results: AthleteSummary[] = [];
-        await Promise.all(
-          athleteIds.map(async (aid: string) => {
-            const uref = doc(db, 'users', aid);
-            const usnap = await getDoc(uref);
-            if (usnap.exists()) {
-              const u = usnap.data() as any;
-              results.push({
-                id: aid,
-                username: u.username || '',
-                email: u.email || '',
-                displayName: u.displayName || '',
-                profileImageURL: (u.profileImage && u.profileImage.profileImageURL) || ''
-              });
-            }
-          })
-        );
-        setAthletes(results.sort((a,b)=> (a.username||'').localeCompare(b.username||'')));
+        const list = await coachService.getConnectedAthletes(currentUser.id);
+        const mapped: AthleteSummary[] = (Array.isArray(list) ? list : [])
+          .map((a: any) => ({
+            id: a.id || a.userId || '',
+            username: a.username || '',
+            email: a.email || '',
+            displayName: a.displayName || '',
+            profileImageURL: a.profileImage?.profileImageURL || a.profileImageURL || ''
+          }))
+          .filter((athlete) => athlete.id);
+        setAthletes(mapped.sort((a, b) => (a.username || '').localeCompare(b.username || '')));
       } catch (_) {
         setAthletes([]);
       }
@@ -191,16 +155,8 @@ const StaffPage: React.FC = () => {
     setSending(true);
     try {
       const base = typeof window !== 'undefined' ? window.location.origin : '';
-      let referral = '';
-      try {
-        if (currentUser?.id) {
-          const profile = await coachService.getCoachProfile(currentUser.id);
-          referral = profile?.referralCode || '';
-        }
-      } catch (_) {}
-      const refParam = referral || (currentUser?.username || '');
-      const inviteUrl = `${base}/coach/inbox`;
-      const signUpUrl = `${base}/coach/sign-up?ref=${encodeURIComponent(refParam)}`;
+      const inviteUrl = `${base}/PulseCheck/login?legacyFlow=coach-staff-migration`;
+      const signUpUrl = `${base}/PulseCheck/coach`;
       const res = await fetch('/.netlify/functions/send-staff-invite-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -208,7 +164,9 @@ const StaffPage: React.FC = () => {
           toEmail: inviteEmail,
           coachName: currentUser?.username || 'a Pulse coach',
           inviteUrl,
-          signUpUrl
+          signUpUrl,
+          message:
+            'PulseCheck now provisions team access through team invites and admin activation. Use the coach setup page to create an account, then your admin can issue the correct team invite.'
         })
       });
       const data = await res.json();
