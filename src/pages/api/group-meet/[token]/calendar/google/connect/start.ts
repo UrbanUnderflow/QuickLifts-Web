@@ -33,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     return res.status(200).json({
-      url: buildGuestGoogleCalendarConnectUrl(req, token),
+      url: await buildGuestGoogleCalendarConnectUrl(req, token),
     });
   } catch (error: any) {
     console.error('[group-meet-public] Failed to start Google Calendar connect:', error);

@@ -189,13 +189,16 @@ FIREBASE_PRIVATE_KEY_4
 
 ### 5. Guest Google Calendar Import OAuth For Group Meet Guests
 
-Only add these if the machine will test the guest-side Group Meet calendar import flow:
+Only add these if the machine will test the guest-side Group Meet calendar import flow.
+You can provide them directly as env vars, or point runtime at Secret Manager instead of storing the real secret material in Netlify:
 
 ```bash
 GOOGLE_GUEST_CALENDAR_CLIENT_ID
 GOOGLE_GUEST_CALENDAR_CLIENT_SECRET
 GOOGLE_GUEST_CALENDAR_REDIRECT_URI
 GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY
+GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME
+GOOGLE_GUEST_CALENDAR_ENCRYPTION_SECRET_NAME
 ```
 
 This contract is separate from the existing admin-side Group Meet scheduling setup.
@@ -204,6 +207,18 @@ Use the admin-side Google Calendar service-account / delegated-user setup for ho
 Use these guest OAuth envs for invite-scoped free/busy import suggestions only.
 
 Do not reuse `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON` or the admin scheduling identity for the guest import path.
+Preferred Secret Manager shape is one JSON secret addressed by `GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME`, for example:
+
+```json
+{
+  "client_id": "…",
+  "client_secret": "…",
+  "redirect_uri": "https://fitwithpulse.ai/api/group-meet/calendar/google/callback",
+  "encryption_key": "…"
+}
+```
+
+If you prefer to keep the encryption key separate, store that string in a second Secret Manager secret and point `GOOGLE_GUEST_CALENDAR_ENCRYPTION_SECRET_NAME` at it.
 
 ### 6. Optional Broader App Integrations
 

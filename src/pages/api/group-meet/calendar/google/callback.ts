@@ -31,7 +31,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   let inviteToken = '';
   try {
-    inviteToken = verifyGuestCalendarState(rawState).token;
+    inviteToken = (await verifyGuestCalendarState(rawState)).token;
   } catch (error: any) {
     return res.status(400).json({
       error: toPublicGuestCalendarErrorMessage(error),
@@ -95,7 +95,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           lastSyncError: null,
           googleAccountEmail: tokens.connectedEmail || null,
           tokenRefKey: 'invite_doc_encrypted',
-          encryptedToken: encryptGuestGoogleCalendarTokens(tokens),
+          encryptedToken: await encryptGuestGoogleCalendarTokens(tokens),
         },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },

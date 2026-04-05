@@ -691,7 +691,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       purpose: 'Guest-consent Google OAuth flow that imports free/busy suggestions from a guest calendar into Group Meet.',
       owner: 'Web Platform',
       credentialSource:
-        'Dedicated guest OAuth envs (`GOOGLE_GUEST_CALENDAR_CLIENT_ID`, `GOOGLE_GUEST_CALENDAR_CLIENT_SECRET`, `GOOGLE_GUEST_CALENDAR_REDIRECT_URI`) plus invite-scoped secure token storage (`GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY` or equivalent)',
+        'Dedicated guest OAuth envs (`GOOGLE_GUEST_CALENDAR_CLIENT_ID`, `GOOGLE_GUEST_CALENDAR_CLIENT_SECRET`, `GOOGLE_GUEST_CALENDAR_REDIRECT_URI`) or Secret Manager-backed guest OAuth JSON (`GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME`), plus invite-scoped secure token storage (`GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY`, `GOOGLE_GUEST_CALENDAR_ENCRYPTION_SECRET_NAME`, or equivalent)',
       products: ['QuickLifts Web'],
       status: 'planned',
       sourceRefs: [

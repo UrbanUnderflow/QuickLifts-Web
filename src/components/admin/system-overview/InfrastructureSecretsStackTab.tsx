@@ -30,8 +30,8 @@ const GROUP_MEET_ROWS = [
 
 const GROUP_MEET_GUEST_GCAL_ROWS = [
   ['Guest OAuth client', 'Dedicated guest-side Google OAuth app', 'Separate consent boundary from the admin scheduler. Used only for invite-scoped calendar import.'],
-  ['Guest OAuth env contract', '`GOOGLE_GUEST_CALENDAR_CLIENT_ID`, `GOOGLE_GUEST_CALENDAR_CLIENT_SECRET`, `GOOGLE_GUEST_CALENDAR_REDIRECT_URI`', 'Required for the guest-side connect/import/callback flow. Do not reuse the admin scheduler service-account contract here.'],
-  ['Token protection', '`GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY` or secure equivalent', 'Used to protect invite-scoped OAuth token material or secure references before persistence.'],
+  ['Guest OAuth env contract', '`GOOGLE_GUEST_CALENDAR_CLIENT_ID`, `GOOGLE_GUEST_CALENDAR_CLIENT_SECRET`, `GOOGLE_GUEST_CALENDAR_REDIRECT_URI` or Secret Manager secret `GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME`', 'Required for the guest-side connect/import/callback flow. Do not reuse the admin scheduler service-account contract here.'],
+  ['Token protection', '`GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY`, `GOOGLE_GUEST_CALENDAR_ENCRYPTION_SECRET_NAME`, or a combined Secret Manager JSON blob', 'Used to protect invite-scoped OAuth token material or secure references before persistence.'],
   ['Guest import storage', 'Invite-level metadata in Firestore plus server-only credential storage', 'Store connection status, last sync metadata, and secure token references only. Do not store raw event details.'],
   ['Guest import behavior', 'Google free/busy only', 'Import availability suggestions from busy windows; guests still review and save manually.'],
 ];
