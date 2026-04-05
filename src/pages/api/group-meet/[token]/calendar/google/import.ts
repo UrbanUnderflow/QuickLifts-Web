@@ -8,6 +8,7 @@ import {
   findGroupMeetInviteByToken,
   getGuestGoogleCalendarAccessToken,
   shouldForceDevFirebase,
+  toPublicGuestCalendarErrorMessage,
   toIso,
 } from '../../../../../../lib/groupMeetGuestGoogleCalendar';
 
@@ -107,8 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ),
     });
   } catch (error: any) {
-    const message =
-      error?.message || 'Failed to import Google Calendar availability.';
+    const message = toPublicGuestCalendarErrorMessage(error);
 
     await inviteDoc.ref.set(
       {

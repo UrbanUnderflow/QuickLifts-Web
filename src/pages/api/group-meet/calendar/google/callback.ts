@@ -5,6 +5,7 @@ import {
   exchangeGuestGoogleCalendarCode,
   findGroupMeetInviteByToken,
   shouldForceDevFirebase,
+  toPublicGuestCalendarErrorMessage,
   verifyGuestCalendarState,
 } from '../../../../../lib/groupMeetGuestGoogleCalendar';
 
@@ -33,7 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     inviteToken = verifyGuestCalendarState(rawState).token;
   } catch (error: any) {
     return res.status(400).json({
-      error: error?.message || 'Google Calendar callback state could not be verified.',
+      error: toPublicGuestCalendarErrorMessage(error),
     });
   }
 
@@ -105,7 +106,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       calendarGoogleSuccess: 'Google Calendar connected. Import availability when you are ready.',
     });
   } catch (error: any) {
-    const message = error?.message || 'Google Calendar connection failed.';
+    const message = toPublicGuestCalendarErrorMessage(error);
 
     await found.inviteDoc.ref.set(
       {

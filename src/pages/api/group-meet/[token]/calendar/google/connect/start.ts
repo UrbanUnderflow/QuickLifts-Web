@@ -4,6 +4,7 @@ import {
   buildGuestGoogleCalendarConnectUrl,
   findGroupMeetInviteByToken,
   shouldForceDevFirebase,
+  toPublicGuestCalendarErrorMessage,
   toIso,
 } from '../../../../../../../lib/groupMeetGuestGoogleCalendar';
 
@@ -38,6 +39,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('[group-meet-public] Failed to start Google Calendar connect:', error);
     return res
       .status(500)
-      .json({ error: error?.message || 'Unable to start Google Calendar connection.' });
+      .json({ error: toPublicGuestCalendarErrorMessage(error) });
   }
 }

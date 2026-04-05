@@ -64,31 +64,33 @@ function getDerivedSecretKey(secret: string) {
 }
 
 function getGuestCalendarEncryptionSecret() {
-  const value = process.env.GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY?.trim();
+  const value =
+    process.env.GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY?.trim() ||
+    process.env.SYSTEM_OVERVIEW_SHARE_COOKIE_SECRET?.trim() ||
+    process.env.FIREBASE_SECRET_KEY?.trim() ||
+    process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim();
   if (!value) {
-    throw new Error(
-      'Google guest calendar import is not configured. Set GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY.'
-    );
+    throw new Error('Google Calendar import is not available right now.');
   }
   return value;
 }
 
 function getGuestCalendarClientId() {
-  const value = process.env.GOOGLE_GUEST_CALENDAR_CLIENT_ID?.trim();
+  const value =
+    process.env.GOOGLE_GUEST_CALENDAR_CLIENT_ID?.trim() ||
+    process.env.GOOGLE_CALENDAR_CLIENT_ID?.trim();
   if (!value) {
-    throw new Error(
-      'Google guest calendar import is not configured. Set GOOGLE_GUEST_CALENDAR_CLIENT_ID.'
-    );
+    throw new Error('Google Calendar import is not available right now.');
   }
   return value;
 }
 
 function getGuestCalendarClientSecret() {
-  const value = process.env.GOOGLE_GUEST_CALENDAR_CLIENT_SECRET?.trim();
+  const value =
+    process.env.GOOGLE_GUEST_CALENDAR_CLIENT_SECRET?.trim() ||
+    process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim();
   if (!value) {
-    throw new Error(
-      'Google guest calendar import is not configured. Set GOOGLE_GUEST_CALENDAR_CLIENT_SECRET.'
-    );
+    throw new Error('Google Calendar import is not available right now.');
   }
   return value;
 }
@@ -102,8 +104,23 @@ export function getGroupMeetBaseUrl(req: NextApiRequest) {
 export function getGuestGoogleCalendarRedirectUri(req: NextApiRequest) {
   return (
     process.env.GOOGLE_GUEST_CALENDAR_REDIRECT_URI?.trim() ||
+    process.env.GOOGLE_CALENDAR_REDIRECT_URI?.trim() ||
     `${getGroupMeetBaseUrl(req)}${GOOGLE_GUEST_CALENDAR_CALLBACK_PATH}`
   );
+}
+
+export function toPublicGuestCalendarErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '');
+
+  if (/not configured|not available right now|client id|client secret|redirect uri|encryption/i.test(message)) {
+    return 'Google Calendar connect is not available right now. You can still add your availability manually.';
+  }
+
+  if (/access_denied|canceled/i.test(message)) {
+    return 'Google Calendar connection was canceled.';
+  }
+
+  return message || 'Google Calendar connect could not be completed.';
 }
 
 export function hasTruthyHeader(value: string | string[] | undefined) {
