@@ -13,6 +13,7 @@ const GOOGLE_GUEST_CALENDAR_SCOPE = [
 ].join(' ');
 const GOOGLE_GUEST_CALENDAR_CALLBACK_PATH = '/api/group-meet/calendar/google/callback';
 const GOOGLE_GUEST_CALENDAR_STATE_TTL_MS = 30 * 60 * 1000;
+const DEFAULT_GUEST_GOOGLE_CALENDAR_OAUTH_SECRET_NAME = 'group-meet-guest-google-oauth';
 
 type GuestGoogleCalendarTokens = {
   accessToken: string | null;
@@ -120,7 +121,9 @@ async function getGuestGoogleCalendarSecretConfig() {
     const secretName =
       process.env.GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME?.trim() ||
       process.env.GROUP_MEET_GUEST_GOOGLE_CALENDAR_OAUTH_SECRET_NAME?.trim() ||
-      '';
+      (process.env.NODE_ENV === 'production'
+        ? DEFAULT_GUEST_GOOGLE_CALENDAR_OAUTH_SECRET_NAME
+        : '');
 
     if (!secretName) {
       return null;
