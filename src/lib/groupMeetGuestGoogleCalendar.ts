@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, 
 import type { NextApiRequest } from 'next';
 import { OAuth2Client } from 'google-auth-library';
 import type { GroupMeetGuestCalendarImportSummary } from './groupMeet';
+import { getSecretManagerSecret } from './secretManager';
 
 export const GROUP_MEET_REQUESTS_COLLECTION = 'groupMeetRequests';
 export const GROUP_MEET_INVITES_SUBCOLLECTION = 'groupMeetInvites';
@@ -20,6 +21,13 @@ type GuestGoogleCalendarTokens = {
   scope: string | null;
   tokenType: string | null;
   connectedEmail: string | null;
+};
+
+type GuestGoogleCalendarSecretConfig = {
+  clientId: string | null;
+  clientSecret: string | null;
+  redirectUri: string | null;
+  encryptionKey: string | null;
 };
 
 type SignedStatePayload = {
@@ -43,6 +51,8 @@ export type GroupMeetGuestCalendarImportClientSummary =
 export const toIso = (value: FirebaseFirestore.Timestamp | null | undefined) =>
   value?.toDate?.().toISOString?.() || null;
 
+let guestGoogleCalendarSecretConfigPromise: Promise<GuestGoogleCalendarSecretConfig | null> | null = null;
+
 function base64UrlEncode(value: any) {
   const bufferValue =
     typeof value === 'string' ? Buffer.from(value, 'utf8') : Buffer.from(value as any);
@@ -63,9 +73,83 @@ function getDerivedSecretKey(secret: string) {
   return createHash('sha256').update(secret).digest();
 }
 
-function getGuestCalendarEncryptionSecret() {
+function parseGuestGoogleCalendarSecretConfig(raw: string): GuestGoogleCalendarSecretConfig {
+  const parsed = JSON.parse(raw) as {
+    web?: {
+      client_id?: string;
+      client_secret?: string;
+      redirect_uri?: string;
+      redirect_uris?: string[];
+      encryption_key?: string;
+    };
+    client_id?: string;
+    client_secret?: string;
+    redirect_uri?: string;
+    redirect_uris?: string[];
+    encryption_key?: string;
+  };
+  const web = parsed.web || null;
+
+  return {
+    clientId: web?.client_id?.trim() || parsed.client_id?.trim() || null,
+    clientSecret: web?.client_secret?.trim() || parsed.client_secret?.trim() || null,
+    redirectUri:
+      web?.redirect_uri?.trim() ||
+      web?.redirect_uris?.[0]?.trim() ||
+      parsed.redirect_uri?.trim() ||
+      parsed.redirect_uris?.[0]?.trim() ||
+      null,
+    encryptionKey:
+      web?.encryption_key?.trim() ||
+      parsed.encryption_key?.trim() ||
+      null,
+  };
+}
+
+async function getGuestGoogleCalendarSecretConfig() {
+  if (guestGoogleCalendarSecretConfigPromise) {
+    return guestGoogleCalendarSecretConfigPromise;
+  }
+
+  guestGoogleCalendarSecretConfigPromise = (async () => {
+    const inline = process.env.GOOGLE_GUEST_CALENDAR_OAUTH_JSON?.trim();
+    if (inline) {
+      return parseGuestGoogleCalendarSecretConfig(inline);
+    }
+
+    const secretName =
+      process.env.GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME?.trim() ||
+      process.env.GROUP_MEET_GUEST_GOOGLE_CALENDAR_OAUTH_SECRET_NAME?.trim() ||
+      '';
+
+    if (!secretName) {
+      return null;
+    }
+
+    return parseGuestGoogleCalendarSecretConfig(await getSecretManagerSecret(secretName));
+  })();
+
+  return guestGoogleCalendarSecretConfigPromise;
+}
+
+async function getGuestCalendarEncryptionSecret() {
+  const inlineValue = process.env.GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY?.trim();
+  if (inlineValue) {
+    return inlineValue;
+  }
+
+  const encryptionSecretName =
+    process.env.GOOGLE_GUEST_CALENDAR_ENCRYPTION_SECRET_NAME?.trim() || '';
+  if (encryptionSecretName) {
+    const value = (await getSecretManagerSecret(encryptionSecretName)).trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  const secretConfig = await getGuestGoogleCalendarSecretConfig();
   const value =
-    process.env.GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY?.trim() ||
+    secretConfig?.encryptionKey ||
     process.env.SYSTEM_OVERVIEW_SHARE_COOKIE_SECRET?.trim() ||
     process.env.FIREBASE_SECRET_KEY?.trim() ||
     process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim();
@@ -75,8 +159,10 @@ function getGuestCalendarEncryptionSecret() {
   return value;
 }
 
-function getGuestCalendarClientId() {
+async function getGuestCalendarClientId() {
+  const secretConfig = await getGuestGoogleCalendarSecretConfig();
   const value =
+    secretConfig?.clientId ||
     process.env.GOOGLE_GUEST_CALENDAR_CLIENT_ID?.trim() ||
     process.env.GOOGLE_CALENDAR_CLIENT_ID?.trim();
   if (!value) {
@@ -85,8 +171,10 @@ function getGuestCalendarClientId() {
   return value;
 }
 
-function getGuestCalendarClientSecret() {
+async function getGuestCalendarClientSecret() {
+  const secretConfig = await getGuestGoogleCalendarSecretConfig();
   const value =
+    secretConfig?.clientSecret ||
     process.env.GOOGLE_GUEST_CALENDAR_CLIENT_SECRET?.trim() ||
     process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim();
   if (!value) {
@@ -101,8 +189,10 @@ export function getGroupMeetBaseUrl(req: NextApiRequest) {
   return process.env.NEXT_PUBLIC_SITE_URL || `${proto}://${req.headers.host}`;
 }
 
-export function getGuestGoogleCalendarRedirectUri(req: NextApiRequest) {
+export async function getGuestGoogleCalendarRedirectUri(req: NextApiRequest) {
+  const secretConfig = await getGuestGoogleCalendarSecretConfig();
   return (
+    secretConfig?.redirectUri ||
     process.env.GOOGLE_GUEST_CALENDAR_REDIRECT_URI?.trim() ||
     process.env.GOOGLE_CALENDAR_REDIRECT_URI?.trim() ||
     `${getGroupMeetBaseUrl(req)}${GOOGLE_GUEST_CALENDAR_CALLBACK_PATH}`
@@ -181,28 +271,28 @@ export async function findGroupMeetInviteByToken(
   return { inviteDoc, requestDoc };
 }
 
-function getGoogleGuestOAuthClient(req: NextApiRequest) {
+async function getGoogleGuestOAuthClient(req: NextApiRequest) {
   return new OAuth2Client({
-    clientId: getGuestCalendarClientId(),
-    clientSecret: getGuestCalendarClientSecret(),
-    redirectUri: getGuestGoogleCalendarRedirectUri(req),
+    clientId: await getGuestCalendarClientId(),
+    clientSecret: await getGuestCalendarClientSecret(),
+    redirectUri: await getGuestGoogleCalendarRedirectUri(req),
   });
 }
 
-function signGuestCalendarState(payload: SignedStatePayload) {
-  const secretKey = getDerivedSecretKey(getGuestCalendarEncryptionSecret());
+async function signGuestCalendarState(payload: SignedStatePayload) {
+  const secretKey = getDerivedSecretKey(await getGuestCalendarEncryptionSecret());
   const encodedPayload = base64UrlEncode(JSON.stringify(payload));
   const signature = createHmac('sha256', secretKey as any).update(encodedPayload).digest();
   return `${encodedPayload}.${base64UrlEncode(signature)}`;
 }
 
-export function verifyGuestCalendarState(state: string): SignedStatePayload {
+export async function verifyGuestCalendarState(state: string): Promise<SignedStatePayload> {
   const [encodedPayload, encodedSignature] = (state || '').split('.');
   if (!encodedPayload || !encodedSignature) {
     throw new Error('Missing or invalid Google Calendar state.');
   }
 
-  const secretKey = getDerivedSecretKey(getGuestCalendarEncryptionSecret());
+  const secretKey = getDerivedSecretKey(await getGuestCalendarEncryptionSecret());
   const expectedSignature = createHmac('sha256', secretKey as any).update(encodedPayload).digest();
   const providedSignature = base64UrlDecode(encodedSignature);
 
@@ -225,9 +315,9 @@ export function verifyGuestCalendarState(state: string): SignedStatePayload {
   return payload;
 }
 
-export function buildGuestGoogleCalendarConnectUrl(req: NextApiRequest, token: string) {
-  const client = getGoogleGuestOAuthClient(req);
-  const state = signGuestCalendarState({
+export async function buildGuestGoogleCalendarConnectUrl(req: NextApiRequest, token: string) {
+  const client = await getGoogleGuestOAuthClient(req);
+  const state = await signGuestCalendarState({
     token,
     issuedAt: Date.now(),
   });
@@ -260,7 +350,7 @@ export async function exchangeGuestGoogleCalendarCode(
   req: NextApiRequest,
   code: string
 ): Promise<GuestGoogleCalendarTokens> {
-  const client = getGoogleGuestOAuthClient(req);
+  const client = await getGoogleGuestOAuthClient(req);
   const { tokens } = await client.getToken(code);
   const accessToken = tokens.access_token?.trim() || null;
 
@@ -278,8 +368,8 @@ export async function exchangeGuestGoogleCalendarCode(
   };
 }
 
-export function encryptGuestGoogleCalendarTokens(tokens: GuestGoogleCalendarTokens) {
-  const secretKey = getDerivedSecretKey(getGuestCalendarEncryptionSecret());
+export async function encryptGuestGoogleCalendarTokens(tokens: GuestGoogleCalendarTokens) {
+  const secretKey = getDerivedSecretKey(await getGuestCalendarEncryptionSecret());
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', secretKey as any, iv as any);
   const plaintext = Buffer.from(JSON.stringify(tokens), 'utf8');
@@ -289,13 +379,13 @@ export function encryptGuestGoogleCalendarTokens(tokens: GuestGoogleCalendarToke
   return [base64UrlEncode(iv), base64UrlEncode(authTag), base64UrlEncode(encrypted)].join('.');
 }
 
-function decryptGuestGoogleCalendarTokens(encryptedToken: string): GuestGoogleCalendarTokens {
+async function decryptGuestGoogleCalendarTokens(encryptedToken: string): Promise<GuestGoogleCalendarTokens> {
   const [ivEncoded, authTagEncoded, payloadEncoded] = (encryptedToken || '').split('.');
   if (!ivEncoded || !authTagEncoded || !payloadEncoded) {
     throw new Error('Stored Google Calendar credentials are invalid.');
   }
 
-  const secretKey = getDerivedSecretKey(getGuestCalendarEncryptionSecret());
+  const secretKey = getDerivedSecretKey(await getGuestCalendarEncryptionSecret());
   const decipher = createDecipheriv(
     'aes-256-gcm',
     secretKey as any,
@@ -361,7 +451,7 @@ async function refreshGuestGoogleCalendarTokens(
     throw new Error('Google Calendar needs to be reconnected before it can import availability.');
   }
 
-  const client = getGoogleGuestOAuthClient(req);
+  const client = await getGoogleGuestOAuthClient(req);
   client.setCredentials({ refresh_token: currentTokens.refreshToken });
   const refreshResponse = await client.refreshAccessToken();
   const credentials = refreshResponse.credentials || client.credentials;
@@ -393,7 +483,7 @@ export async function getGuestGoogleCalendarAccessToken(args: {
     throw new Error('Google Calendar is not connected for this invite yet.');
   }
 
-  const storedTokens = decryptGuestGoogleCalendarTokens(encryptedToken);
+  const storedTokens = await decryptGuestGoogleCalendarTokens(encryptedToken);
   const isAccessTokenFresh =
     storedTokens.accessToken &&
     (!storedTokens.expiryDate || storedTokens.expiryDate > Date.now() + 60_000);
@@ -410,7 +500,7 @@ export async function getGuestGoogleCalendarAccessToken(args: {
     accessToken: nextTokens.accessToken,
     tokens: {
       ...nextTokens,
-      encryptedToken: encryptGuestGoogleCalendarTokens(nextTokens),
+      encryptedToken: await encryptGuestGoogleCalendarTokens(nextTokens),
     } satisfies DecryptedStoredGuestCalendarTokens,
   };
 }

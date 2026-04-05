@@ -86,6 +86,8 @@ console.log('GOOGLE_GUEST_CALENDAR_CLIENT_ID:', process.env.GOOGLE_GUEST_CALENDA
 console.log('GOOGLE_GUEST_CALENDAR_CLIENT_SECRET:', process.env.GOOGLE_GUEST_CALENDAR_CLIENT_SECRET ? '✓ Set' : '✗ Not set');
 console.log('GOOGLE_GUEST_CALENDAR_REDIRECT_URI:', process.env.GOOGLE_GUEST_CALENDAR_REDIRECT_URI ? '✓ Set' : '✗ Not set');
 console.log('GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY:', process.env.GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY ? '✓ Set' : '✗ Not set');
+console.log('GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME:', process.env.GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME ? '✓ Set' : '✗ Not set');
+console.log('GOOGLE_GUEST_CALENDAR_ENCRYPTION_SECRET_NAME:', process.env.GOOGLE_GUEST_CALENDAR_ENCRYPTION_SECRET_NAME ? '✓ Set' : '✗ Not set');
 
 console.log('\nBREVO VARIABLES:');
 console.log('BREVO_MARKETING_KEY:', process.env.BREVO_MARKETING_KEY ? '✓ Set' : '✗ Not set');
