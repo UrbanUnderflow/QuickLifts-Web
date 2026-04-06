@@ -72,7 +72,9 @@ function compileGroupMeetRuntime() {
     '--outDir', outDir,
     path.join(repoRoot, 'src/lib/groupMeet.ts'),
     path.join(repoRoot, 'src/lib/googleCalendar.ts'),
+    path.join(repoRoot, 'src/lib/groupMeetGuestGoogleCalendar.ts'),
     path.join(repoRoot, 'src/pages/api/group-meet/[token].ts'),
+    path.join(repoRoot, 'src/pages/api/group-meet/[token]/calendar/google/connect/start.ts'),
     path.join(repoRoot, 'src/pages/api/admin/group-meet/index.ts'),
     path.join(repoRoot, 'src/pages/api/admin/group-meet/[requestId].ts'),
   ];
@@ -84,12 +86,25 @@ function compileGroupMeetRuntime() {
 
   const groupMeetPath = findFileRecursive(outDir, 'groupMeet.js');
   const googleCalendarPath = findFileRecursive(outDir, 'googleCalendar.js');
+  const guestGoogleCalendarPath = findFileRecursive(outDir, 'groupMeetGuestGoogleCalendar.js');
   const publicInviteHandlerPath = findFileRecursiveBySuffix(outDir, 'pages/api/group-meet/[token].js');
+  const connectStartHandlerPath = findFileRecursiveBySuffix(
+    outDir,
+    'pages/api/group-meet/[token]/calendar/google/connect/start.js'
+  );
   const createHandlerPath = findFileRecursiveBySuffix(outDir, 'pages/api/admin/group-meet/index.js');
   const requestHandlerPath = findFileRecursive(outDir, '[requestId].js');
 
   if (
-    (!groupMeetPath || !googleCalendarPath || !publicInviteHandlerPath || !createHandlerPath || !requestHandlerPath) &&
+    (
+      !groupMeetPath ||
+      !googleCalendarPath ||
+      !guestGoogleCalendarPath ||
+      !publicInviteHandlerPath ||
+      !connectStartHandlerPath ||
+      !createHandlerPath ||
+      !requestHandlerPath
+    ) &&
     result.status !== 0
   ) {
     throw new Error(
@@ -97,7 +112,15 @@ function compileGroupMeetRuntime() {
     );
   }
 
-  if (!groupMeetPath || !googleCalendarPath || !publicInviteHandlerPath || !createHandlerPath || !requestHandlerPath) {
+  if (
+    !groupMeetPath ||
+    !googleCalendarPath ||
+    !guestGoogleCalendarPath ||
+    !publicInviteHandlerPath ||
+    !connectStartHandlerPath ||
+    !createHandlerPath ||
+    !requestHandlerPath
+  ) {
     throw new Error('Compiled Group Meet runtime files were not emitted to the temp directory.');
   }
 
@@ -105,7 +128,9 @@ function compileGroupMeetRuntime() {
     outDir,
     groupMeetPath,
     googleCalendarPath,
+    guestGoogleCalendarPath,
     publicInviteHandlerPath,
+    connectStartHandlerPath,
     createHandlerPath,
     requestHandlerPath,
   };
@@ -163,6 +188,36 @@ function loadGoogleCalendarRuntime({ secretManagerMock } = {}) {
       },
     },
     () => require(googleCalendarPath)
+  );
+}
+
+function loadGuestGoogleCalendarRuntime({ secretManagerMock, OAuth2ClientMock } = {}) {
+  const { guestGoogleCalendarPath } = compileGroupMeetRuntime();
+  clearCompiledRuntimeModuleCache();
+
+  return withModuleMocks(
+    {
+      './secretManager': {
+        getSecretManagerSecret:
+          secretManagerMock || (async () => {
+            throw new Error('Secret Manager mock not provided.');
+          }),
+      },
+      'google-auth-library': {
+        OAuth2Client:
+          OAuth2ClientMock ||
+          class DefaultMockOAuth2Client {
+            constructor(options) {
+              this.options = options;
+            }
+
+            generateAuthUrl() {
+              return 'https://accounts.google.com/o/oauth2/v2/auth';
+            }
+          },
+      },
+    },
+    () => require(guestGoogleCalendarPath)
   );
 }
 
@@ -724,9 +779,67 @@ function createPublicInviteHandlerRuntime({
   };
   firebaseAdminMock.firestore.FieldValue = firestore.FieldValue;
 
+  const groupMeetGuestGoogleCalendarMock = {
+    GROUP_MEET_INVITES_SUBCOLLECTION: 'groupMeetInvites',
+    buildGroupMeetGuestCalendarImportSummary(value) {
+      const raw = value || null;
+      if (!raw || raw.provider !== 'google') {
+        return null;
+      }
+
+      return {
+        provider: 'google',
+        status: raw.status || 'disconnected',
+        connectedAt: raw.connectedAt?.toDate?.().toISOString?.() || null,
+        disconnectedAt: raw.disconnectedAt?.toDate?.().toISOString?.() || null,
+        lastSyncedAt: raw.lastSyncedAt?.toDate?.().toISOString?.() || null,
+        lastSyncStatus: raw.lastSyncStatus || 'never',
+        lastSyncError: raw.lastSyncError || null,
+        googleAccountEmail: raw.googleAccountEmail || null,
+        connected: raw.status === 'connected',
+        connectedEmail: raw.googleAccountEmail || null,
+        lastConnectedAt: raw.connectedAt?.toDate?.().toISOString?.() || null,
+        lastImportedAt: raw.lastSyncedAt?.toDate?.().toISOString?.() || null,
+        error: raw.lastSyncError || null,
+      };
+    },
+    findGroupMeetInviteByToken: async (db, token) => {
+      let snapshot = await db.collectionGroup('groupMeetInvites').where('token', '==', token).limit(1).get();
+      let inviteDoc = snapshot?.empty ? null : snapshot?.docs?.[0] || null;
+
+      if (!inviteDoc) {
+        snapshot = await db.collectionGroup('groupMeetInvites').get();
+        inviteDoc =
+          snapshot.docs.find((docSnap) => {
+            const data = docSnap.data() || {};
+            return docSnap.id === token || data.token === token;
+          }) || null;
+      }
+
+      if (!inviteDoc) {
+        return null;
+      }
+
+      return {
+        inviteDoc,
+        requestDoc: await requestRef.get(),
+      };
+    },
+    shouldForceDevFirebase(req) {
+      const hostHeader = req.headers?.host || '';
+      const host = Array.isArray(hostHeader) ? hostHeader[0] || '' : hostHeader;
+      const normalizedHost = String(host).trim().toLowerCase();
+      return normalizedHost.startsWith('localhost:') || normalizedHost.startsWith('127.0.0.1:');
+    },
+    toIso(value) {
+      return value?.toDate?.().toISOString?.() || null;
+    },
+  };
+
   const handlerModule = withModuleMocks(
     {
       '../../../lib/firebase-admin': firebaseAdminMock,
+      '../../../lib/groupMeetGuestGoogleCalendar': groupMeetGuestGoogleCalendarMock,
       'google-auth-library': {
         OAuth2Client: class MockOAuth2Client {},
       },
@@ -740,11 +853,79 @@ function createPublicInviteHandlerRuntime({
   };
 }
 
+function createGuestCalendarConnectStartHandlerRuntime({
+  requestData = {
+    title: 'Group Meet',
+    targetMonth: '2026-04',
+    deadlineAt: makeTimestamp('2026-04-08T21:00:00.000Z'),
+    timezone: 'America/New_York',
+    meetingDurationMinutes: 60,
+    status: 'draft',
+  },
+  helperOverrides = {},
+} = {}) {
+  const { connectStartHandlerPath } = compileGroupMeetRuntime();
+  clearCompiledRuntimeModuleCache();
+
+  const state = {
+    firebaseAppSelections: [],
+  };
+
+  const firebaseAdminMock = {
+    getFirebaseAdminApp(forceDevProject = false) {
+      state.firebaseAppSelections.push(Boolean(forceDevProject));
+      return {
+        firestore() {
+          return {};
+        },
+      };
+    },
+  };
+
+  const helperMock = {
+    buildGuestGoogleCalendarConnectUrl: async () => 'https://accounts.google.com/o/oauth2/v2/auth',
+    findGroupMeetInviteByToken: async () => ({
+      inviteDoc: {
+        data: () => ({
+          token: 'guest-token',
+        }),
+      },
+      requestDoc: {
+        data: () => clone(requestData),
+      },
+    }),
+    getPublicGuestCalendarDebugInfo: () => ({
+      code: 'google_calendar_connect_unknown',
+      hint: 'Check the server log entry for the connect route to see the exact failure stage.',
+    }),
+    shouldForceDevFirebase: () => false,
+    toPublicGuestCalendarErrorMessage: (error) =>
+      error?.message || 'Google Calendar connect could not be completed.',
+    toIso: (value) => value?.toDate?.().toISOString?.() || null,
+    ...helperOverrides,
+  };
+
+  const handlerModule = withModuleMocks(
+    {
+      '../../../../../../../lib/firebase-admin': firebaseAdminMock,
+      '../../../../../../../lib/groupMeetGuestGoogleCalendar': helperMock,
+    },
+    () => require(connectStartHandlerPath)
+  );
+
+  return {
+    handler: handlerModule.default,
+    state,
+  };
+}
+
 module.exports = {
   createApiResponseRecorder,
   createGroupMeetCreateHandlerRuntime,
+  createGuestCalendarConnectStartHandlerRuntime,
   createPublicInviteHandlerRuntime,
   createRequestDetailHandlerRuntime,
+  loadGuestGoogleCalendarRuntime,
   loadGoogleCalendarRuntime,
   loadGroupMeetRuntime,
   makeTimestamp,
