@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Download, ExternalLink, Loader2, QrCode, X } from 'lucide-react';
 import QRCode from 'qrcode';
 import type { PulseCheckInviteLink } from '../../../api/firebase/pulsecheckProvisioning/types';
+import { buildPulseCheckTeamInviteWebUrl } from '../../../utils/pulsecheckInviteLinks';
 
 type PilotInviteQrModalProps = {
   invite: PulseCheckInviteLink | null;
@@ -23,6 +24,18 @@ const truncateUrl = (value: string) => {
   return `${value.slice(0, 42)}...${value.slice(-22)}`;
 };
 
+const resolveInviteShareUrl = (invite: PulseCheckInviteLink | null) => {
+  if (!invite) return '';
+  if (invite.redemptionMode === 'general') {
+    const currentOrigin =
+      typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai';
+    return `${buildPulseCheckTeamInviteWebUrl(invite.token || invite.id, currentOrigin)}?web=1`;
+  }
+  return invite.activationUrl || buildPulseCheckTeamInviteWebUrl(invite.token || invite.id);
+};
+
 export function PilotInviteQrModal({
   invite,
   pilotName,
@@ -33,11 +46,12 @@ export function PilotInviteQrModal({
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const shareUrl = resolveInviteShareUrl(invite);
 
   useEffect(() => {
     let cancelled = false;
 
-    if (!invite?.activationUrl) {
+    if (!shareUrl) {
       setQrDataUrl('');
       setLoading(false);
       setError('');
@@ -49,7 +63,7 @@ export function PilotInviteQrModal({
     setLoading(true);
     setError('');
 
-    QRCode.toDataURL(invite.activationUrl, {
+    QRCode.toDataURL(shareUrl, {
       errorCorrectionLevel: 'M',
       margin: 1,
       width: 720,
@@ -74,10 +88,10 @@ export function PilotInviteQrModal({
     return () => {
       cancelled = true;
     };
-  }, [invite?.activationUrl]);
+  }, [shareUrl]);
 
   const handleDownload = () => {
-    if (!invite?.activationUrl || !qrDataUrl) return;
+    if (!invite || !shareUrl || !qrDataUrl) return;
 
     const link = document.createElement('a');
     const fileBase = [
@@ -159,8 +173,10 @@ export function PilotInviteQrModal({
 
                     <div className="mt-4 rounded-[20px] bg-[#09111e] px-4 py-3 text-center">
                       <div className="text-sm font-semibold text-white">{headline}</div>
-                      <div className="mt-1 text-xs leading-5 text-slate-300">
-                        Open the invite on a phone camera and move directly into onboarding for this pilot.
+                    <div className="mt-1 text-xs leading-5 text-slate-300">
+                        {invite?.redemptionMode === 'general'
+                          ? 'This QR opens the browser-safe join page first, which is the most reliable activation-day path for reusable pilot links.'
+                          : 'Open the invite on a phone camera and move directly into onboarding for this pilot.'}
                       </div>
                     </div>
                   </div>
@@ -208,9 +224,11 @@ export function PilotInviteQrModal({
                 </div>
 
                 <div className="mt-4 rounded-2xl border border-white/8 bg-black/20 p-4">
-                  <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Encoded Share Link</div>
-                  <div className="mt-2 break-all font-mono text-xs leading-6 text-cyan-100" title={invite?.activationUrl || ''}>
-                    {truncateUrl(invite?.activationUrl || '')}
+                  <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+                    {invite?.redemptionMode === 'general' ? 'Encoded Browser Join Link' : 'Encoded Share Link'}
+                  </div>
+                  <div className="mt-2 break-all font-mono text-xs leading-6 text-cyan-100" title={shareUrl}>
+                    {truncateUrl(shareUrl)}
                   </div>
                 </div>
 
@@ -225,7 +243,7 @@ export function PilotInviteQrModal({
                     Download PNG
                   </button>
                   <a
-                    href={invite?.activationUrl || '#'}
+                    href={shareUrl || '#'}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"

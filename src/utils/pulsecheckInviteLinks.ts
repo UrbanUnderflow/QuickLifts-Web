@@ -33,6 +33,12 @@ export const isPulseCheckInviteOneLink = (url?: string | null) => {
   return value.includes(`${APPS_FLYER_SUBDOMAIN}/${APPS_FLYER_TEMPLATE_ID}`);
 };
 
+export const buildPulseCheckTeamInviteWebUrl = (token: string, siteOrigin?: string | null) => {
+  const normalizedToken = String(token || '').trim();
+  const normalizedOrigin = String(siteOrigin || PULSE_WEB_ORIGIN).trim().replace(/\/+$/, '') || PULSE_WEB_ORIGIN;
+  return `${normalizedOrigin}/PulseCheck/team-invite/${encodeURIComponent(normalizedToken)}`;
+};
+
 export const buildPulseCheckTeamInviteOneLink = ({
   token,
   fallbackPath,
