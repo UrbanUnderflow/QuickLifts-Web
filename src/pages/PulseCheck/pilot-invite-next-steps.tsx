@@ -24,8 +24,17 @@ type PilotInviteNextStepsProps = {
 const PILOT_INVITE_CONFIGS_COLLECTION = 'pulsecheck-pilot-invite-configs';
 const TEAM_INVITE_DEFAULTS_COLLECTION = 'pulsecheck-team-invite-defaults';
 const ORGANIZATION_INVITE_DEFAULTS_COLLECTION = 'pulsecheck-organization-invite-defaults';
+const PULSECHECK_IOS_APP_STORE_URL = 'https://apps.apple.com/by/app/pulsecheck-mindset-coaching/id6747253393';
+const LEGACY_FIT_WITH_PULSE_IOS_APP_ID = 'id6451497729';
 
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+const resolvePulseCheckIosAppUrl = (value: unknown) => {
+  const normalizedValue = normalizeString(value);
+  if (!normalizedValue || normalizedValue.includes(LEGACY_FIT_WITH_PULSE_IOS_APP_ID)) {
+    return PULSECHECK_IOS_APP_STORE_URL;
+  }
+  return normalizedValue;
+};
 
 const splitInstructionLines = (value: string) =>
   value
@@ -58,7 +67,7 @@ const buildFallbackConfig = (
   supportName: '',
   supportEmail: '',
   supportPhone: '',
-  iosAppUrl: appLinks.appStoreUrl,
+  iosAppUrl: PULSECHECK_IOS_APP_STORE_URL,
   androidAppUrl: appLinks.playStoreUrl,
   createdAt: null,
   updatedAt: null,
@@ -75,7 +84,7 @@ const applyConfigLayer = (base: PulseCheckPilotInviteConfig, data: Record<string
   supportName: normalizeString(data?.supportName) || base.supportName,
   supportEmail: normalizeString(data?.supportEmail) || base.supportEmail,
   supportPhone: normalizeString(data?.supportPhone) || base.supportPhone,
-  iosAppUrl: normalizeString(data?.iosAppUrl) || base.iosAppUrl,
+  iosAppUrl: resolvePulseCheckIosAppUrl(data?.iosAppUrl) || base.iosAppUrl,
   androidAppUrl: normalizeString(data?.androidAppUrl) || base.androidAppUrl,
 });
 
@@ -185,7 +194,7 @@ const PilotInviteNextStepsPage = ({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <a
-                  href={config.iosAppUrl || appLinks.appStoreUrl}
+                  href={resolvePulseCheckIosAppUrl(config.iosAppUrl) || PULSECHECK_IOS_APP_STORE_URL}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"

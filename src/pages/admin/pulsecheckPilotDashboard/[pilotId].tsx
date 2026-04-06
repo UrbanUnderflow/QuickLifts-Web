@@ -33,7 +33,7 @@ import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsechec
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
 import type { PulseCheckInviteLink } from '../../../api/firebase/pulsecheckProvisioning/types';
 import type { PulseCheckRequiredConsentDocument } from '../../../api/firebase/pulsecheckProvisioning/types';
-import { analyzePulseCheckInviteOneLink, isPulseCheckInviteOneLink } from '../../../utils/pulsecheckInviteLinks';
+import { analyzePulseCheckInviteOneLink, buildPulseCheckTeamInviteWebUrl, isPulseCheckInviteOneLink } from '../../../utils/pulsecheckInviteLinks';
 import { useUser } from '../../../hooks/useUser';
 import type {
   PilotDashboardDetail,
@@ -136,6 +136,46 @@ const inviteRedemptionModeClassName = (mode?: InviteCreationMode) =>
 const formatInviteUsageCount = (count?: number) => {
   const safeCount = Math.max(0, Number(count || 0));
   return `Used ${safeCount} time${safeCount === 1 ? '' : 's'}`;
+};
+const getInviteShareOrigin = () =>
+  (typeof window !== 'undefined' && window.location?.origin
+    ? window.location.origin
+    : process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai'
+  ).replace(/\/+$/, '');
+const resolveInviteShareUrl = (invite?: PulseCheckInviteLink | null) => {
+  if (!invite) return '';
+  if (invite.redemptionMode === 'general') {
+    return `${buildPulseCheckTeamInviteWebUrl(invite.token || invite.id, getInviteShareOrigin())}?web=1`;
+  }
+  return invite.activationUrl || buildPulseCheckTeamInviteWebUrl(invite.token || invite.id, getInviteShareOrigin());
+};
+const analyzeInviteShareTarget = (invite?: PulseCheckInviteLink | null) => {
+  if (!invite) {
+    return analyzePulseCheckInviteOneLink('');
+  }
+
+  if (invite.redemptionMode === 'general') {
+    const shareUrl = resolveInviteShareUrl(invite);
+    let shareHost: string | null = null;
+    try {
+      shareHost = new URL(shareUrl).host;
+    } catch {
+      shareHost = null;
+    }
+
+    return {
+      status: 'valid' as const,
+      summary: 'This general invite uses a browser-safe join route so repeated QR scans stay out of the native app redemption path during activation.',
+      details: [
+        'Scans open the Fit With Pulse invite page first, then continue into onboarding from there.',
+        'This keeps the reusable link active for additional athletes instead of retiring it after the first successful join.',
+      ],
+      fallbackUrl: shareUrl,
+      fallbackHost: shareHost,
+    };
+  }
+
+  return analyzePulseCheckInviteOneLink(invite.activationUrl || '');
 };
 const normalizeRequiredConsentDraft = (consent: PulseCheckRequiredConsentDocument, index: number): PulseCheckRequiredConsentDocument => ({
   id: consent.id.trim() || `consent-${index + 1}`,
@@ -1006,8 +1046,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
   const scopedInvite = scopedActiveInvites?.[0] || scopedInvites?.[0] || null;
   const scopedInviteDiagnostic = useMemo(
-    () => analyzePulseCheckInviteOneLink(scopedInvite?.activationUrl || ''),
-    [scopedInvite?.activationUrl]
+    () => analyzeInviteShareTarget(scopedInvite),
+    [scopedInvite]
   );
   const scopedInviteSummary = useMemo(() => {
     if (!scopedInvites.length) {
@@ -1298,9 +1338,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
-  const copyInviteLink = async (inviteId: string, activationUrl: string, successText: string) => {
+  const copyInviteLink = async (inviteId: string, shareUrl: string, successText: string) => {
     try {
-      await navigator.clipboard.writeText(activationUrl);
+      await navigator.clipboard.writeText(shareUrl);
       setCopiedInviteId(inviteId);
       if (copyFeedbackTimeoutRef.current) {
         window.clearTimeout(copyFeedbackTimeoutRef.current);
@@ -1331,8 +1371,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
           createdByEmail: currentUser?.email || '',
         });
         setInviteLinks(pulseCheckPilotDashboardService.listDemoInviteLinks());
-        if (createdInvite?.activationUrl) {
-          await navigator.clipboard.writeText(createdInvite.activationUrl);
+        if (createdInvite) {
+          await navigator.clipboard.writeText(resolveInviteShareUrl(createdInvite));
         }
         setPageMessage({
           type: 'success',
@@ -1360,8 +1400,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       const refreshedInviteLinks = await pulseCheckProvisioningService.listTeamInviteLinks(detail.team.id);
       setInviteLinks(refreshedInviteLinks);
       const createdInvite = refreshedInviteLinks.find((invite) => invite.id === inviteId);
-      if (createdInvite?.activationUrl) {
-        await navigator.clipboard.writeText(createdInvite.activationUrl);
+      if (createdInvite) {
+        await navigator.clipboard.writeText(resolveInviteShareUrl(createdInvite));
       }
 
       setPageMessage({
@@ -2474,7 +2514,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                           Single-use links are ideal for one athlete at a time. General links stay active so the same QR code or shared URL can bring a whole group into this pilot scope.
                         </p>
                         <p className="mt-2 text-xs text-zinc-500">
-                          This link is intended to be the preview-ready PulseCheck share link. Once your PulseCheck OneLink template is configured in AppsFlyer, it should open PulseCheck directly instead of Fit With Pulse.
+                          General links currently use a browser-safe join route for activation reliability. Single-use links still preserve the preview-ready PulseCheck share link for deeper app handoff testing.
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -2551,7 +2591,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         </div>
                         <p className="mt-3 text-sm text-zinc-200">{scopedInviteDiagnostic.summary}</p>
                         <div className="mt-3 text-xs text-zinc-400">
-                          Fallback redirect:{' '}
+                          {scopedInvite?.redemptionMode === 'general' ? 'Share target:' : 'Fallback redirect:'}{' '}
                           <span className="text-zinc-200">{scopedInviteDiagnostic.fallbackUrl || 'Missing'}</span>
                         </div>
                         <ul className="mt-3 space-y-2 text-sm text-zinc-300">
@@ -2587,11 +2627,17 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                     </span>
                                   ) : null}
                                   <span className={`rounded-full px-3 py-1 text-[11px] ${
-                                    isPulseCheckInviteOneLink(invite.activationUrl)
+                                    invite.redemptionMode === 'general'
+                                      ? 'border border-sky-400/20 bg-sky-400/10 text-sky-100'
+                                      : isPulseCheckInviteOneLink(resolveInviteShareUrl(invite))
                                       ? 'border border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
                                       : 'border border-amber-400/20 bg-amber-400/10 text-amber-100'
                                   }`}>
-                                    {isPulseCheckInviteOneLink(invite.activationUrl) ? 'PulseCheck share link' : 'Fallback web link'}
+                                    {invite.redemptionMode === 'general'
+                                      ? 'Browser-safe join link'
+                                      : isPulseCheckInviteOneLink(resolveInviteShareUrl(invite))
+                                        ? 'PulseCheck share link'
+                                        : 'Fallback web link'}
                                   </span>
                                   <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">
                                     Created {formatTimeValue(invite.createdAt)}
@@ -2606,7 +2652,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                     </span>
                                   ) : null}
                                 </div>
-                                <div className="mt-3 break-all text-xs text-cyan-100">{invite.activationUrl}</div>
+                                <div className="mt-3 break-all text-xs text-cyan-100">{resolveInviteShareUrl(invite)}</div>
                                 {invite.status === 'redeemed' && invite.redeemedByEmail ? (
                                   <div className="mt-2 text-xs text-zinc-400">
                                     Redeemed by {invite.redeemedByEmail}
@@ -2620,7 +2666,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                               <div className="flex flex-wrap gap-2">
                                 <button
                                   data-testid={`pilot-invite-copy-${invite.id}`}
-                                  onClick={() => void copyInviteLink(invite.id, invite.activationUrl, 'Pilot athlete share link copied to clipboard.')}
+                                  onClick={() => void copyInviteLink(invite.id, resolveInviteShareUrl(invite), 'Pilot athlete share link copied to clipboard.')}
                                   className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition-all duration-200 ${
                                     copiedInviteId === invite.id
                                       ? 'border-emerald-400/30 bg-emerald-400/15 text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.08)]'
@@ -2640,7 +2686,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                   QR Code
                                 </button>
                                 <a
-                                  href={invite.activationUrl}
+                                  href={resolveInviteShareUrl(invite)}
                                   target="_blank"
                                   rel="noreferrer"
                                   className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
