@@ -173,3 +173,41 @@ test('firebase-next-api resolves the public api path when originalPath is missin
     url: '/api/example/probe-456?mode=live',
   });
 });
+
+test('firebase-next-api supports Node-style writeHead redirects used by callback routes', async () => {
+  const proxyModule = loadProxyModule();
+  const handler = proxyModule.__test.createFirebaseNextApiHandler([
+    {
+      pattern: '/api/example/callback',
+      async loadHandler() {
+        return {
+          default: async (_req, res) => {
+            res.writeHead(302, {
+              Location: 'https://fitwithpulse.ai/group-meet/invite-token?calendarGoogleSuccess=Connected',
+            });
+            res.end();
+          },
+        };
+      },
+    },
+  ]);
+
+  const response = await handler({
+    httpMethod: 'GET',
+    path: '/api/example/callback',
+    rawUrl: 'https://fitwithpulse.ai/api/example/callback',
+    headers: {
+      host: 'fitwithpulse.ai',
+    },
+    queryStringParameters: {},
+    body: null,
+    isBase64Encoded: false,
+  });
+
+  assert.equal(response.statusCode, 302);
+  assert.equal(
+    response.headers.Location,
+    'https://fitwithpulse.ai/group-meet/invite-token?calendarGoogleSuccess=Connected'
+  );
+  assert.equal(response.body, '');
+});
