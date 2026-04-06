@@ -1,8 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { randomUUID } from 'crypto';
 import { getFirebaseAdminApp } from '../../../../../../../lib/firebase-admin';
 import {
   buildGuestGoogleCalendarConnectUrl,
   findGroupMeetInviteByToken,
+  getPublicGuestCalendarDebugInfo,
   shouldForceDevFirebase,
   toPublicGuestCalendarErrorMessage,
   toIso,
@@ -36,9 +38,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       url: await buildGuestGoogleCalendarConnectUrl(req, token),
     });
   } catch (error: any) {
-    console.error('[group-meet-public] Failed to start Google Calendar connect:', error);
+    const debugId = randomUUID();
+    const debug = getPublicGuestCalendarDebugInfo(error);
+
+    console.error('[group-meet-public] Failed to start Google Calendar connect:', {
+      debugId,
+      token,
+      debug,
+      message: error instanceof Error ? error.message : String(error || ''),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
     return res
       .status(500)
-      .json({ error: toPublicGuestCalendarErrorMessage(error) });
+      .json({
+        error: toPublicGuestCalendarErrorMessage(error),
+        debugCode: debug.code,
+        debugHint: debug.hint,
+        debugId,
+      });
   }
 }
