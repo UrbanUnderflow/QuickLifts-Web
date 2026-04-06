@@ -94,7 +94,7 @@ export interface AdminService {
   addVersion: (
     product: AppVersionProduct,
     version: string,
-    buildNumber: string,
+    buildNumber: string | undefined,
     changeNotes: string[],
     isCriticalUpdate: boolean,
     media?: AppVersionMediaItem[]
