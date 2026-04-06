@@ -14,6 +14,7 @@ import {
 } from '../../../api/firebase/pulsecheckProvisioning/types';
 import type {
   PulseCheckTeamCommercialSnapshot,
+  PulseCheckInviteLinkRedemptionMode,
   PulseCheckTeamMembershipRole,
 } from '../../../api/firebase/pulsecheckProvisioning/types';
 import { claimUsername, generateUsernameFromEmail, isUsernameAvailable, isValidUsernameFormat, normalizeUsername } from '../../../api/firebase/auth/username';
@@ -36,6 +37,8 @@ type TeamInvitePageProps = {
     organizationName: string;
     teamName: string;
     status: string;
+    redemptionMode: PulseCheckInviteLinkRedemptionMode;
+    redemptionCount: number;
     teamMembershipRole: PulseCheckTeamMembershipRole;
     invitedTitle: string;
     recipientName: string;
@@ -158,6 +161,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   const normalizedTargetEmail = useMemo(() => invite.targetEmail.trim().toLowerCase(), [invite.targetEmail]);
   const normalizedAuthEmail = useMemo(() => authUser?.email?.trim().toLowerCase() || '', [authUser]);
   const authEmailMatchesInvite = !normalizedTargetEmail || !normalizedAuthEmail || normalizedTargetEmail === normalizedAuthEmail;
+  const isGeneralInvite = invite.redemptionMode === 'general';
   const teamPlanBypassesPaywall = invite.commercialSnapshot?.teamPlanBypassesPaywall === true;
   const shouldPreferAppDownload = invite.teamMembershipRole === 'athlete' && Boolean(invite.pilotId || invite.cohortId);
   const shouldShowDownloadFirst = shouldPreferAppDownload && !showWebOnboarding && !redeemedState;
@@ -493,9 +497,11 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
                       <div className="flex items-center gap-2">
                         <MailPlus className="h-4 w-4 text-cyan-200" />
-                        <p className="text-sm font-semibold text-white">Target Email</p>
+                        <p className="text-sm font-semibold text-white">{isGeneralInvite ? 'Link Type' : 'Target Email'}</p>
                       </div>
-                      <p className="mt-3 text-sm text-zinc-300">{invite.targetEmail || 'Open invite link'}</p>
+                      <p className="mt-3 text-sm text-zinc-300">
+                        {isGeneralInvite ? 'General athlete access link' : invite.targetEmail || 'Open invite link'}
+                      </p>
                     </div>
                   </div>
 
@@ -518,6 +524,12 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     </div>
                   ) : null}
 
+                  {isGeneralInvite ? (
+                    <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/[0.06] p-4 text-sm leading-7 text-cyan-50">
+                      This is a reusable pilot access link. Each athlete who opens it can join this pilot from the same QR code or shared URL.
+                    </div>
+                  ) : null}
+
                   {invite.teamMembershipRole === 'athlete' ? (
                     <div
                       className={`rounded-2xl border p-4 text-sm leading-7 ${
@@ -535,7 +547,8 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-400">
                     <p className="font-medium text-white">What happens on redemption</p>
                     <p className="mt-2 leading-7">
-                      Your team membership is created and this invite is marked redeemed.
+                      Your team membership is created
+                      {isGeneralInvite ? ' and this general invite stays active for additional athletes.' : ' and this invite is marked redeemed.'}
                       {invite.cohortId
                         ? ' Because this link is cohort-linked, the athlete is attached directly to that pilot scope and the next-steps page explains whether onboarding is needed.'
                         : ' Team admins continue into setup, while other roles land in the shared team workspace.'}
@@ -914,8 +927,9 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
     const previewTitle = String(invite.pilotName || '').trim()
       ? `You're Invited to Join ${String(invite.pilotName).trim()}`
       : `You're Invited to Join ${teamName}`;
+    const redemptionMode = invite.redemptionMode === 'general' ? 'general' : 'single-use';
     const previewDescription = invite.cohortId
-      ? `Join ${teamName} inside ${organizationName}. This pilot invite places you into ${String(invite.cohortName || 'the assigned cohort')} automatically.`
+      ? `Join ${teamName} inside ${organizationName}. This ${redemptionMode === 'general' ? 'general ' : ''}pilot invite places you into ${String(invite.cohortName || 'the assigned cohort')} automatically.`
       : `Join ${teamName} inside ${organizationName} on PulseCheck.`;
     const previewImageUrl = resolvePulseCheckInvitePreviewImage(teamImageUrl, organizationImageUrl);
 
@@ -936,6 +950,8 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
           organizationName,
           teamName,
           status: String(invite.status || 'active'),
+          redemptionMode,
+          redemptionCount: Math.max(0, Number(invite.redemptionCount || 0)),
           teamMembershipRole: (String(invite.teamMembershipRole || 'coach') as PulseCheckTeamMembershipRole),
           invitedTitle: String(invite.invitedTitle || ''),
           recipientName: String(invite.recipientName || ''),

@@ -49,6 +49,7 @@ import type {
 } from '../../../api/firebase/pulsecheckPilotDashboard/types';
 
 type DetailTab = 'overview' | 'engine-health' | 'findings' | 'hypotheses' | 'research-readout';
+type InviteCreationMode = 'single-use' | 'general';
 
 const STATUS_OPTIONS: Array<{ value: PilotHypothesisStatus; label: string }> = [
   { value: 'not-enough-data', label: 'Not enough data' },
@@ -124,6 +125,15 @@ const inviteStatusClassName = (status: PulseCheckInviteLink['status']) => {
     default:
       return 'border-cyan-400/20 bg-cyan-400/10 text-cyan-100';
   }
+};
+const inviteRedemptionModeLabel = (mode?: InviteCreationMode) => (mode === 'general' ? 'General link' : 'Single-use link');
+const inviteRedemptionModeClassName = (mode?: InviteCreationMode) =>
+  mode === 'general'
+    ? 'border border-sky-400/20 bg-sky-400/10 text-sky-100'
+    : 'border border-white/10 bg-white/5 text-zinc-200';
+const formatInviteUsageCount = (count?: number) => {
+  const safeCount = Math.max(0, Number(count || 0));
+  return `Used ${safeCount} time${safeCount === 1 ? '' : 's'}`;
 };
 const normalizeRequiredConsentDraft = (consent: PulseCheckRequiredConsentDocument, index: number): PulseCheckRequiredConsentDocument => ({
   id: consent.id.trim() || `consent-${index + 1}`,
@@ -481,7 +491,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [savingInviteDefaultScope, setSavingInviteDefaultScope] = useState<'team' | 'organization' | null>(null);
   const [resettingInviteConfig, setResettingInviteConfig] = useState(false);
   const [seedingDefaults, setSeedingDefaults] = useState(false);
-  const [creatingInvite, setCreatingInvite] = useState(false);
+  const [creatingInviteMode, setCreatingInviteMode] = useState<InviteCreationMode | null>(null);
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
   const [deletingInviteId, setDeletingInviteId] = useState<string | null>(null);
   const [unenrollingAthleteId, setUnenrollingAthleteId] = useState<string | null>(null);
@@ -974,6 +984,14 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     () => scopedInvites.filter((invite) => invite.status === 'active'),
     [scopedInvites]
   );
+  const scopedSingleUseInvites = useMemo(
+    () => scopedInvites.filter((invite) => invite.redemptionMode !== 'general'),
+    [scopedInvites]
+  );
+  const scopedGeneralInvites = useMemo(
+    () => scopedInvites.filter((invite) => invite.redemptionMode === 'general'),
+    [scopedInvites]
+  );
   const scopedRedeemedInvites = useMemo(
     () => scopedInvites.filter((invite) => invite.status === 'redeemed'),
     [scopedInvites]
@@ -1004,8 +1022,24 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       segments.push(`${scopedRevokedInvites.length} deactivated`);
     }
 
-    return `${segments.join(', ')} invite link${scopedInvites.length === 1 ? '' : 's'} currently visible for this scope.`;
-  }, [scopedActiveInvites.length, scopedInvites.length, scopedRedeemedInvites.length, scopedRevokedInvites.length]);
+    const statusSummary = `${segments.join(', ')} invite link${scopedInvites.length === 1 ? '' : 's'} currently visible for this scope.`;
+    const modeSegments: string[] = [];
+    if (scopedSingleUseInvites.length > 0) {
+      modeSegments.push(`${scopedSingleUseInvites.length} single-use`);
+    }
+    if (scopedGeneralInvites.length > 0) {
+      modeSegments.push(`${scopedGeneralInvites.length} general`);
+    }
+
+    return modeSegments.length > 0 ? `${statusSummary} ${modeSegments.join(', ')}.` : statusSummary;
+  }, [
+    scopedActiveInvites.length,
+    scopedGeneralInvites.length,
+    scopedInvites.length,
+    scopedRedeemedInvites.length,
+    scopedRevokedInvites.length,
+    scopedSingleUseInvites.length,
+  ]);
 
   const inviteConfigSource = useMemo(() => {
     if (!detail) {
@@ -1278,15 +1312,16 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
-  const handleCreatePilotInviteLink = async () => {
+  const handleCreatePilotInviteLink = async (redemptionMode: InviteCreationMode) => {
     if (!detail) return;
-    setCreatingInvite(true);
+    setCreatingInviteMode(redemptionMode);
     setPageMessage(null);
     try {
       if (demoModeEnabled) {
         const createdInvite = pulseCheckPilotDashboardService.createDemoInviteLink({
           pilotId: detail.pilot.id,
           pilotName: detail.pilot.name,
+          redemptionMode,
           cohortId: selectedInviteCohort?.id || '',
           cohortName: selectedInviteCohort?.name || '',
           createdByUserId: currentUser?.id || '',
@@ -1299,8 +1334,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         setPageMessage({
           type: 'success',
           text: selectedInviteCohort
-            ? `Pilot share link for ${selectedInviteCohort.name} was created and copied.`
-            : 'Pilot athlete share link was created and copied.',
+            ? `${redemptionMode === 'general' ? 'General' : 'Single-use'} pilot share link for ${selectedInviteCohort.name} was created and copied.`
+            : `${redemptionMode === 'general' ? 'General' : 'Single-use'} pilot athlete share link was created and copied.`,
         });
         return;
       }
@@ -1309,7 +1344,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         organizationId: detail.organization.id,
         teamId: detail.team.id,
         teamMembershipRole: 'athlete',
-        revokeExistingMatchingLinks: false,
+        redemptionMode,
+        revokeExistingMatchingLinks: redemptionMode === 'general',
         pilotId: detail.pilot.id,
         pilotName: detail.pilot.name,
         cohortId: selectedInviteCohort?.id || '',
@@ -1328,19 +1364,23 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       setPageMessage({
         type: 'success',
         text: selectedInviteCohort
-          ? `Pilot share link for ${selectedInviteCohort.name} was created and copied.`
-          : 'Pilot athlete share link was created and copied.',
+          ? `${redemptionMode === 'general' ? 'General' : 'Single-use'} pilot share link for ${selectedInviteCohort.name} was created and copied.`
+          : `${redemptionMode === 'general' ? 'General' : 'Single-use'} pilot athlete share link was created and copied.`,
       });
     } catch (inviteError) {
       console.error('[PulseCheckPilotDashboard] Failed to create pilot invite link:', inviteError);
       setPageMessage({ type: 'error', text: 'Failed to create pilot athlete invite link.' });
     } finally {
-      setCreatingInvite(false);
+      setCreatingInviteMode(null);
     }
   };
 
   const handleRevokePilotInviteLink = async (invite: PulseCheckInviteLink) => {
-    const confirmed = window.confirm('Deactivate this invite link? Anyone who has not redeemed it will no longer be able to use it.');
+    const confirmed = window.confirm(
+      invite.redemptionMode === 'general'
+        ? 'Deactivate this general invite link? Athletes who open it after this point will no longer be able to use it.'
+        : 'Deactivate this invite link? Anyone who has not redeemed it will no longer be able to use it.'
+    );
     if (!confirmed) return;
 
     setRevokingInviteId(invite.id);
@@ -2427,18 +2467,29 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         <p className="mt-3 text-sm text-zinc-300">
                           Existing Pulse athletes should sign in and get attached to the pilot without replaying onboarding. New athletes should create an account and follow the mobile setup walkthrough.
                         </p>
+                        <p className="mt-2 text-sm text-zinc-400">
+                          Single-use links are ideal for one athlete at a time. General links stay active so the same QR code or shared URL can bring a whole group into this pilot scope.
+                        </p>
                         <p className="mt-2 text-xs text-zinc-500">
                           This link is intended to be the preview-ready PulseCheck share link. Once your PulseCheck OneLink template is configured in AppsFlyer, it should open PulseCheck directly instead of Fit With Pulse.
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <button
-                          onClick={() => void handleCreatePilotInviteLink()}
-                          disabled={creatingInvite}
+                          onClick={() => void handleCreatePilotInviteLink('single-use')}
+                          disabled={Boolean(creatingInviteMode)}
                           className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <Clipboard className="h-4 w-4" />
-                          {creatingInvite ? 'Generating Link...' : scopedInvite ? 'Generate New Link' : 'Create Invite Link'}
+                          {creatingInviteMode === 'single-use' ? 'Generating Single Link...' : 'Generate Single Link'}
+                        </button>
+                        <button
+                          onClick={() => void handleCreatePilotInviteLink('general')}
+                          disabled={Boolean(creatingInviteMode)}
+                          className="inline-flex items-center gap-2 rounded-2xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-sm text-sky-100 transition hover:bg-sky-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Users2 className="h-4 w-4" />
+                          {creatingInviteMode === 'general' ? 'Generating General Link...' : 'Generate General Link'}
                         </button>
                       </div>
                     </div>
@@ -2524,6 +2575,14 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                   <span className={`rounded-full px-3 py-1 text-[11px] ${inviteStatusClassName(invite.status)}`}>
                                     {inviteStatusLabel(invite.status)}
                                   </span>
+                                  <span className={`rounded-full px-3 py-1 text-[11px] ${inviteRedemptionModeClassName(invite.redemptionMode)}`}>
+                                    {inviteRedemptionModeLabel(invite.redemptionMode)}
+                                  </span>
+                                  {invite.redemptionMode === 'general' && Number(invite.redemptionCount || 0) > 0 ? (
+                                    <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] text-emerald-100">
+                                      {formatInviteUsageCount(invite.redemptionCount)}
+                                    </span>
+                                  ) : null}
                                   <span className={`rounded-full px-3 py-1 text-[11px] ${
                                     isPulseCheckInviteOneLink(invite.activationUrl)
                                       ? 'border border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
@@ -2538,12 +2597,20 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                     <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">
                                       Redeemed {formatTimeValue(invite.redeemedAt)}
                                     </span>
+                                  ) : invite.redemptionMode === 'general' && invite.redeemedAt ? (
+                                    <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                                      Last used {formatTimeValue(invite.redeemedAt)}
+                                    </span>
                                   ) : null}
                                 </div>
                                 <div className="mt-3 break-all text-xs text-cyan-100">{invite.activationUrl}</div>
                                 {invite.status === 'redeemed' && invite.redeemedByEmail ? (
                                   <div className="mt-2 text-xs text-zinc-400">
                                     Redeemed by {invite.redeemedByEmail}
+                                  </div>
+                                ) : invite.redemptionMode === 'general' && invite.redeemedByEmail ? (
+                                  <div className="mt-2 text-xs text-zinc-400">
+                                    Last used by {invite.redeemedByEmail}
                                   </div>
                                 ) : null}
                               </div>

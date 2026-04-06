@@ -1654,6 +1654,7 @@ export const pulseCheckPilotDashboardService = {
   createDemoInviteLink(input: {
     pilotId: string;
     pilotName: string;
+    redemptionMode?: 'single-use' | 'general';
     cohortId?: string;
     cohortName?: string;
     createdByUserId?: string;

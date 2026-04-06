@@ -11,6 +11,7 @@ import {
   resolveTeamMembershipOnboardingStatus,
 } from '../../../../api/firebase/pulsecheckProvisioning/accessState';
 import type {
+  PulseCheckInviteLinkRedemptionMode,
   PulseCheckRequiredConsentDocument,
   PulseCheckPilotStudyMode,
   PulseCheckResearchConsentStatus,
@@ -29,6 +30,8 @@ const PILOT_ENROLLMENTS_COLLECTION = 'pulsecheck-pilot-enrollments';
 
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const normalizeEmail = (value: unknown) => normalizeString(value).toLowerCase();
+const normalizeInviteRedemptionMode = (value: unknown): PulseCheckInviteLinkRedemptionMode =>
+  value === 'general' ? 'general' : 'single-use';
 const SubscriptionType = {
   unsubscribed: 'Unsubscribed',
   teamPlan: 'Team Plan Access',
@@ -237,6 +240,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if ((invite.status || '') !== 'active') {
         throw new Error('Invite is no longer active.');
       }
+      const redemptionMode = normalizeInviteRedemptionMode(invite.redemptionMode);
 
       const targetEmail = normalizeEmail(invite.targetEmail);
       if (targetEmail && targetEmail !== userEmail) {
@@ -271,8 +275,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ]);
       const userSnap = await transaction.get(userRef);
       const existingTeamMembershipSnap = await transaction.get(teamMembershipRef);
+      const hadExistingTeamMembership = existingTeamMembershipSnap.exists;
       const pilotSnap = pilotRef ? await transaction.get(pilotRef) : null;
       const existingPilotEnrollmentSnap = pilotEnrollmentRef ? await transaction.get(pilotEnrollmentRef) : null;
+      const hadExistingPilotEnrollment = Boolean(existingPilotEnrollmentSnap?.exists);
 
       if (!organizationSnap.exists) {
         throw new Error('Organization not found.');
@@ -440,17 +446,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
       }
 
-      transaction.set(
-        inviteRef,
-        {
-          status: 'redeemed',
-          redeemedByUserId: userId,
-          redeemedByEmail: userEmail,
-          redeemedAt: now,
-          updatedAt: now,
-        },
-        { merge: true }
-      );
+      if (redemptionMode === 'general') {
+        const grantedNewScopeAccess =
+          !hadExistingTeamMembership ||
+          (teamMembershipRole === 'athlete' && Boolean(pilotId) && !hadExistingPilotEnrollment);
+
+        if (grantedNewScopeAccess) {
+          transaction.set(
+            inviteRef,
+            {
+              redeemedByUserId: userId,
+              redeemedByEmail: userEmail,
+              redeemedAt: now,
+              redemptionCount: admin.firestore.FieldValue.increment(1),
+              updatedAt: now,
+            },
+            { merge: true }
+          );
+        }
+      } else {
+        transaction.set(
+          inviteRef,
+          {
+            status: 'redeemed',
+            redeemedByUserId: userId,
+            redeemedByEmail: userEmail,
+            redeemedAt: now,
+            redemptionCount: 1,
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+      }
 
       return {
         organizationId,
