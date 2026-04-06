@@ -233,9 +233,16 @@ test.describe.serial('PulseCheck pilot dashboard', () => {
       const inviteDiagnostics = page.getByTestId('pilot-invite-diagnostics');
       await expect(inviteDiagnostics).toBeVisible();
       await expect(inviteDiagnostics).toContainText('Fallback redirect');
-      await expect(page.getByText(/^General link$/)).toBeVisible();
+      await expect(page.getByText(/^General link$/).first()).toBeVisible();
       const copyButtons = page.locator('[data-testid^="pilot-invite-copy-"]');
       await expect(copyButtons.first()).toBeVisible();
+      const qrButtons = page.locator('[data-testid^="pilot-invite-qr-"]');
+      await expect(qrButtons.first()).toBeVisible();
+      await qrButtons.first().click();
+      await expect(page.getByTestId('pilot-invite-qr-modal')).toBeVisible();
+      await expect(page.getByTestId('pilot-invite-qr-image')).toBeVisible();
+      await page.getByRole('button', { name: /Close QR modal/i }).click();
+      await expect(page.getByTestId('pilot-invite-qr-modal')).toBeHidden();
 
       await page
         .getByTestId('pilot-dashboard-tab-research-readout')

@@ -14,6 +14,7 @@ import {
   FileText,
   FlaskConical,
   MonitorPlay,
+  QrCode,
   RefreshCcw,
   Save,
   ShieldCheck,
@@ -25,6 +26,7 @@ import {
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
 import { LocalFirebaseModeButton } from '../../../components/admin/pilot-dashboard/LocalFirebaseModeButton';
 import NoraMetricHelpButton from '../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
+import { PilotInviteQrModal } from '../../../components/admin/pilot-dashboard/PilotInviteQrModal';
 import { StaffPilotSurveyModal } from '../../../components/admin/pilot-dashboard/StaffPilotSurveyModal';
 import type { PilotDashboardMetricExplanationKey } from '../../../components/admin/pilot-dashboard/noraMetricCatalog';
 import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
@@ -498,6 +500,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [savingAthleteCohortId, setSavingAthleteCohortId] = useState<string | null>(null);
   const [seedingAthleteDataId, setSeedingAthleteDataId] = useState<string | null>(null);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
+  const [qrInvite, setQrInvite] = useState<PulseCheckInviteLink | null>(null);
   const [staffSurveyModalRole, setStaffSurveyModalRole] = useState<'coach' | 'clinician' | null>(null);
   const [demoModeEnabled, setDemoModeEnabled] = useState(false);
   const [generatingResearchReadout, setGeneratingResearchReadout] = useState(false);
@@ -2627,6 +2630,15 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                   {copiedInviteId === invite.id ? <CheckCircle2 className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
                                   {copiedInviteId === invite.id ? 'Copied to Clipboard' : 'Copy Share Link'}
                                 </button>
+                                <button
+                                  type="button"
+                                  data-testid={`pilot-invite-qr-${invite.id}`}
+                                  onClick={() => setQrInvite(invite)}
+                                  className="inline-flex items-center gap-2 rounded-2xl border border-sky-400/20 bg-sky-400/10 px-4 py-3 text-sm text-sky-100 transition hover:bg-sky-400/15"
+                                >
+                                  <QrCode className="h-4 w-4" />
+                                  QR Code
+                                </button>
                                 <a
                                   href={invite.activationUrl}
                                   target="_blank"
@@ -4446,6 +4458,15 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
             cohortId={selectedCohort?.id || null}
             onClose={() => setStaffSurveyModalRole(null)}
             onSubmitted={handleStaffSurveySubmitted}
+          />
+        ) : null}
+        {detail ? (
+          <PilotInviteQrModal
+            invite={qrInvite}
+            pilotName={detail.pilot.name}
+            teamName={detail.team.displayName}
+            organizationName={detail.organization.displayName}
+            onClose={() => setQrInvite(null)}
           />
         ) : null}
         <AnimatePresence>
