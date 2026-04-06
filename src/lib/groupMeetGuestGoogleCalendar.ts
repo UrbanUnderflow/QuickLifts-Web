@@ -135,7 +135,10 @@ async function getGuestGoogleCalendarSecretConfig() {
     }
 
     return parseGuestGoogleCalendarSecretConfig(await getSecretManagerSecret(secretName));
-  })();
+  })().catch((error) => {
+    guestGoogleCalendarSecretConfigPromise = null;
+    throw error;
+  });
 
   return guestGoogleCalendarSecretConfigPromise;
 }
