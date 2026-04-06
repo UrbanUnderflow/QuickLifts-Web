@@ -150,6 +150,7 @@ export type PilotDashboardOperationalWatchListReasonCode =
   | 'manual_safety_hold'
   | 'temporary_restriction'
   | 'care_team_requested_pause'
+  | 'operational_hold'
   | 'other';
 export type PilotDashboardOperationalWatchListSource = 'clinician' | 'staff' | 'system';
 

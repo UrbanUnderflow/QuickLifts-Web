@@ -27,8 +27,8 @@ function escapeHtml(input) {
 
 function tierLabel(tier) {
   if (tier === 1) return 'Tier 1 (Coach Review)';
-  if (tier === 2) return 'Tier 2 (Clinical Handoff — Consent-Based)';
-  if (tier === 3) return 'Tier 3 (Clinical Handoff — Immediate)';
+  if (tier === 2) return 'Tier 2 (Support Escalation — Consent-Based)';
+  if (tier === 3) return 'Tier 3 (Support Escalation — Immediate)';
   return 'Tier 0 (None)';
 }
 
@@ -37,7 +37,7 @@ function tierPrimaryMessage(tier) {
     return `An athlete you coach had a conversation today with Nora that we felt should be escalated to you for review.`;
   }
   if (tier === 2 || tier === 3) {
-    return `An athlete you coach had a Tier ${tier} escalation event today. We initiated a handoff to a clinical professional.`;
+    return `An athlete you coach had a Tier ${tier} escalation event today. We activated the support pathway configured for that team.`;
   }
   return `An athlete you coach had a conversation today with Nora.`;
 }
@@ -53,8 +53,8 @@ function renderHtml({ coachName, athleteName, tier, dashboardUrl }) {
       <div style="font-weight:800;margin-bottom:8px;">What the tiers mean</div>
       <ul style="margin:0;padding-left:18px;line-height:1.6;">
         <li><strong>Tier 1 (Coach Review):</strong> Monitor-only concern. Please review and consider reaching out to the athlete.</li>
-        <li><strong>Tier 2 (Clinical Handoff — Consent-Based):</strong> Elevated concern. After consent, we hand off to a clinical professional. You’re notified for awareness and support.</li>
-        <li><strong>Tier 3 (Clinical Handoff — Immediate):</strong> Critical concern. Immediate clinical handoff is initiated. You’re notified for awareness and support.</li>
+        <li><strong>Tier 2 (Support Escalation — Consent-Based):</strong> Elevated concern. After consent, we activate the team's support route. You’re notified for awareness and support.</li>
+        <li><strong>Tier 3 (Support Escalation — Immediate):</strong> Critical concern. The team's support route is activated immediately. You’re notified for awareness and support.</li>
       </ul>
       <div style="margin-top:10px;color:#444;font-size:12px;">
         Note: This email intentionally excludes conversation details to protect athlete privacy.
@@ -117,9 +117,9 @@ async function sendCoachEscalationEmail({ coachEmail, coachName, athleteName, ti
     tier === 1
       ? `Coach Alert: Athlete check-in flagged (Tier 1)`
       : tier === 2
-        ? `Coach Alert: Tier 2 escalation event (clinical handoff)`
+        ? `Coach Alert: Tier 2 escalation event (support activated)`
         : tier === 3
-          ? `Coach Alert: Tier 3 escalation event (clinical handoff)`
+          ? `Coach Alert: Tier 3 escalation event (support activated)`
           : `Coach Alert: Athlete check-in update`;
 
   const htmlContent = renderHtml({ coachName, athleteName, tier, dashboardUrl });

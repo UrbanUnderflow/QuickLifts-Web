@@ -320,7 +320,7 @@ const AthleteCard: React.FC<AthleteCardProps> = ({
         return {
           title: 'Tier 2: Elevated Risk',
           description: 'The athlete showed signs of elevated psychological distress that may benefit from professional support.',
-          action: 'A clinical handoff has been initiated (with athlete consent). A mental health professional will reach out.',
+          action: 'The team support pathway has been activated with athlete consent. Review the dashboard for the current routing status.',
           examples: ['Persistent distress', 'Anxiety indicators', 'Injury-related psychological concerns', 'Recurring concerns'],
           color: '#F97316'
         };
@@ -328,7 +328,7 @@ const AthleteCard: React.FC<AthleteCardProps> = ({
         return {
           title: 'Tier 3: Critical Risk',
           description: 'The athlete expressed critical safety concerns requiring immediate professional intervention.',
-          action: 'A mandatory clinical handoff has been initiated. A mental health professional is being connected immediately.',
+          action: 'The team support pathway has been activated immediately. Review the dashboard for the current routing status.',
           examples: ['Self-harm indicators', 'Suicidal ideation', 'Imminent safety risk', 'Severe psychological distress'],
           color: '#EF4444'
         };

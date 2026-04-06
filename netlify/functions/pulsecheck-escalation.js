@@ -14,6 +14,7 @@
 
 const { initializeFirebaseAdmin, db, headers, admin } = require('./config/firebase');
 const {
+  applyPilotWatchList,
   emitPilotMetricEvent,
   evaluateCoachWorkflowContinuity,
   recordPilotMetricAlert,
@@ -80,6 +81,12 @@ const EscalationIncidentStatus = {
 };
 const ESCALATION_DEDUPE_WINDOW_SECONDS = 30 * 60;
 const INCIDENT_HISTORY_LIMIT = 10;
+const TEAMS_COLLECTION = 'pulsecheck-teams';
+const HOTLINE_SUPPORT_RESOURCE = Object.freeze({
+  name: '988 Suicide & Crisis Lifeline',
+  phone: '988',
+  url: 'https://988lifeline.org',
+});
 
 // AuntEDNA placeholder URLs (replace with real endpoints)
 const AUNTEDNA_BASE_URL = process.env.AUNTEDNA_API_URL || 'https://api.auntedna.com/v1';
@@ -92,6 +99,16 @@ function normalizeString(value) {
 
 function normalizeCategoryValue(value) {
   return normalizeString(value) || 'general';
+}
+
+function normalizeTeamEscalationRoute(value) {
+  return normalizeString(value).toLowerCase() === 'hotline' ? 'hotline' : 'clinician';
+}
+
+function buildHotlineSupportMessage(isCritical = false) {
+  return isCritical
+    ? `Please call or text ${HOTLINE_SUPPORT_RESOURCE.phone} now, or visit ${HOTLINE_SUPPORT_RESOURCE.url} for immediate support. We have also added you to the watch list so an admin can keep following up.`
+    : `Thank you. Please call or text ${HOTLINE_SUPPORT_RESOURCE.phone} now, or visit ${HOTLINE_SUPPORT_RESOURCE.url} for immediate support. We have also added you to the watch list so an admin can keep following up.`;
 }
 
 function mapTierToSeverity(tier) {
@@ -398,6 +415,129 @@ async function findMergeableEscalationRecord({ userId, conversationId, model }) 
   return fallbackCandidate ? { ...fallbackCandidate, mergeStrategy: 'fallback_key' } : null;
 }
 
+async function resolveEscalationSupportContext({
+  athleteId,
+  preferredPilotEnrollmentId = null,
+  preferredPilotId = null,
+  preferredTeamMembershipId = null,
+  preferredTeamId = null,
+}) {
+  const pilotContext = await resolvePilotEnrollmentContext({
+    db,
+    athleteId,
+    preferredPilotEnrollmentId: normalizeString(preferredPilotEnrollmentId) || null,
+    preferredPilotId: normalizeString(preferredPilotId) || null,
+    preferredTeamMembershipId: normalizeString(preferredTeamMembershipId) || null,
+    allowMembershipFallback: true,
+  });
+
+  const teamId = normalizeString(preferredTeamId) || normalizeString(pilotContext?.teamId);
+  if (!teamId) {
+    return {
+      route: 'clinician',
+      teamId: '',
+      team: null,
+      pilotContext,
+    };
+  }
+
+  let team = null;
+  try {
+    const teamDoc = await db.collection(TEAMS_COLLECTION).doc(teamId).get();
+    team = teamDoc.exists ? { id: teamDoc.id, ...(teamDoc.data() || {}) } : null;
+  } catch (error) {
+    team = null;
+  }
+
+  return {
+    route: normalizeTeamEscalationRoute(team?.defaultEscalationRoute),
+    teamId,
+    team,
+    pilotContext,
+  };
+}
+
+async function applyHotlineSupportRouting(userId, escalationId, escalationData, supportContext, isCritical = false) {
+  const processedAt = Math.floor(Date.now() / 1000);
+  let watchListState = null;
+
+  try {
+    watchListState = await applyPilotWatchList({
+      db,
+      athleteId: userId,
+      preferredPilotEnrollmentId: normalizeString(supportContext?.pilotContext?.pilotEnrollmentId) || null,
+      preferredPilotId: normalizeString(supportContext?.pilotContext?.pilotId) || null,
+      preferredTeamMembershipId: normalizeString(supportContext?.pilotContext?.teamMembershipId) || null,
+      actorUserId: null,
+      actorRole: 'system',
+      reasonCode: 'operational_hold',
+      reason: 'Hotline escalation route selected. Keep athlete on the watch list until an admin removes the hold.',
+      watchListSource: 'system',
+      linkedIncidentIds: [escalationId],
+      createdAt: processedAt * 1000,
+    });
+  } catch (error) {
+    console.warn('[pulsecheck-escalation] Failed to apply hotline watch list (non-blocking):', error?.message || error);
+    try {
+      if (supportContext?.pilotContext?.pilotId) {
+        await recordPilotMetricAlert({
+          db,
+          pilotId: supportContext.pilotContext.pilotId,
+          scope: 'hotline_watch_list_apply',
+          severity: 'warning',
+          message: error?.message || 'Failed to apply hotline watch list automatically.',
+          context: {
+            athleteId: normalizeString(userId),
+            escalationId: normalizeString(escalationId),
+          },
+        });
+      }
+    } catch (nestedError) {
+      console.error('[pulsecheck-escalation] Failed to record hotline watch list alert:', nestedError);
+    }
+  }
+
+  await db.collection('escalation-records').doc(escalationId).set({
+    supportRoute: 'hotline',
+    supportRouteResolvedAt: processedAt,
+    hotlineResource: HOTLINE_SUPPORT_RESOURCE,
+    hotlineResourceProvidedAt: processedAt,
+    watchListAutoApplied: Boolean(watchListState?.watchListActive),
+    watchListAppliedAt: watchListState?.watchListAppliedAt || processedAt,
+    pilotId: normalizeString(supportContext?.pilotContext?.pilotId) || null,
+    pilotEnrollmentId: normalizeString(supportContext?.pilotContext?.pilotEnrollmentId) || null,
+    organizationId: normalizeString(supportContext?.pilotContext?.organizationId) || null,
+    teamId: normalizeString(supportContext?.teamId || supportContext?.pilotContext?.teamId) || null,
+    teamMembershipId: normalizeString(supportContext?.pilotContext?.teamMembershipId) || null,
+    handoffStatus: HandoffStatus.Completed,
+    handoffInitiatedAt: escalationData?.handoffInitiatedAt || processedAt,
+    handoffCompletedAt: processedAt,
+    incidentLastActivityAt: processedAt,
+    incident: {
+      ...((escalationData?.incident && typeof escalationData.incident === 'object') ? escalationData.incident : {}),
+      id: escalationData?.incidentId || escalationId,
+      status: EscalationIncidentStatus.Open,
+      lastActivityAt: processedAt,
+      lifecycleEvents: appendBounded(
+        escalationData?.incident?.lifecycleEvents,
+        buildIncidentLifecycleEntry('opened', processedAt, 'hotline_route_applied')
+      ),
+    },
+  }, { merge: true });
+
+  await refreshPilotOutcomeRollupsForAthlete(userId, processedAt * 1000);
+
+  return {
+    success: true,
+    status: 'hotline_resource_provided',
+    supportRoute: 'hotline',
+    hotlineResource: HOTLINE_SUPPORT_RESOURCE,
+    watchListApplied: Boolean(watchListState?.watchListActive),
+    isCritical: Boolean(isCritical),
+    message: buildHotlineSupportMessage(isCritical),
+  };
+}
+
 exports.handler = async (event, context) => {
   let requestBody = {};
   if (event.httpMethod === 'OPTIONS') {
@@ -636,6 +776,12 @@ async function handleCreateEscalation(body) {
     classificationFamily: escalationData.classificationFamily,
     requiresClinicalHandoff: escalationData.requiresClinicalHandoff,
   }) ? escalationData.tier : EscalationTier.None;
+  const supportContext = await resolveEscalationSupportContext({
+    athleteId: userId,
+    preferredPilotId: escalationData?.pilotId || null,
+    preferredTeamMembershipId: escalationData?.teamMembershipId || null,
+    preferredTeamId: escalationData?.teamId || null,
+  });
   await db.collection('conversations').doc(conversationId).set({
     escalationTier: activeTier,
     escalationStatus: EscalationRecordStatus.Active,
@@ -647,7 +793,7 @@ async function handleCreateEscalation(body) {
   // For Tier 3 (Critical), immediately initiate handoff
   if (activeTier === EscalationTier.CriticalRisk) {
     // Trigger async handoff (don't wait)
-    triggerCriticalHandoff(userId, conversationId, escalationId, escalationData).catch(err => {
+    triggerCriticalHandoff(userId, conversationId, escalationId, escalationData, supportContext).catch(err => {
       console.error('[pulsecheck-escalation] Critical handoff error:', err);
     });
   }
@@ -668,7 +814,13 @@ async function handleCreateEscalation(body) {
       tier: escalationData.tier,
       deduped,
       requiresConsent: activeTier === EscalationTier.ElevatedRisk,
-      isCritical: activeTier === EscalationTier.CriticalRisk
+      isCritical: activeTier === EscalationTier.CriticalRisk,
+      supportRoute: supportContext.route,
+      hotlineResource: supportContext.route === 'hotline' ? HOTLINE_SUPPORT_RESOURCE : null,
+      message:
+        activeTier === EscalationTier.CriticalRisk && supportContext.route === 'hotline'
+          ? buildHotlineSupportMessage(true)
+          : null,
     })
   };
 }
@@ -698,6 +850,12 @@ async function handleConsent(body) {
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
+  const supportContext = await resolveEscalationSupportContext({
+    athleteId: userId,
+    preferredPilotId: data?.pilotId || null,
+    preferredTeamMembershipId: data?.teamMembershipId || null,
+    preferredTeamId: data?.teamId || null,
+  });
 
   if (consent) {
     // User accepted - initiate clinical handoff
@@ -719,7 +877,7 @@ async function handleConsent(body) {
     });
 
     // Trigger handoff
-    triggerElevatedHandoff(userId, data.conversationId, escalationId, data).catch(err => {
+    triggerElevatedHandoff(userId, data.conversationId, escalationId, data, supportContext).catch(err => {
       console.error('[pulsecheck-escalation] Elevated handoff error:', err);
     });
 
@@ -733,7 +891,12 @@ async function handleConsent(body) {
       body: JSON.stringify({
         success: true,
         status: 'consent_accepted',
-        message: 'Thank you. A mental health professional will reach out soon.'
+        supportRoute: supportContext.route,
+        hotlineResource: supportContext.route === 'hotline' ? HOTLINE_SUPPORT_RESOURCE : null,
+        message:
+          supportContext.route === 'hotline'
+            ? buildHotlineSupportMessage(false)
+            : 'Thank you. A mental health professional will reach out soon.'
       })
     };
   } else {
@@ -797,14 +960,22 @@ async function handleClinicalHandoff(body) {
   }
 
   const escalationData = escalationDoc.data();
+  const supportContext = await resolveEscalationSupportContext({
+    athleteId: userId,
+    preferredPilotId: escalationData?.pilotId || null,
+    preferredTeamMembershipId: escalationData?.teamMembershipId || null,
+    preferredTeamId: escalationData?.teamId || null,
+  });
 
   // Build handoff payload
-  const handoffResult = await performClinicalHandoff(
-    userId,
-    conversationId,
-    escalationId,
-    escalationData
-  );
+  const handoffResult = supportContext.route === 'hotline'
+    ? await applyHotlineSupportRouting(userId, escalationId, escalationData, supportContext, escalationData?.tier === EscalationTier.CriticalRisk)
+    : await performClinicalHandoff(
+        userId,
+        conversationId,
+        escalationId,
+        escalationData
+      );
 
   return {
     statusCode: 200,
@@ -1008,7 +1179,7 @@ async function notifyCoach(body) {
       tier === EscalationTier.MonitorOnly
         ? 'An athlete you coach was flagged for monitor-only concern. Please review when you can.'
         : tier === EscalationTier.ElevatedRisk || tier === EscalationTier.CriticalRisk
-          ? 'An athlete you coach had an escalation event and was handed off to a clinical professional. Please check your dashboard.'
+          ? 'An athlete you coach had an escalation event and the team support pathway was activated. Please check your dashboard.'
           : 'An athlete you coach has been flagged for elevated concern. Please check your dashboard.',
     escalationId,
     athleteId: userId,
@@ -1052,7 +1223,7 @@ async function notifyCoach(body) {
           body:
             tier === EscalationTier.MonitorOnly
               ? 'Tier 1 coach-review escalation email sent (privacy-safe).'
-              : `Tier ${tier} clinical-handoff escalation email sent (privacy-safe).`,
+              : `Tier ${tier} support-path escalation email sent (privacy-safe).`,
           notificationType: 'COACH_ESCALATION_EMAIL',
           functionName: 'netlify/pulsecheck-escalation.notifyCoach',
           success: !!result?.success,
@@ -1327,6 +1498,7 @@ async function performClinicalHandoff(userId, conversationId, escalationId, esca
       escalationId: escalationData.clinicalReferenceId,
       deduped: true,
       status: 'already_completed',
+      supportRoute: 'clinician',
     };
   }
   if (escalationData?.handoffStatus === HandoffStatus.Initiated) {
@@ -1335,6 +1507,7 @@ async function performClinicalHandoff(userId, conversationId, escalationId, esca
       deduped: true,
       status: 'already_initiated',
       escalationId: escalationData?.clinicalReferenceId || null,
+      supportRoute: 'clinician',
     };
   }
 
@@ -1407,6 +1580,7 @@ async function performClinicalHandoff(userId, conversationId, escalationId, esca
   // Update handoff status
   const initiatedAt = Math.floor(Date.now() / 1000);
   await db.collection('escalation-records').doc(escalationId).update({
+    supportRoute: 'clinician',
     handoffStatus: HandoffStatus.Initiated,
     handoffInitiatedAt: initiatedAt,
     incidentStatus: EscalationIncidentStatus.Open,
@@ -1478,6 +1652,7 @@ async function performClinicalHandoff(userId, conversationId, escalationId, esca
   if (result.success) {
     const completedAt = Math.floor(Date.now() / 1000);
     await db.collection('escalation-records').doc(escalationId).update({
+      supportRoute: 'clinician',
       handoffStatus: HandoffStatus.Completed,
       clinicalReferenceId: result.escalationId,
       handoffAcceptedAt: completedAt,
@@ -1523,20 +1698,30 @@ async function performClinicalHandoff(userId, conversationId, escalationId, esca
     });
   }
 
-  return result;
+  return {
+    ...result,
+    supportRoute: 'clinician',
+  };
 }
 
 /**
  * Trigger critical handoff (Tier 3 - immediate)
  */
-async function triggerCriticalHandoff(userId, conversationId, escalationId, escalationData) {
+async function triggerCriticalHandoff(userId, conversationId, escalationId, escalationData, supportContext = null) {
   console.log('[pulsecheck-escalation] Triggering critical handoff:', escalationId);
   
   // Notify coach immediately
   await notifyCoach({ escalationId, userId });
-  
-  // Perform clinical handoff
-  const result = await performClinicalHandoff(userId, conversationId, escalationId, escalationData);
+  const resolvedSupportContext = supportContext || await resolveEscalationSupportContext({
+    athleteId: userId,
+    preferredPilotId: escalationData?.pilotId || null,
+    preferredTeamMembershipId: escalationData?.teamMembershipId || null,
+    preferredTeamId: escalationData?.teamId || null,
+  });
+
+  const result = resolvedSupportContext.route === 'hotline'
+    ? await applyHotlineSupportRouting(userId, escalationId, escalationData, resolvedSupportContext, true)
+    : await performClinicalHandoff(userId, conversationId, escalationId, escalationData);
   
   console.log('[pulsecheck-escalation] Critical handoff complete:', result);
   return result;
@@ -1545,14 +1730,21 @@ async function triggerCriticalHandoff(userId, conversationId, escalationId, esca
 /**
  * Trigger elevated handoff (Tier 2 - after consent)
  */
-async function triggerElevatedHandoff(userId, conversationId, escalationId, escalationData) {
+async function triggerElevatedHandoff(userId, conversationId, escalationId, escalationData, supportContext = null) {
   console.log('[pulsecheck-escalation] Triggering elevated handoff:', escalationId);
   
   // Notify coach
   await notifyCoach({ escalationId, userId });
-  
-  // Perform clinical handoff
-  const result = await performClinicalHandoff(userId, conversationId, escalationId, escalationData);
+  const resolvedSupportContext = supportContext || await resolveEscalationSupportContext({
+    athleteId: userId,
+    preferredPilotId: escalationData?.pilotId || null,
+    preferredTeamMembershipId: escalationData?.teamMembershipId || null,
+    preferredTeamId: escalationData?.teamId || null,
+  });
+
+  const result = resolvedSupportContext.route === 'hotline'
+    ? await applyHotlineSupportRouting(userId, escalationId, escalationData, resolvedSupportContext, false)
+    : await performClinicalHandoff(userId, conversationId, escalationId, escalationData);
   
   console.log('[pulsecheck-escalation] Elevated handoff complete:', result);
   return result;

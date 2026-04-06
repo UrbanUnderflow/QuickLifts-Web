@@ -27,6 +27,7 @@ import type {
   PulseCheckOrganizationMembership,
   PulseCheckOrganization,
   PulseCheckTeamImplementationMetadata,
+  PulseCheckTeamEscalationRoute,
   PulseCheckAuntEdnaClinicianProfile,
   PulseCheckInviteLinkType,
   PulseCheckRevenueRecipientRole,
@@ -135,6 +136,8 @@ const normalizeRevenueRecipientRole = (value: unknown): PulseCheckRevenueRecipie
   }
   return 'team-admin';
 };
+const normalizeTeamEscalationRoute = (value: unknown): PulseCheckTeamEscalationRoute =>
+  normalizeString(typeof value === 'string' ? value : '') === 'hotline' ? 'hotline' : 'clinician';
 const normalizeReferralRevenueSharePct = (value: unknown) => {
   const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
   if (!Number.isFinite(parsed)) return 0;
@@ -458,6 +461,8 @@ const normalizeTeamImplementationMetadata = (
     routingDefaultsMode:
       routingDefaultsMode === 'team-clinician-profile'
         ? 'team-clinician-profile'
+        : routingDefaultsMode === 'team-hotline'
+          ? 'team-hotline'
         : routingDefaultsMode === 'organization-default-required'
           ? 'organization-default-required'
           : 'organization-default-optional',
@@ -510,6 +515,7 @@ const toTeam = (id: string, data: Record<string, any>): PulseCheckTeam => ({
   status: (data.status as PulseCheckTeamStatus) || 'provisioning',
   defaultInvitePolicy: data.defaultInvitePolicy || 'admin-only',
   commercialConfig: normalizeTeamCommercialConfig(data.commercialConfig),
+  defaultEscalationRoute: normalizeTeamEscalationRoute(data.defaultEscalationRoute),
   defaultClinicianProfileId: data.defaultClinicianProfileId || '',
   defaultClinicianExternalProfileId: data.defaultClinicianExternalProfileId || '',
   defaultClinicianProfileName: data.defaultClinicianProfileName || '',
@@ -1664,6 +1670,10 @@ export const pulseCheckProvisioningService = {
 
   async createTeam(input: CreatePulseCheckTeamInput): Promise<string> {
     const commercialConfig = normalizeTeamCommercialConfig(input.commercialConfig);
+    const defaultEscalationRoute = normalizeTeamEscalationRoute(input.defaultEscalationRoute);
+    const normalizedImplementationMetadata = input.implementationMetadata
+      ? normalizeTeamImplementationMetadata(input.implementationMetadata, input.defaultInvitePolicy)
+      : undefined;
     const payload = {
       organizationId: normalizeString(input.organizationId),
       displayName: normalizeString(input.displayName),
@@ -1678,14 +1688,23 @@ export const pulseCheckProvisioningService = {
       status: input.status || 'provisioning',
       defaultInvitePolicy: input.defaultInvitePolicy,
       commercialConfig,
-      defaultClinicianProfileId: normalizeString(input.defaultClinicianProfileId),
-      defaultClinicianExternalProfileId: normalizeString(input.defaultClinicianExternalProfileId),
-      defaultClinicianProfileName: normalizeString(input.defaultClinicianProfileName),
-      defaultClinicianProfileType: input.defaultClinicianProfileType || 'group',
-      defaultClinicianProfileSource: input.defaultClinicianProfileSource || 'pulsecheck-local',
+      defaultEscalationRoute,
+      defaultClinicianProfileId: defaultEscalationRoute === 'clinician' ? normalizeString(input.defaultClinicianProfileId) : '',
+      defaultClinicianExternalProfileId:
+        defaultEscalationRoute === 'clinician' ? normalizeString(input.defaultClinicianExternalProfileId) : '',
+      defaultClinicianProfileName: defaultEscalationRoute === 'clinician' ? normalizeString(input.defaultClinicianProfileName) : '',
+      defaultClinicianProfileType: defaultEscalationRoute === 'clinician' ? (input.defaultClinicianProfileType || 'group') : 'group',
+      defaultClinicianProfileSource:
+        defaultEscalationRoute === 'clinician' ? (input.defaultClinicianProfileSource || 'pulsecheck-local') : 'pulsecheck-local',
       implementationMetadata: input.implementationMetadata
         ? {
-            ...normalizeTeamImplementationMetadata(input.implementationMetadata, input.defaultInvitePolicy),
+            ...(normalizedImplementationMetadata || {}),
+            routingDefaultsMode:
+              defaultEscalationRoute === 'hotline'
+                ? 'team-hotline'
+                : normalizeString(input.defaultClinicianProfileId)
+                  ? 'team-clinician-profile'
+                  : normalizedImplementationMetadata?.routingDefaultsMode || 'organization-default-optional',
             provisionedAt:
               input.implementationMetadata.provisionedAt ||
               (input.implementationMetadata.legacySignupPathUsed ? null : serverTimestamp()),

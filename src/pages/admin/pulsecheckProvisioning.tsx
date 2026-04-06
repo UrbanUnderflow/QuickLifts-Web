@@ -34,6 +34,7 @@ import type {
   PulseCheckTeam,
   PulseCheckTeamCommercialConfig,
   PulseCheckTeamCommercialModel,
+  PulseCheckTeamEscalationRoute,
   PulseCheckTeamPlanStatus,
   PulseCheckTeamStatus,
 } from '../../api/firebase/pulsecheckProvisioning/types';
@@ -73,6 +74,7 @@ const defaultTeamForm: CreatePulseCheckTeamInput = {
   defaultAdminEmail: '',
   defaultInvitePolicy: 'admin-and-staff',
   commercialConfig: getDefaultPulseCheckTeamCommercialConfig(),
+  defaultEscalationRoute: 'hotline',
   defaultClinicianProfileId: '',
   defaultClinicianProfileName: '',
   defaultClinicianProfileType: 'group',
@@ -116,6 +118,29 @@ const TEAM_TYPE_OPTIONS = [
   { value: 'research-group', label: 'Research Group' },
   { value: 'other', label: 'Other' },
 ];
+
+const TEAM_ESCALATION_ROUTE_OPTIONS: Array<{
+  value: PulseCheckTeamEscalationRoute;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: 'hotline',
+    label: 'Hotline',
+    description: 'Athletes are directed to 988 during escalation and stay on the watch list until an admin clears them.',
+  },
+  {
+    value: 'clinician',
+    label: 'Clinician',
+    description: 'Athletes follow the clinician escalation lane and the team must have a clinician profile attached.',
+  },
+];
+
+const HOTLINE_RESOURCE = {
+  name: '988 Suicide & Crisis Lifeline',
+  phone: '988',
+  url: 'https://988lifeline.org',
+};
 
 const TEAM_COMMERCIAL_MODEL_OPTIONS: Array<{ value: PulseCheckTeamCommercialModel; label: string }> = [
   { value: 'athlete-pay', label: 'Athlete Pay' },
@@ -269,6 +294,8 @@ const getCohortAssignmentRuleLabel = (value?: string) => {
   if (!value || value === 'manual-staff-assignment') return 'Manual assignment by staff';
   return value;
 };
+const getTeamEscalationRouteLabel = (value?: PulseCheckTeamEscalationRoute) =>
+  TEAM_ESCALATION_ROUTE_OPTIONS.find((option) => option.value === value)?.label || 'Clinician';
 
 const normalizeCohortTag = (value: string) => value.trim().replace(/\s+/g, '-').toLowerCase();
 const sanitizeStorageSegment = (value: string) => value.replace(/[^a-zA-Z0-9._-]+/g, '-');
@@ -401,6 +428,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
     () => clinicianProfiles.find((profile) => profile.id === teamForm.defaultClinicianProfileId) || null,
     [clinicianProfiles, teamForm.defaultClinicianProfileId]
   );
+  const draftTeamUsesClinicianRoute = teamForm.defaultEscalationRoute === 'clinician';
   const teamSportOptions = useMemo(() => {
     if (!teamForm.sportOrProgram.trim()) return sportOptions;
     if (sportOptions.some((sport) => sport.name.toLowerCase() === teamForm.sportOrProgram.trim().toLowerCase())) {
@@ -721,7 +749,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
   const handleTeamFieldChange = (
     field: keyof CreatePulseCheckTeamInput,
-    value: string | PulseCheckInvitePolicy
+    value: string | PulseCheckInvitePolicy | PulseCheckTeamEscalationRoute
   ) => {
     setTeamForm((current) => {
       if (field === 'organizationId') {
@@ -975,10 +1003,13 @@ const PulseCheckProvisioningPage: React.FC = () => {
       return;
     }
 
-    if (!teamForm.defaultClinicianProfileId || !teamForm.defaultClinicianProfileName) {
+    if (
+      teamForm.defaultEscalationRoute === 'clinician' &&
+      (!teamForm.defaultClinicianProfileId || !teamForm.defaultClinicianProfileName)
+    ) {
       setMessage({
         type: 'error',
-        text: 'Select or create a clinician profile before creating the team.',
+        text: 'Select or create a clinician profile before creating a clinician-routed team.',
       });
       return;
     }
@@ -1025,7 +1056,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
       await loadData();
       setMessage({
         type: 'success',
-        text: 'Team created with its default clinician profile attached. You can now add pilots and cohorts before issuing onboarding links.',
+        text:
+          teamForm.defaultEscalationRoute === 'hotline'
+            ? 'Team created with 988 hotline escalation routing and automatic watch-list hold behavior. You can now add pilots and cohorts before issuing onboarding links.'
+            : 'Team created with its default clinician profile attached. You can now add pilots and cohorts before issuing onboarding links.',
       });
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to create team:', error);
@@ -1358,7 +1392,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                 <h1 className="text-3xl font-semibold text-white">PulseCheck Provisioning</h1>
                 <p className="mt-2 max-w-4xl text-sm text-zinc-300">
                   First implementation slice for the provisioning model. This page lets Pulse Check admins create the
-                  top-level organization, persistent team container, pilot structure, cohort structure, clinical route,
+                  top-level organization, persistent team container, pilot structure, cohort structure, support route,
                   and onboarding links in one connected setup flow.
                 </p>
               </div>
@@ -1392,10 +1426,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
             <article className="rounded-2xl border border-purple-500/20 bg-purple-500/[0.06] p-4">
               <div className="flex items-center gap-3">
                 <Stethoscope className="h-5 w-5 text-purple-300" />
-                <h2 className="text-sm font-semibold text-white">Step 3: Connect Clinical Profile</h2>
+                <h2 className="text-sm font-semibold text-white">Step 3: Configure Support Route</h2>
               </div>
               <p className="mt-2 text-sm text-zinc-300">
-                Attach the team to a clinician profile record now, then let athlete-level overrides fall back to this default later.
+                Choose whether escalations route to the 988 hotline or to a clinician profile attached to the team.
               </p>
             </article>
 
@@ -1851,33 +1885,76 @@ const PulseCheckProvisioningPage: React.FC = () => {
                     </div>
                   </label>
 
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Escalation Support Route</span>
+                    <select
+                      value={teamForm.defaultEscalationRoute}
+                      onChange={(event) => handleTeamFieldChange('defaultEscalationRoute', event.target.value as PulseCheckTeamEscalationRoute)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
+                    >
+                      {TEAM_ESCALATION_ROUTE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-zinc-500">
+                      {TEAM_ESCALATION_ROUTE_OPTIONS.find((option) => option.value === teamForm.defaultEscalationRoute)?.description}
+                    </p>
+                  </label>
+
                   <div className="space-y-2 md:col-span-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Selected Team Clinical Profile</span>
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">
+                      {draftTeamUsesClinicianRoute ? 'Selected Team Clinician Profile' : 'Hotline Escalation Behavior'}
+                    </span>
                     <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3">
-                      {selectedClinicianProfile ? (
-                        <div className="space-y-1 text-sm text-zinc-300">
-                          <p className="font-medium text-white">{selectedClinicianProfile.displayName}</p>
+                      {draftTeamUsesClinicianRoute ? (
+                        selectedClinicianProfile ? (
+                          <div className="space-y-1 text-sm text-zinc-300">
+                            <p className="font-medium text-white">{selectedClinicianProfile.displayName}</p>
+                            <p>
+                              Local Profile ID: <span className="text-zinc-400">{selectedClinicianProfile.id}</span>
+                            </p>
+                            <p>
+                              Type: <span className="text-zinc-400">{selectedClinicianProfile.profileType}</span>
+                            </p>
+                            <p>
+                              Organization: <span className="text-zinc-400">{selectedClinicianProfile.organizationName || 'Not set'}</span>
+                            </p>
+                            <p>
+                              Sync status: <span className="text-zinc-400">{selectedClinicianProfile.syncStatus}</span>
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-zinc-500">
+                            No clinician profile connected yet. Use the clinician configuration card below before creating this team.
+                          </p>
+                        )
+                      ) : (
+                        <div className="space-y-2 text-sm text-zinc-300">
+                          <p className="font-medium text-white">{HOTLINE_RESOURCE.name}</p>
                           <p>
-                            Local Profile ID: <span className="text-zinc-400">{selectedClinicianProfile.id}</span>
+                            Direct athletes to <span className="text-zinc-100">{HOTLINE_RESOURCE.phone}</span> or{' '}
+                            <a
+                              href={HOTLINE_RESOURCE.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-cyan-300 underline-offset-4 transition hover:text-cyan-200 hover:underline"
+                            >
+                              {HOTLINE_RESOURCE.url}
+                            </a>{' '}
+                            during escalations.
                           </p>
                           <p>
-                            Type: <span className="text-zinc-400">{selectedClinicianProfile.profileType}</span>
-                          </p>
-                          <p>
-                            Organization: <span className="text-zinc-400">{selectedClinicianProfile.organizationName || 'Not set'}</span>
-                          </p>
-                          <p>
-                            Sync status: <span className="text-zinc-400">{selectedClinicianProfile.syncStatus}</span>
+                            Athletes routed this way are automatically added to the watch list and stay there until an admin removes them.
                           </p>
                         </div>
-                      ) : (
-                        <p className="text-sm text-zinc-500">
-                          No clinician profile connected yet. Use the clinical profile card below before creating the team.
-                        </p>
                       )}
                     </div>
                     <p className="text-xs text-zinc-500">
-                      Routing rule: athlete-specific provider override later, otherwise fall back to this team default.
+                      {draftTeamUsesClinicianRoute
+                        ? 'Routing rule: athlete-specific provider override later, otherwise fall back to this team clinician profile.'
+                        : 'Routing rule: hotline support first, plus an operational watch-list hold that remains active until an admin clears it.'}
                     </p>
                   </div>
 
@@ -2199,13 +2276,19 @@ const PulseCheckProvisioningPage: React.FC = () => {
                 <div className="mb-5 flex items-center gap-3">
                   <Stethoscope className="h-5 w-5 text-purple-300" />
                   <div>
-                    <h2 className="text-lg font-semibold text-white">Connect Clinical Profile</h2>
+                    <h2 className="text-lg font-semibold text-white">
+                      {draftTeamUsesClinicianRoute ? 'Connect Clinician Profile' : 'Hotline Escalation Route'}
+                    </h2>
                     <p className="text-sm text-zinc-400">
-                      For now, PulseCheck stores clinician profile records locally in Firestore and links the team to that record. These can sync to AuntEdna later once the APIs are available.
+                      {draftTeamUsesClinicianRoute
+                        ? 'For now, PulseCheck stores clinician profile records locally in Firestore and links the team to that record. These can sync to AuntEdna later once the APIs are available.'
+                        : 'This team will use the 988 Lifeline instead of a clinician profile. Escalated athletes are shown the hotline resource and automatically placed on the watch list until an admin clears them.'}
                     </p>
                   </div>
                 </div>
 
+                {draftTeamUsesClinicianRoute ? (
+                  <>
                 <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                   <button
                     type="button"
@@ -2363,6 +2446,38 @@ const PulseCheckProvisioningPage: React.FC = () => {
                     </div>
                   </form>
                 )}
+                  </>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4">
+                      <p className="text-xs uppercase tracking-wide text-zinc-500">Active Hotline</p>
+                      <p className="mt-2 text-lg font-semibold text-white">{HOTLINE_RESOURCE.name}</p>
+                      <p className="mt-2 text-sm text-zinc-300">
+                        Athletes are directed to <span className="font-semibold text-white">{HOTLINE_RESOURCE.phone}</span> and to{' '}
+                        <a
+                          href={HOTLINE_RESOURCE.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-cyan-300 underline-offset-4 transition hover:text-cyan-200 hover:underline"
+                        >
+                          {HOTLINE_RESOURCE.url}
+                        </a>{' '}
+                        when they hit the escalation path for this team.
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-300">
+                      <p className="font-medium text-white">Automatic watch-list hold</p>
+                      <p className="mt-2 leading-7 text-zinc-400">
+                        Hotline-routed escalations automatically place the athlete on the watch list and leave that hold in place until an admin removes them manually.
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-dashed border-zinc-700 bg-black/10 px-4 py-5 text-sm text-zinc-500">
+                      Switch the team route back to <span className="text-zinc-300">Clinician</span> above if you want to attach a clinician profile and generate clinician onboarding links instead.
+                    </div>
+                  </div>
+                )}
               </section>
             </div>
 
@@ -2372,7 +2487,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                   <ClipboardList className="h-5 w-5 text-purple-300" />
                   <div>
                     <h2 className="text-lg font-semibold text-white">Connected Provisioning Map</h2>
-                    <p className="text-sm text-zinc-400">Live org, team, clinician, and activation state shown as one connected hierarchy.</p>
+                    <p className="text-sm text-zinc-400">Live org, team, support-route, and activation state shown as one connected hierarchy.</p>
                   </div>
                 </div>
 
@@ -2477,6 +2592,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                               <p>Invite policy: {team.defaultInvitePolicy}</p>
                                               <p>Default admin: {team.defaultAdminEmail || 'Not set'}</p>
                                               <p>Site / campus: {team.siteLabel || 'Not set'}</p>
+                                              <p>Escalation route: {getTeamEscalationRouteLabel(team.defaultEscalationRoute)}</p>
                                               <p>Created: {formatTimestamp(team.createdAt)}</p>
                                             </div>
                                             <div className="mt-4 rounded-2xl border border-zinc-800 bg-[#0b1220] p-4">
@@ -2660,52 +2776,78 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                         </div>
 
                                         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.9fr)_auto_minmax(0,1.1fr)] xl:items-stretch">
-                                          <div className="rounded-2xl border border-purple-500/20 bg-purple-500/[0.06] p-4">
-                                            <div className="flex items-start justify-between gap-3">
-                                              <div className="flex items-center gap-2">
-                                                <Stethoscope className="h-4 w-4 text-purple-300" />
-                                                <p className="text-sm font-semibold text-white">AuntEdna Clinician Onboarding</p>
+                                          {team.defaultEscalationRoute === 'clinician' ? (
+                                            <div className="rounded-2xl border border-purple-500/20 bg-purple-500/[0.06] p-4">
+                                              <div className="flex items-start justify-between gap-3">
+                                                <div className="flex items-center gap-2">
+                                                  <Stethoscope className="h-4 w-4 text-purple-300" />
+                                                  <p className="text-sm font-semibold text-white">AuntEdna Clinician Onboarding</p>
+                                                </div>
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    clinicianProfile
+                                                      ? handleOpenOnboardingModal({
+                                                          channel: 'clinician',
+                                                          organization,
+                                                          team,
+                                                          clinicianProfile,
+                                                        })
+                                                      : undefined
+                                                  }
+                                                  disabled={!clinicianProfile}
+                                                  className="inline-flex items-center gap-1.5 rounded-xl border border-purple-400/30 px-3 py-2 text-[11px] font-semibold text-purple-100 transition hover:border-purple-300 hover:text-white disabled:cursor-not-allowed disabled:border-zinc-800 disabled:text-zinc-600"
+                                                >
+                                                  <MailPlus className="h-3.5 w-3.5" />
+                                                  Send Onboarding Link
+                                                </button>
                                               </div>
-                                              <button
-                                                type="button"
-                                                onClick={() =>
-                                                  clinicianProfile
-                                                    ? handleOpenOnboardingModal({
-                                                        channel: 'clinician',
-                                                        organization,
-                                                        team,
-                                                        clinicianProfile,
-                                                      })
-                                                    : undefined
-                                                }
-                                                disabled={!clinicianProfile}
-                                                className="inline-flex items-center gap-1.5 rounded-xl border border-purple-400/30 px-3 py-2 text-[11px] font-semibold text-purple-100 transition hover:border-purple-300 hover:text-white disabled:cursor-not-allowed disabled:border-zinc-800 disabled:text-zinc-600"
-                                              >
-                                                <MailPlus className="h-3.5 w-3.5" />
-                                                Send Onboarding Link
-                                              </button>
+                                              {clinicianProfile ? (
+                                                <div className="mt-3 space-y-2 text-xs text-zinc-300">
+                                                  <p className="font-medium text-white">{clinicianProfile.displayName}</p>
+                                                  <p>{clinicianProfile.profileType} · {clinicianProfile.syncStatus}</p>
+                                                  <p>{clinicianProfile.email || 'No email set'}</p>
+                                                  <p>{clinicianProfile.organizationName || 'No organization label'}</p>
+                                                  {clinicianOnboardingLink ? (
+                                                    <div className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-3">
+                                                      <p className="text-[11px] uppercase tracking-wide text-zinc-500">Active clinician link</p>
+                                                      <p className="mt-1 truncate text-xs text-white">{clinicianOnboardingLink.activationUrl}</p>
+                                                    </div>
+                                                  ) : (
+                                                    <p className="text-[11px] text-zinc-500">
+                                                      No clinician onboarding link created yet.
+                                                    </p>
+                                                  )}
+                                                </div>
+                                              ) : (
+                                                <p className="mt-3 text-xs text-zinc-500">No clinician profile connected yet.</p>
+                                              )}
                                             </div>
-                                            {clinicianProfile ? (
-                                              <div className="mt-3 space-y-2 text-xs text-zinc-300">
-                                                <p className="font-medium text-white">{clinicianProfile.displayName}</p>
-                                                <p>{clinicianProfile.profileType} · {clinicianProfile.syncStatus}</p>
-                                                <p>{clinicianProfile.email || 'No email set'}</p>
-                                                <p>{clinicianProfile.organizationName || 'No organization label'}</p>
-                                                {clinicianOnboardingLink ? (
-                                                  <div className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-3">
-                                                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">Active clinician link</p>
-                                                    <p className="mt-1 truncate text-xs text-white">{clinicianOnboardingLink.activationUrl}</p>
-                                                  </div>
-                                                ) : (
-                                                  <p className="text-[11px] text-zinc-500">
-                                                    No clinician onboarding link created yet.
-                                                  </p>
-                                                )}
+                                          ) : (
+                                            <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4">
+                                              <div className="flex items-start justify-between gap-3">
+                                                <div className="flex items-center gap-2">
+                                                  <AlertTriangle className="h-4 w-4 text-red-300" />
+                                                  <p className="text-sm font-semibold text-white">988 Hotline Escalation Route</p>
+                                                </div>
+                                                <a
+                                                  href={HOTLINE_RESOURCE.url}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  className="inline-flex items-center gap-1.5 rounded-xl border border-red-400/30 px-3 py-2 text-[11px] font-semibold text-red-100 transition hover:border-red-300 hover:text-white"
+                                                >
+                                                  <ExternalLink className="h-3.5 w-3.5" />
+                                                  Open 988
+                                                </a>
                                               </div>
-                                            ) : (
-                                              <p className="mt-3 text-xs text-zinc-500">No clinician profile connected yet.</p>
-                                            )}
-                                          </div>
+                                              <div className="mt-3 space-y-2 text-xs text-zinc-300">
+                                                <p className="font-medium text-white">{HOTLINE_RESOURCE.name}</p>
+                                                <p>Route: call or text {HOTLINE_RESOURCE.phone}</p>
+                                                <p>Escalated athletes are added to the watch list automatically.</p>
+                                                <p>That watch-list hold stays active until an admin removes it.</p>
+                                              </div>
+                                            </div>
+                                          )}
 
                                           <div className="hidden items-center justify-center xl:flex">
                                             <div className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-800 bg-black/30">
