@@ -11,6 +11,9 @@ const GOOGLE_GUEST_CALENDAR_SCOPE = [
   'email',
   'https://www.googleapis.com/auth/calendar.readonly',
 ].join(' ');
+const GOOGLE_GUEST_CALENDAR_REQUIRED_SCOPES = [
+  'https://www.googleapis.com/auth/calendar.readonly',
+];
 const GOOGLE_GUEST_CALENDAR_CALLBACK_PATH = '/api/group-meet/calendar/google/callback';
 const GOOGLE_GUEST_CALENDAR_STATE_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_GUEST_GOOGLE_CALENDAR_OAUTH_SECRET_NAME = 'group-meet-guest-google-oauth';
@@ -211,6 +214,10 @@ export async function getGuestGoogleCalendarRedirectUri(req: NextApiRequest) {
 export function toPublicGuestCalendarErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || '');
 
+  if (/insufficient authentication scopes|insufficient scopes|request had insufficient authentication scopes/i.test(message)) {
+    return 'Google Calendar needs to be reconnected so Group Meet can request read-only calendar access.';
+  }
+
   if (/not configured|not available right now|client id|client secret|redirect uri|encryption/i.test(message)) {
     return 'Google Calendar connect is not available right now. You can still add your availability manually.';
   }
@@ -296,10 +303,28 @@ export function getPublicGuestCalendarDebugInfo(error: unknown): GroupMeetGuestC
     };
   }
 
+  if (normalized.includes('insufficient authentication scopes') || normalized.includes('insufficient scopes')) {
+    return {
+      code: 'google_calendar_scope_missing',
+      hint: 'Reconnect Google Calendar so the guest can approve read-only calendar access for import.',
+    };
+  }
+
   return {
     code: 'google_calendar_connect_unknown',
     hint: 'Check the server log entry for the connect route to see the exact failure stage.',
   };
+}
+
+export function hasRequiredGuestCalendarScopes(scopeValue: string | null | undefined) {
+  const normalized = new Set(
+    String(scopeValue || '')
+      .split(/\s+/)
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+  );
+
+  return GOOGLE_GUEST_CALENDAR_REQUIRED_SCOPES.every((scope) => normalized.has(scope));
 }
 
 export function hasTruthyHeader(value: string | string[] | undefined) {
@@ -583,6 +608,12 @@ export async function getGuestGoogleCalendarAccessToken(args: {
 
   if (!nextTokens.accessToken) {
     throw new Error('Google Calendar did not return a usable access token.');
+  }
+
+  if (nextTokens.scope && !hasRequiredGuestCalendarScopes(nextTokens.scope)) {
+    throw new Error(
+      'Google Calendar needs to be reconnected so Group Meet can request read-only calendar access.'
+    );
   }
 
   return {

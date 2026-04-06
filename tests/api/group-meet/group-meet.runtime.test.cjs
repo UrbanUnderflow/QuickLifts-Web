@@ -523,3 +523,76 @@ test('guest Google debug classification explains generic config-unavailable fail
   assert.equal(debug.code, 'google_oauth_config_unavailable');
   assert.match(debug.hint, /group-meet-guest-google-oauth/);
 });
+
+test('guest Google scope helper recognizes the required read-only calendar scope', { concurrency: false }, () => {
+  const { hasRequiredGuestCalendarScopes } = loadGuestGoogleCalendarRuntime({
+    secretManagerMock: async () => {
+      throw new Error('Secret Manager mock should not be called.');
+    },
+  });
+
+  assert.equal(
+    hasRequiredGuestCalendarScopes('openid email https://www.googleapis.com/auth/calendar.readonly'),
+    true
+  );
+  assert.equal(hasRequiredGuestCalendarScopes('openid email'), false);
+});
+
+test('guest Google access token helper forces reconnect when the stored grant lacks calendar.readonly', { concurrency: false }, async () => {
+  const previous = new Map(GUEST_CALENDAR_ENV_KEYS.map((key) => [key, process.env[key]]));
+
+  for (const key of GUEST_CALENDAR_ENV_KEYS) {
+    delete process.env[key];
+  }
+  process.env.GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY = 'guest-calendar-encryption-secret';
+
+  try {
+    const {
+      encryptGuestGoogleCalendarTokens,
+      getGuestGoogleCalendarAccessToken,
+      toPublicGuestCalendarErrorMessage,
+    } = loadGuestGoogleCalendarRuntime({
+      secretManagerMock: async () => {
+        throw new Error('Secret Manager mock should not be called.');
+      },
+    });
+
+    const encryptedToken = await encryptGuestGoogleCalendarTokens({
+      accessToken: 'access-token',
+      refreshToken: null,
+      expiryDate: Date.now() + 60_000,
+      scope: 'openid email',
+      tokenType: 'Bearer',
+      connectedEmail: 'tremaine.grant@gmail.com',
+    });
+
+    await assert.rejects(
+      () =>
+        getGuestGoogleCalendarAccessToken({
+          req: { headers: { host: 'fitwithpulse.ai' } },
+          inviteData: {
+            calendarImport: {
+              encryptedToken,
+            },
+          },
+        }),
+      /reconnected so Group Meet can request read-only calendar access/i
+    );
+
+    assert.equal(
+      toPublicGuestCalendarErrorMessage(
+        new Error('Request had insufficient authentication scopes.')
+      ),
+      'Google Calendar needs to be reconnected so Group Meet can request read-only calendar access.'
+    );
+  } finally {
+    for (const key of GUEST_CALENDAR_ENV_KEYS) {
+      const priorValue = previous.get(key);
+      if (priorValue == null) {
+        delete process.env[key];
+      } else {
+        process.env[key] = priorValue;
+      }
+    }
+  }
+});
