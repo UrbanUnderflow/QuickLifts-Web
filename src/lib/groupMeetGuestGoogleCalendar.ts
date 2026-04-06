@@ -126,9 +126,7 @@ async function getGuestGoogleCalendarSecretConfig() {
     const secretName =
       process.env.GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME?.trim() ||
       process.env.GROUP_MEET_GUEST_GOOGLE_CALENDAR_OAUTH_SECRET_NAME?.trim() ||
-      (process.env.NODE_ENV === 'production'
-        ? DEFAULT_GUEST_GOOGLE_CALENDAR_OAUTH_SECRET_NAME
-        : '');
+      DEFAULT_GUEST_GOOGLE_CALENDAR_OAUTH_SECRET_NAME;
 
     if (!secretName) {
       return null;
@@ -227,6 +225,13 @@ export function toPublicGuestCalendarErrorMessage(error: unknown) {
 export function getPublicGuestCalendarDebugInfo(error: unknown): GroupMeetGuestCalendarDebugInfo {
   const message = error instanceof Error ? error.message : String(error || '');
   const normalized = message.toLowerCase();
+
+  if (normalized.includes('not configured') || normalized.includes('not available right now')) {
+    return {
+      code: 'google_oauth_config_unavailable',
+      hint: 'The runtime could not resolve the guest Google OAuth config. Verify it can read the canonical Secret Manager secret group-meet-guest-google-oauth or set GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME explicitly.',
+    };
+  }
 
   if (normalized.includes('failed to access secret manager secret')) {
     if (normalized.includes('permission') || normalized.includes('denied') || normalized.includes('403')) {
