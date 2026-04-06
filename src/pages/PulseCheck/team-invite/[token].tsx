@@ -61,6 +61,18 @@ const roleLabel: Record<PulseCheckTeamMembershipRole, string> = {
   clinician: 'Clinician',
   athlete: 'Athlete',
 };
+const resolveInviteStatus = (status: unknown, redemptionMode: unknown) => {
+  const normalizedStatus = String(status || '').trim();
+  if (normalizedStatus === 'revoked') {
+    return 'revoked';
+  }
+
+  if (normalizedStatus === 'redeemed' && redemptionMode !== 'general') {
+    return 'redeemed';
+  }
+
+  return 'active';
+};
 
 const nextHrefByRole = (role: PulseCheckTeamMembershipRole, organizationId: string, teamId: string) => {
   if (role === 'team-admin') {
@@ -892,7 +904,9 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
       invite = await getFirestoreDocFallback('pulsecheck-invite-links', token, forceDevFirebase);
     }
     if (!invite) return { notFound: true };
-    if (invite.status && invite.status !== 'active') return { notFound: true };
+    const redemptionMode = invite.redemptionMode === 'general' ? 'general' : 'single-use';
+    const effectiveStatus = resolveInviteStatus(invite.status, redemptionMode);
+    if (effectiveStatus !== 'active') return { notFound: true };
     if (invite.inviteType !== 'team-access') return { notFound: true };
 
     let organizationName = 'PulseCheck Organization';
@@ -927,7 +941,6 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
     const previewTitle = String(invite.pilotName || '').trim()
       ? `You're Invited to Join ${String(invite.pilotName).trim()}`
       : `You're Invited to Join ${teamName}`;
-    const redemptionMode = invite.redemptionMode === 'general' ? 'general' : 'single-use';
     const previewDescription = invite.cohortId
       ? `Join ${teamName} inside ${organizationName}. This ${redemptionMode === 'general' ? 'general ' : ''}pilot invite places you into ${String(invite.cohortName || 'the assigned cohort')} automatically.`
       : `Join ${teamName} inside ${organizationName} on PulseCheck.`;
@@ -949,7 +962,7 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
           targetEmail: String(invite.targetEmail || ''),
           organizationName,
           teamName,
-          status: String(invite.status || 'active'),
+          status: effectiveStatus,
           redemptionMode,
           redemptionCount: Math.max(0, Number(invite.redemptionCount || 0)),
           teamMembershipRole: (String(invite.teamMembershipRole || 'coach') as PulseCheckTeamMembershipRole),

@@ -32,6 +32,18 @@ const normalizeString = (value: unknown) => (typeof value === 'string' ? value.t
 const normalizeEmail = (value: unknown) => normalizeString(value).toLowerCase();
 const normalizeInviteRedemptionMode = (value: unknown): PulseCheckInviteLinkRedemptionMode =>
   value === 'general' ? 'general' : 'single-use';
+const isInviteLinkUsable = (status: unknown, redemptionMode: unknown) => {
+  const normalizedStatus = normalizeString(status);
+  if (normalizedStatus === 'revoked') {
+    return false;
+  }
+
+  if (normalizedStatus === 'redeemed' && normalizeInviteRedemptionMode(redemptionMode) !== 'general') {
+    return false;
+  }
+
+  return true;
+};
 const SubscriptionType = {
   unsubscribed: 'Unsubscribed',
   teamPlan: 'Team Plan Access',
@@ -237,10 +249,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if ((invite.inviteType || '') !== 'team-access') {
         throw new Error('Invite type is invalid for this route.');
       }
-      if ((invite.status || '') !== 'active') {
+      const redemptionMode = normalizeInviteRedemptionMode(invite.redemptionMode);
+      if (!isInviteLinkUsable(invite.status, redemptionMode)) {
         throw new Error('Invite is no longer active.');
       }
-      const redemptionMode = normalizeInviteRedemptionMode(invite.redemptionMode);
 
       const targetEmail = normalizeEmail(invite.targetEmail);
       if (targetEmail && targetEmail !== userEmail) {
@@ -450,15 +462,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const grantedNewScopeAccess =
           !hadExistingTeamMembership ||
           (teamMembershipRole === 'athlete' && Boolean(pilotId) && !hadExistingPilotEnrollment);
+        const shouldRepairInviteStatus = normalizeString(invite.status) !== 'active';
 
-        if (grantedNewScopeAccess) {
+        if (grantedNewScopeAccess || shouldRepairInviteStatus) {
           transaction.set(
             inviteRef,
             {
-              redeemedByUserId: userId,
-              redeemedByEmail: userEmail,
-              redeemedAt: now,
-              redemptionCount: admin.firestore.FieldValue.increment(1),
+              status: 'active',
+              ...(grantedNewScopeAccess
+                ? {
+                    redeemedByUserId: userId,
+                    redeemedByEmail: userEmail,
+                    redeemedAt: now,
+                    redemptionCount: admin.firestore.FieldValue.increment(1),
+                  }
+                : {}),
               updatedAt: now,
             },
             { merge: true }
