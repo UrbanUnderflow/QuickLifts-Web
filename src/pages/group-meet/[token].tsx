@@ -308,7 +308,16 @@ const GroupMeetInvitePage: React.FC = () => {
       }
 
       const nextSuggestions = Array.isArray(payload.suggestions) ? payload.suggestions : [];
-      setImportedSuggestions(nextSuggestions);
+      const importedSlots: GroupMeetAvailabilitySlot[] = nextSuggestions.map((suggestion) => ({
+        date: suggestion.date,
+        startMinutes: suggestion.startMinutes,
+        endMinutes: suggestion.endMinutes,
+      }));
+      const mergedAvailability = mergeAvailabilitySlots(availabilityEntries, importedSlots);
+      const addedSlotCount = mergedAvailability.length - availabilityEntries.length;
+
+      setAvailabilityEntries(mergedAvailability);
+      setImportedSuggestions([]);
 
       if (payload.calendarImport !== undefined) {
         setCalendarImport(payload.calendarImport || null);
@@ -316,9 +325,9 @@ const GroupMeetInvitePage: React.FC = () => {
 
       setMessage({
         type: 'success',
-        text: nextSuggestions.length
-          ? `Imported ${nextSuggestions.length} Google Calendar ${nextSuggestions.length === 1 ? 'suggestion' : 'suggestions'}. Add the ones you want, edit them if needed, and then press Save availability.`
-          : 'Google Calendar is connected. No importable availability windows were found for this month.',
+        text: addedSlotCount > 0
+          ? `Imported ${addedSlotCount} Google Calendar ${addedSlotCount === 1 ? 'time slot' : 'time slots'} into your draft. Review or edit them, then press Save availability when you're ready.`
+          : 'Google Calendar is connected. No new availability windows were added because your draft already includes the importable times for this month.',
       });
     } catch (error: any) {
       setMessage({ type: 'error', text: error?.message || 'Failed to import Google Calendar availability.' });
@@ -375,10 +384,10 @@ const GroupMeetInvitePage: React.FC = () => {
       : 'Connected'
     : 'Not connected';
   const googleCalendarHint = googleCalendarConnected
-    ? 'Import busy blocks from Google Calendar to prefill editable suggestions. Nothing is saved until you press Save availability.'
-    : 'Optionally connect Google Calendar to import busy blocks as editable suggestions. We never submit anything automatically.';
+    ? 'Import busy blocks from Google Calendar to prefill your draft availability. Nothing is submitted until you press Save availability.'
+    : 'Optionally connect Google Calendar to prefill your draft availability from busy-block data. We never submit anything automatically.';
   const pickerSubtitle = googleCalendarConnected
-    ? 'Tap the days that work, add your times, or import Google Calendar to prefill suggestions. Hover the guest images to see who has already replied.'
+    ? 'Tap the days that work, add your times, or import Google Calendar to prefill your draft. Hover the guest images to see who has already replied.'
     : 'Tap the days that work, add one or more time windows, and save before the deadline.';
 
   return (
