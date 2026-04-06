@@ -8,6 +8,7 @@ export type PulseCheckPilotStudyMode = 'operational' | 'pilot' | 'research';
 export type PulseCheckPilotCohortStatus = 'draft' | 'active' | 'paused' | 'archived';
 export type PulseCheckPilotEnrollmentStatus = 'pending-consent' | 'active' | 'withdrawn';
 export type PulseCheckClinicianBridgeMode = 'none' | 'optional' | 'required';
+export type PulseCheckTeamEscalationRoute = 'hotline' | 'clinician';
 export type PulseCheckInvitePolicy = 'admin-only' | 'admin-and-staff' | 'admin-staff-and-coaches';
 export type PulseCheckClinicianProfileType = 'individual' | 'group' | 'provider';
 export type PulseCheckClinicianProfileSource = 'pulsecheck-local' | 'auntedna';
@@ -216,7 +217,7 @@ export interface PulseCheckTeamImplementationMetadata {
   selectedTargetLeadId?: string;
   selectedTargetEvidenceIds?: string[];
   sourceBriefPath?: string;
-  routingDefaultsMode?: 'organization-default-optional' | 'organization-default-required' | 'team-clinician-profile';
+  routingDefaultsMode?: 'organization-default-optional' | 'organization-default-required' | 'team-clinician-profile' | 'team-hotline';
   invitePosture?: PulseCheckInvitePolicy;
   provisionedBy?: string;
   provisionedAt?: Timestamp | null;
@@ -238,6 +239,7 @@ export interface PulseCheckTeam {
   status: PulseCheckTeamStatus;
   defaultInvitePolicy: PulseCheckInvitePolicy;
   commercialConfig: PulseCheckTeamCommercialConfig;
+  defaultEscalationRoute: PulseCheckTeamEscalationRoute;
   defaultClinicianProfileId?: string;
   defaultClinicianExternalProfileId?: string;
   defaultClinicianProfileName?: string;
@@ -263,6 +265,7 @@ export interface CreatePulseCheckTeamInput {
   status?: PulseCheckTeamStatus;
   defaultInvitePolicy: PulseCheckInvitePolicy;
   commercialConfig: PulseCheckTeamCommercialConfig;
+  defaultEscalationRoute: PulseCheckTeamEscalationRoute;
   defaultClinicianProfileId?: string;
   defaultClinicianExternalProfileId?: string;
   defaultClinicianProfileName?: string;

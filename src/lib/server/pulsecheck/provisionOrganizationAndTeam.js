@@ -35,6 +35,10 @@ function normalizeRevenueRecipientRole(value) {
   return 'team-admin';
 }
 
+function normalizeTeamEscalationRoute(value) {
+  return normalizeString(value) === 'hotline' ? 'hotline' : 'clinician';
+}
+
 function normalizeReferralRevenueSharePct(value) {
   const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
   if (!Number.isFinite(parsed)) return 0;
@@ -110,6 +114,8 @@ function normalizeTeamImplementationMetadata(value, actorLabel, fallbackInvitePo
     routingDefaultsMode:
       routingDefaultsMode === 'team-clinician-profile'
         ? 'team-clinician-profile'
+        : routingDefaultsMode === 'team-hotline'
+          ? 'team-hotline'
         : routingDefaultsMode === 'organization-default-required'
           ? 'organization-default-required'
           : 'organization-default-optional',
@@ -188,11 +194,27 @@ function buildProvisioningPayload(input) {
           ? 'admin-and-staff'
           : 'admin-staff-and-coaches',
     commercialConfig: normalizeTeamCommercialConfig(input.team.commercialConfig),
-    defaultClinicianProfileId: normalizeString(input.team.defaultClinicianProfileId),
-    defaultClinicianExternalProfileId: normalizeString(input.team.defaultClinicianExternalProfileId),
-    defaultClinicianProfileName: normalizeString(input.team.defaultClinicianProfileName),
-    defaultClinicianProfileType: normalizeString(input.team.defaultClinicianProfileType) || 'group',
-    defaultClinicianProfileSource: normalizeString(input.team.defaultClinicianProfileSource) || 'pulsecheck-local',
+    defaultEscalationRoute: normalizeTeamEscalationRoute(input.team.defaultEscalationRoute),
+    defaultClinicianProfileId:
+      normalizeTeamEscalationRoute(input.team.defaultEscalationRoute) === 'clinician'
+        ? normalizeString(input.team.defaultClinicianProfileId)
+        : '',
+    defaultClinicianExternalProfileId:
+      normalizeTeamEscalationRoute(input.team.defaultEscalationRoute) === 'clinician'
+        ? normalizeString(input.team.defaultClinicianExternalProfileId)
+        : '',
+    defaultClinicianProfileName:
+      normalizeTeamEscalationRoute(input.team.defaultEscalationRoute) === 'clinician'
+        ? normalizeString(input.team.defaultClinicianProfileName)
+        : '',
+    defaultClinicianProfileType:
+      normalizeTeamEscalationRoute(input.team.defaultEscalationRoute) === 'clinician'
+        ? (normalizeString(input.team.defaultClinicianProfileType) || 'group')
+        : 'group',
+    defaultClinicianProfileSource:
+      normalizeTeamEscalationRoute(input.team.defaultEscalationRoute) === 'clinician'
+        ? (normalizeString(input.team.defaultClinicianProfileSource) || 'pulsecheck-local')
+        : 'pulsecheck-local',
     implementationMetadata: teamImplementationMetadata,
     notes: normalizeString(input.team.notes),
   };
@@ -273,6 +295,7 @@ function buildCanaryProvisioningInput(params = {}) {
       defaultAdminEmail: ownerEmail,
       status: 'provisioning',
       defaultInvitePolicy: 'admin-staff-and-coaches',
+      defaultEscalationRoute: 'clinician',
       commercialConfig: {
         commercialModel: 'athlete-pay',
         teamPlanStatus: 'inactive',

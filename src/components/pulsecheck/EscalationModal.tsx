@@ -100,8 +100,8 @@ const Tier2Modal: React.FC<{
             <div>
               <p className="text-white font-medium mb-1">Would you like to connect with support?</p>
               <p className="text-sm text-zinc-400">
-                With your permission, I can connect you with a mental health professional 
-                who specializes in supporting athletes. This is completely confidential.
+                With your permission, I can activate the support path configured for your team.
+                That may connect you with a clinician or direct you to immediate hotline support.
               </p>
             </div>
           </div>
@@ -177,8 +177,8 @@ const Tier3Modal: React.FC<{
         <div className="bg-red-500/10 rounded-xl p-4 border border-red-500/20">
           <p className="text-white leading-relaxed">
             I hear you, and I want you to know that what you're feeling matters. 
-            A trained professional is being notified right now to reach out to you 
-            and provide the support you deserve.
+            Your team&apos;s urgent support path is being activated right now, and the
+            crisis resources below are available immediately.
           </p>
         </div>
 
