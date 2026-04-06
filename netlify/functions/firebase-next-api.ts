@@ -182,6 +182,26 @@ function createResponse() {
     getHeader(name: string) {
       return headers.get(name);
     },
+    writeHead(
+      code: number,
+      statusMessageOrHeaders?: string | Record<string, HeaderValue>,
+      maybeHeaders?: Record<string, HeaderValue>
+    ) {
+      statusCode = code;
+
+      const headerRecord =
+        typeof statusMessageOrHeaders === 'string'
+          ? maybeHeaders
+          : statusMessageOrHeaders;
+
+      if (headerRecord) {
+        for (const [name, value] of Object.entries(headerRecord)) {
+          headers.set(name, value);
+        }
+      }
+
+      return response;
+    },
     json(payload: unknown) {
       if (!headers.has('Content-Type')) {
         headers.set('Content-Type', 'application/json; charset=utf-8');
