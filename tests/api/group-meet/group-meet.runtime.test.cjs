@@ -406,6 +406,72 @@ test('guest Google Calendar config retries after an initial Secret Manager failu
   ]);
 });
 
+test('guest Google Calendar config defaults to the canonical Secret Manager secret name without an env pointer', { concurrency: false }, () => {
+  const harnessPath = '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/group-meet/_runtimeHarness.cjs';
+  const script = `
+    const { loadGuestGoogleCalendarRuntime } = require(${JSON.stringify(harnessPath)});
+    const keys = [
+      'GOOGLE_GUEST_CALENDAR_OAUTH_JSON',
+      'GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME',
+      'GROUP_MEET_GUEST_GOOGLE_CALENDAR_OAUTH_SECRET_NAME',
+      'GOOGLE_GUEST_CALENDAR_CLIENT_ID',
+      'GOOGLE_GUEST_CALENDAR_CLIENT_SECRET',
+      'GOOGLE_GUEST_CALENDAR_REDIRECT_URI',
+      'GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY',
+      'GOOGLE_GUEST_CALENDAR_ENCRYPTION_SECRET_NAME',
+      'SYSTEM_OVERVIEW_SHARE_COOKIE_SECRET',
+      'FIREBASE_SECRET_KEY',
+      'NODE_ENV',
+    ];
+    for (const key of keys) delete process.env[key];
+
+    const seenSecretNames = [];
+    class MockOAuth2Client {
+      constructor() {}
+      generateAuthUrl() {
+        return 'https://accounts.google.com/o/oauth2/v2/auth?mock=default-secret';
+      }
+    }
+
+    const { buildGuestGoogleCalendarConnectUrl } = loadGuestGoogleCalendarRuntime({
+      secretManagerMock: async (secretName) => {
+        seenSecretNames.push(secretName);
+        return JSON.stringify({
+          client_id: 'guest-client-id',
+          client_secret: 'guest-client-secret',
+          redirect_uri: 'https://fitwithpulse.ai/api/group-meet/calendar/google/callback',
+          encryption_key: 'guest-encryption-key',
+        });
+      },
+      OAuth2ClientMock: MockOAuth2Client,
+    });
+
+    (async () => {
+      const url = await buildGuestGoogleCalendarConnectUrl({
+        headers: { host: 'fitwithpulse.ai', 'x-forwarded-proto': 'https' },
+      }, 'guest-token');
+
+      console.log(JSON.stringify({ url, seenSecretNames }));
+    })().catch((error) => {
+      console.error(error && error.stack ? error.stack : String(error));
+      process.exit(1);
+    });
+  `;
+
+  const result = spawnSync(process.execPath, ['-e', script], {
+    cwd: '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web',
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const payload = JSON.parse((result.stdout || '').trim());
+  assert.equal(payload.url, 'https://accounts.google.com/o/oauth2/v2/auth?mock=default-secret');
+  assert.deepEqual(payload.seenSecretNames, [
+    'group-meet-guest-google-oauth',
+  ]);
+});
+
 test('guest Google connect start route returns structured debug metadata on failure', { concurrency: false }, async () => {
   const { handler, state } = createGuestCalendarConnectStartHandlerRuntime({
     helperOverrides: {
@@ -441,4 +507,19 @@ test('guest Google connect start route returns structured debug metadata on fail
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
   );
   assert.deepEqual(state.firebaseAppSelections, [true]);
+});
+
+test('guest Google debug classification explains generic config-unavailable failures', { concurrency: false }, () => {
+  const { getPublicGuestCalendarDebugInfo } = loadGuestGoogleCalendarRuntime({
+    secretManagerMock: async () => {
+      throw new Error('Secret Manager mock should not be called.');
+    },
+  });
+
+  const debug = getPublicGuestCalendarDebugInfo(
+    new Error('Google Calendar import is not available right now.')
+  );
+
+  assert.equal(debug.code, 'google_oauth_config_unavailable');
+  assert.match(debug.hint, /group-meet-guest-google-oauth/);
 });
