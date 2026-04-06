@@ -103,6 +103,7 @@ const AddVersionPage = () => {
   const [isUpdateModalEnabled, setIsUpdateModalEnabled] = useState(true);
   const [isSavingModalConfig, setIsSavingModalConfig] = useState(false);
   const [modalConfigMessage, setModalConfigMessage] = useState('');
+  const requiresBuildNumber = activeProduct === 'fitWithPulse';
 
   useEffect(() => {
     const fetchLatestVersion = async () => {
@@ -248,8 +249,12 @@ const AddVersionPage = () => {
     const normalizedBuildNumber = buildNumber.trim();
     const notesArray = changeNotes.map((note) => note.trim()).filter((note) => note.length > 0);
 
-    if (!normalizedVersion || !normalizedBuildNumber || notesArray.length === 0) {
-      setError('Version, build number, and at least one change note are required.');
+    if (!normalizedVersion || notesArray.length === 0 || (requiresBuildNumber && !normalizedBuildNumber)) {
+      setError(
+        requiresBuildNumber
+          ? 'Version, build number, and at least one change note are required.'
+          : 'Version and at least one change note are required.'
+      );
       setLoading(false);
       setLoadingMessage('');
       return;
@@ -261,7 +266,7 @@ const AddVersionPage = () => {
       await adminMethods.addVersion(
         activeProduct,
         normalizedVersion,
-        normalizedBuildNumber,
+        normalizedBuildNumber || undefined,
         notesArray,
         isCriticalUpdate,
         uploadedMedia
@@ -564,7 +569,9 @@ const AddVersionPage = () => {
                 </div>
 
                 <div>
-                  <label className="block text-gray-300 mb-2 text-sm font-medium">Build Number</label>
+                  <label className="block text-gray-300 mb-2 text-sm font-medium">
+                    Build Number{requiresBuildNumber ? '' : ' (Optional)'}
+                  </label>
                   <div className="flex space-x-2">
                     <input
                       type="text"
@@ -572,8 +579,8 @@ const AddVersionPage = () => {
                       className="w-full bg-[#262a30] border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] transition text-white placeholder-gray-500"
                       value={buildNumber}
                       onChange={(event) => setBuildNumber(event.target.value)}
-                      placeholder="e.g. 2"
-                      required
+                      placeholder={requiresBuildNumber ? 'e.g. 2' : 'Optional'}
+                      required={requiresBuildNumber}
                     />
                     <button
                       type="button"
@@ -591,8 +598,10 @@ const AddVersionPage = () => {
               </div>
 
               <div className="rounded-xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-zinc-300">
-                <span className="font-semibold text-white">Release rule:</span> upload and wait for Apple first, then
-                publish the matching version/build here to turn on the in-app release messaging.
+                <span className="font-semibold text-white">Release rule:</span>{' '}
+                {requiresBuildNumber
+                  ? 'upload and wait for Apple first, then publish the matching version/build here to turn on the in-app release messaging.'
+                  : 'upload and wait for Apple first, then publish the matching version here. A build number is optional for PulseCheck.'}
               </div>
 
               <div>
