@@ -257,16 +257,25 @@ const resolvePilotEffectiveStatus = (pilot: PulseCheckPilot): PulseCheckPilot['s
   }
 
   const now = new Date();
-  const startAt = toDate(pilot.startAt);
   const endAt = toDate(pilot.endAt);
 
   if (endAt && endAt.getTime() < now.getTime()) return 'completed';
-  if (startAt && startAt.getTime() <= now.getTime()) return 'active';
-  if (pilot.status === 'active') return 'active';
-  return 'draft';
+  return 'active';
 };
 
 const isActivePilotDashboardScope = (pilot: PulseCheckPilot) => resolvePilotEffectiveStatus(pilot) === 'active';
+
+const isPilotMetricWindowOpen = (pilot: PulseCheckPilot) => {
+  if (resolvePilotEffectiveStatus(pilot) !== 'active') return false;
+
+  const now = new Date();
+  const startAt = toDate(pilot.startAt);
+  const endAt = toDate(pilot.endAt);
+
+  if (startAt && startAt.getTime() > now.getTime()) return false;
+  if (endAt && endAt.getTime() < now.getTime()) return false;
+  return true;
+};
 
 const resolveCohortEffectiveStatus = (cohort: PulseCheckPilotCohort): PulseCheckPilotCohort['status'] =>
   cohort.status === 'paused' || cohort.status === 'archived' ? cohort.status : 'active';
@@ -1398,7 +1407,19 @@ async function loadEngineSummaryForAthlete(athleteId: string): Promise<PilotDash
   };
 }
 
+const buildEmptyEngineSummary = (): PilotDashboardEngineSummary => ({
+  hasEngineRecord: false,
+  evidenceRecordCount: 0,
+  patternModelCount: 0,
+  stablePatternCount: 0,
+  highConfidencePatternCount: 0,
+  degradedPatternCount: 0,
+  recommendationProjectionCount: 0,
+  recommendationProjectionCountsByConsumer: {},
+});
+
 async function buildAthleteSummary(
+  pilot: PulseCheckPilot,
   enrollment: PulseCheckPilotEnrollment,
   cohortMap: Map<string, PulseCheckPilotCohort>,
   teamMembershipMap: Map<string, PulseCheckTeamMembership>,
@@ -1406,7 +1427,9 @@ async function buildAthleteSummary(
 ): Promise<PilotDashboardAthleteSummary> {
   const teamMembership = teamMembershipMap.get(enrollment.userId) || null;
   const cohort = normalizeString(enrollment.cohortId) ? cohortMap.get(normalizeString(enrollment.cohortId)) || null : null;
-  const engineSummary = await loadEngineSummaryForAthlete(enrollment.userId);
+  const engineSummary = isPilotMetricWindowOpen(pilot)
+    ? await loadEngineSummaryForAthlete(enrollment.userId)
+    : buildEmptyEngineSummary();
 
   return {
     athleteId: enrollment.userId,
@@ -1480,7 +1503,16 @@ function buildCohortSummaries(
   return summaries.sort((left, right) => left.cohortName.localeCompare(right.cohortName));
 }
 
-async function loadDirectoryEngineMetrics(activeEnrollments: PulseCheckPilotEnrollment[]) {
+async function loadDirectoryEngineMetrics(pilot: PulseCheckPilot, activeEnrollments: PulseCheckPilotEnrollment[]) {
+  if (!isPilotMetricWindowOpen(pilot)) {
+    return {
+      engineCoverageRate: 0,
+      stablePatternRate: 0,
+      avgEvidenceRecordsPerActiveAthlete: 0,
+      avgRecommendationProjectionsPerActiveAthlete: 0,
+    };
+  }
+
   const summaries = await Promise.all(activeEnrollments.map((enrollment) => loadEngineSummaryForAthlete(enrollment.userId)));
   const athletesWithEngineRecord = summaries.filter((summary) => summary.hasEngineRecord).length;
   const athletesWithStablePatterns = summaries.filter((summary) => summary.stablePatternCount > 0).length;
@@ -2146,7 +2178,10 @@ export const pulseCheckPilotDashboardService = {
         return {
           organization,
           team,
-          pilot,
+          pilot: {
+            ...pilot,
+            status: resolvePilotEffectiveStatus(pilot),
+          },
           cohorts: pilotCohorts,
           totalEnrollmentCount: pilotEnrollments.length,
           activeEnrollmentCount: activeEnrollments.length,
@@ -2180,7 +2215,7 @@ export const pulseCheckPilotDashboardService = {
     const enrichedEntries = await Promise.all(
       baseEntries.map(async (entry) => {
         const [directoryMetrics, outcomeRollup, outcomeReleaseSettings, operationalWatchListStates] = await Promise.all([
-          loadDirectoryEngineMetrics(entry._activeEnrollments),
+          loadDirectoryEngineMetrics(entry.pilot, entry._activeEnrollments),
           loadCurrentOutcomeRollup(entry.pilot.id),
           loadPilotOutcomeReleaseSettings(entry.pilot.id),
           loadPilotOperationalWatchListStates(entry.pilot.id),
@@ -2234,9 +2269,13 @@ export const pulseCheckPilotDashboardService = {
       operationalWatchListStates.map((state) => [state.pilotEnrollmentId, state])
     );
     const activeEnrollments = enrollments.filter((enrollment) => enrollment.status === 'active');
+    const effectivePilot = {
+      ...pilot,
+      status: resolvePilotEffectiveStatus(pilot),
+    };
     const athletes = await Promise.all(
       activeEnrollments.map((enrollment) =>
-        buildAthleteSummary(enrollment, cohortMap, teamMembershipMap, operationalWatchListByEnrollmentId.get(enrollment.id) || null)
+        buildAthleteSummary(effectivePilot, enrollment, cohortMap, teamMembershipMap, operationalWatchListByEnrollmentId.get(enrollment.id) || null)
       )
     );
     const totalEvidenceRecords = athletes.reduce((sum, athlete) => sum + athlete.engineSummary.evidenceRecordCount, 0);
@@ -2303,7 +2342,7 @@ export const pulseCheckPilotDashboardService = {
     return {
       organization,
       team,
-      pilot,
+      pilot: effectivePilot,
       cohorts: pilotCohorts,
       athletes: athletes.sort((left, right) => left.displayName.localeCompare(right.displayName)),
       hypotheses,
@@ -2348,13 +2387,17 @@ export const pulseCheckPilotDashboardService = {
       pulseCheckProvisioningService.getPilotEnrollment(pilotId, athleteId),
       pulseCheckProvisioningService.listPilotCohorts(),
       pulseCheckProvisioningService.listTeamMemberships(pilot.teamId),
-      loadEngineSummaryForAthlete(athleteId),
+      isPilotMetricWindowOpen(pilot) ? loadEngineSummaryForAthlete(athleteId) : Promise.resolve(buildEmptyEngineSummary()),
       loadAthleteOperationalWatchListState(athleteId),
     ]);
 
     const pilotCohorts = cohorts.filter((entry) => entry.pilotId === pilotId);
     if (!isPilotOperationallyActive(pilot, pilotCohorts, enrollment ? [enrollment] : [])) return null;
     if (!organization || !team || !enrollment || enrollment.status !== 'active') return null;
+    const effectivePilot = {
+      ...pilot,
+      status: resolvePilotEffectiveStatus(pilot),
+    };
 
     const teamMembership = teamMemberships.find((membership) => membership.userId === athleteId) || null;
     const cohort = pilotCohorts.find((entry) => entry.id === enrollment.cohortId) || null;
@@ -2375,7 +2418,7 @@ export const pulseCheckPilotDashboardService = {
 
     const mentalPerformanceSnapshots = await loadPilotMentalPerformanceSnapshotSet(enrollment.id);
     const outcomeDetail = await loadAthleteOutcomeDetail({
-      pilot,
+      pilot: effectivePilot,
       athleteId,
       pilotEnrollment: enrollment,
       teamMembership,
@@ -2385,7 +2428,7 @@ export const pulseCheckPilotDashboardService = {
     return {
       organization,
       team,
-      pilot,
+      pilot: effectivePilot,
       cohort,
       pilotEnrollment: enrollment,
       teamMembership,

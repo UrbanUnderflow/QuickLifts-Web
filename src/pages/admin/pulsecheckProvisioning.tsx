@@ -89,7 +89,7 @@ const defaultPilotForm: CreatePulseCheckPilotInput = {
   objective: '',
   studyMode: 'operational',
   checkpointCadence: 'weekly',
-  status: 'draft',
+  status: 'active',
   startAt: null,
   endAt: null,
   notes: '',
@@ -263,14 +263,15 @@ const getDerivedPilotStatusDisplay = (pilot: PulseCheckPilot) => {
 };
 
 const getDerivedPilotStatusValue = (pilot: PulseCheckPilot): PulseCheckPilot['status'] => {
+  if (pilot.status === 'archived' || pilot.status === 'completed' || pilot.status === 'paused') {
+    return pilot.status;
+  }
+
   const now = new Date();
-  const startAt = toDateValue(pilot.startAt);
   const endAt = toDateValue(pilot.endAt);
 
-  if (!startAt) return 'draft';
   if (endAt && endAt.getTime() < now.getTime()) return 'completed';
-  if (startAt.getTime() <= now.getTime()) return 'active';
-  return 'draft';
+  return 'active';
 };
 
 const getCohortStatusDisplay = (status?: PulseCheckPilotCohortStatus) => {
@@ -595,7 +596,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
         ...current,
         organizationId: current.organizationId || teamResults[0]?.organizationId || '',
         teamId: current.teamId || teamResults[0]?.id || '',
-        status: 'draft',
+        status: 'active',
       }));
       setCohortForm((current) => ({
         ...current,
@@ -1040,7 +1041,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
         organizationId: selectedOrganizationId,
         teamId: createdTeamId,
         checkpointCadence: 'weekly',
-        status: 'draft',
+        status: 'active',
       });
       setPilotStartDate('');
       setPilotDurationPreset('14');
@@ -1118,7 +1119,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
       const createdPilotId = await pulseCheckProvisioningService.createPilot({
         ...pilotForm,
-        status: 'draft',
+        status: 'active',
         startAt,
         endAt,
         ownerInternalUserId: currentUser?.id || '',
@@ -1136,13 +1137,16 @@ const PulseCheckProvisioningPage: React.FC = () => {
         teamId: current.teamId,
         studyMode: current.studyMode,
         checkpointCadence: current.checkpointCadence || 'weekly',
-        status: 'draft',
+        status: 'active',
       }));
       setPilotStartDate('');
       setPilotDurationPreset('14');
       setPilotCustomDays('');
       await loadData();
-      setMessage({ type: 'success', text: 'Pilot created in draft. Display status now follows the pilot start date and duration window, and you can add cohorts under it.' });
+      setMessage({
+        type: 'success',
+        text: 'Pilot created and activated. It will show up in the dashboard immediately, while start and end dates still scope the reporting window.',
+      });
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to create pilot:', error);
       setMessage({ type: 'error', text: 'Failed to create pilot.' });
@@ -2119,8 +2123,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
                   </div>
 
                   <div className="md:col-span-2 rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.06] px-4 py-3 text-sm text-zinc-300">
-                    New pilots are created in draft. The provisioning view now derives display status from the start date and pilot length:
-                    no start date means draft, an active date window means active, and the pilot moves to completed once the derived duration window ends.
+                    New pilots are activated as soon as they are created so they appear in the dashboard right away.
+                    Start and end dates still define the reporting window, and the pilot moves to completed once that selected window ends.
                     {pilotStartDate
                       ? ` With the current inputs, the projected end date is ${
                           (() => {
