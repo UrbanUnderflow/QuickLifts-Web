@@ -109,22 +109,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   } catch (error: any) {
     const message = toPublicGuestCalendarErrorMessage(error);
+    const requiresReconnect = /reconnected|read-only calendar access|insufficient authentication scopes|insufficient scopes/i.test(
+      `${message} ${error?.message || ''}`
+    );
+    const nextCalendarImport: Record<string, unknown> = {
+      provider: 'google',
+      status: requiresReconnect ? 'disconnected' : inviteData?.calendarImport?.encryptedToken ? 'connected' : 'error',
+      lastSyncedAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastSyncStatus: 'error',
+      lastSyncError: message,
+    };
+
+    if (requiresReconnect) {
+      nextCalendarImport.disconnectedAt = admin.firestore.FieldValue.serverTimestamp();
+      nextCalendarImport.encryptedToken = null;
+      nextCalendarImport.tokenRefKey = null;
+    }
 
     await inviteDoc.ref.set(
       {
-        calendarImport: {
-          provider: 'google',
-          status: inviteData?.calendarImport?.encryptedToken ? 'connected' : 'error',
-          lastSyncedAt: admin.firestore.FieldValue.serverTimestamp(),
-          lastSyncStatus: 'error',
-          lastSyncError: message,
-        },
+        calendarImport: nextCalendarImport,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true }
     );
 
+    const refreshedInviteDoc = await inviteDoc.ref.get();
+
     console.error('[group-meet-public] Failed to import Google Calendar availability:', error);
-    return res.status(500).json({ error: message });
+    return res.status(requiresReconnect ? 409 : 500).json({
+      error: message,
+      calendarImport: buildGroupMeetGuestCalendarImportSummary(
+        refreshedInviteDoc.data()?.calendarImport
+      ),
+    });
   }
 }

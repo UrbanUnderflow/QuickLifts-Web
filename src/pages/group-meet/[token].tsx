@@ -301,6 +301,9 @@ const GroupMeetInvitePage: React.FC = () => {
       };
 
       if (!response.ok) {
+        if (payload.calendarImport !== undefined) {
+          setCalendarImport(payload.calendarImport || null);
+        }
         throw new Error(payload.error || 'Failed to import Google Calendar availability.');
       }
 
@@ -364,8 +367,7 @@ const GroupMeetInvitePage: React.FC = () => {
     calendarImport &&
       (calendarImport.connected ||
         calendarImport.status === 'connected' ||
-        calendarImport.status === 'imported' ||
-        calendarImport.connectedEmail)
+        calendarImport.status === 'imported')
   );
   const googleCalendarStatusLabel = googleCalendarConnected
     ? calendarImport?.status === 'imported'
