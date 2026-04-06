@@ -69,6 +69,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/starter-pack', '/one-on-one', '/train-your-client', '/stacks', '/moves', '/terms', '/press', '/100trainers',
     '/subscribe', '/pricing', '/download', '/morning-mobility-challenge', '/review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch', '/secure', '/haveyoupaid',
     '/delete-account', '/deleteAccount',
+    '/group-meet', '/group-meet/privacy', '/group-meet/terms',
     // Public onboarding/marketing entry points
     '/sign-up', '/coach', '/coach/sign-up', '/build-your-round', '/creator-onboarding',
     // Design language showcase
@@ -94,7 +95,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   ].map(route => route?.toLowerCase());
 
   const publicPathPatterns = [
-    '/round-invitation', '/round', '/round-library', '/profile', '/challenge', '/review', '/programming', '/press', '/100trainers', '/MoveAndFuelATL', '/investor', '/invest', '/connect', '/coach-invite', '/research', '/onboarding', '/legal-doc', '/pulsecheck'
+    '/round-invitation', '/round', '/round-library', '/profile', '/challenge', '/review', '/programming', '/press', '/100trainers', '/MoveAndFuelATL', '/investor', '/invest', '/connect', '/coach-invite', '/research', '/onboarding', '/legal-doc', '/pulsecheck', '/group-meet'
   ].map(pattern => pattern.toLowerCase());
 
   const isPublicClubPath = (path: string) => {
