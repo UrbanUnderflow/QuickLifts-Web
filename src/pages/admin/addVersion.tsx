@@ -729,7 +729,9 @@ const AddVersionPage = () => {
                     Is Critical Update?
                   </label>
                   <p className="text-gray-500 text-xs mt-1">
-                    Mark this only when the new build is already live and you want the app to push people to install it.
+                    {activeProduct === 'pulseCheck'
+                      ? 'Mark this only when the new build is already live. PulseCheck iOS will gate the app and keep people on the update screen until they install it.'
+                      : 'Mark this only when the new build is already live and you want the app to push people to install it.'}
                   </p>
                 </div>
                 {isCriticalUpdate && (

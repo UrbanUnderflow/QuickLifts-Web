@@ -1,9 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
 
 const {
   createApiResponseRecorder,
+  createGuestCalendarConnectStartHandlerRuntime,
   createPublicInviteHandlerRuntime,
+  loadGuestGoogleCalendarRuntime,
   loadGoogleCalendarRuntime,
   loadGroupMeetRuntime,
   makeTimestamp,
@@ -23,6 +26,20 @@ const CALENDAR_ENV_KEYS = [
   'GOOGLE_CALENDAR_DELEGATED_USER_EMAIL',
   'GOOGLE_CALENDAR_ORGANIZER_EMAIL',
   'GOOGLE_CALENDAR_ID',
+];
+
+const GUEST_CALENDAR_ENV_KEYS = [
+  'GOOGLE_GUEST_CALENDAR_OAUTH_JSON',
+  'GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME',
+  'GROUP_MEET_GUEST_GOOGLE_CALENDAR_OAUTH_SECRET_NAME',
+  'GOOGLE_GUEST_CALENDAR_CLIENT_ID',
+  'GOOGLE_GUEST_CALENDAR_CLIENT_SECRET',
+  'GOOGLE_GUEST_CALENDAR_REDIRECT_URI',
+  'GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY',
+  'GOOGLE_GUEST_CALENDAR_ENCRYPTION_SECRET_NAME',
+  'SYSTEM_OVERVIEW_SHARE_COOKIE_SECRET',
+  'FIREBASE_SECRET_KEY',
+  'NODE_ENV',
 ];
 
 function withIsolatedCalendarEnv(envPatch, run) {
@@ -48,7 +65,30 @@ function withIsolatedCalendarEnv(envPatch, run) {
   }
 }
 
-test('computeGroupMeetAnalysis ranks a full-match window ahead of partial overlap', () => {
+function withIsolatedGuestCalendarEnv(envPatch, run) {
+  const previous = new Map(GUEST_CALENDAR_ENV_KEYS.map((key) => [key, process.env[key]]));
+
+  for (const key of GUEST_CALENDAR_ENV_KEYS) {
+    delete process.env[key];
+  }
+
+  Object.assign(process.env, envPatch);
+
+  try {
+    return run();
+  } finally {
+    for (const key of GUEST_CALENDAR_ENV_KEYS) {
+      const priorValue = previous.get(key);
+      if (priorValue == null) {
+        delete process.env[key];
+      } else {
+        process.env[key] = priorValue;
+      }
+    }
+  }
+}
+
+test('computeGroupMeetAnalysis ranks a full-match window ahead of partial overlap', { concurrency: false }, () => {
   const { computeGroupMeetAnalysis } = loadGroupMeetRuntime();
 
   const invites = [
@@ -108,7 +148,7 @@ test('computeGroupMeetAnalysis ranks a full-match window ahead of partial overla
   assert.equal(topDate.availableParticipantCount, 3);
 });
 
-test('getGoogleCalendarSetupStatus reports Secret Manager-backed service-account readiness', async () => {
+test('getGoogleCalendarSetupStatus reports Secret Manager-backed service-account readiness', { concurrency: false }, async () => {
   await withIsolatedCalendarEnv(
     {
       GOOGLE_CALENDAR_SERVICE_ACCOUNT_SECRET_NAME: 'GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON',
@@ -138,7 +178,7 @@ test('getGoogleCalendarSetupStatus reports Secret Manager-backed service-account
   );
 });
 
-test('getGoogleCalendarSetupStatus blocks scheduling when delegated mailbox is missing', async () => {
+test('getGoogleCalendarSetupStatus blocks scheduling when delegated mailbox is missing', { concurrency: false }, async () => {
   await withIsolatedCalendarEnv(
     {
       GOOGLE_CALENDAR_SERVICE_ACCOUNT_SECRET_NAME: 'GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON',
@@ -162,7 +202,7 @@ test('getGoogleCalendarSetupStatus blocks scheduling when delegated mailbox is m
   );
 });
 
-test('convertLocalDateMinutesToUtcIso respects timezone offsets and DST boundaries', () => {
+test('convertLocalDateMinutesToUtcIso respects timezone offsets and DST boundaries', { concurrency: false }, () => {
   const { convertLocalDateMinutesToUtcIso } = loadGoogleCalendarRuntime();
 
   assert.equal(
@@ -181,7 +221,7 @@ test('convertLocalDateMinutesToUtcIso respects timezone offsets and DST boundari
   );
 });
 
-test('public guest invite endpoint resolves an invite by stored token and honors localhost dev firebase', async () => {
+test('public guest invite endpoint resolves an invite by stored token and honors localhost dev firebase', { concurrency: false }, async () => {
   const { handler, state } = createPublicInviteHandlerRuntime({
     requestData: {
       title: 'Pulse Intelligence Labs Advisory Board Meeting',
@@ -263,4 +303,142 @@ test('public guest invite endpoint resolves an invite by stored token and honors
     [{ date: '2026-04-01', startMinutes: 540, endMinutes: 600 }]
   );
   assert.equal(state.firebaseAppSelections[0], true);
+});
+
+test('guest Google Calendar config retries after an initial Secret Manager failure', { concurrency: false }, () => {
+  const harnessPath = '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/group-meet/_runtimeHarness.cjs';
+  const script = `
+    const { loadGuestGoogleCalendarRuntime } = require(${JSON.stringify(harnessPath)});
+    const keys = [
+      'GOOGLE_GUEST_CALENDAR_OAUTH_JSON',
+      'GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME',
+      'GROUP_MEET_GUEST_GOOGLE_CALENDAR_OAUTH_SECRET_NAME',
+      'GOOGLE_GUEST_CALENDAR_CLIENT_ID',
+      'GOOGLE_GUEST_CALENDAR_CLIENT_SECRET',
+      'GOOGLE_GUEST_CALENDAR_REDIRECT_URI',
+      'GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY',
+      'GOOGLE_GUEST_CALENDAR_ENCRYPTION_SECRET_NAME',
+      'SYSTEM_OVERVIEW_SHARE_COOKIE_SECRET',
+      'FIREBASE_SECRET_KEY',
+      'NODE_ENV',
+    ];
+    for (const key of keys) delete process.env[key];
+    process.env.GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME = 'group-meet-guest-google-oauth';
+
+    let secretReadCount = 0;
+    const oauthClientOptions = [];
+
+    class MockOAuth2Client {
+      constructor(options) {
+        oauthClientOptions.push(options);
+      }
+
+      generateAuthUrl() {
+        return 'https://accounts.google.com/o/oauth2/v2/auth?mock=1';
+      }
+    }
+
+    const { buildGuestGoogleCalendarConnectUrl } = loadGuestGoogleCalendarRuntime({
+      secretManagerMock: async (secretName) => {
+        secretReadCount += 1;
+        if (secretName !== 'group-meet-guest-google-oauth') {
+          throw new Error('Unexpected secret name ' + secretName);
+        }
+        if (secretReadCount === 1) {
+          throw new Error('Failed to access Secret Manager secret group-meet-guest-google-oauth.');
+        }
+        return JSON.stringify({
+          client_id: 'guest-client-id',
+          client_secret: 'guest-client-secret',
+          redirect_uri: 'https://fitwithpulse.ai/api/group-meet/calendar/google/callback',
+          encryption_key: 'guest-encryption-key',
+        });
+      },
+      OAuth2ClientMock: MockOAuth2Client,
+    });
+
+    (async () => {
+      let firstError = null;
+      try {
+        await buildGuestGoogleCalendarConnectUrl({
+          headers: { host: 'fitwithpulse.ai', 'x-forwarded-proto': 'https' },
+        }, 'guest-token');
+      } catch (error) {
+        firstError = error.message;
+      }
+
+      const secondUrl = await buildGuestGoogleCalendarConnectUrl({
+        headers: { host: 'fitwithpulse.ai', 'x-forwarded-proto': 'https' },
+      }, 'guest-token');
+
+      console.log(JSON.stringify({
+        firstError,
+        secondUrl,
+        secretReadCount,
+        oauthClientOptions,
+      }));
+    })().catch((error) => {
+      console.error(error && error.stack ? error.stack : String(error));
+      process.exit(1);
+    });
+  `;
+
+  const result = spawnSync(process.execPath, ['-e', script], {
+    cwd: '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web',
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const payload = JSON.parse((result.stdout || '').trim());
+  assert.equal(
+    payload.firstError,
+    'Failed to access Secret Manager secret group-meet-guest-google-oauth.'
+  );
+  assert.equal(payload.secondUrl, 'https://accounts.google.com/o/oauth2/v2/auth?mock=1');
+  assert.equal(payload.secretReadCount, 2);
+  assert.deepEqual(payload.oauthClientOptions, [
+    {
+      clientId: 'guest-client-id',
+      clientSecret: 'guest-client-secret',
+      redirectUri: 'https://fitwithpulse.ai/api/group-meet/calendar/google/callback',
+    },
+  ]);
+});
+
+test('guest Google connect start route returns structured debug metadata on failure', { concurrency: false }, async () => {
+  const { handler, state } = createGuestCalendarConnectStartHandlerRuntime({
+    helperOverrides: {
+      buildGuestGoogleCalendarConnectUrl: async () => {
+        throw new Error('Permission denied while reading Secret Manager.');
+      },
+      getPublicGuestCalendarDebugInfo: () => ({
+        code: 'secret_manager_permission_denied',
+        hint: 'Grant the production runtime service account Secret Manager Secret Accessor on the guest Google OAuth secret.',
+      }),
+      shouldForceDevFirebase: () => true,
+    },
+  });
+
+  const req = {
+    method: 'POST',
+    query: { token: 'guest-token' },
+    headers: { host: 'localhost:8888' },
+  };
+  const res = createApiResponseRecorder();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 500);
+  assert.equal(res.payload.error, 'Permission denied while reading Secret Manager.');
+  assert.equal(res.payload.debugCode, 'secret_manager_permission_denied');
+  assert.match(
+    res.payload.debugHint,
+    /Secret Manager Secret Accessor on the guest Google OAuth secret/
+  );
+  assert.match(
+    res.payload.debugId,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  );
+  assert.deepEqual(state.firebaseAppSelections, [true]);
 });
