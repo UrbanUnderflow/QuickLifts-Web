@@ -49,6 +49,11 @@ export type GroupMeetGuestCalendarImportClientSummary =
     error: string | null;
   };
 
+export type GroupMeetGuestCalendarDebugInfo = {
+  code: string;
+  hint: string;
+};
+
 export const toIso = (value: FirebaseFirestore.Timestamp | null | undefined) =>
   value?.toDate?.().toISOString?.() || null;
 
@@ -214,6 +219,79 @@ export function toPublicGuestCalendarErrorMessage(error: unknown) {
   }
 
   return message || 'Google Calendar connect could not be completed.';
+}
+
+export function getPublicGuestCalendarDebugInfo(error: unknown): GroupMeetGuestCalendarDebugInfo {
+  const message = error instanceof Error ? error.message : String(error || '');
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes('failed to access secret manager secret')) {
+    if (normalized.includes('permission') || normalized.includes('denied') || normalized.includes('403')) {
+      return {
+        code: 'secret_manager_permission_denied',
+        hint: 'Grant the production runtime service account Secret Manager Secret Accessor on the guest Google OAuth secret.',
+      };
+    }
+
+    if (normalized.includes('not found') || normalized.includes('was not found') || normalized.includes('404')) {
+      return {
+        code: 'secret_manager_secret_not_found',
+        hint: 'Create the guest Google OAuth secret in the runtime Google Cloud project or point the app at the correct secret name.',
+      };
+    }
+
+    return {
+      code: 'secret_manager_access_failed',
+      hint: 'The runtime could not read the guest Google OAuth secret from Secret Manager.',
+    };
+  }
+
+  if (normalized.includes('missing google cloud project id')) {
+    return {
+      code: 'secret_manager_project_missing',
+      hint: 'Set the runtime Google Cloud project id or use a service account credential that includes project_id.',
+    };
+  }
+
+  if (normalized.includes('application default credentials') || normalized.includes('service-account')) {
+    return {
+      code: 'secret_manager_auth_missing',
+      hint: 'The runtime could not authenticate to Google Cloud Secret Manager with a usable service account.',
+    };
+  }
+
+  if (normalized.includes('client id')) {
+    return {
+      code: 'google_oauth_client_id_missing',
+      hint: 'The guest Google OAuth client id is not available to the runtime.',
+    };
+  }
+
+  if (normalized.includes('client secret')) {
+    return {
+      code: 'google_oauth_client_secret_missing',
+      hint: 'The guest Google OAuth client secret is not available to the runtime.',
+    };
+  }
+
+  if (normalized.includes('redirect uri')) {
+    return {
+      code: 'google_oauth_redirect_uri_missing',
+      hint: 'The guest Google OAuth redirect URI is missing or mismatched.',
+    };
+  }
+
+  if (normalized.includes('encryption')) {
+    return {
+      code: 'google_oauth_encryption_missing',
+      hint: 'The guest Google OAuth encryption secret is not available to the runtime.',
+    };
+  }
+
+  return {
+    code: 'google_calendar_connect_unknown',
+    hint: 'Check the server log entry for the connect route to see the exact failure stage.',
+  };
 }
 
 export function hasTruthyHeader(value: string | string[] | undefined) {

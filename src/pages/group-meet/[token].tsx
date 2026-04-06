@@ -251,14 +251,30 @@ const GroupMeetInvitePage: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
         }
       );
-      const payload = (await response.json().catch(() => ({}))) as { url?: string; error?: string };
+      const payload = (await response.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+        debugCode?: string;
+        debugHint?: string;
+        debugId?: string;
+      };
 
       if (!response.ok || !payload.url) {
-        throw new Error(payload.error || 'Unable to start Google Calendar connection.');
+        const error = new Error(payload.error || 'Unable to start Google Calendar connection.') as Error & {
+          status?: number;
+          payload?: typeof payload;
+        };
+        error.status = response.status;
+        error.payload = payload;
+        throw error;
       }
 
       window.location.assign(payload.url);
     } catch (error: any) {
+      console.error('[GroupMeetInvitePage] Google Calendar connect failed', {
+        status: error?.status || null,
+        payload: error?.payload || null,
+      });
       setMessage({ type: 'error', text: error?.message || 'Unable to start Google Calendar connection.' });
       setCalendarAction(null);
     }
