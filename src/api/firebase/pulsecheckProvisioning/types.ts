@@ -83,30 +83,40 @@ export interface PulseCheckRequiredConsentDocument {
   version: string;
 }
 
+const parseConsentVersionNumber = (version?: string): number => {
+  const normalized = String(version || '').trim().toLowerCase();
+  const match = normalized.match(/(\d+)/);
+  return match ? Number(match[1]) || 0 : 0;
+};
+
 const DEFAULT_PULSECHECK_REQUIRED_CONSENTS: PulseCheckRequiredConsentDocument[] = [
   {
     id: 'pulsecheck-team-participation-v1',
-    title: 'PulseCheck Team Participation',
+    title: 'PulseCheck Pilot Participation',
     body:
       [
-        'Your coaching staff invited you into PulseCheck so they can support you more clearly across training.',
-        'When you join, PulseCheck may share the check-ins you complete, the readiness trends you create, and the session activity you log with the staff who support your team.',
-        'That helps your staff notice patterns, follow up with you, and keep your support connected to what is actually happening in training.',
-        'Read this through, and if anything feels unclear, ask your staff before you agree.',
+        'You are being invited to participate in a PulseCheck pilot connected to your team. This pilot is voluntary, and you can decide not to participate or stop participating at any time.',
+        'This is a pilot experience, which means features, workflows, recommendations, and support operations may change while the pilot is active. Some parts of the experience may be incomplete, experimental, or still being evaluated.',
+        'There are risks to participating in the pilot, including the possibility that recommendations, alerts, support pathways, or product behavior may not work as expected, may feel disruptive, or may not be appropriate for your situation.',
+        'By participating, you understand that PulseCheck may share the check-ins you complete, the readiness trends you create, and the session activity you log with the staff who support your team so they can follow up with you and coordinate support.',
+        'By continuing, you acknowledge that Pulse Intelligence Labs, Inc. and AuntEdna are not responsible for injuries, losses, claims, or damages arising from your participation in this pilot or from your reliance on the pilot experience, except where that limitation is not allowed by law.',
+        'Read this carefully, and if anything feels unclear, ask your staff before you agree.',
       ].join('\n\n'),
-    version: 'v1',
+    version: 'v2',
   },
   {
     id: 'pulsecheck-data-privacy-v1',
     title: 'PulseCheck Privacy and Data Use',
     body:
       [
-        'PulseCheck uses the information you share in the app, plus any health or wearable connections you approve, to run your team experience.',
-        'That can include things like your check-ins, recovery trends, readiness signals, session activity, and the information you choose to connect.',
-        'We use that information to support your experience in PulseCheck and the permissions you approve here.',
+        'PulseCheck uses the information you share in the app, plus any health or wearable connections you approve, to run your team pilot experience.',
+        'That can include your check-ins, recovery trends, readiness signals, session activity, connected health data, and the information you choose to provide during the pilot.',
+        'Because this is a voluntary pilot, the information collected may be used to operate, review, improve, and evaluate the pilot experience and the support workflows attached to it.',
+        'There are privacy and operational risks any time you share information in a digital product, including the risk of unauthorized access, mistaken interpretation, incomplete data, or product workflows that do not perform exactly as intended during the pilot.',
+        'By continuing, you acknowledge that Pulse Intelligence Labs, Inc. and AuntEdna are not responsible for injuries, losses, claims, or damages arising from your participation in this pilot or from your reliance on the pilot experience, except where that limitation is not allowed by law.',
         'If you want a copy for your records, you can save this agreement as a PDF before you continue.',
       ].join('\n\n'),
-    version: 'v1',
+    version: 'v2',
   },
 ];
 
@@ -117,12 +127,21 @@ export const mergePulseCheckRequiredConsents = (
   customConsents?: PulseCheckRequiredConsentDocument[] | null
 ): PulseCheckRequiredConsentDocument[] => {
   const merged = new Map<string, PulseCheckRequiredConsentDocument>();
+  const defaultsById = new Map<string, PulseCheckRequiredConsentDocument>();
 
   getDefaultPulseCheckRequiredConsents().forEach((consent) => {
     merged.set(consent.id, consent);
+    defaultsById.set(consent.id, consent);
   });
 
   (customConsents || []).forEach((consent) => {
+    const defaultConsent = defaultsById.get(consent.id);
+    if (
+      defaultConsent
+      && parseConsentVersionNumber(consent.version) < parseConsentVersionNumber(defaultConsent.version)
+    ) {
+      return;
+    }
     merged.set(consent.id, consent);
   });
 

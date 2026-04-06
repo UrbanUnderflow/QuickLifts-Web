@@ -87,6 +87,23 @@ const normalizeString = (value?: string) => value?.trim() || '';
 const normalizeEmail = (value?: string) => normalizeString(value).toLowerCase();
 const normalizeInviteRedemptionMode = (value?: unknown): PulseCheckInviteLinkRedemptionMode =>
   value === 'general' ? 'general' : 'single-use';
+const resolveInviteLinkStatus = (
+  status: unknown,
+  redemptionMode?: unknown
+): PulseCheckInviteLinkStatus => {
+  const normalizedStatus = normalizeString(typeof status === 'string' ? status : '');
+  if (normalizedStatus === 'revoked') {
+    return 'revoked';
+  }
+
+  if (normalizedStatus === 'redeemed' && normalizeInviteRedemptionMode(redemptionMode) !== 'general') {
+    return 'redeemed';
+  }
+
+  return 'active';
+};
+const isInviteLinkUsable = (status: unknown, redemptionMode?: unknown) =>
+  resolveInviteLinkStatus(status, redemptionMode) === 'active';
 const isLocalHostname = (hostname?: string | null) => LOCALHOST_HOSTNAMES.has(normalizeString(hostname ?? undefined).toLowerCase());
 const getCurrentSiteOrigin = () =>
   typeof window !== 'undefined' ? window.location.origin.replace(/\/+$/, '') : DEFAULT_PUBLIC_SITE_ORIGIN;
@@ -594,7 +611,7 @@ const toPilotEnrollment = (id: string, data: Record<string, any>): PulseCheckPil
 const toInviteLink = (id: string, data: Record<string, any>): PulseCheckInviteLink => ({
   id,
   inviteType: (data.inviteType as PulseCheckInviteLinkType) || 'admin-activation',
-  status: (data.status as PulseCheckInviteLinkStatus) || 'active',
+  status: resolveInviteLinkStatus(data.status, data.redemptionMode),
   redemptionMode: normalizeInviteRedemptionMode(data.redemptionMode),
   redemptionCount: Math.max(0, Number(data.redemptionCount || 0)),
   organizationId: data.organizationId || '',
@@ -2576,7 +2593,7 @@ export const pulseCheckProvisioningService = {
           if ((invite.inviteType || '') !== 'team-access') {
             throw new Error('Invite type is invalid for this route.');
           }
-          if ((invite.status || '') !== 'active') {
+          if (!isInviteLinkUsable(invite.status, invite.redemptionMode)) {
             throw new Error('Invite is no longer active.');
           }
           const redemptionMode = normalizeInviteRedemptionMode(invite.redemptionMode);
@@ -2798,15 +2815,21 @@ export const pulseCheckProvisioningService = {
             const grantedNewScopeAccess =
               !hadExistingTeamMembership ||
               (teamMembershipRole === 'athlete' && Boolean(pilotId) && !hadExistingPilotEnrollment);
+            const shouldRepairInviteStatus = normalizeString(invite.status) !== 'active';
 
-            if (grantedNewScopeAccess) {
+            if (grantedNewScopeAccess || shouldRepairInviteStatus) {
               transaction.set(
                 inviteRef,
                 {
-                  redeemedByUserId: userId,
-                  redeemedByEmail: userEmail,
-                  redeemedAt: serverTimestamp(),
-                  redemptionCount: increment(1),
+                  status: 'active',
+                  ...(grantedNewScopeAccess
+                    ? {
+                        redeemedByUserId: userId,
+                        redeemedByEmail: userEmail,
+                        redeemedAt: serverTimestamp(),
+                        redemptionCount: increment(1),
+                      }
+                    : {}),
                   updatedAt: serverTimestamp(),
                 },
                 { merge: true }
