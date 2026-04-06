@@ -947,6 +947,8 @@ function buildBaseDemoStore(): PilotDashboardDemoStore {
       id: 'demo-invite-link',
       inviteType: 'team-access',
       status: 'active',
+      redemptionMode: 'single-use',
+      redemptionCount: 0,
       organizationId: organization.id,
       teamId: team.id,
       pilotId: pilot.id,
@@ -1426,6 +1428,7 @@ export const pilotDashboardDemoMode = {
   createInviteLink(input: {
     pilotId: string;
     pilotName: string;
+    redemptionMode?: 'single-use' | 'general';
     cohortId?: string;
     cohortName?: string;
     createdByUserId?: string;
@@ -1433,11 +1436,14 @@ export const pilotDashboardDemoMode = {
   }): PulseCheckInviteLink {
     const store = readStore();
     const now = Date.now();
+    const redemptionMode = input.redemptionMode === 'general' ? 'general' : 'single-use';
     const cohortSegment = normalizeString(input.cohortId) ? `-${normalizeString(input.cohortId)}` : '';
     const invite = {
       id: `demo-invite-${now}`,
       inviteType: 'team-access',
       status: 'active',
+      redemptionMode,
+      redemptionCount: 0,
       organizationId: store.organization.id,
       teamId: store.team.id,
       pilotId: normalizeString(input.pilotId),
@@ -1452,7 +1458,23 @@ export const pilotDashboardDemoMode = {
       createdAt: asTimestamp(now),
       updatedAt: asTimestamp(now),
     } as PulseCheckInviteLink;
-    store.inviteLinks = [invite, ...store.inviteLinks];
+    const filteredInvites =
+      redemptionMode === 'general'
+        ? store.inviteLinks.map((currentInvite) =>
+            currentInvite.inviteType === 'team-access' &&
+            currentInvite.status === 'active' &&
+            (currentInvite.redemptionMode || 'single-use') === 'general' &&
+            normalizeString(currentInvite.pilotId) === normalizeString(input.pilotId) &&
+            normalizeString(currentInvite.cohortId) === normalizeString(input.cohortId)
+              ? {
+                  ...currentInvite,
+                  status: 'revoked' as const,
+                  updatedAt: asTimestamp(now),
+                }
+              : currentInvite
+          )
+        : store.inviteLinks;
+    store.inviteLinks = [invite, ...filteredInvites];
     writeStore(store);
     return invite;
   },

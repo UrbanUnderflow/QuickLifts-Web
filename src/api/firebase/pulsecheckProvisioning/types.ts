@@ -14,6 +14,7 @@ export type PulseCheckClinicianProfileSource = 'pulsecheck-local' | 'auntedna';
 export type PulseCheckClinicianProfileSyncStatus = 'pending-sync' | 'synced' | 'sync-failed';
 export type PulseCheckInviteLinkStatus = 'active' | 'redeemed' | 'revoked';
 export type PulseCheckInviteLinkType = 'admin-activation' | 'clinician-onboarding' | 'team-access';
+export type PulseCheckInviteLinkRedemptionMode = 'single-use' | 'general';
 export type PulseCheckOrganizationMembershipRole = 'org-admin' | 'implementation-observer';
 export type PulseCheckOperatingRole = 'admin-only' | 'admin-plus-coach' | 'admin-plus-support-staff';
 export type PulseCheckRosterVisibilityScope = 'team' | 'assigned' | 'none';
@@ -399,6 +400,8 @@ export interface PulseCheckInviteLink {
   id: string;
   inviteType: PulseCheckInviteLinkType;
   status: PulseCheckInviteLinkStatus;
+  redemptionMode?: PulseCheckInviteLinkRedemptionMode;
+  redemptionCount?: number;
   organizationId: string;
   teamId: string;
   pilotId?: string;
@@ -537,6 +540,7 @@ export interface CreatePulseCheckTeamAccessInviteInput {
   organizationId: string;
   teamId: string;
   teamMembershipRole: PulseCheckTeamMembershipRole;
+  redemptionMode?: PulseCheckInviteLinkRedemptionMode;
   revokeExistingMatchingLinks?: boolean;
   pilotId?: string;
   cohortId?: string;

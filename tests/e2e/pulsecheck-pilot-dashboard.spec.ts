@@ -225,12 +225,15 @@ test.describe.serial('PulseCheck pilot dashboard', () => {
 
       await expect(page.getByRole('heading', { name: fixture.pilotName })).toBeVisible();
       await expect(page.getByText(/Athletes outside this pilot are excluded/i)).toBeVisible();
+      const singleLinkButton = page.getByRole('button', { name: /Generate Single Link/i });
+      const generalLinkButton = page.getByRole('button', { name: /Generate General Link/i });
+      await expect(singleLinkButton).toBeVisible();
+      await expect(generalLinkButton).toBeVisible();
+      await generalLinkButton.click();
       const inviteDiagnostics = page.getByTestId('pilot-invite-diagnostics');
-      if (!(await inviteDiagnostics.isVisible().catch(() => false))) {
-        await page.getByRole('button', { name: /Create Invite Link|Generate New Link/i }).click();
-      }
       await expect(inviteDiagnostics).toBeVisible();
       await expect(inviteDiagnostics).toContainText('Fallback redirect');
+      await expect(page.getByText(/^General link$/)).toBeVisible();
       const copyButtons = page.locator('[data-testid^="pilot-invite-copy-"]');
       await expect(copyButtons.first()).toBeVisible();
 

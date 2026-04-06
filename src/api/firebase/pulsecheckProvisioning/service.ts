@@ -1,4 +1,4 @@
-import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { auth, db, getFirebaseModeRequestHeaders } from '../config';
 import { buildPulseCheckTeamInviteOneLink, resolvePulseCheckInvitePreviewImage } from '../../../utils/pulsecheckInviteLinks';
 import { SubscriptionPlatform, SubscriptionType } from '../user';
@@ -49,6 +49,7 @@ import type {
   PulseCheckTeamMembershipRole,
   PulseCheckTeamStatus,
   PulseCheckInviteLink,
+  PulseCheckInviteLinkRedemptionMode,
   PulseCheckInviteLinkStatus,
   PulseCheckLegacyCoachRosterCandidate,
   PulseCheckLegacyCoachRosterMigrationResult,
@@ -83,6 +84,8 @@ const DEFAULT_PUBLIC_SITE_ORIGIN = (process.env.NEXT_PUBLIC_SITE_URL || 'https:/
 
 const normalizeString = (value?: string) => value?.trim() || '';
 const normalizeEmail = (value?: string) => normalizeString(value).toLowerCase();
+const normalizeInviteRedemptionMode = (value?: unknown): PulseCheckInviteLinkRedemptionMode =>
+  value === 'general' ? 'general' : 'single-use';
 const isLocalHostname = (hostname?: string | null) => LOCALHOST_HOSTNAMES.has(normalizeString(hostname ?? undefined).toLowerCase());
 const getCurrentSiteOrigin = () =>
   typeof window !== 'undefined' ? window.location.origin.replace(/\/+$/, '') : DEFAULT_PUBLIC_SITE_ORIGIN;
@@ -586,6 +589,8 @@ const toInviteLink = (id: string, data: Record<string, any>): PulseCheckInviteLi
   id,
   inviteType: (data.inviteType as PulseCheckInviteLinkType) || 'admin-activation',
   status: (data.status as PulseCheckInviteLinkStatus) || 'active',
+  redemptionMode: normalizeInviteRedemptionMode(data.redemptionMode),
+  redemptionCount: Math.max(0, Number(data.redemptionCount || 0)),
   organizationId: data.organizationId || '',
   teamId: data.teamId || '',
   pilotId: data.pilotId || '',
@@ -1858,6 +1863,7 @@ export const pulseCheckProvisioningService = {
     const normalizedTargetEmail = normalizeEmail(input.targetEmail);
     const normalizedPilotId = normalizeString(input.pilotId);
     const normalizedCohortId = normalizeString(input.cohortId);
+    const redemptionMode = normalizeInviteRedemptionMode(input.redemptionMode);
     const shouldRevokeExistingMatchingLinks = input.revokeExistingMatchingLinks !== false;
     const normalizedOrganizationId = normalizeString(input.organizationId);
     const baseUrl = getCurrentSiteOrigin();
@@ -1915,6 +1921,7 @@ export const pulseCheckProvisioningService = {
           normalizeEmail(link.targetEmail || '') === normalizedTargetEmail &&
           (link.pilotId || '') === normalizedPilotId &&
           (link.cohortId || '') === normalizedCohortId &&
+          normalizeInviteRedemptionMode(link.redemptionMode) === redemptionMode &&
           (link.inviteType || '') === 'team-access' &&
           (link.status || '') === 'active'
         );
@@ -1933,6 +1940,8 @@ export const pulseCheckProvisioningService = {
     const payload = {
       inviteType: 'team-access',
       status: 'active',
+      redemptionMode,
+      redemptionCount: 0,
       organizationId: normalizedOrganizationId,
       teamId: normalizedTeamId,
       pilotId: normalizedPilotId,
@@ -2551,6 +2560,7 @@ export const pulseCheckProvisioningService = {
           if ((invite.status || '') !== 'active') {
             throw new Error('Invite is no longer active.');
           }
+          const redemptionMode = normalizeInviteRedemptionMode(invite.redemptionMode);
 
           const targetEmail = normalizeEmail(invite.targetEmail);
           if (targetEmail && targetEmail !== userEmail) {
@@ -2579,8 +2589,10 @@ export const pulseCheckProvisioningService = {
           ]);
           const userSnap = await transaction.get(userRef);
           const existingTeamMembershipSnap = await transaction.get(teamMembershipRef);
+          const hadExistingTeamMembership = existingTeamMembershipSnap.exists();
           let pilotStudyMode: PulseCheckPilotStudyMode | null = null;
           let existingPilotEnrollment: Record<string, any> = {};
+          let hadExistingPilotEnrollment = false;
           let pilotRequiredConsents: PulseCheckRequiredConsentDocument[] = [];
           if (pilotId) {
             const pilotRef = doc(db, PILOTS_COLLECTION, pilotId);
@@ -2593,6 +2605,7 @@ export const pulseCheckProvisioningService = {
 
             const pilotEnrollmentRef = doc(db, PILOT_ENROLLMENTS_COLLECTION, buildPilotEnrollmentId(pilotId, userId));
             const existingPilotEnrollmentSnap = await transaction.get(pilotEnrollmentRef);
+            hadExistingPilotEnrollment = existingPilotEnrollmentSnap.exists();
             existingPilotEnrollment = existingPilotEnrollmentSnap.exists()
               ? (existingPilotEnrollmentSnap.data() as Record<string, any>)
               : {};
@@ -2762,17 +2775,38 @@ export const pulseCheckProvisioningService = {
             );
           }
 
-          transaction.set(
-            inviteRef,
-            {
-              status: 'redeemed',
-              redeemedByUserId: userId,
-              redeemedByEmail: userEmail,
-              redeemedAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            },
-            { merge: true }
-          );
+          if (redemptionMode === 'general') {
+            const grantedNewScopeAccess =
+              !hadExistingTeamMembership ||
+              (teamMembershipRole === 'athlete' && Boolean(pilotId) && !hadExistingPilotEnrollment);
+
+            if (grantedNewScopeAccess) {
+              transaction.set(
+                inviteRef,
+                {
+                  redeemedByUserId: userId,
+                  redeemedByEmail: userEmail,
+                  redeemedAt: serverTimestamp(),
+                  redemptionCount: increment(1),
+                  updatedAt: serverTimestamp(),
+                },
+                { merge: true }
+              );
+            }
+          } else {
+            transaction.set(
+              inviteRef,
+              {
+                status: 'redeemed',
+                redeemedByUserId: userId,
+                redeemedByEmail: userEmail,
+                redeemedAt: serverTimestamp(),
+                redemptionCount: 1,
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true }
+            );
+          }
 
           return {
             organizationId,
