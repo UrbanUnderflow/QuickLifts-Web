@@ -1,6 +1,26 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
-import { AlertTriangle, ArrowRight, Building2, Clipboard, ClipboardList, ExternalLink, Loader2, MailPlus, ShieldPlus, Sparkles, Stethoscope, Users2, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Building2,
+  ChevronDown,
+  CircleDollarSign,
+  Clipboard,
+  ClipboardList,
+  Download,
+  ExternalLink,
+  HeartPulse,
+  Loader2,
+  MailPlus,
+  MoreHorizontal,
+  Plus,
+  Search,
+  ShieldPlus,
+  Sparkles,
+  Stethoscope,
+  Users2,
+  X,
+} from 'lucide-react';
 import type { Timestamp } from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
@@ -195,6 +215,21 @@ const CLINICIAN_PROFILE_TYPE_OPTIONS: Array<{ value: PulseCheckClinicianProfileT
   { value: 'provider', label: 'Provider Network' },
 ];
 
+type StatusDisplay = {
+  label: string;
+  tone: string;
+  dotTone: string;
+};
+
+const formatEnumLabel = (value?: string | null) => {
+  if (!value) return 'Not set';
+  return value
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+
 const formatTimestamp = (value?: Timestamp | null) => {
   if (!value || typeof value.toDate !== 'function') return 'Pending write';
   return value.toDate().toLocaleString();
@@ -207,53 +242,113 @@ const toDateValue = (value?: Timestamp | Date | null) => {
   return null;
 };
 
-const getOrganizationStatusDisplay = (status?: PulseCheckOrganizationStatus) => {
+const getOrganizationStatusDisplay = (status?: PulseCheckOrganizationStatus): StatusDisplay => {
   switch (status) {
     case 'ready-for-activation':
-      return { label: 'Ready for Activation', tone: 'border-amber-500/30 text-amber-200 bg-amber-500/10' };
+      return {
+        label: 'Ready for Activation',
+        tone: 'border-cyan-400/40 bg-cyan-500/15 text-cyan-50',
+        dotTone: 'bg-cyan-300',
+      };
     case 'active':
-      return { label: 'Active', tone: 'border-green-500/30 text-green-200 bg-green-500/10' };
+      return {
+        label: 'Active',
+        tone: 'border-emerald-400/40 bg-emerald-500/15 text-emerald-50',
+        dotTone: 'bg-emerald-300',
+      };
     case 'implementation-hold':
-      return { label: 'Implementation Hold', tone: 'border-red-500/30 text-red-200 bg-red-500/10' };
+      return {
+        label: 'Implementation Hold',
+        tone: 'border-rose-400/40 bg-rose-500/15 text-rose-50',
+        dotTone: 'bg-rose-300',
+      };
     case 'archived':
-      return { label: 'Archived', tone: 'border-zinc-700 text-zinc-300 bg-zinc-800/30' };
+      return {
+        label: 'Archived',
+        tone: 'border-zinc-600/60 bg-zinc-500/10 text-zinc-200',
+        dotTone: 'bg-zinc-400',
+      };
     case 'draft':
     case 'provisioning':
     default:
-      return { label: 'Provisioning', tone: 'border-blue-500/30 text-blue-200 bg-blue-500/10' };
+      return {
+        label: 'Provisioning',
+        tone: 'border-amber-400/40 bg-amber-500/15 text-amber-50',
+        dotTone: 'bg-amber-300',
+      };
   }
 };
 
-const getTeamStatusDisplay = (status?: PulseCheckTeamStatus) => {
+const getTeamStatusDisplay = (status?: PulseCheckTeamStatus): StatusDisplay => {
   switch (status) {
     case 'ready-for-activation':
-      return { label: 'Ready for Activation', tone: 'border-amber-500/30 text-amber-200 bg-amber-500/10' };
+      return {
+        label: 'Ready for Activation',
+        tone: 'border-cyan-400/40 bg-cyan-500/15 text-cyan-50',
+        dotTone: 'bg-cyan-300',
+      };
     case 'active':
-      return { label: 'Active', tone: 'border-green-500/30 text-green-200 bg-green-500/10' };
+      return {
+        label: 'Active',
+        tone: 'border-emerald-400/40 bg-emerald-500/15 text-emerald-50',
+        dotTone: 'bg-emerald-300',
+      };
     case 'paused':
-      return { label: 'Paused', tone: 'border-zinc-700 text-zinc-300 bg-zinc-800/30' };
+      return {
+        label: 'Paused',
+        tone: 'border-zinc-600/60 bg-zinc-500/10 text-zinc-200',
+        dotTone: 'bg-zinc-400',
+      };
     case 'archived':
-      return { label: 'Archived', tone: 'border-zinc-700 text-zinc-300 bg-zinc-800/30' };
+      return {
+        label: 'Archived',
+        tone: 'border-zinc-600/60 bg-zinc-500/10 text-zinc-200',
+        dotTone: 'bg-zinc-400',
+      };
     case 'draft':
     case 'provisioning':
     default:
-      return { label: 'Provisioning', tone: 'border-blue-500/30 text-blue-200 bg-blue-500/10' };
+      return {
+        label: 'Provisioning',
+        tone: 'border-amber-400/40 bg-amber-500/15 text-amber-50',
+        dotTone: 'bg-amber-300',
+      };
   }
 };
 
-const getPilotStatusDisplay = (status?: PulseCheckPilot['status']) => {
+const getPilotStatusDisplay = (status?: PulseCheckPilot['status']): StatusDisplay => {
   switch (status) {
     case 'active':
-      return { label: 'Active', tone: 'border-cyan-500/30 text-cyan-200 bg-cyan-500/10' };
+      return {
+        label: 'Active',
+        tone: 'border-emerald-400/40 bg-emerald-500/15 text-emerald-50',
+        dotTone: 'bg-emerald-300',
+      };
     case 'paused':
-      return { label: 'Paused', tone: 'border-zinc-700 text-zinc-300 bg-zinc-800/30' };
+      return {
+        label: 'Paused',
+        tone: 'border-zinc-600/60 bg-zinc-500/10 text-zinc-200',
+        dotTone: 'bg-zinc-400',
+      };
     case 'completed':
-      return { label: 'Completed', tone: 'border-green-500/30 text-green-200 bg-green-500/10' };
+      return {
+        label: 'Completed',
+        tone: 'border-zinc-600/60 bg-zinc-500/10 text-zinc-200',
+        dotTone: 'bg-zinc-400',
+      };
     case 'archived':
-      return { label: 'Archived', tone: 'border-zinc-700 text-zinc-300 bg-zinc-800/30' };
+      return {
+        label: 'Archived',
+        tone: 'border-zinc-600/60 bg-zinc-500/10 text-zinc-200',
+        dotTone: 'bg-zinc-400',
+      };
     case 'draft':
     default:
-      return { label: 'Draft', tone: 'border-violet-500/30 text-violet-200 bg-violet-500/10' };
+      return {
+        label: 'Draft',
+        tone: 'border-violet-400/40 bg-violet-500/15 text-violet-50',
+        dotTone: 'bg-violet-300',
+      };
   }
 };
 
@@ -274,17 +369,33 @@ const getDerivedPilotStatusValue = (pilot: PulseCheckPilot): PulseCheckPilot['st
   return 'active';
 };
 
-const getCohortStatusDisplay = (status?: PulseCheckPilotCohortStatus) => {
+const getCohortStatusDisplay = (status?: PulseCheckPilotCohortStatus): StatusDisplay => {
   switch (status) {
     case 'active':
-      return { label: 'Active', tone: 'border-emerald-500/30 text-emerald-200 bg-emerald-500/10' };
+      return {
+        label: 'Active',
+        tone: 'border-emerald-400/40 bg-emerald-500/15 text-emerald-50',
+        dotTone: 'bg-emerald-300',
+      };
     case 'paused':
-      return { label: 'Paused', tone: 'border-zinc-700 text-zinc-300 bg-zinc-800/30' };
+      return {
+        label: 'Paused',
+        tone: 'border-zinc-600/60 bg-zinc-500/10 text-zinc-200',
+        dotTone: 'bg-zinc-400',
+      };
     case 'archived':
-      return { label: 'Archived', tone: 'border-zinc-700 text-zinc-300 bg-zinc-800/30' };
+      return {
+        label: 'Archived',
+        tone: 'border-zinc-600/60 bg-zinc-500/10 text-zinc-200',
+        dotTone: 'bg-zinc-400',
+      };
     case 'draft':
     default:
-      return { label: 'Draft', tone: 'border-fuchsia-500/30 text-fuchsia-200 bg-fuchsia-500/10' };
+      return {
+        label: 'Draft',
+        tone: 'border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-50',
+        dotTone: 'bg-fuchsia-300',
+      };
   }
 };
 
@@ -314,6 +425,44 @@ type OnboardingModalState =
       team: PulseCheckTeam;
       clinicianProfile: PulseCheckAuntEdnaClinicianProfile;
     };
+
+type ProvisioningWizardStep = 'org' | 'team' | 'route' | 'activation' | 'pilot' | 'cohort';
+type DashboardStatusFilter = 'all' | 'prov' | 'ready' | 'active';
+
+const PROVISIONING_WIZARD_STEPS: Array<{ key: ProvisioningWizardStep; label: string }> = [
+  { key: 'org', label: 'Organization' },
+  { key: 'team', label: 'Team' },
+  { key: 'route', label: 'Support Route' },
+  { key: 'activation', label: 'Admin Activation' },
+  { key: 'pilot', label: 'Pilot' },
+  { key: 'cohort', label: 'Cohort' },
+];
+
+const getOrganizationFilterStatus = (status?: PulseCheckOrganizationStatus): DashboardStatusFilter => {
+  if (status === 'ready-for-activation') return 'ready';
+  if (status === 'active') return 'active';
+  return 'prov';
+};
+
+const getDashboardStatusClassName = (display: StatusDisplay) => {
+  switch (display.label) {
+    case 'Ready for Activation':
+      return 'pcp-s-ready';
+    case 'Active':
+      return 'pcp-s-active';
+    case 'Completed':
+    case 'Archived':
+    case 'Paused':
+      return 'pcp-s-done';
+    case 'Implementation Hold':
+      return 'pcp-s-done';
+    case 'Draft':
+      return 'pcp-s-ready';
+    case 'Provisioning':
+    default:
+      return 'pcp-s-prov';
+  }
+};
 
 const PulseCheckProvisioningPage: React.FC = () => {
   const currentUser = useUser();
@@ -358,6 +507,28 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [teamImageUploadingId, setTeamImageUploadingId] = useState<string | null>(null);
   const [sportOptions, setSportOptions] = useState(() => getDefaultPulseCheckSports());
   const [teamCommercialDrafts, setTeamCommercialDrafts] = useState<Record<string, PulseCheckTeamCommercialConfig>>({});
+  const [isProvisioningModalOpen, setIsProvisioningModalOpen] = useState(false);
+  const [activeWizardStep, setActiveWizardStep] = useState<ProvisioningWizardStep>('org');
+  const [organizationSearch, setOrganizationSearch] = useState('');
+  const [organizationStatusFilter, setOrganizationStatusFilter] = useState<DashboardStatusFilter>('all');
+  const [expandedOrganizationIds, setExpandedOrganizationIds] = useState<string[]>([]);
+  const [expandedTeamIds, setExpandedTeamIds] = useState<string[]>([]);
+  const [expandedPilotIds, setExpandedPilotIds] = useState<string[]>([]);
+  const [hasInitializedExpansionState, setHasInitializedExpansionState] = useState(false);
+  const [activationDraft, setActivationDraft] = useState<{
+    teamId: string;
+    channel: 'admin' | 'clinician';
+    targetEmail: string;
+  }>({
+    teamId: '',
+    channel: 'admin',
+    targetEmail: '',
+  });
+  const organizationFormRef = useRef<HTMLFormElement | null>(null);
+  const teamRouteFormRef = useRef<HTMLFormElement | null>(null);
+  const activationFormRef = useRef<HTMLFormElement | null>(null);
+  const pilotFormRef = useRef<HTMLFormElement | null>(null);
+  const cohortFormRef = useRef<HTMLFormElement | null>(null);
 
   const selectedOrganization = useMemo(
     () => organizations.find((organization) => organization.id === teamForm.organizationId) || null,
@@ -527,6 +698,73 @@ const PulseCheckProvisioningPage: React.FC = () => {
       }),
     [organizations, teams, pilots, clinicianProfileById, inviteLinksByTeamId, inviteLinksByClinicianProfileId, pilotCohortsByPilotId]
   );
+  const mapSummary = useMemo(
+    () => ({
+      organizationCount: organizations.length,
+      teamCount: teams.length,
+      pilotCount: pilots.length,
+      cohortCount: pilotCohorts.length,
+      readyCount:
+        organizations.filter((organization) => organization.status === 'ready-for-activation').length +
+        teams.filter((team) => team.status === 'ready-for-activation').length,
+      activeCount:
+        organizations.filter((organization) => organization.status === 'active').length +
+        teams.filter((team) => team.status === 'active').length,
+      provisioningCount: organizations.filter((organization) => getOrganizationFilterStatus(organization.status) === 'prov').length,
+      organizationReadyCount: organizations.filter((organization) => getOrganizationFilterStatus(organization.status) === 'ready').length,
+      organizationActiveCount: organizations.filter((organization) => getOrganizationFilterStatus(organization.status) === 'active').length,
+    }),
+    [organizations, teams, pilots, pilotCohorts]
+  );
+  const selectedActivationTeam = useMemo(
+    () => teams.find((team) => team.id === activationDraft.teamId) || null,
+    [teams, activationDraft.teamId]
+  );
+  const selectedActivationClinicianProfile = useMemo(
+    () =>
+      selectedActivationTeam?.defaultClinicianProfileId
+        ? clinicianProfileById.get(selectedActivationTeam.defaultClinicianProfileId) || null
+        : null,
+    [selectedActivationTeam, clinicianProfileById]
+  );
+  const filteredOrganizationBundles = useMemo(() => {
+    const normalizedSearch = organizationSearch.trim().toLowerCase();
+
+    return organizationBundles.filter(({ organization, teams: bundledTeams }) => {
+      if (
+        organizationStatusFilter !== 'all' &&
+        getOrganizationFilterStatus(organization.status) !== organizationStatusFilter
+      ) {
+        return false;
+      }
+
+      if (!normalizedSearch) return true;
+
+      const searchDocument = [
+        organization.displayName,
+        organization.legalName,
+        organization.organizationType,
+        organization.primaryCustomerAdminEmail,
+        ...bundledTeams.flatMap(({ team, pilots: bundledPilots, clinicianProfile }) => [
+          team.displayName,
+          team.sportOrProgram,
+          team.defaultAdminEmail,
+          team.defaultInvitePolicy,
+          clinicianProfile?.displayName || '',
+          ...bundledPilots.flatMap(({ pilot, cohorts }) => [
+            pilot.name,
+            pilot.objective || '',
+            ...cohorts.flatMap((cohort) => [cohort.name, ...(cohort.reportingTags || [])]),
+          ]),
+        ]),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return searchDocument.includes(normalizedSearch);
+    });
+  }, [organizationBundles, organizationSearch, organizationStatusFilter]);
   const onboardingModalLinks = useMemo(() => {
     if (!onboardingModal) return [];
 
@@ -615,6 +853,55 @@ const PulseCheckProvisioningPage: React.FC = () => {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (hasInitializedExpansionState || loading) return;
+
+    setExpandedOrganizationIds(organizations.map((organization) => organization.id));
+    setExpandedTeamIds(teams.map((team) => team.id));
+    setExpandedPilotIds(
+      pilots
+        .filter((pilot) => (pilotCohortsByPilotId.get(pilot.id) || []).length > 0)
+        .map((pilot) => pilot.id)
+    );
+    setHasInitializedExpansionState(true);
+  }, [hasInitializedExpansionState, loading, organizations, teams, pilots, pilotCohortsByPilotId]);
+
+  useEffect(() => {
+    if (!teams.length) return;
+    if (activationDraft.teamId) return;
+
+    const firstTeam = teams[0];
+    setActivationDraft({
+      teamId: firstTeam.id,
+      channel: firstTeam.defaultEscalationRoute === 'clinician' ? 'clinician' : 'admin',
+      targetEmail: firstTeam.defaultAdminEmail || '',
+    });
+  }, [teams, activationDraft.teamId]);
+
+  useEffect(() => {
+    if (!selectedActivationTeam) return;
+
+    setActivationDraft((current) => {
+      const nextChannel = current.channel === 'clinician' && selectedActivationTeam.defaultEscalationRoute !== 'clinician'
+        ? 'admin'
+        : current.channel;
+      const nextEmail =
+        nextChannel === 'clinician'
+          ? selectedActivationClinicianProfile?.email || current.targetEmail
+          : current.targetEmail || selectedActivationTeam.defaultAdminEmail || '';
+
+      if (current.channel === nextChannel && current.targetEmail === nextEmail) {
+        return current;
+      }
+
+      return {
+        ...current,
+        channel: nextChannel,
+        targetEmail: nextEmail,
+      };
+    });
+  }, [selectedActivationTeam, selectedActivationClinicianProfile]);
 
   const uploadInvitePreviewImage = useCallback(
     async (scope: 'organization' | 'team', entityId: string, file: File) => {
@@ -967,7 +1254,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
     event.preventDefault();
     if (!orgForm.displayName.trim() || !orgForm.legalName.trim() || !orgForm.primaryCustomerAdminEmail?.trim()) {
       setMessage({ type: 'error', text: 'Display name, legal name, and customer admin email are required.' });
-      return;
+      return false;
     }
 
     setOrgSubmitting(true);
@@ -988,10 +1275,14 @@ const PulseCheckProvisioningPage: React.FC = () => {
         defaultAdminName: current.defaultAdminName || orgForm.primaryCustomerAdminName || '',
         defaultAdminEmail: current.defaultAdminEmail || orgForm.primaryCustomerAdminEmail || '',
       }));
+      setExpandedOrganizationIds((current) => (current.includes(createdId) ? current : [...current, createdId]));
+      setActiveWizardStep('team');
       setMessage({ type: 'success', text: 'Organization created. You can now create the first team under it.' });
+      return true;
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to create organization:', error);
       setMessage({ type: 'error', text: 'Failed to create organization.' });
+      return false;
     } finally {
       setOrgSubmitting(false);
     }
@@ -1001,7 +1292,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
     event.preventDefault();
     if (!teamForm.organizationId || !teamForm.displayName.trim() || !teamForm.sportOrProgram.trim()) {
       setMessage({ type: 'error', text: 'Organization, team name, and sport are required.' });
-      return;
+      return false;
     }
 
     if (
@@ -1012,7 +1303,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
         type: 'error',
         text: 'Select or create a clinician profile before creating a clinician-routed team.',
       });
-      return;
+      return false;
     }
 
     setTeamSubmitting(true);
@@ -1055,6 +1346,19 @@ const PulseCheckProvisioningPage: React.FC = () => {
       });
       setCohortTagsInput('');
       await loadData();
+      setExpandedOrganizationIds((current) =>
+        current.includes(selectedOrganizationId) ? current : [...current, selectedOrganizationId]
+      );
+      setExpandedTeamIds((current) => (current.includes(createdTeamId) ? current : [...current, createdTeamId]));
+      setActivationDraft({
+        teamId: createdTeamId,
+        channel: teamForm.defaultEscalationRoute === 'clinician' ? 'clinician' : 'admin',
+        targetEmail:
+          teamForm.defaultEscalationRoute === 'clinician'
+            ? selectedClinicianProfile?.email || teamForm.defaultAdminEmail || ''
+            : teamForm.defaultAdminEmail || '',
+      });
+      setActiveWizardStep('activation');
       setMessage({
         type: 'success',
         text:
@@ -1062,9 +1366,11 @@ const PulseCheckProvisioningPage: React.FC = () => {
             ? 'Team created with 988 hotline escalation routing and automatic watch-list hold behavior. You can now add pilots and cohorts before issuing onboarding links.'
             : 'Team created with its default clinician profile attached. You can now add pilots and cohorts before issuing onboarding links.',
       });
+      return true;
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to create team:', error);
       setMessage({ type: 'error', text: 'Failed to create team.' });
+      return false;
     } finally {
       setTeamSubmitting(false);
     }
@@ -1094,7 +1400,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
     event.preventDefault();
     if (!pilotForm.organizationId || !pilotForm.teamId || !pilotForm.name.trim()) {
       setMessage({ type: 'error', text: 'Select a team and enter a pilot name before creating a pilot.' });
-      return;
+      return false;
     }
 
     setPilotSubmitting(true);
@@ -1110,7 +1416,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
       if (pilotDurationPreset === 'custom' && (!Number.isFinite(durationDays) || durationDays <= 0)) {
         setMessage({ type: 'error', text: 'Enter a valid number of days for a custom pilot duration.' });
         setPilotSubmitting(false);
-        return;
+        return false;
       }
 
       const endAt = startAt && Number.isFinite(durationDays) && durationDays > 0
@@ -1143,13 +1449,18 @@ const PulseCheckProvisioningPage: React.FC = () => {
       setPilotDurationPreset('14');
       setPilotCustomDays('');
       await loadData();
+      setExpandedTeamIds((current) => (current.includes(pilotForm.teamId) ? current : [...current, pilotForm.teamId]));
+      setExpandedPilotIds((current) => (current.includes(createdPilotId) ? current : [...current, createdPilotId]));
+      setActiveWizardStep('cohort');
       setMessage({
         type: 'success',
         text: 'Pilot created and activated. It will show up in the dashboard immediately, while start and end dates still scope the reporting window.',
       });
+      return true;
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to create pilot:', error);
       setMessage({ type: 'error', text: 'Failed to create pilot.' });
+      return false;
     } finally {
       setPilotSubmitting(false);
     }
@@ -1159,7 +1470,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
     event.preventDefault();
     if (!cohortForm.organizationId || !cohortForm.teamId || !cohortForm.pilotId || !cohortForm.name.trim()) {
       setMessage({ type: 'error', text: 'Select a pilot and enter a cohort name before creating a cohort.' });
-      return;
+      return false;
     }
 
     const pendingTags = cohortTagsInput
@@ -1189,13 +1500,18 @@ const PulseCheckProvisioningPage: React.FC = () => {
       }));
       setCohortTagsInput('');
       await loadData();
+      setExpandedPilotIds((current) => (current.includes(cohortForm.pilotId) ? current : [...current, cohortForm.pilotId]));
+      setIsProvisioningModalOpen(false);
+      setActiveWizardStep('org');
       setMessage({
         type: 'success',
         text: `Cohort created and linked to the selected pilot. It inherited a ${inheritedStatus} status from the pilot at creation time.`,
       });
+      return true;
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to create cohort:', error);
       setMessage({ type: 'error', text: 'Failed to create cohort.' });
+      return false;
     } finally {
       setCohortSubmitting(false);
     }
@@ -1204,7 +1520,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const handleCreateAdminActivationLink = async (team: PulseCheckTeam, targetEmail?: string) => {
     if (!targetEmail?.trim()) {
       setMessage({ type: 'error', text: 'An admin email is required before generating an onboarding link.' });
-      return;
+      return false;
     }
 
     setActivationCreatingTeamId(team.id);
@@ -1225,9 +1541,11 @@ const PulseCheckProvisioningPage: React.FC = () => {
         type: 'success',
         text: `Admin activation link created for ${targetEmail}. ${team.displayName} is ready for activation.`,
       });
+      return true;
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to create admin activation link:', error);
       setMessage({ type: 'error', text: 'Failed to create admin activation link.' });
+      return false;
     } finally {
       setActivationCreatingTeamId(null);
       setAdminLinkCreatingEmail(null);
@@ -1323,9 +1641,11 @@ const PulseCheckProvisioningPage: React.FC = () => {
         type: 'success',
         text: `Clinician onboarding link created for ${clinicianProfile.displayName}.`,
       });
+      return true;
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to create clinician onboarding link:', error);
       setMessage({ type: 'error', text: 'Failed to create clinician onboarding link.' });
+      return false;
     } finally {
       setClinicianLinkCreatingProfileId(null);
     }
@@ -1380,1694 +1700,2242 @@ const PulseCheckProvisioningPage: React.FC = () => {
     }
   };
 
+  const toggleExpandedId = useCallback((id: string, setExpanded: React.Dispatch<React.SetStateAction<string[]>>) => {
+    setExpanded((current) => (current.includes(id) ? current.filter((currentId) => currentId !== id) : [...current, id]));
+  }, []);
+
+  const toggleOrganizationRow = useCallback((organizationId: string) => {
+    toggleExpandedId(organizationId, setExpandedOrganizationIds);
+  }, [toggleExpandedId]);
+
+  const toggleTeamRow = useCallback((teamId: string) => {
+    toggleExpandedId(teamId, setExpandedTeamIds);
+  }, [toggleExpandedId]);
+
+  const togglePilotRow = useCallback((pilotId: string) => {
+    toggleExpandedId(pilotId, setExpandedPilotIds);
+  }, [toggleExpandedId]);
+
+  const handleToggleAllRows = useCallback(() => {
+    const shouldCollapseAll = expandedOrganizationIds.length === organizations.length && expandedTeamIds.length === teams.length;
+
+    if (shouldCollapseAll) {
+      setExpandedOrganizationIds([]);
+      setExpandedTeamIds([]);
+      setExpandedPilotIds([]);
+      return;
+    }
+
+    setExpandedOrganizationIds(organizations.map((organization) => organization.id));
+    setExpandedTeamIds(teams.map((team) => team.id));
+    setExpandedPilotIds(pilots.map((pilot) => pilot.id));
+  }, [expandedOrganizationIds.length, expandedTeamIds.length, organizations, pilots, teams]);
+
+  const handleOpenProvisioningModal = useCallback(
+    (
+      step: ProvisioningWizardStep = 'org',
+      options?: {
+        organizationId?: string;
+        teamId?: string;
+        pilotId?: string;
+        channel?: 'admin' | 'clinician';
+      }
+    ) => {
+      setIsProvisioningModalOpen(true);
+      setActiveWizardStep(step);
+
+      const nextOrganizationId = options?.organizationId;
+      if (nextOrganizationId) {
+        const nextOrganization = organizations.find((organization) => organization.id === nextOrganizationId) || null;
+        setTeamForm((current) => ({
+          ...current,
+          organizationId: nextOrganizationId,
+          defaultAdminName: nextOrganization?.primaryCustomerAdminName || current.defaultAdminName || '',
+          defaultAdminEmail: nextOrganization?.primaryCustomerAdminEmail || current.defaultAdminEmail || '',
+        }));
+      }
+
+      if (options?.teamId) {
+        const nextTeam = teams.find((team) => team.id === options.teamId) || null;
+        if (nextTeam) {
+          setPilotForm((current) => ({
+            ...current,
+            organizationId: nextTeam.organizationId,
+            teamId: nextTeam.id,
+          }));
+          setActivationDraft({
+            teamId: nextTeam.id,
+            channel: options?.channel || (nextTeam.defaultEscalationRoute === 'clinician' ? 'clinician' : 'admin'),
+            targetEmail:
+              options?.channel === 'clinician'
+                ? clinicianProfileById.get(nextTeam.defaultClinicianProfileId || '')?.email || ''
+                : nextTeam.defaultAdminEmail || '',
+          });
+          setCohortForm((current) => ({
+            ...current,
+            organizationId: nextTeam.organizationId,
+            teamId: nextTeam.id,
+          }));
+        }
+      }
+
+      if (options?.pilotId) {
+        const nextPilot = pilots.find((pilot) => pilot.id === options.pilotId) || null;
+        if (nextPilot) {
+          setCohortForm((current) => ({
+            ...current,
+            organizationId: nextPilot.organizationId,
+            teamId: nextPilot.teamId,
+            pilotId: nextPilot.id,
+          }));
+        }
+      }
+    },
+    [clinicianProfileById, organizations, pilots, teams]
+  );
+
+  const handleCloseProvisioningModal = useCallback(() => {
+    setIsProvisioningModalOpen(false);
+  }, []);
+
+  const handleWizardBack = useCallback(() => {
+    const currentIndex = PROVISIONING_WIZARD_STEPS.findIndex((step) => step.key === activeWizardStep);
+    if (currentIndex <= 0) return;
+    setActiveWizardStep(PROVISIONING_WIZARD_STEPS[currentIndex - 1].key);
+  }, [activeWizardStep]);
+
+  const handleWizardNext = useCallback(() => {
+    if (activeWizardStep === 'team') {
+      setActiveWizardStep('route');
+      return;
+    }
+
+    if (activeWizardStep === 'org') {
+      organizationFormRef.current?.requestSubmit();
+      return;
+    }
+
+    if (activeWizardStep === 'route') {
+      teamRouteFormRef.current?.requestSubmit();
+      return;
+    }
+
+    if (activeWizardStep === 'activation') {
+      activationFormRef.current?.requestSubmit();
+      return;
+    }
+
+    if (activeWizardStep === 'pilot') {
+      pilotFormRef.current?.requestSubmit();
+      return;
+    }
+
+    cohortFormRef.current?.requestSubmit();
+  }, [activeWizardStep]);
+
+  const handleWizardActivationSubmit = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+
+      if (!selectedActivationTeam) {
+        setMessage({ type: 'error', text: 'Select a team before generating an activation link.' });
+        return false;
+      }
+
+      if (activationDraft.channel === 'clinician') {
+        if (!selectedActivationClinicianProfile) {
+          setMessage({ type: 'error', text: 'This team does not have a clinician profile attached yet.' });
+          return false;
+        }
+
+        const organization = organizations.find((organization) => organization.id === selectedActivationTeam.organizationId);
+        if (!organization) {
+          setMessage({ type: 'error', text: 'The selected team is missing its parent organization.' });
+          return false;
+        }
+
+        const success = await handleCreateClinicianOnboardingLink(
+          organization,
+          selectedActivationTeam,
+          selectedActivationClinicianProfile
+        );
+
+        if (success) {
+          setActiveWizardStep('pilot');
+        }
+
+        return success;
+      }
+
+      const success = await handleCreateAdminActivationLink(selectedActivationTeam, activationDraft.targetEmail);
+      if (success) {
+        setActiveWizardStep('pilot');
+      }
+      return success;
+    },
+    [
+      activationDraft.channel,
+      activationDraft.targetEmail,
+      handleCreateAdminActivationLink,
+      handleCreateClinicianOnboardingLink,
+      organizations,
+      selectedActivationClinicianProfile,
+      selectedActivationTeam,
+    ]
+  );
+
+  const handleExportOrganizations = useCallback(() => {
+    if (typeof window === 'undefined') return;
+
+    const exportPayload = organizationBundles.map(({ organization, teams: bundledTeams }) => ({
+      organization,
+      teams: bundledTeams.map(({ team, pilots: bundledPilots, clinicianProfile, adminActivationLinks, clinicianOnboardingLink }) => ({
+        team,
+        clinicianProfile,
+        adminActivationLinks,
+        clinicianOnboardingLink,
+        pilots: bundledPilots,
+      })),
+    }));
+
+    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = `pulsecheck-organizations-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(objectUrl);
+  }, [organizationBundles]);
+
+  const currentWizardStepIndex = PROVISIONING_WIZARD_STEPS.findIndex((step) => step.key === activeWizardStep);
+  const currentWizardStepLabel = PROVISIONING_WIZARD_STEPS[currentWizardStepIndex]?.label || 'Organization';
+  const activeWizardSubmitting =
+    activeWizardStep === 'org'
+      ? orgSubmitting
+      : activeWizardStep === 'route'
+        ? teamSubmitting
+        : activeWizardStep === 'activation'
+          ? activationCreatingTeamId === activationDraft.teamId ||
+            (activationDraft.channel === 'clinician' && clinicianLinkCreatingProfileId === selectedActivationClinicianProfile?.id)
+          : activeWizardStep === 'pilot'
+            ? pilotSubmitting
+            : activeWizardStep === 'cohort'
+              ? cohortSubmitting
+              : false;
+  const wizardPrimaryLabel =
+    activeWizardStep === 'team'
+      ? 'Continue to Support Route'
+      : activeWizardStep === 'cohort'
+        ? cohortSubmitting
+          ? 'Creating Cohort...'
+          : 'Finish Provisioning'
+        : activeWizardStep === 'org'
+          ? orgSubmitting
+            ? 'Creating Organization...'
+            : 'Save & Continue'
+          : activeWizardStep === 'route'
+            ? teamSubmitting
+              ? 'Creating Team...'
+              : 'Save & Continue'
+            : activeWizardStep === 'activation'
+              ? activeWizardSubmitting
+                ? 'Generating Link...'
+                : 'Save & Continue'
+              : activeWizardStep === 'pilot'
+                ? pilotSubmitting
+                  ? 'Creating Pilot...'
+                  : 'Save & Continue'
+                : 'Save & Continue';
+  const adminInitials = (currentUser?.displayName || currentUser?.email || 'Pulse Admin')
+    .split(/[\s@._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((segment) => segment.charAt(0).toUpperCase())
+    .join('');
+
   return (
     <AdminRouteGuard>
       <div className="min-h-screen bg-[#05070c] text-white">
         <Head>
           <title>PulseCheck Provisioning | Pulse Admin</title>
           <meta name="robots" content="noindex,nofollow" />
+          <link rel="preconnect" href="https://fonts.googleapis.com" />
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+          <link
+            href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap"
+            rel="stylesheet"
+          />
         </Head>
+        <style jsx global>{`
+          .pcp-org-dashboard,
+          .pcp-org-dashboard * ,
+          .pcp-org-dashboard *::before,
+          .pcp-org-dashboard *::after { box-sizing: border-box; }
+          .pcp-org-dashboard {
+            --bg: #07090f;
+            --teal: #00d4aa;
+            --teal-d: rgba(0, 212, 170, 0.1);
+            --teal-b: rgba(0, 212, 170, 0.22);
+            --amber: #f5a623;
+            --amber-d: rgba(245, 166, 35, 0.1);
+            --green: #4ade80;
+            --green-d: rgba(74, 222, 128, 0.08);
+            --blue: #60a5fa;
+            --blue-d: rgba(96, 165, 250, 0.08);
+            --purple: #a78bfa;
+            --purple-d: rgba(167, 139, 250, 0.08);
+            --mb: rgba(255, 255, 255, 0.07);
+            --glass: rgba(255, 255, 255, 0.028);
+            --glass2: rgba(255, 255, 255, 0.045);
+            --glassh: rgba(255, 255, 255, 0.055);
+            --t1: rgba(255, 255, 255, 0.95);
+            --t2: rgba(255, 255, 255, 0.52);
+            --t3: rgba(255, 255, 255, 0.28);
+            --fd: 'Syne', sans-serif;
+            --fm: 'DM Mono', monospace;
+            --fb: 'DM Sans', sans-serif;
+            min-height: 100vh;
+            background: var(--bg);
+            color: var(--t1);
+            font-family: var(--fb);
+            overflow-x: hidden;
+          }
+          .pcp-org-dashboard button,
+          .pcp-org-dashboard input,
+          .pcp-org-dashboard select,
+          .pcp-org-dashboard textarea { font: inherit; }
+          .pcp-org-dashboard a { color: inherit; text-decoration: none; }
+          .pcp-shell { position: relative; z-index: 1; display: grid; grid-template-columns: 200px 1fr; grid-template-rows: 56px 1fr; min-height: 100vh; }
+          .pcp-amb-layer { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+          .pcp-amb { position: absolute; border-radius: 9999px; filter: blur(110px); opacity: 0; animation: pcpAmbIn 2.5s ease forwards; }
+          .pcp-a1 { width: 700px; height: 700px; background: radial-gradient(circle, rgba(0, 212, 170, 0.055) 0%, transparent 70%); top: -200px; right: -150px; animation-delay: 0.2s; }
+          .pcp-a2 { width: 500px; height: 500px; background: radial-gradient(circle, rgba(96, 165, 250, 0.04) 0%, transparent 70%); bottom: -100px; left: -100px; animation-delay: 0.5s; }
+          .pcp-a3 { width: 350px; height: 350px; background: radial-gradient(circle, rgba(245, 166, 35, 0.03) 0%, transparent 70%); top: 50%; left: 35%; animation-delay: 0.9s; }
+          @keyframes pcpAmbIn { to { opacity: 1; } }
+          .pcp-topbar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; height: 56px; border-bottom: 0.5px solid var(--mb); background: rgba(7, 9, 15, 0.75); backdrop-filter: blur(24px); position: sticky; top: 0; z-index: 200; }
+          .pcp-topbar-left { display: flex; align-items: center; gap: 14px; }
+          .pcp-logo { display: flex; align-items: center; gap: 8px; font-family: var(--fd); font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+          .pcp-logo-dot { width: 8px; height: 8px; border-radius: 9999px; background: var(--teal); box-shadow: 0 0 12px rgba(0, 212, 170, 0.55); animation: pcpPulse 2.5s ease-in-out infinite; }
+          @keyframes pcpPulse { 0%, 100% { box-shadow: 0 0 10px rgba(0, 212, 170, 0.5); } 50% { box-shadow: 0 0 22px rgba(0, 212, 170, 0.85); } }
+          .pcp-divider { width: 0.5px; height: 20px; background: var(--mb); }
+          .pcp-crumb { font-family: var(--fd); font-size: 12px; font-weight: 600; color: var(--t3); letter-spacing: 0.1em; text-transform: uppercase; }
+          .pcp-admin-chip { display: flex; align-items: center; gap: 7px; padding: 4px 12px 4px 6px; border-radius: 9999px; background: var(--glass); border: 0.5px solid var(--mb); font-size: 12px; color: var(--t2); }
+          .pcp-av { width: 22px; height: 22px; border-radius: 9999px; background: linear-gradient(135deg, var(--teal), #0891b2); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; text-transform: uppercase; }
+          .pcp-sidebar { border-right: 0.5px solid var(--mb); padding: 24px 0; position: sticky; top: 56px; height: calc(100vh - 56px); overflow-y: auto; display: flex; flex-direction: column; }
+          .pcp-sidebar::-webkit-scrollbar { display: none; }
+          .pcp-nav-sec { margin-bottom: 22px; }
+          .pcp-nav-lbl { font-size: 9px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--t3); padding: 0 18px; margin-bottom: 4px; }
+          .pcp-nav-item { display: flex; align-items: center; gap: 8px; padding: 8px 18px; font-size: 13px; color: var(--t2); position: relative; }
+          .pcp-nav-item.active { color: var(--t1); }
+          .pcp-nav-item.active::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 0 2px 2px 0; background: var(--teal); }
+          .pcp-nav-item svg { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.55; }
+          .pcp-nav-item.active svg { opacity: 1; color: var(--teal); }
+          .pcp-nav-badge { margin-left: auto; font-size: 10px; font-weight: 500; padding: 2px 6px; border-radius: 9999px; background: var(--teal-d); color: var(--teal); font-family: var(--fm); }
+          .pcp-lifecycle { padding: 12px 18px; margin-top: auto; border-top: 0.5px solid var(--mb); }
+          .pcp-lifecycle-lbl { font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--t3); margin-bottom: 8px; }
+          .pcp-lifecycle-row { display: flex; align-items: center; gap: 7px; padding: 4px 0; }
+          .pcp-lifecycle-dot { width: 6px; height: 6px; border-radius: 9999px; flex-shrink: 0; }
+          .pcp-lifecycle-name { font-size: 11px; color: var(--t3); }
+          .pcp-lifecycle-count { margin-left: auto; font-size: 10px; font-family: var(--fm); }
+          .pcp-main { overflow-y: auto; display: flex; flex-direction: column; }
+          .pcp-main::-webkit-scrollbar { width: 3px; }
+          .pcp-main::-webkit-scrollbar-thumb { background: var(--mb); border-radius: 2px; }
+          .pcp-page-head { padding: 28px 36px 22px; border-bottom: 0.5px solid var(--mb); display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+          .pcp-page-head-left { flex: 1; min-width: 0; }
+          .pcp-eyebrow { font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--teal); margin-bottom: 4px; }
+          .pcp-heading { font-family: var(--fd); font-size: 26px; font-weight: 700; letter-spacing: -0.4px; margin-bottom: 4px; }
+          .pcp-desc { font-size: 13px; color: var(--t2); line-height: 1.55; max-width: 760px; }
+          .pcp-head-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding-top: 4px; }
+          .pcp-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px; border-radius: 9px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: transform 0.12s, filter 0.12s, background 0.15s; letter-spacing: -0.1px; }
+          .pcp-btn:active { transform: scale(0.97); }
+          .pcp-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+          .pcp-btn-teal { background: var(--teal); color: #07090f; }
+          .pcp-btn-teal:hover { filter: brightness(1.08); }
+          .pcp-btn-ghost { background: var(--glass); border: 0.5px solid var(--mb); color: var(--t2); }
+          .pcp-btn-ghost:hover { background: var(--glassh); color: var(--t1); }
+          .pcp-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+          .pcp-stats-row { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 0.5px solid var(--mb); }
+          .pcp-stat-cell { padding: 16px 24px; border-right: 0.5px solid var(--mb); display: flex; align-items: center; gap: 12px; }
+          .pcp-stat-cell:last-child { border-right: none; }
+          .pcp-stat-icon { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+          .pcp-stat-icon svg { width: 15px; height: 15px; }
+          .pcp-si-t { background: var(--teal-d); border: 0.5px solid var(--teal-b); color: var(--teal); }
+          .pcp-si-b { background: var(--blue-d); border: 0.5px solid rgba(96, 165, 250, 0.2); color: var(--blue); }
+          .pcp-si-a { background: var(--amber-d); border: 0.5px solid rgba(245, 166, 35, 0.2); color: var(--amber); }
+          .pcp-si-p { background: var(--purple-d); border: 0.5px solid rgba(167, 139, 250, 0.2); color: var(--purple); }
+          .pcp-stat-n { font-family: var(--fm); font-size: 20px; line-height: 1; }
+          .pcp-stat-l { font-size: 11px; color: var(--t3); margin-top: 2px; }
+          .pcp-toolbar { padding: 12px 36px; display: flex; align-items: center; gap: 10px; border-bottom: 0.5px solid var(--mb); position: sticky; top: 56px; z-index: 50; background: rgba(7, 9, 15, 0.85); backdrop-filter: blur(20px); }
+          .pcp-search-wrap { position: relative; flex: 1; max-width: 360px; }
+          .pcp-search-input { width: 100%; padding: 8px 12px 8px 32px; background: var(--glass); border: 0.5px solid var(--mb); border-radius: 9px; font-size: 13px; color: var(--t1); outline: none; transition: border-color 0.2s; }
+          .pcp-search-input:focus { border-color: var(--teal-b); }
+          .pcp-search-input::placeholder { color: var(--t3); }
+          .pcp-search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--t3); }
+          .pcp-search-icon svg { width: 13px; height: 13px; }
+          .pcp-filter-pills { display: flex; gap: 5px; }
+          .pcp-pill { padding: 5px 12px; border-radius: 9999px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 0.5px solid transparent; color: var(--t3); background: transparent; }
+          .pcp-pill:hover { color: var(--t2); background: var(--glass); }
+          .pcp-pill.on { color: var(--t1); background: var(--glass2); border-color: var(--mb); }
+          .pcp-pill-prov.on { color: var(--amber); background: var(--amber-d); border-color: rgba(245, 166, 35, 0.2); }
+          .pcp-pill-ready.on { color: var(--blue); background: var(--blue-d); border-color: rgba(96, 165, 250, 0.2); }
+          .pcp-pill-active.on { color: var(--green); background: var(--green-d); border-color: rgba(74, 222, 128, 0.2); }
+          .pcp-toolbar-right { display: flex; gap: 8px; margin-left: auto; }
+          .pcp-message { margin: 14px 36px 0; padding: 12px 14px; border-radius: 10px; border: 0.5px solid var(--mb); display: flex; align-items: center; gap: 10px; font-size: 12px; line-height: 1.5; }
+          .pcp-message svg { width: 14px; height: 14px; flex-shrink: 0; }
+          .pcp-message-success { background: rgba(74, 222, 128, 0.08); border-color: rgba(74, 222, 128, 0.2); color: rgba(74, 222, 128, 0.9); }
+          .pcp-message-error { background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.2); color: rgba(248, 113, 113, 0.95); }
+          .pcp-org-list { padding: 12px 36px 40px; }
+          .pcp-org-row { border: 0.5px solid var(--mb); border-radius: 14px; margin-bottom: 8px; overflow: hidden; transition: border-color 0.2s; }
+          .pcp-org-row:hover, .pcp-org-row.open { border-color: rgba(255, 255, 255, 0.1); }
+          .pcp-org-hd { display: flex; align-items: center; padding: 0 16px 0 0; cursor: pointer; user-select: none; background: var(--glass); min-height: 62px; transition: background 0.15s; }
+          .pcp-org-hd:hover { background: var(--glassh); }
+          .pcp-org-chev { width: 42px; height: 62px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+          .pcp-org-chev svg { width: 13px; height: 13px; color: var(--t3); transition: transform 0.2s; }
+          .pcp-org-row.open .pcp-org-chev svg { transform: rotate(90deg); }
+          .pcp-org-ico { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, rgba(0, 212, 170, 0.14), rgba(0, 212, 170, 0.04)); border: 0.5px solid var(--teal-b); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: 12px; color: var(--teal); }
+          .pcp-org-info { flex: 1; min-width: 0; padding: 12px 0; }
+          .pcp-org-name { font-size: 14px; font-weight: 600; letter-spacing: -0.2px; margin-bottom: 2px; }
+          .pcp-org-meta { font-size: 11px; color: var(--t3); font-family: var(--fm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 520px; }
+          .pcp-org-counts { display: flex; gap: 5px; margin-right: 12px; }
+          .pcp-mc { font-size: 10px; font-weight: 500; padding: 3px 7px; border-radius: 9999px; background: rgba(255, 255, 255, 0.04); border: 0.5px solid rgba(255, 255, 255, 0.07); color: var(--t3); font-family: var(--fm); white-space: nowrap; }
+          .pcp-org-actions { display: flex; align-items: center; gap: 6px; margin-left: 10px; }
+          .pcp-status { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 9px; border-radius: 9999px; white-space: nowrap; }
+          .pcp-s-prov { background: var(--amber-d); border: 0.5px solid rgba(245, 166, 35, 0.22); color: var(--amber); }
+          .pcp-s-ready { background: var(--blue-d); border: 0.5px solid rgba(96, 165, 250, 0.22); color: var(--blue); }
+          .pcp-s-active { background: var(--green-d); border: 0.5px solid rgba(74, 222, 128, 0.22); color: var(--green); }
+          .pcp-s-done { background: rgba(255, 255, 255, 0.05); border: 0.5px solid rgba(255, 255, 255, 0.08); color: var(--t3); }
+          .pcp-ab { padding: 5px 10px; border-radius: 7px; font-size: 11px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: background 0.15s, color 0.15s; border: none; }
+          .pcp-ab svg { width: 11px; height: 11px; }
+          .pcp-ab-g { background: rgba(255, 255, 255, 0.05); color: var(--t2); border: 0.5px solid var(--mb); }
+          .pcp-ab-g:hover { background: rgba(255, 255, 255, 0.09); color: var(--t1); }
+          .pcp-ab-t { background: var(--teal-d); color: var(--teal); border: 0.5px solid var(--teal-b); }
+          .pcp-ab-t:hover { background: rgba(0, 212, 170, 0.16); }
+          .pcp-ab:disabled { opacity: 0.45; cursor: not-allowed; }
+          .pcp-org-body { display: none; }
+          .pcp-org-row.open .pcp-org-body { display: block; }
+          .pcp-team-row { border-top: 0.5px solid var(--mb); }
+          .pcp-team-hd { display: flex; align-items: center; padding: 0 16px 0 0; cursor: pointer; user-select: none; min-height: 46px; transition: background 0.15s; }
+          .pcp-team-hd:hover { background: rgba(255, 255, 255, 0.018); }
+          .pcp-t-indent { width: 42px; flex-shrink: 0; }
+          .pcp-t-chev { width: 26px; height: 46px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+          .pcp-t-chev svg { width: 11px; height: 11px; color: var(--t3); transition: transform 0.2s; }
+          .pcp-team-row.open .pcp-t-chev svg { transform: rotate(90deg); }
+          .pcp-t-vline { width: 1px; height: 28px; background: rgba(255, 255, 255, 0.07); margin-right: 10px; flex-shrink: 0; }
+          .pcp-t-av { width: 26px; height: 26px; border-radius: 7px; background: rgba(255, 255, 255, 0.04); border: 0.5px solid rgba(255, 255, 255, 0.07); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: 9px; color: var(--t3); }
+          .pcp-t-av svg { width: 12px; height: 12px; }
+          .pcp-t-info { flex: 1; min-width: 0; }
+          .pcp-t-name { font-size: 13px; font-weight: 600; }
+          .pcp-t-meta { font-size: 10px; color: var(--t3); font-family: var(--fm); }
+          .pcp-t-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+          .pcp-team-body { display: none; }
+          .pcp-team-row.open .pcp-team-body { display: block; }
+          .pcp-pilot-row { display: flex; align-items: center; padding: 0 16px 0 0; border-top: 0.5px solid rgba(255, 255, 255, 0.04); cursor: pointer; min-height: 38px; transition: background 0.15s; }
+          .pcp-pilot-row:hover { background: rgba(255, 255, 255, 0.015); }
+          .pcp-pilot-row.open { background: rgba(0, 212, 170, 0.018); }
+          .pcp-p-indent { width: 80px; flex-shrink: 0; }
+          .pcp-p-dot { width: 5px; height: 5px; border-radius: 9999px; background: rgba(255, 255, 255, 0.14); flex-shrink: 0; margin-right: 9px; }
+          .pcp-p-info { flex: 1; min-width: 0; padding: 7px 0; }
+          .pcp-p-name { font-size: 12px; font-weight: 600; }
+          .pcp-p-meta { font-size: 10px; color: var(--t3); font-family: var(--fm); margin-top: 1px; }
+          .pcp-p-right { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+          .pcp-p-chev svg { width: 10px; height: 10px; color: var(--t3); transition: transform 0.2s; }
+          .pcp-pilot-row.open .pcp-p-chev svg { transform: rotate(90deg); }
+          .pcp-pilot-panel { display: none; padding: 10px 16px 12px 100px; border-top: 0.5px solid rgba(255, 255, 255, 0.04); background: rgba(0, 212, 170, 0.012); }
+          .pcp-pilot-panel.open { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+          .pcp-pp-lbl { font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t3); margin-bottom: 6px; }
+          .pcp-cohort-item,
+          .pcp-ob-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; border-radius: 8px; margin-bottom: 4px; background: rgba(255, 255, 255, 0.025); border: 0.5px solid rgba(255, 255, 255, 0.06); gap: 10px; }
+          .pcp-ci-name { font-size: 11px; font-weight: 500; }
+          .pcp-ci-meta { font-size: 9px; color: var(--t3); font-family: var(--fm); margin-top: 1px; }
+          .pcp-ob-type { font-size: 10px; font-weight: 600; color: var(--t2); }
+          .pcp-ob-val { font-size: 10px; color: var(--teal); font-family: var(--fm); margin-top: 1px; line-height: 1.5; }
+          .pcp-ob-empty { font-size: 10px; color: var(--t3); font-style: italic; margin-top: 1px; line-height: 1.5; }
+          .pcp-c-empty { font-size: 11px; color: var(--t3); font-style: italic; padding: 4px 0; }
+          .pcp-empty-panel { padding: 24px 18px; border-radius: 14px; border: 0.5px dashed rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.02); text-align: center; color: var(--t2); font-size: 12px; }
+          .pcp-org-overview { padding: 16px 16px 0 54px; }
+          .pcp-org-grid,
+          .pcp-team-grid { display: grid; gap: 12px; }
+          .pcp-org-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); }
+          .pcp-team-shell { padding: 14px 16px 16px 80px; }
+          .pcp-team-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.9fr); margin-bottom: 12px; }
+          .pcp-card { border-radius: 14px; border: 0.5px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02); padding: 14px; }
+          .pcp-card-title { font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--t3); margin-bottom: 10px; }
+          .pcp-card-copy { font-size: 12px; color: var(--t2); line-height: 1.55; }
+          .pcp-summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+          .pcp-summary-item { padding: 11px 12px; border-radius: 10px; border: 0.5px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02); }
+          .pcp-summary-kicker { font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--t3); margin-bottom: 4px; }
+          .pcp-summary-value { font-size: 12px; font-weight: 600; line-height: 1.45; }
+          .pcp-summary-subcopy { margin-top: 4px; font-size: 11px; color: var(--t2); line-height: 1.5; }
+          .pcp-preview-shell { display: flex; gap: 12px; align-items: center; }
+          .pcp-preview-image { width: 72px; height: 72px; border-radius: 16px; object-fit: cover; border: 0.5px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.04); flex-shrink: 0; }
+          .pcp-preview-meta { min-width: 0; }
+          .pcp-preview-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+          .pcp-preview-copy { font-size: 11px; color: var(--t2); line-height: 1.55; }
+          .pcp-preview-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+          .pcp-file-trigger input { display: none; }
+          .pcp-card-stack { display: grid; gap: 10px; }
+          .pcp-link-card { padding: 11px 12px; border-radius: 10px; border: 0.5px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02); display: flex; justify-content: space-between; gap: 12px; }
+          .pcp-link-card-main { min-width: 0; }
+          .pcp-link-card-copy { font-size: 11px; color: var(--t2); line-height: 1.55; margin-top: 4px; }
+          .pcp-commercial-shell { display: grid; gap: 10px; }
+          .pcp-commercial-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+          .pcp-checkbox-row { display: flex; gap: 10px; padding: 11px 12px; border-radius: 10px; border: 0.5px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02); }
+          .pcp-checkbox-row input { margin-top: 3px; accent-color: #00d4aa; }
+          .pcp-checkbox-copy { font-size: 11px; color: var(--t2); line-height: 1.55; }
+          .pcp-commercial-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+          .pcp-commercial-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 76px; min-height: 76px; padding: 12px; border-radius: 9999px; border: 0.5px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.02); font-size: 10px; line-height: 1.35; text-transform: uppercase; letter-spacing: 0.12em; color: var(--t2); text-align: center; }
+          .pcp-modal-bg { position: fixed; inset: 0; z-index: 500; background: rgba(7, 9, 15, 0.7); backdrop-filter: blur(8px); display: flex; align-items: flex-start; justify-content: flex-end; opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
+          .pcp-modal-bg.open { opacity: 1; pointer-events: all; }
+          .pcp-modal { width: 560px; height: 100vh; overflow-y: auto; background: rgba(10, 13, 22, 0.97); border-left: 0.5px solid var(--mb); display: flex; flex-direction: column; transform: translateX(40px); transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+          .pcp-modal-bg.open .pcp-modal { transform: translateX(0); }
+          .pcp-modal::-webkit-scrollbar { width: 3px; }
+          .pcp-modal::-webkit-scrollbar-thumb { background: var(--mb); border-radius: 2px; }
+          .pcp-modal-tb { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; min-height: 56px; border-bottom: 0.5px solid var(--mb); position: sticky; top: 0; background: rgba(10, 13, 22, 0.97); z-index: 10; }
+          .pcp-modal-title { font-family: var(--fd); font-size: 14px; font-weight: 700; }
+          .pcp-modal-x { width: 28px; height: 28px; border-radius: 7px; background: var(--glass); border: 0.5px solid var(--mb); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.15s; color: var(--t2); }
+          .pcp-modal-x:hover { background: var(--glassh); color: var(--t1); }
+          .pcp-modal-x svg { width: 13px; height: 13px; }
+          .pcp-modal-steps { display: flex; gap: 0; padding: 0 24px; border-bottom: 0.5px solid var(--mb); overflow-x: auto; flex-shrink: 0; }
+          .pcp-modal-steps::-webkit-scrollbar { display: none; }
+          .pcp-ms { display: flex; align-items: center; gap: 6px; padding: 11px 14px; font-size: 12px; font-weight: 500; color: var(--t3); cursor: pointer; border-bottom: 1.5px solid transparent; white-space: nowrap; transition: color 0.15s, border-color 0.15s; flex-shrink: 0; background: transparent; border-left: none; border-right: none; border-top: none; }
+          .pcp-ms.active { color: var(--t1); border-bottom-color: var(--teal); }
+          .pcp-ms.done { color: var(--teal); }
+          .pcp-ms-num { width: 18px; height: 18px; border-radius: 9999px; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: rgba(255, 255, 255, 0.07); color: var(--t3); }
+          .pcp-ms.active .pcp-ms-num { background: var(--teal); color: #07090f; }
+          .pcp-ms.done .pcp-ms-num { background: rgba(0, 212, 170, 0.15); color: var(--teal); }
+          .pcp-modal-body { padding: 26px 24px; flex: 1; }
+          .pcp-m-tab { display: none; }
+          .pcp-m-tab.active { display: block; }
+          .pcp-sec-hd { display: flex; align-items: center; gap: 9px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 0.5px solid var(--mb); }
+          .pcp-sec-ic { width: 26px; height: 26px; border-radius: 7px; background: var(--glass); border: 0.5px solid var(--mb); display: flex; align-items: center; justify-content: center; color: var(--teal); }
+          .pcp-sec-ic svg { width: 12px; height: 12px; }
+          .pcp-sec-tl { font-family: var(--fd); font-size: 13px; font-weight: 600; }
+          .pcp-info-box,
+          .pcp-warn-box { padding: 11px 13px; border-radius: 9px; font-size: 12px; line-height: 1.55; margin-bottom: 12px; }
+          .pcp-info-box { background: var(--teal-d); border: 0.5px solid var(--teal-b); color: rgba(0, 212, 170, 0.85); }
+          .pcp-warn-box { background: var(--amber-d); border: 0.5px solid rgba(245, 166, 35, 0.22); color: var(--amber); }
+          .pcp-fg { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+          .pcp-fg.pcp-c1 { grid-template-columns: 1fr; }
+          .pcp-fld { display: flex; flex-direction: column; gap: 5px; }
+          .pcp-fld.pcp-s2 { grid-column: 1 / -1; }
+          .pcp-flbl { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t3); }
+          .pcp-finp { background: var(--glass); border: 0.5px solid var(--mb); border-radius: 9px; padding: 8px 12px; font-size: 13px; color: var(--t1); outline: none; transition: border-color 0.2s, background 0.2s; }
+          .pcp-finp:focus { border-color: var(--teal-b); background: var(--teal-d); }
+          .pcp-finp::placeholder { color: var(--t3); }
+          .pcp-finp:disabled { opacity: 0.5; cursor: not-allowed; }
+          .pcp-finp.pcp-select { cursor: pointer; }
+          .pcp-finp.pcp-textarea { resize: vertical; min-height: 76px; line-height: 1.55; }
+          .pcp-fhint { font-size: 11px; color: var(--t3); line-height: 1.45; }
+          .pcp-toggle-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 13px; border-radius: 10px; background: var(--glass); border: 0.5px solid var(--mb); margin-bottom: 12px; }
+          .pcp-tt { width: 34px; height: 19px; border-radius: 9999px; background: rgba(255, 255, 255, 0.1); border: 0.5px solid var(--mb); position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; margin-top: 1px; }
+          .pcp-tt.on { background: var(--teal); }
+          .pcp-tk { position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 9999px; background: #fff; transition: transform 0.2s; }
+          .pcp-tt.on .pcp-tk { transform: translateX(15px); }
+          .pcp-t-lbl { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+          .pcp-t-desc { font-size: 11px; color: var(--t2); line-height: 1.5; }
+          .pcp-route-mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+          .pcp-route-mode { border-radius: 10px; border: 0.5px solid var(--mb); background: var(--glass); color: var(--t2); padding: 12px 13px; text-align: left; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }
+          .pcp-route-mode.active { border-color: rgba(167, 139, 250, 0.35); background: rgba(167, 139, 250, 0.12); color: var(--t1); }
+          .pcp-route-mode-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+          .pcp-route-mode-copy { font-size: 11px; color: var(--t2); line-height: 1.5; }
+          .pcp-clinician-card { border-radius: 10px; border: 0.5px solid var(--mb); background: rgba(255, 255, 255, 0.02); padding: 12px 13px; margin-bottom: 8px; display: flex; justify-content: space-between; gap: 12px; }
+          .pcp-chip-row { display: flex; flex-wrap: wrap; gap: 6px; min-height: 18px; }
+          .pcp-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 9999px; background: rgba(167, 139, 250, 0.12); border: 0.5px solid rgba(167, 139, 250, 0.22); color: #efe7ff; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+          .pcp-chip button { background: transparent; border: none; color: inherit; cursor: pointer; display: inline-flex; align-items: center; }
+          .pcp-chip-input { min-width: 180px; flex: 1; background: transparent; border: none; outline: none; color: var(--t1); font-size: 13px; }
+          .pcp-modal-ft { padding: 14px 24px; border-top: 0.5px solid var(--mb); display: flex; align-items: center; justify-content: space-between; position: sticky; bottom: 0; background: rgba(10, 13, 22, 0.97); z-index: 10; }
+          .pcp-modal-ft-l { font-size: 12px; color: var(--t3); }
+          .pcp-modal-ft-r { display: flex; gap: 8px; }
+          .pcp-slide-up { opacity: 0; animation: pcpSlideUp 0.4s ease forwards; }
+          .pcp-fade-in { opacity: 0; animation: pcpFadeIn 0.35s ease forwards; }
+          @keyframes pcpFadeIn { to { opacity: 1; } }
+          @keyframes pcpSlideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+          @media (max-width: 1180px) {
+            .pcp-shell { grid-template-columns: 1fr; grid-template-rows: 56px auto 1fr; }
+            .pcp-sidebar { grid-row: 2; position: static; height: auto; border-right: none; border-bottom: 0.5px solid var(--mb); padding: 18px 0; }
+            .pcp-main { grid-row: 3; }
+          }
+          @media (max-width: 900px) {
+            .pcp-page-head,
+            .pcp-toolbar,
+            .pcp-org-list { padding-left: 18px; padding-right: 18px; }
+            .pcp-message { margin-left: 18px; margin-right: 18px; }
+            .pcp-page-head { flex-direction: column; }
+            .pcp-stats-row { grid-template-columns: repeat(2, 1fr); }
+            .pcp-stat-cell:nth-child(2) { border-right: none; }
+            .pcp-toolbar { flex-wrap: wrap; }
+            .pcp-filter-pills { flex-wrap: wrap; }
+            .pcp-org-grid,
+            .pcp-team-grid,
+            .pcp-summary-grid,
+            .pcp-commercial-grid { grid-template-columns: 1fr; }
+            .pcp-org-overview { padding-left: 18px; }
+            .pcp-team-shell { padding-left: 18px; }
+            .pcp-pilot-panel.open { grid-template-columns: 1fr; padding-left: 80px; }
+            .pcp-fg { grid-template-columns: 1fr; }
+            .pcp-route-mode-grid { grid-template-columns: 1fr; }
+            .pcp-modal { width: min(100vw, 560px); }
+          }
+          @media (max-width: 640px) {
+            .pcp-topbar { padding: 0 16px; }
+            .pcp-stats-row { grid-template-columns: 1fr; }
+            .pcp-stat-cell { border-right: none; border-bottom: 0.5px solid var(--mb); }
+            .pcp-stat-cell:last-child { border-bottom: none; }
+            .pcp-org-hd, .pcp-team-hd { flex-wrap: wrap; padding-right: 12px; }
+            .pcp-org-counts, .pcp-org-actions, .pcp-t-right { width: 100%; margin: 0 0 12px 54px; flex-wrap: wrap; }
+            .pcp-org-meta { white-space: normal; }
+            .pcp-pilot-panel.open { padding-left: 18px; }
+            .pcp-modal-ft { flex-direction: column; align-items: stretch; gap: 10px; }
+            .pcp-modal-ft-r { justify-content: space-between; }
+          }
+        `}</style>
 
-        <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
-          <header className="space-y-3">
-            <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">PulseCheck Admin</p>
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <h1 className="text-3xl font-semibold text-white">PulseCheck Provisioning</h1>
-                <p className="mt-2 max-w-4xl text-sm text-zinc-300">
-                  First implementation slice for the provisioning model. This page lets Pulse Check admins create the
-                  top-level organization, persistent team container, pilot structure, cohort structure, support route,
-                  and onboarding links in one connected setup flow.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] px-4 py-3 text-sm text-zinc-300">
-                Signed in as <span className="font-medium text-white">{currentUser?.email || 'unknown user'}</span>
-              </div>
-            </div>
-          </header>
+        <div className="pcp-org-dashboard">
+          <div className="pcp-amb-layer">
+            <div className="pcp-amb pcp-a1" />
+            <div className="pcp-amb pcp-a2" />
+            <div className="pcp-amb pcp-a3" />
+          </div>
 
-          <section className="grid grid-cols-1 gap-4 xl:grid-cols-4">
-            <article className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] p-4">
-              <div className="flex items-center gap-3">
-                <Building2 className="h-5 w-5 text-blue-300" />
-                <h2 className="text-sm font-semibold text-white">Step 1: Create Organization</h2>
-              </div>
-              <p className="mt-2 text-sm text-zinc-300">
-                Create the top-level account and capture the first customer admin contact plus posture defaults.
-              </p>
-            </article>
-
-            <article className="rounded-2xl border border-green-500/20 bg-green-500/[0.06] p-4">
-              <div className="flex items-center gap-3">
-                <Users2 className="h-5 w-5 text-green-300" />
-                <h2 className="text-sm font-semibold text-white">Step 2: Create Team</h2>
-              </div>
-              <p className="mt-2 text-sm text-zinc-300">
-                Create the persistent team container under that organization. Team is separate from pilot.
-              </p>
-            </article>
-
-            <article className="rounded-2xl border border-purple-500/20 bg-purple-500/[0.06] p-4">
-              <div className="flex items-center gap-3">
-                <Stethoscope className="h-5 w-5 text-purple-300" />
-                <h2 className="text-sm font-semibold text-white">Step 3: Configure Support Route</h2>
-              </div>
-              <p className="mt-2 text-sm text-zinc-300">
-                Choose whether escalations route to the 988 hotline or to a clinician profile attached to the team.
-              </p>
-            </article>
-
-            <article className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
-              <div className="flex items-center gap-3">
-                <MailPlus className="h-5 w-5 text-amber-300" />
-                <h2 className="text-sm font-semibold text-white">Step 4: Generate Admin Activation</h2>
-              </div>
-              <p className="mt-2 text-sm text-zinc-300">
-                Once the shell is configured, generate the first customer admin activation link and hand off onboarding.
-              </p>
-            </article>
-          </section>
-
-          <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <article className="rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4">
-              <div className="flex items-center gap-3">
-                <ClipboardList className="h-5 w-5 text-cyan-300" />
-                <h2 className="text-sm font-semibold text-white">Step 5: Create Pilot</h2>
-              </div>
-              <p className="mt-2 text-sm text-zinc-300">
-                Add the time-bound pilot layer inside the team when the rollout needs checkpointing, study posture, or internal evaluation structure.
-              </p>
-            </article>
-
-            <article className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] p-4">
-              <div className="flex items-center gap-3">
-                <Clipboard className="h-5 w-5 text-fuchsia-300" />
-                <h2 className="text-sm font-semibold text-white">Step 6: Create Cohorts</h2>
-              </div>
-              <p className="mt-2 text-sm text-zinc-300">
-                Add cohorts inside the pilot for intervention arms, reporting groups, position clusters, or other subgroup logic.
-              </p>
-            </article>
-          </section>
-
-          <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div className="max-w-3xl">
-                <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Lifecycle Model</p>
-                <h2 className="mt-2 text-xl font-semibold text-white">Provisioning Lifecycle</h2>
-                <p className="mt-2 text-sm leading-7 text-zinc-300">
-                  Organization and team records move through three operational states: provisioning while PulseCheck assembles the shell,
-                  ready for activation once the onboarding link is issued, and active after the first customer admin completes handoff and
-                  takes ownership of the container.
-                </p>
-              </div>
-
-              <div className="grid w-full max-w-[520px] grid-cols-1 gap-3 md:grid-cols-3">
-                <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] p-4">
-                  <p className="text-xs uppercase tracking-wide text-blue-200">Provisioning</p>
-                  <p className="mt-2 text-sm text-zinc-300">Internal shell is being assembled.</p>
+          <div className="pcp-shell">
+            <header className="pcp-topbar">
+              <div className="pcp-topbar-left">
+                <div className="pcp-logo">
+                  <div className="pcp-logo-dot" />
+                  PulseCheck
                 </div>
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
-                  <p className="text-xs uppercase tracking-wide text-amber-200">Ready for Activation</p>
-                  <p className="mt-2 text-sm text-zinc-300">Activation link exists and handoff can start.</p>
-                </div>
-                <div className="rounded-2xl border border-green-500/20 bg-green-500/[0.06] p-4">
-                  <p className="text-xs uppercase tracking-wide text-green-200">Active</p>
-                  <p className="mt-2 text-sm text-zinc-300">Customer admin redeemed the link and owns the container.</p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
-            <div className="flex flex-col gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Modeling Rules</p>
-                <h2 className="mt-2 text-xl font-semibold text-white">Organization vs Team vs Pilot vs Cohort</h2>
-                <p className="mt-2 max-w-4xl text-sm leading-7 text-zinc-300">
-                  Start with the top-level organization, then define the persistent team container, then add the time-bound pilot layer, then any subgrouping inside it.
-                </p>
+                <div className="pcp-divider" />
+                <span className="pcp-crumb">Admin</span>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
-                <article className="rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] p-4">
-                  <p className="text-sm font-semibold text-white">Organization</p>
-                  <p className="mt-2 text-sm text-zinc-300">
-                    The top-level customer container. Organizations hold the legal identity, primary admin handoff, and the set of teams that belong to the same partner.
-                  </p>
-                </article>
-
-                <article className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] p-4">
-                  <p className="text-sm font-semibold text-white">Team</p>
-                  <p className="mt-2 text-sm text-zinc-300">
-                    The long-lived container for a sport, program, or operational unit. Teams own the roster, invite policy, and default routing setup.
-                  </p>
-                </article>
-
-                <article className="rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4">
-                  <p className="text-sm font-semibold text-white">Pilot</p>
-                  <p className="mt-2 text-sm text-zinc-300">
-                    A time-bound initiative inside a team. Use a pilot for rollout structure, checkpoint cadence, or a defined study or evaluation window.
-                  </p>
-                </article>
-
-                <article className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] p-4">
-                  <p className="text-sm font-semibold text-white">Cohort</p>
-                  <p className="mt-2 text-sm text-zinc-300">
-                    A subgroup inside a pilot. Use cohorts for intervention groups, control groups, position clusters, rehab groups, or reporting splits.
-                  </p>
-                </article>
+              <div className="pcp-admin-chip">
+                <div className="pcp-av">{adminInitials || 'PA'}</div>
+                <span>{currentUser?.email || 'unknown user'}</span>
               </div>
+            </header>
 
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-300">
-                  <p className="font-semibold text-white">Simple rule</p>
-                  <p className="mt-2">
-                    If something needs its own customer identity or legal/admin umbrella, it should probably be a separate organization. If it needs its own long-term roster, admins, or invite flow inside that customer, it should probably be a separate team. If it is just a subgroup inside a pilot, it should be a cohort.
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-300">
-                  <p className="font-semibold text-white">Hierarchy</p>
-                  <p className="mt-2 font-medium text-white">Organization -&gt; Team -&gt; Pilot -&gt; Cohort</p>
+            <nav className="pcp-sidebar">
+              <div className="pcp-nav-sec">
+                <div className="pcp-nav-lbl">Provisioning</div>
+                <div className="pcp-nav-item active">
+                  <Building2 />
+                  Organizations
+                  <span className="pcp-nav-badge">{mapSummary.organizationCount}</span>
                 </div>
               </div>
-            </div>
-          </section>
 
-          {message ? (
-            <div
-              className={`flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm ${
-                message.type === 'success'
-                  ? 'border-green-500/20 bg-green-500/[0.06] text-green-200'
-                  : 'border-red-500/20 bg-red-500/[0.06] text-red-200'
-              }`}
-            >
-              <AlertTriangle className="h-4 w-4" />
-              <span>{message.text}</span>
-            </div>
-          ) : null}
+              <div className="pcp-nav-sec">
+                <div className="pcp-nav-lbl">Clinical</div>
+                <div className="pcp-nav-item">
+                  <HeartPulse />
+                  Escalation Routes
+                </div>
+                <div className="pcp-nav-item">
+                  <Stethoscope />
+                  Clinicians
+                </div>
+              </div>
 
-          <main className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-            <div className="space-y-6">
-              <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
-                <div className="mb-5 flex items-center gap-3">
-                  <Building2 className="h-5 w-5 text-blue-300" />
+              <div className="pcp-nav-sec">
+                <div className="pcp-nav-lbl">Commercial</div>
+                <div className="pcp-nav-item">
+                  <CircleDollarSign />
+                  Revenue Config
+                </div>
+              </div>
+
+              <div className="pcp-lifecycle">
+                <div className="pcp-lifecycle-lbl">Lifecycle</div>
+                <div className="pcp-lifecycle-row">
+                  <div className="pcp-lifecycle-dot" style={{ background: 'var(--amber)' }} />
+                  <span className="pcp-lifecycle-name">Provisioning</span>
+                  <span className="pcp-lifecycle-count" style={{ color: 'var(--amber)' }}>{mapSummary.provisioningCount}</span>
+                </div>
+                <div className="pcp-lifecycle-row">
+                  <div className="pcp-lifecycle-dot" style={{ background: 'var(--blue)' }} />
+                  <span className="pcp-lifecycle-name">Ready</span>
+                  <span className="pcp-lifecycle-count" style={{ color: 'var(--blue)' }}>{mapSummary.organizationReadyCount}</span>
+                </div>
+                <div className="pcp-lifecycle-row">
+                  <div className="pcp-lifecycle-dot" style={{ background: 'var(--green)' }} />
+                  <span className="pcp-lifecycle-name">Active</span>
+                  <span className="pcp-lifecycle-count" style={{ color: 'var(--green)' }}>{mapSummary.organizationActiveCount}</span>
+                </div>
+              </div>
+            </nav>
+
+            <main className="pcp-main">
+              <div className="pcp-page-head pcp-slide-up">
+                <div className="pcp-page-head-left">
+                  <div className="pcp-eyebrow">PulseCheck Admin</div>
+                  <div className="pcp-heading">Organizations</div>
+                  <div className="pcp-desc">
+                    All partner organizations provisioned in PulseCheck. Each org holds teams, pilots, cohorts, support routes,
+                    and onboarding links inside one connected hierarchy.
+                  </div>
+                </div>
+
+                <div className="pcp-head-right">
+                  <button type="button" className="pcp-btn pcp-btn-ghost" onClick={handleExportOrganizations}>
+                    <Download />
+                    Export
+                  </button>
+                  <button type="button" className="pcp-btn pcp-btn-teal" onClick={() => handleOpenProvisioningModal('org')}>
+                    <Plus />
+                    New Organization
+                  </button>
+                </div>
+              </div>
+
+              <div className="pcp-stats-row pcp-slide-up" style={{ animationDelay: '0.06s' }}>
+                <div className="pcp-stat-cell">
+                  <div className="pcp-stat-icon pcp-si-t"><Building2 /></div>
                   <div>
-                    <h2 className="text-lg font-semibold text-white">Create Organization</h2>
-                    <p className="text-sm text-zinc-400">Internal-only setup for the customer account shell.</p>
+                    <div className="pcp-stat-n">{mapSummary.organizationCount}</div>
+                    <div className="pcp-stat-l">Organizations</div>
                   </div>
                 </div>
-
-                <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleCreateOrganization}>
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Display Name</span>
-                    <input
-                      value={orgForm.displayName}
-                      onChange={(event) => handleOrgFieldChange('displayName', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
-                      placeholder="Hampton Athletics"
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Legal Name</span>
-                    <input
-                      value={orgForm.legalName}
-                      onChange={(event) => handleOrgFieldChange('legalName', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
-                      placeholder="Hampton University Athletics Department"
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Organization Type</span>
-                    <select
-                      value={orgForm.organizationType}
-                      onChange={(event) => handleOrgFieldChange('organizationType', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
-                    >
-                      {ORGANIZATION_TYPE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Default Study Posture</span>
-                    <select
-                      value={orgForm.defaultStudyPosture}
-                      onChange={(event) => handleOrgFieldChange('defaultStudyPosture', event.target.value as PulseCheckStudyPosture)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
-                    >
-                      <option value="operational">Operational</option>
-                      <option value="pilot">Pilot</option>
-                      <option value="research-eligible">Research Eligible</option>
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Customer Admin Name</span>
-                    <input
-                      value={orgForm.primaryCustomerAdminName}
-                      onChange={(event) => handleOrgFieldChange('primaryCustomerAdminName', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
-                      placeholder="Athletic Director"
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Customer Admin Email</span>
-                    <input
-                      type="email"
-                      value={orgForm.primaryCustomerAdminEmail}
-                      onChange={(event) => handleOrgFieldChange('primaryCustomerAdminEmail', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
-                      placeholder="admin@school.edu"
-                    />
-                  </label>
-
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Clinician Routing Requirement</span>
-                    <select
-                      value={orgForm.defaultClinicianBridgeMode}
-                      onChange={(event) =>
-                        handleOrgFieldChange('defaultClinicianBridgeMode', event.target.value as PulseCheckClinicianBridgeMode)
-                      }
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
-                    >
-                      <option value="none">None</option>
-                      <option value="optional">Optional</option>
-                      <option value="required">Required</option>
-                    </select>
-                  </label>
-
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Notes</span>
-                    <textarea
-                      value={orgForm.notes}
-                      onChange={(event) => handleOrgFieldChange('notes', event.target.value)}
-                      rows={4}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
-                      placeholder="Implementation notes, routing assumptions, or contract context."
-                    />
-                  </label>
-
-                  <div className="md:col-span-2 flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={orgSubmitting}
-                      className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {orgSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Building2 className="h-4 w-4" />}
-                      {orgSubmitting ? 'Creating Organization...' : 'Create Organization'}
-                    </button>
-                  </div>
-                </form>
-              </section>
-
-              <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
-                <div className="mb-5 flex items-center gap-3">
-                  <Users2 className="h-5 w-5 text-green-300" />
+                <div className="pcp-stat-cell">
+                  <div className="pcp-stat-icon pcp-si-b"><Users2 /></div>
                   <div>
-                    <h2 className="text-lg font-semibold text-white">Create Team</h2>
-                    <p className="text-sm text-zinc-400">Persistent sport or unit container inside the selected organization.</p>
+                    <div className="pcp-stat-n">{mapSummary.teamCount}</div>
+                    <div className="pcp-stat-l">Teams</div>
                   </div>
                 </div>
+                <div className="pcp-stat-cell">
+                  <div className="pcp-stat-icon pcp-si-a"><ClipboardList /></div>
+                  <div>
+                    <div className="pcp-stat-n">{mapSummary.pilotCount}</div>
+                    <div className="pcp-stat-l">Pilots</div>
+                  </div>
+                </div>
+                <div className="pcp-stat-cell">
+                  <div className="pcp-stat-icon pcp-si-p"><Clipboard /></div>
+                  <div>
+                    <div className="pcp-stat-n">{mapSummary.cohortCount}</div>
+                    <div className="pcp-stat-l">Cohorts</div>
+                  </div>
+                </div>
+              </div>
 
-                <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleCreateTeam}>
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Organization</span>
-                    <select
-                      value={teamForm.organizationId}
-                      onChange={(event) => handleTeamFieldChange('organizationId', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
-                    >
-                      <option value="">Select an organization</option>
-                      {organizations.map((organization) => (
-                        <option key={organization.id} value={organization.id}>
-                          {organization.displayName}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+              <div className="pcp-toolbar pcp-slide-up" style={{ animationDelay: '0.1s' }}>
+                <div className="pcp-search-wrap">
+                  <div className="pcp-search-icon"><Search /></div>
+                  <input
+                    className="pcp-search-input"
+                    type="text"
+                    value={organizationSearch}
+                    onChange={(event) => setOrganizationSearch(event.target.value)}
+                    placeholder="Search organizations, teams, pilots..."
+                  />
+                </div>
 
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Team Name</span>
-                    <input
-                      value={teamForm.displayName}
-                      onChange={(event) => handleTeamFieldChange('displayName', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
-                      placeholder="Men's Basketball"
-                    />
-                  </label>
+                <div className="pcp-filter-pills">
+                  <button
+                    type="button"
+                    className={`pcp-pill ${organizationStatusFilter === 'all' ? 'on' : ''}`}
+                    onClick={() => setOrganizationStatusFilter('all')}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    className={`pcp-pill pcp-pill-prov ${organizationStatusFilter === 'prov' ? 'on' : ''}`}
+                    onClick={() => setOrganizationStatusFilter('prov')}
+                  >
+                    Provisioning
+                  </button>
+                  <button
+                    type="button"
+                    className={`pcp-pill pcp-pill-ready ${organizationStatusFilter === 'ready' ? 'on' : ''}`}
+                    onClick={() => setOrganizationStatusFilter('ready')}
+                  >
+                    Ready
+                  </button>
+                  <button
+                    type="button"
+                    className={`pcp-pill pcp-pill-active ${organizationStatusFilter === 'active' ? 'on' : ''}`}
+                    onClick={() => setOrganizationStatusFilter('active')}
+                  >
+                    Active
+                  </button>
+                </div>
 
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Team Type</span>
-                    <select
-                      value={teamForm.teamType}
-                      onChange={(event) => handleTeamFieldChange('teamType', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
-                    >
-                      {TEAM_TYPE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                <div className="pcp-toolbar-right">
+                  <button type="button" className="pcp-btn pcp-btn-ghost" onClick={handleToggleAllRows}>
+                    <ChevronDown />
+                    Toggle all
+                  </button>
+                </div>
+              </div>
 
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Sport</span>
-                    <select
-                      value={teamForm.sportOrProgram}
-                      onChange={(event) => handleTeamFieldChange('sportOrProgram', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
-                    >
-                      <option value="">Select a sport</option>
-                      {teamSportOptions.map((sport) => (
-                        <option key={sport.id} value={sport.name}>
-                          {sport.name}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-zinc-500">Managed from PulseCheck Sport Configuration.</p>
-                  </label>
+              {message ? (
+                <div className={`pcp-message ${message.type === 'success' ? 'pcp-message-success' : 'pcp-message-error'}`}>
+                  <AlertTriangle />
+                  <span>{message.text}</span>
+                </div>
+              ) : null}
 
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Site / Campus Label (Optional)</span>
-                    <input
-                      value={teamForm.siteLabel}
-                      onChange={(event) => handleTeamFieldChange('siteLabel', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
-                      placeholder="Main Campus"
-                    />
-                  </label>
+              <div className="pcp-org-list">
+                {loading ? (
+                  <div className="pcp-empty-panel">Loading organizations and provisioning hierarchy...</div>
+                ) : filteredOrganizationBundles.length === 0 ? (
+                  <div className="pcp-empty-panel">No organizations match the current filters.</div>
+                ) : (
+                  filteredOrganizationBundles.map(({ organization, teams: bundledTeams }, organizationIndex) => {
+                    const orgStatus = getOrganizationStatusDisplay(organization.status);
+                    const organizationExpanded = expandedOrganizationIds.includes(organization.id);
+                    const organizationPreviewImage = resolvePulseCheckInvitePreviewImage(undefined, organization.invitePreviewImageUrl);
+                    const organizationAdminCount =
+                      (organization.primaryCustomerAdminEmail ? 1 : 0) + (organization.additionalAdminContacts?.length || 0);
+                    const totalPilotCount = bundledTeams.reduce((count, bundle) => count + bundle.pilots.length, 0);
+                    const totalCohortCount = bundledTeams.reduce(
+                      (count, bundle) => count + bundle.pilots.reduce((pilotCount, pilotBundle) => pilotCount + pilotBundle.cohorts.length, 0),
+                      0
+                    );
+                    const firstBundle = bundledTeams[0] || null;
 
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Organization-Linked Team Admin</span>
-                    <select
-                      value={teamForm.defaultAdminEmail}
-                      onChange={(event) => handleTeamAdminSelection(event.target.value)}
-                      disabled={!selectedOrganization || teamAdminOptions.length === 0}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <option value="">
-                        {!selectedOrganization
-                          ? 'Select an organization first'
-                          : teamAdminOptions.length === 0
-                            ? 'No organization admin contact configured'
-                            : 'Select organization admin'}
-                      </option>
-                      {teamAdminOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-zinc-500">
-                      Team admins must come from the selected organization&apos;s admin contact data in this first slice.
-                    </p>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Who Can Create Invite Links</span>
-                    <select
-                      value={teamForm.defaultInvitePolicy}
-                      onChange={(event) => handleTeamFieldChange('defaultInvitePolicy', event.target.value as PulseCheckInvitePolicy)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
-                    >
-                      <option value="admin-only">Admin Only</option>
-                      <option value="admin-and-staff">Admin and Staff</option>
-                      <option value="admin-staff-and-coaches">Admin, Staff, and Coaches</option>
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Commercial Model</span>
-                    <select
-                      value={teamForm.commercialConfig.commercialModel}
-                      onChange={(event) => handleTeamCommercialFieldChange('commercialModel', event.target.value as PulseCheckTeamCommercialModel)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
-                    >
-                      {TEAM_COMMERCIAL_MODEL_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Team Plan Status</span>
-                    <select
-                      value={teamForm.commercialConfig.teamPlanStatus}
-                      onChange={(event) => handleTeamCommercialFieldChange('teamPlanStatus', event.target.value as PulseCheckTeamPlanStatus)}
-                      disabled={teamForm.commercialConfig.commercialModel !== 'team-plan'}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {TEAM_PLAN_STATUS_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Revenue Recipient Role</span>
-                    <select
-                      value={teamForm.commercialConfig.revenueRecipientRole}
-                      onChange={(event) => handleTeamCommercialFieldChange('revenueRecipientRole', event.target.value as PulseCheckRevenueRecipientRole)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
-                    >
-                      {TEAM_REVENUE_RECIPIENT_ROLE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Referral Revenue Share %</span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step="0.5"
-                      value={teamForm.commercialConfig.referralRevenueSharePct}
-                      onChange={(event) => handleTeamCommercialFieldChange('referralRevenueSharePct', event.target.value)}
-                      disabled={!teamForm.commercialConfig.referralKickbackEnabled}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400 disabled:cursor-not-allowed disabled:opacity-60"
-                    />
-                  </label>
-
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Commercial Rules</span>
-                    <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-4">
-                      <label className="flex items-start gap-3 text-sm text-zinc-300">
-                        <input
-                          type="checkbox"
-                          checked={teamForm.commercialConfig.referralKickbackEnabled}
-                          onChange={(event) => handleTeamCommercialFieldChange('referralKickbackEnabled', event.target.checked)}
-                          className="mt-1 h-4 w-4 rounded border-zinc-700 bg-black/20 text-green-400"
-                        />
-                        <span>
-                          Enable referral kickback for athlete-paid subscriptions tied to this team.
-                        </span>
-                      </label>
-                      <div className="mt-3 rounded-xl border border-zinc-800 bg-[#0b1220] px-3 py-3 text-xs leading-6 text-zinc-400">
-                        {derivePulseCheckTeamPlanBypass(teamForm.commercialConfig)
-                          ? 'Active team plan: athletes invited through this team bypass the paywall and land with team-sponsored access.'
-                          : 'Athlete-paid flow: invited athletes remain unsubscribed until they purchase, and any configured referral share stays attached to the team invite attribution.'}
-                        {teamForm.commercialConfig.revenueRecipientRole === 'team-admin'
-                          ? ' The first redeemed team admin becomes the default revenue recipient unless you set a recipient user explicitly later.'
-                          : ''}
-                      </div>
-                    </div>
-                  </label>
-
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Escalation Support Route</span>
-                    <select
-                      value={teamForm.defaultEscalationRoute}
-                      onChange={(event) => handleTeamFieldChange('defaultEscalationRoute', event.target.value as PulseCheckTeamEscalationRoute)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
-                    >
-                      {TEAM_ESCALATION_ROUTE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-zinc-500">
-                      {TEAM_ESCALATION_ROUTE_OPTIONS.find((option) => option.value === teamForm.defaultEscalationRoute)?.description}
-                    </p>
-                  </label>
-
-                  <div className="space-y-2 md:col-span-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">
-                      {draftTeamUsesClinicianRoute ? 'Selected Team Clinician Profile' : 'Hotline Escalation Behavior'}
-                    </span>
-                    <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3">
-                      {draftTeamUsesClinicianRoute ? (
-                        selectedClinicianProfile ? (
-                          <div className="space-y-1 text-sm text-zinc-300">
-                            <p className="font-medium text-white">{selectedClinicianProfile.displayName}</p>
-                            <p>
-                              Local Profile ID: <span className="text-zinc-400">{selectedClinicianProfile.id}</span>
-                            </p>
-                            <p>
-                              Type: <span className="text-zinc-400">{selectedClinicianProfile.profileType}</span>
-                            </p>
-                            <p>
-                              Organization: <span className="text-zinc-400">{selectedClinicianProfile.organizationName || 'Not set'}</span>
-                            </p>
-                            <p>
-                              Sync status: <span className="text-zinc-400">{selectedClinicianProfile.syncStatus}</span>
-                            </p>
+                    return (
+                      <div
+                        key={organization.id}
+                        className={`pcp-org-row ${organizationExpanded ? 'open' : ''} pcp-fade-in`}
+                        style={{ animationDelay: `${0.14 + organizationIndex * 0.05}s` }}
+                      >
+                        <div className="pcp-org-hd" onClick={() => toggleOrganizationRow(organization.id)}>
+                          <div className="pcp-org-chev"><ChevronDown /></div>
+                          <div className="pcp-org-ico"><Building2 /></div>
+                          <div className="pcp-org-info">
+                            <div className="pcp-org-name">{organization.displayName}</div>
+                            <div className="pcp-org-meta">
+                              {[
+                                formatEnumLabel(organization.organizationType),
+                                `${formatEnumLabel(organization.defaultStudyPosture).toLowerCase()} posture`,
+                                `clinician: ${formatEnumLabel(organization.defaultClinicianBridgeMode).toLowerCase()}`,
+                                organization.primaryCustomerAdminEmail || 'no admin email',
+                              ].join(' · ')}
+                            </div>
                           </div>
-                        ) : (
-                          <p className="text-sm text-zinc-500">
-                            No clinician profile connected yet. Use the clinician configuration card below before creating this team.
-                          </p>
-                        )
-                      ) : (
-                        <div className="space-y-2 text-sm text-zinc-300">
-                          <p className="font-medium text-white">{HOTLINE_RESOURCE.name}</p>
-                          <p>
-                            Direct athletes to <span className="text-zinc-100">{HOTLINE_RESOURCE.phone}</span> or{' '}
-                            <a
-                              href={HOTLINE_RESOURCE.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-cyan-300 underline-offset-4 transition hover:text-cyan-200 hover:underline"
-                            >
-                              {HOTLINE_RESOURCE.url}
-                            </a>{' '}
-                            during escalations.
-                          </p>
-                          <p>
-                            Athletes routed this way are automatically added to the watch list and stay there until an admin removes them.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    <p className="text-xs text-zinc-500">
-                      {draftTeamUsesClinicianRoute
-                        ? 'Routing rule: athlete-specific provider override later, otherwise fall back to this team clinician profile.'
-                        : 'Routing rule: hotline support first, plus an operational watch-list hold that remains active until an admin clears it.'}
-                    </p>
-                  </div>
 
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Notes</span>
-                    <textarea
-                      value={teamForm.notes}
-                      onChange={(event) => handleTeamFieldChange('notes', event.target.value)}
-                      rows={4}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
-                      placeholder="Roster scope, staffing notes, or activation assumptions."
-                    />
-                  </label>
+                          <div className="pcp-org-counts">
+                            <span className="pcp-mc">{bundledTeams.length} team{bundledTeams.length === 1 ? '' : 's'}</span>
+                            <span className="pcp-mc">{totalPilotCount} pilot{totalPilotCount === 1 ? '' : 's'}</span>
+                            <span className="pcp-mc">{totalCohortCount} cohort{totalCohortCount === 1 ? '' : 's'}</span>
+                          </div>
 
-                  <div className="md:col-span-2 flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={teamSubmitting || organizations.length === 0}
-                      className="inline-flex items-center gap-2 rounded-xl bg-green-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-green-400 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {teamSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users2 className="h-4 w-4" />}
-                      {teamSubmitting ? 'Creating Team...' : 'Create Team'}
-                    </button>
-                  </div>
-                </form>
-              </section>
+                          <span className={`pcp-status ${getDashboardStatusClassName(orgStatus)}`}>{orgStatus.label}</span>
 
-              <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
-                <div className="mb-5 flex items-center gap-3">
-                  <ClipboardList className="h-5 w-5 text-cyan-300" />
-                  <div>
-                    <h2 className="text-lg font-semibold text-white">Create Pilot</h2>
-                    <p className="text-sm text-zinc-400">Internal-only pilot layer inside a team for study posture, checkpoints, and rollout structure.</p>
-                  </div>
-                </div>
-
-                <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleCreatePilot}>
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Team</span>
-                    <select
-                      value={pilotForm.teamId}
-                      onChange={(event) => handlePilotFieldChange('teamId', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
-                    >
-                      <option value="">Select a team</option>
-                      {teams.map((team) => {
-                        const organization = organizations.find((item) => item.id === team.organizationId);
-                        return (
-                          <option key={team.id} value={team.id}>
-                            {organization ? `${organization.displayName} -> ${team.displayName}` : team.displayName}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Pilot Name</span>
-                    <input
-                      value={pilotForm.name}
-                      onChange={(event) => handlePilotFieldChange('name', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
-                      placeholder="Spring Pilot 2026"
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Study Mode</span>
-                    <select
-                      value={pilotForm.studyMode}
-                      onChange={(event) => handlePilotFieldChange('studyMode', event.target.value as PulseCheckPilotStudyMode)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
-                    >
-                      {PILOT_STUDY_MODE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Checkpoint Cadence</span>
-                    <select
-                      value={pilotForm.checkpointCadence || 'weekly'}
-                      onChange={(event) => handlePilotFieldChange('checkpointCadence', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
-                    >
-                      {CHECKPOINT_CADENCE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Start Date</span>
-                    <input
-                      type="date"
-                      value={pilotStartDate}
-                      onChange={(event) => setPilotStartDate(event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Pilot Length</span>
-                    <select
-                      value={pilotDurationPreset}
-                      onChange={(event) => setPilotDurationPreset(event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
-                    >
-                      {PILOT_DURATION_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {pilotDurationPreset === 'custom' ? (
-                    <label className="space-y-2">
-                      <span className="text-xs uppercase tracking-wide text-zinc-500">Custom Days</span>
-                      <input
-                        type="number"
-                        min={1}
-                        value={pilotCustomDays}
-                        onChange={(event) => setPilotCustomDays(event.target.value)}
-                        className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
-                        placeholder="21"
-                      />
-                    </label>
-                  ) : null}
-
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Objective</span>
-                    <textarea
-                      value={pilotForm.objective || ''}
-                      onChange={(event) => handlePilotFieldChange('objective', event.target.value)}
-                      rows={3}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
-                      placeholder="Why this pilot exists, what it is measuring, and what the team should align around."
-                    />
-                  </label>
-
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Notes</span>
-                    <textarea
-                      value={pilotForm.notes || ''}
-                      onChange={(event) => handlePilotFieldChange('notes', event.target.value)}
-                      rows={3}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
-                      placeholder="Internal study setup notes, staffing assumptions, or rollout constraints."
-                    />
-                  </label>
-
-                  <div className="md:col-span-2 rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3 text-sm text-zinc-300">
-                    {selectedPilotTeam
-                      ? `This pilot will attach to ${selectedPilotTeam.displayName} and inherit that team's organization context.`
-                      : 'Select a team first. Pilots are nested inside teams rather than replacing the team layer.'}
-                  </div>
-
-                  <div className="md:col-span-2 rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.06] px-4 py-3 text-sm text-zinc-300">
-                    New pilots are activated as soon as they are created so they appear in the dashboard right away.
-                    Start and end dates still define the reporting window, and the pilot moves to completed once that selected window ends.
-                    {pilotStartDate
-                      ? ` With the current inputs, the projected end date is ${
-                          (() => {
-                            const durationDays =
-                              pilotDurationPreset === 'custom'
-                                ? Number.parseInt(pilotCustomDays, 10)
-                                : Number.parseInt(pilotDurationPreset, 10);
-                            if (!Number.isFinite(durationDays) || durationDays <= 0) return 'not available';
-                            const startAt = new Date(`${pilotStartDate}T00:00:00`);
-                            const projectedEnd = new Date(startAt.getTime() + (durationDays - 1) * 24 * 60 * 60 * 1000);
-                            return projectedEnd.toLocaleDateString();
-                          })()
-                        }.`
-                      : ''}
-                  </div>
-
-                  <div className="md:col-span-2 flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={pilotSubmitting || teams.length === 0}
-                      className="inline-flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {pilotSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
-                      {pilotSubmitting ? 'Creating Pilot...' : 'Create Pilot'}
-                    </button>
-                  </div>
-                </form>
-              </section>
-
-              <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
-                <div className="mb-5 flex items-center gap-3">
-                  <Clipboard className="h-5 w-5 text-fuchsia-300" />
-                  <div>
-                    <h2 className="text-lg font-semibold text-white">Create Cohort</h2>
-                    <p className="text-sm text-zinc-400">Subgroup layer inside a pilot for reporting, experimentation, or differentiated programming.</p>
-                  </div>
-                </div>
-
-                <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleCreateCohort}>
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Pilot</span>
-                    <select
-                      value={cohortForm.pilotId}
-                      onChange={(event) => handleCohortFieldChange('pilotId', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-fuchsia-400"
-                    >
-                      <option value="">Select a pilot</option>
-                      {pilots.map((pilot) => {
-                        const team = teams.find((item) => item.id === pilot.teamId);
-                        return (
-                          <option key={pilot.id} value={pilot.id}>
-                            {team ? `${team.displayName} -> ${pilot.name}` : pilot.name}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Cohort Name</span>
-                    <input
-                      value={cohortForm.name}
-                      onChange={(event) => handleCohortFieldChange('name', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-fuchsia-400"
-                      placeholder="Intervention Group"
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Cohort Type</span>
-                    <select
-                      value={cohortForm.cohortType || 'intervention-group'}
-                      onChange={(event) => handleCohortFieldChange('cohortType', event.target.value)}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-fuchsia-400"
-                    >
-                      {COHORT_TYPE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Reporting Tags</span>
-                    <div className="rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 transition focus-within:border-fuchsia-400">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {(cohortForm.reportingTags || []).map((tag) => (
-                          <span
-                            key={tag}
-                            className="inline-flex items-center gap-1 rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-2.5 py-1 text-xs font-medium text-fuchsia-100"
-                          >
-                            {tag}
+                          <div className="pcp-org-actions">
                             <button
                               type="button"
-                              onClick={() => removeCohortTag(tag)}
-                              className="text-fuchsia-200 transition hover:text-white"
-                              aria-label={`Remove ${tag}`}
+                              className="pcp-ab pcp-ab-g"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleOpenProvisioningModal('team', { organizationId: organization.id });
+                              }}
                             >
-                              <X className="h-3 w-3" />
+                              <Plus />
+                              Add Team
                             </button>
-                          </span>
-                        ))}
-                        <input
-                          value={cohortTagsInput}
-                          onChange={(event) => setCohortTagsInput(event.target.value)}
-                          onBlur={commitCohortTagsInput}
-                          onKeyDown={(event) => {
-                            if (event.key === ',' || event.key === 'Enter') {
-                              event.preventDefault();
-                              commitCohortTagsInput();
-                            }
-                          }}
-                          className="min-w-[180px] flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
-                          placeholder={(cohortForm.reportingTags || []).length > 0 ? 'Add another tag' : 'control, spring-2026, returners'}
-                        />
-                      </div>
-                    </div>
-                    <p className="text-xs text-zinc-500">Type a tag and press comma or enter to turn it into a chip for reporting, comparisons, or export filters.</p>
-                  </label>
-
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="text-xs uppercase tracking-wide text-zinc-500">Notes</span>
-                    <textarea
-                      value={cohortForm.notes || ''}
-                      onChange={(event) => handleCohortFieldChange('notes', event.target.value)}
-                      rows={3}
-                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-fuchsia-400"
-                      placeholder="What distinguishes this subgroup and how it should be treated operationally."
-                    />
-                  </label>
-
-                  <div className="md:col-span-2 rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3 text-sm text-zinc-300">
-                    {selectedCohortPilot
-                      ? `This cohort will attach to ${selectedCohortPilot.name} inside its parent team. Use cohorts for subgroups inside a pilot, not as a substitute for teams. It will inherit the pilot's current ${getDerivedPilotStatusDisplay(selectedCohortPilot).label.toLowerCase()} state when it is created.`
-                      : 'Select a pilot first. Cohorts only exist inside pilots.'}
-                  </div>
-
-                  <div className="md:col-span-2 flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={cohortSubmitting || pilots.length === 0}
-                      className="inline-flex items-center gap-2 rounded-xl bg-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {cohortSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clipboard className="h-4 w-4" />}
-                      {cohortSubmitting ? 'Creating Cohort...' : 'Create Cohort'}
-                    </button>
-                  </div>
-                </form>
-              </section>
-
-              <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
-                <div className="mb-5 flex items-center gap-3">
-                  <Stethoscope className="h-5 w-5 text-purple-300" />
-                  <div>
-                    <h2 className="text-lg font-semibold text-white">
-                      {draftTeamUsesClinicianRoute ? 'Connect Clinician Profile' : 'Hotline Escalation Route'}
-                    </h2>
-                    <p className="text-sm text-zinc-400">
-                      {draftTeamUsesClinicianRoute
-                        ? 'For now, PulseCheck stores clinician profile records locally in Firestore and links the team to that record. These can sync to AuntEdna later once the APIs are available.'
-                        : 'This team will use the 988 Lifeline instead of a clinician profile. Escalated athletes are shown the hotline resource and automatically placed on the watch list until an admin clears them.'}
-                    </p>
-                  </div>
-                </div>
-
-                {draftTeamUsesClinicianRoute ? (
-                  <>
-                <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => setClinicianLinkMode('existing')}
-                    className={`rounded-2xl border px-4 py-3 text-left transition ${
-                      clinicianLinkMode === 'existing'
-                        ? 'border-purple-400 bg-purple-500/[0.12] text-white'
-                        : 'border-zinc-800 bg-black/20 text-zinc-300 hover:border-zinc-700'
-                    }`}
-                  >
-                    <p className="text-sm font-semibold">Link Existing Profile</p>
-                    <p className="mt-1 text-xs text-zinc-400">Search previously saved clinician profiles and attach one to this team.</p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setClinicianLinkMode('create')}
-                    className={`rounded-2xl border px-4 py-3 text-left transition ${
-                      clinicianLinkMode === 'create'
-                        ? 'border-purple-400 bg-purple-500/[0.12] text-white'
-                        : 'border-zinc-800 bg-black/20 text-zinc-300 hover:border-zinc-700'
-                    }`}
-                  >
-                    <p className="text-sm font-semibold">Create New Profile</p>
-                    <p className="mt-1 text-xs text-zinc-400">Create a local clinician profile record now and sync it to AuntEdna later.</p>
-                  </button>
-                </div>
-
-                {clinicianLinkMode === 'existing' ? (
-                  <div className="space-y-4">
-                    <label className="block space-y-2">
-                      <span className="text-xs uppercase tracking-wide text-zinc-500">Search Saved Profiles</span>
-                      <input
-                        value={clinicianSearchTerm}
-                        onChange={(event) => setClinicianSearchTerm(event.target.value)}
-                        className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-purple-400"
-                        placeholder="Hampton, Carter, provider network..."
-                      />
-                    </label>
-
-                    <div className="space-y-3">
-                      {filteredClinicianProfiles.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-zinc-700 bg-black/10 px-4 py-5 text-sm text-zinc-500">
-                          No saved clinician profiles yet. Create one locally to keep moving on provisioning.
+                            {firstBundle ? (
+                              <button
+                                type="button"
+                                className="pcp-ab pcp-ab-g"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleOpenOnboardingModal({
+                                    channel: 'admin',
+                                    organization,
+                                    team: firstBundle.team,
+                                    clinicianProfile: firstBundle.clinicianProfile,
+                                  });
+                                }}
+                              >
+                                <MoreHorizontal />
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
-                      ) : (
-                        filteredClinicianProfiles.map((profile) => {
-                          const isSelected = profile.id === teamForm.defaultClinicianProfileId;
-                          return (
-                            <article
-                              key={profile.id}
-                              className={`rounded-2xl border p-4 transition ${
-                                isSelected ? 'border-purple-400 bg-purple-500/[0.08]' : 'border-zinc-800 bg-black/20'
-                              }`}
-                            >
-                              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                <div className="space-y-1">
-                                  <p className="text-sm font-semibold text-white">{profile.displayName}</p>
-                                  <p className="text-xs text-zinc-400">Local profile ID: {profile.id}</p>
-                                  <p className="text-xs text-zinc-400">Type: {profile.profileType}</p>
-                                  <p className="text-xs text-zinc-400">Organization: {profile.organizationName || 'Not set'}</p>
-                                  <p className="text-xs text-zinc-400">Email: {profile.email || 'Not set'}</p>
-                                  <p className="text-xs text-zinc-400">Sync status: {profile.syncStatus}</p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleSelectClinicianProfile(profile)}
-                                  className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
-                                    isSelected
-                                      ? 'bg-purple-400 text-black'
-                                      : 'bg-zinc-800 text-white hover:bg-zinc-700'
-                                  }`}
-                                >
-                                  {isSelected ? 'Connected' : 'Connect to Team'}
-                                </button>
-                              </div>
-                            </article>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleCreateClinicianProfile}>
-                    <label className="space-y-2">
-                      <span className="text-xs uppercase tracking-wide text-zinc-500">Profile Display Name</span>
-                      <input
-                        value={newClinicianProfileForm.displayName}
-                        onChange={(event) =>
-                          setNewClinicianProfileForm((current) => ({ ...current, displayName: event.target.value }))
-                        }
-                        className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-purple-400"
-                        placeholder="Hampton Sports Medicine Main"
-                      />
-                    </label>
 
-                    <label className="space-y-2">
-                      <span className="text-xs uppercase tracking-wide text-zinc-500">Profile Type</span>
-                      <select
-                        value={newClinicianProfileForm.profileType}
-                        onChange={(event) =>
-                          setNewClinicianProfileForm((current) => ({
-                            ...current,
-                            profileType: event.target.value as PulseCheckClinicianProfileType,
-                          }))
-                        }
-                        className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-purple-400"
-                      >
-                        {CLINICIAN_PROFILE_TYPE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label className="space-y-2">
-                      <span className="text-xs uppercase tracking-wide text-zinc-500">Organization / Provider</span>
-                      <input
-                        value={newClinicianProfileForm.organizationName}
-                        onChange={(event) =>
-                          setNewClinicianProfileForm((current) => ({ ...current, organizationName: event.target.value }))
-                        }
-                        className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-purple-400"
-                        placeholder={selectedOrganization?.displayName || 'Clinical Partner'}
-                      />
-                    </label>
-
-                    <label className="space-y-2">
-                      <span className="text-xs uppercase tracking-wide text-zinc-500">Contact Email</span>
-                      <input
-                        type="email"
-                        value={newClinicianProfileForm.email}
-                        onChange={(event) =>
-                          setNewClinicianProfileForm((current) => ({ ...current, email: event.target.value }))
-                        }
-                        className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-purple-400"
-                        placeholder="sportsmed@hampton.edu"
-                        required
-                      />
-                    </label>
-
-                    <div className="md:col-span-2 rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3 text-sm text-zinc-300">
-                      Creating a profile here saves the initial bones of the clinician account handoff in PulseCheck, immediately selects it as the team default route, and gives us a record we can sync into AuntEdna later before completing clinician onboarding there through SSO.
-                    </div>
-
-                    <div className="md:col-span-2 flex justify-end">
-                      <button
-                        type="submit"
-                        disabled={clinicianSubmitting}
-                        className="inline-flex items-center gap-2 rounded-xl bg-purple-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-400 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {clinicianSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldPlus className="h-4 w-4" />}
-                        {clinicianSubmitting ? 'Creating Profile...' : 'Create Local Profile and Connect'}
-                      </button>
-                    </div>
-                  </form>
-                )}
-                  </>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4">
-                      <p className="text-xs uppercase tracking-wide text-zinc-500">Active Hotline</p>
-                      <p className="mt-2 text-lg font-semibold text-white">{HOTLINE_RESOURCE.name}</p>
-                      <p className="mt-2 text-sm text-zinc-300">
-                        Athletes are directed to <span className="font-semibold text-white">{HOTLINE_RESOURCE.phone}</span> and to{' '}
-                        <a
-                          href={HOTLINE_RESOURCE.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-cyan-300 underline-offset-4 transition hover:text-cyan-200 hover:underline"
-                        >
-                          {HOTLINE_RESOURCE.url}
-                        </a>{' '}
-                        when they hit the escalation path for this team.
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-300">
-                      <p className="font-medium text-white">Automatic watch-list hold</p>
-                      <p className="mt-2 leading-7 text-zinc-400">
-                        Hotline-routed escalations automatically place the athlete on the watch list and leave that hold in place until an admin removes them manually.
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-dashed border-zinc-700 bg-black/10 px-4 py-5 text-sm text-zinc-500">
-                      Switch the team route back to <span className="text-zinc-300">Clinician</span> above if you want to attach a clinician profile and generate clinician onboarding links instead.
-                    </div>
-                  </div>
-                )}
-              </section>
-            </div>
-
-            <div className="space-y-6">
-              <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
-                <div className="mb-4 flex items-center gap-3">
-                  <ClipboardList className="h-5 w-5 text-purple-300" />
-                  <div>
-                    <h2 className="text-lg font-semibold text-white">Connected Provisioning Map</h2>
-                    <p className="text-sm text-zinc-400">Live org, team, support-route, and activation state shown as one connected hierarchy.</p>
-                  </div>
-                </div>
-
-                {loading ? (
-                  <div className="flex items-center gap-2 rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3 text-sm text-zinc-300">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading provisioning graph...
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {organizationBundles.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-zinc-700 bg-black/10 px-4 py-5 text-sm text-zinc-500">
-                        No organizations created yet.
-                      </div>
-                    ) : (
-                      organizationBundles.map(({ organization, teams: bundledTeams }) => {
-                        const orgStatus = getOrganizationStatusDisplay(organization.status);
-
-                        return (
-                          <article key={organization.id} className="rounded-[28px] border border-blue-500/15 bg-blue-500/[0.04] p-5">
-                            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-3">
-                                  <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.08] p-2.5">
-                                    <Building2 className="h-5 w-5 text-blue-300" />
-                                  </div>
-                                  <div>
-                                    <p className="text-lg font-semibold text-white">{organization.displayName}</p>
-                                    <p className="text-xs text-zinc-400">{organization.legalName}</p>
+                        <div className="pcp-org-body">
+                          <div className="pcp-org-overview">
+                            <div className="pcp-org-grid">
+                              <div className="pcp-card">
+                                <div className="pcp-card-title">Organization Invite Artwork</div>
+                                <div className="pcp-preview-shell">
+                                  <img
+                                    className="pcp-preview-image"
+                                    src={organizationPreviewImage}
+                                    alt={`${organization.displayName} invite artwork`}
+                                  />
+                                  <div className="pcp-preview-meta">
+                                    <div className="pcp-preview-title">{organization.displayName}</div>
+                                    <div className="pcp-preview-copy">
+                                      This artwork becomes the default invite preview for every team that inherits organization branding.
+                                    </div>
                                   </div>
                                 </div>
-                                <div className="grid grid-cols-1 gap-2 text-xs text-zinc-400 md:grid-cols-2">
-                                  <p>Type: {organization.organizationType}</p>
-                                  <p>Study posture: {organization.defaultStudyPosture}</p>
-                                  <p>Clinician routing requirement: {organization.defaultClinicianBridgeMode}</p>
-                                  <p>Customer admin: {organization.primaryCustomerAdminEmail || 'Not set'}</p>
-                                </div>
-                                <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                                  <p className="text-xs uppercase tracking-wide text-zinc-500">Organization Invite Artwork</p>
-                                  <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center">
-                                    <img
-                                      src={resolvePulseCheckInvitePreviewImage('', organization.invitePreviewImageUrl)}
-                                      alt={`${organization.displayName} invite preview`}
-                                      className="h-20 w-32 rounded-xl object-cover"
+                                <div className="pcp-preview-actions">
+                                  <label className="pcp-ab pcp-ab-g pcp-file-trigger">
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(event) => {
+                                        void handleOrganizationInviteImageUpload(organization.id, event.target.files?.[0] || null);
+                                        event.currentTarget.value = '';
+                                      }}
                                     />
-                                    <div className="space-y-2">
-                                      <p className="text-xs text-zinc-400">
-                                        This image is used by default for invite previews when a team does not have its own image yet.
-                                      </p>
-                                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-blue-400/30 px-3 py-2 text-xs font-semibold text-blue-100 transition hover:border-blue-300 hover:text-white">
-                                        {organizationImageUploadingId === organization.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Building2 className="h-3.5 w-3.5" />}
-                                        {organizationImageUploadingId === organization.id ? 'Uploading...' : 'Upload Organization Image'}
-                                        <input
-                                          type="file"
-                                          accept="image/*"
-                                          className="hidden"
-                                          disabled={organizationImageUploadingId === organization.id}
-                                          onChange={(event) => {
-                                            void handleOrganizationInviteImageUpload(organization.id, event.target.files?.[0] || null);
-                                            event.currentTarget.value = '';
-                                          }}
-                                        />
-                                      </label>
+                                    {organizationImageUploadingId === organization.id ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <Sparkles className="h-3.5 w-3.5" />
+                                    )}
+                                    {organizationImageUploadingId === organization.id ? 'Uploading...' : 'Upload Organization Image'}
+                                  </label>
+                                </div>
+                              </div>
+
+                              <div className="pcp-card">
+                                <div className="pcp-card-title">Organization Summary</div>
+                                <div className="pcp-summary-grid">
+                                  <div className="pcp-summary-item">
+                                    <div className="pcp-summary-kicker">Customer Admin</div>
+                                    <div className="pcp-summary-value">
+                                      {organization.primaryCustomerAdminName || organization.primaryCustomerAdminEmail || 'Not set'}
+                                    </div>
+                                    <div className="pcp-summary-subcopy">
+                                      {organization.primaryCustomerAdminEmail || 'No handoff email configured yet'}
+                                    </div>
+                                  </div>
+                                  <div className="pcp-summary-item">
+                                    <div className="pcp-summary-kicker">Study Posture</div>
+                                    <div className="pcp-summary-value">{formatEnumLabel(organization.defaultStudyPosture)}</div>
+                                    <div className="pcp-summary-subcopy">
+                                      Clinician routing {formatEnumLabel(organization.defaultClinicianBridgeMode).toLowerCase()}
+                                    </div>
+                                  </div>
+                                  <div className="pcp-summary-item">
+                                    <div className="pcp-summary-kicker">Activation State</div>
+                                    <div className="pcp-summary-value">{orgStatus.label}</div>
+                                    <div className="pcp-summary-subcopy">
+                                      {totalPilotCount} pilot{totalPilotCount === 1 ? '' : 's'} and {totalCohortCount} cohort
+                                      {totalCohortCount === 1 ? '' : 's'} inside this org.
+                                    </div>
+                                  </div>
+                                  <div className="pcp-summary-item">
+                                    <div className="pcp-summary-kicker">Admin Contacts</div>
+                                    <div className="pcp-summary-value">
+                                      {organizationAdminCount} admin{organizationAdminCount === 1 ? '' : 's'}
+                                    </div>
+                                    <div className="pcp-summary-subcopy">
+                                      {bundledTeams.length} connected team{bundledTeams.length === 1 ? '' : 's'} inheriting this shell.
                                     </div>
                                   </div>
                                 </div>
                               </div>
-                              <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-wide ${orgStatus.tone}`}>
-                                {orgStatus.label}
-                              </span>
                             </div>
+                          </div>
 
-                            <div className="mt-5 space-y-4 border-l border-zinc-800/80 pl-4 md:pl-6">
-                              {bundledTeams.length === 0 ? (
-                                <div className="rounded-2xl border border-dashed border-zinc-700 bg-black/10 px-4 py-5 text-sm text-zinc-500">
-                                  No teams attached yet.
-                                </div>
-                              ) : (
-                                bundledTeams.map(({ team, pilots: bundledPilots, clinicianProfile, adminActivationLinks, clinicianOnboardingLink }) => {
-                                  const teamStatus = getTeamStatusDisplay(team.status);
-                                  const teamCommercialDraft = teamCommercialDrafts[team.id] || team.commercialConfig;
-                                  const teamPlanBypassesPaywall = derivePulseCheckTeamPlanBypass(teamCommercialDraft);
+                          {bundledTeams.length === 0 ? (
+                            <div className="pcp-team-body" style={{ display: 'block' }}>
+                              <div style={{ padding: '12px 16px 12px 54px' }}>
+                                <div className="pcp-c-empty">No teams attached yet.</div>
+                              </div>
+                            </div>
+                          ) : (
+                            bundledTeams.map(({ team, pilots: bundledPilots, clinicianProfile, adminActivationLinks, clinicianOnboardingLink }) => {
+                              const teamExpanded = expandedTeamIds.includes(team.id);
+                              const teamStatus = getTeamStatusDisplay(team.status);
+                              const activeAdminLink = adminActivationLinks[0] || null;
+                              const teamCommercialDraft = teamCommercialDrafts[team.id] || team.commercialConfig;
+                              const teamPreviewImage = resolvePulseCheckInvitePreviewImage(
+                                team.invitePreviewImageUrl,
+                                organization.invitePreviewImageUrl
+                              );
+                              const teamPlanBypass = derivePulseCheckTeamPlanBypass(teamCommercialDraft);
 
-                                  return (
-                                    <div key={team.id} className="relative rounded-3xl border border-zinc-800 bg-black/20 p-4">
-                                      <div className="absolute -left-[31px] top-8 hidden h-px w-5 bg-zinc-800 md:block" />
-                                      <div className="flex flex-col gap-4">
-                                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                                          <div>
-                                            <div className="flex items-center gap-3">
-                                              <div className="rounded-2xl border border-green-500/20 bg-green-500/[0.08] p-2">
-                                                <Users2 className="h-4 w-4 text-green-300" />
-                                              </div>
-                                              <div>
-                                                <p className="text-base font-semibold text-white">{team.displayName}</p>
-                                                <p className="text-xs text-zinc-400">
-                                                  {team.teamType} · {team.sportOrProgram}
-                                                </p>
-                                              </div>
-                                            </div>
-                                            <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-zinc-400 md:grid-cols-2">
-                                              <p>Invite policy: {team.defaultInvitePolicy}</p>
-                                              <p>Default admin: {team.defaultAdminEmail || 'Not set'}</p>
-                                              <p>Site / campus: {team.siteLabel || 'Not set'}</p>
-                                              <p>Escalation route: {getTeamEscalationRouteLabel(team.defaultEscalationRoute)}</p>
-                                              <p>Created: {formatTimestamp(team.createdAt)}</p>
-                                            </div>
-                                            <div className="mt-4 rounded-2xl border border-zinc-800 bg-[#0b1220] p-4">
-                                              <p className="text-xs uppercase tracking-wide text-zinc-500">Pilot Invite Artwork</p>
-                                              <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center">
-                                                <img
-                                                  src={resolvePulseCheckInvitePreviewImage(team.invitePreviewImageUrl, organization.invitePreviewImageUrl)}
-                                                  alt={`${team.displayName} invite preview`}
-                                                  className="h-20 w-32 rounded-xl object-cover"
-                                                />
-                                                <div className="space-y-2">
-                                                  <p className="text-xs text-zinc-400">
-                                                    {team.invitePreviewImageUrl
-                                                      ? 'This team image will be used for pilot and athlete invite previews.'
-                                                      : 'This team currently inherits the organization image for invite previews. Upload a team image to override it.'}
-                                                  </p>
-                                                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-green-400/30 px-3 py-2 text-xs font-semibold text-green-100 transition hover:border-green-300 hover:text-white">
-                                                    {teamImageUploadingId === team.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Users2 className="h-3.5 w-3.5" />}
-                                                    {teamImageUploadingId === team.id ? 'Uploading...' : 'Upload Team Image'}
-                                                    <input
-                                                      type="file"
-                                                      accept="image/*"
-                                                      className="hidden"
-                                                      disabled={teamImageUploadingId === team.id}
-                                                      onChange={(event) => {
-                                                        void handleTeamInviteImageUpload(team.id, event.target.files?.[0] || null);
-                                                        event.currentTarget.value = '';
-                                                      }}
-                                                    />
-                                                  </label>
-                                                </div>
-                                              </div>
-                                            </div>
-                                            <div className="mt-4 rounded-2xl border border-green-500/20 bg-green-500/[0.05] p-4">
-                                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                                                <div>
-                                                  <p className="text-xs uppercase tracking-wide text-zinc-500">Team Commercial Config</p>
-                                                  <p className="mt-2 text-sm text-zinc-300">
-                                                    Control whether this team uses athlete-paid access or an active team plan, and where referral revenue should route.
-                                                  </p>
-                                                </div>
-                                                <div className="rounded-full border border-zinc-700 bg-black/20 px-3 py-1 text-[11px] uppercase tracking-wide text-zinc-400">
-                                                  {teamPlanBypassesPaywall ? 'Team Plan Active' : 'Athlete-Paid Access'}
-                                                </div>
-                                              </div>
+                              return (
+                                <div key={team.id} className={`pcp-team-row ${teamExpanded ? 'open' : ''}`}>
+                                  <div className="pcp-team-hd" onClick={() => toggleTeamRow(team.id)}>
+                                    <div className="pcp-t-indent" />
+                                    <div className="pcp-t-chev"><ChevronDown /></div>
+                                    <div className="pcp-t-vline" />
+                                    <div className="pcp-t-av"><Users2 /></div>
+                                    <div className="pcp-t-info">
+                                      <div className="pcp-t-name">{team.displayName}</div>
+                                      <div className="pcp-t-meta">
+                                        {[
+                                          formatEnumLabel(team.teamType),
+                                          team.sportOrProgram || 'no sport set',
+                                          `${team.defaultEscalationRoute === 'clinician' ? 'clinician' : 'hotline'} escalation`,
+                                          team.defaultAdminEmail || 'no default admin',
+                                        ].join(' · ')}
+                                      </div>
+                                    </div>
+                                    <div className="pcp-t-right">
+                                      <span className="pcp-mc">{bundledPilots.length} pilot{bundledPilots.length === 1 ? '' : 's'}</span>
+                                      <span className={`pcp-status ${getDashboardStatusClassName(teamStatus)}`}>{teamStatus.label}</span>
+                                      <button
+                                        type="button"
+                                        className="pcp-ab pcp-ab-g"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          handleOpenProvisioningModal('pilot', { teamId: team.id });
+                                        }}
+                                      >
+                                        <Plus />
+                                        Add Pilot
+                                      </button>
+                                    </div>
+                                  </div>
 
-                                              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                                                <label className="space-y-2">
-                                                  <span className="text-[11px] uppercase tracking-wide text-zinc-500">Commercial Model</span>
-                                                  <select
-                                                    value={teamCommercialDraft.commercialModel}
-                                                    onChange={(event) =>
-                                                      handleExistingTeamCommercialFieldChange(
-                                                        team.id,
-                                                        'commercialModel',
-                                                        event.target.value as PulseCheckTeamCommercialModel
-                                                      )
-                                                    }
-                                                    className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
-                                                  >
-                                                    {TEAM_COMMERCIAL_MODEL_OPTIONS.map((option) => (
-                                                      <option key={option.value} value={option.value}>
-                                                        {option.label}
-                                                      </option>
-                                                    ))}
-                                                  </select>
-                                                </label>
-
-                                                <label className="space-y-2">
-                                                  <span className="text-[11px] uppercase tracking-wide text-zinc-500">Team Plan Status</span>
-                                                  <select
-                                                    value={teamCommercialDraft.teamPlanStatus}
-                                                    onChange={(event) =>
-                                                      handleExistingTeamCommercialFieldChange(
-                                                        team.id,
-                                                        'teamPlanStatus',
-                                                        event.target.value as PulseCheckTeamPlanStatus
-                                                      )
-                                                    }
-                                                    disabled={teamCommercialDraft.commercialModel !== 'team-plan'}
-                                                    className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400 disabled:cursor-not-allowed disabled:opacity-60"
-                                                  >
-                                                    {TEAM_PLAN_STATUS_OPTIONS.map((option) => (
-                                                      <option key={option.value} value={option.value}>
-                                                        {option.label}
-                                                      </option>
-                                                    ))}
-                                                  </select>
-                                                </label>
-
-                                                <label className="space-y-2">
-                                                  <span className="text-[11px] uppercase tracking-wide text-zinc-500">Revenue Recipient Role</span>
-                                                  <select
-                                                    value={teamCommercialDraft.revenueRecipientRole}
-                                                    onChange={(event) =>
-                                                      handleExistingTeamCommercialFieldChange(
-                                                        team.id,
-                                                        'revenueRecipientRole',
-                                                        event.target.value as PulseCheckRevenueRecipientRole
-                                                      )
-                                                    }
-                                                    className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
-                                                  >
-                                                    {TEAM_REVENUE_RECIPIENT_ROLE_OPTIONS.map((option) => (
-                                                      <option key={option.value} value={option.value}>
-                                                        {option.label}
-                                                      </option>
-                                                    ))}
-                                                  </select>
-                                                </label>
-
-                                                <label className="space-y-2">
-                                                  <span className="text-[11px] uppercase tracking-wide text-zinc-500">Referral Revenue Share %</span>
-                                                  <input
-                                                    type="number"
-                                                    min={0}
-                                                    max={100}
-                                                    step="0.5"
-                                                    value={teamCommercialDraft.referralRevenueSharePct}
-                                                    onChange={(event) =>
-                                                      handleExistingTeamCommercialFieldChange(
-                                                        team.id,
-                                                        'referralRevenueSharePct',
-                                                        event.target.value
-                                                      )
-                                                    }
-                                                    disabled={!teamCommercialDraft.referralKickbackEnabled}
-                                                    className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400 disabled:cursor-not-allowed disabled:opacity-60"
-                                                  />
-                                                </label>
-                                              </div>
-
-                                              <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/20 px-4 py-4">
-                                                <label className="flex items-start gap-3 text-sm text-zinc-300">
-                                                  <input
-                                                    type="checkbox"
-                                                    checked={teamCommercialDraft.referralKickbackEnabled}
-                                                    onChange={(event) =>
-                                                      handleExistingTeamCommercialFieldChange(
-                                                        team.id,
-                                                        'referralKickbackEnabled',
-                                                        event.target.checked
-                                                      )
-                                                    }
-                                                    className="mt-1 h-4 w-4 rounded border-zinc-700 bg-black/20 text-green-400"
-                                                  />
-                                                  <span>
-                                                    Enable referral kickback for athlete-paid subscriptions that originate from this team.
-                                                  </span>
-                                                </label>
-                                                <p className="mt-3 text-xs leading-6 text-zinc-400">
-                                                  {teamPlanBypassesPaywall
-                                                    ? 'Active team plan: athletes invited through this team bypass checkout and land with team-sponsored access.'
-                                                    : 'Athlete-paid flow: invited athletes keep team attribution when they purchase later, and the configured revenue share can route back to this team.'}
-                                                  {teamCommercialDraft.revenueRecipientRole === 'team-admin'
-                                                    ? ' The first redeemed team admin remains the default revenue recipient until you intentionally override it later.'
-                                                    : ''}
-                                                </p>
-                                              </div>
-
-                                              <div className="mt-4 flex justify-end">
-                                                <button
-                                                  type="button"
-                                                  onClick={() => void handleSaveTeamCommercialConfig(team)}
-                                                  disabled={teamCommercialSavingId === team.id}
-                                                  className="inline-flex items-center gap-2 rounded-xl border border-green-400/30 px-4 py-2 text-sm font-semibold text-green-100 transition hover:border-green-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                                >
-                                                  {teamCommercialSavingId === team.id ? (
-                                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                                  ) : (
-                                                    <Sparkles className="h-4 w-4" />
-                                                  )}
-                                                  {teamCommercialSavingId === team.id ? 'Saving...' : 'Save Commercial Config'}
-                                                </button>
+                                  <div className="pcp-team-body">
+                                    <div className="pcp-team-shell">
+                                      <div className="pcp-team-grid">
+                                        <div className="pcp-card">
+                                          <div className="pcp-card-title">Pilot Invite Artwork</div>
+                                          <div className="pcp-preview-shell">
+                                            <img
+                                              className="pcp-preview-image"
+                                              src={teamPreviewImage}
+                                              alt={`${team.displayName} invite artwork`}
+                                            />
+                                            <div className="pcp-preview-meta">
+                                              <div className="pcp-preview-title">{team.displayName}</div>
+                                              <div className="pcp-preview-copy">
+                                                {team.invitePreviewImageUrl
+                                                  ? 'This team has its own invite preview artwork.'
+                                                  : 'This team is currently inheriting the organization invite artwork.'}
                                               </div>
                                             </div>
                                           </div>
-                                          <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-wide ${teamStatus.tone}`}>
-                                            {teamStatus.label}
-                                          </span>
+                                          <div className="pcp-preview-actions">
+                                            <label className="pcp-ab pcp-ab-g pcp-file-trigger">
+                                              <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={(event) => {
+                                                  void handleTeamInviteImageUpload(team.id, event.target.files?.[0] || null);
+                                                  event.currentTarget.value = '';
+                                                }}
+                                              />
+                                              {teamImageUploadingId === team.id ? (
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                              ) : (
+                                                <Sparkles className="h-3.5 w-3.5" />
+                                              )}
+                                              {teamImageUploadingId === team.id ? 'Uploading...' : 'Upload Team Image'}
+                                            </label>
+                                          </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.9fr)_auto_minmax(0,1.1fr)] xl:items-stretch">
-                                          {team.defaultEscalationRoute === 'clinician' ? (
-                                            <div className="rounded-2xl border border-purple-500/20 bg-purple-500/[0.06] p-4">
-                                              <div className="flex items-start justify-between gap-3">
-                                                <div className="flex items-center gap-2">
-                                                  <Stethoscope className="h-4 w-4 text-purple-300" />
-                                                  <p className="text-sm font-semibold text-white">AuntEdna Clinician Onboarding</p>
+                                        <div className="pcp-card">
+                                          <div className="pcp-commercial-footer" style={{ alignItems: 'flex-start' }}>
+                                            <div>
+                                              <div className="pcp-card-title">Team Commercial Config</div>
+                                              <div className="pcp-card-copy">
+                                                Control whether this team uses athlete-paid access or a bypassed team plan, and where referral revenue routes.
+                                              </div>
+                                            </div>
+                                            <div className="pcp-commercial-badge">
+                                              {teamPlanBypass
+                                                ? 'Team Plan Active'
+                                                : teamCommercialDraft.commercialModel === 'athlete-pay'
+                                                  ? 'Athlete Paid Access'
+                                                  : 'Team Plan Inactive'}
+                                            </div>
+                                          </div>
+                                          <div className="pcp-commercial-shell">
+                                            <div className="pcp-commercial-grid">
+                                              <label className="pcp-fld">
+                                                <span className="pcp-flbl">Commercial Model</span>
+                                                <select
+                                                  className="pcp-finp pcp-select"
+                                                  value={teamCommercialDraft.commercialModel}
+                                                  onChange={(event) =>
+                                                    handleExistingTeamCommercialFieldChange(
+                                                      team.id,
+                                                      'commercialModel',
+                                                      event.target.value as PulseCheckTeamCommercialModel
+                                                    )
+                                                  }
+                                                >
+                                                  {TEAM_COMMERCIAL_MODEL_OPTIONS.map((option) => (
+                                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                                  ))}
+                                                </select>
+                                              </label>
+                                              <label className="pcp-fld">
+                                                <span className="pcp-flbl">Team Plan Status</span>
+                                                <select
+                                                  className="pcp-finp pcp-select"
+                                                  value={teamCommercialDraft.teamPlanStatus}
+                                                  onChange={(event) =>
+                                                    handleExistingTeamCommercialFieldChange(
+                                                      team.id,
+                                                      'teamPlanStatus',
+                                                      event.target.value as PulseCheckTeamPlanStatus
+                                                    )
+                                                  }
+                                                >
+                                                  {TEAM_PLAN_STATUS_OPTIONS.map((option) => (
+                                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                                  ))}
+                                                </select>
+                                              </label>
+                                              <label className="pcp-fld">
+                                                <span className="pcp-flbl">Revenue Recipient Role</span>
+                                                <select
+                                                  className="pcp-finp pcp-select"
+                                                  value={teamCommercialDraft.revenueRecipientRole}
+                                                  onChange={(event) =>
+                                                    handleExistingTeamCommercialFieldChange(
+                                                      team.id,
+                                                      'revenueRecipientRole',
+                                                      event.target.value as PulseCheckRevenueRecipientRole
+                                                    )
+                                                  }
+                                                >
+                                                  {TEAM_REVENUE_RECIPIENT_ROLE_OPTIONS.map((option) => (
+                                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                                  ))}
+                                                </select>
+                                              </label>
+                                              <label className="pcp-fld">
+                                                <span className="pcp-flbl">Referral Revenue Share %</span>
+                                                <input
+                                                  className="pcp-finp"
+                                                  type="number"
+                                                  min={0}
+                                                  max={100}
+                                                  value={teamCommercialDraft.referralRevenueSharePct}
+                                                  onChange={(event) =>
+                                                    handleExistingTeamCommercialFieldChange(
+                                                      team.id,
+                                                      'referralRevenueSharePct',
+                                                      event.target.value
+                                                    )
+                                                  }
+                                                />
+                                              </label>
+                                            </div>
+
+                                            <label className="pcp-checkbox-row">
+                                              <input
+                                                type="checkbox"
+                                                checked={teamCommercialDraft.referralKickbackEnabled}
+                                                onChange={(event) =>
+                                                  handleExistingTeamCommercialFieldChange(
+                                                    team.id,
+                                                    'referralKickbackEnabled',
+                                                    event.target.checked
+                                                  )
+                                                }
+                                              />
+                                              <div>
+                                                <div className="pcp-preview-title" style={{ fontSize: '12px', marginBottom: 4 }}>
+                                                  Enable referral kickback for athlete-paid conversions
+                                                </div>
+                                                <div className="pcp-checkbox-copy">
+                                                  Invited athletes keep team attribution when they subscribe later, and the configured revenue share can route back to this team.
+                                                </div>
+                                              </div>
+                                            </label>
+
+                                            <div className="pcp-commercial-footer">
+                                              <div className="pcp-card-copy">
+                                                {teamPlanBypass
+                                                  ? 'This team currently bypasses checkout for invited athletes.'
+                                                  : `Escalation route: ${getTeamEscalationRouteLabel(team.defaultEscalationRoute)}.`}
+                                              </div>
+                                              <button
+                                                type="button"
+                                                className="pcp-btn pcp-btn-teal"
+                                                onClick={(event) => {
+                                                  event.stopPropagation();
+                                                  void handleSaveTeamCommercialConfig(team);
+                                                }}
+                                                disabled={teamCommercialSavingId === team.id}
+                                              >
+                                                {teamCommercialSavingId === team.id ? (
+                                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                ) : (
+                                                  <Sparkles className="h-3.5 w-3.5" />
+                                                )}
+                                                Save Commercial Config
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        <div className="pcp-card">
+                                          <div className="pcp-card-title">Support Route + Activation</div>
+                                          <div className="pcp-card-stack">
+                                            {team.defaultEscalationRoute === 'clinician' ? (
+                                              <div className="pcp-link-card">
+                                                <div className="pcp-link-card-main">
+                                                  <div className="pcp-preview-title" style={{ fontSize: '12px', marginBottom: 0 }}>
+                                                    Clinician escalation
+                                                  </div>
+                                                  <div className="pcp-link-card-copy">
+                                                    {clinicianProfile
+                                                      ? `${clinicianProfile.displayName} · ${clinicianProfile.email || 'No email set'}`
+                                                      : 'No clinician profile attached yet.'}
+                                                  </div>
                                                 </div>
                                                 <button
                                                   type="button"
-                                                  onClick={() =>
-                                                    clinicianProfile
-                                                      ? handleOpenOnboardingModal({
-                                                          channel: 'clinician',
-                                                          organization,
-                                                          team,
-                                                          clinicianProfile,
-                                                        })
-                                                      : undefined
-                                                  }
+                                                  className="pcp-ab pcp-ab-g"
                                                   disabled={!clinicianProfile}
-                                                  className="inline-flex items-center gap-1.5 rounded-xl border border-purple-400/30 px-3 py-2 text-[11px] font-semibold text-purple-100 transition hover:border-purple-300 hover:text-white disabled:cursor-not-allowed disabled:border-zinc-800 disabled:text-zinc-600"
+                                                  onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    if (!clinicianProfile) return;
+                                                    handleOpenOnboardingModal({
+                                                      channel: 'clinician',
+                                                      organization,
+                                                      team,
+                                                      clinicianProfile,
+                                                    });
+                                                  }}
                                                 >
-                                                  <MailPlus className="h-3.5 w-3.5" />
-                                                  Send Onboarding Link
+                                                  <MailPlus />
+                                                  {clinicianOnboardingLink ? 'Send Link' : 'Create Link'}
                                                 </button>
                                               </div>
-                                              {clinicianProfile ? (
-                                                <div className="mt-3 space-y-2 text-xs text-zinc-300">
-                                                  <p className="font-medium text-white">{clinicianProfile.displayName}</p>
-                                                  <p>{clinicianProfile.profileType} · {clinicianProfile.syncStatus}</p>
-                                                  <p>{clinicianProfile.email || 'No email set'}</p>
-                                                  <p>{clinicianProfile.organizationName || 'No organization label'}</p>
-                                                  {clinicianOnboardingLink ? (
-                                                    <div className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-3">
-                                                      <p className="text-[11px] uppercase tracking-wide text-zinc-500">Active clinician link</p>
-                                                      <p className="mt-1 truncate text-xs text-white">{clinicianOnboardingLink.activationUrl}</p>
-                                                    </div>
-                                                  ) : (
-                                                    <p className="text-[11px] text-zinc-500">
-                                                      No clinician onboarding link created yet.
-                                                    </p>
-                                                  )}
-                                                </div>
-                                              ) : (
-                                                <p className="mt-3 text-xs text-zinc-500">No clinician profile connected yet.</p>
-                                              )}
-                                            </div>
-                                          ) : (
-                                            <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4">
-                                              <div className="flex items-start justify-between gap-3">
-                                                <div className="flex items-center gap-2">
-                                                  <AlertTriangle className="h-4 w-4 text-red-300" />
-                                                  <p className="text-sm font-semibold text-white">988 Hotline Escalation Route</p>
+                                            ) : (
+                                              <div className="pcp-link-card">
+                                                <div className="pcp-link-card-main">
+                                                  <div className="pcp-preview-title" style={{ fontSize: '12px', marginBottom: 0 }}>
+                                                    Hotline escalation
+                                                  </div>
+                                                  <div className="pcp-link-card-copy">
+                                                    {HOTLINE_RESOURCE.name}. Escalated athletes are held on the watch list until an admin clears them.
+                                                  </div>
                                                 </div>
                                                 <a
                                                   href={HOTLINE_RESOURCE.url}
                                                   target="_blank"
                                                   rel="noreferrer"
-                                                  className="inline-flex items-center gap-1.5 rounded-xl border border-red-400/30 px-3 py-2 text-[11px] font-semibold text-red-100 transition hover:border-red-300 hover:text-white"
+                                                  className="pcp-ab pcp-ab-g"
+                                                  onClick={(event) => event.stopPropagation()}
                                                 >
-                                                  <ExternalLink className="h-3.5 w-3.5" />
+                                                  <ExternalLink />
                                                   Open 988
                                                 </a>
                                               </div>
-                                              <div className="mt-3 space-y-2 text-xs text-zinc-300">
-                                                <p className="font-medium text-white">{HOTLINE_RESOURCE.name}</p>
-                                                <p>Route: call or text {HOTLINE_RESOURCE.phone}</p>
-                                                <p>Escalated athletes are added to the watch list automatically.</p>
-                                                <p>That watch-list hold stays active until an admin removes it.</p>
-                                              </div>
-                                            </div>
-                                          )}
+                                            )}
 
-                                          <div className="hidden items-center justify-center xl:flex">
-                                            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-800 bg-black/30">
-                                              <ArrowRight className="h-4 w-4 text-zinc-500" />
-                                            </div>
-                                          </div>
-
-                                          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
-                                            <div className="flex items-start justify-between gap-3">
-                                              <div className="flex items-center gap-2">
-                                                <MailPlus className="h-4 w-4 text-amber-300" />
-                                                <p className="text-sm font-semibold text-white">PulseCheck Admin Onboarding</p>
+                                            <div className="pcp-link-card">
+                                              <div className="pcp-link-card-main">
+                                                <div className="pcp-preview-title" style={{ fontSize: '12px', marginBottom: 0 }}>
+                                                  PulseCheck admin onboarding
+                                                </div>
+                                                <div className="pcp-link-card-copy">
+                                                  {activeAdminLink
+                                                    ? `${activeAdminLink.targetEmail || team.defaultAdminEmail || 'No email set'} · ${adminActivationLinks.length} active link${adminActivationLinks.length === 1 ? '' : 's'}`
+                                                    : 'No admin onboarding link has been issued yet.'}
+                                                </div>
                                               </div>
                                               <button
                                                 type="button"
-                                                onClick={() =>
+                                                className="pcp-ab pcp-ab-t"
+                                                onClick={(event) => {
+                                                  event.stopPropagation();
                                                   handleOpenOnboardingModal({
                                                     channel: 'admin',
                                                     organization,
                                                     team,
                                                     clinicianProfile,
-                                                  })
-                                                }
-                                                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400/30 px-3 py-2 text-[11px] font-semibold text-amber-100 transition hover:border-amber-300 hover:text-white"
+                                                  });
+                                                }}
                                               >
-                                                <MailPlus className="h-3.5 w-3.5" />
-                                                Send Onboarding Link
+                                                <MailPlus />
+                                                {activeAdminLink ? 'Resend' : 'Generate'}
                                               </button>
                                             </div>
-                                            {adminActivationLinks.length > 0 ? (
-                                              <div className="mt-3 space-y-3">
-                                                <div className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-3">
-                                                  <p className="text-[11px] uppercase tracking-wide text-zinc-500">Active admin links</p>
-                                                  <p className="mt-1 text-sm font-medium text-white">{adminActivationLinks.length}</p>
-                                                  <div className="mt-2 space-y-1">
-                                                    {adminActivationLinks.slice(0, 3).map((link) => (
-                                                      <p key={link.token} className="truncate text-[11px] text-zinc-400">
-                                                        {link.targetEmail || 'No email set'}
-                                                      </p>
-                                                    ))}
-                                                  </div>
-                                                </div>
-                                                <p className="text-[11px] text-zinc-500">
-                                                  Once redeemed, this should make the first external user the org admin and initial team admin.
-                                                </p>
-                                                <p className="text-[11px] text-zinc-600">
-                                                  Regenerating a link for the same admin email revokes the prior link for that recipient.
-                                                </p>
-                                              </div>
-                                            ) : (
-                                              <div className="mt-3 space-y-3">
-                                                <p className="text-xs text-zinc-400">
-                                                  No admin onboarding link has been issued yet. Open the onboarding modal to generate a unique handoff link, copy it, or draft the email.
-                                                </p>
-                                              </div>
-                                            )}
                                           </div>
-                                        </div>
-
-                                        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.05] p-4">
-                                          <div className="flex items-center justify-between gap-3">
-                                            <div className="flex items-center gap-2">
-                                              <ClipboardList className="h-4 w-4 text-cyan-300" />
-                                              <p className="text-sm font-semibold text-white">Pilot and Cohort Structure</p>
-                                            </div>
-                                            <span className="text-[11px] uppercase tracking-wide text-zinc-500">
-                                              {bundledPilots.length} pilot{bundledPilots.length === 1 ? '' : 's'}
-                                            </span>
-                                          </div>
-
-                                          {bundledPilots.length === 0 ? (
-                                            <p className="mt-3 text-xs text-zinc-500">No pilots created for this team yet.</p>
-                                          ) : (
-                                            <div className="mt-3 space-y-3">
-                                              {bundledPilots.map(({ pilot, cohorts }) => {
-                                                const pilotStatus = getDerivedPilotStatusDisplay(pilot);
-                                                return (
-                                                  <div key={pilot.id} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                                                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                                                      <div>
-                                                        <div className="flex items-center gap-2">
-                                                          <p className="text-sm font-semibold text-white">{pilot.name}</p>
-                                                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide ${pilotStatus.tone}`}>
-                                                            {pilotStatus.label}
-                                                          </span>
-                                                        </div>
-                                                        <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-zinc-400 md:grid-cols-2">
-                                                          <p>Study mode: {pilot.studyMode}</p>
-                                                          <p>Checkpoint cadence: {pilot.checkpointCadence || 'Not set'}</p>
-                                                          <p>Starts: {toDateValue(pilot.startAt)?.toLocaleDateString() || 'Not set'}</p>
-                                                          <p>Ends: {toDateValue(pilot.endAt)?.toLocaleDateString() || 'Not set'}</p>
-                                                          <p>Owner: {pilot.ownerInternalEmail || 'Not set'}</p>
-                                                          <p>Created: {formatTimestamp(pilot.createdAt)}</p>
-                                                        </div>
-                                                        {pilot.objective ? (
-                                                          <p className="mt-3 text-xs leading-6 text-zinc-300">{pilot.objective}</p>
-                                                        ) : null}
-                                                      </div>
-                                                      <span className="text-[11px] uppercase tracking-wide text-zinc-500">
-                                                        {cohorts.length} cohort{cohorts.length === 1 ? '' : 's'}
-                                                      </span>
-                                                    </div>
-
-                                                    {cohorts.length === 0 ? (
-                                                      <p className="mt-3 text-xs text-zinc-500">No cohorts attached yet.</p>
-                                                    ) : (
-                                                      <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
-                                                        {cohorts.map((cohort) => {
-                                                          const cohortStatus = getCohortStatusDisplay(cohort.status);
-                                                          const cohortInviteLinks = athleteInviteLinksByCohortId.get(cohort.id) || [];
-                                                          const activeCohortInvite = cohortInviteLinks[0] || null;
-                                                          return (
-                                                            <div key={cohort.id} className="rounded-2xl border border-fuchsia-500/15 bg-fuchsia-500/[0.05] p-3">
-                                                              <div className="flex items-center justify-between gap-2">
-                                                                <p className="text-sm font-medium text-white">{cohort.name}</p>
-                                                                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cohortStatus.tone}`}>
-                                                                  {cohortStatus.label}
-                                                                </span>
-                                                              </div>
-                                                              <div className="mt-2 space-y-1 text-xs text-zinc-400">
-                                                                <p>Type: {getCohortTypeLabel(cohort.cohortType)}</p>
-                                                                <p>Assignment: {getCohortAssignmentRuleLabel(cohort.assignmentRule)}</p>
-                                                                <div className="flex flex-wrap gap-1.5">
-                                                                  {cohort.reportingTags && cohort.reportingTags.length > 0 ? (
-                                                                    cohort.reportingTags.map((tag) => (
-                                                                      <span
-                                                                        key={tag}
-                                                                        className="inline-flex rounded-full border border-fuchsia-400/20 bg-black/20 px-2 py-0.5 text-[10px] uppercase tracking-wide text-fuchsia-100"
-                                                                      >
-                                                                        {tag}
-                                                                      </span>
-                                                                    ))
-                                                                  ) : (
-                                                                    <span>Tags: None</span>
-                                                                  )}
-                                                                </div>
-                                                              </div>
-                                                              <div className="mt-3 rounded-xl border border-zinc-800 bg-black/20 p-3">
-                                                                <div className="flex items-center justify-between gap-3">
-                                                                  <div>
-                                                                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">Cohort Athlete Invite</p>
-                                                                    <p className="mt-1 text-xs leading-5 text-zinc-400">
-                                                                      Athletes using this link join the team and are automatically placed into this cohort. Team athlete links without cohort context only add them to the team.
-                                                                    </p>
-                                                                  </div>
-                                                                  <button
-                                                                    type="button"
-                                                                    onClick={() =>
-                                                                      activeCohortInvite
-                                                                        ? handleCopyInviteLink(activeCohortInvite.activationUrl, 'Cohort athlete invite copied to clipboard.')
-                                                                        : handleCreateCohortInviteLink(pilot, cohort)
-                                                                    }
-                                                                    disabled={cohortInviteCreatingId === cohort.id}
-                                                                    className="inline-flex items-center gap-1.5 rounded-xl border border-fuchsia-400/30 px-3 py-2 text-[11px] font-semibold text-fuchsia-100 transition hover:border-fuchsia-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                                                  >
-                                                                    {cohortInviteCreatingId === cohort.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clipboard className="h-3.5 w-3.5" />}
-                                                                    {cohortInviteCreatingId === cohort.id
-                                                                      ? 'Creating...'
-                                                                      : activeCohortInvite
-                                                                        ? 'Copy Invite Link'
-                                                                        : 'Create Invite Link'}
-                                                                  </button>
-                                                                </div>
-                                                                {activeCohortInvite ? (
-                                                                  <div className="mt-3 rounded-xl border border-zinc-800 bg-[#090f1c] px-3 py-3">
-                                                                    <p className="truncate text-xs text-white">{activeCohortInvite.activationUrl}</p>
-                                                                    <div className="mt-2 flex items-center gap-2">
-                                                                      <button
-                                                                        type="button"
-                                                                        onClick={() => handleCopyInviteLink(activeCohortInvite.activationUrl, 'Cohort athlete invite copied to clipboard.')}
-                                                                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:border-zinc-500"
-                                                                      >
-                                                                        <Clipboard className="h-3.5 w-3.5" />
-                                                                        Copy
-                                                                      </button>
-                                                                      <a
-                                                                        href={activeCohortInvite.activationUrl}
-                                                                        target="_blank"
-                                                                        rel="noreferrer"
-                                                                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:border-zinc-500"
-                                                                      >
-                                                                        <ExternalLink className="h-3.5 w-3.5" />
-                                                                        Open
-                                                                      </a>
-                                                                    </div>
-                                                                  </div>
-                                                                ) : (
-                                                                  <p className="mt-3 text-xs text-zinc-500">No cohort-specific athlete invite has been created yet.</p>
-                                                                )}
-                                                              </div>
-                                                            </div>
-                                                          );
-                                                        })}
-                                                      </div>
-                                                    )}
-                                                  </div>
-                                                );
-                                              })}
-                                            </div>
-                                          )}
                                         </div>
                                       </div>
                                     </div>
-                                  );
-                                })
-                              )}
+
+                                    {bundledPilots.length === 0 ? (
+                                      <div style={{ padding: '0 16px 10px 80px' }}>
+                                        <div className="pcp-c-empty">No pilots created yet for this team.</div>
+                                      </div>
+                                    ) : (
+                                      bundledPilots.map(({ pilot, cohorts }) => {
+                                        const pilotExpanded = expandedPilotIds.includes(pilot.id);
+                                        const pilotStatus = getDerivedPilotStatusDisplay(pilot);
+
+                                        return (
+                                          <React.Fragment key={pilot.id}>
+                                            <div
+                                              className={`pcp-pilot-row ${pilotExpanded ? 'open' : ''}`}
+                                              onClick={() => togglePilotRow(pilot.id)}
+                                            >
+                                              <div className="pcp-p-indent" />
+                                              <div className="pcp-p-dot" />
+                                              <div className="pcp-p-info">
+                                                <div className="pcp-p-name">{pilot.name}</div>
+                                                <div className="pcp-p-meta">
+                                                  {[
+                                                    toDateValue(pilot.startAt)?.toLocaleDateString() || 'not scheduled',
+                                                    toDateValue(pilot.endAt)?.toLocaleDateString() || 'open ended',
+                                                    pilot.checkpointCadence || 'no cadence',
+                                                    `${cohorts.length} cohort${cohorts.length === 1 ? '' : 's'}`,
+                                                  ].join(' · ')}
+                                                </div>
+                                              </div>
+                                              <div className="pcp-p-right">
+                                                <span className={`pcp-status ${getDashboardStatusClassName(pilotStatus)}`}>{pilotStatus.label}</span>
+                                                <div className="pcp-p-chev"><ChevronDown /></div>
+                                              </div>
+                                            </div>
+
+                                            <div className={`pcp-pilot-panel ${pilotExpanded ? 'open' : ''}`}>
+                                              <div>
+                                                <div className="pcp-pp-lbl">Cohorts</div>
+                                                {cohorts.length === 0 ? (
+                                                  <div className="pcp-c-empty">No cohorts attached yet.</div>
+                                                ) : (
+                                                  cohorts.map((cohort) => {
+                                                    const activeCohortInvite = (athleteInviteLinksByCohortId.get(cohort.id) || [])[0] || null;
+                                                    const cohortStatus = getCohortStatusDisplay(cohort.status);
+
+                                                    return (
+                                                      <div key={cohort.id} className="pcp-cohort-item">
+                                                        <div style={{ minWidth: 0, flex: 1 }}>
+                                                          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                                                            <div className="pcp-ci-name">{cohort.name}</div>
+                                                            <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${cohortStatus.tone}`}>
+                                                              {cohortStatus.label}
+                                                            </span>
+                                                          </div>
+                                                          <div className="pcp-ci-meta">
+                                                            {[
+                                                              getCohortTypeLabel(cohort.cohortType),
+                                                              getCohortAssignmentRuleLabel(cohort.assignmentRule),
+                                                              cohort.reportingTags?.length ? cohort.reportingTags.join(', ') : 'no tags',
+                                                            ].join(' · ')}
+                                                          </div>
+                                                        </div>
+                                                        <button
+                                                          type="button"
+                                                          className="pcp-ab pcp-ab-g"
+                                                          onClick={(event) => {
+                                                            event.stopPropagation();
+                                                            void (
+                                                              activeCohortInvite
+                                                                ? handleCopyInviteLink(
+                                                                    activeCohortInvite.activationUrl,
+                                                                    'Cohort athlete invite copied to clipboard.'
+                                                                  )
+                                                                : handleCreateCohortInviteLink(pilot, cohort)
+                                                            );
+                                                          }}
+                                                          disabled={cohortInviteCreatingId === cohort.id}
+                                                        >
+                                                          {cohortInviteCreatingId === cohort.id ? <Loader2 /> : <Clipboard />}
+                                                          {activeCohortInvite ? 'Copy Invite' : 'Create Invite'}
+                                                        </button>
+                                                      </div>
+                                                    );
+                                                  })
+                                                )}
+                                              </div>
+
+                                              <div>
+                                                <div className="pcp-pp-lbl">Onboarding Links</div>
+                                                {team.defaultEscalationRoute === 'clinician' ? (
+                                                  <div className="pcp-ob-item">
+                                                    <div>
+                                                      <div className="pcp-ob-type">AuntEdna Clinician</div>
+                                                      {clinicianProfile ? (
+                                                        <div className="pcp-ob-val">
+                                                          {clinicianOnboardingLink
+                                                            ? clinicianProfile.email || clinicianProfile.displayName
+                                                            : `${clinicianProfile.displayName} · ${formatEnumLabel(clinicianProfile.syncStatus).toLowerCase()}`}
+                                                        </div>
+                                                      ) : (
+                                                        <div className="pcp-ob-empty">No clinician profile attached yet</div>
+                                                      )}
+                                                    </div>
+                                                    <button
+                                                      type="button"
+                                                      className={`pcp-ab ${clinicianProfile ? 'pcp-ab-g' : 'pcp-ab-g'}`}
+                                                      disabled={!clinicianProfile}
+                                                      onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        if (!clinicianProfile) return;
+                                                        handleOpenOnboardingModal({
+                                                          channel: 'clinician',
+                                                          organization,
+                                                          team,
+                                                          clinicianProfile,
+                                                        });
+                                                      }}
+                                                    >
+                                                      <MailPlus />
+                                                      {clinicianOnboardingLink ? 'Send Link' : 'Create Link'}
+                                                    </button>
+                                                  </div>
+                                                ) : (
+                                                  <div className="pcp-ob-item">
+                                                    <div>
+                                                      <div className="pcp-ob-type">988 Hotline</div>
+                                                      <div className="pcp-ob-val">{HOTLINE_RESOURCE.name}</div>
+                                                    </div>
+                                                    <a
+                                                      href={HOTLINE_RESOURCE.url}
+                                                      target="_blank"
+                                                      rel="noreferrer"
+                                                      className="pcp-ab pcp-ab-g"
+                                                      onClick={(event) => event.stopPropagation()}
+                                                    >
+                                                      <ExternalLink />
+                                                      Open 988
+                                                    </a>
+                                                  </div>
+                                                )}
+
+                                                <div className="pcp-ob-item">
+                                                  <div>
+                                                    <div className="pcp-ob-type">
+                                                      PulseCheck Admin
+                                                      {adminActivationLinks.length > 0 ? ` · ${adminActivationLinks.length} active` : ''}
+                                                    </div>
+                                                    {activeAdminLink ? (
+                                                      <div className="pcp-ob-val">{activeAdminLink.targetEmail || team.defaultAdminEmail || 'No email set'}</div>
+                                                    ) : (
+                                                      <div className="pcp-ob-empty">No link issued yet</div>
+                                                    )}
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    className={`pcp-ab ${activeAdminLink ? 'pcp-ab-t' : 'pcp-ab-t'}`}
+                                                    onClick={(event) => {
+                                                      event.stopPropagation();
+                                                      handleOpenOnboardingModal({
+                                                        channel: 'admin',
+                                                        organization,
+                                                        team,
+                                                        clinicianProfile,
+                                                      });
+                                                    }}
+                                                  >
+                                                    <MailPlus />
+                                                    {activeAdminLink ? 'Resend' : 'Generate'}
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </React.Fragment>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </main>
+          </div>
+
+          <div className={`pcp-modal-bg ${isProvisioningModalOpen ? 'open' : ''}`} onClick={handleCloseProvisioningModal}>
+            <div className="pcp-modal" onClick={(event) => event.stopPropagation()}>
+              <div className="pcp-modal-tb">
+                <div className="pcp-modal-title">Provision New Organization</div>
+                <button type="button" className="pcp-modal-x" onClick={handleCloseProvisioningModal}>
+                  <X />
+                </button>
+              </div>
+
+              <div className="pcp-modal-steps">
+                {PROVISIONING_WIZARD_STEPS.map((step, stepIndex) => {
+                  const isDone = stepIndex < currentWizardStepIndex;
+                  const isActive = step.key === activeWizardStep;
+
+                  return (
+                    <button
+                      key={step.key}
+                      type="button"
+                      className={`pcp-ms ${isDone ? 'done' : ''} ${isActive ? 'active' : ''}`}
+                      onClick={() => setActiveWizardStep(step.key)}
+                    >
+                      <div className="pcp-ms-num">{isDone ? '✓' : stepIndex + 1}</div>
+                      {step.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="pcp-modal-body">
+                <form ref={organizationFormRef} onSubmit={handleCreateOrganization}>
+                  <div className={`pcp-m-tab ${activeWizardStep === 'org' ? 'active' : ''}`}>
+                    <div className="pcp-sec-hd">
+                      <div className="pcp-sec-ic"><Building2 /></div>
+                      <span className="pcp-sec-tl">Create Organization</span>
+                    </div>
+                    <div className="pcp-info-box">
+                      Top-level customer container. Organizations hold legal identity, primary admin handoff, and every team connected to that partner.
+                    </div>
+                    <div className="pcp-fg">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Display Name</span>
+                        <input
+                          className="pcp-finp"
+                          value={orgForm.displayName}
+                          onChange={(event) => handleOrgFieldChange('displayName', event.target.value)}
+                          placeholder="Hampton Athletics"
+                        />
+                      </label>
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Legal Name</span>
+                        <input
+                          className="pcp-finp"
+                          value={orgForm.legalName}
+                          onChange={(event) => handleOrgFieldChange('legalName', event.target.value)}
+                          placeholder="Hampton University Athletics Department"
+                        />
+                      </label>
+                    </div>
+                    <div className="pcp-fg">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Organization Type</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={orgForm.organizationType}
+                          onChange={(event) => handleOrgFieldChange('organizationType', event.target.value)}
+                        >
+                          {ORGANIZATION_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Default Study Posture</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={orgForm.defaultStudyPosture}
+                          onChange={(event) => handleOrgFieldChange('defaultStudyPosture', event.target.value as PulseCheckStudyPosture)}
+                        >
+                          <option value="operational">Operational</option>
+                          <option value="pilot">Pilot</option>
+                          <option value="research-eligible">Research Eligible</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="pcp-fg">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Customer Admin Name</span>
+                        <input
+                          className="pcp-finp"
+                          value={orgForm.primaryCustomerAdminName}
+                          onChange={(event) => handleOrgFieldChange('primaryCustomerAdminName', event.target.value)}
+                          placeholder="Athletic Director"
+                        />
+                      </label>
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Customer Admin Email</span>
+                        <input
+                          className="pcp-finp"
+                          type="email"
+                          value={orgForm.primaryCustomerAdminEmail}
+                          onChange={(event) => handleOrgFieldChange('primaryCustomerAdminEmail', event.target.value)}
+                          placeholder="admin@school.edu"
+                        />
+                      </label>
+                    </div>
+                    <div className="pcp-fg pcp-c1">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Clinician Routing Requirement</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={orgForm.defaultClinicianBridgeMode}
+                          onChange={(event) => handleOrgFieldChange('defaultClinicianBridgeMode', event.target.value as PulseCheckClinicianBridgeMode)}
+                        >
+                          <option value="optional">Optional</option>
+                          <option value="required">Required</option>
+                          <option value="none">None</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="pcp-fg pcp-c1">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Notes</span>
+                        <textarea
+                          className="pcp-finp pcp-textarea"
+                          value={orgForm.notes}
+                          onChange={(event) => handleOrgFieldChange('notes', event.target.value)}
+                          placeholder="Implementation notes, routing assumptions, or contract context."
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </form>
+
+                <form ref={teamRouteFormRef} onSubmit={handleCreateTeam}>
+                  <div className={`pcp-m-tab ${activeWizardStep === 'team' ? 'active' : ''}`}>
+                    <div className="pcp-sec-hd">
+                      <div className="pcp-sec-ic"><Users2 /></div>
+                      <span className="pcp-sec-tl">Create Team</span>
+                    </div>
+                    <div className="pcp-fg pcp-c1">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Organization</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={teamForm.organizationId}
+                          onChange={(event) => handleTeamFieldChange('organizationId', event.target.value)}
+                        >
+                          <option value="">Select an organization</option>
+                          {organizations.map((organization) => (
+                            <option key={organization.id} value={organization.id}>{organization.displayName}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <div className="pcp-fg">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Team Name</span>
+                        <input
+                          className="pcp-finp"
+                          value={teamForm.displayName}
+                          onChange={(event) => handleTeamFieldChange('displayName', event.target.value)}
+                          placeholder="Men's Basketball"
+                        />
+                      </label>
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Team Type</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={teamForm.teamType}
+                          onChange={(event) => handleTeamFieldChange('teamType', event.target.value)}
+                        >
+                          {TEAM_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <div className="pcp-fg">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Sport</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={teamForm.sportOrProgram}
+                          onChange={(event) => handleTeamFieldChange('sportOrProgram', event.target.value)}
+                        >
+                          <option value="">Select a sport</option>
+                          {teamSportOptions.map((sport) => (
+                            <option key={sport.id} value={sport.name}>{sport.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Site / Campus Label</span>
+                        <input
+                          className="pcp-finp"
+                          value={teamForm.siteLabel}
+                          onChange={(event) => handleTeamFieldChange('siteLabel', event.target.value)}
+                          placeholder="Main Campus"
+                        />
+                      </label>
+                    </div>
+                    <div className="pcp-fg pcp-c1">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Org-Linked Admin</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={teamForm.defaultAdminEmail}
+                          onChange={(event) => handleTeamAdminSelection(event.target.value)}
+                          disabled={!selectedOrganization || teamAdminOptions.length === 0}
+                        >
+                          <option value="">
+                            {!selectedOrganization
+                              ? 'Select an organization first'
+                              : teamAdminOptions.length === 0
+                                ? 'No organization admin contact configured'
+                                : 'Select organization admin'}
+                          </option>
+                          {teamAdminOptions.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                        <span className="pcp-fhint">Team admins must come from the selected organization&apos;s admin contact data.</span>
+                      </label>
+                    </div>
+                    <div className="pcp-fg">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Invite Policy</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={teamForm.defaultInvitePolicy}
+                          onChange={(event) => handleTeamFieldChange('defaultInvitePolicy', event.target.value as PulseCheckInvitePolicy)}
+                        >
+                          <option value="admin-and-staff">Admin and Staff</option>
+                          <option value="admin-only">Admin Only</option>
+                          <option value="admin-staff-and-coaches">Admin, Staff, and Coaches</option>
+                        </select>
+                      </label>
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Commercial Model</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={teamForm.commercialConfig.commercialModel}
+                          onChange={(event) => handleTeamCommercialFieldChange('commercialModel', event.target.value as PulseCheckTeamCommercialModel)}
+                        >
+                          {TEAM_COMMERCIAL_MODEL_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className={`pcp-m-tab ${activeWizardStep === 'route' ? 'active' : ''}`}>
+                    <div className="pcp-sec-hd">
+                      <div className="pcp-sec-ic"><HeartPulse /></div>
+                      <span className="pcp-sec-tl">Configure Support Route</span>
+                    </div>
+                    <div className="pcp-warn-box">
+                      Choose whether escalations route to the 988 hotline or to a clinician profile. This determines what athletes see when Nora triggers an escalation.
+                    </div>
+
+                    <div className="pcp-fg pcp-c1">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Escalation Route</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={teamForm.defaultEscalationRoute}
+                          onChange={(event) => handleTeamFieldChange('defaultEscalationRoute', event.target.value as PulseCheckTeamEscalationRoute)}
+                        >
+                          {TEAM_ESCALATION_ROUTE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label} — {option.description}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    {draftTeamUsesClinicianRoute ? (
+                      <>
+                        <div className="pcp-route-mode-grid">
+                          <button
+                            type="button"
+                            className={`pcp-route-mode ${clinicianLinkMode === 'existing' ? 'active' : ''}`}
+                            onClick={() => setClinicianLinkMode('existing')}
+                          >
+                            <div className="pcp-route-mode-title">Link Existing Profile</div>
+                            <div className="pcp-route-mode-copy">Search saved clinician profiles and attach one to this team.</div>
+                          </button>
+                          <button
+                            type="button"
+                            className={`pcp-route-mode ${clinicianLinkMode === 'create' ? 'active' : ''}`}
+                            onClick={() => setClinicianLinkMode('create')}
+                          >
+                            <div className="pcp-route-mode-title">Create New Profile</div>
+                            <div className="pcp-route-mode-copy">Create a local clinician profile record now and sync it later.</div>
+                          </button>
+                        </div>
+
+                        {clinicianLinkMode === 'existing' ? (
+                          <>
+                            <div className="pcp-fg pcp-c1">
+                              <label className="pcp-fld">
+                                <span className="pcp-flbl">Search Saved Profiles</span>
+                                <input
+                                  className="pcp-finp"
+                                  value={clinicianSearchTerm}
+                                  onChange={(event) => setClinicianSearchTerm(event.target.value)}
+                                  placeholder="Hampton, Carter, provider network..."
+                                />
+                              </label>
                             </div>
-                          </article>
-                        );
-                      })
+
+                            {filteredClinicianProfiles.length === 0 ? (
+                              <div className="pcp-empty-panel">No saved clinician profiles yet. Create one locally to keep moving.</div>
+                            ) : (
+                              filteredClinicianProfiles.map((profile) => {
+                                const isSelected = profile.id === teamForm.defaultClinicianProfileId;
+
+                                return (
+                                  <div key={profile.id} className="pcp-clinician-card">
+                                    <div>
+                                      <div className="pcp-ci-name">{profile.displayName}</div>
+                                      <div className="pcp-ci-meta">
+                                        {[
+                                          `Type: ${formatEnumLabel(profile.profileType)}`,
+                                          `Org: ${profile.organizationName || 'Not set'}`,
+                                          `Email: ${profile.email || 'Not set'}`,
+                                          `Sync: ${formatEnumLabel(profile.syncStatus)}`,
+                                        ].join(' · ')}
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className={`pcp-ab ${isSelected ? 'pcp-ab-t' : 'pcp-ab-g'}`}
+                                      onClick={() => handleSelectClinicianProfile(profile)}
+                                    >
+                                      {isSelected ? 'Connected' : 'Connect'}
+                                    </button>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </>
+                        ) : (
+                          <div className="pcp-fg">
+                            <label className="pcp-fld">
+                              <span className="pcp-flbl">Profile Display Name</span>
+                              <input
+                                className="pcp-finp"
+                                value={newClinicianProfileForm.displayName}
+                                onChange={(event) =>
+                                  setNewClinicianProfileForm((current) => ({ ...current, displayName: event.target.value }))
+                                }
+                                placeholder="Hampton Sports Medicine Main"
+                              />
+                            </label>
+                            <label className="pcp-fld">
+                              <span className="pcp-flbl">Profile Type</span>
+                              <select
+                                className="pcp-finp pcp-select"
+                                value={newClinicianProfileForm.profileType}
+                                onChange={(event) =>
+                                  setNewClinicianProfileForm((current) => ({
+                                    ...current,
+                                    profileType: event.target.value as PulseCheckClinicianProfileType,
+                                  }))
+                                }
+                              >
+                                {CLINICIAN_PROFILE_TYPE_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="pcp-fld">
+                              <span className="pcp-flbl">Organization / Provider</span>
+                              <input
+                                className="pcp-finp"
+                                value={newClinicianProfileForm.organizationName}
+                                onChange={(event) =>
+                                  setNewClinicianProfileForm((current) => ({ ...current, organizationName: event.target.value }))
+                                }
+                                placeholder={selectedOrganization?.displayName || 'Clinical Partner'}
+                              />
+                            </label>
+                            <label className="pcp-fld">
+                              <span className="pcp-flbl">Contact Email</span>
+                              <input
+                                className="pcp-finp"
+                                type="email"
+                                value={newClinicianProfileForm.email}
+                                onChange={(event) =>
+                                  setNewClinicianProfileForm((current) => ({ ...current, email: event.target.value }))
+                                }
+                                placeholder="sportsmed@hampton.edu"
+                              />
+                            </label>
+                            <div className="pcp-fld pcp-s2">
+                              <button
+                                type="button"
+                                className="pcp-btn pcp-btn-teal"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  void handleCreateClinicianProfile(event as unknown as React.FormEvent);
+                                }}
+                                disabled={clinicianSubmitting}
+                              >
+                                {clinicianSubmitting ? <Loader2 /> : <ShieldPlus />}
+                                {clinicianSubmitting ? 'Creating Profile...' : 'Create Local Profile'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="pcp-info-box">
+                          {HOTLINE_RESOURCE.name}. Athletes are directed to {HOTLINE_RESOURCE.phone} or {HOTLINE_RESOURCE.url} during escalations.
+                        </div>
+                        <div className="pcp-toggle-row">
+                          <div className="pcp-tt on">
+                            <div className="pcp-tk" />
+                          </div>
+                          <div>
+                            <div className="pcp-t-lbl">Automatic watch-list hold</div>
+                            <div className="pcp-t-desc">
+                              Hotline-routed escalations place the athlete on the watch list until an admin clears them manually.
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="pcp-fg pcp-c1">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Notes</span>
+                        <textarea
+                          className="pcp-finp pcp-textarea"
+                          value={teamForm.notes}
+                          onChange={(event) => handleTeamFieldChange('notes', event.target.value)}
+                          placeholder="Roster scope, staffing notes, or activation assumptions."
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </form>
+
+                <form ref={activationFormRef} onSubmit={handleWizardActivationSubmit}>
+                  <div className={`pcp-m-tab ${activeWizardStep === 'activation' ? 'active' : ''}`}>
+                    <div className="pcp-sec-hd">
+                      <div className="pcp-sec-ic"><MailPlus /></div>
+                      <span className="pcp-sec-tl">Generate Admin Activation</span>
+                    </div>
+                    <div className="pcp-info-box">
+                      Generate a unique onboarding link. Regenerating a link revokes the prior active link for the same recipient.
+                    </div>
+                    {teams.length === 0 ? (
+                      <div className="pcp-empty-panel">Create at least one team before generating onboarding links.</div>
+                    ) : (
+                      <>
+                        <div className="pcp-fg">
+                          <label className="pcp-fld">
+                            <span className="pcp-flbl">Team</span>
+                            <select
+                              className="pcp-finp pcp-select"
+                              value={activationDraft.teamId}
+                              onChange={(event) => setActivationDraft((current) => ({ ...current, teamId: event.target.value }))}
+                            >
+                              {teams.map((team) => {
+                                const organization = organizations.find((organization) => organization.id === team.organizationId);
+                                return (
+                                  <option key={team.id} value={team.id}>
+                                    {organization ? `${organization.displayName} → ${team.displayName}` : team.displayName}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </label>
+                          <label className="pcp-fld">
+                            <span className="pcp-flbl">Onboarding Type</span>
+                            <select
+                              className="pcp-finp pcp-select"
+                              value={activationDraft.channel}
+                              onChange={(event) =>
+                                setActivationDraft((current) => ({
+                                  ...current,
+                                  channel: event.target.value as 'admin' | 'clinician',
+                                }))
+                              }
+                            >
+                              <option value="admin">PulseCheck Admin Onboarding</option>
+                              <option value="clinician" disabled={selectedActivationTeam?.defaultEscalationRoute !== 'clinician'}>
+                                AuntEdna Clinician Onboarding
+                              </option>
+                            </select>
+                          </label>
+                        </div>
+
+                        <div className="pcp-fg pcp-c1">
+                          <label className="pcp-fld">
+                            <span className="pcp-flbl">Recipient Email</span>
+                            <input
+                              className="pcp-finp"
+                              type="email"
+                              value={activationDraft.targetEmail}
+                              onChange={(event) => setActivationDraft((current) => ({ ...current, targetEmail: event.target.value }))}
+                              placeholder="admin@school.edu"
+                              disabled={activationDraft.channel === 'clinician'}
+                            />
+                            {activationDraft.channel === 'clinician' ? (
+                              <span className="pcp-fhint">
+                                Clinician links use the attached clinician profile email: {selectedActivationClinicianProfile?.email || 'not set'}.
+                              </span>
+                            ) : null}
+                          </label>
+                        </div>
+                      </>
                     )}
                   </div>
-                )}
-              </section>
+                </form>
+
+                <form ref={pilotFormRef} onSubmit={handleCreatePilot}>
+                  <div className={`pcp-m-tab ${activeWizardStep === 'pilot' ? 'active' : ''}`}>
+                    <div className="pcp-sec-hd">
+                      <div className="pcp-sec-ic"><ClipboardList /></div>
+                      <span className="pcp-sec-tl">Create Pilot</span>
+                    </div>
+                    <div className="pcp-fg pcp-c1">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Team</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={pilotForm.teamId}
+                          onChange={(event) => handlePilotFieldChange('teamId', event.target.value)}
+                        >
+                          <option value="">Select a team</option>
+                          {teams.map((team) => {
+                            const organization = organizations.find((item) => item.id === team.organizationId);
+                            return (
+                              <option key={team.id} value={team.id}>
+                                {organization ? `${organization.displayName} → ${team.displayName}` : team.displayName}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </label>
+                    </div>
+                    {selectedPilotTeam ? (
+                      <div className="pcp-info-box">
+                        This pilot will attach to {selectedPilotTeam.displayName} and inherit that team&apos;s organization context and routing defaults.
+                      </div>
+                    ) : null}
+                    <div className="pcp-fg">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Pilot Name</span>
+                        <input
+                          className="pcp-finp"
+                          value={pilotForm.name}
+                          onChange={(event) => handlePilotFieldChange('name', event.target.value)}
+                          placeholder="Spring 2026 Pilot"
+                        />
+                      </label>
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Study Mode</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={pilotForm.studyMode}
+                          onChange={(event) => handlePilotFieldChange('studyMode', event.target.value as PulseCheckPilotStudyMode)}
+                        >
+                          {PILOT_STUDY_MODE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <div className="pcp-fg">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Checkpoint Cadence</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={pilotForm.checkpointCadence || 'weekly'}
+                          onChange={(event) => handlePilotFieldChange('checkpointCadence', event.target.value)}
+                        >
+                          {CHECKPOINT_CADENCE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Start Date</span>
+                        <input
+                          className="pcp-finp"
+                          type="date"
+                          value={pilotStartDate}
+                          onChange={(event) => setPilotStartDate(event.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <div className="pcp-fg">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Pilot Length</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={pilotDurationPreset}
+                          onChange={(event) => setPilotDurationPreset(event.target.value)}
+                        >
+                          {PILOT_DURATION_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      {pilotDurationPreset === 'custom' ? (
+                        <label className="pcp-fld">
+                          <span className="pcp-flbl">Custom Days</span>
+                          <input
+                            className="pcp-finp"
+                            type="number"
+                            min={1}
+                            value={pilotCustomDays}
+                            onChange={(event) => setPilotCustomDays(event.target.value)}
+                            placeholder="21"
+                          />
+                        </label>
+                      ) : (
+                        <label className="pcp-fld">
+                          <span className="pcp-flbl">Projected End</span>
+                          <input
+                            className="pcp-finp"
+                            value={
+                              pilotStartDate
+                                ? (() => {
+                                    const durationDays = pilotDurationPreset === 'custom'
+                                      ? Number.parseInt(pilotCustomDays, 10)
+                                      : Number.parseInt(pilotDurationPreset, 10);
+                                    if (!Number.isFinite(durationDays) || durationDays <= 0) return 'Not available';
+                                    const startAt = new Date(`${pilotStartDate}T00:00:00`);
+                                    const projectedEnd = new Date(startAt.getTime() + (durationDays - 1) * 24 * 60 * 60 * 1000);
+                                    return projectedEnd.toLocaleDateString();
+                                  })()
+                                : ''
+                            }
+                            readOnly
+                            placeholder="Projected automatically"
+                          />
+                        </label>
+                      )}
+                    </div>
+                    <div className="pcp-fg pcp-c1">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Objective</span>
+                        <textarea
+                          className="pcp-finp pcp-textarea"
+                          value={pilotForm.objective || ''}
+                          onChange={(event) => handlePilotFieldChange('objective', event.target.value)}
+                          placeholder="Why this pilot exists and what it is measuring."
+                        />
+                      </label>
+                    </div>
+                    <div className="pcp-fg pcp-c1">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Notes</span>
+                        <textarea
+                          className="pcp-finp pcp-textarea"
+                          value={pilotForm.notes || ''}
+                          onChange={(event) => handlePilotFieldChange('notes', event.target.value)}
+                          placeholder="Internal setup notes, staffing assumptions, or rollout constraints."
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </form>
+
+                <form ref={cohortFormRef} onSubmit={handleCreateCohort}>
+                  <div className={`pcp-m-tab ${activeWizardStep === 'cohort' ? 'active' : ''}`}>
+                    <div className="pcp-sec-hd">
+                      <div className="pcp-sec-ic"><Clipboard /></div>
+                      <span className="pcp-sec-tl">Create Cohort</span>
+                    </div>
+                    <div className="pcp-fg pcp-c1">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Pilot</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={cohortForm.pilotId}
+                          onChange={(event) => handleCohortFieldChange('pilotId', event.target.value)}
+                        >
+                          <option value="">Select a pilot</option>
+                          {pilots.map((pilot) => {
+                            const team = teams.find((item) => item.id === pilot.teamId);
+                            return (
+                              <option key={pilot.id} value={pilot.id}>
+                                {team ? `${team.displayName} → ${pilot.name}` : pilot.name}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </label>
+                    </div>
+                    <div className="pcp-fg">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Cohort Name</span>
+                        <input
+                          className="pcp-finp"
+                          value={cohortForm.name}
+                          onChange={(event) => handleCohortFieldChange('name', event.target.value)}
+                          placeholder="Intervention Group"
+                        />
+                      </label>
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Cohort Type</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={cohortForm.cohortType || 'intervention-group'}
+                          onChange={(event) => handleCohortFieldChange('cohortType', event.target.value)}
+                        >
+                          {COHORT_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <div className="pcp-fg pcp-c1">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Reporting Tags</span>
+                        <div className="pcp-finp">
+                          <div className="pcp-chip-row">
+                            {(cohortForm.reportingTags || []).map((tag) => (
+                              <span key={tag} className="pcp-chip">
+                                {tag}
+                                <button type="button" onClick={() => removeCohortTag(tag)} aria-label={`Remove ${tag}`}>
+                                  <X style={{ width: 10, height: 10 }} />
+                                </button>
+                              </span>
+                            ))}
+                            <input
+                              className="pcp-chip-input"
+                              value={cohortTagsInput}
+                              onChange={(event) => setCohortTagsInput(event.target.value)}
+                              onBlur={commitCohortTagsInput}
+                              onKeyDown={(event) => {
+                                if (event.key === ',' || event.key === 'Enter') {
+                                  event.preventDefault();
+                                  commitCohortTagsInput();
+                                }
+                              }}
+                              placeholder={(cohortForm.reportingTags || []).length > 0 ? 'Add another tag' : 'control, spring-2026, returners'}
+                            />
+                          </div>
+                        </div>
+                        <span className="pcp-fhint">Type a tag and press comma or enter to create a chip.</span>
+                      </label>
+                    </div>
+                    <div className="pcp-fg pcp-c1">
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Notes</span>
+                        <textarea
+                          className="pcp-finp pcp-textarea"
+                          value={cohortForm.notes || ''}
+                          onChange={(event) => handleCohortFieldChange('notes', event.target.value)}
+                          placeholder="What distinguishes this subgroup operationally."
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              <div className="pcp-modal-ft">
+                <div className="pcp-modal-ft-l">
+                  Step {currentWizardStepIndex + 1} of {PROVISIONING_WIZARD_STEPS.length} — {currentWizardStepLabel}
+                </div>
+                <div className="pcp-modal-ft-r">
+                  <button
+                    type="button"
+                    className="pcp-btn pcp-btn-ghost"
+                    onClick={handleWizardBack}
+                    disabled={currentWizardStepIndex === 0 || activeWizardSubmitting}
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    type="button"
+                    className="pcp-btn pcp-btn-teal"
+                    onClick={handleWizardNext}
+                    disabled={activeWizardSubmitting || (activeWizardStep === 'activation' && !teams.length)}
+                  >
+                    {wizardPrimaryLabel}
+                  </button>
+                </div>
+              </div>
             </div>
-          </main>
+          </div>
 
           {onboardingModal ? (
             <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 px-4 py-4 sm:px-6 sm:py-6">
