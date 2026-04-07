@@ -33,6 +33,7 @@ import PilotAthleteCommunicationModal, {
   type PilotAthleteCommunicationPreview,
   type PilotAthleteCommunicationRecord,
 } from '../../../components/admin/pilot-dashboard/PilotAthleteCommunicationModal';
+import PilotAthleteTransferModal from '../../../components/admin/pilot-dashboard/PilotAthleteTransferModal';
 import { PilotInviteQrModal } from '../../../components/admin/pilot-dashboard/PilotInviteQrModal';
 import { StaffPilotSurveyModal } from '../../../components/admin/pilot-dashboard/StaffPilotSurveyModal';
 import type { PilotDashboardMetricExplanationKey } from '../../../components/admin/pilot-dashboard/noraMetricCatalog';
@@ -42,8 +43,11 @@ import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckP
 import type {
   PulseCheckInviteActivity,
   PulseCheckInviteLink,
+  PulseCheckPilot,
+  PulseCheckPilotCohort,
   PulseCheckPilotEnrollmentStatus,
   PulseCheckRequiredConsentDocument,
+  PulseCheckTeam,
 } from '../../../api/firebase/pulsecheckProvisioning/types';
 import { analyzePulseCheckInviteOneLink, buildPulseCheckTeamInviteWebUrl, isPulseCheckInviteOneLink } from '../../../utils/pulsecheckInviteLinks';
 import { useUser } from '../../../hooks/useUser';
@@ -89,6 +93,18 @@ type AthleteCommunicationPreviewModalState = {
   loading: boolean;
   sending: boolean;
   error: string | null;
+};
+type AthleteTransferModalState = {
+  athlete: PilotDashboardDetail['rosterAthletes'][number];
+  loading: boolean;
+  saving: boolean;
+  error: string | null;
+  teams: PulseCheckTeam[];
+  pilots: PulseCheckPilot[];
+  cohorts: PulseCheckPilotCohort[];
+  selectedTeamId: string;
+  selectedPilotId: string;
+  selectedCohortId: string;
 };
 
 const STATUS_OPTIONS: Array<{ value: PilotHypothesisStatus; label: string }> = [
@@ -687,6 +703,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [historyWindowStartFilter, setHistoryWindowStartFilter] = useState('');
   const [historyWindowEndFilter, setHistoryWindowEndFilter] = useState('');
   const [communicationPreviewModal, setCommunicationPreviewModal] = useState<AthleteCommunicationPreviewModalState | null>(null);
+  const [athleteTransferModal, setAthleteTransferModal] = useState<AthleteTransferModalState | null>(null);
   const copyFeedbackTimeoutRef = useRef<number | null>(null);
   const loadRequestIdRef = useRef(0);
   const communicationLoadRequestIdRef = useRef(0);
@@ -1006,6 +1023,153 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
+  const openAthleteTransferModal = async (athlete: PilotDashboardDetail['rosterAthletes'][number]) => {
+    if (!detail) return;
+    if (pulseCheckPilotDashboardService.isDemoModeEnabled()) {
+      setPageMessage({ type: 'error', text: 'Demo mode does not support team transfers.' });
+      return;
+    }
+
+    if (!athlete.teamMembership || athlete.teamMembership.teamId !== detail.team.id) {
+      setPageMessage({ type: 'error', text: `${athlete.displayName} is not currently attached to this team.` });
+      return;
+    }
+
+    setPageMessage(null);
+    setAthleteTransferModal({
+      athlete,
+      loading: true,
+      saving: false,
+      error: null,
+      teams: [],
+      pilots: [],
+      cohorts: [],
+      selectedTeamId: '',
+      selectedPilotId: '',
+      selectedCohortId: '',
+    });
+
+    try {
+      const [teams, pilots, cohorts] = await Promise.all([
+        pulseCheckProvisioningService.listTeams(),
+        pulseCheckProvisioningService.listPilots(),
+        pulseCheckProvisioningService.listPilotCohorts(),
+      ]);
+      const eligibleTeams = teams.filter((team) => team.organizationId === detail.organization.id && team.id !== detail.team.id);
+      const defaultTeamId = eligibleTeams.length === 1 ? eligibleTeams[0].id : '';
+
+      setAthleteTransferModal((current) =>
+        current && current.athlete.athleteId === athlete.athleteId
+          ? {
+              ...current,
+              loading: false,
+              teams,
+              pilots,
+              cohorts,
+              selectedTeamId: defaultTeamId,
+              selectedPilotId: '',
+              selectedCohortId: '',
+              error: eligibleTeams.length > 0 ? null : 'No other teams are available under this organization yet.',
+            }
+          : current
+      );
+    } catch (loadError: any) {
+      console.error('[PulseCheckPilotDashboard] Failed to load athlete transfer options:', loadError);
+      setAthleteTransferModal((current) =>
+        current && current.athlete.athleteId === athlete.athleteId
+          ? {
+              ...current,
+              loading: false,
+              error: loadError?.message || 'Failed to load destination team options.',
+            }
+          : current
+      );
+    }
+  };
+
+  const handleTransferTeamChange = (teamId: string) => {
+    setAthleteTransferModal((current) =>
+      current
+        ? {
+            ...current,
+            selectedTeamId: teamId,
+            selectedPilotId: '',
+            selectedCohortId: '',
+            error: null,
+          }
+        : current
+    );
+  };
+
+  const handleTransferPilotChange = (pilotId: string) => {
+    setAthleteTransferModal((current) =>
+      current
+        ? {
+            ...current,
+            selectedPilotId: pilotId,
+            selectedCohortId: '',
+            error: null,
+          }
+        : current
+    );
+  };
+
+  const handleTransferCohortChange = (cohortId: string) => {
+    setAthleteTransferModal((current) =>
+      current
+        ? {
+            ...current,
+            selectedCohortId: cohortId,
+            error: null,
+          }
+        : current
+    );
+  };
+
+  const confirmAthleteTransfer = async () => {
+    if (!detail || !athleteTransferModal) return;
+      const { athlete, selectedTeamId, selectedPilotId, selectedCohortId } = athleteTransferModal;
+
+    if (!selectedTeamId) {
+      setAthleteTransferModal((current) =>
+        current ? { ...current, error: 'Choose a destination team before transferring this athlete.' } : current
+      );
+      return;
+    }
+
+    setAthleteTransferModal((current) => (current ? { ...current, saving: true, error: null } : current));
+    setPageMessage(null);
+
+    try {
+      await pulseCheckProvisioningService.transferAthleteToTeam({
+        athleteId: athlete.athleteId,
+        sourceTeamId: detail.team.id,
+        sourcePilotId: detail.pilot.id,
+        destinationTeamId: selectedTeamId,
+        destinationPilotId: selectedPilotId || undefined,
+        destinationCohortId: selectedCohortId || undefined,
+        actorUserId: currentUser?.id || undefined,
+        actorEmail: currentUser?.email || undefined,
+      });
+
+      const destinationTeam = athleteTransferModal.teams.find((team) => team.id === selectedTeamId) || null;
+      const destinationPilot = athleteTransferModal.pilots.find((pilot) => pilot.id === selectedPilotId) || null;
+      const successText = destinationPilot
+        ? `${athlete.displayName} was transferred to ${destinationTeam?.displayName || 'the destination team'} and enrolled in ${destinationPilot.name}.`
+        : `${athlete.displayName} was transferred to ${destinationTeam?.displayName || 'the destination team'}.`;
+
+      setAthleteTransferModal(null);
+      setPageMessage({ type: 'success', text: successText });
+      dispatch(showToast({ message: successText, type: 'success' }));
+      await load('refresh');
+    } catch (transferError: any) {
+      const message = transferError?.message || 'Failed to transfer this athlete to the selected team.';
+      console.error('[PulseCheckPilotDashboard] Failed to transfer athlete:', transferError);
+      setAthleteTransferModal((current) => (current ? { ...current, saving: false, error: message } : current));
+      dispatch(showToast({ message, type: 'error' }));
+    }
+  };
+
   const toggleDemoMode = async () => {
     const nextValue = !pulseCheckPilotDashboardService.isDemoModeEnabled();
     pulseCheckPilotDashboardService.setDemoModeEnabled(nextValue);
@@ -1111,8 +1275,29 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       (left, right) =>
         athleteRosterStatusRank(left.pilotEnrollment?.status) - athleteRosterStatusRank(right.pilotEnrollment?.status) ||
         left.displayName.localeCompare(right.displayName)
-    );
+      );
   }, [detail, cohortFilter]);
+
+  const transferTeamOptions = useMemo(() => {
+    if (!athleteTransferModal || !detail) return [];
+    return athleteTransferModal.teams
+      .filter((team) => team.organizationId === detail.organization.id && team.id !== detail.team.id)
+      .sort((left, right) => left.displayName.localeCompare(right.displayName));
+  }, [athleteTransferModal, detail]);
+
+  const transferPilotOptions = useMemo(() => {
+    if (!athleteTransferModal) return [];
+    return athleteTransferModal.pilots
+      .filter((pilot) => pilot.teamId === athleteTransferModal.selectedTeamId)
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [athleteTransferModal]);
+
+  const transferCohortOptions = useMemo(() => {
+    if (!athleteTransferModal) return [];
+    return athleteTransferModal.cohorts
+      .filter((cohort) => cohort.pilotId === athleteTransferModal.selectedPilotId)
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [athleteTransferModal]);
 
   const visibleMetrics = useMemo(() => {
     const activeCohortCount = detail?.cohorts.length || 0;
@@ -3622,6 +3807,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                             visibleRosterAthletes.map((athlete) => {
                               const enrollmentBadge = athleteEnrollmentBadgePresentation(athlete.pilotEnrollment?.status);
                               const canManageEnrollment = Boolean(athlete.isEnrolled && athlete.pilotEnrollment);
+                              const canTransferAthlete = Boolean(athlete.teamMembership && athlete.teamMembership.teamId === detail.team.id);
                               const hasActivePilotEnrollment = athlete.pilotEnrollment?.status === 'active';
                               const canSendActivationOutreach = Boolean(athlete.pilotEnrollment);
                               const hasEmailDestination = Boolean(athlete.email.trim());
@@ -3850,9 +4036,27 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                         >
                                           {unenrollingAthleteId === athlete.athleteId ? 'Unenrolling...' : 'Unenroll from pilot'}
                                         </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => void openAthleteTransferModal(athlete)}
+                                          disabled={athleteTransferModal?.saving || !canTransferAthlete}
+                                          className="text-cyan-200 transition hover:text-cyan-100 disabled:cursor-not-allowed disabled:text-zinc-500"
+                                        >
+                                          Transfer team
+                                        </button>
                                       </>
                                     ) : (
-                                      <span className="text-zinc-500">Not enrolled in this pilot</span>
+                                      <>
+                                        <span className="text-zinc-500">Not enrolled in this pilot</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => void openAthleteTransferModal(athlete)}
+                                          disabled={athleteTransferModal?.saving || !canTransferAthlete}
+                                          className="text-cyan-200 transition hover:text-cyan-100 disabled:cursor-not-allowed disabled:text-zinc-500"
+                                        >
+                                          Transfer team
+                                        </button>
+                                      </>
                                     )}
                                   </div>
                                 </td>
@@ -5129,6 +5333,48 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
             teamName={detail.team.displayName}
             organizationName={detail.organization.displayName}
             onClose={() => setQrInvite(null)}
+          />
+        ) : null}
+        {detail && athleteTransferModal ? (
+          <PilotAthleteTransferModal
+            isOpen={Boolean(athleteTransferModal)}
+            athleteName={athleteTransferModal.athlete.displayName}
+            athleteEmail={athleteTransferModal.athlete.email}
+            currentTeamName={detail.team.displayName}
+            currentPilotName={detail.pilot.name}
+            teamOptions={transferTeamOptions.map((team) => ({
+              id: team.id,
+              displayName: team.displayName,
+              sportOrProgram: team.sportOrProgram,
+              status: team.status,
+            }))}
+            pilotOptions={transferPilotOptions.map((pilot) => ({
+              id: pilot.id,
+              teamId: pilot.teamId,
+              name: pilot.name,
+              studyMode: pilot.studyMode,
+              status: pilot.status,
+            }))}
+            cohortOptions={transferCohortOptions.map((cohort) => ({
+              id: cohort.id,
+              pilotId: cohort.pilotId,
+              name: cohort.name,
+              status: cohort.status,
+            }))}
+            selectedTeamId={athleteTransferModal.selectedTeamId}
+            selectedPilotId={athleteTransferModal.selectedPilotId}
+            selectedCohortId={athleteTransferModal.selectedCohortId}
+            loadingOptions={athleteTransferModal.loading}
+            saving={athleteTransferModal.saving}
+            error={athleteTransferModal.error}
+            onClose={() => {
+              if (athleteTransferModal.saving) return;
+              setAthleteTransferModal(null);
+            }}
+            onTeamChange={handleTransferTeamChange}
+            onPilotChange={handleTransferPilotChange}
+            onCohortChange={handleTransferCohortChange}
+            onConfirm={() => void confirmAthleteTransfer()}
           />
         ) : null}
         {communicationPreviewModal ? (
