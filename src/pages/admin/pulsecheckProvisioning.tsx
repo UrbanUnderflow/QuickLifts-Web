@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   Building2,
   ChevronDown,
-  CircleDollarSign,
   Clipboard,
   ClipboardList,
   Download,
@@ -17,7 +16,6 @@ import {
   Search,
   ShieldPlus,
   Sparkles,
-  Stethoscope,
   Users2,
   X,
 } from 'lucide-react';
@@ -89,7 +87,6 @@ const defaultTeamForm: CreatePulseCheckTeamInput = {
   displayName: '',
   teamType: 'sport-team',
   sportOrProgram: '',
-  siteLabel: '',
   defaultAdminName: '',
   defaultAdminEmail: '',
   defaultInvitePolicy: 'admin-and-staff',
@@ -478,7 +475,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [pilotForm, setPilotForm] = useState<CreatePulseCheckPilotInput>(defaultPilotForm);
   const [cohortForm, setCohortForm] = useState<CreatePulseCheckPilotCohortInput>(defaultCohortForm);
   const [cohortTagsInput, setCohortTagsInput] = useState('');
+  const [skipCohortForNow, setSkipCohortForNow] = useState(false);
   const [pilotStartDate, setPilotStartDate] = useState('');
+  const [pilotIsIndefinite, setPilotIsIndefinite] = useState(false);
   const [pilotDurationPreset, setPilotDurationPreset] = useState('14');
   const [pilotCustomDays, setPilotCustomDays] = useState('');
   const [clinicianSearchTerm, setClinicianSearchTerm] = useState('');
@@ -1335,6 +1334,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
         status: 'active',
       });
       setPilotStartDate('');
+      setPilotIsIndefinite(false);
       setPilotDurationPreset('14');
       setPilotCustomDays('');
       setCohortForm({
@@ -1408,19 +1408,21 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
     try {
       const startAt = pilotStartDate ? new Date(`${pilotStartDate}T00:00:00`) : null;
-      const durationDays =
-        pilotDurationPreset === 'custom'
+      const durationDays = pilotIsIndefinite
+        ? null
+        : pilotDurationPreset === 'custom'
           ? Number.parseInt(pilotCustomDays, 10)
           : Number.parseInt(pilotDurationPreset, 10);
+      const finiteDurationDays = typeof durationDays === 'number' && Number.isFinite(durationDays) ? durationDays : null;
 
-      if (pilotDurationPreset === 'custom' && (!Number.isFinite(durationDays) || durationDays <= 0)) {
+      if (!pilotIsIndefinite && pilotDurationPreset === 'custom' && (!finiteDurationDays || finiteDurationDays <= 0)) {
         setMessage({ type: 'error', text: 'Enter a valid number of days for a custom pilot duration.' });
         setPilotSubmitting(false);
         return false;
       }
 
-      const endAt = startAt && Number.isFinite(durationDays) && durationDays > 0
-        ? new Date(startAt.getTime() + (durationDays - 1) * 24 * 60 * 60 * 1000 + (23 * 60 * 60 + 59 * 60 + 59) * 1000)
+      const endAt = !pilotIsIndefinite && startAt && finiteDurationDays && finiteDurationDays > 0
+        ? new Date(startAt.getTime() + (finiteDurationDays - 1) * 24 * 60 * 60 * 1000 + (23 * 60 * 60 + 59 * 60 + 59) * 1000)
         : null;
 
       const createdPilotId = await pulseCheckProvisioningService.createPilot({
@@ -1446,15 +1448,19 @@ const PulseCheckProvisioningPage: React.FC = () => {
         status: 'active',
       }));
       setPilotStartDate('');
+      setPilotIsIndefinite(false);
       setPilotDurationPreset('14');
       setPilotCustomDays('');
+      setSkipCohortForNow(false);
       await loadData();
       setExpandedTeamIds((current) => (current.includes(pilotForm.teamId) ? current : [...current, pilotForm.teamId]));
       setExpandedPilotIds((current) => (current.includes(createdPilotId) ? current : [...current, createdPilotId]));
       setActiveWizardStep('cohort');
       setMessage({
         type: 'success',
-        text: 'Pilot created and activated. It will show up in the dashboard immediately, while start and end dates still scope the reporting window.',
+        text: pilotIsIndefinite
+          ? 'Pilot created and activated with no end date. It will stay open until you complete or pause it manually.'
+          : 'Pilot created and activated. It will show up in the dashboard immediately, while start and end dates still scope the reporting window.',
       });
       return true;
     } catch (error) {
@@ -1503,6 +1509,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
       setExpandedPilotIds((current) => (current.includes(cohortForm.pilotId) ? current : [...current, cohortForm.pilotId]));
       setIsProvisioningModalOpen(false);
       setActiveWizardStep('org');
+      setSkipCohortForNow(false);
       setMessage({
         type: 'success',
         text: `Cohort created and linked to the selected pilot. It inherited a ${inheritedStatus} status from the pilot at creation time.`,
@@ -1743,13 +1750,14 @@ const PulseCheckProvisioningPage: React.FC = () => {
     ) => {
       setIsProvisioningModalOpen(true);
       setActiveWizardStep(step);
+      setSkipCohortForNow(false);
 
       const nextOrganizationId = options?.organizationId;
       if (nextOrganizationId) {
         const nextOrganization = organizations.find((organization) => organization.id === nextOrganizationId) || null;
         setTeamForm((current) => ({
           ...current,
-          organizationId: nextOrganizationId,
+          organizationId: String(nextOrganizationId),
           defaultAdminName: nextOrganization?.primaryCustomerAdminName || current.defaultAdminName || '',
           defaultAdminEmail: nextOrganization?.primaryCustomerAdminEmail || current.defaultAdminEmail || '',
         }));
@@ -1796,6 +1804,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
   const handleCloseProvisioningModal = useCallback(() => {
     setIsProvisioningModalOpen(false);
+    setSkipCohortForNow(false);
   }, []);
 
   const handleWizardBack = useCallback(() => {
@@ -1830,8 +1839,21 @@ const PulseCheckProvisioningPage: React.FC = () => {
       return;
     }
 
+    if (skipCohortForNow) {
+      setCohortForm(defaultCohortForm);
+      setCohortTagsInput('');
+      setIsProvisioningModalOpen(false);
+      setActiveWizardStep('org');
+      setSkipCohortForNow(false);
+      setMessage({
+        type: 'success',
+        text: 'Provisioning finished without creating a cohort. You can always add one later from the pilot hierarchy.',
+      });
+      return;
+    }
+
     cohortFormRef.current?.requestSubmit();
-  }, [activeWizardStep]);
+  }, [activeWizardStep, skipCohortForNow]);
 
   const handleWizardActivationSubmit = useCallback(
     async (event: React.FormEvent) => {
@@ -1926,7 +1948,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
     activeWizardStep === 'team'
       ? 'Continue to Support Route'
       : activeWizardStep === 'cohort'
-        ? cohortSubmitting
+        ? skipCohortForNow
+          ? 'Finish Without Cohort'
+          : cohortSubmitting
           ? 'Creating Cohort...'
           : 'Finish Provisioning'
         : activeWizardStep === 'org'
@@ -2005,7 +2029,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-org-dashboard select,
           .pcp-org-dashboard textarea { font: inherit; }
           .pcp-org-dashboard a { color: inherit; text-decoration: none; }
-          .pcp-shell { position: relative; z-index: 1; display: grid; grid-template-columns: 200px 1fr; grid-template-rows: 56px 1fr; min-height: 100vh; }
+          .pcp-shell { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr; grid-template-rows: 56px 1fr; min-height: 100vh; }
           .pcp-amb-layer { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
           .pcp-amb { position: absolute; border-radius: 9999px; filter: blur(110px); opacity: 0; animation: pcpAmbIn 2.5s ease forwards; }
           .pcp-a1 { width: 700px; height: 700px; background: radial-gradient(circle, rgba(0, 212, 170, 0.055) 0%, transparent 70%); top: -200px; right: -150px; animation-delay: 0.2s; }
@@ -2045,6 +2069,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-eyebrow { font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--teal); margin-bottom: 4px; }
           .pcp-heading { font-family: var(--fd); font-size: 26px; font-weight: 700; letter-spacing: -0.4px; margin-bottom: 4px; }
           .pcp-desc { font-size: 13px; color: var(--t2); line-height: 1.55; max-width: 760px; }
+          .pcp-page-context { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+          .pcp-context-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 9999px; background: rgba(255, 255, 255, 0.03); border: 0.5px solid rgba(255, 255, 255, 0.08); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t2); }
+          .pcp-context-pill strong { font-family: var(--fm); font-size: 11px; color: var(--t1); letter-spacing: normal; text-transform: none; }
+          .pcp-context-dot { width: 6px; height: 6px; border-radius: 9999px; flex-shrink: 0; }
           .pcp-head-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding-top: 4px; }
           .pcp-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px; border-radius: 9px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: transform 0.12s, filter 0.12s, background 0.15s; letter-spacing: -0.1px; }
           .pcp-btn:active { transform: scale(0.97); }
@@ -2250,17 +2278,13 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-fade-in { opacity: 0; animation: pcpFadeIn 0.35s ease forwards; }
           @keyframes pcpFadeIn { to { opacity: 1; } }
           @keyframes pcpSlideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-          @media (max-width: 1180px) {
-            .pcp-shell { grid-template-columns: 1fr; grid-template-rows: 56px auto 1fr; }
-            .pcp-sidebar { grid-row: 2; position: static; height: auto; border-right: none; border-bottom: 0.5px solid var(--mb); padding: 18px 0; }
-            .pcp-main { grid-row: 3; }
-          }
           @media (max-width: 900px) {
             .pcp-page-head,
             .pcp-toolbar,
             .pcp-org-list { padding-left: 18px; padding-right: 18px; }
             .pcp-message { margin-left: 18px; margin-right: 18px; }
             .pcp-page-head { flex-direction: column; }
+            .pcp-page-context { margin-top: 12px; }
             .pcp-stats-row { grid-template-columns: repeat(2, 1fr); }
             .pcp-stat-cell:nth-child(2) { border-right: none; }
             .pcp-toolbar { flex-wrap: wrap; }
@@ -2314,56 +2338,6 @@ const PulseCheckProvisioningPage: React.FC = () => {
               </div>
             </header>
 
-            <nav className="pcp-sidebar">
-              <div className="pcp-nav-sec">
-                <div className="pcp-nav-lbl">Provisioning</div>
-                <div className="pcp-nav-item active">
-                  <Building2 />
-                  Organizations
-                  <span className="pcp-nav-badge">{mapSummary.organizationCount}</span>
-                </div>
-              </div>
-
-              <div className="pcp-nav-sec">
-                <div className="pcp-nav-lbl">Clinical</div>
-                <div className="pcp-nav-item">
-                  <HeartPulse />
-                  Escalation Routes
-                </div>
-                <div className="pcp-nav-item">
-                  <Stethoscope />
-                  Clinicians
-                </div>
-              </div>
-
-              <div className="pcp-nav-sec">
-                <div className="pcp-nav-lbl">Commercial</div>
-                <div className="pcp-nav-item">
-                  <CircleDollarSign />
-                  Revenue Config
-                </div>
-              </div>
-
-              <div className="pcp-lifecycle">
-                <div className="pcp-lifecycle-lbl">Lifecycle</div>
-                <div className="pcp-lifecycle-row">
-                  <div className="pcp-lifecycle-dot" style={{ background: 'var(--amber)' }} />
-                  <span className="pcp-lifecycle-name">Provisioning</span>
-                  <span className="pcp-lifecycle-count" style={{ color: 'var(--amber)' }}>{mapSummary.provisioningCount}</span>
-                </div>
-                <div className="pcp-lifecycle-row">
-                  <div className="pcp-lifecycle-dot" style={{ background: 'var(--blue)' }} />
-                  <span className="pcp-lifecycle-name">Ready</span>
-                  <span className="pcp-lifecycle-count" style={{ color: 'var(--blue)' }}>{mapSummary.organizationReadyCount}</span>
-                </div>
-                <div className="pcp-lifecycle-row">
-                  <div className="pcp-lifecycle-dot" style={{ background: 'var(--green)' }} />
-                  <span className="pcp-lifecycle-name">Active</span>
-                  <span className="pcp-lifecycle-count" style={{ color: 'var(--green)' }}>{mapSummary.organizationActiveCount}</span>
-                </div>
-              </div>
-            </nav>
-
             <main className="pcp-main">
               <div className="pcp-page-head pcp-slide-up">
                 <div className="pcp-page-head-left">
@@ -2372,6 +2346,28 @@ const PulseCheckProvisioningPage: React.FC = () => {
                   <div className="pcp-desc">
                     All partner organizations provisioned in PulseCheck. Each org holds teams, pilots, cohorts, support routes,
                     and onboarding links inside one connected hierarchy.
+                  </div>
+                  <div className="pcp-page-context">
+                    <div className="pcp-context-pill">
+                      <Building2 />
+                      Organizations
+                      <strong>{mapSummary.organizationCount}</strong>
+                    </div>
+                    <div className="pcp-context-pill">
+                      <span className="pcp-context-dot" style={{ background: 'var(--amber)' }} />
+                      Provisioning
+                      <strong>{mapSummary.provisioningCount}</strong>
+                    </div>
+                    <div className="pcp-context-pill">
+                      <span className="pcp-context-dot" style={{ background: 'var(--blue)' }} />
+                      Ready
+                      <strong>{mapSummary.organizationReadyCount}</strong>
+                    </div>
+                    <div className="pcp-context-pill">
+                      <span className="pcp-context-dot" style={{ background: 'var(--green)' }} />
+                      Active
+                      <strong>{mapSummary.organizationActiveCount}</strong>
+                    </div>
                   </div>
                 </div>
 
@@ -3323,7 +3319,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                         </select>
                       </label>
                     </div>
-                    <div className="pcp-fg">
+                    <div className="pcp-fg pcp-c1">
                       <label className="pcp-fld">
                         <span className="pcp-flbl">Sport</span>
                         <select
@@ -3336,15 +3332,6 @@ const PulseCheckProvisioningPage: React.FC = () => {
                             <option key={sport.id} value={sport.name}>{sport.name}</option>
                           ))}
                         </select>
-                      </label>
-                      <label className="pcp-fld">
-                        <span className="pcp-flbl">Site / Campus Label</span>
-                        <input
-                          className="pcp-finp"
-                          value={teamForm.siteLabel}
-                          onChange={(event) => handleTeamFieldChange('siteLabel', event.target.value)}
-                          placeholder="Main Campus"
-                        />
                       </label>
                     </div>
                     <div className="pcp-fg pcp-c1">
@@ -3742,6 +3729,21 @@ const PulseCheckProvisioningPage: React.FC = () => {
                         />
                       </label>
                     </div>
+                    <label className="pcp-checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={pilotIsIndefinite}
+                        onChange={(event) => setPilotIsIndefinite(event.target.checked)}
+                      />
+                      <div>
+                        <div className="pcp-preview-title" style={{ fontSize: '12px', marginBottom: 4 }}>
+                          Run this pilot indefinitely
+                        </div>
+                        <div className="pcp-checkbox-copy">
+                          Leave the pilot without an end date. It will remain active until someone pauses or completes it manually.
+                        </div>
+                      </div>
+                    </label>
                     <div className="pcp-fg">
                       <label className="pcp-fld">
                         <span className="pcp-flbl">Pilot Length</span>
@@ -3749,13 +3751,23 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           className="pcp-finp pcp-select"
                           value={pilotDurationPreset}
                           onChange={(event) => setPilotDurationPreset(event.target.value)}
+                          disabled={pilotIsIndefinite}
                         >
                           {PILOT_DURATION_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>{option.label}</option>
                           ))}
                         </select>
                       </label>
-                      {pilotDurationPreset === 'custom' ? (
+                      {pilotIsIndefinite ? (
+                        <label className="pcp-fld">
+                          <span className="pcp-flbl">Pilot Window</span>
+                          <input
+                            className="pcp-finp"
+                            value="Runs indefinitely"
+                            readOnly
+                          />
+                        </label>
+                      ) : pilotDurationPreset === 'custom' ? (
                         <label className="pcp-fld">
                           <span className="pcp-flbl">Custom Days</span>
                           <input
@@ -3829,6 +3841,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           className="pcp-finp pcp-select"
                           value={cohortForm.pilotId}
                           onChange={(event) => handleCohortFieldChange('pilotId', event.target.value)}
+                          disabled={skipCohortForNow}
                         >
                           <option value="">Select a pilot</option>
                           {pilots.map((pilot) => {
@@ -3842,6 +3855,26 @@ const PulseCheckProvisioningPage: React.FC = () => {
                         </select>
                       </label>
                     </div>
+                    <label className="pcp-checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={skipCohortForNow}
+                        onChange={(event) => setSkipCohortForNow(event.target.checked)}
+                      />
+                      <div>
+                        <div className="pcp-preview-title" style={{ fontSize: '12px', marginBottom: 4 }}>
+                          Skip cohort for now
+                        </div>
+                        <div className="pcp-checkbox-copy">
+                          Cohorts are optional. Finish provisioning without creating one, and add a subgroup later only if the pilot needs split reporting or intervention arms.
+                        </div>
+                      </div>
+                    </label>
+                    {skipCohortForNow ? (
+                      <div className="pcp-info-box">
+                        This pilot will stay cohort-free for now. You can create cohorts later from the provisioning hierarchy once the rollout needs subgrouping.
+                      </div>
+                    ) : null}
                     <div className="pcp-fg">
                       <label className="pcp-fld">
                         <span className="pcp-flbl">Cohort Name</span>
@@ -3850,6 +3883,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           value={cohortForm.name}
                           onChange={(event) => handleCohortFieldChange('name', event.target.value)}
                           placeholder="Intervention Group"
+                          disabled={skipCohortForNow}
                         />
                       </label>
                       <label className="pcp-fld">
@@ -3858,6 +3892,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           className="pcp-finp pcp-select"
                           value={cohortForm.cohortType || 'intervention-group'}
                           onChange={(event) => handleCohortFieldChange('cohortType', event.target.value)}
+                          disabled={skipCohortForNow}
                         >
                           {COHORT_TYPE_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>{option.label}</option>
@@ -3873,7 +3908,12 @@ const PulseCheckProvisioningPage: React.FC = () => {
                             {(cohortForm.reportingTags || []).map((tag) => (
                               <span key={tag} className="pcp-chip">
                                 {tag}
-                                <button type="button" onClick={() => removeCohortTag(tag)} aria-label={`Remove ${tag}`}>
+                                <button
+                                  type="button"
+                                  onClick={() => removeCohortTag(tag)}
+                                  aria-label={`Remove ${tag}`}
+                                  disabled={skipCohortForNow}
+                                >
                                   <X style={{ width: 10, height: 10 }} />
                                 </button>
                               </span>
@@ -3883,6 +3923,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                               value={cohortTagsInput}
                               onChange={(event) => setCohortTagsInput(event.target.value)}
                               onBlur={commitCohortTagsInput}
+                              disabled={skipCohortForNow}
                               onKeyDown={(event) => {
                                 if (event.key === ',' || event.key === 'Enter') {
                                   event.preventDefault();
@@ -3904,6 +3945,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           value={cohortForm.notes || ''}
                           onChange={(event) => handleCohortFieldChange('notes', event.target.value)}
                           placeholder="What distinguishes this subgroup operationally."
+                          disabled={skipCohortForNow}
                         />
                       </label>
                     </div>
