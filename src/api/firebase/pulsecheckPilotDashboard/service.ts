@@ -40,6 +40,7 @@ import type {
 } from '../pulsecheckProvisioning/types';
 import type {
   PilotDashboardAthleteDetail,
+  PilotDashboardAthleteProfileSummary,
   PilotDashboardAthleteAdherenceDay,
   PilotDashboardAthleteAdherenceSummary,
   PilotDashboardAthleteEscalationDetail,
@@ -48,6 +49,7 @@ import type {
   PilotDashboardOutcomeOperationalDiagnostics,
   PilotDashboardOutcomeSurveyDiagnostics,
   PilotDashboardAthleteSummary,
+  PilotDashboardRosterAthleteSummary,
   PilotDashboardCohortSummary,
   PilotDashboardDetail,
   PilotDashboardDirectoryEntry,
@@ -1335,11 +1337,69 @@ const toInviteDefaultConfig = (
   updatedAt: data.updatedAt || null,
 });
 
-const buildAthleteLabel = (teamMembership: PulseCheckTeamMembership | null, enrollment: PulseCheckPilotEnrollment) => {
+const buildAthleteLabel = (
+  teamMembership: PulseCheckTeamMembership | null,
+  athleteId: string,
+  enrollment?: PulseCheckPilotEnrollment | null,
+  userProfile?: PilotDashboardAthleteProfileSummary | null
+) => {
   const onboardingName = normalizeString(teamMembership?.athleteOnboarding?.entryOnboardingName);
   if (onboardingName) return onboardingName;
-  return normalizeString(teamMembership?.email) || normalizeString(enrollment.userId) || 'Pilot athlete';
+  const profileDisplayName = normalizeString(userProfile?.displayName);
+  if (profileDisplayName) return profileDisplayName;
+  const username = normalizeString(userProfile?.username);
+  if (username) return username;
+  return normalizeString(teamMembership?.email) || normalizeString(enrollment?.userId) || normalizeString(athleteId) || 'Pilot athlete';
 };
+
+async function loadAthleteProfileSummary(
+  athleteId: string,
+  teamMembership: PulseCheckTeamMembership | null,
+  teamSportOrProgram = ''
+): Promise<{ profile: PilotDashboardAthleteProfileSummary; canReceivePulseCheckPush: boolean }> {
+  const fallbackEmail = normalizeString(teamMembership?.email);
+  const fallbackDisplayName = normalizeString(teamMembership?.athleteOnboarding?.entryOnboardingName);
+  const fallbackTitle = normalizeString(teamMembership?.title);
+  const summary: PilotDashboardAthleteProfileSummary = {
+    displayName: '',
+    onboardingName: fallbackDisplayName,
+    username: '',
+    email: fallbackEmail,
+    profileImageUrl: '',
+    bio: '',
+    membershipTitle: fallbackTitle,
+    teamSportOrProgram: normalizeString(teamSportOrProgram),
+    accountCreatedAt: null,
+  };
+  const fallbackResult = { profile: summary, canReceivePulseCheckPush: false };
+
+  try {
+    const userSnap = await getDoc(doc(db, 'users', athleteId));
+    if (!userSnap.exists()) {
+      return fallbackResult;
+    }
+
+    const userData = userSnap.data() as Record<string, any>;
+    const pulseCheckFcmToken = normalizeString(userData.pulseCheckFcmToken);
+    const pushTokenSourceApp = normalizeString(userData.pushTokenSourceApp).toLowerCase();
+
+    return {
+      profile: {
+        ...summary,
+        displayName: normalizeString(userData.displayName),
+        username: normalizeString(userData.username),
+        email: normalizeString(userData.email) || summary.email,
+        profileImageUrl: normalizeString(userData.profileImage?.profileImageURL),
+        bio: normalizeString(userData.bio),
+        accountCreatedAt: toTimeValue(userData.createdAt),
+      },
+      canReceivePulseCheckPush: Boolean(pulseCheckFcmToken && pushTokenSourceApp === 'pulsecheck'),
+    };
+  } catch (error) {
+    console.warn('[pulsecheckPilotDashboard] Failed to load athlete profile summary:', athleteId, error);
+    return fallbackResult;
+  }
+}
 
 async function loadEngineSummaryForAthlete(athleteId: string): Promise<PilotDashboardEngineSummary> {
   const athleteRef = doc(db, ATHLETE_PHYSIOLOGY_COGNITION_COLLECTION, athleteId);
@@ -1433,13 +1493,48 @@ async function buildAthleteSummary(
 
   return {
     athleteId: enrollment.userId,
-    displayName: buildAthleteLabel(teamMembership, enrollment),
+    displayName: buildAthleteLabel(teamMembership, enrollment.userId, enrollment),
     email: normalizeString(teamMembership?.email),
     pilotEnrollment: enrollment,
     teamMembership,
     cohort,
     engineSummary,
     operationalWatchList: operationalWatchList || null,
+  };
+}
+
+async function buildRosterAthleteSummary(
+  pilot: PulseCheckPilot,
+  athleteId: string,
+  teamMembership: PulseCheckTeamMembership | null,
+  enrollment: PulseCheckPilotEnrollment | null,
+  cohortMap: Map<string, PulseCheckPilotCohort>,
+  operationalWatchList?: PilotDashboardOperationalWatchListState | null
+): Promise<PilotDashboardRosterAthleteSummary> {
+  const isEnrolled = Boolean(enrollment && enrollment.status !== 'withdrawn');
+  const cohort = isEnrolled && normalizeString(enrollment?.cohortId)
+    ? cohortMap.get(normalizeString(enrollment?.cohortId)) || null
+    : null;
+  const athleteProfileContext = await loadAthleteProfileSummary(athleteId, teamMembership);
+  const athleteProfile = athleteProfileContext.profile;
+  const userEmail = athleteProfile.email;
+  const canReceivePulseCheckPush = athleteProfileContext.canReceivePulseCheckPush;
+
+  const engineSummary = isPilotMetricWindowOpen(pilot) && enrollment?.status === 'active'
+    ? await loadEngineSummaryForAthlete(athleteId)
+    : buildEmptyEngineSummary();
+
+  return {
+    athleteId,
+    displayName: buildAthleteLabel(teamMembership, athleteId, enrollment, athleteProfile),
+    email: normalizeString(teamMembership?.email) || userEmail,
+    isEnrolled,
+    canReceivePulseCheckPush,
+    pilotEnrollment: isEnrolled ? enrollment : null,
+    teamMembership,
+    cohort,
+    engineSummary,
+    operationalWatchList: isEnrolled ? (operationalWatchList || null) : null,
   };
 }
 
@@ -2269,6 +2364,14 @@ export const pulseCheckPilotDashboardService = {
       operationalWatchListStates.map((state) => [state.pilotEnrollmentId, state])
     );
     const activeEnrollments = enrollments.filter((enrollment) => enrollment.status === 'active');
+    const pilotEnrollmentByAthleteId = new Map(enrollments.map((enrollment) => [enrollment.userId, enrollment]));
+    const teamAthleteMemberships = teamMemberships.filter((membership) => membership.role === 'athlete');
+    const rosterAthleteIds = Array.from(
+      new Set([
+        ...teamAthleteMemberships.map((membership) => membership.userId),
+        ...enrollments.map((enrollment) => enrollment.userId),
+      ])
+    );
     const effectivePilot = {
       ...pilot,
       status: resolvePilotEffectiveStatus(pilot),
@@ -2276,6 +2379,21 @@ export const pulseCheckPilotDashboardService = {
     const athletes = await Promise.all(
       activeEnrollments.map((enrollment) =>
         buildAthleteSummary(effectivePilot, enrollment, cohortMap, teamMembershipMap, operationalWatchListByEnrollmentId.get(enrollment.id) || null)
+      )
+    );
+    const rosterAthletes = await Promise.all(
+      rosterAthleteIds.map((athleteId) =>
+        buildRosterAthleteSummary(
+          effectivePilot,
+          athleteId,
+          teamMembershipMap.get(athleteId) || null,
+          pilotEnrollmentByAthleteId.get(athleteId) || null,
+          cohortMap,
+          (() => {
+            const enrollment = pilotEnrollmentByAthleteId.get(athleteId);
+            return enrollment ? operationalWatchListByEnrollmentId.get(enrollment.id) || null : null;
+          })()
+        )
       )
     );
     const totalEvidenceRecords = athletes.reduce((sum, athlete) => sum + athlete.engineSummary.evidenceRecordCount, 0);
@@ -2345,6 +2463,11 @@ export const pulseCheckPilotDashboardService = {
       pilot: effectivePilot,
       cohorts: pilotCohorts,
       athletes: athletes.sort((left, right) => left.displayName.localeCompare(right.displayName)),
+      rosterAthletes: rosterAthletes.sort(
+        (left, right) =>
+          Number(right.isEnrolled) - Number(left.isEnrolled) ||
+          left.displayName.localeCompare(right.displayName)
+      ),
       hypotheses,
       metrics,
       coverage,
@@ -2400,6 +2523,7 @@ export const pulseCheckPilotDashboardService = {
     };
 
     const teamMembership = teamMemberships.find((membership) => membership.userId === athleteId) || null;
+    const athleteProfile = (await loadAthleteProfileSummary(athleteId, teamMembership, team.sportOrProgram)).profile;
     const cohort = pilotCohorts.find((entry) => entry.id === enrollment.cohortId) || null;
     const timelineItems = await loadAthleteTimelineItems(athleteId);
     const snapshotQuery = query(
@@ -2433,8 +2557,9 @@ export const pulseCheckPilotDashboardService = {
       pilotEnrollment: enrollment,
       teamMembership,
       operationalWatchList,
-      displayName: buildAthleteLabel(teamMembership, enrollment),
-      email: normalizeString(teamMembership?.email),
+      displayName: buildAthleteLabel(teamMembership, athleteId, enrollment, athleteProfile),
+      email: normalizeString(teamMembership?.email) || athleteProfile.email,
+      profile: athleteProfile,
       engineSummary,
       profileSnapshotCount: snapshots.length,
       latestAssessmentContextFlagStatus,

@@ -426,6 +426,31 @@ export interface PilotDashboardAthleteSummary {
   operationalWatchList?: PilotDashboardOperationalWatchListState | null;
 }
 
+export interface PilotDashboardRosterAthleteSummary {
+  athleteId: string;
+  displayName: string;
+  email: string;
+  isEnrolled: boolean;
+  canReceivePulseCheckPush: boolean;
+  pilotEnrollment: PulseCheckPilotEnrollment | null;
+  teamMembership: PulseCheckTeamMembership | null;
+  cohort: PulseCheckPilotCohort | null;
+  engineSummary: PilotDashboardEngineSummary;
+  operationalWatchList?: PilotDashboardOperationalWatchListState | null;
+}
+
+export interface PilotDashboardAthleteProfileSummary {
+  displayName: string;
+  onboardingName: string;
+  username: string;
+  email: string;
+  profileImageUrl: string;
+  bio: string;
+  membershipTitle: string;
+  teamSportOrProgram: string;
+  accountCreatedAt?: PilotDashboardTimeValue;
+}
+
 export interface PilotDashboardDirectoryEntry {
   organization: PulseCheckOrganization;
   team: PulseCheckTeam;
@@ -647,6 +672,7 @@ export interface PilotDashboardDetail {
   pilot: PulseCheckPilot;
   cohorts: PulseCheckPilotCohort[];
   athletes: PilotDashboardAthleteSummary[];
+  rosterAthletes: PilotDashboardRosterAthleteSummary[];
   hypotheses: PulseCheckPilotHypothesis[];
   metrics: PilotDashboardMetrics;
   coverage: PilotDashboardCoverageMetrics;
@@ -683,6 +709,7 @@ export interface PilotDashboardAthleteDetail {
   operationalWatchList?: PilotDashboardOperationalWatchListState | null;
   displayName: string;
   email: string;
+  profile: PilotDashboardAthleteProfileSummary;
   engineSummary: PilotDashboardEngineSummary;
   profileSnapshotCount: number;
   latestAssessmentContextFlagStatus: string;

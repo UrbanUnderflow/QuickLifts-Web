@@ -44,6 +44,76 @@ const BREVO_ROWS = [
   ['Current audit finding', 'Documentation gap previously hid the real source', 'As of Apr 3, 2026, the linked Netlify project `quickliftsapp` exposes only `NODE_VERSION`, and the documented GCP projects `quicklifts-dev-01` / `quicklifts-dd3f1` do not currently hold Brevo secrets in Secret Manager.'],
 ];
 
+const PRODUCTION_ACCESS_ROWS = [
+  [
+    'Default local override to check first',
+    <code className="text-xs">echo $GOOGLE_APPLICATION_CREDENTIALS</code>,
+    <>
+      On this machine the common value is{' '}
+      <code className="text-xs">~/.config/gcloud/quicklifts-dev-01-firebase-adminsdk.json</code>. That file is dev-only and will
+      silently force Firebase Admin calls toward dev or cause production permission confusion if left active.
+    </>,
+  ],
+  [
+    'User ADC file for prod-capable gcloud login',
+    <code className="text-xs">~/.config/gcloud/application_default_credentials.json</code>,
+    'This is the file `applicationDefault()` falls back to when `GOOGLE_APPLICATION_CREDENTIALS` is unset. It uses the signed-in gcloud user account rather than the dev service account file.',
+  ],
+  [
+    'Prod Firestore access pattern',
+    <code className="text-xs">env -u GOOGLE_APPLICATION_CREDENTIALS node ...</code>,
+    'Use this when you need production Firestore/Auth with your gcloud user access. Pair it with an explicit project id like `quicklifts-dd3f1` so local env state does not accidentally drag the call back to dev.',
+  ],
+  [
+    'Secret inventory lookup',
+    <code className="text-xs">gcloud secrets list --project=quicklifts-dd3f1</code>,
+    'Use Secret Manager inventory to confirm what production machine credentials exist before hunting through the repo. As of Apr 7, 2026 this was the fastest way to verify prod secret coverage on this machine.',
+  ],
+  [
+    'Netlify reality check',
+    <code className="text-xs">./node_modules/.bin/netlify env:list --context production --json</code>,
+    'Run this before assuming Netlify holds the live secret you need. The currently linked project on this machine was not the source of production Firebase admin access and only exposed `NODE_VERSION` in production context.',
+  ],
+  [
+    'Local browser/admin bootstrap',
+    <code className="text-xs">.playwright/admin-storage-state.json</code>,
+    'Useful for local admin UI automation only. Do not confuse Playwright storage state with production infrastructure credentials. It can prove local admin UI auth but not grant direct prod Firestore access.',
+  ],
+];
+
+const PRODUCTION_ACCESS_STEPS = [
+  {
+    title: 'Verify which identity is active before touching production',
+    body: 'Start with `gcloud auth list` and `gcloud config list`. Confirm whether you are using your human Google account or a local dev service-account file before assuming any production query result is trustworthy.',
+    owner: 'Operator',
+  },
+  {
+    title: 'Check and neutralize the dev-only credential override',
+    body: 'Run `echo $GOOGLE_APPLICATION_CREDENTIALS`. If it points at `~/.config/gcloud/quicklifts-dev-01-firebase-adminsdk.json`, unset it for production work or prefix commands with `env -u GOOGLE_APPLICATION_CREDENTIALS` so Firebase Admin uses user ADC instead.',
+    owner: 'Operator',
+  },
+  {
+    title: 'Use explicit project ids on every production command',
+    body: 'When reading or writing production, pass `quicklifts-dd3f1` directly into the admin SDK or `--project=quicklifts-dd3f1` on gcloud commands. Do not trust the shell default project to already be correct.',
+    owner: 'Engineering',
+  },
+  {
+    title: 'Check Secret Manager before repo archaeology',
+    body: 'Use `gcloud secrets list --project=quicklifts-dd3f1` and `gcloud secrets list --project=quicklifts-dev-01` first. This is faster than digging through the repo when you need to know whether a production credential exists at all.',
+    owner: 'Platform + Ops',
+  },
+  {
+    title: 'Treat Netlify link state as informational, not authoritative',
+    body: 'Run `netlify status` and `netlify env:list --context production --json` to see what the currently linked site actually exposes. If the linked site is not the live app or only shows minimal env, do not keep debugging the wrong control plane.',
+    owner: 'Web Platform',
+  },
+  {
+    title: 'Record the winning access path back into this handbook',
+    body: 'Whenever a production incident reveals a new credential location, shell gotcha, or secret-home mismatch, update this page immediately so the next operator can repeat the working path without rediscovery.',
+    owner: 'Engineering',
+  },
+];
+
 const OPERATING_STEPS = [
   {
     title: 'Decide where a new secret belongs before shipping',
@@ -73,7 +143,7 @@ export default function InfrastructureSecretsStackTab() {
       <DocHeader
         eyebrow="Infrastructure Handbook"
         title="Infrastructure & Secrets Stack"
-        version="Updated Apr 5, 2026"
+        version="Updated Apr 7, 2026"
         summary="Source-of-truth reference for how QuickLifts Web, Firebase, Netlify, Google Cloud, Google Workspace, and Secret Manager relate to each other operationally, with explicit rules for where sensitive credentials should live."
         highlights={[
           {
@@ -199,6 +269,37 @@ export default function InfrastructureSecretsStackTab() {
             'Until that bridge exists, local machine bootstrap and Netlify env parity are the operational source of truth for Brevo sends.',
           ]}
         />
+      </SectionBlock>
+
+      <SectionBlock icon={ShieldCheck} title="Production Access Playbook">
+        <DataTable columns={['Concern', 'Where To Look', 'Why It Matters']} rows={PRODUCTION_ACCESS_ROWS} />
+        <CardGrid columns="xl:grid-cols-2">
+          <InfoCard
+            title="Most Common Prod Access Failure"
+            accent="amber"
+            body={
+              <>
+                If Firebase Admin code keeps acting like dev or throws production permission errors, check{' '}
+                <code className="text-xs">GOOGLE_APPLICATION_CREDENTIALS</code> first. A dev service-account file in that env var will
+                override the more useful user ADC path.
+              </>
+            }
+          />
+          <InfoCard
+            title="Working Prod Query Pattern"
+            accent="green"
+            body={
+              <>
+                Production reads on this machine worked with:
+                <br />
+                <code className="text-xs">env -u GOOGLE_APPLICATION_CREDENTIALS node ...</code>
+                <br />
+                plus an explicit admin SDK project id of <code className="text-xs">quicklifts-dd3f1</code>.
+              </>
+            }
+          />
+        </CardGrid>
+        <StepRail steps={PRODUCTION_ACCESS_STEPS} />
       </SectionBlock>
 
       <SectionBlock icon={Server} title="Runtime Boundary">
