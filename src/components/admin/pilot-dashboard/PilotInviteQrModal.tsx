@@ -26,13 +26,6 @@ const truncateUrl = (value: string) => {
 
 const resolveInviteShareUrl = (invite: PulseCheckInviteLink | null) => {
   if (!invite) return '';
-  if (invite.redemptionMode === 'general') {
-    const currentOrigin =
-      typeof window !== 'undefined' && window.location?.origin
-        ? window.location.origin
-        : process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai';
-    return `${buildPulseCheckTeamInviteWebUrl(invite.token || invite.id, currentOrigin)}?web=1`;
-  }
   return invite.activationUrl || buildPulseCheckTeamInviteWebUrl(invite.token || invite.id);
 };
 
@@ -173,9 +166,9 @@ export function PilotInviteQrModal({
 
                     <div className="mt-4 rounded-[20px] bg-[#09111e] px-4 py-3 text-center">
                       <div className="text-sm font-semibold text-white">{headline}</div>
-                    <div className="mt-1 text-xs leading-5 text-slate-300">
+                      <div className="mt-1 text-xs leading-5 text-slate-300">
                         {invite?.redemptionMode === 'general'
-                          ? 'This QR opens the browser-safe join page first, which is the most reliable activation-day path for reusable pilot links.'
+                          ? 'This QR encodes the reusable PulseCheck OneLink so scans can open the app directly while the invite itself stays valid until you delete it.'
                           : 'Open the invite on a phone camera and move directly into onboarding for this pilot.'}
                       </div>
                     </div>
@@ -225,7 +218,7 @@ export function PilotInviteQrModal({
 
                 <div className="mt-4 rounded-2xl border border-white/8 bg-black/20 p-4">
                   <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
-                    {invite?.redemptionMode === 'general' ? 'Encoded Browser Join Link' : 'Encoded Share Link'}
+                    {invite?.redemptionMode === 'general' ? 'Encoded Reusable OneLink' : 'Encoded Share Link'}
                   </div>
                   <div className="mt-2 break-all font-mono text-xs leading-6 text-cyan-100" title={shareUrl}>
                     {truncateUrl(shareUrl)}

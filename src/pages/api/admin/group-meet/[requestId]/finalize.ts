@@ -1,13 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin, { getFirebaseAdminApp } from '../../../../../lib/firebase-admin';
 import { requireAdminRequest } from '../../_auth';
+import { computeGroupMeetAnalysis } from '../../../../../lib/groupMeet';
 import {
-  buildGroupMeetCandidateKey,
-  computeGroupMeetAnalysis,
-  normalizeGroupMeetAvailabilitySlots,
-  type GroupMeetFinalSelection,
-  type GroupMeetInviteDetail,
-} from '../../../../../lib/groupMeet';
+  buildGroupMeetFinalSelection,
+  mapGroupMeetInviteDocs,
+} from '../../../../../lib/groupMeetWorkflow';
 
 const REQUESTS_COLLECTION = 'groupMeetRequests';
 const INVITES_SUBCOLLECTION = 'groupMeetInvites';
@@ -16,30 +14,6 @@ type FinalizeBody = {
   candidateKey?: string;
   hostNote?: string;
 };
-
-const toIso = (value: FirebaseFirestore.Timestamp | null | undefined) =>
-  value?.toDate?.().toISOString?.() || null;
-
-function mapInvites(
-  invitesSnapshot: FirebaseFirestore.QuerySnapshot,
-  targetMonth: string
-): GroupMeetInviteDetail[] {
-  return invitesSnapshot.docs.map((docSnap) => {
-    const inviteData = docSnap.data();
-    const availabilityEntries = normalizeGroupMeetAvailabilitySlots(inviteData.availabilityEntries, targetMonth);
-    return {
-      token: docSnap.id,
-      name: inviteData.name || '',
-      email: inviteData.email || null,
-      shareUrl: inviteData.shareUrl || '',
-      emailStatus: inviteData.emailStatus || 'not_sent',
-      emailError: inviteData.emailError || null,
-      respondedAt: toIso(inviteData.responseSubmittedAt),
-      availabilityCount: availabilityEntries.length,
-      availabilityEntries,
-    };
-  });
-}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const adminUser = await requireAdminRequest(req);
@@ -79,30 +53,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const targetMonth = typeof requestData.targetMonth === 'string' ? requestData.targetMonth : '';
     const meetingDurationMinutes = Math.max(15, Number(requestData.meetingDurationMinutes) || 30);
     const invitesSnapshot = await requestRef.collection(INVITES_SUBCOLLECTION).orderBy('createdAt', 'asc').get();
-    const invites = mapInvites(invitesSnapshot, targetMonth);
+    const invites = mapGroupMeetInviteDocs(invitesSnapshot, targetMonth);
     const analysis = computeGroupMeetAnalysis(invites, meetingDurationMinutes);
-
-    const candidate = analysis.bestCandidates.find(
-      (item) => buildGroupMeetCandidateKey(item.date, item.suggestedStartMinutes) === candidateKey
-    );
-
-    if (!candidate) {
-      return res.status(400).json({ error: 'The selected candidate could not be found in the current overlap results.' });
-    }
-
-    const finalSelection: GroupMeetFinalSelection = {
+    const finalSelection = buildGroupMeetFinalSelection({
+      analysis,
       candidateKey,
-      date: candidate.date,
-      startMinutes: candidate.suggestedStartMinutes,
-      endMinutes: candidate.suggestedEndMinutes,
-      participantCount: candidate.participantCount,
-      totalParticipants: candidate.totalParticipants,
-      participantNames: candidate.participantNames,
-      missingParticipantNames: candidate.missingParticipantNames,
-      selectedAt: new Date().toISOString(),
       selectedByEmail: adminUser.email,
-      hostNote: hostNote || null,
-    };
+      hostNote,
+    });
 
     await requestRef.set(
       {

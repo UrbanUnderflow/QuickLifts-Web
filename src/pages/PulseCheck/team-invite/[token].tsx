@@ -69,6 +69,10 @@ const roleLabel: Record<PulseCheckTeamMembershipRole, string> = {
   athlete: 'Athlete',
 };
 const resolveInviteStatus = (status: unknown, redemptionMode: unknown) => {
+  if (redemptionMode === 'general') {
+    return 'active';
+  }
+
   const normalizedStatus = String(status || '').trim();
   if (normalizedStatus === 'revoked') {
     return 'revoked';

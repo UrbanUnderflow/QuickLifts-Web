@@ -646,6 +646,7 @@ function createPublicInviteHandlerRuntime({
     },
   ],
 } = {}) {
+  compiledRuntimeCache = null;
   const { publicInviteHandlerPath } = compileGroupMeetRuntime();
   clearCompiledRuntimeModuleCache();
 
@@ -653,6 +654,7 @@ function createPublicInviteHandlerRuntime({
     requestData: clone(requestData),
     inviteDocs: new Map(inviteDocs.map((inviteDoc) => [inviteDoc.id, clone(inviteDoc.data)])),
     firebaseAppSelections: [],
+    hostNotificationCalls: [],
   };
 
   function createInviteSnapshot(id, data) {
@@ -663,6 +665,10 @@ function createPublicInviteHandlerRuntime({
         id,
         parent: {
           parent: requestRef,
+        },
+        async get() {
+          const current = state.inviteDocs.get(id) || {};
+          return createInviteSnapshot(id, current);
         },
         async set(payload, options = {}) {
           const existing = state.inviteDocs.get(id) || {};
@@ -836,10 +842,49 @@ function createPublicInviteHandlerRuntime({
     },
   };
 
+  const groupMeetAdminMock = {
+    getGroupMeetBaseUrl() {
+      return 'https://fitwithpulse.ai';
+    },
+    mapGroupMeetInviteDetail(docSnap, targetMonth) {
+      const data = docSnap.data() || {};
+      const availabilityEntries = Array.isArray(data.availabilityEntries)
+        ? data.availabilityEntries
+            .filter((slot) => typeof slot?.date === 'string' && slot.date.startsWith(`${targetMonth}-`))
+            .map((slot) => ({
+              date: slot.date,
+              startMinutes: slot.startMinutes,
+              endMinutes: slot.endMinutes,
+            }))
+        : [];
+
+      return {
+        token: docSnap.id,
+        name: data.name || '',
+        email: data.email || null,
+        imageUrl: data.imageUrl || null,
+        participantType: data.participantType === 'host' ? 'host' : 'participant',
+        contactId: data.contactId || null,
+        shareUrl: data.shareUrl || '',
+        emailStatus: data.emailStatus || 'not_sent',
+        emailedAt: data.emailedAt?.toDate?.().toISOString?.() || null,
+        emailError: data.emailError || null,
+        respondedAt: data.responseSubmittedAt?.toDate?.().toISOString?.() || null,
+        availabilityCount: availabilityEntries.length,
+        availabilityEntries,
+      };
+    },
+    maybeNotifyGroupMeetHostAfterAvailabilitySave: async (args) => {
+      state.hostNotificationCalls.push(clone(args));
+      return { notified: true, mode: 'progress', skipped: false };
+    },
+  };
+
   const handlerModule = withModuleMocks(
     {
       '../../../lib/firebase-admin': firebaseAdminMock,
       '../../../lib/groupMeetGuestGoogleCalendar': groupMeetGuestGoogleCalendarMock,
+      '../../../lib/groupMeetAdmin': groupMeetAdminMock,
       'google-auth-library': {
         OAuth2Client: class MockOAuth2Client {},
       },

@@ -140,3 +140,6 @@ exports.processEngagementEvent = require('./engagementTracking').processEngageme
 
 // Export Monthly Creator Payout calculation (runs 1st of every month automatically)
 exports.calculateMonthlyPayouts = require('./calculateMonthlyPayouts').calculateMonthlyPayouts;
+
+// Keep reusable PulseCheck general invite links in an always-valid state for the currently shipped native app.
+exports.repairPulseCheckGeneralInviteStatus = require('./pulsecheckGeneralInviteGuard').repairPulseCheckGeneralInviteStatus;

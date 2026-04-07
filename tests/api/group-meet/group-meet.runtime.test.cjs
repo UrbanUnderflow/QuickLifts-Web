@@ -305,6 +305,80 @@ test('public guest invite endpoint resolves an invite by stored token and honors
   assert.equal(state.firebaseAppSelections[0], true);
 });
 
+test('public guest invite save triggers host notification context after a participant responds', { concurrency: false }, async () => {
+  const { handler, state } = createPublicInviteHandlerRuntime({
+    requestData: {
+      title: 'Pulse Intelligence Labs Advisory Board Meeting',
+      targetMonth: '2026-04',
+      deadlineAt: makeTimestamp('2026-04-08T21:00:00.000Z'),
+      timezone: 'America/New_York',
+      meetingDurationMinutes: 60,
+      status: 'collecting',
+      participantCount: 3,
+    },
+    inviteDocs: [
+      {
+        id: 'host-token',
+        data: {
+          token: 'host-token',
+          name: 'Tremaine Grant',
+          email: 'tre@fitwithpulse.ai',
+          participantType: 'host',
+          shareUrl: 'https://fitwithpulse.ai/group-meet/host-token',
+          availabilityEntries: [{ date: '2026-04-01', startMinutes: 540, endMinutes: 600 }],
+          responseSubmittedAt: makeTimestamp('2026-03-31T12:00:00.000Z'),
+          hasResponse: true,
+        },
+      },
+      {
+        id: 'guest-token',
+        data: {
+          token: 'guest-token',
+          name: 'Bobby Weke',
+          email: 'bobby@fitwithpulse.ai',
+          participantType: 'participant',
+          shareUrl: 'https://fitwithpulse.ai/group-meet/guest-token',
+          availabilityEntries: [],
+          responseSubmittedAt: null,
+          hasResponse: false,
+        },
+      },
+      {
+        id: 'guest-two-token',
+        data: {
+          token: 'guest-two-token',
+          name: 'Valerie Alexander',
+          email: 'valerie@speakhappiness.com',
+          participantType: 'participant',
+          shareUrl: 'https://fitwithpulse.ai/group-meet/guest-two-token',
+          availabilityEntries: [],
+          responseSubmittedAt: null,
+          hasResponse: false,
+        },
+      },
+    ],
+  });
+
+  const req = {
+    method: 'POST',
+    query: { token: 'guest-token' },
+    headers: { host: 'fitwithpulse.ai' },
+    body: {
+      availabilityEntries: [{ date: '2026-04-02', startMinutes: 600, endMinutes: 660 }],
+    },
+  };
+  const res = createApiResponseRecorder();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(state.requestData.responseCount, 2);
+  assert.equal(state.hostNotificationCalls.length, 1);
+  assert.equal(state.hostNotificationCalls[0].responseAction, 'added');
+  assert.equal(state.hostNotificationCalls[0].responderToken, 'guest-token');
+  assert.equal(state.hostNotificationCalls[0].baseUrl, 'https://fitwithpulse.ai');
+});
+
 test('guest Google Calendar config retries after an initial Secret Manager failure', { concurrency: false }, () => {
   const harnessPath = '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/group-meet/_runtimeHarness.cjs';
   const script = `

@@ -95,6 +95,10 @@ const resolveInviteLinkStatus = (
   status: unknown,
   redemptionMode?: unknown
 ): PulseCheckInviteLinkStatus => {
+  if (normalizeInviteRedemptionMode(redemptionMode) === 'general') {
+    return 'active';
+  }
+
   const normalizedStatus = normalizeString(typeof status === 'string' ? status : '');
   if (normalizedStatus === 'revoked') {
     return 'revoked';
@@ -143,6 +147,14 @@ const normalizeInviteActivationUrl = (value?: unknown) => {
   } catch {
     return rawValue;
   }
+};
+const toTimestampMillis = (value: unknown) => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof (value as { toDate?: () => Date })?.toDate === 'function') {
+    return (value as { toDate: () => Date }).toDate().getTime();
+  }
+  return 0;
 };
 const defaultNotificationPreferences = (): PulseCheckNotificationPreferences => ({
   email: true,
@@ -929,6 +941,26 @@ export const pulseCheckProvisioningService = {
 
   async listTeamInviteLinks(teamId: string): Promise<PulseCheckInviteLink[]> {
     const snapshot = await getDocs(query(collection(db, INVITE_LINKS_COLLECTION), where('teamId', '==', normalizeString(teamId))));
+    const generalLinksToRepair = snapshot.docs.filter((docSnap) => {
+      const data = docSnap.data() as Record<string, any>;
+      return (
+        (data.inviteType || '') === 'team-access' &&
+        normalizeInviteRedemptionMode(data.redemptionMode) === 'general' &&
+        normalizeString(data.status) !== 'active'
+      );
+    });
+
+    if (generalLinksToRepair.length > 0) {
+      await Promise.all(
+        generalLinksToRepair.map((docSnap) =>
+          updateDoc(docSnap.ref, {
+            status: 'active',
+            updatedAt: serverTimestamp(),
+          })
+        )
+      );
+    }
+
     return snapshot.docs
       .map((docSnap) => toInviteLink(docSnap.id, docSnap.data() as Record<string, any>))
       .sort((left, right) => {
@@ -1965,7 +1997,6 @@ export const pulseCheckProvisioningService = {
   },
 
   async createTeamAccessInviteLink(input: CreatePulseCheckTeamAccessInviteInput): Promise<string> {
-    const token = crypto.randomUUID();
     const normalizedTeamId = normalizeString(input.teamId);
     const normalizedRole = input.teamMembershipRole;
     const normalizedTargetEmail = normalizeEmail(input.targetEmail);
@@ -1974,6 +2005,28 @@ export const pulseCheckProvisioningService = {
     const redemptionMode = normalizeInviteRedemptionMode(input.redemptionMode);
     const shouldRevokeExistingMatchingLinks = input.revokeExistingMatchingLinks !== false;
     const normalizedOrganizationId = normalizeString(input.organizationId);
+    const inviteQuerySnapshot = await getDocs(collection(db, INVITE_LINKS_COLLECTION));
+    const matchingLinkSnapshots = inviteQuerySnapshot.docs.filter((snapshot) => {
+      const link = snapshot.data() as Record<string, any>;
+      return (
+        (link.inviteType || '') === 'team-access' &&
+        (link.organizationId || '') === normalizedOrganizationId &&
+        (link.teamId || '') === normalizedTeamId &&
+        (link.teamMembershipRole || '') === normalizedRole &&
+        normalizeEmail(link.targetEmail || '') === normalizedTargetEmail &&
+        (link.pilotId || '') === normalizedPilotId &&
+        (link.cohortId || '') === normalizedCohortId &&
+        normalizeInviteRedemptionMode(link.redemptionMode) === redemptionMode
+      );
+    });
+    const mostRecentMatchingLink = matchingLinkSnapshots
+      .slice()
+      .sort(
+        (left, right) =>
+          toTimestampMillis((right.data() as Record<string, any>).createdAt) -
+          toTimestampMillis((left.data() as Record<string, any>).createdAt)
+      )[0] || null;
+    const token = normalizeString((mostRecentMatchingLink?.data() as Record<string, any> | undefined)?.token) || crypto.randomUUID();
     const baseUrl = getCurrentSiteOrigin();
     const fallbackPath = `/PulseCheck/team-invite/${token}${shouldStampDevFirebaseLinks() ? '?devFirebase=1' : ''}`;
     let activationUrl = `${baseUrl}${fallbackPath}`;
@@ -2019,21 +2072,34 @@ export const pulseCheckProvisioningService = {
       console.warn('[pulsecheckProvisioningService] Failed to resolve invite preview metadata, falling back to direct URL.', error);
     }
 
-    if (shouldRevokeExistingMatchingLinks) {
-      const existingActiveLinks = await getDocs(collection(db, INVITE_LINKS_COLLECTION));
-      const linksToRevoke = existingActiveLinks.docs.filter((snapshot) => {
-        const link = snapshot.data() as Record<string, any>;
-        return (
-          (link.teamId || '') === normalizedTeamId &&
-          (link.teamMembershipRole || '') === normalizedRole &&
-          normalizeEmail(link.targetEmail || '') === normalizedTargetEmail &&
-          (link.pilotId || '') === normalizedPilotId &&
-          (link.cohortId || '') === normalizedCohortId &&
-          normalizeInviteRedemptionMode(link.redemptionMode) === redemptionMode &&
-          (link.inviteType || '') === 'team-access' &&
-          (link.status || '') === 'active'
-        );
+    if (redemptionMode === 'general' && mostRecentMatchingLink) {
+      await updateDoc(mostRecentMatchingLink.ref, {
+        // Keep the persisted status shim at "active" so the current shipped iOS app continues to accept the reusable invite.
+        status: 'active',
+        redemptionMode,
+        organizationId: normalizedOrganizationId,
+        teamId: normalizedTeamId,
+        pilotId: normalizedPilotId,
+        pilotName: normalizeString(input.pilotName),
+        cohortId: normalizedCohortId,
+        cohortName: normalizeString(input.cohortName),
+        teamMembershipRole: normalizedRole,
+        targetEmail: normalizedTargetEmail,
+        recipientName: normalizeString(input.recipientName),
+        invitedTitle: normalizeString(input.invitedTitle),
+        commercialSnapshot,
+        token,
+        activationUrl,
+        createdByUserId: normalizeString(input.createdByUserId),
+        createdByEmail: normalizeString(input.createdByEmail),
+        updatedAt: serverTimestamp(),
       });
+
+      return mostRecentMatchingLink.id;
+    }
+
+    if (shouldRevokeExistingMatchingLinks && redemptionMode !== 'general') {
+      const linksToRevoke = matchingLinkSnapshots.filter((snapshot) => (snapshot.data() as Record<string, any>).status === 'active');
 
       await Promise.all(
         linksToRevoke.map((snapshot) =>

@@ -17,6 +17,10 @@ const normalizeEmail = (value: unknown) => normalizeString(value, 320).toLowerCa
 const normalizeInviteRedemptionMode = (value: unknown): PulseCheckInviteLinkRedemptionMode =>
   value === 'general' ? 'general' : 'single-use';
 const resolveInviteLinkStatus = (status: unknown, redemptionMode: unknown): PulseCheckInviteLinkStatus => {
+  if (normalizeInviteRedemptionMode(redemptionMode) === 'general') {
+    return 'active';
+  }
+
   const normalizedStatus = normalizeString(status, 32);
   if (normalizedStatus === 'revoked') {
     return 'revoked';

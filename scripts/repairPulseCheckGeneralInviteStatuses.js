@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Repair PulseCheck general invite links that were incorrectly marked redeemed.
+ * Repair PulseCheck general invite links that were incorrectly marked non-active.
  *
  * Usage:
  *   node scripts/repairPulseCheckGeneralInviteStatuses.js
@@ -13,7 +13,7 @@
  *
  * Notes:
  * - Dry-run by default. Pass --apply to write.
- * - Repairs only team-access invites where redemptionMode=general and status=redeemed.
+ * - Repairs only team-access invites where redemptionMode=general and status!=active.
  * - Leaves redemption metadata intact so "last used" and redemptionCount stay visible.
  */
 
@@ -92,7 +92,7 @@ function isRepairCandidate(id, data, filters) {
   if (!data || typeof data !== 'object') return false;
   if (normalizeString(data.inviteType) !== 'team-access') return false;
   if (normalizeString(data.redemptionMode) !== 'general') return false;
-  if (normalizeString(data.status) !== 'redeemed') return false;
+  if (normalizeString(data.status) === 'active') return false;
   if (filters.teamId && normalizeString(data.teamId) !== filters.teamId) return false;
   if (filters.inviteId && id !== filters.inviteId) return false;
   return true;
@@ -110,12 +110,12 @@ async function main() {
   if (args.inviteId) console.log(`Invite filter: ${args.inviteId}`);
   if (args.limit) console.log(`Limit: ${args.limit}`);
 
-  const redeemedSnap = await db.collection(INVITE_LINKS_COLLECTION).where('status', '==', 'redeemed').get();
-  const candidates = redeemedSnap.docs
+  const inviteSnap = await db.collection(INVITE_LINKS_COLLECTION).where('redemptionMode', '==', 'general').get();
+  const candidates = inviteSnap.docs
     .filter((docSnap) => isRepairCandidate(docSnap.id, docSnap.data(), args))
     .slice(0, args.limit || undefined);
 
-  console.log(`Redeemed invites scanned: ${redeemedSnap.size}`);
+  console.log(`General invites scanned: ${inviteSnap.size}`);
   console.log(`Repair candidates: ${candidates.length}`);
 
   if (candidates.length === 0) {
