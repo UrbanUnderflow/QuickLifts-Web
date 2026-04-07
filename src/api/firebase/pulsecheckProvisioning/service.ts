@@ -1210,6 +1210,345 @@ export const pulseCheckProvisioningService = {
     });
   },
 
+  async transferAthleteToTeam(input: {
+    athleteId: string;
+    sourceTeamId: string;
+    sourcePilotId?: string;
+    destinationTeamId: string;
+    destinationPilotId?: string;
+    destinationCohortId?: string;
+    actorUserId?: string;
+    actorEmail?: string;
+  }): Promise<void> {
+    const athleteId = normalizeString(input.athleteId);
+    const sourceTeamId = normalizeString(input.sourceTeamId);
+    const sourcePilotId = normalizeString(input.sourcePilotId);
+    const destinationTeamId = normalizeString(input.destinationTeamId);
+    const destinationPilotId = normalizeString(input.destinationPilotId);
+    const destinationCohortId = normalizeString(input.destinationCohortId);
+    const actorUserId = normalizeString(input.actorUserId);
+    const actorEmail = normalizeEmail(input.actorEmail);
+
+    if (!athleteId || !sourceTeamId || !destinationTeamId) {
+      throw new Error('Source team, destination team, and athlete are required to transfer this athlete.');
+    }
+
+    if (sourceTeamId === destinationTeamId) {
+      throw new Error('Choose a different destination team to transfer this athlete.');
+    }
+
+    await runTransaction(db, async (transaction) => {
+      const sourceMembershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, `${sourceTeamId}_${athleteId}`);
+      const destinationMembershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, `${destinationTeamId}_${athleteId}`);
+      const sourceTeamRef = doc(db, TEAMS_COLLECTION, sourceTeamId);
+      const destinationTeamRef = doc(db, TEAMS_COLLECTION, destinationTeamId);
+      const userRef = doc(db, USERS_COLLECTION, athleteId);
+
+      const [sourceMembershipSnap, destinationMembershipSnap, sourceTeamSnap, destinationTeamSnap, userSnap] = await Promise.all([
+        transaction.get(sourceMembershipRef),
+        transaction.get(destinationMembershipRef),
+        transaction.get(sourceTeamRef),
+        transaction.get(destinationTeamRef),
+        transaction.get(userRef),
+      ]);
+
+      if (!sourceMembershipSnap.exists()) {
+        throw new Error('Could not find the current athlete membership on the source team.');
+      }
+
+      if (!sourceTeamSnap.exists() || !destinationTeamSnap.exists()) {
+        throw new Error('Could not find one of the teams involved in this transfer.');
+      }
+
+      const sourceMembershipData = sourceMembershipSnap.data() as Record<string, any>;
+      if (normalizeString(sourceMembershipData.role) !== 'athlete') {
+        throw new Error('Only athlete team memberships can be transferred from the pilot dashboard.');
+      }
+
+      const destinationMembershipData = destinationMembershipSnap.exists()
+        ? ((destinationMembershipSnap.data() as Record<string, any>) || {})
+        : {};
+      if (destinationMembershipSnap.exists() && normalizeString(destinationMembershipData.role) !== 'athlete') {
+        throw new Error('This user already has a non-athlete membership on the destination team.');
+      }
+
+      const sourceTeamData = sourceTeamSnap.data() as Record<string, any>;
+      const destinationTeamData = destinationTeamSnap.data() as Record<string, any>;
+      const sourceOrganizationId = normalizeString(sourceTeamData.organizationId);
+      const destinationOrganizationId = normalizeString(destinationTeamData.organizationId);
+      if (!sourceOrganizationId || sourceOrganizationId !== destinationOrganizationId) {
+        throw new Error('Athletes can only be transferred between teams inside the same organization.');
+      }
+
+      let destinationPilotData: Record<string, any> | null = null;
+      let destinationPilotStudyMode: PulseCheckPilotStudyMode | null = null;
+      let destinationPilotRequiredConsents: PulseCheckRequiredConsentDocument[] = [];
+      let destinationCohortName = '';
+
+      if (destinationPilotId) {
+        const destinationPilotRef = doc(db, PILOTS_COLLECTION, destinationPilotId);
+        const destinationPilotSnap = await transaction.get(destinationPilotRef);
+        if (!destinationPilotSnap.exists()) {
+          throw new Error('The selected destination pilot could not be found.');
+        }
+
+        destinationPilotData = destinationPilotSnap.data() as Record<string, any>;
+        if (
+          normalizeString(destinationPilotData.organizationId) !== destinationOrganizationId ||
+          normalizeString(destinationPilotData.teamId) !== destinationTeamId
+        ) {
+          throw new Error('The selected destination pilot does not belong to the destination team.');
+        }
+
+        destinationPilotStudyMode = (destinationPilotData.studyMode as PulseCheckPilotStudyMode) || 'operational';
+        destinationPilotRequiredConsents = normalizeRequiredConsentDocuments(destinationPilotData.requiredConsents || []);
+
+        if (destinationCohortId) {
+          const destinationCohortRef = doc(db, PILOT_COHORTS_COLLECTION, destinationCohortId);
+          const destinationCohortSnap = await transaction.get(destinationCohortRef);
+          if (!destinationCohortSnap.exists()) {
+            throw new Error('The selected destination cohort could not be found.');
+          }
+
+          const cohortData = destinationCohortSnap.data() as Record<string, any>;
+          if (normalizeString(cohortData.pilotId) !== destinationPilotId) {
+            throw new Error('The selected destination cohort does not belong to the destination pilot.');
+          }
+
+          destinationCohortName = normalizeString(cohortData.name);
+        }
+      } else if (destinationCohortId) {
+        throw new Error('Choose a destination pilot before assigning a destination cohort.');
+      }
+
+      const sourceAthleteOnboarding = (sourceMembershipData.athleteOnboarding || {}) as Record<string, any>;
+      const destinationAthleteOnboarding = (destinationMembershipData.athleteOnboarding || {}) as Record<string, any>;
+      const destinationMembershipRole = (destinationMembershipData.role as PulseCheckTeamMembershipRole) || 'athlete';
+      const destinationCommercialConfig = normalizeTeamCommercialConfig(destinationTeamData.commercialConfig);
+      const destinationCommercialSnapshot = buildTeamCommercialSnapshot({
+        organizationId: destinationOrganizationId,
+        teamId: destinationTeamId,
+        commercialConfig: destinationCommercialConfig,
+        inviteToken: normalizeString(
+          destinationMembershipData.commercialAccess?.inviteToken ||
+            sourceMembershipData.commercialAccess?.inviteToken ||
+            destinationMembershipData.grantedByInviteToken ||
+            sourceMembershipData.grantedByInviteToken
+        ),
+      });
+
+      const nextAthleteOnboarding = destinationPilotId
+        ? buildAthleteOnboardingFromInvite(
+            {
+              pilotId: destinationPilotId,
+              pilotName: normalizeString(destinationPilotData?.name),
+              cohortId: destinationCohortId,
+              cohortName: destinationCohortName,
+            },
+            sourceAthleteOnboarding,
+            destinationPilotStudyMode,
+            destinationPilotRequiredConsents
+          )
+        : {
+            ...defaultAthleteOnboardingState(),
+            ...sourceAthleteOnboarding,
+            enrollmentMode: 'product-only' as const,
+            targetPilotId: '',
+            targetPilotName: '',
+            targetCohortId: '',
+            targetCohortName: '',
+            requiredConsents: [] as PulseCheckRequiredConsentDocument[],
+            completedConsentIds: [] as string[],
+            researchConsentStatus: 'not-required' as const,
+            researchConsentVersion: '',
+            researchConsentRespondedAt: null,
+            eligibleForResearchDataset: false,
+          };
+
+      const nextMembershipOnboardingStatus = resolveTeamMembershipOnboardingStatus({
+        role: destinationMembershipRole,
+        athleteOnboarding: nextAthleteOnboarding,
+        studyMode: destinationPilotStudyMode,
+      });
+      const nextPilotEnrollmentStatus = resolvePilotEnrollmentStatus({
+        athleteOnboarding: nextAthleteOnboarding,
+        studyMode: destinationPilotStudyMode,
+      });
+
+      const sourceEnrollmentPilotIds = new Set(
+        [sourcePilotId, normalizeString(sourceAthleteOnboarding.targetPilotId)].filter(Boolean)
+      );
+      for (const pilotIdToWithdraw of sourceEnrollmentPilotIds) {
+        const enrollmentRef = doc(db, PILOT_ENROLLMENTS_COLLECTION, buildPilotEnrollmentId(pilotIdToWithdraw, athleteId));
+        const enrollmentSnap = await transaction.get(enrollmentRef);
+        if (!enrollmentSnap.exists()) continue;
+
+        transaction.set(
+          enrollmentRef,
+          {
+            status: 'withdrawn',
+            updatedAt: serverTimestamp(),
+            withdrawnAt: serverTimestamp(),
+            withdrawnByUserId: actorUserId,
+            withdrawnByEmail: actorEmail,
+          },
+          { merge: true }
+        );
+      }
+
+      const destinationEnrollmentPilotIdsToWithdraw = new Set<string>();
+      const existingDestinationPilotId = normalizeString(destinationAthleteOnboarding.targetPilotId);
+      if (existingDestinationPilotId && existingDestinationPilotId !== destinationPilotId) {
+        destinationEnrollmentPilotIdsToWithdraw.add(existingDestinationPilotId);
+      }
+
+      for (const pilotIdToWithdraw of destinationEnrollmentPilotIdsToWithdraw) {
+        const enrollmentRef = doc(db, PILOT_ENROLLMENTS_COLLECTION, buildPilotEnrollmentId(pilotIdToWithdraw, athleteId));
+        const enrollmentSnap = await transaction.get(enrollmentRef);
+        if (!enrollmentSnap.exists()) continue;
+
+        transaction.set(
+          enrollmentRef,
+          {
+            status: 'withdrawn',
+            updatedAt: serverTimestamp(),
+            withdrawnAt: serverTimestamp(),
+            withdrawnByUserId: actorUserId,
+            withdrawnByEmail: actorEmail,
+          },
+          { merge: true }
+        );
+      }
+
+      const nextDestinationMembership = {
+        organizationId: destinationOrganizationId,
+        teamId: destinationTeamId,
+        userId: athleteId,
+        email:
+          normalizeEmail(sourceMembershipData.email) ||
+          normalizeEmail(destinationMembershipData.email) ||
+          normalizeEmail(userSnap.exists() ? (userSnap.data() as Record<string, any>).email : ''),
+        legacySource: sourceMembershipData.legacySource || destinationMembershipData.legacySource || undefined,
+        legacyCoachId: normalizeString(sourceMembershipData.legacyCoachId || destinationMembershipData.legacyCoachId),
+        legacyConnectionId: normalizeString(sourceMembershipData.legacyConnectionId || destinationMembershipData.legacyConnectionId),
+        legacyLinkedAt: sourceMembershipData.legacyLinkedAt || destinationMembershipData.legacyLinkedAt || null,
+        role: 'athlete' as const,
+        title: normalizeString(sourceMembershipData.title || destinationMembershipData.title),
+        permissionSetId: permissionSetByRole.athlete,
+        operatingRole: sourceMembershipData.operatingRole || destinationMembershipData.operatingRole || undefined,
+        notificationPreferences: {
+          ...defaultNotificationPreferences(),
+          ...(destinationMembershipData.notificationPreferences || sourceMembershipData.notificationPreferences || {}),
+        },
+        rosterVisibilityScope: 'none' as const,
+        allowedAthleteIds: [] as string[],
+        athleteOnboarding: nextAthleteOnboarding,
+        onboardingStatus: nextMembershipOnboardingStatus,
+        postActivationCompletedAt:
+          destinationMembershipData.postActivationCompletedAt || sourceMembershipData.postActivationCompletedAt || null,
+        grantedByInviteToken:
+          normalizeString(destinationMembershipData.grantedByInviteToken) ||
+          normalizeString(sourceMembershipData.grantedByInviteToken),
+        grantedAt: destinationMembershipData.grantedAt || sourceMembershipData.grantedAt || serverTimestamp(),
+        handoffMetadata: destinationMembershipData.handoffMetadata || sourceMembershipData.handoffMetadata || undefined,
+        commercialAccess: destinationCommercialSnapshot,
+        createdAt: destinationMembershipData.createdAt || sourceMembershipData.createdAt || serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      transaction.set(destinationMembershipRef, nextDestinationMembership, { merge: true });
+
+      if (destinationPilotId) {
+        const destinationEnrollmentRef = doc(
+          db,
+          PILOT_ENROLLMENTS_COLLECTION,
+          buildPilotEnrollmentId(destinationPilotId, athleteId)
+        );
+        const destinationEnrollmentSnap = await transaction.get(destinationEnrollmentRef);
+        const destinationEnrollmentData = destinationEnrollmentSnap.exists()
+          ? ((destinationEnrollmentSnap.data() as Record<string, any>) || {})
+          : {};
+
+        transaction.set(
+          destinationEnrollmentRef,
+          {
+            organizationId: destinationOrganizationId,
+            teamId: destinationTeamId,
+            pilotId: destinationPilotId,
+            cohortId: destinationCohortId,
+            userId: athleteId,
+            teamMembershipId: destinationMembershipRef.id,
+            studyMode: destinationPilotStudyMode || 'operational',
+            enrollmentMode: nextAthleteOnboarding.enrollmentMode === 'research' ? 'research' : 'pilot',
+            status: nextPilotEnrollmentStatus,
+            productConsentAccepted: Boolean(nextAthleteOnboarding.productConsentAccepted),
+            productConsentAcceptedAt:
+              nextAthleteOnboarding.productConsentAcceptedAt ||
+              destinationEnrollmentData.productConsentAcceptedAt ||
+              null,
+            productConsentVersion: normalizeString(
+              nextAthleteOnboarding.productConsentVersion || destinationEnrollmentData.productConsentVersion
+            ),
+            researchConsentStatus: nextAthleteOnboarding.researchConsentStatus || 'not-required',
+            researchConsentVersion: normalizeString(
+              nextAthleteOnboarding.researchConsentVersion || destinationEnrollmentData.researchConsentVersion
+            ),
+            researchConsentRespondedAt:
+              nextAthleteOnboarding.researchConsentRespondedAt ||
+              destinationEnrollmentData.researchConsentRespondedAt ||
+              null,
+            requiredConsentIds: (nextAthleteOnboarding.requiredConsents || []).map((consent) => consent.id),
+            completedConsentIds: Array.isArray(nextAthleteOnboarding.completedConsentIds)
+              ? nextAthleteOnboarding.completedConsentIds
+              : [],
+            eligibleForResearchDataset: Boolean(nextAthleteOnboarding.eligibleForResearchDataset),
+            grantedByInviteToken:
+              normalizeString(destinationEnrollmentData.grantedByInviteToken) ||
+              normalizeString(sourceMembershipData.grantedByInviteToken),
+            createdAt: destinationEnrollmentData.createdAt || serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
+
+      const existingUserData = userSnap.exists() ? ((userSnap.data() as Record<string, any>) || {}) : {};
+      const currentSubscriptionType = normalizeString(existingUserData.subscriptionType);
+      const shouldGrantTeamPlanAccess =
+        destinationCommercialSnapshot.teamPlanBypassesPaywall &&
+        (!currentSubscriptionType ||
+          currentSubscriptionType === SubscriptionType.unsubscribed ||
+          currentSubscriptionType === SubscriptionType.teamPlan);
+
+      transaction.set(
+        userRef,
+        {
+          pulseCheckTeamCommercialAccess: destinationCommercialSnapshot,
+          onboardInvite: {
+            ...(existingUserData.onboardInvite || {}),
+            source: 'pulsecheck-team-transfer',
+            organizationId: destinationOrganizationId,
+            teamId: destinationTeamId,
+            pilotId: destinationPilotId,
+            cohortId: destinationCohortId,
+            teamMembershipRole: 'athlete',
+            capturedAt: Math.floor(Date.now() / 1000),
+          },
+          ...(shouldGrantTeamPlanAccess
+            ? {
+                subscriptionType: SubscriptionType.teamPlan,
+                subscriptionPlatform: SubscriptionPlatform.Web,
+              }
+            : {}),
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
+
+      transaction.delete(sourceMembershipRef);
+    });
+  },
+
   async listLegacyCoachRosterCandidates(): Promise<PulseCheckLegacyCoachRosterCandidate[]> {
     const coachAthleteSnapshot = await getDocs(collection(db, COACH_ATHLETES_COLLECTION));
     const activeLinks = coachAthleteSnapshot.docs.filter((docSnap) => {
