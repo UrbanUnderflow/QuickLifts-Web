@@ -50,6 +50,9 @@ import type {
   PulseCheckTeamMembershipRole,
   PulseCheckTeamStatus,
   PulseCheckInviteLink,
+  PulseCheckInviteActivity,
+  PulseCheckInviteActivityEmailSource,
+  PulseCheckInviteActivityEventType,
   PulseCheckInviteLinkRedemptionMode,
   PulseCheckInviteLinkStatus,
   PulseCheckLegacyCoachRosterCandidate,
@@ -71,6 +74,7 @@ const PILOT_COHORTS_COLLECTION = 'pulsecheck-pilot-cohorts';
 const PILOT_ENROLLMENTS_COLLECTION = 'pulsecheck-pilot-enrollments';
 const CLINICIAN_PROFILES_COLLECTION = 'pulsecheck-auntedna-clinician-profiles';
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
+const INVITE_ACTIVITY_COLLECTION = 'pulsecheck-invite-activities';
 const ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const LEGACY_ROSTER_MIGRATIONS_COLLECTION = 'pulsecheck-legacy-roster-migrations';
@@ -641,6 +645,61 @@ const toInviteLink = (id: string, data: Record<string, any>): PulseCheckInviteLi
   updatedAt: data.updatedAt || null,
 });
 
+const normalizeInviteActivityEventType = (value: unknown): PulseCheckInviteActivityEventType => {
+  switch (normalizeString(typeof value === 'string' ? value : '')) {
+    case 'authenticated-view':
+      return 'authenticated-view';
+    case 'redeem-started':
+      return 'redeem-started';
+    case 'redeem-succeeded':
+      return 'redeem-succeeded';
+    case 'redeem-failed':
+      return 'redeem-failed';
+    case 'follow-up-requested':
+      return 'follow-up-requested';
+    case 'page-view':
+    default:
+      return 'page-view';
+  }
+};
+
+const normalizeInviteActivityEmailSource = (value: unknown): PulseCheckInviteActivityEmailSource => {
+  switch (normalizeString(typeof value === 'string' ? value : '')) {
+    case 'authenticated-user':
+      return 'authenticated-user';
+    case 'manual-follow-up':
+      return 'manual-follow-up';
+    default:
+      return 'unknown';
+  }
+};
+
+const toInviteActivity = (id: string, data: Record<string, any>): PulseCheckInviteActivity => ({
+  id,
+  token: data.token || '',
+  inviteId: data.inviteId || data.token || '',
+  eventType: normalizeInviteActivityEventType(data.eventType),
+  organizationId: data.organizationId || '',
+  teamId: data.teamId || '',
+  pilotId: data.pilotId || '',
+  cohortId: data.cohortId || '',
+  inviteStatus: resolveInviteLinkStatus(data.inviteStatus, data.redemptionMode),
+  redemptionMode: normalizeInviteRedemptionMode(data.redemptionMode),
+  teamMembershipRole: data.teamMembershipRole || undefined,
+  sessionId: data.sessionId || '',
+  userId: data.userId || '',
+  email: data.email || '',
+  emailSource: normalizeInviteActivityEmailSource(data.emailSource),
+  source: data.source === 'browser' ? 'browser' : 'browser',
+  pageUrl: data.pageUrl || '',
+  userAgent: data.userAgent || '',
+  ipHash: data.ipHash || '',
+  errorMessage: data.errorMessage || '',
+  needsFollowUp: Boolean(data.needsFollowUp),
+  createdAt: data.createdAt || null,
+  updatedAt: data.updatedAt || null,
+});
+
 const toTeamMembership = (id: string, data: Record<string, any>): PulseCheckTeamMembership => ({
   id,
   organizationId: data.organizationId || '',
@@ -872,6 +931,19 @@ export const pulseCheckProvisioningService = {
     const snapshot = await getDocs(query(collection(db, INVITE_LINKS_COLLECTION), where('teamId', '==', normalizeString(teamId))));
     return snapshot.docs
       .map((docSnap) => toInviteLink(docSnap.id, docSnap.data() as Record<string, any>))
+      .sort((left, right) => {
+        const leftTime = toJsDate(left.createdAt)?.getTime() || 0;
+        const rightTime = toJsDate(right.createdAt)?.getTime() || 0;
+        return rightTime - leftTime;
+      });
+  },
+
+  async listPilotInviteActivity(pilotId: string): Promise<PulseCheckInviteActivity[]> {
+    const snapshot = await getDocs(
+      query(collection(db, INVITE_ACTIVITY_COLLECTION), where('pilotId', '==', normalizeString(pilotId)))
+    );
+    return snapshot.docs
+      .map((docSnap) => toInviteActivity(docSnap.id, docSnap.data() as Record<string, any>))
       .sort((left, right) => {
         const leftTime = toJsDate(left.createdAt)?.getTime() || 0;
         const rightTime = toJsDate(right.createdAt)?.getTime() || 0;

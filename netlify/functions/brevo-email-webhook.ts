@@ -2,6 +2,7 @@ import type { Handler } from '@netlify/functions';
 import { admin } from './config/firebase';
 
 const db = admin.firestore();
+const PILOT_ATHLETE_COMMUNICATIONS_COLLECTION = 'pulsecheck-pilot-athlete-communications';
 
 /**
  * Brevo Webhook Event Types:
@@ -98,6 +99,39 @@ const applyStatusUpdate = (
   }
 };
 
+const applyPilotAthleteCommunicationStatusUpdate = (
+  updateData: Record<string, any>,
+  eventType: BrevoWebhookEvent['event'],
+  now: Date,
+  link?: string
+) => {
+  switch (eventType) {
+    case 'delivered':
+      updateData.status = 'delivered';
+      updateData.deliveredAt = now;
+      break;
+    case 'opened':
+      updateData.status = 'opened';
+      updateData.openedAt = now;
+      break;
+    case 'click':
+      updateData.status = 'opened';
+      updateData.openedAt = updateData.openedAt || now;
+      updateData.clickedAt = now;
+      updateData.clickedLink = link || null;
+      break;
+    case 'soft_bounce':
+    case 'hard_bounce':
+    case 'spam':
+    case 'unsubscribe':
+    case 'blocked':
+    case 'deferred':
+      updateData.status = 'failed';
+      updateData.lastError = eventType;
+      break;
+  }
+};
+
 export const handler: Handler = async (event) => {
   // Only accept POST requests
   if (event.httpMethod !== 'POST') {
@@ -145,6 +179,7 @@ export const handler: Handler = async (event) => {
 
     for (const webhookEvent of events) {
       const { event: eventType, email, 'message-id': messageId, link } = webhookEvent;
+      const now = new Date();
       
       console.log(`[brevo-webhook] Processing event: ${eventType} for ${email}`);
 
@@ -152,6 +187,7 @@ export const handler: Handler = async (event) => {
       let friendId: string | null = null;
       let emailRecordId: string | null = null;
       let updatePeriodId: string | null = null;
+      let pilotAthleteCommunicationId: string | null = null;
       
       if (webhookEvent['X-Mailin-custom']) {
         try {
@@ -159,9 +195,24 @@ export const handler: Handler = async (event) => {
           friendId = custom.friendId || null;
           emailRecordId = custom.emailRecordId || null;
           updatePeriodId = custom.updatePeriodId || null;
+          pilotAthleteCommunicationId = custom.pilotAthleteCommunicationId || null;
         } catch (e) {
           console.warn('[brevo-webhook] Failed to parse X-Mailin-custom:', e);
         }
+      }
+
+      if (pilotAthleteCommunicationId) {
+        const outreachRef = db.collection(PILOT_ATHLETE_COMMUNICATIONS_COLLECTION).doc(pilotAthleteCommunicationId);
+        const outreachUpdate: Record<string, any> = {
+          lastEmailEvent: eventType,
+          lastEmailEventAt: now,
+          updatedAt: now,
+        };
+        applyPilotAthleteCommunicationStatusUpdate(outreachUpdate, eventType, now, link);
+        if (messageId) {
+          outreachUpdate.messageId = messageId;
+        }
+        await outreachRef.set(outreachUpdate, { merge: true });
       }
 
       // If we have a friendId, update the friend's email tracking
@@ -170,7 +221,6 @@ export const handler: Handler = async (event) => {
         const friendDoc = await friendRef.get();
         
         if (friendDoc.exists) {
-          const now = new Date();
           const updateData: Record<string, any> = {
             lastEmailEvent: eventType,
             lastEmailEventAt: now,
@@ -237,7 +287,6 @@ export const handler: Handler = async (event) => {
         
         if (!friendsSnapshot.empty) {
           const friendDoc = friendsSnapshot.docs[0];
-          const now = new Date();
           const updateData: Record<string, any> = {
             lastEmailEvent: eventType,
             lastEmailEventAt: now,

@@ -774,6 +774,17 @@ function buildBaseDemoStore(): PilotDashboardDemoStore {
       operationalWatchList,
       displayName: athlete.displayName,
       email: athlete.email,
+      profile: {
+        displayName: athlete.displayName,
+        onboardingName: athlete.displayName,
+        username: athlete.email.split('@')[0] || '',
+        email: athlete.email,
+        profileImageUrl: '',
+        bio: 'Demo athlete profile for pilot dashboard walkthroughs.',
+        membershipTitle: 'Athlete',
+        teamSportOrProgram: team.sportOrProgram,
+        accountCreatedAt: athlete.snapshotHistory[athlete.snapshotHistory.length - 1]?.capturedAt || null,
+      },
       engineSummary,
       profileSnapshotCount: athlete.snapshotHistory.length,
       latestAssessmentContextFlagStatus: athlete.assessmentContextStatus,
@@ -1024,6 +1035,13 @@ function buildDetailFromStore(store: PilotDashboardDemoStore): PilotDashboardDet
     pilot: store.pilot,
     cohorts: store.cohorts,
     athletes,
+    rosterAthletes: athletes
+      .map((athlete) => ({
+        ...athlete,
+        isEnrolled: true,
+        canReceivePulseCheckPush: true,
+      }))
+      .sort((left, right) => left.displayName.localeCompare(right.displayName)),
     hypotheses: [...store.hypotheses].sort((left, right) => left.code.localeCompare(right.code)),
     metrics,
     coverage,

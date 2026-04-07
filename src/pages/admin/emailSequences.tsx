@@ -55,6 +55,14 @@ const SEQUENCES: SequenceRow[] = [
     templateDocId: 'coach-connection-v1',
   },
   {
+    id: 'pulsecheck-pilot-activation-v1',
+    name: 'PulseCheck Pilot Activation',
+    trigger: 'Manual from the PulseCheck pilot dashboard when an athlete is admitted and needs to reopen the app to finish consent',
+    defaultSubject: '{{teamName}} access is ready in PulseCheck',
+    functionPath: '/.netlify/functions/send-pulsecheck-pilot-activation-email',
+    templateDocId: 'pulsecheck-pilot-activation-v1',
+  },
+  {
     id: 'winner-notification-v1',
     name: 'Winner Notification',
     trigger: 'When prize distribution is confirmed for challenge winners',

@@ -79,6 +79,16 @@ const formatExclusionReason = (value?: string | null) => {
   }
 };
 
+const buildInitials = (value: string) => {
+  const parts = value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+  if (parts.length === 0) return 'PC';
+  return parts.map((part) => part.charAt(0).toUpperCase()).join('');
+};
+
 type WatchListDraft = {
   reasonCode: string;
   reasonText: string;
@@ -354,6 +364,81 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
           ) : (
             <>
               <div className="mt-6 rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex min-w-0 items-center gap-4">
+                    <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[28px] border border-white/10 bg-[#0b0f17] text-2xl font-semibold text-cyan-100">
+                      {detail.profile.profileImageUrl ? (
+                        <img src={detail.profile.profileImageUrl} alt={detail.displayName} className="h-full w-full object-cover" />
+                      ) : (
+                        buildInitials(detail.profile.displayName || detail.profile.onboardingName || detail.displayName)
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Athlete Profile</div>
+                      <h2 className="mt-2 truncate text-2xl font-semibold text-white">
+                        {detail.profile.displayName || detail.profile.onboardingName || detail.displayName}
+                      </h2>
+                      <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                        {detail.profile.username ? (
+                          <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 text-cyan-100">
+                            @{detail.profile.username}
+                          </span>
+                        ) : null}
+                        {detail.profile.membershipTitle ? (
+                          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-zinc-300">
+                            {detail.profile.membershipTitle}
+                          </span>
+                        ) : null}
+                        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-zinc-300">
+                          {detail.profile.teamSportOrProgram || detail.team.sportOrProgram || detail.team.teamType || 'PulseCheck athlete'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-zinc-300">
+                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Account Created</div>
+                    <div className="mt-2 font-medium text-white">{formatTimestamp(detail.profile.accountCreatedAt)}</div>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">App Display Name</div>
+                    <div className="mt-2 text-sm font-medium text-white">{detail.profile.displayName || 'Not set'}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Name Provided On Join</div>
+                    <div className="mt-2 text-sm font-medium text-white">{detail.profile.onboardingName || 'Not captured'}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Email</div>
+                    <div className="mt-2 break-all text-sm font-medium text-white">{detail.profile.email || detail.email || 'No email on file'}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Username</div>
+                    <div className="mt-2 text-sm font-medium text-white">
+                      {detail.profile.username ? `@${detail.profile.username}` : 'Not claimed'}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Team Sport / Program</div>
+                    <div className="mt-2 text-sm font-medium text-white">
+                      {detail.profile.teamSportOrProgram || detail.team.sportOrProgram || 'Not set'}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Membership Title</div>
+                    <div className="mt-2 text-sm font-medium text-white">{detail.profile.membershipTitle || 'Athlete'}</div>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                  <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Bio</div>
+                  <div className="mt-2 text-sm text-zinc-300">{detail.profile.bio || 'No profile bio has been added yet.'}</div>
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-3xl border border-white/10 bg-[#11151f] p-5">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex items-center gap-3 text-rose-300">
                     <ShieldAlert className="h-5 w-5" />
@@ -464,7 +549,18 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                     <Users2 className="h-5 w-5" />
                     <span className="text-sm font-medium">Cohort</span>
                   </div>
-                  <div className="mt-3 text-lg font-semibold">{detail.cohort?.name || 'No cohort'}</div>
+                  <div className="mt-3 text-lg font-semibold">
+                    {detail.pilotEnrollment.cohortId
+                      ? detail.cohort?.name || 'Cohort lookup missing'
+                      : detail.cohort
+                        ? detail.cohort.name
+                        : 'No cohort assigned'}
+                  </div>
+                  {!detail.cohort && !detail.pilotEnrollment.cohortId ? (
+                    <div className="mt-2 text-sm text-zinc-400">
+                      No cohort has been assigned for this athlete in the current pilot.
+                    </div>
+                  ) : null}
                 </div>
                 <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
                   <NoraMetricHelpButton metricKey="evidence-records" className="absolute right-4 top-4" />

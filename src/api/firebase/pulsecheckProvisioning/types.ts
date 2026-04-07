@@ -16,6 +16,14 @@ export type PulseCheckClinicianProfileSyncStatus = 'pending-sync' | 'synced' | '
 export type PulseCheckInviteLinkStatus = 'active' | 'redeemed' | 'revoked';
 export type PulseCheckInviteLinkType = 'admin-activation' | 'clinician-onboarding' | 'team-access';
 export type PulseCheckInviteLinkRedemptionMode = 'single-use' | 'general';
+export type PulseCheckInviteActivityEventType =
+  | 'page-view'
+  | 'authenticated-view'
+  | 'redeem-started'
+  | 'redeem-succeeded'
+  | 'redeem-failed'
+  | 'follow-up-requested';
+export type PulseCheckInviteActivityEmailSource = 'authenticated-user' | 'manual-follow-up' | 'unknown';
 export type PulseCheckOrganizationMembershipRole = 'org-admin' | 'implementation-observer';
 export type PulseCheckOperatingRole = 'admin-only' | 'admin-plus-coach' | 'admin-plus-support-staff';
 export type PulseCheckRosterVisibilityScope = 'team' | 'assigned' | 'none';
@@ -445,6 +453,32 @@ export interface PulseCheckInviteLink {
   redeemedByUserId?: string;
   redeemedByEmail?: string;
   redeemedAt?: Timestamp | null;
+}
+
+export interface PulseCheckInviteActivity {
+  id: string;
+  token: string;
+  inviteId: string;
+  eventType: PulseCheckInviteActivityEventType;
+  organizationId: string;
+  teamId: string;
+  pilotId?: string;
+  cohortId?: string;
+  inviteStatus: PulseCheckInviteLinkStatus;
+  redemptionMode?: PulseCheckInviteLinkRedemptionMode;
+  teamMembershipRole?: PulseCheckTeamMembershipRole;
+  sessionId?: string;
+  userId?: string;
+  email?: string;
+  emailSource?: PulseCheckInviteActivityEmailSource;
+  source?: 'browser';
+  pageUrl?: string;
+  userAgent?: string;
+  ipHash?: string;
+  errorMessage?: string;
+  needsFollowUp?: boolean;
+  createdAt?: Timestamp | null;
+  updatedAt?: Timestamp | null;
 }
 
 export interface PulseCheckProvisioningHandoffMetadata {

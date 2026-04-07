@@ -3,6 +3,8 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { AnimatePresence, motion } from 'framer-motion';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { useDispatch } from 'react-redux';
 import {
   Activity,
   ArrowLeft,
@@ -26,15 +28,26 @@ import {
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
 import { LocalFirebaseModeButton } from '../../../components/admin/pilot-dashboard/LocalFirebaseModeButton';
 import NoraMetricHelpButton from '../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
+import PilotAthleteCommunicationModal, {
+  type PilotAthleteCommunicationChannel,
+  type PilotAthleteCommunicationPreview,
+  type PilotAthleteCommunicationRecord,
+} from '../../../components/admin/pilot-dashboard/PilotAthleteCommunicationModal';
 import { PilotInviteQrModal } from '../../../components/admin/pilot-dashboard/PilotInviteQrModal';
 import { StaffPilotSurveyModal } from '../../../components/admin/pilot-dashboard/StaffPilotSurveyModal';
 import type { PilotDashboardMetricExplanationKey } from '../../../components/admin/pilot-dashboard/noraMetricCatalog';
+import { db, getFirebaseModeRequestHeaders } from '../../../api/firebase/config';
 import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
-import type { PulseCheckInviteLink } from '../../../api/firebase/pulsecheckProvisioning/types';
-import type { PulseCheckRequiredConsentDocument } from '../../../api/firebase/pulsecheckProvisioning/types';
+import type {
+  PulseCheckInviteActivity,
+  PulseCheckInviteLink,
+  PulseCheckPilotEnrollmentStatus,
+  PulseCheckRequiredConsentDocument,
+} from '../../../api/firebase/pulsecheckProvisioning/types';
 import { analyzePulseCheckInviteOneLink, buildPulseCheckTeamInviteWebUrl, isPulseCheckInviteOneLink } from '../../../utils/pulsecheckInviteLinks';
 import { useUser } from '../../../hooks/useUser';
+import { showToast } from '../../../redux/toastSlice';
 import type {
   PilotDashboardDetail,
   PilotHypothesisAssistSuggestion,
@@ -52,6 +65,31 @@ import type {
 
 type DetailTab = 'overview' | 'engine-health' | 'findings' | 'hypotheses' | 'research-readout';
 type InviteCreationMode = 'single-use' | 'general';
+type InviteActivityParticipantRow = {
+  key: string;
+  email: string;
+  emailSource: PulseCheckInviteActivity['emailSource'];
+  sessionId: string;
+  firstSeenAt: Date | null;
+  lastSeenAt: Date | null;
+  lastEventType: PulseCheckInviteActivity['eventType'];
+  lastError: string;
+  userAgent: string;
+  token: string;
+  hasPageView: boolean;
+  hasRedeemSucceeded: boolean;
+  hasRedeemFailed: boolean;
+  hasFollowUpRequest: boolean;
+  needsFollowUp: boolean;
+};
+type AthleteCommunicationPreviewModalState = {
+  athlete: PilotDashboardDetail['rosterAthletes'][number];
+  channel: PilotAthleteCommunicationChannel;
+  preview: PilotAthleteCommunicationPreview | null;
+  loading: boolean;
+  sending: boolean;
+  error: string | null;
+};
 
 const STATUS_OPTIONS: Array<{ value: PilotHypothesisStatus; label: string }> = [
   { value: 'not-enough-data', label: 'Not enough data' },
@@ -137,6 +175,31 @@ const formatInviteUsageCount = (count?: number) => {
   const safeCount = Math.max(0, Number(count || 0));
   return `Used ${safeCount} time${safeCount === 1 ? '' : 's'}`;
 };
+const athleteRosterStatusRank = (status?: PulseCheckPilotEnrollmentStatus | null) => {
+  if (status === 'active') return 0;
+  if (status === 'pending-consent') return 1;
+  return 2;
+};
+const athleteEnrollmentBadgePresentation = (status?: PulseCheckPilotEnrollmentStatus | null) => {
+  if (status === 'active') {
+    return {
+      label: 'Enrolled',
+      className: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100',
+    };
+  }
+
+  if (status === 'pending-consent') {
+    return {
+      label: 'Pending consent',
+      className: 'border-amber-400/20 bg-amber-400/10 text-amber-100',
+    };
+  }
+
+  return {
+    label: 'Not enrolled',
+    className: 'border-white/10 bg-white/5 text-zinc-300',
+  };
+};
 const getInviteShareOrigin = () =>
   (typeof window !== 'undefined' && window.location?.origin
     ? window.location.origin
@@ -203,6 +266,38 @@ const formatTimeValue = (value: any) => {
     return new Date(value).toLocaleString();
   }
   return nextDate ? nextDate.toLocaleString() : 'Not available';
+};
+const formatInviteActivityEventLabel = (value?: PulseCheckInviteActivity['eventType']) =>
+  (value || 'page-view')
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+const inviteActivityStatusPresentation = (participant: InviteActivityParticipantRow) => {
+  if (participant.hasRedeemSucceeded) {
+    return {
+      label: 'Joined',
+      className: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100',
+    };
+  }
+
+  if (participant.needsFollowUp) {
+    return {
+      label: 'Needs follow-up',
+      className: 'border-amber-400/20 bg-amber-400/10 text-amber-100',
+    };
+  }
+
+  if (participant.email) {
+    return {
+      label: 'Identified scan',
+      className: 'border-cyan-400/20 bg-cyan-400/10 text-cyan-100',
+    };
+  }
+
+  return {
+    label: 'Anonymous scan',
+    className: 'border-white/10 bg-white/5 text-zinc-200',
+  };
 };
 
 const INVITE_PREVIEW_FIELDS: Array<{ field: InvitePreviewField; label: string }> = [
@@ -505,13 +600,95 @@ const formatAthleteCountLabel = (count: number | null | undefined) => {
 };
 const formatDurationMetricValue = (value: number | null | undefined) =>
   value === null || value === undefined ? 'Not enough data yet' : `${value.toFixed(1)} min`;
+const PILOT_ATHLETE_COMMUNICATIONS_COLLECTION = 'pulsecheck-pilot-athlete-communications';
+const PULSECHECK_APP_DEEP_LINK_URL = 'pulsecheck://open';
+const PULSECHECK_IOS_APP_STORE_URL = 'https://apps.apple.com/by/app/pulsecheck-mindset-coaching/id6747253393';
+const buildAthleteCommunicationKey = (athleteId: string, channel: PilotAthleteCommunicationChannel) => `${athleteId}::${channel}`;
+const normalizeCommunicationStatus = (value?: string | null) => {
+  if (value === 'sent' || value === 'delivered' || value === 'opened' || value === 'failed') return value;
+  return 'not-sent';
+};
+const toFirstName = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return 'there';
+  const safeBase = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed;
+  return safeBase.split(/[.\s_-]+/).find(Boolean) || 'there';
+};
+const buildPilotReadyPushTitle = (detail: PilotDashboardDetail) => {
+  const baseLabel = detail.team.displayName || detail.organization.displayName || detail.pilot.name || 'PulseCheck';
+  return /\bpilot\b/i.test(baseLabel) ? baseLabel : `${baseLabel} Pilot`;
+};
+const buildPilotReadyPushBody = (athlete: PilotDashboardDetail['rosterAthletes'][number]) =>
+  athlete.pilotEnrollment?.status === 'active'
+    ? 'Your PulseCheck app is ready! Open the app and you should be good to go.'
+    : 'Your PulseCheck app is ready! Open the app, complete consent, and you should be good to go.';
+const buildDefaultPushPreview = (detail: PilotDashboardDetail, athlete: PilotDashboardDetail['rosterAthletes'][number]): PilotAthleteCommunicationPreview => ({
+  channel: 'push',
+  title: buildPilotReadyPushTitle(detail),
+  subtitle: 'Open the app to continue',
+  body: buildPilotReadyPushBody(athlete),
+  ctaLabel: 'Open Pulse Check App',
+  ctaUrl: PULSECHECK_APP_DEEP_LINK_URL,
+});
+const COMMUNICATION_STATUS_STAGES = ['sent', 'delivered', 'opened'] as const;
+const toCommunicationDateValue = (value: any): Date | null => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value?.toDate === 'function') return value.toDate();
+  if (typeof value === 'number' && Number.isFinite(value)) return new Date(value);
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+};
+const formatCommunicationTimestamp = (value: any) => {
+  const date = toCommunicationDateValue(value);
+  return date
+    ? date.toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : 'Not yet';
+};
+const communicationStageLabel = (stage: typeof COMMUNICATION_STATUS_STAGES[number]) => `${stage.charAt(0).toUpperCase()}${stage.slice(1)}`;
+const communicationStageIsComplete = (
+  record: PilotAthleteCommunicationRecord | null,
+  stage: typeof COMMUNICATION_STATUS_STAGES[number]
+) => {
+  if (!record) return false;
+  if (stage === 'sent') {
+    return Boolean(record.sentAt || record.messageId || ['sent', 'delivered', 'opened'].includes(record.status));
+  }
+  if (stage === 'delivered') {
+    return Boolean(record.deliveredAt || ['delivered', 'opened'].includes(record.status));
+  }
+  return Boolean(record.openedAt || record.status === 'opened');
+};
+const communicationStageClassName = (active: boolean) =>
+  active
+    ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100'
+    : 'border-white/10 bg-white/5 text-zinc-500';
+const summarizeCommunicationStatus = (record: PilotAthleteCommunicationRecord | null) => {
+  if (!record) return 'Not sent yet';
+  if (record.status === 'failed') return record.lastError || 'Last send failed';
+  if (record.status === 'opened') return `Opened ${formatCommunicationTimestamp(record.openedAt)}`;
+  if (record.status === 'delivered') return `Delivered ${formatCommunicationTimestamp(record.deliveredAt)}`;
+  if (record.status === 'sent') return `Sent ${formatCommunicationTimestamp(record.sentAt)}`;
+  return 'Not sent yet';
+};
 
 const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const currentUser = useUser();
+  const dispatch = useDispatch();
   const router = useRouter();
   const pilotId = typeof router.query.pilotId === 'string' ? router.query.pilotId : '';
   const [detail, setDetail] = useState<PilotDashboardDetail | null>(null);
   const [inviteLinks, setInviteLinks] = useState<PulseCheckInviteLink[]>([]);
+  const [inviteActivity, setInviteActivity] = useState<PulseCheckInviteActivity[]>([]);
+  const [communicationRecordsByKey, setCommunicationRecordsByKey] = useState<Record<string, PilotAthleteCommunicationRecord>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -557,8 +734,50 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [historyCohortScopeFilter, setHistoryCohortScopeFilter] = useState<'all' | 'whole-pilot' | 'cohort-only'>('all');
   const [historyWindowStartFilter, setHistoryWindowStartFilter] = useState('');
   const [historyWindowEndFilter, setHistoryWindowEndFilter] = useState('');
+  const [communicationPreviewModal, setCommunicationPreviewModal] = useState<AthleteCommunicationPreviewModalState | null>(null);
   const copyFeedbackTimeoutRef = useRef<number | null>(null);
   const loadRequestIdRef = useRef(0);
+  const communicationLoadRequestIdRef = useRef(0);
+
+  const loadCommunicationRecords = async (resolvedPilotId: string) => {
+    if (!resolvedPilotId) {
+      setCommunicationRecordsByKey({});
+      return;
+    }
+
+    const requestId = ++communicationLoadRequestIdRef.current;
+    try {
+      const communicationSnapshot = await getDocs(
+        query(collection(db, PILOT_ATHLETE_COMMUNICATIONS_COLLECTION), where('pilotId', '==', resolvedPilotId))
+      );
+      if (requestId !== communicationLoadRequestIdRef.current) return;
+
+      const nextRecords = communicationSnapshot.docs.reduce<Record<string, PilotAthleteCommunicationRecord>>((result, docSnap) => {
+        const data = docSnap.data() as Record<string, any>;
+        const athleteId = typeof data.athleteId === 'string' ? data.athleteId.trim() : '';
+        const channel = data.channel === 'push' ? 'push' : data.channel === 'email' ? 'email' : null;
+        if (!athleteId || !channel) return result;
+
+        result[buildAthleteCommunicationKey(athleteId, channel)] = {
+          id: docSnap.id,
+          channel,
+          status: normalizeCommunicationStatus(data.status),
+          messageId: typeof data.messageId === 'string' ? data.messageId : null,
+          sentAt: data.sentAt || null,
+          deliveredAt: data.deliveredAt || null,
+          openedAt: data.openedAt || null,
+          updatedAt: data.updatedAt || null,
+          lastError: typeof data.lastError === 'string' ? data.lastError : null,
+          preview: data.preview || null,
+        };
+        return result;
+      }, {});
+
+      setCommunicationRecordsByKey(nextRecords);
+    } catch (loadError) {
+      console.error('[PulseCheckPilotDashboard] Failed to load athlete communication records:', loadError);
+    }
+  };
 
   const load = async (mode: 'initial' | 'refresh' = 'initial') => {
     if (!pilotId) return;
@@ -576,14 +795,25 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       const nextDetail = await pulseCheckPilotDashboardService.getPilotDashboardDetail(pilotId);
       if (requestId !== loadRequestIdRef.current) return;
       setDetail(nextDetail);
+      if (nextDetail?.pilot.id) {
+        await loadCommunicationRecords(nextDetail.pilot.id);
+        if (requestId !== loadRequestIdRef.current) return;
+      } else {
+        setCommunicationRecordsByKey({});
+      }
       if (nextDetail?.team.id) {
         const nextInviteLinks = pulseCheckPilotDashboardService.isDemoModeEnabled()
           ? pulseCheckPilotDashboardService.listDemoInviteLinks()
           : await pulseCheckProvisioningService.listTeamInviteLinks(nextDetail.team.id);
+        const nextInviteActivity = pulseCheckPilotDashboardService.isDemoModeEnabled()
+          ? []
+          : await pulseCheckProvisioningService.listPilotInviteActivity(nextDetail.pilot.id);
         if (requestId !== loadRequestIdRef.current) return;
         setInviteLinks(nextInviteLinks);
+        setInviteActivity(nextInviteActivity);
       } else {
         setInviteLinks([]);
+        setInviteActivity([]);
       }
       setCohortFilter((current) => {
         if (!current) return '';
@@ -595,7 +825,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       });
       setAthleteCohortDrafts(
         Object.fromEntries(
-          (nextDetail?.athletes || []).map((athlete) => [athlete.athleteId, athlete.pilotEnrollment.cohortId || ''])
+          (nextDetail?.rosterAthletes || []).map((athlete) => [athlete.athleteId, athlete.pilotEnrollment?.cohortId || ''])
         )
       );
       const hypothesisMap = Object.fromEntries((nextDetail?.hypotheses || []).map((hypothesis) => [hypothesis.id, cloneHypothesis(hypothesis)]));
@@ -622,12 +852,207 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   }, [pilotId]);
 
   useEffect(() => {
+    if (!detail?.pilot.id) return;
+    const intervalId = window.setInterval(() => {
+      void loadCommunicationRecords(detail.pilot.id);
+    }, 15000);
+    return () => window.clearInterval(intervalId);
+  }, [detail?.pilot.id]);
+
+  useEffect(() => {
     return () => {
       if (copyFeedbackTimeoutRef.current) {
         window.clearTimeout(copyFeedbackTimeoutRef.current);
       }
     };
   }, []);
+
+  const getAthleteCommunicationRecord = (
+    athleteId: string,
+    channel: PilotAthleteCommunicationChannel
+  ): PilotAthleteCommunicationRecord | null => communicationRecordsByKey[buildAthleteCommunicationKey(athleteId, channel)] || null;
+
+  const buildAthleteCommunicationRequestPayload = (
+    athlete: PilotDashboardDetail['rosterAthletes'][number],
+    channel: PilotAthleteCommunicationChannel
+  ) => {
+    if (!detail) return null;
+    return {
+      userId: athlete.athleteId,
+      athleteId: athlete.athleteId,
+      athleteName: athlete.displayName,
+      athleteEmail: athlete.email,
+      firstName: toFirstName(athlete.displayName || athlete.email),
+      organizationId: detail.organization.id,
+      organizationName: detail.organization.displayName,
+      teamId: detail.team.id,
+      teamName: detail.team.displayName,
+      pilotId: detail.pilot.id,
+      pilotName: detail.pilot.name,
+      enrollmentStatus: athlete.pilotEnrollment?.status || '',
+      openAppUrl: PULSECHECK_APP_DEEP_LINK_URL,
+      iosAppUrl: PULSECHECK_IOS_APP_STORE_URL,
+      channel,
+    };
+  };
+
+  const openAthleteCommunicationPreview = async (
+    athlete: PilotDashboardDetail['rosterAthletes'][number],
+    channel: PilotAthleteCommunicationChannel
+  ) => {
+    if (!detail) return;
+    const requestPayload = buildAthleteCommunicationRequestPayload(athlete, channel);
+    if (!requestPayload) return;
+
+    if (channel === 'push' && !athlete.canReceivePulseCheckPush) {
+      setPageMessage({ type: 'error', text: `${athlete.displayName} does not currently have a PulseCheck push token on file.` });
+      return;
+    }
+
+    if (channel === 'email' && !athlete.email.trim()) {
+      setPageMessage({ type: 'error', text: `${athlete.displayName} does not have an email address on file.` });
+      return;
+    }
+
+    setCommunicationPreviewModal({
+      athlete,
+      channel,
+      preview: channel === 'push' ? buildDefaultPushPreview(detail, athlete) : null,
+      loading: true,
+      sending: false,
+      error: null,
+    });
+
+    try {
+      const endpoint =
+        channel === 'email'
+          ? '/.netlify/functions/send-pulsecheck-pilot-activation-email'
+          : '/.netlify/functions/send-pulsecheck-pilot-activation-push';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getFirebaseModeRequestHeaders(),
+        },
+        body: JSON.stringify({
+          ...requestPayload,
+          previewOnly: true,
+        }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.error || json?.message || `Failed to load ${channel} preview (HTTP ${response.status})`);
+      }
+
+      if (json?.outreach?.id) {
+        setCommunicationRecordsByKey((current) => ({
+          ...current,
+          [buildAthleteCommunicationKey(athlete.athleteId, channel)]: json.outreach as PilotAthleteCommunicationRecord,
+        }));
+      }
+
+      setCommunicationPreviewModal((current) =>
+        current && current.athlete.athleteId === athlete.athleteId && current.channel === channel
+          ? {
+              ...current,
+              preview: (json.preview as PilotAthleteCommunicationPreview) || current.preview,
+              loading: false,
+              error: null,
+            }
+          : current
+      );
+    } catch (previewError: any) {
+      console.error('[PulseCheckPilotDashboard] Failed to load communication preview:', previewError);
+      setCommunicationPreviewModal((current) =>
+        current && current.athlete.athleteId === athlete.athleteId && current.channel === channel
+          ? {
+              ...current,
+              loading: false,
+              error: previewError?.message || `Failed to load ${channel} preview.`,
+            }
+          : current
+      );
+    }
+  };
+
+  const confirmCommunicationSend = async () => {
+    if (!detail || !communicationPreviewModal) return;
+    const { athlete, channel } = communicationPreviewModal;
+    const requestPayload = buildAthleteCommunicationRequestPayload(athlete, channel);
+    if (!requestPayload) return;
+
+    if (channel === 'push' && !athlete.canReceivePulseCheckPush) {
+      const message = `${athlete.displayName} does not currently have a PulseCheck push token on file.`;
+      setCommunicationPreviewModal((current) => (current ? { ...current, sending: false, error: message } : current));
+      dispatch(showToast({ message, type: 'error' }));
+      return;
+    }
+
+    if (channel === 'email' && !athlete.email.trim()) {
+      const message = `${athlete.displayName} does not have an email address on file.`;
+      setCommunicationPreviewModal((current) => (current ? { ...current, sending: false, error: message } : current));
+      dispatch(showToast({ message, type: 'error' }));
+      return;
+    }
+
+    setCommunicationPreviewModal((current) => (current ? { ...current, sending: true, error: null } : current));
+    setPageMessage(null);
+
+    try {
+      const endpoint =
+        channel === 'email'
+          ? '/.netlify/functions/send-pulsecheck-pilot-activation-email'
+          : '/.netlify/functions/send-pulsecheck-pilot-activation-push';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getFirebaseModeRequestHeaders(),
+        },
+        body: JSON.stringify(requestPayload),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.error || json?.message || `Failed to send ${channel} notification (HTTP ${response.status})`);
+      }
+
+      if (json?.outreach?.id) {
+        setCommunicationRecordsByKey((current) => ({
+          ...current,
+          [buildAthleteCommunicationKey(athlete.athleteId, channel)]: json.outreach as PilotAthleteCommunicationRecord,
+        }));
+      } else {
+        await loadCommunicationRecords(detail.pilot.id);
+      }
+
+      setCommunicationPreviewModal((current) =>
+        current && current.athlete.athleteId === athlete.athleteId && current.channel === channel
+          ? {
+              ...current,
+              preview: (json.preview as PilotAthleteCommunicationPreview) || current.preview,
+              loading: false,
+              sending: false,
+              error: null,
+            }
+          : current
+      );
+
+      dispatch(
+        showToast({
+          message:
+            channel === 'email'
+              ? `Activation email sent to ${athlete.email}.`
+              : `Activation push sent to ${athlete.displayName}.`,
+          type: 'success',
+        })
+      );
+    } catch (sendError: any) {
+      const message = sendError?.message || `Failed to send ${channel} notification.`;
+      console.error(`[PulseCheckPilotDashboard] Failed to send ${channel} outreach:`, sendError);
+      setCommunicationPreviewModal((current) => (current ? { ...current, sending: false, error: message } : current));
+      dispatch(showToast({ message, type: 'error' }));
+    }
+  };
 
   const toggleDemoMode = async () => {
     const nextValue = !pulseCheckPilotDashboardService.isDemoModeEnabled();
@@ -719,27 +1144,39 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     setHypothesisAssistMeta(null);
   }, [pilotId, cohortFilter]);
 
-  const visibleAthletes = useMemo(() => {
+  const visibleActiveAthletes = useMemo(() => {
     if (!detail) return [];
     if (!cohortFilter) return detail.athletes;
     return detail.athletes.filter((athlete) => athlete.pilotEnrollment.cohortId === cohortFilter);
   }, [detail, cohortFilter]);
 
+  const visibleRosterAthletes = useMemo(() => {
+    if (!detail) return [];
+    const filtered = cohortFilter
+      ? detail.rosterAthletes.filter((athlete) => athlete.pilotEnrollment?.cohortId === cohortFilter)
+      : detail.rosterAthletes;
+    return [...filtered].sort(
+      (left, right) =>
+        athleteRosterStatusRank(left.pilotEnrollment?.status) - athleteRosterStatusRank(right.pilotEnrollment?.status) ||
+        left.displayName.localeCompare(right.displayName)
+    );
+  }, [detail, cohortFilter]);
+
   const visibleMetrics = useMemo(() => {
     const activeCohortCount = detail?.cohorts.length || 0;
     return {
-      activeAthleteCount: visibleAthletes.length,
+      activeAthleteCount: visibleActiveAthletes.length,
       cohortCount: cohortFilter ? (selectedCohort ? 1 : 0) : activeCohortCount,
-      athletesWithEngineRecord: visibleAthletes.filter((athlete) => athlete.engineSummary.hasEngineRecord).length,
-      athletesWithStablePatterns: visibleAthletes.filter((athlete) => athlete.engineSummary.stablePatternCount > 0).length,
-      totalEvidenceRecords: visibleAthletes.reduce((sum, athlete) => sum + athlete.engineSummary.evidenceRecordCount, 0),
-      totalPatternModels: visibleAthletes.reduce((sum, athlete) => sum + athlete.engineSummary.patternModelCount, 0),
-      totalRecommendationProjections: visibleAthletes.reduce(
+      athletesWithEngineRecord: visibleActiveAthletes.filter((athlete) => athlete.engineSummary.hasEngineRecord).length,
+      athletesWithStablePatterns: visibleActiveAthletes.filter((athlete) => athlete.engineSummary.stablePatternCount > 0).length,
+      totalEvidenceRecords: visibleActiveAthletes.reduce((sum, athlete) => sum + athlete.engineSummary.evidenceRecordCount, 0),
+      totalPatternModels: visibleActiveAthletes.reduce((sum, athlete) => sum + athlete.engineSummary.patternModelCount, 0),
+      totalRecommendationProjections: visibleActiveAthletes.reduce(
         (sum, athlete) => sum + athlete.engineSummary.recommendationProjectionCount,
         0
       ),
     };
-  }, [cohortFilter, detail?.cohorts.length, selectedCohort, visibleAthletes]);
+  }, [cohortFilter, detail?.cohorts.length, selectedCohort, visibleActiveAthletes]);
 
   const visibleCohortSummaries = useMemo(() => {
     if (!detail) return [];
@@ -761,7 +1198,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   }), [visibleMetrics]);
 
   const visibleRecommendationProjectionConsumerCounts = useMemo(() => {
-    return visibleAthletes.reduce<Record<string, number>>((accumulator, athlete) => {
+    return visibleActiveAthletes.reduce<Record<string, number>>((accumulator, athlete) => {
       const counts = athlete.engineSummary.recommendationProjectionCountsByConsumer || {};
       Object.entries(counts).forEach(([consumer, count]) => {
         if (!count) return;
@@ -769,7 +1206,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       });
       return accumulator;
     }, {});
-  }, [visibleAthletes]);
+  }, [visibleActiveAthletes]);
 
   const visibleOutcomeMetrics = useMemo(() => {
     if (!detail) return null;
@@ -835,10 +1272,10 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
   const visibleEnrollmentCount = useMemo(() => {
     if (!visibleOutcomeMetrics) return null;
-    const totalCount = cohortFilter ? visibleAthletes.length : (detail?.metrics.totalEnrollmentCount || 0);
+    const totalCount = cohortFilter ? visibleActiveAthletes.length : (detail?.metrics.totalEnrollmentCount || 0);
     const enrolledCount = totalCount > 0 ? Math.round((visibleOutcomeMetrics.enrollmentRate / 100) * totalCount) : 0;
     return { enrolledCount, totalCount };
-  }, [cohortFilter, detail?.metrics.totalEnrollmentCount, visibleAthletes.length, visibleOutcomeMetrics]);
+  }, [cohortFilter, detail?.metrics.totalEnrollmentCount, visibleActiveAthletes.length, visibleOutcomeMetrics]);
 
   const wholePilotOutcomeMetrics = detail?.outcomeMetrics || null;
   const operationalWatchListSummaryCards: Array<{
@@ -1083,6 +1520,78 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     scopedRevokedInvites.length,
     scopedSingleUseInvites.length,
   ]);
+
+  const inviteActivityParticipants = useMemo(() => {
+    const grouped = new Map<string, InviteActivityParticipantRow>();
+
+    inviteActivity.forEach((activity) => {
+      const participantKey = activity.email || activity.sessionId || activity.id;
+      const eventDate = toDateValue(activity.createdAt);
+      const existing = grouped.get(participantKey);
+
+      if (!existing) {
+        grouped.set(participantKey, {
+          key: participantKey,
+          email: activity.email || '',
+          emailSource: activity.emailSource || 'unknown',
+          sessionId: activity.sessionId || '',
+          firstSeenAt: eventDate,
+          lastSeenAt: eventDate,
+          lastEventType: activity.eventType,
+          lastError: activity.errorMessage || '',
+          userAgent: activity.userAgent || '',
+          token: activity.token || '',
+          hasPageView: activity.eventType === 'page-view' || activity.eventType === 'authenticated-view',
+          hasRedeemSucceeded: activity.eventType === 'redeem-succeeded',
+          hasRedeemFailed: activity.eventType === 'redeem-failed',
+          hasFollowUpRequest: activity.eventType === 'follow-up-requested',
+          needsFollowUp: Boolean(activity.needsFollowUp),
+        });
+        return;
+      }
+
+      const shouldReplaceLatest =
+        (eventDate?.getTime() || 0) >= (existing.lastSeenAt?.getTime() || 0);
+
+      if (!existing.email && activity.email) {
+        existing.email = activity.email;
+        existing.emailSource = activity.emailSource || existing.emailSource;
+      }
+
+      if (eventDate && (!existing.firstSeenAt || eventDate.getTime() < existing.firstSeenAt.getTime())) {
+        existing.firstSeenAt = eventDate;
+      }
+
+      if (shouldReplaceLatest) {
+        existing.lastSeenAt = eventDate;
+        existing.lastEventType = activity.eventType;
+        existing.lastError = activity.errorMessage || existing.lastError;
+        existing.userAgent = activity.userAgent || existing.userAgent;
+        existing.token = activity.token || existing.token;
+      }
+
+      existing.hasPageView ||= activity.eventType === 'page-view' || activity.eventType === 'authenticated-view';
+      existing.hasRedeemSucceeded ||= activity.eventType === 'redeem-succeeded';
+      existing.hasRedeemFailed ||= activity.eventType === 'redeem-failed';
+      existing.hasFollowUpRequest ||= activity.eventType === 'follow-up-requested';
+      existing.needsFollowUp ||= Boolean(activity.needsFollowUp);
+    });
+
+    return Array.from(grouped.values())
+      .map((participant) => ({
+        ...participant,
+        needsFollowUp: (participant.hasRedeemFailed || participant.hasFollowUpRequest || participant.needsFollowUp)
+          && !participant.hasRedeemSucceeded,
+      }))
+      .sort((left, right) => (right.lastSeenAt?.getTime() || 0) - (left.lastSeenAt?.getTime() || 0));
+  }, [inviteActivity]);
+
+  const inviteActivitySummary = useMemo(() => ({
+    scannedCount: inviteActivityParticipants.filter((participant) => participant.hasPageView).length,
+    identifiedCount: inviteActivityParticipants.filter((participant) => Boolean(participant.email)).length,
+    needsFollowUpCount: inviteActivityParticipants.filter((participant) => participant.needsFollowUp).length,
+    joinedCount: inviteActivityParticipants.filter((participant) => participant.hasRedeemSucceeded).length,
+  }), [inviteActivityParticipants]);
 
   const inviteConfigSource = useMemo(() => {
     if (!detail) {
@@ -1482,8 +1991,12 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
-  const handleUnenrollAthlete = async (athlete: PilotDashboardDetail['athletes'][number]) => {
+  const handleUnenrollAthlete = async (athlete: PilotDashboardDetail['rosterAthletes'][number]) => {
     if (!detail) return;
+    if (!athlete.isEnrolled || !athlete.pilotEnrollment) {
+      setPageMessage({ type: 'error', text: `${athlete.displayName} is not currently enrolled in this pilot.` });
+      return;
+    }
 
     const confirmed = window.confirm(
       `Unenroll ${athlete.displayName} from ${detail.pilot.name}? They will stop appearing in this pilot's active athlete reporting.`
@@ -1517,8 +2030,12 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
-  const handleSaveAthleteCohort = async (athlete: PilotDashboardDetail['athletes'][number]) => {
+  const handleSaveAthleteCohort = async (athlete: PilotDashboardDetail['rosterAthletes'][number]) => {
     if (!detail) return;
+    if (!athlete.isEnrolled || !athlete.pilotEnrollment) {
+      setPageMessage({ type: 'error', text: `${athlete.displayName} is not currently enrolled in this pilot.` });
+      return;
+    }
 
     const nextCohortId = athleteCohortDrafts[athlete.athleteId] ?? athlete.pilotEnrollment.cohortId ?? '';
     const currentCohortId = athlete.pilotEnrollment.cohortId || '';
@@ -1560,8 +2077,12 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
-  const handleSeedAthleteData = async (athlete: PilotDashboardDetail['athletes'][number]) => {
+  const handleSeedAthleteData = async (athlete: PilotDashboardDetail['rosterAthletes'][number]) => {
     if (!detail) return;
+    if (!athlete.pilotEnrollment || athlete.pilotEnrollment.status !== 'active') {
+      setPageMessage({ type: 'error', text: `${athlete.displayName} needs an active pilot enrollment before seeding data.` });
+      return;
+    }
 
     if (demoModeEnabled) {
       setPageMessage({ type: 'error', text: 'Demo mode does not support seeding pilot athlete data.' });
@@ -2719,6 +3240,102 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         ))}
                       </div>
                     ) : null}
+
+                    <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4">
+                      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Invite Activity</div>
+                          <h3 className="mt-2 text-base font-semibold text-white">Scan and follow-up queue</h3>
+                          <p className="mt-1 text-sm text-zinc-400">
+                            Browser-safe invite opens, authenticated joins, redeem failures, and manual follow-up requests land here so staff can work a real recovery list.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <div className="rounded-2xl border border-white/10 bg-[#0b0f17] p-4">
+                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Scans Captured</div>
+                          <div className="mt-3 text-2xl font-semibold text-white">{inviteActivitySummary.scannedCount}</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-[#0b0f17] p-4">
+                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Identified People</div>
+                          <div className="mt-3 text-2xl font-semibold text-white">{inviteActivitySummary.identifiedCount}</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-[#0b0f17] p-4">
+                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Needs Follow-Up</div>
+                          <div className="mt-3 text-2xl font-semibold text-amber-100">{inviteActivitySummary.needsFollowUpCount}</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-[#0b0f17] p-4">
+                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Joined Successfully</div>
+                          <div className="mt-3 text-2xl font-semibold text-emerald-100">{inviteActivitySummary.joinedCount}</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] p-4 text-sm leading-7 text-zinc-200">
+                        This queue captures the browser-safe invite route. Earlier native-app failures that never touched the web invite page may still need manual roster comparison, but everyone using the current QR or shared URL should appear here.
+                      </div>
+
+                      {inviteActivityParticipants.length > 0 ? (
+                        <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
+                          <table className="min-w-full divide-y divide-white/10 text-left text-sm">
+                            <thead className="bg-white/5 text-xs uppercase tracking-[0.16em] text-zinc-500">
+                              <tr>
+                                <th className="px-4 py-3 font-medium">Person</th>
+                                <th className="px-4 py-3 font-medium">Status</th>
+                                <th className="px-4 py-3 font-medium">Latest Event</th>
+                                <th className="px-4 py-3 font-medium">Last Seen</th>
+                                <th className="px-4 py-3 font-medium">Notes</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5 bg-[#0b0f17]">
+                              {inviteActivityParticipants.slice(0, 50).map((participant) => {
+                                const status = inviteActivityStatusPresentation(participant);
+                                const anonymousLabel = participant.sessionId
+                                  ? `Anonymous scan ${participant.sessionId.slice(0, 8)}`
+                                  : 'Anonymous scan';
+
+                                return (
+                                  <tr key={participant.key}>
+                                    <td className="px-4 py-4 align-top">
+                                      <div className="font-medium text-white">{participant.email || anonymousLabel}</div>
+                                      <div className="mt-1 text-xs text-zinc-500">
+                                        {participant.email
+                                          ? participant.emailSource === 'manual-follow-up'
+                                            ? 'Captured from follow-up request'
+                                            : 'Captured from authenticated browser session'
+                                          : 'No contact email captured yet'}
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-4 align-top">
+                                      <span className={`inline-flex rounded-full border px-3 py-1 text-xs ${status.className}`}>
+                                        {status.label}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-4 align-top text-zinc-300">
+                                      {formatInviteActivityEventLabel(participant.lastEventType)}
+                                    </td>
+                                    <td className="px-4 py-4 align-top text-zinc-300">
+                                      {participant.lastSeenAt ? participant.lastSeenAt.toLocaleString() : 'Not available'}
+                                    </td>
+                                    <td className="px-4 py-4 align-top text-zinc-400">
+                                      {participant.lastError || (participant.needsFollowUp
+                                        ? 'Send an individual invite link to this email.'
+                                        : participant.hasRedeemSucceeded
+                                          ? 'Invite completed successfully.'
+                                          : 'Scan captured.' )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-[#0b0f17] px-4 py-6 text-sm text-zinc-400">
+                          No browser-safe invite activity has been recorded for this pilot yet.
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {inviteConfigDraft ? (
@@ -3096,10 +3713,19 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       <div>
                         <h2 className="text-lg font-semibold">Pilot Athletes</h2>
                         <p className="mt-1 text-sm text-zinc-400">
-                          Only athletes with active PilotEnrollment in this pilot appear here{selectedCohort ? `, filtered to ${selectedCohort.name}.` : '.'}
+                          All athlete team members appear here with active enrollments first, then consent-pending athletes, then not-enrolled athletes{selectedCohort ? `, filtered to ${selectedCohort.name}.` : '.'}
                         </p>
                       </div>
                     </div>
+                    {detail.cohorts.length === 0 ? (
+                      <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-4 text-sm text-amber-100">
+                        This pilot does not have any cohort records yet, so every athlete is currently unassigned. Create cohorts in{' '}
+                        <Link href="/admin/pulsecheckProvisioning" className="font-semibold underline hover:text-white">
+                          PulseCheck provisioning
+                        </Link>{' '}
+                        first, then you can assign athletes here.
+                      </div>
+                    ) : null}
                     <div className="mt-4 overflow-x-auto">
                       <table className="min-w-full text-sm">
                         <thead className="text-xs uppercase tracking-wide text-zinc-500">
@@ -3109,21 +3735,42 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                             <th className="px-3 py-2 text-left">Evidence</th>
                             <th className="px-3 py-2 text-left">Patterns</th>
                             <th className="px-3 py-2 text-left">Projections</th>
+                            <th className="px-3 py-2 text-left">Push notification</th>
+                            <th className="px-3 py-2 text-left">Email</th>
                             <th className="px-3 py-2 text-left">Action</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {visibleAthletes.length === 0 ? (
+                          {visibleRosterAthletes.length === 0 ? (
                             <tr className="border-t border-white/5">
-                              <td colSpan={6} className="px-3 py-6 text-center text-sm text-zinc-500">
-                                No active pilot athletes match the current cohort filter.
+                              <td colSpan={8} className="px-3 py-6 text-center text-sm text-zinc-500">
+                                No athlete team members match the current cohort filter.
                               </td>
                             </tr>
                           ) : (
-                            visibleAthletes.map((athlete) => (
+                            visibleRosterAthletes.map((athlete) => {
+                              const enrollmentBadge = athleteEnrollmentBadgePresentation(athlete.pilotEnrollment?.status);
+                              const canManageEnrollment = Boolean(athlete.isEnrolled && athlete.pilotEnrollment);
+                              const hasActivePilotEnrollment = athlete.pilotEnrollment?.status === 'active';
+                              const canSendActivationOutreach = Boolean(athlete.pilotEnrollment);
+                              const hasEmailDestination = Boolean(athlete.email.trim());
+                              const hasPilotCohortsConfigured = detail.cohorts.length > 0;
+                              const pushRecord = getAthleteCommunicationRecord(athlete.athleteId, 'push');
+                              const emailRecord = getAthleteCommunicationRecord(athlete.athleteId, 'email');
+                              const pushActionLabel =
+                                pushRecord && pushRecord.status !== 'not-sent' ? 'Preview & resend' : 'Preview & send';
+                              const emailActionLabel =
+                                emailRecord && emailRecord.status !== 'not-sent' ? 'Preview & resend' : 'Preview & send';
+
+                              return (
                               <tr key={athlete.athleteId} className="border-t border-white/5">
                                 <td className="px-3 py-3">
-                                  <div className="font-medium text-white">{athlete.displayName}</div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="font-medium text-white">{athlete.displayName}</div>
+                                    <span className={`rounded-full border px-2 py-1 text-[11px] ${enrollmentBadge.className}`}>
+                                      {enrollmentBadge.label}
+                                    </span>
+                                  </div>
                                   <div className="text-xs text-zinc-500">{athlete.email || athlete.athleteId}</div>
                                   <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
                                     {athlete.operationalWatchList ? (
@@ -3178,71 +3825,169 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                 </td>
                                 <td className="px-3 py-3 text-zinc-300">
                                   <div className="space-y-3">
-                                    <div>{athlete.cohort?.name || 'No cohort'}</div>
+                                    <div>
+                                      {athlete.isEnrolled
+                                        ? hasPilotCohortsConfigured
+                                          ? athlete.cohort?.name || 'No cohort assigned'
+                                          : 'No pilot cohorts configured'
+                                        : 'Not enrolled'}
+                                    </div>
                                     <select
-                                      value={athleteCohortDrafts[athlete.athleteId] ?? athlete.pilotEnrollment.cohortId ?? ''}
+                                      value={athleteCohortDrafts[athlete.athleteId] ?? athlete.pilotEnrollment?.cohortId ?? ''}
                                       onChange={(event) =>
                                         setAthleteCohortDrafts((current) => ({
                                           ...current,
                                           [athlete.athleteId]: event.target.value,
                                         }))
                                       }
-                                      className="w-full min-w-[180px] rounded-2xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-sm text-white"
+                                      disabled={!canManageEnrollment || !hasPilotCohortsConfigured}
+                                      className="w-full min-w-[180px] rounded-2xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:text-zinc-500 disabled:opacity-60"
                                     >
-                                      <option value="">No cohort</option>
+                                      <option value="">
+                                        {hasPilotCohortsConfigured ? 'No cohort' : 'No pilot cohorts created yet'}
+                                      </option>
                                       {detail.cohorts.map((cohort) => (
                                         <option key={cohort.id} value={cohort.id}>
                                           {cohort.name}
                                         </option>
                                       ))}
                                     </select>
+                                    {canManageEnrollment && !hasPilotCohortsConfigured ? (
+                                      <div className="text-xs text-zinc-500">Create pilot cohorts first to assign this athlete.</div>
+                                    ) : null}
                                   </div>
                                 </td>
-                                <td className="px-3 py-3 text-zinc-300">{athlete.engineSummary.evidenceRecordCount}</td>
-                                <td className="px-3 py-3 text-zinc-300">{athlete.engineSummary.patternModelCount}</td>
-                                <td className="px-3 py-3 text-zinc-300">{athlete.engineSummary.recommendationProjectionCount}</td>
+                                <td className="px-3 py-3 text-zinc-300">{canManageEnrollment ? athlete.engineSummary.evidenceRecordCount : '—'}</td>
+                                <td className="px-3 py-3 text-zinc-300">{canManageEnrollment ? athlete.engineSummary.patternModelCount : '—'}</td>
+                                <td className="px-3 py-3 text-zinc-300">{canManageEnrollment ? athlete.engineSummary.recommendationProjectionCount : '—'}</td>
+                                <td className="px-3 py-3 align-top">
+                                  <div className="flex min-w-[220px] flex-col items-start gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => void openAthleteCommunicationPreview(athlete, 'push')}
+                                      disabled={!canSendActivationOutreach || !athlete.canReceivePulseCheckPush}
+                                      className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-medium text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-zinc-500"
+                                    >
+                                      {pushActionLabel}
+                                    </button>
+                                    <div className="flex flex-wrap gap-1">
+                                      {COMMUNICATION_STATUS_STAGES.map((stage) => (
+                                        <span
+                                          key={`push-${athlete.athleteId}-${stage}`}
+                                          className={`rounded-full border px-2 py-1 text-[10px] uppercase tracking-[0.16em] ${communicationStageClassName(
+                                            communicationStageIsComplete(pushRecord, stage)
+                                          )}`}
+                                        >
+                                          {communicationStageLabel(stage)}
+                                        </span>
+                                      ))}
+                                    </div>
+                                    <span className="text-xs text-zinc-500">
+                                      {!canSendActivationOutreach
+                                        ? 'Not enrolled in this pilot'
+                                        : athlete.canReceivePulseCheckPush
+                                          ? summarizeCommunicationStatus(pushRecord)
+                                          : 'No PulseCheck push token on file'}
+                                    </span>
+                                    {pushRecord?.status === 'failed' ? (
+                                      <span className="text-xs text-rose-200">{pushRecord.lastError || 'Last send failed'}</span>
+                                    ) : (
+                                      <span className="text-[11px] text-zinc-500">
+                                        Delivery and open update when receipts are available.
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-3 align-top">
+                                  <div className="flex min-w-[220px] flex-col items-start gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => void openAthleteCommunicationPreview(athlete, 'email')}
+                                      disabled={!canSendActivationOutreach || !hasEmailDestination}
+                                      className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1.5 text-xs font-medium text-amber-100 transition hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-zinc-500"
+                                    >
+                                      {emailActionLabel}
+                                    </button>
+                                    <div className="flex flex-wrap gap-1">
+                                      {COMMUNICATION_STATUS_STAGES.map((stage) => (
+                                        <span
+                                          key={`email-${athlete.athleteId}-${stage}`}
+                                          className={`rounded-full border px-2 py-1 text-[10px] uppercase tracking-[0.16em] ${communicationStageClassName(
+                                            communicationStageIsComplete(emailRecord, stage)
+                                          )}`}
+                                        >
+                                          {communicationStageLabel(stage)}
+                                        </span>
+                                      ))}
+                                    </div>
+                                    <span className="text-xs text-zinc-500">
+                                      {!canSendActivationOutreach
+                                        ? 'Not enrolled in this pilot'
+                                        : hasEmailDestination
+                                          ? summarizeCommunicationStatus(emailRecord)
+                                          : 'No email address on file'}
+                                    </span>
+                                    {emailRecord?.status === 'failed' ? (
+                                      <span className="text-xs text-rose-200">{emailRecord.lastError || 'Last send failed'}</span>
+                                    ) : (
+                                      <span className="text-[11px] text-zinc-500">Includes an Open Pulse Check App button.</span>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="px-3 py-3">
                                   <div className="flex flex-col items-start gap-2">
-                                    <Link
-                                      href={`/admin/pulsecheckPilotDashboard/${encodeURIComponent(detail.pilot.id)}/athletes/${encodeURIComponent(
-                                        athlete.athleteId
-                                      )}`}
-                                      className="text-cyan-200 hover:text-cyan-100"
-                                    >
-                                      Open athlete
-                                    </Link>
-                                    <button
-                                      type="button"
-                                      onClick={() => void handleSeedAthleteData(athlete)}
-                                      disabled={seedingAthleteDataId === athlete.athleteId}
-                                      className="text-amber-200 transition hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-500"
-                                    >
-                                      {seedingAthleteDataId === athlete.athleteId ? 'Seeding data...' : 'Seed data'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => void handleSaveAthleteCohort(athlete)}
-                                      disabled={
-                                        savingAthleteCohortId === athlete.athleteId ||
-                                        (athleteCohortDrafts[athlete.athleteId] ?? athlete.pilotEnrollment.cohortId ?? '') ===
-                                          (athlete.pilotEnrollment.cohortId || '')
-                                      }
-                                      className="text-emerald-200 transition hover:text-emerald-100 disabled:cursor-not-allowed disabled:text-zinc-500"
-                                    >
-                                      {savingAthleteCohortId === athlete.athleteId ? 'Saving cohort...' : 'Save cohort'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => void handleUnenrollAthlete(athlete)}
-                                      disabled={unenrollingAthleteId === athlete.athleteId}
-                                      className="text-rose-200 transition hover:text-rose-100 disabled:cursor-not-allowed disabled:text-zinc-500"
-                                    >
-                                      {unenrollingAthleteId === athlete.athleteId ? 'Unenrolling...' : 'Unenroll from pilot'}
-                                    </button>
+                                    {canManageEnrollment ? (
+                                      <>
+                                        {hasActivePilotEnrollment ? (
+                                          <Link
+                                            href={`/admin/pulsecheckPilotDashboard/${encodeURIComponent(detail.pilot.id)}/athletes/${encodeURIComponent(
+                                              athlete.athleteId
+                                            )}`}
+                                            className="text-cyan-200 hover:text-cyan-100"
+                                          >
+                                            Open athlete
+                                          </Link>
+                                        ) : (
+                                          <span className="text-zinc-500">Enrollment awaiting consent</span>
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleSeedAthleteData(athlete)}
+                                          disabled={seedingAthleteDataId === athlete.athleteId || !hasActivePilotEnrollment}
+                                          className="text-amber-200 transition hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-500"
+                                        >
+                                          {seedingAthleteDataId === athlete.athleteId ? 'Seeding data...' : 'Seed data'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleSaveAthleteCohort(athlete)}
+                                          disabled={
+                                            !hasPilotCohortsConfigured ||
+                                            savingAthleteCohortId === athlete.athleteId ||
+                                            (athleteCohortDrafts[athlete.athleteId] ?? athlete.pilotEnrollment?.cohortId ?? '') ===
+                                              (athlete.pilotEnrollment?.cohortId || '')
+                                          }
+                                          className="text-emerald-200 transition hover:text-emerald-100 disabled:cursor-not-allowed disabled:text-zinc-500"
+                                        >
+                                          {savingAthleteCohortId === athlete.athleteId ? 'Saving cohort...' : 'Save cohort'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleUnenrollAthlete(athlete)}
+                                          disabled={unenrollingAthleteId === athlete.athleteId}
+                                          className="text-rose-200 transition hover:text-rose-100 disabled:cursor-not-allowed disabled:text-zinc-500"
+                                        >
+                                          {unenrollingAthleteId === athlete.athleteId ? 'Unenrolling...' : 'Unenroll from pilot'}
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <span className="text-zinc-500">Not enrolled in this pilot</span>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
-                            ))
+                              );
+                            })
                           )}
                         </tbody>
                       </table>
@@ -4513,6 +5258,24 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
             teamName={detail.team.displayName}
             organizationName={detail.organization.displayName}
             onClose={() => setQrInvite(null)}
+          />
+        ) : null}
+        {communicationPreviewModal ? (
+          <PilotAthleteCommunicationModal
+            isOpen={Boolean(communicationPreviewModal)}
+            athleteName={communicationPreviewModal.athlete.displayName}
+            athleteEmail={communicationPreviewModal.athlete.email}
+            channel={communicationPreviewModal.channel}
+            preview={communicationPreviewModal.preview}
+            record={getAthleteCommunicationRecord(communicationPreviewModal.athlete.athleteId, communicationPreviewModal.channel)}
+            loadingPreview={communicationPreviewModal.loading}
+            sending={communicationPreviewModal.sending}
+            error={communicationPreviewModal.error}
+            onClose={() => {
+              if (communicationPreviewModal.sending) return;
+              setCommunicationPreviewModal(null);
+            }}
+            onSend={() => void confirmCommunicationSend()}
           />
         ) : null}
         <AnimatePresence>
