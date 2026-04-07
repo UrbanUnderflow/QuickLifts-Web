@@ -12,6 +12,11 @@ import {
   shouldForceDevFirebase,
   toIso,
 } from '../../../lib/groupMeetGuestGoogleCalendar';
+import {
+  getGroupMeetBaseUrl,
+  mapGroupMeetInviteDetail,
+  maybeNotifyGroupMeetHostAfterAvailabilitySave,
+} from '../../../lib/groupMeetAdmin';
 
 type GroupMeetInvitePayload = {
   invite: {
@@ -163,14 +168,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed.' });
   }
 
+  if (requestData.status === 'closed') {
+    return res.status(403).json({ error: 'This availability window is closed.' });
+  }
+
   if (deadlinePassed) {
     return res.status(403).json({ error: 'This availability window is closed.' });
   }
 
   try {
+    const targetMonth = requestData.targetMonth || '';
+    const respondedBeforeSave = hasInviteResponse(inviteData, targetMonth);
     const availabilityEntries = normalizeGroupMeetAvailabilitySlots(
       req.body?.availabilityEntries,
-      requestData.targetMonth || ''
+      targetMonth
     );
 
     const hasResponse = availabilityEntries.length > 0;
@@ -187,7 +198,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const refreshedInvitesSnapshot = await requestDoc.ref.collection(GROUP_MEET_INVITES_SUBCOLLECTION).get();
     const responseCount = refreshedInvitesSnapshot.docs.filter((docSnap) =>
-      hasInviteResponse(docSnap.data() || {}, requestData.targetMonth || '')
+      hasInviteResponse(docSnap.data() || {}, targetMonth)
     ).length;
 
     await requestDoc.ref.set(
@@ -199,20 +210,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     const refreshedInviteDoc = await inviteDoc.ref.get();
+    const refreshedInvites = refreshedInvitesSnapshot.docs.map((docSnap) =>
+      mapGroupMeetInviteDetail(docSnap, targetMonth)
+    );
+    const nextRequestData = {
+      ...requestData,
+      responseCount,
+    };
+
+    if (hasResponse) {
+      try {
+        await maybeNotifyGroupMeetHostAfterAvailabilitySave({
+          requestRef: requestDoc.ref,
+          requestId: requestDoc.id,
+          requestData: nextRequestData,
+          invites: refreshedInvites,
+          responderToken: token,
+          responseAction: respondedBeforeSave ? 'updated' : 'added',
+          baseUrl: getGroupMeetBaseUrl(req),
+        });
+      } catch (notificationError) {
+        console.error('[group-meet-public] Host notification email failed:', notificationError);
+      }
+    }
 
     return res.status(200).json(
       buildInvitePayload({
         token,
         inviteData: refreshedInviteDoc.data() || {},
         requestId: requestDoc.id,
-        requestData: {
-          ...requestData,
-          responseCount,
-        },
+        requestData: nextRequestData,
         peerAvailability: buildPeerAvailability({
           currentToken: token,
           inviteDocs: refreshedInvitesSnapshot.docs,
-          targetMonth: requestData.targetMonth || '',
+          targetMonth,
         }),
       })
     );

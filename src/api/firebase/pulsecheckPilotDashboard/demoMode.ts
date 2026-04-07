@@ -1456,6 +1456,31 @@ export const pilotDashboardDemoMode = {
     const now = Date.now();
     const redemptionMode = input.redemptionMode === 'general' ? 'general' : 'single-use';
     const cohortSegment = normalizeString(input.cohortId) ? `-${normalizeString(input.cohortId)}` : '';
+    const existingGeneralInvite =
+      redemptionMode === 'general'
+        ? store.inviteLinks.find((invite) =>
+            invite.inviteType === 'team-access' &&
+            (invite.redemptionMode || 'single-use') === 'general' &&
+            normalizeString(invite.pilotId) === normalizeString(input.pilotId) &&
+            normalizeString(invite.cohortId) === normalizeString(input.cohortId)
+          ) || null
+        : null;
+
+    if (existingGeneralInvite) {
+      const refreshedInvite = {
+        ...existingGeneralInvite,
+        status: 'active',
+        pilotName: normalizeString(input.pilotName),
+        cohortName: normalizeString(input.cohortName),
+        createdByUserId: normalizeString(input.createdByUserId) || existingGeneralInvite.createdByUserId || 'demo-admin-user',
+        createdByEmail: normalizeString(input.createdByEmail) || existingGeneralInvite.createdByEmail || 'demo-admin@pulsecheck.test',
+        updatedAt: asTimestamp(now),
+      } as PulseCheckInviteLink;
+      store.inviteLinks = store.inviteLinks.map((invite) => (invite.id === refreshedInvite.id ? refreshedInvite : invite));
+      writeStore(store);
+      return refreshedInvite;
+    }
+
     const invite = {
       id: `demo-invite-${now}`,
       inviteType: 'team-access',
@@ -1476,23 +1501,7 @@ export const pilotDashboardDemoMode = {
       createdAt: asTimestamp(now),
       updatedAt: asTimestamp(now),
     } as PulseCheckInviteLink;
-    const filteredInvites =
-      redemptionMode === 'general'
-        ? store.inviteLinks.map((currentInvite) =>
-            currentInvite.inviteType === 'team-access' &&
-            currentInvite.status === 'active' &&
-            (currentInvite.redemptionMode || 'single-use') === 'general' &&
-            normalizeString(currentInvite.pilotId) === normalizeString(input.pilotId) &&
-            normalizeString(currentInvite.cohortId) === normalizeString(input.cohortId)
-              ? {
-                  ...currentInvite,
-                  status: 'revoked' as const,
-                  updatedAt: asTimestamp(now),
-                }
-              : currentInvite
-          )
-        : store.inviteLinks;
-    store.inviteLinks = [invite, ...filteredInvites];
+    store.inviteLinks = [invite, ...store.inviteLinks];
     writeStore(store);
     return invite;
   },
