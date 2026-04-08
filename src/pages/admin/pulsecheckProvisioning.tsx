@@ -498,6 +498,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [clinicianLinkCreatingProfileId, setClinicianLinkCreatingProfileId] = useState<string | null>(null);
   const [adminLinkCreatingEmail, setAdminLinkCreatingEmail] = useState<string | null>(null);
   const [teamCommercialSavingId, setTeamCommercialSavingId] = useState<string | null>(null);
+  const [pilotStudyModeDrafts, setPilotStudyModeDrafts] = useState<Record<string, PulseCheckPilotStudyMode>>({});
+  const [pilotStudyModeSavingId, setPilotStudyModeSavingId] = useState<string | null>(null);
   const [onboardingModal, setOnboardingModal] = useState<OnboardingModalState | null>(null);
   const [additionalAdminForm, setAdditionalAdminForm] = useState({ name: '', email: '' });
   const [additionalAdminSubmitting, setAdditionalAdminSubmitting] = useState(false);
@@ -811,6 +813,12 @@ const PulseCheckProvisioningPage: React.FC = () => {
         return next;
       });
       setPilots(pilotResults);
+      setPilotStudyModeDrafts(
+        pilotResults.reduce<Record<string, PulseCheckPilotStudyMode>>((next, pilot) => {
+          next[pilot.id] = pilot.studyMode;
+          return next;
+        }, {})
+      );
       setPilotCohorts(pilotCohortResults);
       setClinicianProfiles(clinicianProfileResults);
       setInviteLinks(inviteLinkResults);
@@ -1393,6 +1401,39 @@ const PulseCheckProvisioningPage: React.FC = () => {
       setMessage({ type: 'error', text: 'Failed to update team commercial config.' });
     } finally {
       setTeamCommercialSavingId((current) => (current === team.id ? null : current));
+    }
+  };
+
+  const handlePilotStudyModeDraftChange = (pilotId: string, studyMode: PulseCheckPilotStudyMode) => {
+    setPilotStudyModeDrafts((current) => ({
+      ...current,
+      [pilotId]: studyMode,
+    }));
+  };
+
+  const handleSavePilotStudyMode = async (pilot: PulseCheckPilot) => {
+    const nextStudyMode = pilotStudyModeDrafts[pilot.id] || pilot.studyMode;
+    if (nextStudyMode === pilot.studyMode) return;
+
+    setPilotStudyModeSavingId(pilot.id);
+    setMessage(null);
+
+    try {
+      await pulseCheckProvisioningService.updatePilotStudyMode(pilot.id, nextStudyMode);
+      await loadData();
+      setMessage({
+        type: 'success',
+        text: `${pilot.name} is now in ${formatEnumLabel(nextStudyMode).toLowerCase()} mode. The matching disclosure package was applied.`,
+      });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to update pilot study mode:', error);
+      setPilotStudyModeDrafts((current) => ({
+        ...current,
+        [pilot.id]: pilot.studyMode,
+      }));
+      setMessage({ type: 'error', text: 'Failed to update pilot study mode.' });
+    } finally {
+      setPilotStudyModeSavingId((current) => (current === pilot.id ? null : current));
     }
   };
 
@@ -2171,6 +2212,11 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-pilot-panel { display: none; padding: 10px 16px 12px 100px; border-top: 0.5px solid rgba(255, 255, 255, 0.04); background: rgba(0, 212, 170, 0.012); }
           .pcp-pilot-panel.open { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
           .pcp-pp-lbl { font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t3); margin-bottom: 6px; }
+          .pcp-pilot-settings { grid-column: 1 / -1; padding: 11px 12px 12px; border-radius: 10px; border: 0.5px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.025); }
+          .pcp-pilot-settings-copy { font-size: 11px; color: var(--t2); line-height: 1.55; margin-bottom: 10px; max-width: 720px; }
+          .pcp-pilot-settings-grid { display: grid; grid-template-columns: minmax(200px, 240px) minmax(0, 1fr); gap: 12px; align-items: end; }
+          .pcp-pilot-settings-actions { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
+          .pcp-pilot-settings-note { font-size: 11px; color: var(--t3); line-height: 1.5; }
           .pcp-cohort-item,
           .pcp-ob-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; border-radius: 8px; margin-bottom: 4px; background: rgba(255, 255, 255, 0.025); border: 0.5px solid rgba(255, 255, 255, 0.06); gap: 10px; }
           .pcp-ci-name { font-size: 11px; font-weight: 500; }
@@ -2296,6 +2342,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
             .pcp-org-overview { padding-left: 18px; }
             .pcp-team-shell { padding-left: 18px; }
             .pcp-pilot-panel.open { grid-template-columns: 1fr; padding-left: 80px; }
+            .pcp-pilot-settings-grid { grid-template-columns: 1fr; }
+            .pcp-pilot-settings-actions { flex-direction: column; align-items: flex-start; }
             .pcp-fg { grid-template-columns: 1fr; }
             .pcp-route-mode-grid { grid-template-columns: 1fr; }
             .pcp-modal { width: min(100vw, 560px); }
@@ -2961,6 +3009,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                       bundledPilots.map(({ pilot, cohorts }) => {
                                         const pilotExpanded = expandedPilotIds.includes(pilot.id);
                                         const pilotStatus = getDerivedPilotStatusDisplay(pilot);
+                                        const pilotStudyModeDraft = pilotStudyModeDrafts[pilot.id] || pilot.studyMode;
+                                        const pilotStudyModeDirty = pilotStudyModeDraft !== pilot.studyMode;
+                                        const pilotStudyModeSaving = pilotStudyModeSavingId === pilot.id;
 
                                         return (
                                           <React.Fragment key={pilot.id}>
@@ -2976,6 +3027,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                   {[
                                                     toDateValue(pilot.startAt)?.toLocaleDateString() || 'not scheduled',
                                                     toDateValue(pilot.endAt)?.toLocaleDateString() || 'open ended',
+                                                    `${formatEnumLabel(pilot.studyMode).toLowerCase()} mode`,
                                                     pilot.checkpointCadence || 'no cadence',
                                                     `${cohorts.length} cohort${cohorts.length === 1 ? '' : 's'}`,
                                                   ].join(' · ')}
@@ -2988,6 +3040,58 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                             </div>
 
                                             <div className={`pcp-pilot-panel ${pilotExpanded ? 'open' : ''}`}>
+                                              <div className="pcp-pilot-settings">
+                                                <div className="pcp-pp-lbl">Pilot Settings</div>
+                                                <div className="pcp-pilot-settings-copy">
+                                                  Switch the pilot between operational, pilot, and research mode here. Changing the mode also refreshes the disclosure package used for this pilot.
+                                                </div>
+                                                <div className="pcp-pilot-settings-grid">
+                                                  <div className="pcp-fld" style={{ marginBottom: 0 }}>
+                                                    <label className="pcp-flbl" htmlFor={`pilot-study-mode-${pilot.id}`}>
+                                                      Study Mode
+                                                    </label>
+                                                    <select
+                                                      id={`pilot-study-mode-${pilot.id}`}
+                                                      className="pcp-finp pcp-select"
+                                                      value={pilotStudyModeDraft}
+                                                      disabled={pilotStudyModeSaving}
+                                                      onChange={(event) =>
+                                                        handlePilotStudyModeDraftChange(
+                                                          pilot.id,
+                                                          event.target.value as PulseCheckPilotStudyMode
+                                                        )
+                                                      }
+                                                    >
+                                                      {PILOT_STUDY_MODE_OPTIONS.map((option) => (
+                                                        <option key={option.value} value={option.value}>
+                                                          {option.label}
+                                                        </option>
+                                                      ))}
+                                                    </select>
+                                                  </div>
+                                                  <div className="pcp-pilot-settings-actions">
+                                                    <div className="pcp-pilot-settings-note">
+                                                      {pilotStudyModeSaving
+                                                        ? 'Saving study mode and syncing the matching disclosure package...'
+                                                        : pilotStudyModeDirty
+                                                          ? `Current mode: ${formatEnumLabel(pilot.studyMode)}. Save to apply the new disclosure package.`
+                                                          : 'Study mode controls the disclosure package and how this pilot is framed across onboarding and reporting.'}
+                                                    </div>
+                                                    <button
+                                                      type="button"
+                                                      className="pcp-ab pcp-ab-t"
+                                                      disabled={!pilotStudyModeDirty || pilotStudyModeSaving}
+                                                      onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        void handleSavePilotStudyMode(pilot);
+                                                      }}
+                                                    >
+                                                      {pilotStudyModeSaving ? <Loader2 /> : <Sparkles />}
+                                                      {pilotStudyModeSaving ? 'Saving' : 'Update Mode'}
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              </div>
                                               <div>
                                                 <div className="pcp-pp-lbl">Cohorts</div>
                                                 {cohorts.length === 0 ? (

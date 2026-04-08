@@ -2211,6 +2211,31 @@ export const pulseCheckProvisioningService = {
     return docRef.id;
   },
 
+  async updatePilotStudyMode(pilotId: string, studyMode: PulseCheckPilotStudyMode): Promise<void> {
+    const normalizedPilotId = normalizeString(pilotId);
+    if (!normalizedPilotId) {
+      throw new Error('Pilot id is required.');
+    }
+
+    const nextStudyMode: PulseCheckPilotStudyMode =
+      studyMode === 'research' || studyMode === 'pilot' ? studyMode : 'operational';
+    const pilotRef = doc(db, PILOTS_COLLECTION, normalizedPilotId);
+    const pilotSnap = await getDoc(pilotRef);
+
+    if (!pilotSnap.exists()) {
+      throw new Error('Pilot not found.');
+    }
+
+    const data = pilotSnap.data() as Record<string, unknown>;
+    const requiredConsents = normalizeRequiredConsentDocuments(data.requiredConsents || [], nextStudyMode);
+
+    await updateDoc(pilotRef, {
+      studyMode: nextStudyMode,
+      requiredConsents,
+      updatedAt: serverTimestamp(),
+    });
+  },
+
   async createPilotCohort(input: CreatePulseCheckPilotCohortInput): Promise<string> {
     const payload = {
       organizationId: normalizeString(input.organizationId),
