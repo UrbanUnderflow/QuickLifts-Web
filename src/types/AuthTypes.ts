@@ -1,4 +1,4 @@
-export type SignUpStep = 'initial' | 'password' | 'profile' | 'quiz-prompt' | 'quiz' | 'subscription';
+export type SignUpStep = 'initial' | 'password' | 'legal' | 'profile' | 'quiz-prompt' | 'quiz' | 'subscription';
 
 export interface QuizData {
     gender: 'Man' | 'Woman' | 'Self Describe' | null;

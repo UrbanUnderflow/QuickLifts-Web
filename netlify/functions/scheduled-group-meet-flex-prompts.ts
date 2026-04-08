@@ -82,6 +82,7 @@ export async function runScheduledGroupMeetFlexPrompts(now = new Date()) {
       invites,
       maxOptionsPerRecipient: 3,
       includeHost: false,
+      referenceDate: now,
     }).filter((recipient) => {
       const rawInviteData = rawInviteDataByToken.get(recipient.inviteToken) || {};
       return rawInviteData.flexPromptSentLocalDate !== localDateKey;
@@ -103,6 +104,7 @@ export async function runScheduledGroupMeetFlexPrompts(now = new Date()) {
       const fallbackOptions = buildGroupMeetFlexRoundOptions({
         analysis,
         maxOptions: 3,
+        referenceDate: now,
       });
 
       for (const option of fallbackOptions) {

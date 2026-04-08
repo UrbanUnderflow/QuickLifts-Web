@@ -27,6 +27,11 @@ export type GroupMeetFlexPromptRecipient = {
   options: GroupMeetFlexPromptOption[];
 };
 
+export type GroupMeetManualFlexPreview = {
+  strategy: 'blocker' | 'group_options' | 'none';
+  options: GroupMeetFlexPromptOption[];
+};
+
 export type GroupMeetFlexActionPayload = {
   requestId: string;
   inviteToken: string;
@@ -39,6 +44,63 @@ export type GroupMeetFlexActionPayload = {
 
 function roundToQuarterHour(minutes: number) {
   return Math.round(minutes / 15) * 15;
+}
+
+function parseGroupMeetDateKey(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+
+  const [yearRaw, monthRaw, dayRaw] = value.split('-');
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  const day = Number(dayRaw);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return null;
+  }
+
+  return Date.UTC(year, month - 1, day);
+}
+
+function getGroupMeetDateDistance(dateKey: string, referenceDateKey: string) {
+  const dateMs = parseGroupMeetDateKey(dateKey);
+  const referenceMs = parseGroupMeetDateKey(referenceDateKey);
+  if (dateMs == null || referenceMs == null) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  return Math.abs(dateMs - referenceMs);
+}
+
+function prioritizeGroupMeetFlexCandidates(
+  candidates: GroupMeetAnalysis['bestCandidates'],
+  referenceDateKey: string
+) {
+  return [...candidates].sort((left, right) => {
+    if (left.participantCount !== right.participantCount) {
+      return right.participantCount - left.participantCount;
+    }
+
+    if (left.missingParticipantTokens.length !== right.missingParticipantTokens.length) {
+      return left.missingParticipantTokens.length - right.missingParticipantTokens.length;
+    }
+
+    const leftDistance = getGroupMeetDateDistance(left.date, referenceDateKey);
+    const rightDistance = getGroupMeetDateDistance(right.date, referenceDateKey);
+    if (leftDistance !== rightDistance) {
+      return leftDistance - rightDistance;
+    }
+
+    if (left.date !== right.date) {
+      return left.date.localeCompare(right.date);
+    }
+
+    if (left.earliestStartMinutes !== right.earliestStartMinutes) {
+      return left.earliestStartMinutes - right.earliestStartMinutes;
+    }
+
+    return right.flexibilityMinutes - left.flexibilityMinutes;
+  });
 }
 
 function buildFlexStartOptions(args: {
@@ -177,27 +239,32 @@ export function buildGroupMeetFlexPromptRecipients(args: {
   invites: GroupMeetInviteDetail[];
   maxOptionsPerRecipient?: number;
   includeHost?: boolean;
+  maxMissingParticipantsPerCandidate?: number;
+  referenceDate?: Date | string | number;
 }) {
   const maxOptionsPerRecipient = Math.max(1, Number(args.maxOptionsPerRecipient) || 3);
+  const maxMissingParticipantsPerCandidate = Math.max(
+    1,
+    Number(args.maxMissingParticipantsPerCandidate) || 2
+  );
+  const referenceDateKey = getGroupMeetEasternDateKey(args.referenceDate || new Date());
   const inviteByToken = new Map(args.invites.map((invite) => [invite.token, invite] as const));
   const recipients = new Map<string, GroupMeetFlexPromptRecipient>();
+  const prioritizedCandidates = prioritizeGroupMeetFlexCandidates(
+    args.analysis.bestCandidates,
+    referenceDateKey
+  );
+  const minimumParticipantCount = Math.max(2, args.analysis.totalParticipants - maxMissingParticipantsPerCandidate);
 
-  for (const candidate of args.analysis.bestCandidates) {
-    if (candidate.missingParticipantTokens.length !== 1) {
+  for (const candidate of prioritizedCandidates) {
+    if (
+      candidate.missingParticipantTokens.length < 1 ||
+      candidate.missingParticipantTokens.length > maxMissingParticipantsPerCandidate
+    ) {
       continue;
     }
 
-    if (candidate.participantCount !== Math.max(candidate.totalParticipants - 1, 0)) {
-      continue;
-    }
-
-    const inviteToken = candidate.missingParticipantTokens[0];
-    const invite = inviteByToken.get(inviteToken);
-    if (!invite?.email) {
-      continue;
-    }
-
-    if (!args.includeHost && invite.participantType === 'host') {
+    if (candidate.participantCount < minimumParticipantCount) {
       continue;
     }
 
@@ -212,48 +279,64 @@ export function buildGroupMeetFlexPromptRecipients(args: {
       missingParticipantNames: [...candidate.missingParticipantNames],
     };
 
-    const existing = recipients.get(invite.token) || {
-      inviteToken: invite.token,
-      name: invite.name || 'Guest',
-      email: invite.email,
-      imageUrl: invite.imageUrl || null,
-      participantType: invite.participantType || 'participant',
-      shareUrl: invite.shareUrl,
-      options: [],
-    };
-
     const durationMinutes = candidate.suggestedEndMinutes - candidate.suggestedStartMinutes;
-    const remainingCapacity = Math.max(0, maxOptionsPerRecipient - existing.options.length);
-    const startOptions = buildFlexStartOptions({
-      earliestStartMinutes: candidate.earliestStartMinutes,
-      latestStartMinutes: candidate.latestStartMinutes,
-      defaultStartMinutes: option.startMinutes,
-      maxOptions: remainingCapacity,
-    });
-
-    for (const startMinutes of startOptions) {
-      const candidateKey = buildGroupMeetCandidateKey(candidate.date, startMinutes);
-      if (existing.options.some((entry) => entry.candidateKey === candidateKey)) {
+    for (const inviteToken of candidate.missingParticipantTokens) {
+      const invite = inviteByToken.get(inviteToken);
+      if (!invite?.email) {
         continue;
       }
 
-      if (existing.options.length >= maxOptionsPerRecipient) {
-        break;
+      if (!args.includeHost && invite.participantType === 'host') {
+        continue;
       }
 
-      existing.options.push({
-        candidateKey,
-        date: candidate.date,
-        startMinutes,
-        endMinutes: startMinutes + durationMinutes,
-        participantCount: candidate.participantCount,
-        totalParticipants: candidate.totalParticipants,
-        participantNames: [...candidate.participantNames],
-        missingParticipantNames: [...candidate.missingParticipantNames],
-      });
-    }
+      const existing = recipients.get(invite.token) || {
+        inviteToken: invite.token,
+        name: invite.name || 'Guest',
+        email: invite.email,
+        imageUrl: invite.imageUrl || null,
+        participantType: invite.participantType || 'participant',
+        shareUrl: invite.shareUrl,
+        options: [],
+      };
 
-    recipients.set(invite.token, existing);
+      const remainingCapacity = Math.max(0, maxOptionsPerRecipient - existing.options.length);
+      if (remainingCapacity <= 0) {
+        recipients.set(invite.token, existing);
+        continue;
+      }
+
+      const startOptions = buildFlexStartOptions({
+        earliestStartMinutes: candidate.earliestStartMinutes,
+        latestStartMinutes: candidate.latestStartMinutes,
+        defaultStartMinutes: option.startMinutes,
+        maxOptions: remainingCapacity,
+      });
+
+      for (const startMinutes of startOptions) {
+        const candidateKey = buildGroupMeetCandidateKey(candidate.date, startMinutes);
+        if (existing.options.some((entry) => entry.candidateKey === candidateKey)) {
+          continue;
+        }
+
+        if (existing.options.length >= maxOptionsPerRecipient) {
+          break;
+        }
+
+        existing.options.push({
+          candidateKey,
+          date: candidate.date,
+          startMinutes,
+          endMinutes: startMinutes + durationMinutes,
+          participantCount: candidate.participantCount,
+          totalParticipants: candidate.totalParticipants,
+          participantNames: [...candidate.participantNames],
+          missingParticipantNames: [...candidate.missingParticipantNames],
+        });
+      }
+
+      recipients.set(invite.token, existing);
+    }
   }
 
   return Array.from(recipients.values())
@@ -264,18 +347,16 @@ export function buildGroupMeetFlexPromptRecipients(args: {
 export function buildGroupMeetFlexRoundOptions(args: {
   analysis: GroupMeetAnalysis;
   maxOptions?: number;
+  referenceDate?: Date | string | number;
 }) {
   const maxOptions = Math.max(1, Number(args.maxOptions) || 3);
+  const referenceDateKey = getGroupMeetEasternDateKey(args.referenceDate || new Date());
   const options: GroupMeetFlexPromptOption[] = [];
 
-  const prioritizedCandidates = [
-    ...args.analysis.bestCandidates.filter(
-      (candidate) => candidate.participantCount >= Math.max(candidate.totalParticipants - 1, 1)
-    ),
-    ...args.analysis.bestCandidates.filter(
-      (candidate) => candidate.participantCount < Math.max(candidate.totalParticipants - 1, 1)
-    ),
-  ];
+  const prioritizedCandidates = prioritizeGroupMeetFlexCandidates(
+    args.analysis.bestCandidates,
+    referenceDateKey
+  );
 
   for (const candidate of prioritizedCandidates) {
     if (options.length >= maxOptions) {
@@ -315,4 +396,44 @@ export function buildGroupMeetFlexRoundOptions(args: {
   }
 
   return options;
+}
+
+export function buildGroupMeetManualFlexPreview(args: {
+  analysis: GroupMeetAnalysis;
+  invites: GroupMeetInviteDetail[];
+  inviteToken: string;
+  referenceDate?: Date | string | number;
+  maxOptionsPerRecipient?: number;
+}) {
+  const recipientOptions = buildGroupMeetFlexPromptRecipients({
+    analysis: args.analysis,
+    invites: args.invites,
+    maxOptionsPerRecipient: args.maxOptionsPerRecipient || 3,
+    includeHost: false,
+    referenceDate: args.referenceDate,
+  });
+  const matchingRecipient = recipientOptions.find((recipient) => recipient.inviteToken === args.inviteToken);
+  if (matchingRecipient) {
+    return {
+      strategy: 'blocker' as const,
+      options: matchingRecipient.options.slice(0, 3),
+    };
+  }
+
+  const sharedOptions = buildGroupMeetFlexRoundOptions({
+    analysis: args.analysis,
+    maxOptions: 3,
+    referenceDate: args.referenceDate,
+  });
+  if (sharedOptions.length > 0) {
+    return {
+      strategy: 'group_options' as const,
+      options: sharedOptions,
+    };
+  }
+
+  return {
+    strategy: 'none' as const,
+    options: [],
+  };
 }

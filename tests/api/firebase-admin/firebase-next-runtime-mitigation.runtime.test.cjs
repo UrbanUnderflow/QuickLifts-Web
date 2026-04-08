@@ -50,6 +50,10 @@ test('firebase-next-api exposes the full migrated route count and matches dynami
     '/api/admin/group-meet/[requestId]/preview-email'
   );
   assert.equal(
+    proxyModule.__test.resolveRoutePattern('/api/admin/group-meet/request-123/invites/token-123/flex'),
+    '/api/admin/group-meet/[requestId]/invites/[token]/flex'
+  );
+  assert.equal(
     proxyModule.__test.resolveRoutePattern('/api/group-meet/calendar/google/callback'),
     '/api/group-meet/calendar/google/callback'
   );

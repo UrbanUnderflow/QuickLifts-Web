@@ -322,6 +322,7 @@ const ROUTE_ENTRIES: RouteEntry[] = [
   { pattern: '/api/admin/group-meet/test-email', loadHandler: () => import('../../src/pages/api/admin/group-meet/test-email.ts') },
   { pattern: '/api/admin/group-meet/[requestId]', loadHandler: () => import('../../src/pages/api/admin/group-meet/[requestId].ts') },
   { pattern: '/api/admin/group-meet/[requestId]/finalize', loadHandler: () => import('../../src/pages/api/admin/group-meet/[requestId]/finalize.ts') },
+  { pattern: '/api/admin/group-meet/[requestId]/invites/[token]/flex', loadHandler: () => import('../../src/pages/api/admin/group-meet/[requestId]/invites/[token]/flex.ts') },
   { pattern: '/api/admin/group-meet/[requestId]/invites/[token]/resend', loadHandler: () => import('../../src/pages/api/admin/group-meet/[requestId]/invites/[token]/resend.ts') },
   { pattern: '/api/admin/group-meet/[requestId]/preview-email', loadHandler: () => import('../../src/pages/api/admin/group-meet/[requestId]/preview-email.ts') },
   { pattern: '/api/admin/group-meet/[requestId]/recommend', loadHandler: () => import('../../src/pages/api/admin/group-meet/[requestId]/recommend.ts') },

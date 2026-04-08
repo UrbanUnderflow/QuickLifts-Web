@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical, Settings2 } from 'lucide-react';
+import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical, Settings2, Wallet } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { toggleDevMode } from '../../redux/devModeSlice';
@@ -316,6 +316,12 @@ const adminCardsData = [
     description: "Manage cap table, stakeholders, option grants, and equity documents. Generate agreements and track ownership.",
     icon: <PieChart className="w-5 h-5" />,
     link: "/admin/equity"
+  },
+  {
+    title: "Founder Budget",
+    description: "Track monthly personal and business founder expenses with recurring costs, line-item misc spend, and auto-calculated cash position.",
+    icon: <Wallet className="w-5 h-5" />,
+    link: "/admin/founderBudget"
   },
   {
     title: "Investor Dataroom Access",

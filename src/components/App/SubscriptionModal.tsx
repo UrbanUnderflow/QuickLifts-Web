@@ -123,7 +123,7 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isVisible, onClos
 
         {/* Footer */}
         <div className="text-center text-zinc-500 text-sm">
-          By subscribing, you agree to our Terms of Service and Privacy Policy
+          Subscription purchases are subject to our Terms of Service and Privacy Policy.
         </div>
       </div>
     </div>

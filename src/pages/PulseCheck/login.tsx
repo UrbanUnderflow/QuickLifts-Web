@@ -977,7 +977,7 @@ const PulseCheckLoginPage: NextPage = () => {
             transition={{ delay: 0.5 }}
             className="mt-6 text-center text-[11px] text-zinc-600 leading-relaxed"
           >
-            By continuing you agree to Pulse's{' '}
+            Review Pulse&apos;s{' '}
             <a href="/terms" className="text-zinc-500 hover:text-zinc-400 underline underline-offset-2">Terms</a>{' '}
             and{' '}
             <a href="/privacy" className="text-zinc-500 hover:text-zinc-400 underline underline-offset-2">Privacy Policy</a>.

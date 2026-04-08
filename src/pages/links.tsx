@@ -67,6 +67,7 @@ const sections: Section[] = [
       { name: 'User Challenge Management', url: '/admin/inactivityCheck' },
       { name: 'Users', url: '/admin/users' },
       { name: 'Payout Dashboard', url: '/admin/adminPayouts' },
+      { name: 'Founder Budget', url: '/admin/founderBudget' },
       { name: 'Add App Version', url: '/admin/addVersion' },
       { name: 'Send Notifications', url: '/admin/SendNotification' }
     ]

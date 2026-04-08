@@ -76,6 +76,32 @@ type ApiPreviewEmailResponse = {
   messageId?: string | null;
 };
 
+type ApiManualFlexPreviewResponse = {
+  success?: boolean;
+  skipped?: boolean;
+  messageId?: string | null;
+  strategy: 'blocker' | 'group_options' | 'none';
+  options: Array<{
+    candidateKey: string;
+    date: string;
+    startMinutes: number;
+    endMinutes: number;
+    participantCount: number;
+    totalParticipants: number;
+    participantNames: string[];
+    missingParticipantNames: string[];
+  }>;
+  detailText: string;
+  invite: {
+    token: string;
+    name: string;
+    email: string | null;
+    participantType: 'host' | 'participant';
+  };
+  lastManualFlexSentAt: string | null;
+  lastManualFlexStrategy: string | null;
+};
+
 const buildDefaultDeadlineValue = () => {
   const date = new Date();
   date.setDate(date.getDate() + 5);
@@ -231,6 +257,12 @@ const getInviteDeliveryMeta = (
   };
 };
 
+const getManualFlexStrategyLabel = (strategy: ApiManualFlexPreviewResponse['strategy']) => {
+  if (strategy === 'blocker') return 'Targeted blocker';
+  if (strategy === 'group_options') return 'Shared group options';
+  return 'No flex options';
+};
+
 const GroupMeetAdminPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ComposerTab>('create');
   const [title, setTitle] = useState('Group Meet');
@@ -267,6 +299,11 @@ const GroupMeetAdminPage: React.FC = () => {
   const [previewRecipientName, setPreviewRecipientName] = useState('');
   const [previewRecipientEmail, setPreviewRecipientEmail] = useState('');
   const [previewSending, setPreviewSending] = useState(false);
+  const [manualFlexInvite, setManualFlexInvite] = useState<GroupMeetInviteSummary | null>(null);
+  const [manualFlexPreview, setManualFlexPreview] = useState<ApiManualFlexPreviewResponse | null>(null);
+  const [manualFlexLoading, setManualFlexLoading] = useState(false);
+  const [manualFlexSending, setManualFlexSending] = useState(false);
+  const [manualFlexError, setManualFlexError] = useState<string | null>(null);
   const [requestModalMessage, setRequestModalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(
     null
   );
@@ -575,6 +612,7 @@ const GroupMeetAdminPage: React.FC = () => {
   const closeRequestModal = () => {
     setRequestModalOpen(false);
     setRequestModalMessage(null);
+    closeManualFlexModal();
   };
 
   const createRequest = async () => {
@@ -737,6 +775,90 @@ const GroupMeetAdminPage: React.FC = () => {
       setRequestModalMessage({ type: 'error', text: error?.message || 'Failed to send preview email.' });
     } finally {
       setPreviewSending(false);
+    }
+  };
+
+  const closeManualFlexModal = () => {
+    setManualFlexInvite(null);
+    setManualFlexPreview(null);
+    setManualFlexError(null);
+    setManualFlexLoading(false);
+    setManualFlexSending(false);
+  };
+
+  const openManualFlexModal = async (invite: GroupMeetInviteSummary) => {
+    if (!selectedRequestId) return;
+
+    setManualFlexInvite(invite);
+    setManualFlexPreview(null);
+    setManualFlexError(null);
+    setManualFlexLoading(true);
+
+    try {
+      const headers = await getAdminHeaders();
+      const response = await fetch(
+        `/api/admin/group-meet/${encodeURIComponent(selectedRequestId)}/invites/${encodeURIComponent(invite.token)}/flex`,
+        {
+          headers,
+        }
+      );
+      const payload = (await response.json().catch(() => ({}))) as Partial<ApiManualFlexPreviewResponse> & {
+        error?: string;
+      };
+
+      if (!response.ok || !payload.strategy || !payload.invite) {
+        throw new Error(payload.error || `Failed to load flex options for ${invite.name}.`);
+      }
+
+      setManualFlexPreview(payload as ApiManualFlexPreviewResponse);
+    } catch (error: any) {
+      const errorText = error?.message || `Failed to load flex options for ${invite.name}.`;
+      setManualFlexError(errorText);
+      setMessage({ type: 'error', text: errorText });
+      setRequestModalMessage({ type: 'error', text: errorText });
+    } finally {
+      setManualFlexLoading(false);
+    }
+  };
+
+  const sendManualFlexEmail = async () => {
+    if (!selectedRequestId || !manualFlexInvite) return;
+
+    setManualFlexSending(true);
+    setManualFlexError(null);
+    setMessage(null);
+    setRequestModalMessage(null);
+
+    try {
+      const headers = await getAdminHeaders();
+      const response = await fetch(
+        `/api/admin/group-meet/${encodeURIComponent(selectedRequestId)}/invites/${encodeURIComponent(manualFlexInvite.token)}/flex`,
+        {
+          method: 'POST',
+          headers,
+        }
+      );
+      const payload = (await response.json().catch(() => ({}))) as Partial<ApiManualFlexPreviewResponse> & {
+        error?: string;
+      };
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || `Failed to send flex request to ${manualFlexInvite.name}.`);
+      }
+
+      const successText = payload.skipped
+        ? `Flex request was skipped for ${manualFlexInvite.name}.`
+        : `Flex request sent to ${manualFlexInvite.name}.`;
+      setMessage({ type: 'success', text: successText });
+      setRequestModalMessage({ type: 'success', text: successText });
+      closeManualFlexModal();
+    } catch (error: any) {
+      const errorText = error?.message || `Failed to send flex request to ${manualFlexInvite.name}.`;
+      setManualFlexError(errorText);
+      setMessage({ type: 'error', text: errorText });
+      setRequestModalMessage({ type: 'error', text: errorText });
+    } finally {
+      setManualFlexSending(false);
     }
   };
 
@@ -2137,6 +2259,21 @@ const GroupMeetAdminPage: React.FC = () => {
                                   {invite.email && invite.participantType !== 'host' && (
                                     <button
                                       type="button"
+                                      onClick={() => openManualFlexModal(invite)}
+                                      disabled={manualFlexLoading || manualFlexSending}
+                                      className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900 disabled:opacity-50"
+                                    >
+                                      <Sparkles className="w-4 h-4" />
+                                      {manualFlexInvite?.token === invite.token && manualFlexLoading
+                                        ? 'Loading flex…'
+                                        : manualFlexInvite?.token === invite.token && manualFlexSending
+                                          ? 'Sending flex…'
+                                          : 'Flex request'}
+                                    </button>
+                                  )}
+                                  {invite.email && invite.participantType !== 'host' && (
+                                    <button
+                                      type="button"
                                       onClick={() => resendInvite(invite)}
                                       disabled={resendingInviteToken === invite.token}
                                       className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900 disabled:opacity-50"
@@ -2166,6 +2303,118 @@ const GroupMeetAdminPage: React.FC = () => {
                   )}
                 </div>
               </div>
+
+              {manualFlexInvite && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 p-4">
+                  <div className="w-full max-w-3xl rounded-[28px] border border-zinc-800 bg-[#090c11] shadow-2xl">
+                    <div className="flex items-start justify-between gap-4 border-b border-zinc-800 px-6 py-5">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">Manual flex request</div>
+                        <h3 className="mt-2 text-2xl font-semibold text-white">
+                          {manualFlexInvite.name}
+                        </h3>
+                        <div className="mt-2 text-sm text-zinc-400">
+                          Preview the exact times we’ll suggest before sending the flex email.
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={closeManualFlexModal}
+                        className="rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
+                      >
+                        Close
+                      </button>
+                    </div>
+
+                    <div className="max-h-[80vh] overflow-y-auto px-6 py-6">
+                      {manualFlexLoading && (
+                        <div className="rounded-2xl border border-zinc-800 px-4 py-10 text-center text-sm text-zinc-400">
+                          Loading flex suggestions…
+                        </div>
+                      )}
+
+                      {!manualFlexLoading && manualFlexError && (
+                        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-4 text-sm text-red-100">
+                          {manualFlexError}
+                        </div>
+                      )}
+
+                      {!manualFlexLoading && !manualFlexError && manualFlexPreview && (
+                        <div className="space-y-5">
+                          <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
+                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                              <div>
+                                <div className="text-sm text-zinc-300">
+                                  {manualFlexPreview.invite.email || 'No email on file'}
+                                </div>
+                                <div className="mt-2 text-sm text-zinc-400">
+                                  {manualFlexPreview.detailText}
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-2 text-xs">
+                                <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-zinc-300">
+                                  {getManualFlexStrategyLabel(manualFlexPreview.strategy)}
+                                </span>
+                                {manualFlexPreview.lastManualFlexSentAt && (
+                                  <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-zinc-300">
+                                    Last sent {toReadableDateTime(manualFlexPreview.lastManualFlexSentAt, selectedRequest?.timezone || 'America/New_York')}
+                                  </span>
+                                )}
+                                <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-zinc-300">
+                                  info@fitwithpulse.ai BCC
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {manualFlexPreview.options.length ? (
+                            <div className="space-y-3">
+                              {manualFlexPreview.options.map((option, index) => (
+                                <div
+                                  key={`${option.candidateKey}-${index}`}
+                                  className="rounded-2xl border border-zinc-800 bg-black/40 p-4"
+                                >
+                                  <div className="font-medium text-white">
+                                    {formatMonthDate(option.date)} • {formatMinutesAsTime(option.startMinutes)} - {formatMinutesAsTime(option.endMinutes)}
+                                  </div>
+                                  <div className="mt-2 text-sm text-zinc-400">
+                                    Works for {option.participantCount} of {option.totalParticipants} participants right now.
+                                  </div>
+                                  {option.missingParticipantNames.length > 0 && (
+                                    <div className="mt-2 text-xs text-zinc-500">
+                                      Still needed from: {option.missingParticipantNames.join(', ')}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-10 text-center text-sm text-zinc-500">
+                              There are no strong flex options to send for this participant right now.
+                            </div>
+                          )}
+
+                          <div className="flex flex-col-reverse gap-3 border-t border-zinc-800 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="text-sm text-zinc-400">
+                              The email will contain these one-click time buttons and add the selected time directly to the guest’s availability.
+                            </div>
+                            <button
+                              type="button"
+                              onClick={sendManualFlexEmail}
+                              disabled={manualFlexSending || !manualFlexPreview.options.length}
+                              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-3 text-sm font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                            >
+                              <Mail className="w-4 h-4" />
+                              {manualFlexSending ? 'Sending…' : 'Send flex request'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -1,5 +1,6 @@
 // src/api/firebase/user/types.ts
 import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
+import type { LegalAcceptanceRecord } from '../../../utils/legalAcceptance';
 
 export interface UserService {
     updateUser: (userId: string, user: User) => Promise<void>;
@@ -83,6 +84,7 @@ export class User {
   featuredRoundIds: string[];
   checkinsPrivacy: CheckinsPrivacy;
   checkinsAccessList: string[];
+  legalAcceptance?: LegalAcceptanceRecord | null;
   createdAt: Date;
   updatedAt: Date;
 
@@ -140,6 +142,14 @@ export class User {
     this.featuredRoundIds = data.featuredRoundIds || [];
     this.checkinsPrivacy = data.checkinsPrivacy || CheckinsPrivacy.privateOnly;
     this.checkinsAccessList = data.checkinsAccessList || [];
+    this.legalAcceptance = data.legalAcceptance
+      ? {
+          ...data.legalAcceptance,
+          acceptedAt: data.legalAcceptance.acceptedAt
+            ? convertFirestoreTimestamp(data.legalAcceptance.acceptedAt)
+            : null,
+        }
+      : null;
 
     this.createdAt = convertFirestoreTimestamp(data.createdAt) || null;
 
@@ -160,6 +170,14 @@ export class User {
       bodyWeight: Array.isArray(dict.bodyWeight) 
         ? dict.bodyWeight.map((weight: any) => new BodyWeight(weight))
         : [],
+      legalAcceptance: dict.legalAcceptance
+        ? {
+            ...dict.legalAcceptance,
+            acceptedAt: dict.legalAcceptance.acceptedAt
+              ? new Date(dict.legalAcceptance.acceptedAt * 1000)
+              : null,
+          }
+        : null,
     };
 
     return new User(dict.id, processedData);
@@ -203,6 +221,14 @@ export class User {
       featuredRoundIds: this.featuredRoundIds,
       checkinsPrivacy: this.checkinsPrivacy,
       checkinsAccessList: this.checkinsAccessList,
+      legalAcceptance: this.legalAcceptance
+        ? {
+            ...this.legalAcceptance,
+            acceptedAt: this.legalAcceptance.acceptedAt
+              ? dateToUnixTimestamp(this.legalAcceptance.acceptedAt)
+              : null,
+          }
+        : null,
       createdAt: dateToUnixTimestamp(this.createdAt),
       updatedAt: dateToUnixTimestamp(this.updatedAt),
     };
