@@ -30,7 +30,6 @@ import {
 import { resolvePulseCheckFunctionUrl } from '../mentaltraining/pulseCheckFunctionsUrl';
 import { pulseCheckProvisioningService } from '../pulsecheckProvisioning/service';
 import { pilotDashboardDemoMode } from './demoMode';
-import { mergePulseCheckRequiredConsents } from '../pulsecheckProvisioning/types';
 import type {
   PulseCheckPilot,
   PulseCheckPilotCohort,
@@ -156,7 +155,7 @@ const normalizeRequiredConsentDocuments = (value: unknown): PulseCheckRequiredCo
     return acc;
   }, []);
 
-  return mergePulseCheckRequiredConsents(normalized);
+  return normalized;
 };
 const roundMetric = (value: number) => Number(value.toFixed(1));
 const toPercentage = (numerator: number, denominator: number) =>
@@ -433,14 +432,6 @@ const loadPilotEscalationOperationalDiagnostics = async ({
   });
 
   return buildEscalationOperationalDiagnostics(escalations, existingDiagnostics);
-};
-
-const loadPilotOutcomeReleaseSettings = async (pilotId: string): Promise<Record<string, any> | null> => {
-  const normalizedPilotId = normalizeString(pilotId);
-  if (!normalizedPilotId) return null;
-  const snap = await getDoc(doc(db, PULSECHECK_PILOT_OUTCOME_RELEASE_SETTINGS_COLLECTION, normalizedPilotId));
-  if (!snap.exists()) return null;
-  return snap.data() as Record<string, any>;
 };
 
 const loadPilotOutcomeOpsStatus = async (pilotId: string): Promise<Record<string, any> | null> => {
@@ -901,15 +892,6 @@ const isEnrollmentPausedDay = (
   return !(pausedDateKey === dateKey && hasSameDayActivity);
 };
 
-const isEscalationHoldDay = (escalations: Array<Record<string, any>>, dateKey: string) =>
-  escalations.some((escalation) => {
-    if (isBenignPerformanceSupportEscalation(escalation)) return false;
-    if (normalizeEscalationStatus(escalation) !== 'active') return false;
-    const createdDateKey = toUtcDateKey(escalation.createdAt);
-    const resolvedDateKey = toUtcDateKey(escalation.resolvedAt || escalation.handoffCompletedAt || Date.now());
-    return Boolean(createdDateKey && resolvedDateKey && dateKey >= createdDateKey && dateKey <= resolvedDateKey);
-  });
-
 const isOperationalWatchListHoldDay = (
   watchList: PilotDashboardOperationalWatchListState | null | undefined,
   dateKey: string
@@ -930,7 +912,7 @@ const buildAthleteAdherenceDetail = ({
   assignments,
   assignmentEvents,
   checkIns,
-  escalations,
+  escalations: _escalations,
   operationalWatchList,
 }: {
   pilot: PulseCheckPilot;
@@ -945,7 +927,6 @@ const buildAthleteAdherenceDetail = ({
   adherenceSummary: PilotDashboardAthleteAdherenceSummary;
   adherenceDays: PilotDashboardAthleteAdherenceDay[];
 } => {
-  const athleteId = normalizeString(pilotEnrollment.userId);
   const timezone = resolveAthleteTimezoneForAdherence(teamMembership, assignments);
   const assignmentByDate = assignments.reduce<Map<string, Record<string, any>>>((accumulator, assignment) => {
     const sourceDate = normalizeString(assignment.sourceDate);
@@ -2309,19 +2290,17 @@ export const pulseCheckPilotDashboardService = {
 
     const enrichedEntries = await Promise.all(
       baseEntries.map(async (entry) => {
-        const [directoryMetrics, outcomeRollup, outcomeReleaseSettings, operationalWatchListStates] = await Promise.all([
+        const [directoryMetrics, outcomeRollup, operationalWatchListStates] = await Promise.all([
           loadDirectoryEngineMetrics(entry.pilot, entry._activeEnrollments),
           loadCurrentOutcomeRollup(entry.pilot.id),
-          loadPilotOutcomeReleaseSettings(entry.pilot.id),
           loadPilotOperationalWatchListStates(entry.pilot.id),
         ]);
-        const outcomesEnabled = outcomeReleaseSettings?.outcomesEnabled !== false;
         return {
           ...entry,
           ...directoryMetrics,
-          outcomeMetrics: outcomesEnabled ? outcomeRollup?.metrics : undefined,
-          outcomeDiagnostics: outcomesEnabled ? ((outcomeRollup?.diagnostics?.surveys as PilotDashboardOutcomeSurveyDiagnostics) || undefined) : undefined,
-          hypothesisEvaluation: outcomesEnabled ? ((outcomeRollup?.diagnostics?.hypothesisEvaluation as any) || undefined) : undefined,
+          outcomeMetrics: outcomeRollup?.metrics,
+          outcomeDiagnostics: (outcomeRollup?.diagnostics?.surveys as PilotDashboardOutcomeSurveyDiagnostics) || undefined,
+          hypothesisEvaluation: (outcomeRollup?.diagnostics?.hypothesisEvaluation as any) || undefined,
           operationalWatchListSummary: buildOperationalWatchListSummary(operationalWatchListStates),
         };
       })
@@ -2427,13 +2406,12 @@ export const pulseCheckPilotDashboardService = {
     const cohortSummaries = buildCohortSummaries(pilotCohorts, athletes);
     const hypothesisSummary = buildHypothesisSummary(hypotheses);
     const operationalWatchListSummary = buildOperationalWatchListSummary(operationalWatchListStates);
-    const [organizationInviteConfigDefault, teamInviteConfigDefault, pilotInviteConfig, readouts, outcomeRollup, outcomeReleaseSettings, outcomeOpsStatus] = await Promise.all([
+    const [organizationInviteConfigDefault, teamInviteConfigDefault, pilotInviteConfig, readouts, outcomeRollup, outcomeOpsStatus] = await Promise.all([
       getOrganizationInviteDefault(pilot.organizationId),
       getTeamInviteDefault(pilot.teamId),
       getPilotInviteConfig(pilot, organization.displayName, team.displayName),
       this.listPilotResearchReadouts(pilot.id),
       loadCurrentOutcomeRollup(pilot.id),
-      loadPilotOutcomeReleaseSettings(pilot.id),
       loadPilotOutcomeOpsStatus(pilot.id),
     ]);
     const pilotConfigRef = doc(db, PILOT_INVITE_CONFIGS_COLLECTION, pilot.id);
@@ -2445,17 +2423,14 @@ export const pulseCheckPilotDashboardService = {
       pilotInviteConfig
     );
 
-    const outcomesEnabled = outcomeReleaseSettings?.outcomesEnabled !== false;
-    const mergedOutcomeOperationalDiagnostics: PilotDashboardOutcomeOperationalDiagnostics | undefined = outcomesEnabled
-      ? {
-          ...((outcomeRollup?.diagnostics as Record<string, any>) || {}),
-          escalations: await loadPilotEscalationOperationalDiagnostics({
-            pilot,
-            activeEnrollments,
-            existingDiagnostics: (outcomeRollup?.diagnostics as Record<string, any> | undefined)?.escalations || null,
-          }),
-        }
-      : undefined;
+    const mergedOutcomeOperationalDiagnostics: PilotDashboardOutcomeOperationalDiagnostics = {
+      ...((outcomeRollup?.diagnostics as Record<string, any>) || {}),
+      escalations: await loadPilotEscalationOperationalDiagnostics({
+        pilot,
+        activeEnrollments,
+        existingDiagnostics: (outcomeRollup?.diagnostics as Record<string, any> | undefined)?.escalations || null,
+      }),
+    };
 
     return {
       organization,
@@ -2477,21 +2452,20 @@ export const pulseCheckPilotDashboardService = {
       hasPilotInviteConfigOverride: pilotConfigSnap.exists(),
       teamInviteConfigDefault,
       organizationInviteConfigDefault,
-      outcomeMetrics: outcomesEnabled ? outcomeRollup?.metrics : undefined,
-      outcomeMetricsByCohort: outcomesEnabled ? ((outcomeRollup?.outcomeByCohort as Record<string, PilotDashboardOutcomeMetrics>) || undefined) : undefined,
-      outcomeDiagnostics: outcomesEnabled ? ((outcomeRollup?.diagnostics?.surveys as PilotDashboardOutcomeSurveyDiagnostics) || undefined) : undefined,
+      outcomeMetrics: outcomeRollup?.metrics,
+      outcomeMetricsByCohort: (outcomeRollup?.outcomeByCohort as Record<string, PilotDashboardOutcomeMetrics>) || undefined,
+      outcomeDiagnostics: (outcomeRollup?.diagnostics?.surveys as PilotDashboardOutcomeSurveyDiagnostics) || undefined,
       outcomeDiagnosticsByCohort:
-        outcomesEnabled ? ((outcomeRollup?.diagnostics?.surveysByCohort as Record<string, PilotDashboardOutcomeSurveyDiagnostics>) || undefined) : undefined,
+        (outcomeRollup?.diagnostics?.surveysByCohort as Record<string, PilotDashboardOutcomeSurveyDiagnostics>) || undefined,
       outcomeOperationalDiagnostics: mergedOutcomeOperationalDiagnostics,
-      outcomeRecommendationTypeSlices: outcomesEnabled ? ((outcomeRollup?.diagnostics?.recommendationTypeSlices as Record<string, any>) || undefined) : undefined,
+      outcomeRecommendationTypeSlices: (outcomeRollup?.diagnostics?.recommendationTypeSlices as Record<string, any>) || undefined,
       outcomeRecommendationTypeSlicesByCohort:
-        outcomesEnabled ? ((outcomeRollup?.diagnostics?.recommendationTypeSlicesByCohort as Record<string, Record<string, any>>) || undefined) : undefined,
-      outcomeTrustDispositionBaseline: outcomesEnabled ? ((outcomeRollup?.diagnostics?.trustDispositionBaseline as Record<string, any>) || undefined) : undefined,
-      outcomeReleaseSettings: outcomeReleaseSettings || undefined,
+        (outcomeRollup?.diagnostics?.recommendationTypeSlicesByCohort as Record<string, Record<string, any>>) || undefined,
+      outcomeTrustDispositionBaseline: (outcomeRollup?.diagnostics?.trustDispositionBaseline as Record<string, any>) || undefined,
       outcomeOpsStatus: outcomeOpsStatus || undefined,
       operationalWatchListSummary,
-      hypothesisEvaluation: outcomesEnabled ? ((outcomeRollup?.diagnostics?.hypothesisEvaluation as any) || undefined) : undefined,
-      hypothesisEvaluationByCohort: outcomesEnabled ? ((outcomeRollup?.diagnostics?.hypothesisEvaluationByCohort as any) || undefined) : undefined,
+      hypothesisEvaluation: (outcomeRollup?.diagnostics?.hypothesisEvaluation as any) || undefined,
+      hypothesisEvaluationByCohort: (outcomeRollup?.diagnostics?.hypothesisEvaluationByCohort as any) || undefined,
       latestResearchReadout: readouts[0] || null,
       researchReadouts: readouts,
     };

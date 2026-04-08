@@ -246,7 +246,10 @@ const defaultAthleteOnboardingState = () => ({
   baselinePathwayId: '',
 });
 
-const normalizeRequiredConsentDocuments = (value: unknown): PulseCheckRequiredConsentDocument[] => {
+const normalizeRequiredConsentDocuments = (
+  value: unknown,
+  studyMode: PulseCheckPilotStudyMode = 'operational'
+): PulseCheckRequiredConsentDocument[] => {
   if (!Array.isArray(value)) return [];
 
   const normalized = value.reduce<PulseCheckRequiredConsentDocument[]>((acc, entry, index) => {
@@ -263,7 +266,7 @@ const normalizeRequiredConsentDocuments = (value: unknown): PulseCheckRequiredCo
     return acc;
   }, []);
 
-  return mergePulseCheckRequiredConsents(normalized);
+  return mergePulseCheckRequiredConsents(studyMode, normalized);
 };
 
 const normalizeCompletedConsentIds = (
@@ -567,13 +570,16 @@ const toPilot = (id: string, data: Record<string, any>): PulseCheckPilot => ({
   name: data.name || '',
   objective: data.objective || '',
   status: (data.status as PulseCheckPilotStatus) || 'active',
-  studyMode: data.studyMode || 'operational',
+  studyMode: (data.studyMode as PulseCheckPilotStudyMode) || 'operational',
   ownerInternalUserId: data.ownerInternalUserId || '',
   ownerInternalEmail: data.ownerInternalEmail || '',
   checkpointCadence: data.checkpointCadence || '',
   startAt: data.startAt || null,
   endAt: data.endAt || null,
-  requiredConsents: normalizeRequiredConsentDocuments(data.requiredConsents || []),
+  requiredConsents: normalizeRequiredConsentDocuments(
+    data.requiredConsents || [],
+    ((data.studyMode as PulseCheckPilotStudyMode) || 'operational')
+  ),
   notes: data.notes || '',
   createdAt: data.createdAt || null,
   updatedAt: data.updatedAt || null,
@@ -1301,7 +1307,10 @@ export const pulseCheckProvisioningService = {
         }
 
         destinationPilotStudyMode = (destinationPilotData.studyMode as PulseCheckPilotStudyMode) || 'operational';
-        destinationPilotRequiredConsents = normalizeRequiredConsentDocuments(destinationPilotData.requiredConsents || []);
+        destinationPilotRequiredConsents = normalizeRequiredConsentDocuments(
+          destinationPilotData.requiredConsents || [],
+          destinationPilotStudyMode || 'operational'
+        );
 
         if (destinationCohortId) {
           const destinationCohortRef = doc(db, PILOT_COHORTS_COLLECTION, destinationCohortId);
@@ -2192,7 +2201,7 @@ export const pulseCheckProvisioningService = {
       checkpointCadence: normalizeString(input.checkpointCadence),
       startAt: input.startAt || null,
       endAt: input.endAt || null,
-      requiredConsents: normalizeRequiredConsentDocuments(input.requiredConsents || []),
+      requiredConsents: normalizeRequiredConsentDocuments(input.requiredConsents || [], input.studyMode || 'operational'),
       notes: normalizeString(input.notes),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -2533,7 +2542,8 @@ export const pulseCheckProvisioningService = {
     const pilotSnap = pilotId ? await getDoc(doc(db, PILOTS_COLLECTION, pilotId)) : null;
     const pilotStudyMode = pilotSnap?.exists() ? ((pilotSnap.data()?.studyMode as PulseCheckPilotStudyMode) || 'operational') : null;
     const requiredConsents = normalizeRequiredConsentDocuments(
-      pilotSnap?.data()?.requiredConsents ?? currentAthleteOnboarding.requiredConsents ?? []
+      pilotSnap?.data()?.requiredConsents ?? currentAthleteOnboarding.requiredConsents ?? [],
+      pilotStudyMode || 'operational'
     );
     const completedConsentIds = normalizeCompletedConsentIds(
       input.completedConsentIds ?? currentAthleteOnboarding.completedConsentIds,
@@ -2662,7 +2672,8 @@ export const pulseCheckProvisioningService = {
     const pilotSnap = pilotId ? await getDoc(doc(db, PILOTS_COLLECTION, pilotId)) : null;
     const pilotStudyMode = pilotSnap?.exists() ? ((pilotSnap.data()?.studyMode as PulseCheckPilotStudyMode) || 'operational') : null;
     const requiredConsents = normalizeRequiredConsentDocuments(
-      pilotSnap?.data()?.requiredConsents ?? currentAthleteOnboarding.requiredConsents ?? []
+      pilotSnap?.data()?.requiredConsents ?? currentAthleteOnboarding.requiredConsents ?? [],
+      pilotStudyMode || 'operational'
     );
     const completedConsentIds = normalizeCompletedConsentIds(
       input.completedConsentIds ?? currentAthleteOnboarding.completedConsentIds,
@@ -3114,7 +3125,10 @@ export const pulseCheckProvisioningService = {
               throw new Error('Pilot not found.');
             }
             pilotStudyMode = (pilotSnap.data()?.studyMode as PulseCheckPilotStudyMode) || 'operational';
-            pilotRequiredConsents = normalizeRequiredConsentDocuments(pilotSnap.data()?.requiredConsents || []);
+            pilotRequiredConsents = normalizeRequiredConsentDocuments(
+              pilotSnap.data()?.requiredConsents || [],
+              pilotStudyMode || 'operational'
+            );
 
             const pilotEnrollmentRef = doc(db, PILOT_ENROLLMENTS_COLLECTION, buildPilotEnrollmentId(pilotId, userId));
             const existingPilotEnrollmentSnap = await transaction.get(pilotEnrollmentRef);

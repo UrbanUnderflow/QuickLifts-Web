@@ -97,52 +97,134 @@ const parseConsentVersionNumber = (version?: string): number => {
   return match ? Number(match[1]) || 0 : 0;
 };
 
-const DEFAULT_PULSECHECK_REQUIRED_CONSENTS: PulseCheckRequiredConsentDocument[] = [
-  {
-    id: 'pulsecheck-team-participation-v1',
-    title: 'PulseCheck Pilot Participation',
-    body:
-      [
-        'You are being invited to participate in a PulseCheck pilot connected to your team. This pilot is voluntary, and you can decide not to participate or stop participating at any time.',
-        'This is a pilot experience, which means features, workflows, recommendations, and support operations may change while the pilot is active. Some parts of the experience may be incomplete, experimental, or still being evaluated.',
-        'There are risks to participating in the pilot, including the possibility that recommendations, alerts, support pathways, or product behavior may not work as expected, may feel disruptive, or may not be appropriate for your situation.',
-        'By participating, you understand that PulseCheck may share the check-ins you complete, the readiness trends you create, and the session activity you log with the staff who support your team so they can follow up with you and coordinate support.',
-        'By continuing, you acknowledge that Pulse Intelligence Labs, Inc. and AuntEdna are not responsible for injuries, losses, claims, or damages arising from your participation in this pilot or from your reliance on the pilot experience, except where that limitation is not allowed by law.',
-        'Read this carefully, and if anything feels unclear, ask your staff before you agree.',
-      ].join('\n\n'),
-    version: 'v2',
-  },
-  {
-    id: 'pulsecheck-data-privacy-v1',
-    title: 'PulseCheck Privacy and Data Use',
-    body:
-      [
-        'PulseCheck uses the information you share in the app, plus any health or wearable connections you approve, to run your team pilot experience.',
-        'That can include your check-ins, recovery trends, readiness signals, session activity, connected health data, and the information you choose to provide during the pilot.',
-        'Because this is a voluntary pilot, the information collected may be used to operate, review, improve, and evaluate the pilot experience and the support workflows attached to it.',
-        'There are privacy and operational risks any time you share information in a digital product, including the risk of unauthorized access, mistaken interpretation, incomplete data, or product workflows that do not perform exactly as intended during the pilot.',
-        'By continuing, you acknowledge that Pulse Intelligence Labs, Inc. and AuntEdna are not responsible for injuries, losses, claims, or damages arising from your participation in this pilot or from your reliance on the pilot experience, except where that limitation is not allowed by law.',
-        'If you want a copy for your records, you can save this agreement as a PDF before you continue.',
-      ].join('\n\n'),
-    version: 'v2',
-  },
+const LEGACY_DEFAULT_PULSECHECK_REQUIRED_CONSENT_IDS = [
+  'pulsecheck-team-participation-v1',
+  'pulsecheck-data-privacy-v1',
 ];
 
-export const getDefaultPulseCheckRequiredConsents = (): PulseCheckRequiredConsentDocument[] =>
-  DEFAULT_PULSECHECK_REQUIRED_CONSENTS.map((consent) => ({ ...consent }));
+const DEFAULT_PULSECHECK_REQUIRED_CONSENTS_BY_STUDY_MODE: Record<PulseCheckPilotStudyMode, PulseCheckRequiredConsentDocument[]> = {
+  research: [
+    {
+      id: 'pulsecheck-research-study-consent-v1',
+      title: 'PulseCheck Research Study Consent',
+      body:
+        [
+          'You are being invited to take part in a research study involving PulseCheck. The purpose of this study is to understand how PulseCheck tools, check-ins, and support workflows function during this team-based study and whether they are useful, usable, and acceptable to participants.',
+          'If you choose to participate, you may be asked to complete check-ins, use PulseCheck training features, connect approved wearable or health data sources, and allow the study team to review information generated during your participation. This may include check-ins, readiness signals, activity logs, session completion, connected health data you choose to share, survey responses, and support workflow events during the study period.',
+          'Your participation is voluntary. You may choose not to participate or may stop participating at any time. Stopping participation will not affect any rights or benefits to which you are otherwise entitled, except that data already collected may still be used to the extent allowed by law and approved study procedures.',
+          'Possible risks include loss of privacy, unauthorized access to data, mistaken interpretation of incomplete or inaccurate data, discomfort from questions or recommendations, and the possibility that some product features or support workflows may not function as intended during the study. There may also be risks related to sharing information digitally.',
+          'You may or may not receive direct benefit from participating. The study may help researchers, staff, and product teams better understand how to improve the platform and related support workflows.',
+          'If coaches, staff, clinicians, or support partners will receive participant-level information during this study, the study materials should identify what they may receive and why before participation begins.',
+          'Participation in this study does not waive any legal rights. Nothing in this consent releases the investigators, sponsor, institution, or their agents from responsibility where such a release is not allowed by law.',
+          'If you have questions about the study, contact: [study contact]. If you have questions about your rights as a participant, contact: [IRB or research office contact].',
+        ].join('\n\n'),
+      version: 'v1',
+    },
+    {
+      id: 'pulsecheck-research-data-authorization-v1',
+      title: 'Research Data Authorization and Privacy Notice',
+      body:
+        [
+          'By agreeing to participate, you authorize the study team to collect and use the categories of data described in this disclosure for the stated study purposes.',
+          'These categories may include app check-ins and survey responses, session activity and completion data, readiness and support workflow data, connected wearable or health data you choose to authorize, and team or pilot participation metadata.',
+          'If this study uses education records, school records, health records, wearable data, or support workflow data, the study materials should identify what categories of information may be disclosed, the purpose of the disclosure, and the people or organizations that may receive the information.',
+          'Access to identifiable information should be limited to authorized study personnel and approved operational, school, or clinical recipients described by the study. Data may also be analyzed in de-identified or aggregated form when allowed by the study and applicable law.',
+          'Consumer health apps and wearable integrations are not automatically covered by HIPAA. If a covered provider, covered entity, or business associate is involved in a specific data flow, additional authorization or privacy notice may apply and should be provided separately.',
+          'Questions about research data use should be directed to: [study contact]. Questions about participant rights or institutional review should be directed to: [IRB or research office contact].',
+        ].join('\n\n'),
+      version: 'v1',
+    },
+  ],
+  pilot: [
+    {
+      id: 'pulsecheck-pilot-participation-notice-v1',
+      title: 'PulseCheck Pilot Participation Notice',
+      body:
+        [
+          'You are being invited to take part in a PulseCheck pilot connected to your team. This pilot is voluntary. You may choose not to participate or stop participating at any time.',
+          'Because this is a pilot, some features, workflows, recommendations, alerts, and support pathways may change while the pilot is active. Some parts of the experience may be incomplete, experimental, or still being evaluated.',
+          'Potential risks include privacy and security risks associated with digital systems, the possibility of incomplete or inaccurate data, mistaken interpretation, or product workflows that do not operate exactly as intended during the pilot.',
+          'You may or may not receive a direct benefit from participating. The pilot may help teams, staff, and product groups understand how to improve the platform and related support workflows.',
+          'Nothing in this notice waives any legal rights or releases any party from responsibility where such a release is not allowed by law.',
+          'If you have questions about the pilot, contact: [pilot contact].',
+        ].join('\n\n'),
+      version: 'v1',
+    },
+    {
+      id: 'pulsecheck-pilot-privacy-and-data-use-v1',
+      title: 'PulseCheck Pilot Privacy and Data Use',
+      body:
+        [
+          'PulseCheck uses the information you share in the app, plus any health or wearable connections you choose to authorize, to operate the pilot experience and improve the product and support workflows connected to it.',
+          'This may include check-ins, readiness trends, session activity, connected health data, support workflow events, and survey feedback collected during the pilot.',
+          'PulseCheck may share pilot-related information with authorized staff who support your team and, where applicable, with connected care or support partners involved in the pilot workflow. Sharing should be limited to the minimum information needed to operate, review, and improve the pilot.',
+          'If the pilot uses education records or school-linked data, the pilot materials should identify what categories of information are used, for what purpose, and who may receive them.',
+          'Consumer app and wearable data are not automatically protected by HIPAA in every workflow. If a covered provider, covered entity, or business associate is involved in a specific care or support workflow, additional notice or authorization may apply.',
+          'Questions about pilot data use should be directed to: [pilot contact].',
+        ].join('\n\n'),
+      version: 'v1',
+    },
+  ],
+  operational: [
+    {
+      id: 'pulsecheck-operational-participation-notice-v1',
+      title: 'PulseCheck Participation Notice',
+      body:
+        [
+          'Your team or organization is using PulseCheck as part of its current operational support and performance workflow. This notice explains the current-use experience and the information needed to operate it.',
+          'PulseCheck may use check-ins, readiness signals, session activity, survey responses, and other information you provide in the app to support day-to-day workflows tied to this program.',
+          'Some features, support pathways, and operational workflows may change over time as the system is maintained and improved.',
+          'Potential risks include privacy and security risks associated with digital systems, incomplete or inaccurate data, mistaken interpretation, or workflow errors that may require staff follow-up.',
+          'Nothing in this notice waives any legal rights or releases any party from responsibility where such a release is not allowed by law.',
+          'If you have questions about this program, contact: [program contact].',
+        ].join('\n\n'),
+      version: 'v1',
+    },
+    {
+      id: 'pulsecheck-operational-privacy-and-sharing-v1',
+      title: 'PulseCheck Operational Privacy and Sharing',
+      body:
+        [
+          'PulseCheck may collect and use the information you provide in the app, plus any wearable or health data you choose to authorize, to operate current support, performance, and coordination workflows for your team or organization.',
+          'Authorized staff may view the minimum information needed to operate those workflows, respond to concerns, and improve the service. This may include check-ins, readiness trends, session activity, support workflow events, and approved connected-data summaries.',
+          'If education records, school-linked data, or support-program records are used, the operational materials should identify what categories of information are used, the purpose of the use or disclosure, and the people or organizations that may receive the information.',
+          'Consumer apps and wearable integrations are not automatically HIPAA-covered in every workflow. If a covered provider, covered entity, or business associate is involved in a specific care or support flow, additional notice or authorization may apply.',
+          'Questions about operational data use or sharing should be directed to: [program contact].',
+        ].join('\n\n'),
+      version: 'v1',
+    },
+  ],
+};
+
+const ALL_DEFAULT_PULSECHECK_REQUIRED_CONSENT_IDS = new Set<string>([
+  ...LEGACY_DEFAULT_PULSECHECK_REQUIRED_CONSENT_IDS,
+  ...Object.values(DEFAULT_PULSECHECK_REQUIRED_CONSENTS_BY_STUDY_MODE).flatMap((consents) => consents.map((consent) => consent.id)),
+]);
+
+export const getDefaultPulseCheckRequiredConsents = (
+  studyMode: PulseCheckPilotStudyMode = 'operational'
+): PulseCheckRequiredConsentDocument[] =>
+  (DEFAULT_PULSECHECK_REQUIRED_CONSENTS_BY_STUDY_MODE[studyMode] || DEFAULT_PULSECHECK_REQUIRED_CONSENTS_BY_STUDY_MODE.operational)
+    .map((consent) => ({ ...consent }));
 
 export const mergePulseCheckRequiredConsents = (
+  studyMode: PulseCheckPilotStudyMode = 'operational',
   customConsents?: PulseCheckRequiredConsentDocument[] | null
 ): PulseCheckRequiredConsentDocument[] => {
   const merged = new Map<string, PulseCheckRequiredConsentDocument>();
   const defaultsById = new Map<string, PulseCheckRequiredConsentDocument>();
+  const currentDefaultIds = new Set<string>();
 
-  getDefaultPulseCheckRequiredConsents().forEach((consent) => {
+  getDefaultPulseCheckRequiredConsents(studyMode).forEach((consent) => {
     merged.set(consent.id, consent);
     defaultsById.set(consent.id, consent);
+    currentDefaultIds.add(consent.id);
   });
 
   (customConsents || []).forEach((consent) => {
+    if (ALL_DEFAULT_PULSECHECK_REQUIRED_CONSENT_IDS.has(consent.id) && !currentDefaultIds.has(consent.id)) {
+      return;
+    }
     const defaultConsent = defaultsById.get(consent.id);
     if (
       defaultConsent

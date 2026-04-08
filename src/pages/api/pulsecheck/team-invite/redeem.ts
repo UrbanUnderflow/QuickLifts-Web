@@ -118,7 +118,10 @@ const buildTeamCommercialSnapshot = (input: {
   inviteToken: normalizeString(input.inviteToken),
   teamPlanBypassesPaywall: derivePulseCheckTeamPlanBypass(input.commercialConfig),
 });
-const normalizeRequiredConsentDocuments = (value: unknown): PulseCheckRequiredConsentDocument[] => {
+const normalizeRequiredConsentDocuments = (
+  value: unknown,
+  studyMode: PulseCheckPilotStudyMode = 'operational'
+): PulseCheckRequiredConsentDocument[] => {
   if (!Array.isArray(value)) return [];
 
   const normalized = value.reduce<PulseCheckRequiredConsentDocument[]>((acc, entry, index) => {
@@ -133,7 +136,7 @@ const normalizeRequiredConsentDocuments = (value: unknown): PulseCheckRequiredCo
     return acc;
   }, []);
 
-  return mergePulseCheckRequiredConsents(normalized);
+  return mergePulseCheckRequiredConsents(studyMode, normalized);
 };
 const normalizeCompletedConsentIds = (
   value: unknown,
@@ -322,7 +325,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const existingTeamMembership = existingTeamMembershipSnap.exists ? existingTeamMembershipSnap.data() || {} : {};
       const existingPilotEnrollment = existingPilotEnrollmentSnap?.exists ? existingPilotEnrollmentSnap.data() || {} : {};
       const pilotStudyMode = pilotSnap?.data()?.studyMode as PulseCheckPilotStudyMode | undefined;
-      const pilotRequiredConsents = normalizeRequiredConsentDocuments(pilotSnap?.data()?.requiredConsents || []);
+      const pilotRequiredConsents = normalizeRequiredConsentDocuments(
+        pilotSnap?.data()?.requiredConsents || [],
+        pilotStudyMode || 'operational'
+      );
       const nextAthleteOnboarding =
         teamMembershipRole === 'athlete'
           ? buildAthleteOnboardingFromInvite(

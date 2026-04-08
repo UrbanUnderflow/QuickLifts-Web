@@ -11,6 +11,11 @@ import {
   type GroupMeetInviteSummary,
   type GroupMeetRequestSummary,
 } from './groupMeet';
+import {
+  buildGroupMeetFlexSelectionUrl,
+  createGroupMeetFlexActionToken,
+  type GroupMeetFlexPromptOption,
+} from './groupMeetFlex';
 import { buildGroupMeetHostSelectionUrl, createGroupMeetHostActionToken } from './groupMeetHostActions';
 import { buildGroupMeetGuestCalendarImportSummary } from './groupMeetGuestGoogleCalendar';
 import { computeGroupMeetAiRecommendation } from './groupMeetWorkflow';
@@ -27,6 +32,16 @@ export function getGroupMeetBaseUrl(req: NextApiRequest) {
     process.env.NEXT_PUBLIC_SITE_URL ||
     `${req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}`
   );
+}
+
+export function getGroupMeetConfiguredBaseUrl(explicitBaseUrl?: string | null) {
+  return (
+    explicitBaseUrl ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.URL ||
+    process.env.DEPLOY_PRIME_URL ||
+    'https://fitwithpulse.ai'
+  ).replace(/\/+$/, '');
 }
 
 function escapeHtml(input: string) {
@@ -65,6 +80,18 @@ function getGroupMeetSenderIdentity() {
   const senderEmail = process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
   const senderName = process.env.BREVO_SENDER_NAME || 'Pulse';
   return { senderEmail, senderName };
+}
+
+function buildGroupMeetRecommendationSignature(
+  recommendation: Awaited<ReturnType<typeof computeGroupMeetAiRecommendation>>['recommendation']
+) {
+  const recommendationSignature = recommendation.recommendations
+    .slice(0, 3)
+    .map((candidate) => `${candidate.candidateKey}:${candidate.participantCount}/${candidate.totalParticipants}`)
+    .join('|');
+
+  const caveatSignature = recommendation.caveats.slice(0, 5).join('|');
+  return recommendationSignature || `${recommendation.summary}|${caveatSignature}` || 'no-recommendations';
 }
 
 async function sendGroupMeetHostProgressEmail(args: {
@@ -212,7 +239,7 @@ async function sendGroupMeetHostCompletionEmail(args: {
     idempotencyKey: buildEmailDedupeKey([
       'group-meet-host-complete-v1',
       args.requestId,
-      'all-responded',
+      buildGroupMeetRecommendationSignature(args.recommendation),
     ]),
     idempotencyMetadata: {
       requestId: args.requestId,
@@ -220,6 +247,278 @@ async function sendGroupMeetHostCompletionEmail(args: {
     },
     bypassDailyRecipientLimit: true,
   });
+}
+
+export async function sendGroupMeetFlexPromptEmail(args: {
+  requestId: string;
+  requestTitle: string;
+  targetMonth: string;
+  deadlineAt: string | null;
+  timezone: string;
+  inviteToken: string;
+  recipientName: string;
+  recipientEmail: string;
+  shareUrl: string;
+  baseUrl: string;
+  options: GroupMeetFlexPromptOption[];
+}) {
+  const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
+  if (!apiKey) {
+    return {
+      success: false,
+      error: 'Brevo not configured in runtime env.',
+    };
+  }
+
+  const { senderEmail, senderName } = getGroupMeetSenderIdentity();
+  const internalBcc = [{ email: 'info@fitwithpulse.ai', name: 'Pulse Info' }];
+  const deadlineLabel = args.deadlineAt
+    ? new Date(args.deadlineAt).toLocaleString('en-US', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: args.timezone,
+      })
+    : null;
+  const optionCards = args.options.slice(0, 3).map((option) => {
+    const token = createGroupMeetFlexActionToken({
+      requestId: args.requestId,
+      inviteToken: args.inviteToken,
+      candidateKey: option.candidateKey,
+      date: option.date,
+      startMinutes: option.startMinutes,
+      endMinutes: option.endMinutes,
+    });
+    return { option, token };
+  });
+
+  const htmlOptions = optionCards
+    .map(({ option, token }) => {
+      const actionUrl = buildGroupMeetFlexSelectionUrl(args.baseUrl, token);
+      const label = formatGroupMeetCandidateLabel({
+        date: option.date,
+        startMinutes: option.startMinutes,
+        endMinutes: option.endMinutes,
+        timezone: args.timezone,
+      });
+
+      return `
+        <div style="margin:0 0 14px;padding:16px;border-radius:16px;border:1px solid rgba(24,24,27,0.1);background:#fafafa;">
+          <div style="font-weight:700;font-size:16px;">${escapeHtml(label)}</div>
+          <div style="margin-top:8px;color:#18181b;font-size:14px;">
+            Everyone else is currently available for this time.
+          </div>
+          <div style="margin-top:12px;color:#52525b;font-size:13px;">
+            Works for <strong>${option.participantCount} of ${option.totalParticipants}</strong> participants right now.
+          </div>
+          <div style="margin-top:14px;">
+            <a href="${actionUrl}" style="display:inline-block;padding:12px 16px;border-radius:10px;background:#18181b;color:#fff;text-decoration:none;font-weight:600;">
+              I can flex for this time
+            </a>
+          </div>
+          <div style="margin-top:8px;color:#71717a;font-size:12px;line-height:1.5;">
+            If the button does not work, open this link: ${escapeHtml(actionUrl)}
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  const subject = `${args.requestTitle}: can any of these times work for you?`;
+  const htmlContent = `
+    <div style="font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b;">
+      <p>Hi ${escapeHtml(args.recipientName || 'there')},</p>
+      <p>
+        Group Meet found a few times where everyone else is currently available for
+        <strong>${escapeHtml(args.requestTitle)}</strong>.
+        If any of these work for you too, tap one and Group Meet will add it to your availability right away.
+      </p>
+      <p>
+        Month: <strong>${escapeHtml(args.targetMonth)}</strong><br/>
+        ${deadlineLabel ? `Deadline: <strong>${escapeHtml(deadlineLabel)}</strong><br/>` : ''}
+        Timezone: <strong>${escapeHtml(args.timezone)}</strong>
+      </p>
+      <div style="margin-top:18px;">
+        ${htmlOptions}
+      </div>
+      <p style="margin-top:14px;color:#52525b;">
+        Prefer to edit manually instead? Open your Group Meet link here:<br/>
+        ${escapeHtml(args.shareUrl)}
+      </p>
+    </div>
+  `;
+
+  const sendResult = await sendBrevoTransactionalEmail({
+    toEmail: args.recipientEmail,
+    toName: args.recipientName || args.recipientEmail,
+    subject,
+    htmlContent,
+    sender: { email: senderEmail, name: senderName },
+    replyTo: { email: senderEmail, name: senderName },
+    bcc: internalBcc,
+    tags: ['group-meet', 'group-meet-flex-round'],
+    idempotencyKey: buildEmailDedupeKey([
+      'group-meet-flex-prompt-v1',
+      args.requestId,
+      args.recipientEmail,
+      args.options.slice(0, 3).map((option) => option.candidateKey).join('|'),
+    ]),
+    idempotencyMetadata: {
+      requestId: args.requestId,
+      recipientEmail: args.recipientEmail,
+      optionKeys: args.options.slice(0, 3).map((option) => option.candidateKey),
+    },
+    bypassDailyRecipientLimit: true,
+  });
+
+  if (!sendResult.success) {
+    return {
+      success: false,
+      skipped: Boolean(sendResult.skipped),
+      error: sendResult.error || 'Brevo error',
+    };
+  }
+
+  return {
+    success: true,
+    skipped: Boolean(sendResult.skipped),
+    messageId: sendResult.messageId || null,
+  };
+}
+
+export async function sendGroupMeetNoResponseReminderEmail(args: {
+  requestId: string;
+  requestTitle: string;
+  targetMonth: string;
+  deadlineAt: string | null;
+  timezone: string;
+  inviteToken: string;
+  recipientName: string;
+  recipientEmail: string;
+  shareUrl: string;
+  baseUrl: string;
+  options: GroupMeetFlexPromptOption[];
+}) {
+  const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
+  if (!apiKey) {
+    return {
+      success: false,
+      error: 'Brevo not configured in runtime env.',
+    };
+  }
+
+  const { senderEmail, senderName } = getGroupMeetSenderIdentity();
+  const internalBcc = [{ email: 'info@fitwithpulse.ai', name: 'Pulse Info' }];
+  const deadlineLabel = args.deadlineAt
+    ? new Date(args.deadlineAt).toLocaleString('en-US', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: args.timezone,
+      })
+    : null;
+  const optionCards = args.options.slice(0, 3).map((option) => {
+    const token = createGroupMeetFlexActionToken({
+      requestId: args.requestId,
+      inviteToken: args.inviteToken,
+      candidateKey: option.candidateKey,
+      date: option.date,
+      startMinutes: option.startMinutes,
+      endMinutes: option.endMinutes,
+    });
+    return { option, token };
+  });
+
+  const htmlOptions = optionCards
+    .map(({ option, token }) => {
+      const actionUrl = buildGroupMeetFlexSelectionUrl(args.baseUrl, token);
+      const label = formatGroupMeetCandidateLabel({
+        date: option.date,
+        startMinutes: option.startMinutes,
+        endMinutes: option.endMinutes,
+        timezone: args.timezone,
+      });
+
+      return `
+        <div style="margin:0 0 14px;padding:16px;border-radius:16px;border:1px solid rgba(24,24,27,0.1);background:#fafafa;">
+          <div style="font-weight:700;font-size:16px;">${escapeHtml(label)}</div>
+          <div style="margin-top:8px;color:#18181b;font-size:14px;">
+            This is one of the strongest remaining options based on the availability we already have from the group.
+          </div>
+          <div style="margin-top:12px;color:#52525b;font-size:13px;">
+            Works for <strong>${option.participantCount} of ${option.totalParticipants}</strong> participants right now.
+          </div>
+          <div style="margin-top:14px;">
+            <a href="${actionUrl}" style="display:inline-block;padding:12px 16px;border-radius:10px;background:#18181b;color:#fff;text-decoration:none;font-weight:600;">
+              This time works for me
+            </a>
+          </div>
+          <div style="margin-top:8px;color:#71717a;font-size:12px;line-height:1.5;">
+            If the button does not work, open this link: ${escapeHtml(actionUrl)}
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  const subject = `${args.requestTitle}: we still need your availability`;
+  const htmlContent = `
+    <div style="font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b;">
+      <p>Hi ${escapeHtml(args.recipientName || 'there')},</p>
+      <p>
+        Group Meet still needs your availability for <strong>${escapeHtml(args.requestTitle)}</strong>.
+        To make this easier, here are a few of the strongest times still in play based on what the rest of the group has already submitted.
+        If any of these work for you, tap one and Group Meet will add it to your availability right away.
+      </p>
+      <p>
+        Month: <strong>${escapeHtml(args.targetMonth)}</strong><br/>
+        ${deadlineLabel ? `Deadline: <strong>${escapeHtml(deadlineLabel)}</strong><br/>` : ''}
+        Timezone: <strong>${escapeHtml(args.timezone)}</strong>
+      </p>
+      <div style="margin-top:18px;">
+        ${htmlOptions}
+      </div>
+      <p style="margin-top:14px;color:#52525b;">
+        Prefer to edit manually instead? Open your Group Meet link here:<br/>
+        ${escapeHtml(args.shareUrl)}
+      </p>
+    </div>
+  `;
+
+  const sendResult = await sendBrevoTransactionalEmail({
+    toEmail: args.recipientEmail,
+    toName: args.recipientName || args.recipientEmail,
+    subject,
+    htmlContent,
+    sender: { email: senderEmail, name: senderName },
+    replyTo: { email: senderEmail, name: senderName },
+    bcc: internalBcc,
+    tags: ['group-meet', 'group-meet-no-response-reminder'],
+    idempotencyKey: buildEmailDedupeKey([
+      'group-meet-no-response-reminder-v1',
+      args.requestId,
+      args.recipientEmail,
+      args.options.slice(0, 3).map((option) => option.candidateKey).join('|'),
+    ]),
+    idempotencyMetadata: {
+      requestId: args.requestId,
+      recipientEmail: args.recipientEmail,
+      optionKeys: args.options.slice(0, 3).map((option) => option.candidateKey),
+    },
+    bypassDailyRecipientLimit: true,
+  });
+
+  if (!sendResult.success) {
+    return {
+      success: false,
+      skipped: Boolean(sendResult.skipped),
+      error: sendResult.error || 'Brevo error',
+    };
+  }
+
+  return {
+    success: true,
+    skipped: Boolean(sendResult.skipped),
+    messageId: sendResult.messageId || null,
+  };
 }
 
 export function mapGroupMeetInviteSummary(

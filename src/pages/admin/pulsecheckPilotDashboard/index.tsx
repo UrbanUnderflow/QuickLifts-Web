@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import {
   Activity,
   ArrowRight,
@@ -88,6 +89,7 @@ const getMetricValueClassName = (value: number, tone: MetricTone) => {
 };
 
 const PulseCheckPilotDashboardIndexPage: React.FC = () => {
+  const router = useRouter();
   const [entries, setEntries] = useState<PilotDashboardDirectoryEntry[]>([]);
   const [organizationId, setOrganizationId] = useState('');
   const [teamId, setTeamId] = useState('');
@@ -96,6 +98,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [demoModeEnabled, setDemoModeEnabled] = useState(false);
+  const [activeSidebarItem, setActiveSidebarItem] = useState('Active Pilots');
   const loadRequestIdRef = useRef(0);
 
   const load = async (mode: 'initial' | 'refresh' = 'initial') => {
@@ -392,24 +395,60 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
     },
   ];
 
+  const handleSidebarNavigation = (item: {
+    label: string;
+    destination: { type: 'section'; id: string } | { type: 'route'; href: string };
+  }) => {
+    setActiveSidebarItem(item.label);
+
+    if (item.destination.type === 'route') {
+      void router.push(item.destination.href);
+      return;
+    }
+
+    if (typeof document === 'undefined') return;
+    const nextSection = document.getElementById(item.destination.id);
+    if (!nextSection) return;
+
+    nextSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `#${item.destination.id}`);
+    }
+  };
+
   const sidebarSections: Array<{
     label: string;
-    items: Array<{ label: string; value: number; icon: LucideIcon; active?: boolean }>;
+    items: Array<{
+      label: string;
+      value: number;
+      icon: LucideIcon;
+      destination: { type: 'section'; id: string } | { type: 'route'; href: string };
+    }>;
   }> = [
     {
       label: 'Monitoring',
       items: [
-        { label: 'Active Pilots', value: summary.activePilots, icon: Activity, active: true },
-        { label: 'Athletes', value: summary.activeAthletes, icon: Users2 },
-        { label: 'Hypotheses', value: summary.hypothesisCount, icon: Layers3 },
-        { label: 'Watch List', value: operationalWatchListSummary.stateCount, icon: ShieldAlert },
+        { label: 'Active Pilots', value: summary.activePilots, icon: Activity, destination: { type: 'section', id: 'pilot-directory' } },
+        { label: 'Athletes', value: summary.activeAthletes, icon: Users2, destination: { type: 'section', id: 'aggregate-summary' } },
+        { label: 'Hypotheses', value: summary.hypothesisCount, icon: Layers3, destination: { type: 'section', id: 'aggregate-summary' } },
+        { label: 'Watch List', value: operationalWatchListSummary.stateCount, icon: ShieldAlert, destination: { type: 'section', id: 'watch-list-summary' } },
       ],
     },
     {
       label: 'Provisioning',
       items: [
-        { label: 'Organizations', value: visibleOrganizationCount, icon: Building2 },
-        { label: 'Teams', value: visibleTeamCount, icon: FlaskConical },
+        {
+          label: 'Organizations',
+          value: visibleOrganizationCount,
+          icon: Building2,
+          destination: { type: 'route', href: '/admin/pulsecheckProvisioning#organizations-directory' },
+        },
+        {
+          label: 'Teams',
+          value: visibleTeamCount,
+          icon: FlaskConical,
+          destination: { type: 'route', href: '/admin/pulsecheckProvisioning#organization-hierarchy' },
+        },
       ],
     },
   ];
@@ -474,19 +513,24 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                       {section.items.map((item) => {
                         const Icon = item.icon;
                         return (
-                          <div
+                          <button
                             key={item.label}
-                            className={`relative flex items-center gap-3 px-5 py-2.5 text-sm transition ${
-                              item.active ? 'bg-white/[0.04] text-white' : 'text-white/55 hover:bg-white/[0.03] hover:text-white/80'
+                            type="button"
+                            onClick={() => handleSidebarNavigation(item)}
+                            aria-current={activeSidebarItem === item.label ? 'page' : undefined}
+                            className={`relative flex w-full items-center gap-3 px-5 py-2.5 text-left text-sm transition ${
+                              activeSidebarItem === item.label
+                                ? 'bg-white/[0.04] text-white'
+                                : 'text-white/55 hover:bg-white/[0.03] hover:text-white/80'
                             }`}
                           >
-                            {item.active ? <span className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-[#00d4aa]" /> : null}
-                            <Icon className={`h-4 w-4 shrink-0 ${item.active ? 'text-[#00d4aa]' : 'text-white/35'}`} />
+                            {activeSidebarItem === item.label ? <span className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-[#00d4aa]" /> : null}
+                            <Icon className={`h-4 w-4 shrink-0 ${activeSidebarItem === item.label ? 'text-[#00d4aa]' : 'text-white/35'}`} />
                             <span>{item.label}</span>
                             <span className="pilot-font-mono ml-auto rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] text-white/70">
                               {item.value}
                             </span>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -580,7 +624,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                 ) : null}
               </section>
 
-              <section className="pilot-slide-up border-b border-white/10 px-4 py-6 sm:px-8" style={{ animationDelay: '60ms' }}>
+              <section id="aggregate-summary" className="pilot-slide-up scroll-mt-24 border-b border-white/10 px-4 py-6 sm:px-8" style={{ animationDelay: '60ms' }}>
                 <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/30">
                   Aggregate - all active pilots
                 </div>
@@ -633,7 +677,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                 </div>
               </section>
 
-              <section className="pilot-slide-up border-b border-white/10 px-4 py-5 sm:px-8" style={{ animationDelay: '100ms' }}>
+              <section id="watch-list-summary" className="pilot-slide-up scroll-mt-24 border-b border-white/10 px-4 py-5 sm:px-8" style={{ animationDelay: '100ms' }}>
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div className="flex items-start gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-rose-400/20 bg-rose-400/10">
@@ -734,7 +778,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                 </div>
               </section>
 
-              <section className="px-4 py-6 sm:px-8 sm:py-8">
+              <section id="pilot-directory" className="scroll-mt-24 px-4 py-6 sm:px-8 sm:py-8">
                 {loading ? (
                   <div className="pilot-fade-in rounded-[28px] border border-white/10 bg-white/[0.03] p-8 text-sm text-white/50">
                     Loading active pilots...

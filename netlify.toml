@@ -474,3 +474,7 @@
 [functions.scheduled-pulsecheck-protocol-monitoring]
   # Runs every 6 hours and sends a Brevo alert when protocol monitoring thresholds trip.
   schedule = "0 */6 * * *"
+
+[functions.scheduled-group-meet-flex-prompts]
+  # Runs every 30 minutes, but only sends the Group Meet flex round at 8 AM America/New_York on the deadline date.
+  schedule = "*/30 * * * *"

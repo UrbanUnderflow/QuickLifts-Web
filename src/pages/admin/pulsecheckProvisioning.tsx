@@ -2339,7 +2339,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
             </header>
 
             <main className="pcp-main">
-              <div className="pcp-page-head pcp-slide-up">
+              <div id="organizations-directory" className="pcp-page-head pcp-slide-up scroll-mt-24">
                 <div className="pcp-page-head-left">
                   <div className="pcp-eyebrow">PulseCheck Admin</div>
                   <div className="pcp-heading">Organizations</div>
@@ -2472,7 +2472,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                 </div>
               ) : null}
 
-              <div className="pcp-org-list">
+              <div id="organization-hierarchy" className="pcp-org-list scroll-mt-24">
                 {loading ? (
                   <div className="pcp-empty-panel">Loading organizations and provisioning hierarchy...</div>
                 ) : filteredOrganizationBundles.length === 0 ? (

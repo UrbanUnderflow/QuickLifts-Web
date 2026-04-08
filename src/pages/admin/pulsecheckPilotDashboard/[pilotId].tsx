@@ -40,6 +40,7 @@ import type { PilotDashboardMetricExplanationKey } from '../../../components/adm
 import { db, getFirebaseModeRequestHeaders } from '../../../api/firebase/config';
 import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
+import { getDefaultPulseCheckRequiredConsents } from '../../../api/firebase/pulsecheckProvisioning/types';
 import type {
   PulseCheckInviteActivity,
   PulseCheckInviteLink,
@@ -107,6 +108,21 @@ type AthleteTransferModalState = {
   selectedCohortId: string;
 };
 
+const STUDY_MODE_DISCLOSURE_PACKAGE_META: Record<PulseCheckPilot['studyMode'], { label: string; actionLabel: string }> = {
+  research: {
+    label: 'Research study disclosures',
+    actionLabel: 'Reset To Research Package',
+  },
+  pilot: {
+    label: 'Pilot disclosures',
+    actionLabel: 'Reset To Pilot Package',
+  },
+  operational: {
+    label: 'Operational disclosures',
+    actionLabel: 'Reset To Operational Package',
+  },
+};
+
 const STATUS_OPTIONS: Array<{ value: PilotHypothesisStatus; label: string }> = [
   { value: 'not-enough-data', label: 'Not enough data' },
   { value: 'promising', label: 'Promising' },
@@ -121,7 +137,7 @@ const CONFIDENCE_OPTIONS: Array<{ value: PilotHypothesisConfidenceLevel; label: 
 ];
 
 const tabs: Array<{ id: DetailTab; label: string }> = [
-  { id: 'overview', label: 'Pilot Overview' },
+  { id: 'overview', label: 'Overview' },
   { id: 'engine-health', label: 'Engine Health' },
   { id: 'findings', label: 'Findings' },
   { id: 'hypotheses', label: 'Hypotheses' },
@@ -160,7 +176,6 @@ const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 const formatAverage = (value: number) => value.toFixed(1);
 const toScopedPercent = (numerator: number, denominator: number) => (denominator > 0 ? (numerator / denominator) * 100 : 0);
 const normalizeInvitePreviewValue = (value: string) => value.replace(/\r\n/g, '\n').trim();
-const inviteRedemptionModeLabel = (mode?: InviteCreationMode) => (mode === 'general' ? 'General link' : 'Single-use link');
 const inviteRedemptionModeClassName = (mode?: InviteCreationMode) =>
   mode === 'general'
     ? 'border border-sky-400/20 bg-sky-400/10 text-sky-100'
@@ -235,6 +250,228 @@ const formatTimeValue = (value: any) => {
     return new Date(value).toLocaleString();
   }
   return nextDate ? nextDate.toLocaleString() : 'Not available';
+};
+const getTimeValueMs = (value: any) => {
+  const nextDate = toDateValue(value);
+  return nextDate ? nextDate.getTime() : null;
+};
+const METRICS_STATUS_STALE_AFTER_MS = 1000 * 60 * 60 * 24;
+const isHealthyMetricsStatus = (value?: string | null) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return false;
+  return ['ok', 'success', 'succeeded'].includes(normalized);
+};
+const formatMetricsStatusLabel = (value?: string | null) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return 'No status recorded yet';
+  return normalized
+    .split(/[_-\s]+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+const formatMetricsDuration = (value?: number | null) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 'Not available';
+  if (value < 1000) return `${Math.round(value)} ms`;
+  if (value < 60_000) return `${(value / 1000).toFixed(1)} sec`;
+  return `${(value / 60_000).toFixed(1)} min`;
+};
+
+type MetricsOpsScopeStatus = {
+  status?: string;
+  startedAt?: any;
+  completedAt?: any;
+  durationMs?: number | null;
+  lastError?: string | null;
+} | null;
+
+type StudyMetricsStatusModalProps = {
+  isOpen: boolean;
+  pilotName: string;
+  state: 'healthy' | 'stale' | 'broken';
+  refreshScope: MetricsOpsScopeStatus;
+  repairScope: MetricsOpsScopeStatus;
+  onClose: () => void;
+  onRefresh?: () => void;
+  refreshing?: boolean;
+};
+
+const StudyMetricsStatusModal: React.FC<StudyMetricsStatusModalProps> = ({
+  isOpen,
+  pilotName,
+  state,
+  refreshScope,
+  repairScope,
+  onClose,
+  onRefresh,
+  refreshing = false,
+}) => {
+  if (!isOpen) return null;
+
+  const stateTone =
+    state === 'broken'
+      ? {
+          badgeClassName: 'border-rose-400/25 bg-rose-400/10 text-rose-100',
+          label: 'Needs attention',
+          helper: 'The last metrics refresh or repair recorded an issue. Open this panel when the study metrics look missing, stale, or inconsistent.',
+        }
+      : state === 'stale'
+        ? {
+            badgeClassName: 'border-amber-400/25 bg-amber-400/10 text-amber-100',
+            label: 'May be stale',
+            helper: 'The latest refresh status is old or missing, so the pilot summary may not reflect the newest records yet.',
+          }
+        : {
+            badgeClassName: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100',
+            label: 'Healthy',
+            helper: 'The pilot summary has a recent successful refresh on record.',
+          };
+
+  const scopeCards = [
+    {
+      key: 'refresh',
+      label: 'Last metrics refresh',
+      helper: 'This is the job that recalculates the pilot-level study metrics summary from enrollment, survey, adherence, and care records.',
+      scope: refreshScope,
+    },
+    {
+      key: 'repair',
+      label: 'Last repair pass',
+      helper: 'This is the follow-up repair pass that runs when the metrics summary needs cleanup or correction.',
+      scope: repairScope,
+    },
+  ];
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[130] flex items-center justify-center bg-[#03060d]/88 px-4 py-6 backdrop-blur-xl"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ opacity: 0, y: 18, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 18, scale: 0.98 }}
+          transition={{ duration: 0.22, ease: 'easeOut' }}
+          className="relative w-full max-w-4xl overflow-hidden rounded-[30px] border border-white/10 bg-[#0a0f18]/95 shadow-[0_28px_120px_rgba(0,0,0,0.45)]"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="study-metrics-status-title"
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.14),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.1),_transparent_26%)]" />
+          <div className="relative border-b border-white/10 px-6 py-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Admin status</div>
+                <h2 id="study-metrics-status-title" className="mt-2 text-2xl font-semibold text-white">
+                  Study Metrics Status
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+                  Study metrics are pilot-level summaries calculated from the underlying enrollment, survey, adherence,
+                  and care records. This panel shows when that summary last refreshed for {pilotName}.
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="rounded-full border border-white/10 bg-white/5 p-2 text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                aria-label="Close study metrics status"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <span className={`rounded-full border px-3 py-2 text-xs font-medium ${stateTone.badgeClassName}`}>
+                {stateTone.label}
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-300">
+                Admin-only metrics diagnostics
+              </span>
+            </div>
+            <p className="mt-3 text-sm text-zinc-400">{stateTone.helper}</p>
+          </div>
+
+          <div className="relative max-h-[78vh] overflow-y-auto px-6 py-5">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              {scopeCards.map(({ key, label, helper, scope }) => {
+                const hasIssue = Boolean(scope?.lastError) || (scope?.status ? !isHealthyMetricsStatus(scope.status) : false);
+                return (
+                  <div key={key} className="rounded-3xl border border-white/10 bg-[#0f1522] p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{label}</div>
+                        <div className="mt-2 text-lg font-semibold text-white">{formatMetricsStatusLabel(scope?.status)}</div>
+                      </div>
+                      <span
+                        className={`rounded-full border px-3 py-1.5 text-[11px] ${
+                          hasIssue
+                            ? 'border-rose-400/25 bg-rose-400/10 text-rose-100'
+                            : isHealthyMetricsStatus(scope?.status)
+                              ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100'
+                              : 'border-amber-400/25 bg-amber-400/10 text-amber-100'
+                        }`}
+                      >
+                        {hasIssue ? 'Needs review' : isHealthyMetricsStatus(scope?.status) ? 'Healthy' : 'Waiting on status'}
+                      </span>
+                    </div>
+
+                    <p className="mt-3 text-sm leading-6 text-zinc-400">{helper}</p>
+
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                        <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Started</div>
+                        <div className="mt-2 text-sm text-white">{formatTimeValue(scope?.startedAt)}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                        <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Completed</div>
+                        <div className="mt-2 text-sm text-white">{formatTimeValue(scope?.completedAt)}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                        <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Duration</div>
+                        <div className="mt-2 text-sm text-white">{formatMetricsDuration(scope?.durationMs)}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4">
+                      <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Last recorded issue</div>
+                      <div className="mt-2 text-sm text-white">{scope?.lastError || 'No recorded issue'}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="relative flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-6 py-4">
+            <div className="text-sm text-zinc-400">Use refresh if the study metrics look missing or obviously behind the latest pilot activity.</div>
+            <div className="flex items-center gap-3">
+              {onRefresh ? (
+                <button
+                  type="button"
+                  onClick={onRefresh}
+                  disabled={refreshing}
+                  className="inline-flex items-center gap-2 rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  {refreshing ? 'Refreshing Metrics...' : 'Refresh Metrics Now'}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
 };
 const formatInviteActivityEventLabel = (value?: PulseCheckInviteActivity['eventType']) =>
   (value || 'page-view')
@@ -423,24 +660,6 @@ const OUTCOME_CARD_PRESENTATION: Record<typeof OUTCOME_CARD_ORDER[number], { lab
   athleteNps: { label: 'Athlete NPS', help: 'Average recommendation score' },
 };
 
-const ESCALATION_MIGRATION_DRY_RUN_GUIDANCE = [
-  'Stop if blocked rows remain or if any sample patch would move escalation context without a clear reason.',
-  'Capture the current pilot baseline before apply: total escalations, tier split, status buckets, and median minutes to care.',
-  'Treat classifier and disposition changes as denominator changes, not cosmetic relabeling.',
-];
-
-const ESCALATION_MIGRATION_STAGED_VALIDATION = [
-  'Run one pilot in staged mode first and compare before and after counts on the same frame.',
-  'Hold rollout if active, resolved, or declined buckets move unexpectedly.',
-  'If speed to care becomes null or jumps sharply, inspect care timing milestones before widening rollout.',
-];
-
-const ESCALATION_MIGRATION_ROLLBACK_GUIDANCE = [
-  'Disable outcomes for containment if operators need a fast stop.',
-  'Revert classifier or disposition logic to the prior released version if escalation meaning changed unexpectedly.',
-  'Restore exported source docs and recompute pilot rollups before re-enabling live rollout.',
-];
-
 type SurveyMetricKey = 'athleteTrust' | 'coachTrust' | 'clinicianTrust' | 'athleteNps' | 'coachNps' | 'clinicianNps';
 
 const SURVEY_METRIC_CARDS: Array<{
@@ -468,7 +687,7 @@ const RECOMMENDATION_CONSUMER_LABELS: Record<typeof RECOMMENDATION_CONSUMER_ORDE
 };
 
 const formatOutcomeValue = (metricKey: typeof OUTCOME_CARD_ORDER[number], metrics: PilotDashboardDetail['outcomeMetrics'] | null | undefined) => {
-  if (!metrics) return 'No outcome rollup yet';
+  if (!metrics) return 'No study metrics yet';
   switch (metricKey) {
     case 'enrollment':
       return `${metrics.enrollmentRate.toFixed(1)}%`;
@@ -483,7 +702,7 @@ const formatOutcomeValue = (metricKey: typeof OUTCOME_CARD_ORDER[number], metric
     case 'athleteNps':
       return metrics.athleteNps !== null ? metrics.athleteNps.toFixed(1) : 'Not enough responses yet';
     default:
-      return 'No outcome rollup yet';
+      return 'No study metrics yet';
   }
 };
 
@@ -532,7 +751,7 @@ const formatSurveyMetricValue = (
   metricKey: SurveyMetricKey,
   metrics: PilotDashboardDetail['outcomeMetrics'] | null | undefined
 ) => {
-  if (!metrics) return 'No outcome rollup yet';
+  if (!metrics) return 'No study metrics yet';
   const value = metrics[metricKey];
   return value !== null ? value.toFixed(1) : 'Not enough responses yet';
 };
@@ -542,7 +761,7 @@ const formatSurveyMetricSubtext = (
   diagnostics: PilotDashboardDetail['outcomeDiagnostics'] | null | undefined
 ) => {
   if (!diagnostics) {
-    return 'Trust and NPS diagnostics will appear once this frame has a persisted survey rollup.';
+    return 'Trust and NPS diagnostics will appear once this frame has a saved survey metrics summary.';
   }
   const summary = diagnostics[metricKey];
   if (!summary) {
@@ -552,6 +771,11 @@ const formatSurveyMetricSubtext = (
     ? `${summary.responseCount} responses collected · sample threshold met`
     : `${summary.responseCount}/${diagnostics.minimumResponseThreshold} responses collected · below sample threshold`;
 };
+const hasSurveyMetricSliceValues = (metrics: PilotDashboardDetail['outcomeMetrics'] | null | undefined) =>
+  Boolean(
+    metrics
+    && SURVEY_METRIC_CARDS.some(({ key }) => typeof metrics[key] === 'number' && Number.isFinite(metrics[key]))
+  );
 
 const formatConsumerLabel = (consumer: typeof RECOMMENDATION_CONSUMER_ORDER[number]) => RECOMMENDATION_CONSUMER_LABELS[consumer];
 const formatSignedDelta = (value: number | null | undefined, suffix = '') => {
@@ -562,6 +786,24 @@ const formatSignedDelta = (value: number | null | undefined, suffix = '') => {
 const formatComparisonMetricValue = (value: number | null | undefined, kind: 'percent' | 'score') => {
   if (value === null || value === undefined) return 'Not enough data yet';
   return kind === 'percent' ? `${value.toFixed(1)}%` : value.toFixed(1);
+};
+const hasRecommendationTypeSliceMetrics = (slices: Record<string, any> | null | undefined) => {
+  if (!slices) return false;
+  const values = [
+    slices.stateAwareVsFallback?.stateAware?.adherenceRate,
+    slices.stateAwareVsFallback?.stateAware?.athleteTrust,
+    slices.stateAwareVsFallback?.fallbackOrNone?.adherenceRate,
+    slices.stateAwareVsFallback?.fallbackOrNone?.athleteTrust,
+    slices.stateAwareVsFallback?.delta?.adherenceRate,
+    slices.stateAwareVsFallback?.delta?.athleteTrust,
+    slices.protocolCompletion?.completedProtocol?.adherenceRate,
+    slices.protocolCompletion?.completedProtocol?.athleteTrust,
+    slices.protocolCompletion?.incompleteOrSkippedProtocol?.adherenceRate,
+    slices.protocolCompletion?.incompleteOrSkippedProtocol?.athleteTrust,
+    slices.protocolCompletion?.delta?.adherenceRate,
+    slices.protocolCompletion?.delta?.athleteTrust,
+  ];
+  return values.some((value) => typeof value === 'number' && Number.isFinite(value));
 };
 const formatAthleteCountLabel = (count: number | null | undefined) => {
   const safeCount = Number.isFinite(count) ? Number(count) : 0;
@@ -674,7 +916,6 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [creatingSuggestedHypothesisKey, setCreatingSuggestedHypothesisKey] = useState<string | null>(null);
   const [savingInviteConfig, setSavingInviteConfig] = useState(false);
   const [savingRequiredConsents, setSavingRequiredConsents] = useState(false);
-  const [savingOutcomeReleaseSettings, setSavingOutcomeReleaseSettings] = useState(false);
   const [recomputingOutcomeRollups, setRecomputingOutcomeRollups] = useState(false);
   const [savingInviteDefaultScope, setSavingInviteDefaultScope] = useState<'team' | 'organization' | null>(null);
   const [resettingInviteConfig, setResettingInviteConfig] = useState(false);
@@ -704,6 +945,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [historyWindowEndFilter, setHistoryWindowEndFilter] = useState('');
   const [communicationPreviewModal, setCommunicationPreviewModal] = useState<AthleteCommunicationPreviewModalState | null>(null);
   const [athleteTransferModal, setAthleteTransferModal] = useState<AthleteTransferModalState | null>(null);
+  const [studyMetricsStatusModalOpen, setStudyMetricsStatusModalOpen] = useState(false);
   const copyFeedbackTimeoutRef = useRef<number | null>(null);
   const loadRequestIdRef = useRef(0);
   const communicationLoadRequestIdRef = useRef(0);
@@ -1371,41 +1613,69 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
   const visibleRecommendationTypeSlices = useMemo(() => {
     if (!detail) return null;
-    if (cohortFilter) {
-      return detail.outcomeRecommendationTypeSlicesByCohort?.[cohortFilter] || null;
-    }
-    return detail.outcomeRecommendationTypeSlices || null;
+    const recommendationTypeSlices = cohortFilter
+      ? detail.outcomeRecommendationTypeSlicesByCohort?.[cohortFilter] || null
+      : detail.outcomeRecommendationTypeSlices || null;
+    return hasRecommendationTypeSliceMetrics(recommendationTypeSlices) ? recommendationTypeSlices : null;
   }, [cohortFilter, detail]);
+  const visibleSurveyMetricSlices = useMemo(() => (
+    hasSurveyMetricSliceValues(visibleOutcomeMetrics) ? visibleOutcomeMetrics : null
+  ), [visibleOutcomeMetrics]);
 
   const visibleOperationalDiagnostics = detail?.outcomeOperationalDiagnostics || null;
   const visibleEscalationOperationalDiagnostics = visibleOperationalDiagnostics?.escalations || null;
-  const visibleEscalationComparison = visibleEscalationOperationalDiagnostics?.comparison || null;
-  const visibleEscalationMigrationContext = visibleEscalationOperationalDiagnostics?.migrationContext || null;
-  const visibleTrustDispositionBaseline = detail?.outcomeTrustDispositionBaseline || null;
   const visibleOperationalWatchListSummary = detail?.operationalWatchListSummary || null;
-  const outcomeReleaseSettings = detail?.outcomeReleaseSettings || null;
   const outcomeOpsStatus = detail?.outcomeOpsStatus || null;
-  const outcomesEnabled = outcomeReleaseSettings?.outcomesEnabled !== false;
-  const rollupRecomputeStatus = outcomeOpsStatus?.scopes?.rollup_recompute?.status || '';
-  const escalationMigrationReadiness = !outcomesEnabled
-    ? {
-        label: 'Outcomes disabled',
-        className: 'border-rose-400/20 bg-rose-400/10 text-rose-100',
-      }
-    : rollupRecomputeStatus && !['ok', 'success'].includes(rollupRecomputeStatus)
-      ? {
-          label: 'Investigate recompute before widening rollout',
-          className: 'border-amber-400/20 bg-amber-400/10 text-amber-100',
-        }
-      : visibleOutcomeMetrics?.escalationsTotal && visibleOutcomeMetrics?.medianMinutesToCare === null
-        ? {
-            label: 'Escalations present but speed-to-care is missing',
-            className: 'border-amber-400/20 bg-amber-400/10 text-amber-100',
-          }
-        : {
-            label: 'Ready for staged comparison review',
-            className: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100',
-          };
+  const metricsRefreshScope = (outcomeOpsStatus?.scopes?.rollup_recompute || null) as MetricsOpsScopeStatus;
+  const metricsRepairScope = (outcomeOpsStatus?.scopes?.scheduled_rollup_repair || null) as MetricsOpsScopeStatus;
+  const metricsRefreshCompletedMs = getTimeValueMs(
+    metricsRefreshScope?.completedAt || metricsRefreshScope?.startedAt || outcomeOpsStatus?.root?.updatedAt
+  );
+  const metricsRefreshBroken = Boolean(
+    (metricsRefreshScope?.status && !isHealthyMetricsStatus(metricsRefreshScope.status))
+      || metricsRefreshScope?.lastError
+      || (metricsRepairScope?.status && !isHealthyMetricsStatus(metricsRepairScope.status))
+      || metricsRepairScope?.lastError
+  );
+  const metricsRefreshStale = !metricsRefreshCompletedMs || Date.now() - metricsRefreshCompletedMs > METRICS_STATUS_STALE_AFTER_MS;
+  const metricsRefreshState: 'healthy' | 'stale' | 'broken' = metricsRefreshBroken ? 'broken' : metricsRefreshStale ? 'stale' : 'healthy';
+  const showStudyMetricsStatusLink = metricsRefreshState !== 'healthy';
+  const careEscalationTimingSteps = [
+    ['Coach notified', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.coachNotification],
+    ['Consent accepted', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.consentAccepted],
+    ['Handoff initiated', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.handoffInitiated],
+    ['Handoff accepted', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.handoffAccepted],
+    ['First clinician response', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.firstClinicianResponse],
+    ['Care completed', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.careCompleted],
+  ] as const;
+  const currentCareEscalationCount =
+    visibleEscalationOperationalDiagnostics?.secondaryCounts?.groupedIncidents
+    ?? visibleOutcomeMetrics?.escalationsTotal
+    ?? 0;
+  const hasCareTimingData = careEscalationTimingSteps.some(([, summary]) => {
+    const timingSummary = summary as any;
+    return Boolean(
+      (typeof timingSummary?.sampleCount === 'number' && timingSummary.sampleCount > 0)
+      || timingSummary?.medianMinutes !== null && timingSummary?.medianMinutes !== undefined
+      || timingSummary?.p75Minutes !== null && timingSummary?.p75Minutes !== undefined
+    );
+  });
+  const hasCareEscalationData = (
+    [
+      currentCareEscalationCount,
+      visibleEscalationOperationalDiagnostics?.secondaryCounts?.openCareEscalations ?? 0,
+      visibleEscalationOperationalDiagnostics?.secondaryCounts?.coachReviewFlags ?? 0,
+      visibleEscalationOperationalDiagnostics?.secondaryCounts?.supportFlags ?? 0,
+      visibleEscalationOperationalDiagnostics?.statusCounts?.active ?? 0,
+      visibleEscalationOperationalDiagnostics?.statusCounts?.resolved ?? 0,
+      visibleEscalationOperationalDiagnostics?.statusCounts?.declined ?? 0,
+      visibleOutcomeMetrics?.escalationsTier1 ?? 0,
+      visibleOutcomeMetrics?.escalationsTier2 ?? 0,
+      visibleOutcomeMetrics?.escalationsTier3 ?? 0,
+    ].some((value) => value > 0)
+    || hasCareTimingData
+    || (visibleOutcomeMetrics?.medianMinutesToCare !== null && visibleOutcomeMetrics?.medianMinutesToCare !== undefined)
+  );
 
   const visibleEnrollmentCount = useMemo(() => {
     if (!visibleOutcomeMetrics) return null;
@@ -1414,7 +1684,6 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     return { enrolledCount, totalCount };
   }, [cohortFilter, detail?.metrics.totalEnrollmentCount, visibleActiveAthletes.length, visibleOutcomeMetrics]);
 
-  const wholePilotOutcomeMetrics = detail?.outcomeMetrics || null;
   const operationalWatchListSummaryCards: Array<{
     label: string;
     value: string;
@@ -2182,11 +2451,11 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       await load('refresh');
       setPageMessage({
         type: 'success',
-        text: `${athlete.displayName}'s recent PulseCheck history was seeded into this pilot outcome frame.`,
+        text: `${athlete.displayName}'s recent PulseCheck history was seeded into this pilot study-metrics frame.`,
       });
     } catch (seedError: any) {
       console.error('[PulseCheckPilotDashboard] Failed to seed pilot athlete outcome history:', seedError);
-      setPageMessage({ type: 'error', text: seedError?.message || 'Failed to seed this athlete into the pilot outcome rollup.' });
+      setPageMessage({ type: 'error', text: seedError?.message || 'Failed to seed this athlete into the pilot study metrics summary.' });
     } finally {
       setSeedingAthleteDataId(null);
     }
@@ -2212,7 +2481,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     setRequiredConsentDrafts((current) => [
       ...current,
       {
-        id: `consent-${current.length + 1}`,
+        id: `custom-disclosure-${current.length + 1}`,
         title: '',
         body: '',
         version: 'v1',
@@ -2222,6 +2491,12 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
   const removeRequiredConsentDraft = (index: number) => {
     setRequiredConsentDrafts((current) => current.filter((_, consentIndex) => consentIndex !== index));
+  };
+
+  const applyCurrentStudyModeDisclosureDefaults = () => {
+    if (!detail) return;
+    setRequiredConsentDrafts(getDefaultPulseCheckRequiredConsents(detail.pilot.studyMode));
+    setPageMessage(null);
   };
 
   const saveInviteConfig = async () => {
@@ -2272,11 +2547,11 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       await load('refresh');
       setPageMessage({
         type: 'success',
-        text: normalized.length === 0 ? 'Required agreements cleared for this pilot.' : 'Required agreements saved for this pilot.',
+        text: normalized.length === 0 ? 'Required disclosures cleared for this pilot.' : 'Required disclosures saved for this pilot.',
       });
     } catch (saveError) {
       console.error('[PulseCheckPilotDashboard] Failed to save required consents:', saveError);
-      setPageMessage({ type: 'error', text: 'Failed to save required agreements.' });
+      setPageMessage({ type: 'error', text: 'Failed to save required disclosures.' });
     } finally {
       setSavingRequiredConsents(false);
     }
@@ -2289,7 +2564,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const handleStaffSurveySubmitted = () => {
     setPageMessage({
       type: 'success',
-      text: 'Staff feedback submitted. Outcome rollups will refresh as the survey response is recorded.',
+      text: 'Staff feedback submitted. Study metrics will refresh as the survey response is recorded.',
     });
     void load('refresh');
   };
@@ -2442,37 +2717,6 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
-  const updateOutcomeReleaseSettings = async (outcomesEnabled: boolean, rolloutStage: 'disabled' | 'staged' | 'live') => {
-    if (!detail) return;
-    setSavingOutcomeReleaseSettings(true);
-    setPageMessage(null);
-    try {
-      await pulseCheckPilotDashboardService.saveOutcomeReleaseSettings({
-        pilotId: detail.pilot.id,
-        outcomesEnabled,
-        rolloutStage,
-        rolloutNotes:
-          rolloutStage === 'disabled'
-            ? 'Outcome surfaces disabled for rollback or pre-launch hold.'
-            : rolloutStage === 'staged'
-              ? 'Outcome surfaces enabled for staged rollout on a controlled pilot.'
-              : 'Outcome surfaces enabled for live rollout.',
-      });
-      await load('refresh');
-      setPageMessage({
-        type: 'success',
-        text: outcomesEnabled
-          ? `Outcome dashboard set to ${rolloutStage}.`
-          : 'Outcome dashboard disabled for this pilot.',
-      });
-    } catch (releaseError) {
-      console.error('[PulseCheckPilotDashboard] Failed to update outcome release settings:', releaseError);
-      setPageMessage({ type: 'error', text: 'Failed to update the outcome dashboard release settings.' });
-    } finally {
-      setSavingOutcomeReleaseSettings(false);
-    }
-  };
-
   const triggerOutcomeRecompute = async () => {
     if (!detail) return;
     setRecomputingOutcomeRollups(true);
@@ -2485,11 +2729,11 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       await load('refresh');
       setPageMessage({
         type: 'success',
-        text: 'Outcome rollup recompute queued and refreshed for this pilot.',
+        text: 'Study metrics refresh queued for this pilot.',
       });
     } catch (recomputeError) {
       console.error('[PulseCheckPilotDashboard] Failed to recompute outcome rollups:', recomputeError);
-      setPageMessage({ type: 'error', text: 'Failed to recompute pilot outcome rollups.' });
+      setPageMessage({ type: 'error', text: 'Failed to refresh pilot study metrics.' });
     } finally {
       setRecomputingOutcomeRollups(false);
     }
@@ -2499,261 +2743,277 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     <AdminRouteGuard>
       <Head>
         <title>{detail ? `${detail.pilot.name} | Pilot Dashboard` : 'Pilot Dashboard'}</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
       </Head>
-      <div className="min-h-screen bg-[#0b0f17] text-white">
-        <div className="mx-auto max-w-7xl px-6 py-10">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-3">
-              <Link href="/admin/pulsecheckPilotDashboard" className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white">
-                <ArrowLeft className="h-4 w-4" />
-                Back to active pilots
-              </Link>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-300">
-                  {detail ? `${detail.organization.displayName} / ${detail.team.displayName}` : 'PulseCheck Admin'}
-                </p>
-                <h1 className="mt-2 text-3xl font-semibold">{detail?.pilot.name || 'Pilot dashboard'}</h1>
-                <p className="mt-2 max-w-3xl text-sm text-zinc-400">
-                  Active-pilot monitoring surface rooted in PilotEnrollment. Athletes outside this pilot do not belong in these metrics or drill-downs.
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <LocalFirebaseModeButton />
-              {!demoModeEnabled ? (
-                <>
-                  <button
-                    onClick={() => void updateOutcomeReleaseSettings(true, 'staged')}
-                    disabled={savingOutcomeReleaseSettings}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <ShieldCheck className="h-4 w-4" />
-                    Stage Outcomes
-                  </button>
-                  <button
-                    onClick={() => void updateOutcomeReleaseSettings(true, 'live')}
-                    disabled={savingOutcomeReleaseSettings}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Mark Outcomes Live
-                  </button>
-                  <button
-                    onClick={() => void updateOutcomeReleaseSettings(false, 'disabled')}
-                    disabled={savingOutcomeReleaseSettings}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Disable Outcomes
-                  </button>
-                  <button
-                    onClick={() => void triggerOutcomeRecompute()}
-                    disabled={recomputingOutcomeRollups}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <RefreshCcw className={`h-4 w-4 ${recomputingOutcomeRollups ? 'animate-spin' : ''}`} />
-                    Recompute Outcomes
-                  </button>
-                </>
-              ) : null}
-              {demoModeEnabled ? (
-                <button
-                  onClick={() => void resetDemoModeData()}
-                  data-testid="pilot-dashboard-detail-demo-reset"
-                  className="inline-flex items-center gap-2 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100 transition hover:bg-amber-400/15"
+      <div className="pilot-detail-theme pilot-font-body min-h-screen text-white">
+        <div className="pilot-ambient-layer" aria-hidden="true">
+          <div className="pilot-ambient-orb pilot-ambient-orb-teal" />
+          <div className="pilot-ambient-orb pilot-ambient-orb-blue" />
+          <div className="pilot-ambient-orb pilot-ambient-orb-amber" />
+        </div>
+
+        <div className="relative z-10">
+          <header className="sticky top-0 z-40 border-b border-white/10 bg-[rgba(7,9,15,0.82)] backdrop-blur-2xl">
+            <div className="mx-auto flex h-[52px] max-w-[1700px] items-center justify-between px-4 sm:px-8">
+              <div className="flex min-w-0 items-center gap-4">
+                <Link
+                  href="/admin/pulsecheckPilotDashboard"
+                  className="pilot-font-display flex items-center gap-2 text-sm font-bold tracking-[-0.03em] text-white"
                 >
-                  <RefreshCcw className="h-4 w-4" />
-                  Reset Demo Data
-                </button>
-              ) : null}
-              <button
-                onClick={() => void toggleDemoMode()}
-                data-testid="pilot-dashboard-detail-demo-toggle"
-                className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition ${
-                  demoModeEnabled
-                    ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/15'
-                    : 'border-cyan-400/30 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/15'
-                }`}
-              >
-                <MonitorPlay className="h-4 w-4" />
-                {demoModeEnabled ? 'Exit Demo Mode' : 'Switch To Demo Mode'}
-              </button>
-              <button
-                onClick={() => void load('refresh')}
-                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
-              >
-                <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-            </div>
-          </div>
-
-          {demoModeEnabled ? (
-            <div data-testid="pilot-dashboard-detail-demo-banner" className="mt-6 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
-              Demo mode is on. This pilot dashboard is using safe local mock data, mock athlete enrollments, and mock AI research briefs so you can demo and QA without touching live pilot records.
-            </div>
-          ) : null}
-
-          {loading ? (
-            <div className="mt-6 rounded-3xl border border-white/10 bg-[#11151f] p-8 text-sm text-zinc-400">Loading pilot dashboard...</div>
-          ) : error ? (
-            <div className="mt-6 rounded-3xl border border-rose-500/30 bg-rose-500/10 p-8 text-sm text-rose-200">{error}</div>
-          ) : !detail ? (
-            <div className="mt-6 rounded-3xl border border-white/10 bg-[#11151f] p-8 text-sm text-zinc-400">Pilot not found.</div>
-          ) : (
-            <>
-              <div className="mt-6 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
-                {overviewCards.map((card) => (
-                  <div key={card.label} className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex min-w-0 flex-1 items-center gap-3 pr-2 text-cyan-300">
-                      {card.icon}
-                        <span className="text-sm font-medium leading-tight">{card.label}</span>
-                      </div>
-                      <NoraMetricHelpButton metricKey={card.metricKey} className="shrink-0" />
-                    </div>
-                    <div className="mt-3 text-3xl font-semibold">{card.value}</div>
-                  </div>
-                ))}
+                  <span className="pilot-logo-dot" />
+                  PulseCheck
+                </Link>
+                <div className="hidden h-5 w-px bg-white/10 sm:block" />
+                <Link
+                  href="/admin/pulsecheckPilotDashboard"
+                  className="inline-flex items-center gap-2 truncate text-xs text-white/40 transition hover:text-white/75"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+                  Active Pilots
+                </Link>
               </div>
 
-              <div className="mt-6 flex flex-wrap gap-2">
-                {tabs.map((tab) => (
+              <div className="flex items-center gap-2">
+                {detail ? (
+                  <span className="hidden rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-white/60 lg:inline-flex">
+                    {detail.pilot.studyMode}
+                  </span>
+                ) : null}
+                <span
+                  className={`hidden rounded-lg border px-3 py-1.5 text-[11px] md:inline-flex ${
+                    demoModeEnabled
+                      ? 'border-amber-400/20 bg-amber-400/10 text-amber-100'
+                      : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
+                  }`}
+                >
+                  {demoModeEnabled ? 'Demo dataset' : 'Live dataset'}
+                </span>
+                <LocalFirebaseModeButton />
+              </div>
+            </div>
+          </header>
+
+          <div className="border-b border-white/10">
+            <div className="mx-auto max-w-[1700px] px-4 pb-5 pt-6 sm:px-8">
+              <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+                <div className="max-w-4xl">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#00d4aa]">
+                    {detail ? `${detail.organization.displayName} / ${detail.team.displayName}` : 'PulseCheck Admin'}
+                  </div>
+                  <h1 className="pilot-font-display mt-2 text-3xl font-bold tracking-[-0.04em] text-white sm:text-[2.35rem]">
+                    {detail?.pilot.name || 'Pilot dashboard'}
+                  </h1>
+                  <p className="mt-3 max-w-3xl text-sm leading-6 text-white/50 sm:text-[15px]">
+                    Active-pilot monitoring surface rooted in PilotEnrollment. Athletes outside this pilot are excluded from
+                    every KPI, comparison, and drill-down on this page.
+                  </p>
+
+                  {detail ? (
+                    <>
+                      <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
+                        <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-cyan-100">
+                          Study mode: {detail.pilot.studyMode}
+                        </span>
+                        <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-white/65">
+                          Cadence: {detail.pilot.checkpointCadence || 'Not set'}
+                        </span>
+                      </div>
+
+                      {detail.pilot.objective ? (
+                        <div className="mt-4 max-w-3xl rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/35">Objective</div>
+                          <div className="mt-2 text-sm leading-6 text-zinc-300">{detail.pilot.objective}</div>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap gap-2.5 xl:max-w-[640px] xl:justify-end">
                   <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    data-testid={`pilot-dashboard-tab-${tab.id}`}
-                    className={`rounded-full px-4 py-2 text-sm transition ${
-                      activeTab === tab.id ? 'bg-cyan-400 text-black' : 'bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white'
+                    onClick={() => void load('refresh')}
+                    className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                  >
+                    <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                    {refreshing ? 'Refreshing...' : 'Refresh'}
+                  </button>
+
+                  <button
+                    onClick={() => void toggleDemoMode()}
+                    data-testid="pilot-dashboard-detail-demo-toggle"
+                    className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition ${
+                      demoModeEnabled
+                        ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/15'
+                        : 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/15'
                     }`}
                   >
-                    {tab.label}
+                    <MonitorPlay className="h-4 w-4" />
+                    {demoModeEnabled ? 'Exit Demo Mode' : 'Switch To Demo Mode'}
                   </button>
-                ))}
-              </div>
 
-              <div className="mt-4 grid grid-cols-1 gap-4 rounded-3xl border border-white/10 bg-[#11151f] p-4 lg:grid-cols-[minmax(0,280px),1fr]">
-                <label className="space-y-2 text-sm text-zinc-300">
-                  <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Cohort Filter</span>
-                  <select
-                    value={cohortFilter}
-                    onChange={(event) => setCohortFilter(event.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
-                  >
-                    <option value="">All pilot cohorts</option>
-                    {availableCohorts.map((cohort) => (
-                      <option key={cohort.id} value={cohort.id}>
-                        {cohort.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-300">
-                  Denominator lock: all KPI cards and tables on this page are scoped to active `PilotEnrollment` records in this pilot
-                  {selectedCohort ? ` and the ${selectedCohort.name} cohort filter.` : '.'} Athletes outside this pilot are excluded.
+                  {demoModeEnabled ? (
+                    <button
+                      onClick={() => void resetDemoModeData()}
+                      data-testid="pilot-dashboard-detail-demo-reset"
+                      className="inline-flex items-center gap-2 rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-400/15"
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                      Reset Demo Data
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
-              {activeTab === 'overview' ? (
-                <div className="mt-6 space-y-6">
-                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Release Control</div>
-                      <h2 className="mt-2 text-lg font-semibold text-white">Outcome rollout state</h2>
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <span className={`rounded-full border px-3 py-2 text-xs ${
-                          outcomesEnabled
-                            ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
-                            : 'border-rose-400/20 bg-rose-400/10 text-rose-100'
-                        }`}>
-                          {outcomesEnabled ? 'Outcomes enabled' : 'Outcomes disabled'}
-                        </span>
-                        <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-100">
-                          Stage: {outcomeReleaseSettings?.rolloutStage || 'live'}
-                        </span>
-                      </div>
-                      <p className="mt-3 text-sm text-zinc-400">
-                        Use staged rollout for single-pilot validation, live for broad availability, and disable as the rollback path if outcome read models drift.
-                      </p>
-                    </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Ops Status</div>
-                      <h2 className="mt-2 text-lg font-semibold text-white">Rollup recompute health</h2>
-                      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                        <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Last recompute status</div>
-                          <div className="mt-2 text-sm text-white">{outcomeOpsStatus?.scopes?.rollup_recompute?.status || 'No recompute status yet'}</div>
-                          <div className="mt-1 text-xs text-zinc-500">{outcomeOpsStatus?.scopes?.rollup_recompute?.lastError || 'No recorded recompute error'}</div>
-                        </div>
-                        <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Last scheduled repair</div>
-                          <div className="mt-2 text-sm text-white">{outcomeOpsStatus?.scopes?.scheduled_rollup_repair?.status || 'No repair status yet'}</div>
-                          <div className="mt-1 text-xs text-zinc-500">
-                            {outcomeOpsStatus?.scopes?.scheduled_rollup_repair?.lastError || 'No recorded repair error'}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Operational Watch List</div>
-                          <h2 className="mt-2 text-lg font-semibold text-white">Restriction overlay state</h2>
-                        </div>
-                        <div className="rounded-full border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-rose-100">
-                          Internal only
-                        </div>
-                      </div>
-                      <p className="mt-3 text-sm text-zinc-400">
-                        Escalations stay visible as care workflow records. Only this operational layer suppresses surveys, assignments, nudges, or adherence.
-                      </p>
-                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        {operationalWatchListSummaryCards.slice(0, 4).map((card) => (
-                          <div key={card.label} className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{card.label}</div>
-                            <div className={`mt-2 inline-flex rounded-full border px-3 py-2 text-2xl font-semibold ${card.accentClassName}`}>
-                              {card.value}
+              {demoModeEnabled ? (
+                <div
+                  data-testid="pilot-dashboard-detail-demo-banner"
+                  className="mt-5 rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-100"
+                >
+                  Demo mode is on. This pilot dashboard is using safe local mock data, mock athlete enrollments, and
+                  mock AI research briefs so you can demo and QA without touching live pilot records.
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <main className="px-4 py-6 sm:px-8 sm:py-7">
+            <div className="mx-auto max-w-[1700px]">
+              {loading ? (
+                <div className="pilot-detail-panel rounded-[28px] p-8 text-sm text-white/50">Loading pilot dashboard...</div>
+              ) : error ? (
+                <div className="rounded-[28px] border border-rose-500/30 bg-rose-500/10 p-8 text-sm text-rose-200">{error}</div>
+              ) : !detail ? (
+                <div className="pilot-detail-panel rounded-[28px] p-8 text-sm text-white/50">Pilot not found.</div>
+              ) : (
+                <>
+                  <div className="grid gap-3 xl:grid-cols-4">
+                    {overviewCards.map((card) => (
+                      <div key={card.label} className="pilot-detail-panel rounded-[22px] border border-white/10 bg-[#11151f] p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-[#7cefd6]">
+                              {card.icon}
                             </div>
-                            <div className="mt-2 text-xs text-zinc-500">{card.helper}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="mt-3 grid grid-cols-1 gap-3">
-                        {operationalWatchListSummaryCards.slice(4).map((card) => (
-                          <div key={card.label} className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{card.label}</div>
-                            <div className={`mt-2 inline-flex rounded-full border px-3 py-2 text-2xl font-semibold ${card.accentClassName}`}>
-                              {card.value}
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/30">
+                                {card.label}
+                              </div>
+                              <div className="pilot-font-mono mt-4 text-[2rem] leading-none text-white">{card.value}</div>
                             </div>
-                            <div className="mt-2 text-xs text-zinc-500">{card.helper}</div>
                           </div>
-                        ))}
+                          <NoraMetricHelpButton
+                            metricKey={card.metricKey}
+                            className="border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-[#7cefd6] hover:bg-white/[0.08]"
+                          />
+                        </div>
                       </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-6 overflow-x-auto border-b border-white/10">
+                    <div className="flex min-w-max gap-1">
+                      {tabs.map((tab) => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setActiveTab(tab.id)}
+                          data-testid={`pilot-dashboard-tab-${tab.id}`}
+                          className={`relative -mb-px whitespace-nowrap px-5 py-3 text-sm font-medium transition ${
+                            activeTab === tab.id
+                              ? 'text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#00d4aa]'
+                              : 'text-white/35 hover:text-white/75'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
-                  {!outcomesEnabled ? (
-                    <div className="rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
-                      Outcome cards are disabled for this pilot. Engine-health and research surfaces remain available, but governed outcome metrics are hidden until rollout is re-enabled.
+                  <div className="pilot-detail-panel mt-4 grid grid-cols-1 gap-4 rounded-[22px] border border-white/10 bg-[#11151f] p-4 lg:grid-cols-[minmax(0,300px),1fr]">
+                    <label className="space-y-2 text-sm text-white/75">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/30">Cohort</span>
+                      <select
+                        value={cohortFilter}
+                        onChange={(event) => setCohortFilter(event.target.value)}
+                        className="pilot-detail-select w-full rounded-xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                      >
+                        <option value="">All pilot cohorts</option>
+                        {availableCohorts.map((cohort) => (
+                          <option key={cohort.id} value={cohort.id}>
+                            {cohort.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="pilot-detail-inset rounded-[18px] border border-white/5 bg-black/20 p-4 text-sm leading-6 text-white/55">
+                      All KPI cards, comparisons, and tables on this page stay locked to active <code>PilotEnrollment</code>{' '}
+                      records in this pilot
+                      {selectedCohort ? ` and the ${selectedCohort.name} cohort filter.` : '.'} Athletes outside this pilot
+                      are excluded.
                     </div>
-                  ) : null}
+                  </div>
 
-                  {outcomesEnabled ? (
+              {activeTab === 'overview' ? (
+                <div className="mt-6 space-y-6">
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pilot Outcomes</p>
-                        <h2 className="mt-2 text-lg font-semibold text-white">Outcome Snapshot</h2>
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Operational Watch List</div>
+                        <h2 className="mt-2 text-lg font-semibold text-white">Restriction summary</h2>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          Compact view of review-queued states and active suppression flags across this pilot.
+                        </p>
+                      </div>
+                      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-zinc-300">
+                        Internal-only operational overlay
+                      </div>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4 2xl:grid-cols-8">
+                      {operationalWatchListSummaryCards.map((card) => (
+                        <div key={card.label} className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                          <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{card.label}</div>
+                          <div className={`pilot-font-mono mt-3 text-2xl leading-none ${card.accentClassName.replace(/border-[^ ]+ bg-[^ ]+ /g, '')}`}>
+                            {card.value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Study Metrics</p>
+                        <h2 className="mt-2 text-lg font-semibold text-white">Study Metrics Snapshot</h2>
                         <p className="mt-1 text-sm text-zinc-400">
                           {selectedCohort
-                            ? `Showing ${selectedCohort.name} when cohort-specific outcome rollups are available.`
-                            : 'Showing the whole-pilot outcome rollup for the active pilot.'}
+                            ? `Showing ${selectedCohort.name} when cohort-specific study metrics are available.`
+                            : 'Showing the whole-pilot study metrics summary for the active pilot.'}
                         </p>
                       </div>
                       {selectedCohort ? (
                         <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-100">
                           Cohort view
                         </div>
+                      ) : null}
+                      {!demoModeEnabled && showStudyMetricsStatusLink ? (
+                        <button
+                          type="button"
+                          onClick={() => setStudyMetricsStatusModalOpen(true)}
+                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs transition ${
+                            metricsRefreshState === 'broken'
+                              ? 'border-rose-400/25 bg-rose-400/10 text-rose-100 hover:bg-rose-400/15'
+                              : 'border-amber-400/25 bg-amber-400/10 text-amber-100 hover:bg-amber-400/15'
+                          }`}
+                        >
+                          <Database className="h-3.5 w-3.5" />
+                          Check status
+                        </button>
                       ) : null}
                     </div>
 
@@ -2786,52 +3046,50 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       “Not enough responses yet” instead of a misleading score.
                     </div>
 
-                    <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5">
-                      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Trust Diagnostics</div>
-                          <h3 className="mt-2 text-lg font-semibold text-white">Role-Sliced Trust and NPS</h3>
-                          <p className="mt-1 text-sm text-zinc-400">
-                            These cards expose the full athlete, coach, and clinician trust/NPS breakdown with low-sample handling preserved.
-                          </p>
+                    {visibleSurveyMetricSlices ? (
+                      <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5">
+                        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Survey Diagnostics</div>
+                            <h3 className="mt-2 text-lg font-semibold text-white">Role-Sliced Trust and NPS</h3>
+                            <p className="mt-1 text-sm text-zinc-400">
+                              These cards expose the full athlete, coach, and clinician trust/NPS breakdown with low-sample handling preserved.
+                            </p>
+                          </div>
+                          {visibleOutcomeDiagnostics ? (
+                            <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-100">
+                              Minimum sample: {visibleOutcomeDiagnostics.minimumResponseThreshold} responses
+                            </div>
+                          ) : null}
                         </div>
-                        {visibleOutcomeDiagnostics ? (
-                          <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-100">
-                            Minimum sample: {visibleOutcomeDiagnostics.minimumResponseThreshold} responses
-                          </div>
-                        ) : (
-                          <div className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
-                            Waiting on survey diagnostics
-                          </div>
-                        )}
-                      </div>
 
-                      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        {SURVEY_METRIC_CARDS.map((card) => (
-                          <div key={card.key} className="relative rounded-3xl border border-white/10 bg-[#0b0f17] p-4">
-                            <NoraMetricHelpButton metricKey={card.helpKey} className="absolute right-4 top-4" />
-                            <div className="flex items-center gap-2 text-sm font-medium text-white">
-                              <span className={`rounded-full border px-2 py-1 text-[11px] ${card.accentClassName}`}>{card.label}</span>
+                        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                          {SURVEY_METRIC_CARDS.map((card) => (
+                            <div key={card.key} className="relative rounded-3xl border border-white/10 bg-[#0b0f17] p-4">
+                              <NoraMetricHelpButton metricKey={card.helpKey} className="absolute right-4 top-4" />
+                              <div className="flex items-center gap-2 text-sm font-medium text-white">
+                                <span className={`rounded-full border px-2 py-1 text-[11px] ${card.accentClassName}`}>{card.label}</span>
+                              </div>
+                              <div className="mt-3 text-3xl font-semibold text-white">
+                                {formatSurveyMetricValue(card.key, visibleSurveyMetricSlices)}
+                              </div>
+                              <div className="mt-2 text-sm text-zinc-400">
+                                {formatSurveyMetricSubtext(card.key, visibleOutcomeDiagnostics)}
+                              </div>
                             </div>
-                            <div className="mt-3 text-3xl font-semibold text-white">
-                              {formatSurveyMetricValue(card.key, visibleOutcomeMetrics)}
-                            </div>
-                            <div className="mt-2 text-sm text-zinc-400">
-                              {formatSurveyMetricSubtext(card.key, visibleOutcomeDiagnostics)}
-                            </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    ) : null}
 
-                    <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
-                      <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Recommendation-Type Outcome Slices</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">Trust and adherence by recommendation path</h3>
-                        <p className="mt-1 text-sm text-zinc-400">
-                          These slices stay outcome-native: they compare trust and adherence by recommendation exposure rather than by raw projection counts.
-                        </p>
-                        {visibleRecommendationTypeSlices ? (
+                    <div className={`mt-6 grid grid-cols-1 gap-4 ${visibleRecommendationTypeSlices ? 'xl:grid-cols-2' : ''}`}>
+                      {visibleRecommendationTypeSlices ? (
+                        <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Recommendation-Type Study Metric Slices</div>
+                          <h3 className="mt-2 text-lg font-semibold text-white">Trust and adherence by recommendation path</h3>
+                          <p className="mt-1 text-sm text-zinc-400">
+                            These slices stay study-metric based: they compare trust and adherence by recommendation exposure rather than by raw projection counts.
+                          </p>
                           <div className="mt-4 space-y-4">
                             <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
                               <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">State-Aware vs Fallback</div>
@@ -2870,201 +3128,128 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                               </div>
                             </div>
                           </div>
-                        ) : (
-                          <div className="mt-4 rounded-2xl border border-white/5 bg-[#0b0f17] p-4 text-sm text-zinc-400">
-                            Recommendation-type trust and adherence slices will appear once the current rollup has enough governed exposure data.
-                          </div>
-                        )}
-                      </div>
+                        </div>
+                      ) : null}
 
                       <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Care Escalation Diagnostics</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">Secondary operational reads and supporting speed-to-care</h3>
-                        <p className="mt-1 text-sm text-zinc-400">
-                          {selectedCohort
-                            ? 'These supporting escalation diagnostics are still displayed on the whole-pilot frame so the operational sample stays interpretable.'
-                            : 'These are the supporting operational metrics under the primary median-minutes-to-handoff KPI.'}
-                        </p>
-                        <div className="mt-4 rounded-2xl border border-cyan-400/10 bg-[#0b0f17] p-4">
-                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                            <div>
-                              <div className="text-xs uppercase tracking-[0.18em] text-cyan-300">Rollout Review</div>
-                              <div className="mt-2 text-sm text-zinc-300">
-                                Legacy raw escalation records vs normalized grouped incidents.
-                              </div>
-                            </div>
-                            {visibleEscalationMigrationContext ? (
-                              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-zinc-300">
-                                {visibleEscalationMigrationContext.sourceLabel}
-                              </div>
-                            ) : null}
-                        </div>
-                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-                          <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Legacy Raw Records</div>
-                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationComparison?.legacyRecordCount ?? 0}</div>
-                            </div>
-                            <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Normalized Incidents</div>
-                              <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationComparison?.normalizedIncidentCount ?? 0}</div>
-                            </div>
-                            <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Records Collapsed</div>
-                              <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationComparison?.recordsCollapsedByGrouping ?? 0}</div>
-                            </div>
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Care Escalations</div>
+                            <h3 className="mt-2 text-lg font-semibold text-white">Current care activity</h3>
+                            <p className="mt-1 text-sm text-zinc-400">
+                              {selectedCohort
+                                ? 'Care activity stays on the whole-pilot view so case counts and timing stay readable.'
+                                : 'A simpler view of current care cases, status, and timing for this pilot.'}
+                            </p>
                           </div>
-                          {visibleEscalationMigrationContext ? (
-                            <div className="mt-3 text-xs text-zinc-500">
-                              {visibleEscalationMigrationContext.statusLabel}
+                          {selectedCohort ? (
+                            <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-zinc-300">
+                              Whole-pilot view
                             </div>
                           ) : null}
                         </div>
-                        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
-                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Readiness Cue</div>
-                                <div className="mt-2 text-sm text-white">{escalationMigrationReadiness.label}</div>
+
+                        {!hasCareEscalationData ? (
+                          <div className="mt-4 rounded-2xl border border-white/5 bg-[#0b0f17] p-5">
+                            <div className="text-base font-semibold text-white">No care escalations recorded yet</div>
+                            <p className="mt-2 max-w-3xl text-sm text-zinc-400">
+                              This section will start showing current cases, status, and care timing once someone enters the current care workflow.
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                              <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Current Cases</div>
+                                <div className="mt-2 text-2xl font-semibold text-white">{currentCareEscalationCount}</div>
+                                <div className="mt-1 text-xs text-zinc-500">Grouped care cases currently tracked on this pilot.</div>
                               </div>
-                              <div className={`rounded-full border px-3 py-2 text-[11px] ${escalationMigrationReadiness.className}`}>
-                                Staged rollout
+                              <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Open Care</div>
+                                <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.secondaryCounts?.openCareEscalations ?? 0}</div>
+                                <div className="mt-1 text-xs text-zinc-500">Cases still waiting on care follow-through or closure.</div>
                               </div>
-                            </div>
-                            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                              <div>
-                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Total</div>
-                                <div className="mt-1 text-white">{visibleOutcomeMetrics?.escalationsTotal ?? 0}</div>
+                              <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Resolved</div>
+                                <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.statusCounts?.resolved ?? 0}</div>
+                                <div className="mt-1 text-xs text-zinc-500">Cases already closed out in the current workflow.</div>
                               </div>
-                              <div>
+                              <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
                                 <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Median To Care</div>
-                                <div className="mt-1 text-white">{visibleOutcomeMetrics?.medianMinutesToCare !== null && visibleOutcomeMetrics?.medianMinutesToCare !== undefined ? `${visibleOutcomeMetrics.medianMinutesToCare.toFixed(1)} min` : 'No handoff sample'}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Tier Split</div>
-                                <div className="mt-1 text-white">
-                                  {visibleOutcomeMetrics?.escalationsTier1 ?? 0} / {visibleOutcomeMetrics?.escalationsTier2 ?? 0} / {visibleOutcomeMetrics?.escalationsTier3 ?? 0}
+                                <div className="mt-2 text-2xl font-semibold text-white">
+                                  {visibleOutcomeMetrics?.medianMinutesToCare !== null && visibleOutcomeMetrics?.medianMinutesToCare !== undefined
+                                    ? `${visibleOutcomeMetrics.medianMinutesToCare.toFixed(1)} min`
+                                    : 'No sample yet'}
                                 </div>
-                              </div>
-                              <div>
-                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Status Buckets</div>
-                                <div className="mt-1 text-white">
-                                  {visibleEscalationOperationalDiagnostics?.statusCounts?.active ?? 0} active, {visibleEscalationOperationalDiagnostics?.statusCounts?.resolved ?? 0} resolved, {visibleEscalationOperationalDiagnostics?.statusCounts?.declined ?? 0} declined
-                                </div>
+                                <div className="mt-1 text-xs text-zinc-500">Median time from escalation to handoff initiation.</div>
                               </div>
                             </div>
-                            <div className="mt-3 text-xs text-zinc-500">
-                              Treat this pilot frame as the before/after comparison baseline when classifier or disposition logic changes.
-                            </div>
-                          </div>
-                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Dry-Run Review</div>
-                            <div className="mt-2 text-sm text-zinc-300">
-                              Review these before applying any escalation classifier or disposition migration.
-                            </div>
-                            <div className="mt-4 space-y-2 text-sm text-zinc-300">
-                              {ESCALATION_MIGRATION_DRY_RUN_GUIDANCE.map((item) => (
-                                <div key={item} className="rounded-2xl border border-white/5 bg-black/20 px-3 py-3">
-                                  {item}
+
+                            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,340px),1fr]">
+                              <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Current Status</div>
+                                <div className="mt-4 space-y-3">
+                                  {[
+                                    ['Active', visibleEscalationOperationalDiagnostics?.statusCounts?.active ?? 0],
+                                    ['Declined', visibleEscalationOperationalDiagnostics?.statusCounts?.declined ?? 0],
+                                    ['Coach Review Flags', visibleEscalationOperationalDiagnostics?.secondaryCounts?.coachReviewFlags ?? 0],
+                                    ['Support Flags', visibleEscalationOperationalDiagnostics?.secondaryCounts?.supportFlags ?? 0],
+                                  ].map(([label, value]) => (
+                                    <div key={String(label)} className="flex items-center justify-between rounded-2xl border border-white/5 bg-black/20 px-4 py-3">
+                                      <div className="text-sm text-zinc-300">{label}</div>
+                                      <div className="pilot-font-mono text-lg text-white">{value}</div>
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Validation And Rollback</div>
-                            <div className="mt-2 text-sm text-zinc-300">
-                              Promote from staged to live only after the same pilot stays stable through recompute and comparison review.
-                            </div>
-                            <div className="mt-4 space-y-2">
-                              {ESCALATION_MIGRATION_STAGED_VALIDATION.map((item) => (
-                                <div key={item} className="rounded-2xl border border-emerald-400/10 bg-emerald-400/5 px-3 py-3 text-sm text-zinc-300">
-                                  {item}
+                                <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4">
+                                  <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Tier Split</div>
+                                  <div className="mt-2 text-sm text-white">
+                                    Tier 1: {visibleOutcomeMetrics?.escalationsTier1 ?? 0} · Tier 2: {visibleOutcomeMetrics?.escalationsTier2 ?? 0} · Tier 3: {visibleOutcomeMetrics?.escalationsTier3 ?? 0}
+                                  </div>
                                 </div>
-                              ))}
-                              {ESCALATION_MIGRATION_ROLLBACK_GUIDANCE.map((item) => (
-                                <div key={item} className="rounded-2xl border border-rose-400/10 bg-rose-400/5 px-3 py-3 text-sm text-zinc-300">
-                                  {item}
+                              </div>
+
+                              <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                  <div>
+                                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Care Timing</div>
+                                    <div className="mt-2 text-sm text-zinc-300">
+                                      Median and p75 timing across the current care steps.
+                                    </div>
+                                  </div>
+                                  {visibleOutcomeMetrics?.medianMinutesToCare !== null && visibleOutcomeMetrics?.medianMinutesToCare !== undefined ? (
+                                    <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-[11px] text-cyan-100">
+                                      Median to care {visibleOutcomeMetrics.medianMinutesToCare.toFixed(1)} min
+                                    </div>
+                                  ) : null}
                                 </div>
-                              ))}
+
+                                {hasCareTimingData ? (
+                                  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    {careEscalationTimingSteps.map(([label, summary]) => (
+                                      <div key={label} className="rounded-2xl border border-white/5 bg-black/20 p-4 text-sm">
+                                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{label}</div>
+                                        <div className="mt-2 text-white">Median: {formatDurationMetricValue((summary as any)?.medianMinutes)}</div>
+                                        <div className="mt-1 text-zinc-400">P75: {formatDurationMetricValue((summary as any)?.p75Minutes)}</div>
+                                        <div className="mt-1 text-zinc-500">{(summary as any)?.sampleCount ?? 0} cases in sample</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-400">
+                                    No care timing sample yet. Timing will appear once a case moves through the current care steps.
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Coach Review Flags</div>
-                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.secondaryCounts?.coachReviewFlags ?? 0}</div>
-                            <div className="mt-1 text-xs text-zinc-500">Tier 1 review-lane escalations still requiring coach visibility.</div>
-                          </div>
-                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Support Flags</div>
-                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.secondaryCounts?.supportFlags ?? 0}</div>
-                            <div className="mt-1 text-xs text-zinc-500">Benign support-lane incidents that should stay visible without being overstated as care handoffs.</div>
-                          </div>
-                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Grouped Incidents</div>
-                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.secondaryCounts?.groupedIncidents ?? 0}</div>
-                            <div className="mt-1 text-xs text-zinc-500">Same normalized incident count used when grouped escalation threads are shown in the athlete drill-down.</div>
-                          </div>
-                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Open Care Escalations</div>
-                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.secondaryCounts?.openCareEscalations ?? 0}</div>
-                            <div className="mt-1 text-xs text-zinc-500">Active escalations still in the care lane and not yet resolved, declined, or reduced to coach-review/support-flag posture.</div>
-                          </div>
-                        </div>
-                        <div className="mt-4 grid grid-cols-3 gap-3">
-                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Active</div>
-                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.statusCounts?.active ?? 0}</div>
-                          </div>
-                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Resolved</div>
-                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.statusCounts?.resolved ?? 0}</div>
-                          </div>
-                          <div className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Declined</div>
-                            <div className="mt-2 text-2xl font-semibold text-white">{visibleEscalationOperationalDiagnostics?.statusCounts?.declined ?? 0}</div>
-                          </div>
-                        </div>
-                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                          {[
-                            ['Coach notified', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.coachNotification],
-                            ['Consent accepted', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.consentAccepted],
-                            ['Handoff initiated', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.handoffInitiated],
-                            ['Handoff accepted', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.handoffAccepted],
-                            ['First clinician response', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.firstClinicianResponse],
-                            ['Care completed', visibleEscalationOperationalDiagnostics?.supportingSpeedToCare?.careCompleted],
-                          ].map(([label, summary]) => (
-                            <div key={label} className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4 text-sm">
-                              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{label}</div>
-                              <div className="mt-2 text-white">Median: {formatDurationMetricValue((summary as any)?.medianMinutes)}</div>
-                              <div className="mt-1 text-zinc-400">P75: {formatDurationMetricValue((summary as any)?.p75Minutes)}</div>
-                              <div className="mt-1 text-zinc-500">{(summary as any)?.sampleCount ?? 0} escalations in sample</div>
-                            </div>
-                          ))}
-                        </div>
-                        {visibleTrustDispositionBaseline?.responseCount ? (
-                          <div className="mt-4 rounded-2xl border border-white/5 bg-[#0b0f17] p-4 text-sm text-zinc-300">
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Optional Trust Disposition Baseline</div>
-                            <div className="mt-2">PTT average: <span className="font-medium text-white">{formatComparisonMetricValue(visibleTrustDispositionBaseline.averageScore, 'score')}</span></div>
-                            <div className="mt-1 text-xs text-zinc-500">{visibleTrustDispositionBaseline.responseCount} athletes with optional onboarding trust-disposition data</div>
-                          </div>
-                        ) : null}
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
-                  ) : null}
 
-                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5" data-testid="pilot-readout-workspace">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pilot Objective</div>
-                      <div className="mt-3 text-sm text-zinc-300">{detail.pilot.objective || 'No pilot objective recorded yet.'}</div>
-                    </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Study Mode</div>
-                      <div className="mt-3 text-sm text-zinc-300">{detail.pilot.studyMode}</div>
-                      <div className="mt-4 text-xs uppercase tracking-[0.18em] text-zinc-500">Checkpoint Cadence</div>
-                      <div className="mt-2 text-sm text-zinc-300">{detail.pilot.checkpointCadence || 'Not set'}</div>
-                    </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                  <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5" data-testid="pilot-readout-workspace">
+                    <div className="max-w-3xl">
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">V1 Lock</div>
                       <div className="mt-3 text-sm text-zinc-300">
                         Overview, engine health, athlete drill-down, and manual hypothesis tracking are in scope here. Adoption automation and review queue stay deferred to V2.
@@ -3099,47 +3284,21 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                   </div>
 
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
-                        <h2 className="text-lg font-semibold">Pilot Athlete Invite</h2>
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="max-w-3xl">
+                        <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Athlete Onboarding</p>
+                        <h2 className="mt-2 text-lg font-semibold text-white">Athlete Join Links</h2>
                         <p className="mt-1 text-sm text-zinc-400">
-                          Generate the PulseCheck athlete share link used in provisioning, but scoped directly to this pilot
-                          {selectedInviteCohort ? ` and ${selectedInviteCohort.name}.` : '.'}
+                          Choose where athletes should land, then create either a one-person link or a reusable group link
+                          for this pilot.
                         </p>
-                        <p className="mt-3 text-sm text-zinc-300">
-                          Existing Pulse athletes should sign in and get attached to the pilot without replaying onboarding. New athletes should create an account and follow the mobile setup walkthrough.
-                        </p>
-                        <p className="mt-2 text-sm text-zinc-400">
-                          Single-use links are ideal for one athlete at a time. General links stay active so the same QR code or shared URL can bring a whole group into this pilot scope.
-                        </p>
-                        <p className="mt-2 text-xs text-zinc-500">
-                          General links now preserve the reusable PulseCheck OneLink share path, and they stay valid until you delete the invite record.
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => void handleCreatePilotInviteLink('single-use')}
-                          disabled={Boolean(creatingInviteMode)}
-                          className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <Clipboard className="h-4 w-4" />
-                          {creatingInviteMode === 'single-use' ? 'Generating Single Link...' : 'Generate Single Link'}
-                        </button>
-                        <button
-                          onClick={() => void handleCreatePilotInviteLink('general')}
-                          disabled={Boolean(creatingInviteMode)}
-                          className="inline-flex items-center gap-2 rounded-2xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-sm text-sky-100 transition hover:bg-sky-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <Users2 className="h-4 w-4" />
-                          {creatingInviteMode === 'general' ? 'Generating General Link...' : 'Generate General Link'}
-                        </button>
                       </div>
                     </div>
 
-                    <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-300">
-                      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,320px),1fr] lg:items-start">
+                    <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,320px),1fr]">
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                         <label className="space-y-2">
-                          <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Link cohort assignment</span>
+                          <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Join Scope</span>
                           <select
                             value={inviteCohortId}
                             onChange={(event) => setInviteCohortId(event.target.value)}
@@ -3153,158 +3312,219 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                             ))}
                           </select>
                         </label>
-                        <div>
-                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Invite Scope</div>
-                          <div className="mt-2">
+
+                        <div className="mt-4 rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Athletes will land in</div>
+                          <div className="mt-2 text-sm font-medium text-white">
+                            {selectedInviteCohort ? `${detail.pilot.name} -> ${selectedInviteCohort.name}` : `${detail.pilot.name} (no cohort)`}
+                          </div>
+                          <div className="mt-2 text-sm text-zinc-400">
                             {selectedInviteCohort
-                              ? `Athletes joining through this link will enter ${detail.pilot.name} and land directly in ${selectedInviteCohort.name}.`
-                              : `Athletes joining through this link will enter ${detail.pilot.name} without a cohort assignment.`}
+                              ? `New joins will enter ${detail.pilot.name} and start in ${selectedInviteCohort.name}.`
+                              : `New joins will enter ${detail.pilot.name} without a cohort assignment.`}
                           </div>
                         </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-zinc-300">
+                            {scopedInviteSummary}
+                          </span>
+                          <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-cyan-100">
+                            {scopedSingleUseInvites.length} one-person
+                          </span>
+                          <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-sky-100">
+                            {scopedGeneralInvites.length} reusable
+                          </span>
+                        </div>
                       </div>
-                      <div className="mt-3 text-xs text-zinc-500">
-                        {scopedInviteSummary}
+
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/[0.06] p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-xs uppercase tracking-[0.18em] text-cyan-200">One athlete</div>
+                              <h3 className="mt-2 text-base font-semibold text-white">Single-use link</h3>
+                            </div>
+                            <Clipboard className="h-4 w-4 text-cyan-200" />
+                          </div>
+                          <p className="mt-3 text-sm leading-6 text-zinc-300">
+                            Best when you are sending a link to one specific athlete and want it redeemed once.
+                          </p>
+                          <button
+                            onClick={() => void handleCreatePilotInviteLink('single-use')}
+                            disabled={Boolean(creatingInviteMode)}
+                            className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <Clipboard className="h-4 w-4" />
+                            {creatingInviteMode === 'single-use' ? 'Generating Single Link...' : 'Create Single-Use Link'}
+                          </button>
+                        </div>
+
+                        <div className="rounded-2xl border border-sky-400/20 bg-sky-400/[0.06] p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-xs uppercase tracking-[0.18em] text-sky-200">Group or roster</div>
+                              <h3 className="mt-2 text-base font-semibold text-white">Reusable link</h3>
+                            </div>
+                            <Users2 className="h-4 w-4 text-sky-200" />
+                          </div>
+                          <p className="mt-3 text-sm leading-6 text-zinc-300">
+                            Best when the same QR code or shared URL needs to work for a whole group in this pilot scope.
+                          </p>
+                          <button
+                            onClick={() => void handleCreatePilotInviteLink('general')}
+                            disabled={Boolean(creatingInviteMode)}
+                            className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-sm text-sky-100 transition hover:bg-sky-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <Users2 className="h-4 w-4" />
+                            {creatingInviteMode === 'general' ? 'Generating General Link...' : 'Create Reusable Link'}
+                          </button>
+                        </div>
                       </div>
                     </div>
 
-                    {scopedInvite ? (
+                    {scopedInvite && scopedInviteDiagnostic.status !== 'valid' ? (
                       <div
                         data-testid="pilot-invite-diagnostics"
-                        className={`mt-4 rounded-2xl border p-4 ${
-                          scopedInviteDiagnostic.status === 'valid'
-                            ? 'border-emerald-400/20 bg-emerald-400/10'
-                            : 'border-amber-400/20 bg-amber-400/10'
-                        }`}
+                        className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4"
                       >
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Invite Diagnostics</span>
-                          <span
-                            className={`rounded-full px-3 py-1 text-[11px] ${
-                              scopedInviteDiagnostic.status === 'valid'
-                                ? 'border border-emerald-400/25 bg-emerald-400/15 text-emerald-100'
-                                : 'border border-amber-400/25 bg-amber-400/15 text-amber-100'
-                            }`}
-                          >
-                            {scopedInviteDiagnostic.status === 'valid' ? 'Locally valid' : 'Needs attention'}
+                          <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Link Check</span>
+                          <span className="rounded-full border border-amber-400/25 bg-amber-400/15 px-3 py-1 text-[11px] text-amber-100">
+                            Needs attention
                           </span>
                         </div>
                         <p className="mt-3 text-sm text-zinc-200">{scopedInviteDiagnostic.summary}</p>
-                        <div className="mt-3 text-xs text-zinc-400">
-                          {isPulseCheckInviteOneLink(resolveInviteShareUrl(scopedInvite)) ? 'Fallback redirect:' : 'Share target:'}{' '}
-                          <span className="text-zinc-200">{scopedInviteDiagnostic.fallbackUrl || 'Missing'}</span>
-                        </div>
-                        <ul className="mt-3 space-y-2 text-sm text-zinc-300">
-                          {scopedInviteDiagnostic.details.map((detailLine) => (
-                            <li key={detailLine} className="flex gap-2">
-                              <span className="mt-[7px] h-1.5 w-1.5 rounded-full bg-cyan-300/80" />
-                              <span>{detailLine}</span>
-                            </li>
-                          ))}
-                        </ul>
+                        {scopedInviteDiagnostic.fallbackUrl ? (
+                          <div className="mt-2 text-xs text-zinc-400">
+                            Current target: <span className="break-all text-zinc-200">{scopedInviteDiagnostic.fallbackUrl}</span>
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
 
-                    {scopedInvites.length > 0 ? (
-                      <div className="mt-4 space-y-3">
-                        {scopedInvites.map((invite, index) => (
-                          <div key={invite.id} className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100">
-                                    {index === 0 ? 'Latest link' : `Link ${scopedInvites.length - index}`}
-                                  </span>
-                                  <span className={`rounded-full px-3 py-1 text-[11px] ${inviteRedemptionModeClassName(invite.redemptionMode)}`}>
-                                    {inviteRedemptionModeLabel(invite.redemptionMode)}
-                                  </span>
-                                  {invite.redemptionMode === 'general' && Number(invite.redemptionCount || 0) > 0 ? (
-                                    <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] text-emerald-100">
-                                      {formatInviteUsageCount(invite.redemptionCount)}
+                    <div className="mt-5">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Active Links</div>
+                          <h3 className="mt-2 text-base font-semibold text-white">
+                            {selectedInviteCohort ? `Links for ${selectedInviteCohort.name}` : 'Links for whole pilot'}
+                          </h3>
+                          <p className="mt-1 text-sm text-zinc-400">
+                            Copy, open, or delete the athlete join links currently tied to this scope.
+                          </p>
+                        </div>
+                      </div>
+
+                      {scopedInvites.length > 0 ? (
+                        <div className="mt-4 space-y-3">
+                          {scopedInvites.map((invite) => (
+                            <div key={invite.id} className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className={`rounded-full px-3 py-1 text-[11px] ${inviteRedemptionModeClassName(invite.redemptionMode)}`}>
+                                      {invite.redemptionMode === 'general' ? 'Reusable link' : 'Single-use link'}
                                     </span>
-                                  ) : null}
-                                  <span className={`rounded-full px-3 py-1 text-[11px] ${
-                                    invite.redemptionMode === 'general'
-                                      ? 'border border-sky-400/20 bg-sky-400/10 text-sky-100'
-                                      : isPulseCheckInviteOneLink(resolveInviteShareUrl(invite))
-                                      ? 'border border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
-                                      : 'border border-amber-400/20 bg-amber-400/10 text-amber-100'
-                                  }`}>
-                                    {invite.redemptionMode === 'general'
-                                      ? 'Reusable OneLink'
-                                      : isPulseCheckInviteOneLink(resolveInviteShareUrl(invite))
-                                        ? 'PulseCheck share link'
-                                        : 'Fallback web link'}
-                                  </span>
-                                  <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                                    {invite.redemptionMode === 'general' && Number(invite.redemptionCount || 0) > 0 ? (
+                                      <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] text-emerald-100">
+                                        {formatInviteUsageCount(invite.redemptionCount)}
+                                      </span>
+                                    ) : null}
+                                  </div>
+
+                                  <div className="mt-2 text-xs text-zinc-500">
                                     Created {formatTimeValue(invite.createdAt)}
-                                  </span>
-                                  {invite.redeemedAt ? (
-                                    <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                                      {invite.redemptionMode === 'general' ? 'Last used' : 'Redeemed'} {formatTimeValue(invite.redeemedAt)}
-                                    </span>
+                                    {invite.redeemedAt
+                                      ? ` • ${invite.redemptionMode === 'general' ? 'Last used' : 'Redeemed'} ${formatTimeValue(invite.redeemedAt)}`
+                                      : ''}
+                                  </div>
+
+                                  <div className="mt-3 rounded-2xl border border-white/5 bg-[#0b0f17] px-4 py-3 break-all text-xs text-cyan-100">
+                                    {resolveInviteShareUrl(invite)}
+                                  </div>
+
+                                  <div className="mt-2 text-xs text-zinc-400">
+                                    {invite.redemptionMode === 'general'
+                                      ? 'Reusable link for a group in this scope.'
+                                      : 'One athlete can redeem this link once.'}
+                                  </div>
+
+                                  {invite.redeemedByEmail ? (
+                                    <div className="mt-1 text-xs text-zinc-400">
+                                      {invite.redemptionMode === 'general' ? 'Last used by' : 'Redeemed by'} {invite.redeemedByEmail}
+                                    </div>
+                                  ) : null}
+
+                                  {!isPulseCheckInviteOneLink(resolveInviteShareUrl(invite)) ? (
+                                    <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.08] px-3 py-2 text-xs text-amber-100">
+                                      This link is currently using the fallback web invite path.
+                                    </div>
                                   ) : null}
                                 </div>
-                                <div className="mt-3 break-all text-xs text-cyan-100">{resolveInviteShareUrl(invite)}</div>
-                                {invite.redeemedByEmail ? (
-                                  <div className="mt-2 text-xs text-zinc-400">
-                                    {invite.redemptionMode === 'general' ? 'Last used by' : 'Redeemed by'} {invite.redeemedByEmail}
-                                  </div>
-                                ) : null}
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  data-testid={`pilot-invite-copy-${invite.id}`}
-                                  onClick={() => void copyInviteLink(invite.id, resolveInviteShareUrl(invite), 'Pilot athlete share link copied to clipboard.')}
-                                  className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition-all duration-200 ${
-                                    copiedInviteId === invite.id
-                                      ? 'border-emerald-400/30 bg-emerald-400/15 text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.08)]'
-                                      : 'border-white/10 bg-white/5 text-white hover:bg-white/10'
-                                  }`}
-                                >
-                                  {copiedInviteId === invite.id ? <CheckCircle2 className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
-                                  {copiedInviteId === invite.id ? 'Copied to Clipboard' : 'Copy Share Link'}
-                                </button>
-                                <button
-                                  type="button"
-                                  data-testid={`pilot-invite-qr-${invite.id}`}
-                                  onClick={() => setQrInvite(invite)}
-                                  className="inline-flex items-center gap-2 rounded-2xl border border-sky-400/20 bg-sky-400/10 px-4 py-3 text-sm text-sky-100 transition hover:bg-sky-400/15"
-                                >
-                                  <QrCode className="h-4 w-4" />
-                                  QR Code
-                                </button>
-                                <a
-                                  href={resolveInviteShareUrl(invite)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                  Open
-                                </a>
-                                <button
-                                  onClick={() => void handleDeletePilotInviteLink(invite)}
-                                  disabled={deletingInviteId === invite.id}
-                                  className="inline-flex items-center gap-2 rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                  {deletingInviteId === invite.id ? 'Deleting...' : 'Delete'}
-                                </button>
+
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    data-testid={`pilot-invite-copy-${invite.id}`}
+                                    onClick={() => void copyInviteLink(invite.id, resolveInviteShareUrl(invite), 'Pilot athlete share link copied to clipboard.')}
+                                    className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition-all duration-200 ${
+                                      copiedInviteId === invite.id
+                                        ? 'border-emerald-400/30 bg-emerald-400/15 text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.08)]'
+                                        : 'border-white/10 bg-white/5 text-white hover:bg-white/10'
+                                    }`}
+                                  >
+                                    {copiedInviteId === invite.id ? <CheckCircle2 className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
+                                    {copiedInviteId === invite.id ? 'Copied' : 'Copy Link'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    data-testid={`pilot-invite-qr-${invite.id}`}
+                                    onClick={() => setQrInvite(invite)}
+                                    className="inline-flex items-center gap-2 rounded-2xl border border-sky-400/20 bg-sky-400/10 px-4 py-3 text-sm text-sky-100 transition hover:bg-sky-400/15"
+                                  >
+                                    <QrCode className="h-4 w-4" />
+                                    QR Code
+                                  </button>
+                                  <a
+                                    href={resolveInviteShareUrl(invite)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
+                                  >
+                                    <ExternalLink className="h-4 w-4" />
+                                    Open
+                                  </a>
+                                  <button
+                                    onClick={() => void handleDeletePilotInviteLink(invite)}
+                                    disabled={deletingInviteId === invite.id}
+                                    className="inline-flex items-center gap-2 rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    {deletingInviteId === invite.id ? 'Deleting...' : 'Delete'}
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-[#0b0f17] px-4 py-6 text-sm text-zinc-400">
+                          No athlete join links exist for this scope yet.
+                        </div>
+                      )}
+                    </div>
 
-                    <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4">
-                      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="mt-5 rounded-2xl border border-white/5 bg-black/20 p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div>
-                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Invite Activity</div>
-                          <h3 className="mt-2 text-base font-semibold text-white">Scan and follow-up queue</h3>
+                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Web Invite Activity</div>
+                          <h3 className="mt-2 text-base font-semibold text-white">Recovery Queue</h3>
                           <p className="mt-1 text-sm text-zinc-400">
-                            Browser invite opens, authenticated joins, redeem failures, and manual follow-up requests land here so staff can work a real recovery list.
+                            Use this when someone reaches the web invite flow and needs follow-up. It is not the full join ledger.
                           </p>
+                        </div>
+                        <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-zinc-300">
+                          Web only
                         </div>
                       </div>
 
@@ -3327,8 +3547,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] p-4 text-sm leading-7 text-zinc-200">
-                        This queue only captures activity that reaches the web invite flow. Native-app deep links that resolve fully inside PulseCheck may not create a row here, so use this as a recovery signal rather than a full scan ledger.
+                      <div className="mt-4 text-xs leading-6 text-zinc-500">
+                        Native-app deep links that resolve fully inside PulseCheck may not create a row here, so treat this
+                        as a recovery queue for web invite issues rather than a full scan history.
                       </div>
 
                       {inviteActivityParticipants.length > 0 ? (
@@ -3611,24 +3832,38 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       <div className="mt-6 rounded-3xl border border-white/10 bg-[#0b0f17] p-5">
                         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                           <div>
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Required Agreements</div>
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Required Disclosures</div>
                             <div className="mt-2 max-w-2xl text-sm text-zinc-400">
-                              Attach the exact agreements this pilot requires before an athlete can use the app. The native app will keep reopening this gate on launch and resume until every required agreement here is accepted.
+                              Use a disclosure package that matches the pilot&apos;s current study mode before an athlete can use the app. Changing the study mode changes the default disclosure package used in onboarding.
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                              <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-cyan-100">
+                                Study mode: {detail.pilot.studyMode}
+                              </span>
+                              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-zinc-300">
+                                {STUDY_MODE_DISCLOSURE_PACKAGE_META[detail.pilot.studyMode].label}
+                              </span>
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             <button
+                              onClick={applyCurrentStudyModeDisclosureDefaults}
+                              className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15"
+                            >
+                              {STUDY_MODE_DISCLOSURE_PACKAGE_META[detail.pilot.studyMode].actionLabel}
+                            </button>
+                            <button
                               onClick={addRequiredConsentDraft}
                               className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
                             >
-                              Add Agreement
+                              Add Disclosure
                             </button>
                             <button
                               onClick={() => void saveRequiredConsents()}
                               disabled={savingRequiredConsents}
                               className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-400/15 disabled:opacity-60"
                             >
-                              {savingRequiredConsents ? 'Saving...' : 'Save Agreements'}
+                              {savingRequiredConsents ? 'Saving...' : 'Save Disclosures'}
                             </button>
                           </div>
                         </div>
@@ -3636,7 +3871,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         <div className="mt-4 space-y-4">
                           {requiredConsentDrafts.length === 0 ? (
                             <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-5 text-sm text-zinc-500">
-                              No pilot-specific agreements are attached yet.
+                              No disclosures are configured for this study mode yet.
                             </div>
                           ) : null}
 
@@ -3644,7 +3879,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                             <div key={`${consent.id}-${index}`} className="rounded-2xl border border-white/10 bg-[#11151f] p-4">
                               <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.4fr_auto]">
                                 <label className="space-y-2 text-sm text-zinc-300">
-                                  <span className="text-xs uppercase tracking-wide text-zinc-500">Agreement Title</span>
+                                  <span className="text-xs uppercase tracking-wide text-zinc-500">Disclosure Title</span>
                                   <input
                                     value={consent.title}
                                     onChange={(event) => updateRequiredConsentField(index, 'title', event.target.value)}
@@ -3671,7 +3906,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                               </div>
 
                               <label className="mt-4 block space-y-2 text-sm text-zinc-300">
-                                <span className="text-xs uppercase tracking-wide text-zinc-500">Agreement Body</span>
+                                <span className="text-xs uppercase tracking-wide text-zinc-500">Disclosure Body</span>
                                 <textarea
                                   value={consent.body}
                                   onChange={(event) => updateRequiredConsentField(index, 'body', event.target.value)}
@@ -3739,7 +3974,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                           {visibleCohortSummaries.length === 0 ? (
                             <tr className="border-t border-white/5">
                               <td colSpan={5} className="px-3 py-6 text-center text-sm text-zinc-500">
-                                No cohort rollups match the current filter.
+                                No cohort study metrics match the current filter.
                               </td>
                             </tr>
                           ) : (
@@ -4197,9 +4432,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       </div>
                     </div>
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Outcome Lens</div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Study Metrics Lens</div>
                       <div className="mt-3 text-sm text-zinc-300">
-                        Outcome validation is now flowing through pilot rollups for adherence, trust, NPS, mental-performance change, and speed to care. The next interpretation risk is not missing data contracts, but over-reading small slices without checking the sample behind them.
+                        Study-metrics validation is now flowing through pilot summaries for adherence, trust, NPS, mental-performance change, and speed to care. The next interpretation risk is not missing data contracts, but over-reading small slices without checking the sample behind them.
                       </div>
                     </div>
                   </div>
@@ -4296,10 +4531,10 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5" data-testid="pilot-hypothesis-outcome-comparisons">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="max-w-3xl">
-                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Outcome-Backed Comparison Slices</div>
-                        <h2 className="mt-2 text-lg font-semibold text-white">H3, H5, and H6 rollup comparisons</h2>
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Study-Metrics Comparison Slices</div>
+                        <h2 className="mt-2 text-lg font-semibold text-white">H3, H5, and H6 study-metrics comparisons</h2>
                         <p className="mt-1 text-sm text-zinc-400">
-                          These governed slices read the current pilot outcome rollup instead of rescanning raw collections at render time.
+                          These governed slices read the current pilot study metrics summary instead of rescanning raw collections at render time.
                           They are designed to keep recommendation exposure, adherence, mental-performance delta, and trust in the same frame.
                         </p>
                       </div>
@@ -4317,7 +4552,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                               <h3 className="mt-2 text-base font-semibold text-white">Recommendation specificity</h3>
                             </div>
                             <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 text-[11px] text-cyan-100">
-                              Rollup-backed
+                              Metrics-backed
                             </span>
                           </div>
                           <p className="mt-2 text-sm text-zinc-400">{visibleHypothesisEvaluation.h3.comparisonLabel}</p>
@@ -4441,7 +4676,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       </div>
                     ) : (
                       <div className="mt-5 rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-400">
-                        Outcome-backed hypothesis comparisons will appear once the current pilot rollup has enough governed outcome data for this frame.
+                        Study-metrics-backed hypothesis comparisons will appear once the current pilot study metrics summary has enough governed data for this frame.
                       </div>
                     )}
                   </div>
@@ -5115,7 +5350,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
                                 {section.sectionKey === 'research-notes' ? (
                                   <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm text-amber-100">
-                                    Candidate findings only. Keep these in “worth discussing” posture until outcome validation, replication, and stronger controls are in place.
+                                    Candidate findings only. Keep these in “worth discussing” posture until study-metrics validation, replication, and stronger controls are in place.
                                   </div>
                                 ) : null}
 
@@ -5313,6 +5548,161 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
             </>
           )}
         </div>
+      </main>
+
+      <style jsx global>{`
+        .pilot-detail-theme {
+          background: #07090f;
+          color: rgba(255, 255, 255, 0.95);
+        }
+
+        .pilot-font-display {
+          font-family: 'Syne', sans-serif;
+        }
+
+        .pilot-font-body {
+          font-family: 'DM Sans', sans-serif;
+        }
+
+        .pilot-font-mono {
+          font-family: 'DM Mono', monospace;
+        }
+
+        .pilot-ambient-layer {
+          position: fixed;
+          inset: 0;
+          overflow: hidden;
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        .pilot-ambient-orb {
+          position: absolute;
+          border-radius: 9999px;
+          filter: blur(120px);
+          opacity: 0.9;
+          animation: pilotDetailFloat 18s ease-in-out infinite;
+        }
+
+        .pilot-ambient-orb-teal {
+          top: -18rem;
+          right: -12rem;
+          height: 56rem;
+          width: 56rem;
+          background: radial-gradient(circle, rgba(0, 212, 170, 0.11) 0%, rgba(0, 212, 170, 0.02) 46%, transparent 72%);
+        }
+
+        .pilot-ambient-orb-blue {
+          bottom: -14rem;
+          left: -9rem;
+          height: 40rem;
+          width: 40rem;
+          background: radial-gradient(circle, rgba(96, 165, 250, 0.09) 0%, rgba(96, 165, 250, 0.02) 44%, transparent 72%);
+          animation-delay: -6s;
+        }
+
+        .pilot-ambient-orb-amber {
+          top: 36%;
+          left: 24%;
+          height: 30rem;
+          width: 30rem;
+          background: radial-gradient(circle, rgba(245, 166, 35, 0.07) 0%, rgba(245, 166, 35, 0.015) 42%, transparent 72%);
+          animation-delay: -10s;
+        }
+
+        .pilot-logo-dot {
+          height: 0.45rem;
+          width: 0.45rem;
+          border-radius: 9999px;
+          background: #00d4aa;
+          box-shadow: 0 0 12px rgba(0, 212, 170, 0.55);
+          animation: pilotDetailPulse 2.8s ease-in-out infinite;
+        }
+
+        .pilot-detail-panel {
+          background: rgba(255, 255, 255, 0.032);
+          border-color: rgba(255, 255, 255, 0.08);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02), 0 20px 80px rgba(0, 0, 0, 0.22);
+          backdrop-filter: blur(22px);
+        }
+
+        .pilot-detail-inset {
+          background: rgba(255, 255, 255, 0.022);
+          border-color: rgba(255, 255, 255, 0.06);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.015);
+          backdrop-filter: blur(18px);
+        }
+
+        .pilot-detail-select {
+          appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.28)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+          background-position: right 0.9rem center;
+          background-repeat: no-repeat;
+          padding-right: 2.5rem;
+        }
+
+        .pilot-detail-theme [class*='bg-[#11151f]'][class*='border-white/10'] {
+          background: rgba(255, 255, 255, 0.032) !important;
+          border-color: rgba(255, 255, 255, 0.08) !important;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02), 0 18px 64px rgba(0, 0, 0, 0.24);
+          backdrop-filter: blur(20px);
+        }
+
+        .pilot-detail-theme [class*='bg-black/20'][class*='border-white/5'] {
+          background: rgba(255, 255, 255, 0.02) !important;
+          border-color: rgba(255, 255, 255, 0.06) !important;
+        }
+
+        .pilot-detail-theme [class*='bg-[#0b0f17]'][class*='border-white/10'] {
+          background: rgba(255, 255, 255, 0.028) !important;
+          border-color: rgba(255, 255, 255, 0.08) !important;
+        }
+
+        .pilot-detail-theme table thead th {
+          color: rgba(255, 255, 255, 0.28) !important;
+          letter-spacing: 0.12em;
+        }
+
+        .pilot-detail-theme table tbody td {
+          color: rgba(255, 255, 255, 0.7);
+        }
+
+        .pilot-detail-theme table tbody tr:hover td {
+          background: rgba(255, 255, 255, 0.016);
+        }
+
+        .pilot-detail-theme input,
+        .pilot-detail-theme textarea,
+        .pilot-detail-theme select {
+          font-family: 'DM Sans', sans-serif;
+        }
+
+        .pilot-detail-theme code {
+          font-family: 'DM Mono', monospace;
+          color: rgba(255, 255, 255, 0.8);
+        }
+
+        @keyframes pilotDetailPulse {
+          0%,
+          100% {
+            box-shadow: 0 0 12px rgba(0, 212, 170, 0.55);
+          }
+          50% {
+            box-shadow: 0 0 24px rgba(0, 212, 170, 0.9);
+          }
+        }
+
+        @keyframes pilotDetailFloat {
+          0%,
+          100% {
+            transform: translate3d(0, 0, 0) scale(1);
+          }
+          50% {
+            transform: translate3d(0, 18px, 0) scale(1.04);
+          }
+        }
+      `}</style>
+
         {detail && staffSurveyModalRole ? (
           <StaffPilotSurveyModal
             isOpen={Boolean(staffSurveyModalRole)}
@@ -5395,6 +5785,18 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
             onSend={() => void confirmCommunicationSend()}
           />
         ) : null}
+        {detail ? (
+          <StudyMetricsStatusModal
+            isOpen={studyMetricsStatusModalOpen}
+            pilotName={detail.pilot.name}
+            state={metricsRefreshState}
+            refreshScope={metricsRefreshScope}
+            repairScope={metricsRepairScope}
+            onClose={() => setStudyMetricsStatusModalOpen(false)}
+            onRefresh={!demoModeEnabled ? () => void triggerOutcomeRecompute() : undefined}
+            refreshing={recomputingOutcomeRollups}
+          />
+        ) : null}
         <AnimatePresence>
           {pageMessage ? (
             <motion.div
@@ -5427,6 +5829,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
           ) : null}
         </AnimatePresence>
       </div>
+    </div>
     </AdminRouteGuard>
   );
 };
