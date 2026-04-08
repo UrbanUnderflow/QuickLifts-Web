@@ -8,6 +8,11 @@ import { User, SubscriptionType, SubscriptionPlatform, UserLevel } from '../api/
 import { userService } from '../api/firebase/user';
 import { firebaseStorageService } from '../api/firebase/storage/service';
 import { Camera, Eye, EyeOff, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
+import {
+  buildCurrentLegalAcceptance,
+  PRIVACY_POLICY_PATH,
+  TERMS_PATH,
+} from '../utils/legalAcceptance';
 // import { FaGoogle, FaApple } from 'react-icons/fa';
 
 const SignUpPage: React.FC = () => {
@@ -29,12 +34,14 @@ const SignUpPage: React.FC = () => {
   const [isImageUploading, setIsImageUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [hasAcceptedLegal, setHasAcceptedLegal] = useState(false);
   
   const [errors, setErrors] = useState<{
     email?: string;
     password?: string;
     confirmPassword?: string;
     username?: string;
+    legal?: string;
   }>({});
 
   // Username live-check state
@@ -157,6 +164,10 @@ const SignUpPage: React.FC = () => {
         newErrors.username = 'Use 3-20 chars: letters, numbers, underscore';
       }
     }
+
+    if (!hasAcceptedLegal) {
+      newErrors.legal = 'You must agree to the Terms and Privacy Policy to create an account';
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -243,6 +254,7 @@ const SignUpPage: React.FC = () => {
         videoCount: 0,
         creator: null,
         winner: null,
+        legalAcceptance: buildCurrentLegalAcceptance('web-signup-email'),
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -534,6 +546,46 @@ const SignUpPage: React.FC = () => {
               <span className="text-red-400 text-sm">{error}</span>
             </div>
           )}
+
+          <div className={`rounded-xl border p-4 ${errors.legal ? 'border-red-500/70 bg-red-950/20' : 'border-zinc-800 bg-zinc-950/50'}`}>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hasAcceptedLegal}
+                onChange={(e) => {
+                  setHasAcceptedLegal(e.target.checked);
+                  if (errors.legal) {
+                    setErrors((prev) => ({ ...prev, legal: undefined }));
+                  }
+                }}
+                className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-[#E0FE10] focus:ring-[#E0FE10]"
+              />
+              <span className="text-sm leading-6 text-zinc-300">
+                I agree to Pulse&apos;s{' '}
+                <a
+                  href={TERMS_PATH}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#E0FE10] hover:text-lime-300 underline underline-offset-2"
+                >
+                  Terms of Service
+                </a>{' '}
+                and{' '}
+                <a
+                  href={PRIVACY_POLICY_PATH}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#E0FE10] hover:text-lime-300 underline underline-offset-2"
+                >
+                  Privacy Policy
+                </a>
+                .
+              </span>
+            </label>
+            {errors.legal && (
+              <p className="mt-2 text-sm text-red-400">{errors.legal}</p>
+            )}
+          </div>
 
           {/* Submit Button */}
           <button

@@ -9,6 +9,7 @@ import SignInModal from './SignInModal';
 import type { RootState } from '../redux/store';
 import { useUser } from '../hooks/useUser';
 import { setLoginRedirectPath } from '../redux/tempRedirectSlice';
+import { hasAcceptedCurrentLegal } from '../utils/legalAcceptance';
 
 interface AuthWrapperProps {
   children: React.ReactNode;
@@ -333,6 +334,21 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
                 return;
               }
               console.log('[AuthWrapper] Authenticated but missing username. Showing registration modal (non-landing).');
+              setShowSignInModal(true);
+              dispatch(setLoading(false));
+              setAuthChecked(true);
+              return;
+            }
+
+            if (activeUser && !hasAcceptedCurrentLegal(activeUser)) {
+              if (isCreatorLandingPath(router.asPath || router.pathname) || isClubCheckInPath(router.asPath || router.pathname)) {
+                console.log('[AuthWrapper] Authenticated but missing current legal acceptance on public landing/check-in page. Not showing modal.');
+                setShowSignInModal(false);
+                dispatch(setLoading(false));
+                setAuthChecked(true);
+                return;
+              }
+              console.log('[AuthWrapper] Authenticated but missing current legal acceptance. Showing modal.');
               setShowSignInModal(true);
               dispatch(setLoading(false));
               setAuthChecked(true);

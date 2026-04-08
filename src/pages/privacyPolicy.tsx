@@ -1,6 +1,6 @@
 import React from 'react';
 import type { NextPage, GetServerSideProps } from 'next';
-import { useScrollFade } from '../hooks/useScrollFade';
+import Link from 'next/link';
 import PageHead from '../components/PageHead';
 import { adminMethods } from '../api/firebase/admin/methods';
 import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/types';
@@ -13,249 +13,261 @@ interface PrivacyPolicyPageProps {
   metaData: SerializablePageMetaData | null;
 }
 
+type Section = {
+  title: string;
+  body: string[];
+  bullets?: string[];
+};
+
+const EFFECTIVE_DATE = 'April 8, 2026';
+
+const quickFacts = [
+  {
+    title: 'Company-wide baseline policy',
+    body: 'This policy covers Pulse Intelligence Labs services broadly, including Fit With Pulse, Pulse, QuickLifts, PulseCheck, Group Meet, and related pilots, apps, sites, and integrations.',
+  },
+  {
+    title: 'Supplemental notices still matter',
+    body: 'Some products, pilots, school or team workflows, or third-party integrations come with additional privacy notices, disclosures, or consent materials that also apply.',
+  },
+  {
+    title: 'Health data is context-specific',
+    body: 'Not every health, wearable, or wellness workflow is governed by HIPAA. The applicable privacy posture depends on the product, sponsor, and data flow.',
+  },
+];
+
+const sections: Section[] = [
+  {
+    title: 'Scope',
+    body: [
+      'This Privacy Policy applies to the websites, mobile apps, pilots, beta features, hosted workflows, integrations, and related services offered by Pulse Intelligence Labs, Inc., including Fit With Pulse, Pulse, QuickLifts, PulseCheck, Group Meet, and other products we make available from time to time.',
+      'Additional product-specific, pilot-specific, organization-sponsored, or integration-specific notices may also apply. Those supplemental notices explain details for a particular workflow and should be read together with this policy.',
+    ],
+  },
+  {
+    title: 'Categories of information we collect',
+    body: [
+      'Depending on the Services you use, we may collect personal information in the following categories:',
+    ],
+    bullets: [
+      'Identifiers and contact data, such as name, email address, username, phone number, account IDs, and invitation or referral metadata.',
+      'Profile and account data, such as photo, bio, preferences, plan details, role, organization or team affiliation, and login credentials or authentication tokens.',
+      'Fitness, wellness, readiness, recovery, mental-performance, and support-related data, such as workouts, progress, achievements, check-ins, journaling, readiness signals, survey responses, training activity, session history, and support or escalation workflow events.',
+      'Connected device and integration data, such as information you choose to authorize from Apple Health, HealthKit, Oura, Google Calendar, and other approved sources or integrations.',
+      'User content and communications, such as videos, photos, posts, comments, messages, prompts, responses, attachments, and content you create or upload.',
+      'Commercial and billing data, such as purchase history, subscription status, product selections, payment processor identifiers, and transaction records.',
+      'Technical, device, and usage data, such as IP address, browser type, device identifiers, operating system, crash or diagnostic logs, approximate location inferred from network or device data, event telemetry, and interaction history.',
+      'Organization-supplied or sponsor-linked data, such as team, school, coach, clinician, referral, roster, or program metadata when a service is offered through an organization or partner.',
+      'Inferences and derived data, such as engagement trends, risk or support signals, readiness summaries, personalization outputs, and quality or safety review flags generated from the information above.',
+    ],
+  },
+  {
+    title: 'How we collect information',
+    body: [
+      'We collect information directly from you when you create an account, subscribe, connect a device, answer prompts, upload content, or communicate with us.',
+      'We also collect information automatically from your device and browser when you use the Services, and from third parties when you choose to connect them or when an organization, partner, payment provider, or service provider legitimately supplies information needed to operate the workflow.',
+    ],
+    bullets: [
+      'Directly from you',
+      'From your devices, browsers, and apps',
+      'From wearable, calendar, payment, and identity integrations you authorize',
+      'From coaches, teams, schools, or program sponsors where the workflow is organization-sponsored',
+      'From service providers that help us host, authenticate, secure, analyze, message, or process payments',
+    ],
+  },
+  {
+    title: 'How we use information',
+    body: [
+      'We use personal information to operate, maintain, secure, and improve the Services, and to provide the features you request.',
+    ],
+    bullets: [
+      'Create and manage accounts, authenticate users, and personalize product experiences',
+      'Deliver workouts, readiness flows, check-ins, scheduling, support tools, pilots, and related product features',
+      'Process subscriptions, purchases, entitlement checks, billing, refunds, and transaction support',
+      'Run analytics, debugging, quality assurance, product improvement, fraud detection, safety review, and operational monitoring',
+      'Send administrative messages, service notices, invitations, reminders, support communications, and, where permitted, marketing messages',
+      'Support organization-sponsored, coach-linked, team, school, clinician, and partner workflows when those are part of the product design and disclosures',
+      'Generate de-identified or aggregated reporting, research, and product-improvement insights',
+      'Comply with law, enforce our terms, protect rights and safety, and investigate incidents or abuse',
+    ],
+  },
+  {
+    title: 'How we disclose information',
+    body: [
+      'We disclose personal information only as reasonably necessary to operate the Services, support the workflows you use, comply with law, and protect people and systems.',
+    ],
+    bullets: [
+      'Service providers and contractors that support hosting, cloud infrastructure, storage, authentication, communications, analytics, billing, subscriptions, and customer support, including providers such as Firebase, Mixpanel, Stripe, RevenueCat, Brevo, and similar operational vendors',
+      'Third-party platforms or integrations you choose to connect, such as Apple Health, Oura, Google Calendar, app stores, and identity or messaging services',
+      'Coaches, team admins, school staff, clinicians, support partners, or program sponsors when a product or pilot is designed to share information with those roles and the applicable disclosures, permissions, or role rules allow it',
+      'Legal, regulatory, safety, audit, insurance, financing, or transaction counterparties where required or reasonably necessary',
+      'Affiliates or successors in connection with a merger, financing, reorganization, asset sale, acquisition, or similar business transaction',
+    ],
+  },
+  {
+    title: 'Health, wearable, and organization-sponsored data',
+    body: [
+      'Some Services involve wellness, readiness, recovery, or support-related data. If you connect a wearable or health source, we use the data you authorize for the purposes described in the relevant workflow, such as providing product features, personalization, pilot operations, and internal evaluation.',
+      'If a service is sponsored by a coach, team, school, clinic, employer, or other organization, authorized staff or partners may be able to view information consistent with that workflow’s permissions, disclosures, consents, and role boundaries.',
+      'Not all information in our consumer products is protected by HIPAA. Unless a service is offered by or on behalf of a HIPAA covered entity or business associate in a qualifying workflow, information you enter into or connect to the Services may not be subject to HIPAA protections.',
+    ],
+    bullets: [
+      'Review any pilot, school, team, or program disclosures carefully because those workflows may include different recipients, support partners, or retention expectations.',
+      'Where health, wearable, or support data is especially sensitive, we aim to limit collection, use, and disclosure to the minimum reasonably necessary for the feature or workflow.',
+      'If a workflow does involve a covered entity, business associate, or other regulated healthcare posture, additional notices or authorizations may apply.',
+    ],
+  },
+  {
+    title: 'AI and automated features',
+    body: [
+      'Some Services use AI-assisted or automated systems to generate workouts, prompts, summaries, recommendations, scheduling suggestions, support signals, or other outputs. We may use information you provide to generate those outputs, improve quality, review failures, or monitor product performance and safety.',
+      'AI or automated outputs can be incomplete or inaccurate and should not be treated as medical, therapeutic, legal, or emergency guidance.',
+    ],
+  },
+  {
+    title: 'Cookies, SDKs, analytics, and communications',
+    body: [
+      'We and our service providers use cookies, SDKs, local storage, pixels, device identifiers, and similar technologies to keep you signed in, remember preferences, measure performance, secure the Services, understand usage, and communicate with you.',
+      'Our products may use analytics and messaging providers, including web and mobile event tools, crash or usage diagnostics, email delivery, and subscription or payment vendors.',
+    ],
+    bullets: [
+      'You can often control cookies through browser settings and device identifiers or permissions through your device settings, although disabling some tools may affect product functionality.',
+      'You can opt out of marketing emails by using the unsubscribe link in the message or by contacting us.',
+      'If you disconnect an integration, we will stop using it for future syncs, subject to operational records, cached data, and lawful retention obligations.',
+    ],
+  },
+  {
+    title: 'Retention',
+    body: [
+      'We retain personal information for as long as reasonably necessary for the purposes described in this policy, including product operation, account maintenance, security, fraud prevention, compliance, dispute resolution, and recordkeeping.',
+      'Retention periods vary by category and context. We may delete, anonymize, aggregate, or de-identify data when it is no longer reasonably needed in identifiable form.',
+    ],
+    bullets: [
+      'Account and profile data are generally retained while your account is active and for a reasonable period afterward to support deletion processing, security, fraud prevention, and legal compliance.',
+      'Workout, wellness, pilot, check-in, communication, and content records are generally retained while needed for the product experience, the active program, operational review, or until deletion or de-identification is appropriate.',
+      'Billing, tax, payout, payment, and subscription records may be retained longer to meet accounting, audit, tax, chargeback, platform, and legal requirements.',
+      'Technical logs and diagnostics may be retained for shorter periods needed for debugging, security review, and abuse prevention, although certain incident or audit logs may be retained longer.',
+      'De-identified or aggregated data may be retained longer for analytics, system improvement, research, benchmarking, and operational learning where permitted by law.',
+    ],
+  },
+  {
+    title: 'Security and incident response',
+    body: [
+      'We use administrative, technical, and organizational safeguards designed to protect personal information, such as access controls, encrypted transport, protected infrastructure, monitoring, and internal access restrictions.',
+      'No method of transmission, storage, or security control is perfect, and we cannot guarantee absolute security.',
+      'If we determine that a reportable security incident or breach has occurred, we will provide notices required by applicable law. Certain health-related products or workflows may also be subject to specific breach-notification obligations under applicable law, including the FTC Health Breach Notification Rule where relevant.',
+    ],
+  },
+  {
+    title: 'Your choices and privacy rights',
+    body: [
+      'Depending on where you live and the Services you use, you may have rights to request access to, correction of, deletion of, or a copy of certain personal information, and to object to or limit certain processing activities.',
+      'You may also be able to withdraw permissions for device integrations, disconnect connected accounts, update profile information, manage communications, or delete your account directly through the app or related tools.',
+    ],
+    bullets: [
+      'Account deletion: use the in-app flow where available or visit our account deletion page',
+      'Marketing opt-out: use the unsubscribe link or contact us',
+      'Integration permissions: disconnect the integration in the app or through the third-party provider settings where available',
+      'Access, deletion, correction, portability, or appeal requests: contact us using the details below',
+    ],
+  },
+  {
+    title: 'California and similar U.S. state privacy notices',
+    body: [
+      'Residents of California and certain other U.S. states may have additional rights, including the right to know the categories of personal information we collect, sources, purposes, categories of recipients, the right to request deletion or correction, the right to obtain a portable copy of certain information, and the right to opt out of certain types of sale, sharing, or targeted advertising where those rights apply.',
+      'We do not sell personal information for money. We disclose personal information to service providers, contractors, partners, and workflow participants as described in this policy. If we engage in an activity that triggers an additional opt-out right under applicable law, we will provide the notice and method required by that law.',
+      'To exercise rights requests, contact us using the information below. We may need to verify your identity before completing certain requests.',
+    ],
+  },
+  {
+    title: 'Children and age-sensitive use',
+    body: [
+      'Our consumer Services are not directed to children under 13. If we learn that we collected personal information from a child under 13 without appropriate authorization, we will take steps to delete it as required by law.',
+      'Some organization-sponsored or school-linked workflows may involve teens or student-athletes. Those programs may require parental, guardian, school, or program authorization depending on the workflow and applicable law.',
+    ],
+  },
+  {
+    title: 'Changes to this policy',
+    body: [
+      'We may update this Privacy Policy from time to time. If we make material changes, we may provide notice by updating this page, through the Services, or by other reasonable means. The “effective date” above reflects the latest version.',
+    ],
+  },
+];
+
 const PrivacyPolicy: NextPage<PrivacyPolicyPageProps> = ({ metaData }) => {
   return (
-    <div className="min-h-screen bg-zinc-900">
-      <PageHead
-        metaData={metaData}
-        pageOgUrl="https://fitwithpulse.ai/privacyPolicy"
-      />
+    <div className="min-h-screen bg-[#05070b] text-white">
+      <PageHead metaData={metaData} pageOgUrl="https://fitwithpulse.ai/privacy" />
 
-      {/* Hero Section */}
-      <main ref={useScrollFade()} className="max-w-4xl mx-auto px-4 py-20">
-        <h1 className="text-[#E0FE10] text-5xl sm:text-6xl font-bold mb-8">
-          Privacy Policy
-        </h1>
+      <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-5 py-8 sm:px-8 sm:py-12">
+        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(224,254,16,0.12),_transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-6 sm:p-8">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-zinc-300">
+            Pulse Intelligence Labs, Inc. Privacy Policy
+          </div>
+          <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">How Pulse Intelligence Labs handles Fit With Pulse and PulseCheck data.</h1>
+          <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-300 sm:text-lg">
+            Effective date: {EFFECTIVE_DATE}. This is the company-wide baseline privacy policy for Fit With Pulse, Pulse,
+            QuickLifts, PulseCheck, Group Meet, and related websites, apps, pilots, and hosted workflows.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link href="/terms" className="inline-flex items-center justify-center rounded-full bg-[#E0FE10] px-5 py-3 font-semibold text-black transition hover:bg-lime-300">
+              Review terms
+            </Link>
+            <Link href="/delete-account" className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 py-3 font-medium text-zinc-100 transition hover:bg-white/10">
+              Account deletion
+            </Link>
+          </div>
+        </section>
 
-        <p className="text-zinc-400 text-lg mb-12">
-          At Pulse, we respect your privacy and take the protection of personal information very seriously.
-          This Privacy Policy outlines how we collect, use, and protect your information.
-        </p>
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          {quickFacts.map((fact) => (
+            <article key={fact.title} className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+              <h2 className="text-xl font-semibold">{fact.title}</h2>
+              <p className="mt-3 text-sm leading-7 text-zinc-300 sm:text-base">{fact.body}</p>
+            </article>
+          ))}
+        </section>
 
-        <p className="text-zinc-400 text-lg mb-12">
-          This policy is effective as of January 1, 2024 and was last updated on March 1, 2026.
-        </p>
+        <section className="space-y-6">
+          {sections.map((section) => (
+            <article key={section.title} className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 sm:p-8">
+              <h2 className="text-2xl font-semibold">{section.title}</h2>
+              <div className="mt-4 space-y-4">
+                {section.body.map((paragraph) => (
+                  <p key={paragraph} className="text-sm leading-7 text-zinc-300 sm:text-base">
+                    {paragraph}
+                  </p>
+                ))}
+                {section.bullets ? (
+                  <ul className="space-y-3 pt-1 text-sm leading-7 text-zinc-300 sm:text-base">
+                    {section.bullets.map((bullet) => (
+                      <li key={bullet} className="flex gap-3">
+                        <span className="mt-[10px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#E0FE10]" />
+                        <span>{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            </article>
+          ))}
+        </section>
 
-        {/* Privacy Policy Sections */}
-        <div className="space-y-12">
-          {/* Information We Collect */}
-          <section>
-            <h2 className="text-white text-2xl font-bold mb-4">
-              Information We Collect
-            </h2>
-            <p className="text-zinc-400 text-lg">
-              Information we collect includes both information you knowingly and actively provide us when using
-              or participating in any of our services and promotions, and any information automatically sent
-              by your devices in the course of accessing our products and services.
-            </p>
-          </section>
-
-          {/* Types of Information */}
-          <section>
-            <h2 className="text-white text-2xl font-bold mb-4">
-              Types of Information
-            </h2>
-            <ul className="text-zinc-400 text-lg space-y-4">
-              <li>• Account information (email, username, profile data)</li>
-              <li>• Fitness data (workouts, progress, achievements)</li>
-              <li>• Usage data (app interactions, preferences)</li>
-              <li>• Device information (device type, operating system)</li>
-              <li>• Content you create (exercise videos/moves, comments, posts)</li>
-            </ul>
-          </section>
-
-          {/* How We Use Information */}
-          <section>
-            <h2 className="text-white text-2xl font-bold mb-4">
-              How We Use Information
-            </h2>
-            <ul className="text-zinc-400 text-lg space-y-4">
-              <li>• Provide and improve our services</li>
-              <li>• Personalize your experience</li>
-              <li>• Track fitness progress and achievements</li>
-              <li>• Enable community features and interactions</li>
-              <li>• Analyze app performance and usage patterns</li>
-            </ul>
-          </section>
-
-          {/* Data Protection */}
-          <section>
-            <h2 className="text-white text-2xl font-bold mb-4">
-              Data Protection
-            </h2>
-            <p className="text-zinc-400 text-lg">
-              We implement appropriate security measures to protect your personal information.
-              Your data is stored securely and accessed only as necessary to provide our services.
-            </p>
-          </section>
-
-          {/* Data Retention & Deletion */}
-          <section>
-            <h2 className="text-white text-2xl font-bold mb-4">
-              Data Retention & Deletion
-            </h2>
-            <p className="text-zinc-400 text-lg mb-4">
-              We retain your personal data only for as long as necessary to provide you with our services
-              and as described in this Privacy Policy. When you delete your account or request data deletion,
-              we will delete or anonymize your personal information within 30 days, except where we are
-              required to retain certain information for legal, security, fraud-prevention, or compliance
-              obligations.
-            </p>
-            <p className="text-zinc-400 text-lg mb-4">
-              The following data is deleted when you request account deletion:
-            </p>
-            <ul className="text-zinc-400 text-lg space-y-3 mb-4">
-              <li>• Your user profile and account information</li>
-              <li>• Fitness data, workout history, and achievements</li>
-              <li>• Uploaded content, including exercise videos (moves) and posts</li>
-              <li>• Community interactions, comments, and messages</li>
-              <li>• App preferences and settings</li>
-            </ul>
-            <p className="text-zinc-400 text-lg">
-              Some records may be retained beyond account deletion when required by law, including
-              subscription and payment records managed by third-party payment processors (e.g., Apple,
-              Google, Stripe) in accordance with their own data retention policies.
-            </p>
-          </section>
-
-          {/* Account Deletion */}
-          <section>
-            <h2 className="text-white text-2xl font-bold mb-4">
-              Account Deletion
-            </h2>
-            <p className="text-zinc-400 text-lg mb-4">
-              You have the right to delete your Pulse account and all associated data at any time.
-              Account deletion can be done instantly through the app, or you can contact us for assistance.
-            </p>
-            <ul className="text-zinc-400 text-lg space-y-3 mb-6">
-              <li>
-                <strong className="text-white">1. In-App (Instant):</strong>{' '}
-                Open the Pulse app and navigate to{' '}
-                <span className="text-zinc-200">Settings → Delete Account</span>. Your account and all
-                associated data will be deleted immediately.
-              </li>
-              <li>
-                <strong className="text-white">2. Online:</strong>{' '}
-                Visit our{' '}
-                <a href="/delete-account" className="text-[#E0FE10] hover:underline font-semibold">
-                  Account Deletion page
-                </a>{' '}
-                to submit a deletion request.
-              </li>
-              <li>
-                <strong className="text-white">3. Email:</strong>{' '}
-                Send a deletion request to{' '}
-                <a href="mailto:info@fitwithpulse.ai" className="text-[#E0FE10] hover:underline">
-                  info@fitwithpulse.ai
-                </a>{' '}
-                from the email address associated with your account.
-              </li>
-            </ul>
-            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
-              <p className="text-zinc-300 text-base">
-                <strong className="text-white">What happens when you delete your account:</strong> When
-                deleted through the app, your account and data are removed instantly. For requests made
-                via email or our website, deletion will be processed within 30 days. Once deleted, all
-                personal data is permanently removed from our systems. This action is irreversible — you
-                will not be able to recover your account or any associated data.
-              </p>
-            </div>
-            <div className="mt-6">
-              <a
-                href="/delete-account"
-                className="inline-block bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
-              >
-                Request Account Deletion
-              </a>
-            </div>
-          </section>
-
-          {/* Deleting Video Content (Moves) */}
-          <section>
-            <h2 className="text-white text-2xl font-bold mb-4">
-              Deleting Video Content (Moves)
-            </h2>
-            <p className="text-zinc-400 text-lg mb-4">
-              Pulse allows you to upload exercise videos, referred to as &quot;moves,&quot; to share workout
-              demonstrations with the community. You maintain full control over the video content you upload
-              and can delete it at any time.
-            </p>
-            <p className="text-zinc-400 text-lg mb-4">
-              <strong className="text-white">To delete specific video content:</strong>
-            </p>
-            <ul className="text-zinc-400 text-lg space-y-3 mb-4">
-              <li>
-                <strong className="text-white">1. In-App (Instant):</strong>{' '}
-                Open the Pulse app, navigate to your exercise library, select the move you want to remove,
-                and delete it. The video and all associated data will be removed immediately.
-              </li>
-              <li>
-                <strong className="text-white">2. Email request:</strong>{' '}
-                Alternatively, send an email to{' '}
-                <a href="mailto:info@fitwithpulse.ai" className="text-[#E0FE10] hover:underline">
-                  info@fitwithpulse.ai
-                </a>{' '}
-                with the subject line &quot;Video Content Deletion Request.&quot; Include the name or
-                description of the move(s) you want removed and the email address associated with your
-                account. Email requests are processed within 30 days.
-              </li>
-              <li>
-                <strong className="text-white">3. Full account deletion:</strong>{' '}
-                If you delete your account (see above), all uploaded video content, including moves, will
-                be permanently removed as part of the account deletion process.
-              </li>
-            </ul>
-            <p className="text-zinc-400 text-lg">
-              Once deleted, the video files and associated metadata (title, description, thumbnails) will
-              be permanently removed from our servers and will no longer be accessible to other users.
-            </p>
-          </section>
-
-          {/* Content Rights */}
-          <section>
-            <h2 className="text-white text-2xl font-bold mb-4">
-              Content Rights
-            </h2>
-            <p className="text-zinc-400 text-lg">
-              By uploading content to Pulse, you grant Pulse Intelligence Labs, Inc. a non-exclusive license
-              to use that content for improving the service, research, and promotional purposes while your
-              account is active. Upon account deletion or content removal request, this license terminates
-              and the content will be permanently removed from our systems.
-            </p>
-          </section>
-
-          {/* Contact Information */}
-          <section>
-            <h2 className="text-white text-2xl font-bold mb-4">
-              Contact Us
-            </h2>
-            <p className="text-zinc-400 text-lg">
-              If you have any questions about our privacy practices, data deletion, or how to manage
-              your content, please contact us at:
-              <br />
-              <a href="mailto:info@fitwithpulse.ai" className="text-[#E0FE10] hover:underline">
-                info@fitwithpulse.ai
-              </a>
-            </p>
-          </section>
-        </div>
+        <section className="rounded-3xl border border-[#E0FE10]/20 bg-[#E0FE10]/[0.06] p-6 sm:p-8">
+          <h2 className="text-2xl font-semibold">Contact us</h2>
+          <p className="mt-3 text-sm leading-7 text-zinc-200 sm:text-base">
+            For privacy questions, data deletion requests, or rights requests related to Fit With Pulse, PulseCheck, or
+            other Pulse Intelligence Labs, Inc. services, contact{' '}
+            <a className="text-[#E0FE10] underline underline-offset-4" href="mailto:info@fitwithpulse.ai">
+              info@fitwithpulse.ai
+            </a>{' '}
+            or{' '}
+            <a className="text-[#E0FE10] underline underline-offset-4" href="mailto:tre@fitwithpulse.ai">
+              tre@fitwithpulse.ai
+            </a>.
+          </p>
+        </section>
       </main>
-
-      {/* Call to Action */}
-      <section ref={useScrollFade()} className="min-h-[50vh] bg-black flex flex-col items-center justify-center text-center p-8 mt-20">
-        <h2 className="text-white text-5xl sm:text-6xl font-bold mb-6">
-          Ready to start your fitness journey?
-        </h2>
-        <p className="text-zinc-400 text-xl max-w-2xl mb-10">
-          Join the Pulse community and start training today.
-        </p>
-        <a
-          href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
-          className="bg-[#E0FE10] text-black px-12 py-4 rounded-full text-lg font-semibold hover:bg-[#E0FE10]/90 transition-colors"
-        >
-          Download Now
-        </a>
-      </section>
     </div>
   );
 };
@@ -265,7 +277,7 @@ export const getServerSideProps: GetServerSideProps<PrivacyPolicyPageProps> = as
   try {
     rawMetaData = await adminMethods.getPageMetaData('privacyPolicy');
   } catch (error) {
-    console.error("Error fetching page meta data for privacy policy page:", error);
+    console.error('Error fetching page meta data for privacy policy page:', error);
   }
 
   let serializableMetaData: SerializablePageMetaData | null = null;

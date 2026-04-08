@@ -305,7 +305,7 @@ export async function sendGroupMeetFlexPromptEmail(args: {
         <div style="margin:0 0 14px;padding:16px;border-radius:16px;border:1px solid rgba(24,24,27,0.1);background:#fafafa;">
           <div style="font-weight:700;font-size:16px;">${escapeHtml(label)}</div>
           <div style="margin-top:8px;color:#18181b;font-size:14px;">
-            Everyone else is currently available for this time.
+            This is one of the strongest remaining options based on the availability already submitted by the group.
           </div>
           <div style="margin-top:12px;color:#52525b;font-size:13px;">
             Works for <strong>${option.participantCount} of ${option.totalParticipants}</strong> participants right now.
@@ -328,9 +328,9 @@ export async function sendGroupMeetFlexPromptEmail(args: {
     <div style="font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b;">
       <p>Hi ${escapeHtml(args.recipientName || 'there')},</p>
       <p>
-        Group Meet found a few times where everyone else is currently available for
+        Group Meet found a few strong remaining times for
         <strong>${escapeHtml(args.requestTitle)}</strong>.
-        If any of these work for you too, tap one and Group Meet will add it to your availability right away.
+        If any of these work for you, tap one and Group Meet will add it to your availability right away.
       </p>
       <p>
         Month: <strong>${escapeHtml(args.targetMonth)}</strong><br/>
@@ -501,6 +501,153 @@ export async function sendGroupMeetNoResponseReminderEmail(args: {
     idempotencyMetadata: {
       requestId: args.requestId,
       recipientEmail: args.recipientEmail,
+      optionKeys: args.options.slice(0, 3).map((option) => option.candidateKey),
+    },
+    bypassDailyRecipientLimit: true,
+  });
+
+  if (!sendResult.success) {
+    return {
+      success: false,
+      skipped: Boolean(sendResult.skipped),
+      error: sendResult.error || 'Brevo error',
+    };
+  }
+
+  return {
+    success: true,
+    skipped: Boolean(sendResult.skipped),
+    messageId: sendResult.messageId || null,
+  };
+}
+
+export async function sendGroupMeetManualFlexPromptEmail(args: {
+  requestId: string;
+  requestTitle: string;
+  targetMonth: string;
+  deadlineAt: string | null;
+  timezone: string;
+  inviteToken: string;
+  recipientName: string;
+  recipientEmail: string;
+  shareUrl: string;
+  baseUrl: string;
+  options: GroupMeetFlexPromptOption[];
+  strategy: 'blocker' | 'group_options';
+  dispatchKey?: string;
+}) {
+  const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
+  if (!apiKey) {
+    return {
+      success: false,
+      error: 'Brevo not configured in runtime env.',
+    };
+  }
+
+  const { senderEmail, senderName } = getGroupMeetSenderIdentity();
+  const internalBcc = [{ email: 'info@fitwithpulse.ai', name: 'Pulse Info' }];
+  const deadlineLabel = args.deadlineAt
+    ? new Date(args.deadlineAt).toLocaleString('en-US', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: args.timezone,
+      })
+    : null;
+  const optionCards = args.options.slice(0, 3).map((option) => {
+    const token = createGroupMeetFlexActionToken({
+      requestId: args.requestId,
+      inviteToken: args.inviteToken,
+      candidateKey: option.candidateKey,
+      date: option.date,
+      startMinutes: option.startMinutes,
+      endMinutes: option.endMinutes,
+    });
+    return { option, token };
+  });
+
+  const introText =
+    args.strategy === 'blocker'
+      ? 'These are some of the strongest remaining options, and you are currently one of the people still needed to make them work.'
+      : 'These are the strongest remaining options based on the availability the rest of the group has already submitted.';
+  const buttonLabel =
+    args.strategy === 'blocker' ? 'I can flex for this time' : 'This time works for me';
+
+  const htmlOptions = optionCards
+    .map(({ option, token }) => {
+      const actionUrl = buildGroupMeetFlexSelectionUrl(args.baseUrl, token);
+      const label = formatGroupMeetCandidateLabel({
+        date: option.date,
+        startMinutes: option.startMinutes,
+        endMinutes: option.endMinutes,
+        timezone: args.timezone,
+      });
+
+      return `
+        <div style="margin:0 0 14px;padding:16px;border-radius:16px;border:1px solid rgba(24,24,27,0.1);background:#fafafa;">
+          <div style="font-weight:700;font-size:16px;">${escapeHtml(label)}</div>
+          <div style="margin-top:8px;color:#18181b;font-size:14px;">
+            ${escapeHtml(introText)}
+          </div>
+          <div style="margin-top:12px;color:#52525b;font-size:13px;">
+            Works for <strong>${option.participantCount} of ${option.totalParticipants}</strong> participants right now.
+          </div>
+          <div style="margin-top:14px;">
+            <a href="${actionUrl}" style="display:inline-block;padding:12px 16px;border-radius:10px;background:#18181b;color:#fff;text-decoration:none;font-weight:600;">
+              ${escapeHtml(buttonLabel)}
+            </a>
+          </div>
+          <div style="margin-top:8px;color:#71717a;font-size:12px;line-height:1.5;">
+            If the button does not work, open this link: ${escapeHtml(actionUrl)}
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  const subject = `${args.requestTitle}: can any of these times work for you?`;
+  const htmlContent = `
+    <div style="font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b;">
+      <p>Hi ${escapeHtml(args.recipientName || 'there')},</p>
+      <p>
+        We’re trying to lock in <strong>${escapeHtml(args.requestTitle)}</strong>.
+        To make this easier, here are a few strong remaining times based on what the group has already submitted.
+        If any of these work for you, tap one and Group Meet will add it to your availability right away.
+      </p>
+      <p>
+        Month: <strong>${escapeHtml(args.targetMonth)}</strong><br/>
+        ${deadlineLabel ? `Deadline: <strong>${escapeHtml(deadlineLabel)}</strong><br/>` : ''}
+        Timezone: <strong>${escapeHtml(args.timezone)}</strong>
+      </p>
+      <div style="margin-top:18px;">
+        ${htmlOptions}
+      </div>
+      <p style="margin-top:14px;color:#52525b;">
+        Prefer to edit manually instead? Open your Group Meet link here:<br/>
+        ${escapeHtml(args.shareUrl)}
+      </p>
+    </div>
+  `;
+
+  const sendResult = await sendBrevoTransactionalEmail({
+    toEmail: args.recipientEmail,
+    toName: args.recipientName || args.recipientEmail,
+    subject,
+    htmlContent,
+    sender: { email: senderEmail, name: senderName },
+    replyTo: { email: senderEmail, name: senderName },
+    bcc: internalBcc,
+    tags: ['group-meet', 'group-meet-manual-flex'],
+    idempotencyKey: buildEmailDedupeKey([
+      'group-meet-manual-flex-v1',
+      args.requestId,
+      args.recipientEmail,
+      args.options.slice(0, 3).map((option) => option.candidateKey).join('|'),
+      args.dispatchKey || 'default',
+    ]),
+    idempotencyMetadata: {
+      requestId: args.requestId,
+      recipientEmail: args.recipientEmail,
+      strategy: args.strategy,
       optionKeys: args.options.slice(0, 3).map((option) => option.candidateKey),
     },
     bypassDailyRecipientLimit: true,

@@ -10,6 +10,7 @@ import {
   Layers3,
   MonitorPlay,
   RefreshCcw,
+  Search,
   ShieldAlert,
   Users2,
   type LucideIcon,
@@ -94,6 +95,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   const [organizationId, setOrganizationId] = useState('');
   const [teamId, setTeamId] = useState('');
   const [studyMode, setStudyMode] = useState<'' | StudyModeValue>('');
+  const [pilotSearchQuery, setPilotSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -134,6 +136,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
     setOrganizationId('');
     setTeamId('');
     setStudyMode('');
+    setPilotSearchQuery('');
     void load('refresh');
   };
 
@@ -173,9 +176,26 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
         if (organizationId && entry.organization.id !== organizationId) return false;
         if (teamId && entry.team.id !== teamId) return false;
         if (studyMode && entry.pilot.studyMode !== studyMode) return false;
+        if (pilotSearchQuery.trim()) {
+          const normalizedQuery = pilotSearchQuery.trim().toLowerCase();
+          const searchableText = [
+            entry.pilot.name,
+            entry.pilot.id,
+            entry.pilot.studyMode,
+            entry.team.displayName,
+            entry.team.id,
+            entry.organization.displayName,
+            entry.organization.id,
+            ...entry.cohorts.map((cohort) => cohort.name),
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          if (!searchableText.includes(normalizedQuery)) return false;
+        }
         return true;
       }),
-    [entries, organizationId, studyMode, teamId]
+    [entries, organizationId, pilotSearchQuery, studyMode, teamId]
   );
 
   const summary = useMemo(
@@ -453,7 +473,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
     },
   ];
 
-  const areFiltersActive = Boolean(organizationId || teamId || studyMode);
+  const areFiltersActive = Boolean(organizationId || teamId || studyMode || pilotSearchQuery.trim());
   const pilotCountText = loading ? 'Loading pilots...' : error ? 'Directory unavailable' : getPilotCountLabel(filteredEntries.length);
 
   return (
@@ -716,7 +736,17 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                     <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">Filters</span>
                   </div>
 
-                  <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid flex-1 gap-3 md:grid-cols-2 2xl:grid-cols-4">
+                    <label className="relative block">
+                      <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
+                      <input
+                        value={pilotSearchQuery}
+                        onChange={(event) => setPilotSearchQuery(event.target.value)}
+                        placeholder="Search pilots, teams, organizations, cohorts..."
+                        className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-2.5 pl-11 pr-4 text-sm text-white/80 outline-none transition placeholder:text-white/25 hover:border-white/15 hover:text-white focus:border-[#00d4aa]/35"
+                      />
+                    </label>
+
                     <select
                       value={organizationId}
                       onChange={(event) => {
@@ -767,6 +797,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                           setOrganizationId('');
                           setTeamId('');
                           setStudyMode('');
+                          setPilotSearchQuery('');
                         }}
                         className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-white/60 transition hover:bg-white/[0.06] hover:text-white"
                       >
@@ -799,7 +830,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                   <div className="pilot-fade-in rounded-[28px] border border-white/10 bg-white/[0.03] p-8">
                     <div className="pilot-font-display text-xl font-semibold text-white">No active pilots match the current filters</div>
                     <p className="mt-2 max-w-xl text-sm leading-6 text-white/50">
-                      Adjust the organization, team, or study mode filters to bring pilots back into scope.
+                      Adjust the search, organization, team, or study mode filters to bring pilots back into scope.
                     </p>
                     {areFiltersActive ? (
                       <button
@@ -808,6 +839,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                           setOrganizationId('');
                           setTeamId('');
                           setStudyMode('');
+                          setPilotSearchQuery('');
                         }}
                         className="mt-5 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
                       >

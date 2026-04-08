@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { computeGroupMeetAnalysis } from '../../src/lib/groupMeet';
 import {
+  buildGroupMeetManualFlexPreview,
   buildGroupMeetFlexRoundOptions,
   buildGroupMeetFlexPromptRecipients,
   createGroupMeetFlexActionToken,
@@ -158,6 +159,155 @@ test('group meet flex recipients can include invitees who have not submitted any
   assert.equal(recipients[0].options.length, 3);
 });
 
+test('group meet flex recipients include both blockers when a strong candidate is missing two people', () => {
+  const invites = [
+    {
+      token: 'host-token',
+      name: 'Tremaine Grant',
+      email: 'tre@fitwithpulse.ai',
+      participantType: 'host' as const,
+      shareUrl: 'https://fitwithpulse.ai/group-meet/host-token',
+      emailStatus: 'manual_only' as const,
+      emailError: null,
+      respondedAt: '2026-03-31T12:00:00.000Z',
+      availabilityCount: 1,
+      availabilityEntries: [{ date: '2026-04-10', startMinutes: 540, endMinutes: 720 }],
+    },
+    {
+      token: 'guest-one',
+      name: 'Bobby Weke',
+      email: 'bobby@fitwithpulse.ai',
+      participantType: 'participant' as const,
+      shareUrl: 'https://fitwithpulse.ai/group-meet/guest-one',
+      emailStatus: 'sent' as const,
+      emailError: null,
+      respondedAt: '2026-03-31T12:15:00.000Z',
+      availabilityCount: 1,
+      availabilityEntries: [{ date: '2026-04-10', startMinutes: 540, endMinutes: 720 }],
+    },
+    {
+      token: 'guest-two',
+      name: 'Valerie Alexander',
+      email: 'valerie@speakhappiness.com',
+      participantType: 'participant' as const,
+      shareUrl: 'https://fitwithpulse.ai/group-meet/guest-two',
+      emailStatus: 'sent' as const,
+      emailError: null,
+      respondedAt: '2026-03-31T12:30:00.000Z',
+      availabilityCount: 1,
+      availabilityEntries: [{ date: '2026-04-10', startMinutes: 540, endMinutes: 720 }],
+    },
+    {
+      token: 'guest-three',
+      name: 'Marques Zak',
+      email: 'mzak@theacc.org',
+      participantType: 'participant' as const,
+      shareUrl: 'https://fitwithpulse.ai/group-meet/guest-three',
+      emailStatus: 'sent' as const,
+      emailError: null,
+      respondedAt: null,
+      availabilityCount: 0,
+      availabilityEntries: [],
+    },
+    {
+      token: 'guest-four',
+      name: 'DeRay McKesson',
+      email: 'deray@campaignzero.org',
+      participantType: 'participant' as const,
+      shareUrl: 'https://fitwithpulse.ai/group-meet/guest-four',
+      emailStatus: 'sent' as const,
+      emailError: null,
+      respondedAt: null,
+      availabilityCount: 0,
+      availabilityEntries: [],
+    },
+  ];
+
+  const analysis = computeGroupMeetAnalysis(invites, 60);
+  const recipients = buildGroupMeetFlexPromptRecipients({
+    analysis,
+    invites,
+    maxOptionsPerRecipient: 3,
+    includeHost: false,
+    referenceDate: '2026-04-08T12:00:00.000Z',
+  });
+
+  assert.equal(recipients.length, 2);
+  assert.deepEqual(
+    recipients.map((recipient) => recipient.inviteToken).sort(),
+    ['guest-four', 'guest-three']
+  );
+  assert.equal(
+    recipients.every((recipient) => recipient.options.length > 0 && recipient.options.every((option) => option.date === '2026-04-10')),
+    true
+  );
+});
+
+test('group meet manual flex preview falls back to shared group options when a participant is not a direct blocker', () => {
+  const invites = [
+    {
+      token: 'host-token',
+      name: 'Tremaine Grant',
+      email: 'tre@fitwithpulse.ai',
+      participantType: 'host' as const,
+      shareUrl: 'https://fitwithpulse.ai/group-meet/host-token',
+      emailStatus: 'manual_only' as const,
+      emailError: null,
+      respondedAt: '2026-03-31T12:00:00.000Z',
+      availabilityCount: 1,
+      availabilityEntries: [{ date: '2026-04-10', startMinutes: 540, endMinutes: 720 }],
+    },
+    {
+      token: 'guest-one',
+      name: 'Bobby Weke',
+      email: 'bobby@fitwithpulse.ai',
+      participantType: 'participant' as const,
+      shareUrl: 'https://fitwithpulse.ai/group-meet/guest-one',
+      emailStatus: 'sent' as const,
+      emailError: null,
+      respondedAt: '2026-03-31T12:15:00.000Z',
+      availabilityCount: 1,
+      availabilityEntries: [{ date: '2026-04-10', startMinutes: 540, endMinutes: 720 }],
+    },
+    {
+      token: 'guest-two',
+      name: 'Valerie Alexander',
+      email: 'valerie@speakhappiness.com',
+      participantType: 'participant' as const,
+      shareUrl: 'https://fitwithpulse.ai/group-meet/guest-two',
+      emailStatus: 'sent' as const,
+      emailError: null,
+      respondedAt: '2026-03-31T12:30:00.000Z',
+      availabilityCount: 1,
+      availabilityEntries: [{ date: '2026-04-10', startMinutes: 540, endMinutes: 720 }],
+    },
+    {
+      token: 'guest-three',
+      name: 'Marques Zak',
+      email: 'mzak@theacc.org',
+      participantType: 'participant' as const,
+      shareUrl: 'https://fitwithpulse.ai/group-meet/guest-three',
+      emailStatus: 'sent' as const,
+      emailError: null,
+      respondedAt: '2026-03-31T12:45:00.000Z',
+      availabilityCount: 1,
+      availabilityEntries: [{ date: '2026-04-10', startMinutes: 540, endMinutes: 720 }],
+    },
+  ];
+
+  const analysis = computeGroupMeetAnalysis(invites, 60);
+  const preview = buildGroupMeetManualFlexPreview({
+    analysis,
+    invites,
+    inviteToken: 'guest-one',
+    referenceDate: '2026-04-08T12:00:00.000Z',
+  });
+
+  assert.equal(preview.strategy, 'group_options');
+  assert.equal(preview.options.length, 3);
+  assert.equal(preview.options[0].date, '2026-04-10');
+});
+
 test('group meet flex dispatch helpers track the deadline date in eastern time', () => {
   assert.equal(getGroupMeetEasternDateKey('2026-04-08T12:00:00.000Z'), '2026-04-08');
   assert.equal(isGroupMeetFlexDispatchTime('2026-04-08T12:00:00.000Z'), true);
@@ -212,4 +362,61 @@ test('group meet flex round options generate a shared top-three option set', () 
 
   assert.equal(options.length, 3);
   assert.equal(options.every((option) => option.date === '2026-04-10'), true);
+});
+
+test('group meet flex round options favor earlier qualifying dates over later flexible dates', () => {
+  const invites = [
+    {
+      token: 'host-token',
+      name: 'Tremaine Grant',
+      email: 'tre@fitwithpulse.ai',
+      participantType: 'host' as const,
+      shareUrl: 'https://fitwithpulse.ai/group-meet/host-token',
+      emailStatus: 'manual_only' as const,
+      emailError: null,
+      respondedAt: '2026-04-01T12:00:00.000Z',
+      availabilityCount: 2,
+      availabilityEntries: [
+        { date: '2026-04-10', startMinutes: 540, endMinutes: 600 },
+        { date: '2026-04-28', startMinutes: 540, endMinutes: 900 },
+      ],
+    },
+    {
+      token: 'guest-one',
+      name: 'Bobby Weke',
+      email: 'bobby@fitwithpulse.ai',
+      participantType: 'participant' as const,
+      shareUrl: 'https://fitwithpulse.ai/group-meet/guest-one',
+      emailStatus: 'sent' as const,
+      emailError: null,
+      respondedAt: '2026-04-01T12:15:00.000Z',
+      availabilityCount: 2,
+      availabilityEntries: [
+        { date: '2026-04-10', startMinutes: 540, endMinutes: 600 },
+        { date: '2026-04-28', startMinutes: 540, endMinutes: 900 },
+      ],
+    },
+    {
+      token: 'guest-two',
+      name: 'Valerie Alexander',
+      email: 'valerie@speakhappiness.com',
+      participantType: 'participant' as const,
+      shareUrl: 'https://fitwithpulse.ai/group-meet/guest-two',
+      emailStatus: 'sent' as const,
+      emailError: null,
+      respondedAt: null,
+      availabilityCount: 0,
+      availabilityEntries: [],
+    },
+  ];
+
+  const analysis = computeGroupMeetAnalysis(invites, 60);
+  const options = buildGroupMeetFlexRoundOptions({
+    analysis,
+    maxOptions: 3,
+    referenceDate: '2026-04-08T12:00:00.000Z',
+  });
+
+  assert.equal(options.length > 0, true);
+  assert.equal(options[0].date, '2026-04-10');
 });

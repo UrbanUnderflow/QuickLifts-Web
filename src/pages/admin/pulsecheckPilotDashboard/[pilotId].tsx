@@ -19,6 +19,7 @@ import {
   QrCode,
   RefreshCcw,
   Save,
+  Search,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -906,6 +907,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [pageMessage, setPageMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
   const [cohortFilter, setCohortFilter] = useState('');
+  const [athleteSearchQuery, setAthleteSearchQuery] = useState('');
   const [inviteCohortId, setInviteCohortId] = useState('');
   const [athleteCohortDrafts, setAthleteCohortDrafts] = useState<Record<string, string>>({});
   const [editingHypotheses, setEditingHypotheses] = useState<Record<string, PulseCheckPilotHypothesis>>({});
@@ -1060,6 +1062,10 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
   useEffect(() => {
     void load();
+  }, [pilotId]);
+
+  useEffect(() => {
+    setAthleteSearchQuery('');
   }, [pilotId]);
 
   useEffect(() => {
@@ -1510,15 +1516,33 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
   const visibleRosterAthletes = useMemo(() => {
     if (!detail) return [];
-    const filtered = cohortFilter
+    const normalizedQuery = athleteSearchQuery.trim().toLowerCase();
+    const filtered = (cohortFilter
       ? detail.rosterAthletes.filter((athlete) => athlete.pilotEnrollment?.cohortId === cohortFilter)
-      : detail.rosterAthletes;
+      : detail.rosterAthletes
+    ).filter((athlete) => {
+      if (!normalizedQuery) return true;
+      const enrollmentBadge = athleteEnrollmentBadgePresentation(athlete.pilotEnrollment?.status);
+      const searchableText = [
+        athlete.displayName,
+        athlete.email,
+        athlete.athleteId,
+        athlete.cohort?.name,
+        athlete.pilotEnrollment?.cohortId,
+        athlete.pilotEnrollment?.status,
+        enrollmentBadge.label,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return searchableText.includes(normalizedQuery);
+    });
     return [...filtered].sort(
       (left, right) =>
         athleteRosterStatusRank(left.pilotEnrollment?.status) - athleteRosterStatusRank(right.pilotEnrollment?.status) ||
         left.displayName.localeCompare(right.displayName)
-      );
-  }, [detail, cohortFilter]);
+    );
+  }, [athleteSearchQuery, cohortFilter, detail]);
 
   const transferTeamOptions = useMemo(() => {
     if (!athleteTransferModal || !detail) return [];
@@ -4017,6 +4041,29 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         first, then you can assign athletes here.
                       </div>
                     ) : null}
+                    <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <label className="relative block w-full max-w-xl">
+                        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                        <input
+                          value={athleteSearchQuery}
+                          onChange={(event) => setAthleteSearchQuery(event.target.value)}
+                          placeholder="Search athletes by name, email, cohort, or status..."
+                          className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] py-3 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-zinc-500 hover:border-white/15 focus:border-cyan-400/35"
+                        />
+                      </label>
+                      <div className="flex items-center gap-3 text-xs text-zinc-500">
+                        <span>{visibleRosterAthletes.length} athlete{visibleRosterAthletes.length === 1 ? '' : 's'} shown</span>
+                        {athleteSearchQuery.trim() ? (
+                          <button
+                            type="button"
+                            onClick={() => setAthleteSearchQuery('')}
+                            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                          >
+                            Clear search
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
                     <div className="mt-4 overflow-x-auto">
                       <table className="min-w-full text-sm">
                         <thead className="text-xs uppercase tracking-wide text-zinc-500">
@@ -4035,7 +4082,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                           {visibleRosterAthletes.length === 0 ? (
                             <tr className="border-t border-white/5">
                               <td colSpan={8} className="px-3 py-6 text-center text-sm text-zinc-500">
-                                No athlete team members match the current cohort filter.
+                                No athlete team members match the current cohort filter or search.
                               </td>
                             </tr>
                           ) : (

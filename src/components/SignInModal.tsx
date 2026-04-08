@@ -26,6 +26,13 @@ import { clearRoundIdRedirect, clearLoginRedirectPath } from '../redux/tempRedir
 import { showToast } from '../redux/toastSlice'; // Import showToast
 import { workoutService } from '../api/firebase/workout/service'; // Import workout service
 import { Challenge } from '../api/firebase/workout/types'; // Import workout types
+import {
+  buildCurrentLegalAcceptance,
+  hasAcceptedCurrentLegal,
+  PRIVACY_POLICY_PATH,
+  TERMS_PATH,
+} from '../utils/legalAcceptance';
+import { dateToUnixTimestamp } from '../utils/formatDate';
 
 interface SignInModalProps {
   isVisible: boolean;
@@ -115,6 +122,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
   const [signUpStep, setSignUpStep] = useState<SignUpStep>("initial");
+  const [hasAcceptedLegal, setHasAcceptedLegal] = useState(false);
+  const [legalFlowContext, setLegalFlowContext] = useState<'signup' | 'signin'>('signup');
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [showError, setShowError] = useState(false);
@@ -135,6 +144,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
     email?: string;
     password?: string;
     username?: string;
+    legal?: string;
   }>({});
   const { roundIdRedirect, loginRedirectPath } = useSelector((state: RootState) => state.tempRedirect);
   const isPulseCheckPage = router.pathname === '/PulseCheck' || router.asPath === '/PulseCheck' || router.asPath.startsWith('/PulseCheck?') || router.asPath.startsWith('/PulseCheck/');
@@ -149,6 +159,40 @@ const SignInModal: React.FC<SignInModalProps> = ({
       setIsIphone(/iPhone/i.test(ua));
     }
   }, []);
+
+  const clearLegalError = () => {
+    setErrors((prev) => ({ ...prev, legal: undefined }));
+  };
+
+  const openLegalAcceptanceStep = (context: 'signup' | 'signin' = 'signin') => {
+    setLegalFlowContext(context);
+    setHasAcceptedLegal(false);
+    clearLegalError();
+    setIsSignUp(true);
+    setSignUpStep('legal');
+    setError(null);
+  };
+
+  const persistCurrentLegalAcceptance = async (
+    userId: string,
+    acceptanceMethod: string
+  ) => {
+    const acceptedAt = new Date();
+    await userService.updateUser(userId, {
+      legalAcceptance: {
+        ...buildCurrentLegalAcceptance(acceptanceMethod, acceptedAt),
+        acceptedAt: dateToUnixTimestamp(acceptedAt),
+      },
+      updatedAt: dateToUnixTimestamp(acceptedAt),
+    });
+
+    const refreshedUser = await userService.fetchUserFromFirestore(userId);
+    if (refreshedUser) {
+      userService.nonUICurrentUser = refreshedUser;
+    }
+
+    return refreshedUser;
+  };
 
   // Add effect to check if we need to show registration
   // GUARDED to prevent infinite loop - only runs when modal is visible
@@ -171,6 +215,14 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
       const onboardingStatus = isOnboardingComplete(currentUser);
       console.log('[SignInModal Onboarding Check Effect] isOnboardingComplete result:', onboardingStatus);
+
+      if (!hasAcceptedCurrentLegal(currentUser)) {
+        console.log('[SignInModal Onboarding Check Effect] Current user missing current legal acceptance. Opening legal step.');
+        if (signUpStep !== 'legal') {
+          openLegalAcceptanceStep('signin');
+        }
+        return;
+      }
 
       if (!onboardingStatus) {
         console.log('[SignInModal Onboarding Check Effect] Onboarding NOT complete. Checking fields...');
@@ -217,6 +269,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
       setErrors({});
       setIsSignUp(false); // Reset to sign-in view
       setSignUpStep('initial'); // Reset step
+      setHasAcceptedLegal(false);
+      setLegalFlowContext('signup');
       setIsForgotPassword(false); // Reset forgot password state
       setResetEmailSent(false);
     }
@@ -258,6 +312,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
           subscriptionType: firestoreUser.subscriptionType,
           timestamp: new Date().toISOString()
         });
+
+        if (!hasAcceptedCurrentLegal(firestoreUser)) {
+          console.log('[SignInModal] User missing current legal acceptance, pausing auth flow.');
+          openLegalAcceptanceStep('signin');
+          setIsLoading(false);
+          return;
+        }
 
         // --- Onboarding completeness check ---
         if (!isOnboardingComplete(firestoreUser)) {
@@ -302,6 +363,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   const handleSocialAuth = async (provider: "google" | "apple") => {
     try {
+      if (isSignUp && !hasAcceptedLegal) {
+        setErrors((prev) => ({
+          ...prev,
+          legal: 'You must agree to the Terms and Privacy Policy before creating an account',
+        }));
+        setShowError(true);
+        setError('Please agree to the Terms and Privacy Policy to continue');
+        return;
+      }
+
       console.log(`[SignInModal] Starting ${provider} auth:`, {
         timestamp: new Date().toISOString()
       });
@@ -327,11 +398,21 @@ const SignInModal: React.FC<SignInModalProps> = ({
               id: user.uid,
               email: user.email || "",
               displayName: user.displayName || "",
+              legalAcceptance: isSignUp
+                ? buildCurrentLegalAcceptance('web-modal-social-signup-apple')
+                : null,
             });
             await userService.updateUser(user.uid, firestoreUser);
           }
           
           userService.nonUICurrentUser = firestoreUser; // Use nonUICurrentUser
+
+          if (!hasAcceptedCurrentLegal(firestoreUser)) {
+            console.log('[SignInModal] Apple sign-in: legal acceptance missing, opening legal step');
+            openLegalAcceptanceStep('signin');
+            setIsLoading(false);
+            return;
+          }
 
           // If missing username, start registration flow (mirror Google path)
           if (!firestoreUser.username) {
@@ -402,7 +483,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
             email: user.email,
             displayName: user.displayName || "",
             registrationComplete: false,
-            subscriptionType: SubscriptionType.unsubscribed
+            subscriptionType: SubscriptionType.unsubscribed,
+            legalAcceptance: isSignUp
+              ? buildCurrentLegalAcceptance('web-modal-social-signup-google')
+              : null,
           });
           await userService.updateUser(user.uid, firestoreUser);
           console.log('Google Sign In - Created New User:', firestoreUser);
@@ -414,6 +498,12 @@ const SignInModal: React.FC<SignInModalProps> = ({
         }
         userService.nonUICurrentUser = firestoreUser; // Use nonUICurrentUser
         console.log('Google Sign In - Current User Set:', userService.nonUICurrentUser); // Use nonUICurrentUser
+        if (!hasAcceptedCurrentLegal(firestoreUser)) {
+          console.log('[SignInModal] Google sign-in: legal acceptance missing, opening legal step');
+          openLegalAcceptanceStep('signin');
+          setIsLoading(false);
+          return;
+        }
         // Fix: Check if username is missing (using truthy check) instead of empty string comparison
         console.log("Username check:", {
           username: firestoreUser.username,
@@ -598,10 +688,21 @@ const SignInModal: React.FC<SignInModalProps> = ({
             id: user.uid,
             email: user.email,
             displayName: user.displayName || "",
+            legalAcceptance: null,
           });
           await userService.updateUser(user.uid, firestoreUser);
           addLog(`Created new Firestore user: ${firestoreUser.id}`);
         } else if (firestoreUser) {
+          if (!hasAcceptedCurrentLegal(firestoreUser)) {
+            setIsSignUp(true);
+            setLegalFlowContext('signin');
+            setHasAcceptedLegal(false);
+            setSignUpStep('legal');
+            addLog('User missing legal acceptance, opening legal step');
+            setIsLoading(false);
+            return;
+          }
+
           // Check if username is missing - highest priority
           if (!firestoreUser.username) {
             setIsSignUp(true);
@@ -758,6 +859,62 @@ const SignInModal: React.FC<SignInModalProps> = ({
       return; // Important: Stop handleSubmit execution after profile step
     }
 
+    if (signUpStep === "legal") {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        if (!hasAcceptedLegal) {
+          setErrors((prev) => ({
+            ...prev,
+            legal: 'You must agree to the Terms and Privacy Policy before continuing',
+          }));
+          setShowError(true);
+          setIsLoading(false);
+          return;
+        }
+
+        const userId = auth.currentUser?.uid;
+        if (!userId) {
+          throw new Error('No authenticated user found for legal acceptance');
+        }
+
+        const refreshedUser = await persistCurrentLegalAcceptance(
+          userId,
+          legalFlowContext === 'signup'
+            ? 'web-modal-signup-acceptance'
+            : 'web-modal-existing-user-refresh'
+        );
+
+        if (!refreshedUser) {
+          throw new Error('Could not refresh the account after legal acceptance');
+        }
+
+        setHasAcceptedLegal(false);
+        clearLegalError();
+
+        if (!refreshedUser.username) {
+          setSignUpStep('profile');
+          return;
+        }
+
+        if (!isOnboardingComplete(refreshedUser)) {
+          setSignUpStep('quiz-prompt');
+          return;
+        }
+
+        if (auth.currentUser) {
+          await handleSignInSuccess(auth.currentUser);
+        }
+      } catch (err) {
+        console.error('[SignInModal Legal Step] Error saving acceptance:', err);
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
     if (!isSignUp) {
       try {
         setIsLoading(true);
@@ -774,6 +931,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
         });
 
         if (userDoc) {
+          if (!hasAcceptedCurrentLegal(userDoc)) {
+            console.log('[SignInModal] Existing user missing legal acceptance, opening legal step');
+            openLegalAcceptanceStep('signin');
+            setIsLoading(false);
+            return;
+          }
+
           // Check if username is missing
           if (!userDoc.username) {
             console.log('[SignInModal] User missing username, starting registration');
@@ -866,6 +1030,17 @@ const SignInModal: React.FC<SignInModalProps> = ({
             setIsLoading(false);
             return;
           }
+
+          if (!hasAcceptedLegal) {
+            setErrors((prev) => ({
+              ...prev,
+              legal: 'You must agree to the Terms and Privacy Policy before creating an account',
+            }));
+            setError('Please agree to the Terms and Privacy Policy to continue');
+            setShowError(true);
+            setIsLoading(false);
+            return;
+          }
           
           try {
             // Create the Firebase Auth user
@@ -886,6 +1061,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 email: user.email,
                 subscriptionType: SubscriptionType.unsubscribed, // Default for new user
                 registrationComplete: false, // Explicitly false initially
+                legalAcceptance: buildCurrentLegalAcceptance('web-modal-signup-email'),
                 createdAt: new Date(), // Add createdAt
                 updatedAt: new Date(),  // Add updatedAt
                 // If a gym inviteCode was provided, persist it so backend can resolve it
@@ -1890,6 +2066,53 @@ const SignInModal: React.FC<SignInModalProps> = ({
     </>
   );
 
+  const renderLegalAcceptanceField = (helperText?: string) => (
+    <div className={`rounded-xl border p-4 ${errors.legal ? 'border-red-500/70 bg-red-950/20' : 'border-zinc-800 bg-black/30'}`}>
+      <label className="flex items-start gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={hasAcceptedLegal}
+          onChange={(e) => {
+            setHasAcceptedLegal(e.target.checked);
+            if (e.target.checked) {
+              clearLegalError();
+              setError(null);
+              setShowError(false);
+            }
+          }}
+          className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-[#E0FE10] focus:ring-[#E0FE10]"
+        />
+        <span className="text-sm leading-6 text-zinc-300">
+          I agree to Pulse&apos;s{' '}
+          <a
+            href={TERMS_PATH}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#E0FE10] hover:text-[#c8e60e] underline underline-offset-2"
+          >
+            Terms of Service
+          </a>{' '}
+          and{' '}
+          <a
+            href={PRIVACY_POLICY_PATH}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#E0FE10] hover:text-[#c8e60e] underline underline-offset-2"
+          >
+            Privacy Policy
+          </a>
+          .
+        </span>
+      </label>
+      {helperText && (
+        <p className="mt-3 text-xs leading-5 text-zinc-500">{helperText}</p>
+      )}
+      {errors.legal && (
+        <p className="mt-2 text-sm text-red-400">{errors.legal}</p>
+      )}
+    </div>
+  );
+
   const renderPasswordStep = () => (
     <>
       <div className="text-center mb-8">
@@ -2035,6 +2258,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
           </div>
         </div>
 
+        {renderLegalAcceptanceField('Create your account only after reviewing both documents. We save a versioned acceptance record when you continue.')}
+
         {/* Add a Back button */}
         <button
           type="button"
@@ -2043,6 +2268,46 @@ const SignInModal: React.FC<SignInModalProps> = ({
         >
           Back
         </button>
+      </div>
+    </>
+  );
+
+  const renderLegalStep = () => (
+    <>
+      <div className="text-center mb-8">
+        <h2 className="text-2xl font-bold text-white font-['Thunder'] mb-2">
+          Review our legal terms
+        </h2>
+        <p className="text-zinc-400 font-['HK Grotesk'] text-sm">
+          We&apos;ve updated our Terms of Service and Privacy Policy. Please review them before continuing.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <div className="rounded-xl border border-zinc-800 bg-black/30 p-4">
+          <div className="space-y-3">
+            <a
+              href={TERMS_PATH}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-200 transition-colors hover:border-[#E0FE10]/60 hover:text-white"
+            >
+              <span>Open Terms of Service</span>
+              <span className="text-[#E0FE10]">View</span>
+            </a>
+            <a
+              href={PRIVACY_POLICY_PATH}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-200 transition-colors hover:border-[#E0FE10]/60 hover:text-white"
+            >
+              <span>Open Privacy Policy</span>
+              <span className="text-[#E0FE10]">View</span>
+            </a>
+          </div>
+        </div>
+
+        {renderLegalAcceptanceField('You only need to do this when creating an account or when the current legal version changes.')}
       </div>
     </>
   );
@@ -2214,17 +2479,21 @@ const SignInModal: React.FC<SignInModalProps> = ({
         </div>
 
         {isSignUp && (
-          <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-2 font-['HK Grotesk']">
-              Gym invite code <span className="text-zinc-500 text-xs">(optional)</span>
-            </label>
-            <input
-              type="text"
-              value={inviteCode}
-              onChange={(e) => setInviteCode(e.target.value.trim())}
-              className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
-              placeholder="Enter your gym's invite code if you have one"
-            />
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-2 font-['HK Grotesk']">
+                Gym invite code <span className="text-zinc-500 text-xs">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value.trim())}
+                className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
+                placeholder="Enter your gym's invite code if you have one"
+              />
+            </div>
+
+            {renderLegalAcceptanceField('Social signup and email signup both require explicit agreement before your account is created.')}
           </div>
         )}
 
@@ -2338,6 +2607,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
       switch (signUpStep) {
         case "password":
           return renderPasswordStep();
+        case "legal":
+          return renderLegalStep();
         case "profile":
           return renderProfileStep();
         case "quiz-prompt":
@@ -2367,6 +2638,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
     setConfirmPassword("");
     setUsername("");
     setProfileImage(null);
+    setHasAcceptedLegal(false);
+    setLegalFlowContext('signup');
   };
 
   // Add debug logging for props (ONLY when visible to prevent loop)
@@ -2433,6 +2706,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
       if (!userDoc) {
         console.error('[SignInModal] handleSignInSuccess: User document not found in Firestore');
         setError('User profile could not be loaded. Please try again.');
+        return;
+      }
+
+      if (!hasAcceptedCurrentLegal(userDoc)) {
+        console.log('[SignInModal] handleSignInSuccess: Missing current legal acceptance. Opening legal step.');
+        openLegalAcceptanceStep('signin');
+        setIsLoading(false);
         return;
       }
       
@@ -2577,7 +2857,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
                   ? signUpStep === "profile"
                     ? "Complete"
                     : signUpStep === "password"
-                    ? "Continue"
+                    ? "Create Account"
+                    : signUpStep === "legal"
+                    ? "Agree & Continue"
                     : "Continue with Email"
                   : "Sign In"}
               </button>
