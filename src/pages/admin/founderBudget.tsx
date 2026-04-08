@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { db } from '../../api/firebase/config';
+import { auth, db, storage } from '../../api/firebase/config';
 import {
   collection,
   deleteDoc,
@@ -17,15 +17,20 @@ import {
   Briefcase,
   Calendar,
   DollarSign,
+  ImagePlus,
   Loader2,
   Plus,
   Receipt,
   RefreshCw,
   RotateCcw,
   Save,
+  Sparkles,
   Trash2,
+  Upload,
   Wallet,
+  X,
 } from 'lucide-react';
+import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 
 type BudgetScope = 'personal' | 'business';
 
@@ -65,6 +70,25 @@ interface DraftSelectionResult {
   draft: FounderBudgetDraft;
   statusMessage: string;
   hasPersistedRecord: boolean;
+}
+
+interface ParsedExpenseImport {
+  date?: string;
+  label?: string;
+  amount?: number | string;
+  paymentMethod?: string;
+  notes?: string;
+}
+
+interface ParseExpenseImportResponse {
+  success?: boolean;
+  error?: string;
+  expenses?: ParsedExpenseImport[];
+  summary?: {
+    parsedCount?: number;
+    newCount?: number;
+    duplicateCount?: number;
+  };
 }
 
 const CURRENT_DATE = new Date();
@@ -198,6 +222,8 @@ const cloneBudgetDraft = (draft: FounderBudgetDraft): FounderBudgetDraft => ({
 
 const sanitizeMoneyInput = (value: string) => value.replace(/[^0-9.-]/g, '');
 
+const sanitizeFileName = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, '-');
+
 const moneyStringToNumber = (value: string) => {
   const parsed = Number.parseFloat(sanitizeMoneyInput(value));
   return Number.isFinite(parsed) ? parsed : 0;
@@ -232,6 +258,91 @@ const monthYearLabel = (month: number, year: number) => `${monthLabel(month)} ${
 
 const buildBudgetDocId = (scope: BudgetScope, year: number, month: number) =>
   `${scope}-${year}-${String(month).padStart(2, '0')}`;
+
+const normalizePaymentMethod = (value?: string) =>
+  PAYMENT_METHOD_OPTIONS.includes(value || '') ? (value as string) : 'Other';
+
+const normalizeExpenseLabel = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/https?:\/\//g, ' ')
+    .replace(/www\./g, ' ')
+    .replace(/\b\d{4,}\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const labelsLikelyMatch = (left: string, right: string) => {
+  const normalizedLeft = normalizeExpenseLabel(left);
+  const normalizedRight = normalizeExpenseLabel(right);
+
+  if (!normalizedLeft || !normalizedRight) return false;
+  if (normalizedLeft === normalizedRight) return true;
+  if (normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft)) return true;
+
+  const leftTokens = normalizedLeft.split(' ').filter((token) => token.length > 2);
+  const rightTokens = normalizedRight.split(' ').filter((token) => token.length > 2);
+  if (!leftTokens.length || !rightTokens.length) return false;
+
+  const overlapCount = leftTokens.filter((token) => rightTokens.includes(token)).length;
+  return overlapCount >= Math.max(1, Math.min(leftTokens.length, rightTokens.length) - 1);
+};
+
+const expensesLikelyMatch = (
+  left: Pick<MiscExpenseDraft, 'date' | 'label' | 'amount'>,
+  right: Pick<MiscExpenseDraft, 'date' | 'label' | 'amount'>
+) => {
+  const leftAmount = moneyStringToNumber(String(left.amount || ''));
+  const rightAmount = moneyStringToNumber(String(right.amount || ''));
+  if (Math.abs(leftAmount - rightAmount) > 0.009) return false;
+  if (!labelsLikelyMatch(left.label || '', right.label || '')) return false;
+
+  if (left.date && right.date) {
+    return left.date === right.date;
+  }
+
+  return true;
+};
+
+const buildImportedMiscExpenses = (
+  existingExpenses: MiscExpenseDraft[],
+  parsedExpenses: ParsedExpenseImport[]
+) => {
+  const comparisonPool = existingExpenses.map((expense) => ({ ...expense }));
+  const addedExpenses: MiscExpenseDraft[] = [];
+  let duplicateCount = 0;
+
+  parsedExpenses.forEach((expense) => {
+    const label = typeof expense.label === 'string' ? expense.label.trim() : '';
+    const amount = compactMoneyString(expense.amount);
+    const candidate: MiscExpenseDraft = {
+      id: createMiscExpense().id,
+      date: typeof expense.date === 'string' ? expense.date : '',
+      label,
+      amount,
+      paymentMethod: normalizePaymentMethod(expense.paymentMethod),
+      notes: typeof expense.notes === 'string' ? expense.notes.trim() : '',
+    };
+
+    if (!candidate.label || moneyStringToNumber(candidate.amount) === 0) {
+      return;
+    }
+
+    const isDuplicate = comparisonPool.some((existingExpense) => expensesLikelyMatch(existingExpense, candidate));
+    if (isDuplicate) {
+      duplicateCount += 1;
+      return;
+    }
+
+    addedExpenses.push(candidate);
+    comparisonPool.push(candidate);
+  });
+
+  return {
+    addedExpenses,
+    duplicateCount,
+  };
+};
 
 const timestampToDate = (value: unknown): Date | null => {
   if (value instanceof Date) return value;
@@ -418,10 +529,12 @@ const buildDraftForSelection = (
 
 const FounderBudgetAdminPage: React.FC = () => {
   const router = useRouter();
+  const expenseScreenshotInputRef = useRef<HTMLInputElement | null>(null);
   const [records, setRecords] = useState<FounderBudgetRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [parsingExpenseScreenshots, setParsingExpenseScreenshots] = useState(false);
   const [activeScope, setActiveScope] = useState<BudgetScope>('business');
   const [selectedMonth, setSelectedMonth] = useState(DEFAULT_MONTH);
   const [selectedYear, setSelectedYear] = useState(DEFAULT_YEAR);
@@ -430,6 +543,9 @@ const FounderBudgetAdminPage: React.FC = () => {
   const [selectionStatus, setSelectionStatus] = useState('Loading founder budget...');
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [hasPersistedRecord, setHasPersistedRecord] = useState(false);
+  const [expenseImportMessage, setExpenseImportMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [expenseScreenshotFiles, setExpenseScreenshotFiles] = useState<File[]>([]);
+  const [expenseScreenshotPreviewUrls, setExpenseScreenshotPreviewUrls] = useState<string[]>([]);
 
   const comparableDraft = JSON.stringify(buildComparableDraft(draft));
   const comparableBaseline = JSON.stringify(buildComparableDraft(baselineDraft));
@@ -524,6 +640,12 @@ const FounderBudgetAdminPage: React.FC = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
 
+  useEffect(() => {
+    return () => {
+      expenseScreenshotPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [expenseScreenshotPreviewUrls]);
+
   const confirmNavigationWithUnsavedChanges = () => {
     if (!hasUnsavedChanges || typeof window === 'undefined') return true;
     return window.confirm('You have unsaved founder budget edits. Leave this month without saving?');
@@ -616,6 +738,155 @@ const FounderBudgetAdminPage: React.FC = () => {
       ...currentDraft,
       miscExpenses: currentDraft.miscExpenses.filter((expense) => expense.id !== expenseId),
     }));
+  };
+
+  const clearExpenseScreenshotSelection = () => {
+    setExpenseScreenshotPreviewUrls((currentUrls) => {
+      currentUrls.forEach((url) => URL.revokeObjectURL(url));
+      return [];
+    });
+    setExpenseScreenshotFiles([]);
+  };
+
+  const removeExpenseScreenshot = (index: number) => {
+    setExpenseScreenshotFiles((currentFiles) => currentFiles.filter((_, fileIndex) => fileIndex !== index));
+    setExpenseScreenshotPreviewUrls((currentUrls) => {
+      const nextUrls = currentUrls.filter((_, urlIndex) => urlIndex !== index);
+      if (currentUrls[index]) {
+        URL.revokeObjectURL(currentUrls[index]);
+      }
+      return nextUrls;
+    });
+  };
+
+  const uploadExpenseImportImageToStorage = async (file: File) => {
+    const activeUserId = auth.currentUser?.uid || 'admin';
+    const filePath = `founder-budget-imports/${activeUserId}/${selectedYear}-${String(selectedMonth).padStart(2, '0')}/${Date.now()}-${sanitizeFileName(file.name)}`;
+    const screenshotRef = storageRef(storage, filePath);
+
+    await uploadBytes(screenshotRef, file, {
+      contentType: file.type || 'image/png',
+    });
+
+    return getDownloadURL(screenshotRef);
+  };
+
+  const importExpenseScreenshots = async (filesToImport: File[]) => {
+    if (!filesToImport.length) {
+      setExpenseImportMessage({
+        type: 'error',
+        text: 'Choose at least one screenshot to import.',
+      });
+      return;
+    }
+
+    setParsingExpenseScreenshots(true);
+    setExpenseImportMessage(null);
+
+    try {
+      const imageUrls = await Promise.all(filesToImport.map((file) => uploadExpenseImportImageToStorage(file)));
+
+      const response = await fetch('/api/admin/founder-budget/parse-expenses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageUrls,
+          targetMonth: selectedMonth,
+          targetYear: selectedYear,
+          existingExpenses: draft.miscExpenses.map((expense) => ({
+            date: expense.date,
+            label: expense.label,
+            amount: moneyStringToNumber(expense.amount),
+            paymentMethod: expense.paymentMethod,
+            notes: expense.notes,
+          })),
+        }),
+      });
+
+      const result = (await response.json()) as ParseExpenseImportResponse;
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Unable to parse screenshot expenses.');
+      }
+
+      const parsedExpenses = Array.isArray(result.expenses) ? result.expenses : [];
+      let mergeResult = { addedExpenses: [] as MiscExpenseDraft[], duplicateCount: 0 };
+
+      setDraft((currentDraft) => {
+        mergeResult = buildImportedMiscExpenses(currentDraft.miscExpenses, parsedExpenses);
+
+        if (!mergeResult.addedExpenses.length) {
+          return currentDraft;
+        }
+
+        return {
+          ...currentDraft,
+          miscExpenses: [...currentDraft.miscExpenses, ...mergeResult.addedExpenses],
+        };
+      });
+
+      const apiDuplicateCount = result.summary?.duplicateCount || 0;
+      const totalDuplicateCount = Math.max(apiDuplicateCount, mergeResult.duplicateCount);
+
+      if (mergeResult.addedExpenses.length > 0) {
+        setExpenseImportMessage({
+          type: 'success',
+          text:
+            mergeResult.addedExpenses.length === 1
+              ? `Imported 1 new misc expense. Skipped ${totalDuplicateCount} duplicate${totalDuplicateCount === 1 ? '' : 's'}.`
+              : `Imported ${mergeResult.addedExpenses.length} new misc expenses. Skipped ${totalDuplicateCount} duplicate${totalDuplicateCount === 1 ? '' : 's'}.`,
+        });
+      } else {
+        setExpenseImportMessage({
+          type: 'info',
+          text:
+            totalDuplicateCount > 0
+              ? 'Everything in that screenshot already exists in this month, so nothing new was added.'
+              : 'No new expense rows were detected in that screenshot.',
+        });
+      }
+
+      clearExpenseScreenshotSelection();
+    } catch (error) {
+      console.error('Error importing founder budget screenshot:', error);
+      setExpenseImportMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to import screenshot expenses right now.',
+      });
+    } finally {
+      setParsingExpenseScreenshots(false);
+    }
+  };
+
+  const handleExpenseScreenshotUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+
+    if (!files.length) return;
+
+    const imageFiles = files.filter((file) => file.type.startsWith('image/'));
+    if (!imageFiles.length) {
+      setExpenseImportMessage({
+        type: 'error',
+        text: 'Only image files can be imported into misc expenses.',
+      });
+      return;
+    }
+
+    const previewUrls = imageFiles.map((file) => URL.createObjectURL(file));
+    clearExpenseScreenshotSelection();
+    setExpenseScreenshotFiles(imageFiles);
+    setExpenseScreenshotPreviewUrls(previewUrls);
+
+    if (files.length !== imageFiles.length) {
+      setExpenseImportMessage({
+        type: 'info',
+        text: 'Some selected files were skipped because they were not images.',
+      });
+    }
+
+    await importExpenseScreenshots(imageFiles);
   };
 
   const handleResetDraft = () => {
@@ -1140,13 +1411,95 @@ const FounderBudgetAdminPage: React.FC = () => {
                       Month-specific spends that belong at the bottom of the sheet.
                     </p>
                   </div>
-                  <button
-                    onClick={addMiscExpenseRow}
-                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-[#111417] px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-600 hover:text-white"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add line item
-                  </button>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <input
+                      ref={expenseScreenshotInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleExpenseScreenshotUpload}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => expenseScreenshotInputRef.current?.click()}
+                      disabled={parsingExpenseScreenshots}
+                      className="inline-flex items-center gap-2 rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-sm text-sky-100 transition hover:bg-sky-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {parsingExpenseScreenshots ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                      Upload screenshot
+                    </button>
+                    <button
+                      onClick={addMiscExpenseRow}
+                      className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-[#111417] px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-600 hover:text-white"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add line item
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border-b border-zinc-800 px-5 py-5 md:px-6">
+                  <div className="rounded-[24px] border border-zinc-800 bg-[#111417] p-4 md:p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="max-w-2xl">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                          <ImagePlus className="h-4 w-4 text-[#E0FE10]" />
+                          Screenshot Importer
+                        </div>
+                        <p className="mt-2 text-sm text-zinc-400">
+                          Upload one or more screenshots of expenses and the importer will parse them into misc line
+                          items for {monthYearLabel(selectedMonth, selectedYear)}. Duplicate rows already on this month
+                          are skipped automatically, so re-uploading the full list only adds anything new.
+                        </p>
+                      </div>
+
+                      {expenseScreenshotFiles.length > 0 && (
+                        <button
+                          onClick={() => importExpenseScreenshots(expenseScreenshotFiles)}
+                          disabled={parsingExpenseScreenshots}
+                          className="inline-flex items-center gap-2 rounded-xl border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-4 py-2 text-sm text-[#F1FFB6] transition hover:bg-[#E0FE10]/15 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {parsingExpenseScreenshots ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                          Retry import
+                        </button>
+                      )}
+                    </div>
+
+                    {expenseImportMessage && (
+                      <div
+                        className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
+                          expenseImportMessage.type === 'success'
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
+                            : expenseImportMessage.type === 'error'
+                              ? 'border-red-500/30 bg-red-500/10 text-red-100'
+                              : 'border-sky-500/30 bg-sky-500/10 text-sky-100'
+                        }`}
+                      >
+                        {expenseImportMessage.text}
+                      </div>
+                    )}
+
+                    {expenseScreenshotPreviewUrls.length > 0 && (
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        {expenseScreenshotPreviewUrls.map((previewUrl, index) => (
+                          <div key={previewUrl} className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-[#1a1e24]">
+                            <img
+                              src={previewUrl}
+                              alt={`Expense screenshot ${index + 1}`}
+                              className="h-36 w-full object-cover"
+                            />
+                            <button
+                              onClick={() => removeExpenseScreenshot(index)}
+                              className="absolute right-2 top-2 rounded-full bg-black/70 p-1.5 text-white transition hover:bg-black"
+                              aria-label={`Remove screenshot ${index + 1}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto px-3 py-3 md:px-4 md:py-4">
