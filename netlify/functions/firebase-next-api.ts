@@ -334,6 +334,7 @@ const ROUTE_ENTRIES: RouteEntry[] = [
   { pattern: '/api/agent/kickoff-mission', loadHandler: () => import('../../src/pages/api/agent/kickoff-mission.ts') },
   { pattern: '/api/backfill-badges', loadHandler: () => import('../../src/pages/api/backfill-badges.ts') },
   { pattern: '/api/group-meet/calendar/google/callback', loadHandler: () => import('../../src/pages/api/group-meet/calendar/google/callback.ts') },
+  { pattern: '/api/group-meet/flex/[token]', loadHandler: () => import('../../src/pages/api/group-meet/flex/[token].ts') },
   { pattern: '/api/group-meet/host-selection/[token]', loadHandler: () => import('../../src/pages/api/group-meet/host-selection/[token].ts') },
   { pattern: '/api/group-meet/[token]/calendar/google/connect/start', loadHandler: () => import('../../src/pages/api/group-meet/[token]/calendar/google/connect/start.ts') },
   { pattern: '/api/group-meet/[token]/calendar/google/import', loadHandler: () => import('../../src/pages/api/group-meet/[token]/calendar/google/import.ts') },

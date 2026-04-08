@@ -5,6 +5,7 @@ const { spawnSync } = require('node:child_process');
 const {
   createApiResponseRecorder,
   createGuestCalendarConnectStartHandlerRuntime,
+  createPublicFlexHandlerRuntime,
   createPublicInviteHandlerRuntime,
   loadGuestGoogleCalendarRuntime,
   loadGoogleCalendarRuntime,
@@ -581,6 +582,41 @@ test('guest Google connect start route returns structured debug metadata on fail
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
   );
   assert.deepEqual(state.firebaseAppSelections, [true]);
+});
+
+test('public flex endpoint adds the selected slot and notifies the host', { concurrency: false }, async () => {
+  const { handler, state } = createPublicFlexHandlerRuntime();
+  const response = createApiResponseRecorder();
+
+  await handler(
+    {
+      method: 'POST',
+      query: { token: 'flex-token-123' },
+      headers: { host: 'fitwithpulse.ai' },
+    },
+    response
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.payload.requestTitle, 'Group Meet');
+  assert.deepEqual(response.payload.selectedSlot, {
+    date: '2026-04-08',
+    startMinutes: 600,
+    endMinutes: 660,
+  });
+  assert.deepEqual(state.firebaseAppSelections, [false]);
+
+  const updatedInvite = state.inviteDocs.get('guest-token');
+  assert.deepEqual(updatedInvite.availabilityEntries, [
+    {
+      date: '2026-04-08',
+      startMinutes: 600,
+      endMinutes: 660,
+    },
+  ]);
+  assert.equal(state.requestData.responseCount, 2);
+  assert.equal(state.hostNotificationCalls.length, 1);
+  assert.equal(state.hostNotificationCalls[0].responseAction, 'added');
 });
 
 test('guest Google debug classification explains generic config-unavailable failures', { concurrency: false }, () => {

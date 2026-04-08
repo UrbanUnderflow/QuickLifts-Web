@@ -26,7 +26,7 @@ test('firebase-next-api exposes the full migrated route count and matches dynami
   const proxyModule = loadProxyModule();
 
   assert.ok(
-    proxyModule.__test.routeCount >= 37,
+    proxyModule.__test.routeCount >= 38,
     'route count should include the current migrated routes and remain tolerant of new additions'
   );
   assert.equal(
@@ -52,6 +52,10 @@ test('firebase-next-api exposes the full migrated route count and matches dynami
   assert.equal(
     proxyModule.__test.resolveRoutePattern('/api/group-meet/calendar/google/callback'),
     '/api/group-meet/calendar/google/callback'
+  );
+  assert.equal(
+    proxyModule.__test.resolveRoutePattern('/api/group-meet/flex/token-123'),
+    '/api/group-meet/flex/[token]'
   );
   assert.equal(
     proxyModule.__test.resolveRoutePattern('/api/group-meet/host-selection/token-123'),
