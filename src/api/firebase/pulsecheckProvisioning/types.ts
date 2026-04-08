@@ -142,13 +142,15 @@ const DEFAULT_PULSECHECK_REQUIRED_CONSENTS_BY_STUDY_MODE: Record<PulseCheckPilot
       body:
         [
           'You are being invited to take part in a PulseCheck pilot connected to your team. This pilot is voluntary. You may choose not to participate or stop participating at any time.',
+          'If you stop participating or withdraw from the pilot, no new pilot data should be collected from your future pilot activity after that point. Information already collected before your withdrawal may still be retained and used to the extent allowed by law, institutional policy, and the pilot procedures described to you.',
           'Because this is a pilot, some features, workflows, recommendations, alerts, and support pathways may change while the pilot is active. Some parts of the experience may be incomplete, experimental, or still being evaluated.',
+          'PulseCheck is not emergency response, not crisis care, and not a substitute for medical care, mental health treatment, or emergency services. If you believe you are in immediate danger, may harm yourself or someone else, or need urgent help, call 911, call or text 988, contact local emergency services, or use the crisis or care resources provided by your school right away.',
           'Potential risks include privacy and security risks associated with digital systems, the possibility of incomplete or inaccurate data, mistaken interpretation, or product workflows that do not operate exactly as intended during the pilot.',
           'You may or may not receive a direct benefit from participating. The pilot may help teams, staff, and product groups understand how to improve the platform and related support workflows.',
           'Nothing in this notice waives any legal rights or releases any party from responsibility where such a release is not allowed by law.',
-          'If you have questions about the pilot, contact: [pilot contact].',
+          'If you have questions about the pilot, contact your team admin or the pilot contact listed in your invitation or onboarding materials.',
         ].join('\n\n'),
-      version: 'v1',
+      version: 'v2',
     },
     {
       id: 'pulsecheck-pilot-privacy-and-data-use-v1',
@@ -156,13 +158,14 @@ const DEFAULT_PULSECHECK_REQUIRED_CONSENTS_BY_STUDY_MODE: Record<PulseCheckPilot
       body:
         [
           'PulseCheck uses the information you share in the app, plus any health or wearable connections you choose to authorize, to operate the pilot experience and improve the product and support workflows connected to it.',
-          'This may include check-ins, readiness trends, session activity, connected health data, support workflow events, and survey feedback collected during the pilot.',
+          'This may include check-ins, readiness or recovery signals, session activity, survey responses, escalation or support workflow events, and connected wearable or health data that you choose to authorize during the pilot.',
           'PulseCheck may share pilot-related information with authorized staff who support your team and, where applicable, with connected care or support partners involved in the pilot workflow. Sharing should be limited to the minimum information needed to operate, review, and improve the pilot.',
-          'If the pilot uses education records or school-linked data, the pilot materials should identify what categories of information are used, for what purpose, and who may receive them.',
+          'If the pilot uses education records or other school-linked data, the pilot materials should identify what categories of records may be disclosed, the purpose of the disclosure, and the person or class of people or organizations that may receive the information, such as authorized university athletics staff, sports medicine or support staff, PulseCheck personnel, or approved support partners involved in the pilot workflow.',
+          'Pilot data may be retained for the period needed to operate, review, document, secure, and improve the pilot, and to satisfy applicable law, institutional policy, contractual obligations, and audit or security requirements. If you withdraw, previously collected information may still be retained and used as allowed by law and policy, and de-identified or aggregated information may continue to be used for pilot review, internal reporting, or product improvement.',
           'Consumer app and wearable data are not automatically protected by HIPAA in every workflow. If a covered provider, covered entity, or business associate is involved in a specific care or support workflow, additional notice or authorization may apply.',
-          'Questions about pilot data use should be directed to: [pilot contact].',
+          'Questions about pilot data use should be directed to your team admin or the pilot contact listed in your invitation or onboarding materials.',
         ].join('\n\n'),
-      version: 'v1',
+      version: 'v2',
     },
   ],
   operational: [
