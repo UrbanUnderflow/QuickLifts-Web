@@ -1,61 +1,81 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import admin, { getFirebaseAdminApp } from '../../../../../lib/firebase-admin';
+import type { NextApiRequest, NextApiResponse } from "next";
+import admin, { getFirebaseAdminApp } from "../../../../../lib/firebase-admin";
 import {
   GROUP_MEET_INVITES_SUBCOLLECTION,
   GROUP_MEET_REQUESTS_COLLECTION,
   mapGroupMeetInviteSummary,
   sendGroupMeetInviteEmail,
   toIso,
-} from '../../../../../lib/groupMeetAdmin';
-import { resolveGroupMeetStatus, type GroupMeetInviteSummary } from '../../../../../lib/groupMeet';
-import { requireAdminRequest } from '../../_auth';
+} from "../../../../../lib/groupMeetAdmin";
+import {
+  resolveGroupMeetStatus,
+  type GroupMeetInviteSummary,
+} from "../../../../../lib/groupMeet";
+import { requireAdminRequest } from "../../_auth";
 
 type SendInvitesResponse = {
   sentCount: number;
   failedCount: number;
   skippedCount: number;
   invites: GroupMeetInviteSummary[];
-  status: 'draft' | 'collecting' | 'closed';
+  status: "draft" | "collecting" | "closed";
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse,
+) {
   const adminUser = await requireAdminRequest(req);
   if (!adminUser) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const requestId = typeof req.query.requestId === 'string' ? req.query.requestId.trim() : '';
+  const requestId =
+    typeof req.query.requestId === "string" ? req.query.requestId.trim() : "";
   if (!requestId) {
-    return res.status(400).json({ error: 'Request id is required.' });
+    return res.status(400).json({ error: "Request id is required." });
   }
 
   const forceDevFirebase =
-    req.headers?.['x-force-dev-firebase'] === 'true' ||
-    req.headers?.['x-force-dev-firebase'] === '1';
+    req.headers?.["x-force-dev-firebase"] === "true" ||
+    req.headers?.["x-force-dev-firebase"] === "1";
 
   try {
     const db = getFirebaseAdminApp(forceDevFirebase).firestore();
-    const requestRef = db.collection(GROUP_MEET_REQUESTS_COLLECTION).doc(requestId);
+    const requestRef = db
+      .collection(GROUP_MEET_REQUESTS_COLLECTION)
+      .doc(requestId);
     const requestDoc = await requestRef.get();
 
     if (!requestDoc.exists) {
-      return res.status(404).json({ error: 'Group Meet request not found.' });
+      return res.status(404).json({ error: "Group Meet request not found." });
     }
 
     const requestData = requestDoc.data() || {};
-    const deadlineAt = toIso(requestData.deadlineAt) || new Date().toISOString();
-    const currentStatus = resolveGroupMeetStatus(deadlineAt, requestData.status);
+    const deadlineAt =
+      toIso(requestData.deadlineAt) || new Date().toISOString();
+    const currentStatus = resolveGroupMeetStatus(
+      deadlineAt,
+      requestData.status,
+      {
+        finalSelection: requestData.finalSelection || null,
+        calendarInvite: requestData.calendarInvite || null,
+      },
+    );
     const invitesSnapshot = await requestRef
       .collection(GROUP_MEET_INVITES_SUBCOLLECTION)
-      .orderBy('createdAt', 'asc')
+      .orderBy("createdAt", "asc")
       .get();
     const hadSentInviteAlready = invitesSnapshot.docs.some((inviteDoc) => {
       const inviteData = inviteDoc.data() || {};
-      return Boolean(toIso(inviteData.emailedAt)) || inviteData.emailStatus === 'sent';
+      return (
+        Boolean(toIso(inviteData.emailedAt)) ||
+        inviteData.emailStatus === "sent"
+      );
     });
 
     let sentCount = 0;
@@ -65,37 +85,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await Promise.all(
       invitesSnapshot.docs.map(async (inviteDoc) => {
         const inviteData = inviteDoc.data() || {};
-        const participantType = inviteData.participantType === 'host' ? 'host' : 'participant';
+        const participantType =
+          inviteData.participantType === "host" ? "host" : "participant";
         const recipientEmail =
-          typeof inviteData.email === 'string' ? inviteData.email.trim().toLowerCase() : '';
-        const currentEmailStatus = inviteData.emailStatus || 'not_sent';
+          typeof inviteData.email === "string"
+            ? inviteData.email.trim().toLowerCase()
+            : "";
+        const currentEmailStatus = inviteData.emailStatus || "not_sent";
         const previousEmailedAt = inviteData.emailedAt || null;
 
-        if (participantType === 'host' || !recipientEmail || currentEmailStatus === 'sent') {
+        if (
+          participantType === "host" ||
+          !recipientEmail ||
+          currentEmailStatus === "sent"
+        ) {
           skippedCount += 1;
           return;
         }
 
         const result = await sendGroupMeetInviteEmail({
-          requestTitle: requestData.title || 'Group Meet',
-          targetMonth: requestData.targetMonth || '',
+          requestTitle: requestData.title || "Group Meet",
+          targetMonth: requestData.targetMonth || "",
           deadlineAt,
-          timezone: requestData.timezone || 'America/New_York',
-          recipientName: inviteData.name || 'there',
+          timezone: requestData.timezone || "America/New_York",
+          recipientName: inviteData.name || "there",
           recipientEmail,
-          shareUrl: inviteData.shareUrl || '',
+          shareUrl: inviteData.shareUrl || "",
         });
 
         const emailStatus = result.success
           ? result.skipped
-            ? currentEmailStatus || 'not_sent'
-            : 'sent'
-          : 'failed';
+            ? currentEmailStatus || "not_sent"
+            : "sent"
+          : "failed";
         const emailError = result.success
           ? result.skipped
-            ? 'Invite send was skipped by the delivery guard.'
+            ? "Invite send was skipped by the delivery guard."
             : null
-          : result.error || 'Failed to send';
+          : result.error || "Failed to send";
 
         if (result.success && !result.skipped) {
           sentCount += 1;
@@ -115,18 +142,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 : previousEmailedAt,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           },
-          { merge: true }
+          { merge: true },
         );
-      })
+      }),
     );
 
     const hasAnySentInvite = hadSentInviteAlready || sentCount > 0;
     const nextStatus =
-      currentStatus === 'closed'
-        ? 'closed'
-        : currentStatus === 'collecting' || hasAnySentInvite
-          ? resolveGroupMeetStatus(deadlineAt, 'collecting')
-          : 'draft';
+      currentStatus === "closed"
+        ? "closed"
+        : currentStatus === "collecting" || hasAnySentInvite
+          ? resolveGroupMeetStatus(deadlineAt, "collecting", {
+              finalSelection: requestData.finalSelection || null,
+              calendarInvite: requestData.calendarInvite || null,
+            })
+          : "draft";
 
     const requestUpdatePayload: Record<string, unknown> = {
       status: nextStatus,
@@ -134,7 +164,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     if (sentCount > 0) {
-      requestUpdatePayload.inviteBatchSentAt = admin.firestore.FieldValue.serverTimestamp();
+      requestUpdatePayload.inviteBatchSentAt =
+        admin.firestore.FieldValue.serverTimestamp();
       requestUpdatePayload.inviteBatchSentByEmail = adminUser.email || null;
     }
 
@@ -142,7 +173,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const updatedInvitesSnapshot = await requestRef
       .collection(GROUP_MEET_INVITES_SUBCOLLECTION)
-      .orderBy('createdAt', 'asc')
+      .orderBy("createdAt", "asc")
       .get();
 
     const payload: SendInvitesResponse = {
@@ -155,7 +186,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json(payload);
   } catch (error: any) {
-    console.error('[group-meet-send] Failed to send draft invites:', error);
-    return res.status(500).json({ error: error?.message || 'Failed to send Group Meet invites.' });
+    console.error("[group-meet-send] Failed to send draft invites:", error);
+    return res
+      .status(500)
+      .json({ error: error?.message || "Failed to send Group Meet invites." });
   }
 }

@@ -1,6 +1,9 @@
-import type { NextApiRequest } from 'next';
-import admin from './firebase-admin';
-import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from '../../netlify/functions/utils/emailSequenceHelpers';
+import type { NextApiRequest } from "next";
+import admin from "./firebase-admin";
+import {
+  buildEmailDedupeKey,
+  sendBrevoTransactionalEmail,
+} from "../../netlify/functions/utils/emailSequenceHelpers";
 import {
   buildGroupMeetShareUrl,
   formatMinutesAsTime,
@@ -10,19 +13,22 @@ import {
   type GroupMeetInviteDetail,
   type GroupMeetInviteSummary,
   type GroupMeetRequestSummary,
-} from './groupMeet';
+} from "./groupMeet";
 import {
   buildGroupMeetFlexSelectionUrl,
   createGroupMeetFlexActionToken,
   type GroupMeetFlexPromptOption,
-} from './groupMeetFlex';
-import { buildGroupMeetHostSelectionUrl, createGroupMeetHostActionToken } from './groupMeetHostActions';
-import { buildGroupMeetGuestCalendarImportSummary } from './groupMeetGuestGoogleCalendar';
-import { computeGroupMeetAiRecommendation } from './groupMeetWorkflow';
+} from "./groupMeetFlex";
+import {
+  buildGroupMeetHostSelectionUrl,
+  createGroupMeetHostActionToken,
+} from "./groupMeetHostActions";
+import { buildGroupMeetGuestCalendarImportSummary } from "./groupMeetGuestGoogleCalendar";
+import { computeGroupMeetAiRecommendation } from "./groupMeetWorkflow";
 
-export const GROUP_MEET_REQUESTS_COLLECTION = 'groupMeetRequests';
-export const GROUP_MEET_INVITES_SUBCOLLECTION = 'groupMeetInvites';
-export const GROUP_MEET_CONTACTS_COLLECTION = 'groupMeetContacts';
+export const GROUP_MEET_REQUESTS_COLLECTION = "groupMeetRequests";
+export const GROUP_MEET_INVITES_SUBCOLLECTION = "groupMeetInvites";
+export const GROUP_MEET_CONTACTS_COLLECTION = "groupMeetContacts";
 
 export const toIso = (value: FirebaseFirestore.Timestamp | null | undefined) =>
   value?.toDate?.().toISOString?.() || null;
@@ -30,7 +36,7 @@ export const toIso = (value: FirebaseFirestore.Timestamp | null | undefined) =>
 export function getGroupMeetBaseUrl(req: NextApiRequest) {
   return (
     process.env.NEXT_PUBLIC_SITE_URL ||
-    `${req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}`
+    `${req.headers["x-forwarded-proto"] || "http"}://${req.headers.host}`
   );
 }
 
@@ -40,17 +46,17 @@ export function getGroupMeetConfiguredBaseUrl(explicitBaseUrl?: string | null) {
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.URL ||
     process.env.DEPLOY_PRIME_URL ||
-    'https://fitwithpulse.ai'
-  ).replace(/\/+$/, '');
+    "https://fitwithpulse.ai"
+  ).replace(/\/+$/, "");
 }
 
 function escapeHtml(input: string) {
-  return (input || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  return (input || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function formatGroupMeetDate(date: string) {
@@ -58,12 +64,12 @@ function formatGroupMeetDate(date: string) {
     return date;
   }
 
-  const [year, month, day] = date.split('-').map(Number);
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
+  const [year, month, day] = date.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
   }).format(new Date(Date.UTC(year, (month || 1) - 1, day || 1, 12, 0, 0)));
 }
 
@@ -77,21 +83,30 @@ function formatGroupMeetCandidateLabel(args: {
 }
 
 function getGroupMeetSenderIdentity() {
-  const senderEmail = process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
-  const senderName = process.env.BREVO_SENDER_NAME || 'Pulse';
+  const senderEmail = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
+  const senderName = process.env.BREVO_SENDER_NAME || "Pulse";
   return { senderEmail, senderName };
 }
 
 function buildGroupMeetRecommendationSignature(
-  recommendation: Awaited<ReturnType<typeof computeGroupMeetAiRecommendation>>['recommendation']
+  recommendation: Awaited<
+    ReturnType<typeof computeGroupMeetAiRecommendation>
+  >["recommendation"],
 ) {
   const recommendationSignature = recommendation.recommendations
     .slice(0, 3)
-    .map((candidate) => `${candidate.candidateKey}:${candidate.participantCount}/${candidate.totalParticipants}`)
-    .join('|');
+    .map(
+      (candidate) =>
+        `${candidate.candidateKey}:${candidate.participantCount}/${candidate.totalParticipants}`,
+    )
+    .join("|");
 
-  const caveatSignature = recommendation.caveats.slice(0, 5).join('|');
-  return recommendationSignature || `${recommendation.summary}|${caveatSignature}` || 'no-recommendations';
+  const caveatSignature = recommendation.caveats.slice(0, 5).join("|");
+  return (
+    recommendationSignature ||
+    `${recommendation.summary}|${caveatSignature}` ||
+    "no-recommendations"
+  );
 }
 
 async function sendGroupMeetHostProgressEmail(args: {
@@ -102,7 +117,7 @@ async function sendGroupMeetHostProgressEmail(args: {
   hostName: string;
   hostEmail: string;
   responderName: string;
-  responseAction: 'added' | 'updated';
+  responseAction: "added" | "updated";
   respondedAt: string | null;
   responseCount: number;
   participantCount: number;
@@ -110,12 +125,12 @@ async function sendGroupMeetHostProgressEmail(args: {
 }) {
   const { senderEmail, senderName } = getGroupMeetSenderIdentity();
   const pendingLabel = args.pendingParticipantNames.length
-    ? args.pendingParticipantNames.join(', ')
-    : 'No one';
+    ? args.pendingParticipantNames.join(", ")
+    : "No one";
   const subject = `${args.requestTitle}: ${args.responderName} ${args.responseAction} availability`;
   const htmlContent = `
     <div style="font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b;">
-      <p>Hi ${escapeHtml(args.hostName || 'there')},</p>
+      <p>Hi ${escapeHtml(args.hostName || "there")},</p>
       <p><strong>${escapeHtml(args.responderName)}</strong> just ${escapeHtml(args.responseAction)} availability for <strong>${escapeHtml(args.requestTitle)}</strong>.</p>
       <p>
         Responses so far: <strong>${args.responseCount} of ${args.participantCount}</strong><br/>
@@ -134,9 +149,9 @@ async function sendGroupMeetHostProgressEmail(args: {
     htmlContent,
     sender: { email: senderEmail, name: senderName },
     replyTo: { email: senderEmail, name: senderName },
-    tags: ['group-meet', 'group-meet-host-progress'],
+    tags: ["group-meet", "group-meet-host-progress"],
     idempotencyKey: buildEmailDedupeKey([
-      'group-meet-host-progress-v1',
+      "group-meet-host-progress-v1",
       args.requestId,
       args.responderName,
       args.responseAction,
@@ -161,7 +176,9 @@ async function sendGroupMeetHostCompletionEmail(args: {
   hostName: string;
   hostEmail: string;
   baseUrl: string;
-  recommendation: Awaited<ReturnType<typeof computeGroupMeetAiRecommendation>>['recommendation'];
+  recommendation: Awaited<
+    ReturnType<typeof computeGroupMeetAiRecommendation>
+  >["recommendation"];
 }) {
   const { senderEmail, senderName } = getGroupMeetSenderIdentity();
   const recommendationCards = args.recommendation.recommendations
@@ -173,16 +190,18 @@ async function sendGroupMeetHostCompletionEmail(args: {
       });
       const actionUrl = buildGroupMeetHostSelectionUrl(args.baseUrl, token);
       const missingLabel = candidate.missingParticipantNames.length
-        ? `<div style="margin-top:6px;color:#a1a1aa;font-size:13px;">Missing: ${escapeHtml(candidate.missingParticipantNames.join(', '))}</div>`
-        : '';
+        ? `<div style="margin-top:6px;color:#a1a1aa;font-size:13px;">Missing: ${escapeHtml(candidate.missingParticipantNames.join(", "))}</div>`
+        : "";
       return `
         <div style="margin:0 0 14px;padding:16px;border-radius:16px;border:1px solid rgba(24,24,27,0.1);background:#fafafa;">
-          <div style="font-weight:700;font-size:16px;">${escapeHtml(formatGroupMeetCandidateLabel({
-            date: candidate.date,
-            startMinutes: candidate.startMinutes,
-            endMinutes: candidate.endMinutes,
-            timezone: args.timezone,
-          }))}</div>
+          <div style="font-weight:700;font-size:16px;">${escapeHtml(
+            formatGroupMeetCandidateLabel({
+              date: candidate.date,
+              startMinutes: candidate.startMinutes,
+              endMinutes: candidate.endMinutes,
+              timezone: args.timezone,
+            }),
+          )}</div>
           <div style="margin-top:6px;color:#52525b;font-size:14px;">${escapeHtml(candidate.reason)}</div>
           <div style="margin-top:8px;color:#18181b;font-size:14px;">
             Works for <strong>${candidate.participantCount} of ${candidate.totalParticipants}</strong> participants
@@ -199,20 +218,20 @@ async function sendGroupMeetHostCompletionEmail(args: {
         </div>
       `;
     })
-    .join('');
+    .join("");
 
   const caveatsHtml = args.recommendation.caveats.length
     ? `
         <div style="margin:16px 0 0;padding:14px 16px;border-radius:14px;background:#f4f4f5;color:#3f3f46;">
-          ${args.recommendation.caveats.map((caveat) => `<div style="margin:0 0 6px;">• ${escapeHtml(caveat)}</div>`).join('')}
+          ${args.recommendation.caveats.map((caveat) => `<div style="margin:0 0 6px;">• ${escapeHtml(caveat)}</div>`).join("")}
         </div>
       `
-    : '';
+    : "";
 
   const subject = `${args.requestTitle}: everyone added availability`;
   const htmlContent = `
     <div style="font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b;">
-      <p>Hi ${escapeHtml(args.hostName || 'there')},</p>
+      <p>Hi ${escapeHtml(args.hostName || "there")},</p>
       <p>Everyone has now added availability for <strong>${escapeHtml(args.requestTitle)}</strong>.</p>
       <p>
         Target month: <strong>${escapeHtml(args.targetMonth)}</strong><br/>
@@ -235,9 +254,9 @@ async function sendGroupMeetHostCompletionEmail(args: {
     htmlContent,
     sender: { email: senderEmail, name: senderName },
     replyTo: { email: senderEmail, name: senderName },
-    tags: ['group-meet', 'group-meet-host-complete'],
+    tags: ["group-meet", "group-meet-host-complete"],
     idempotencyKey: buildEmailDedupeKey([
-      'group-meet-host-complete-v1',
+      "group-meet-host-complete-v1",
       args.requestId,
       buildGroupMeetRecommendationSignature(args.recommendation),
     ]),
@@ -266,16 +285,16 @@ export async function sendGroupMeetFlexPromptEmail(args: {
   if (!apiKey) {
     return {
       success: false,
-      error: 'Brevo not configured in runtime env.',
+      error: "Brevo not configured in runtime env.",
     };
   }
 
   const { senderEmail, senderName } = getGroupMeetSenderIdentity();
-  const internalBcc = [{ email: 'info@fitwithpulse.ai', name: 'Pulse Info' }];
+  const internalBcc = [{ email: "info@fitwithpulse.ai", name: "Pulse Info" }];
   const deadlineLabel = args.deadlineAt
-    ? new Date(args.deadlineAt).toLocaleString('en-US', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
+    ? new Date(args.deadlineAt).toLocaleString("en-US", {
+        dateStyle: "medium",
+        timeStyle: "short",
         timeZone: args.timezone,
       })
     : null;
@@ -321,12 +340,12 @@ export async function sendGroupMeetFlexPromptEmail(args: {
         </div>
       `;
     })
-    .join('');
+    .join("");
 
   const subject = `${args.requestTitle}: can any of these times work for you?`;
   const htmlContent = `
     <div style="font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b;">
-      <p>Hi ${escapeHtml(args.recipientName || 'there')},</p>
+      <p>Hi ${escapeHtml(args.recipientName || "there")},</p>
       <p>
         Group Meet found a few strong remaining times for
         <strong>${escapeHtml(args.requestTitle)}</strong>.
@@ -334,7 +353,7 @@ export async function sendGroupMeetFlexPromptEmail(args: {
       </p>
       <p>
         Month: <strong>${escapeHtml(args.targetMonth)}</strong><br/>
-        ${deadlineLabel ? `Deadline: <strong>${escapeHtml(deadlineLabel)}</strong><br/>` : ''}
+        ${deadlineLabel ? `Deadline: <strong>${escapeHtml(deadlineLabel)}</strong><br/>` : ""}
         Timezone: <strong>${escapeHtml(args.timezone)}</strong>
       </p>
       <div style="margin-top:18px;">
@@ -355,12 +374,15 @@ export async function sendGroupMeetFlexPromptEmail(args: {
     sender: { email: senderEmail, name: senderName },
     replyTo: { email: senderEmail, name: senderName },
     bcc: internalBcc,
-    tags: ['group-meet', 'group-meet-flex-round'],
+    tags: ["group-meet", "group-meet-flex-round"],
     idempotencyKey: buildEmailDedupeKey([
-      'group-meet-flex-prompt-v1',
+      "group-meet-flex-prompt-v1",
       args.requestId,
       args.recipientEmail,
-      args.options.slice(0, 3).map((option) => option.candidateKey).join('|'),
+      args.options
+        .slice(0, 3)
+        .map((option) => option.candidateKey)
+        .join("|"),
     ]),
     idempotencyMetadata: {
       requestId: args.requestId,
@@ -374,7 +396,7 @@ export async function sendGroupMeetFlexPromptEmail(args: {
     return {
       success: false,
       skipped: Boolean(sendResult.skipped),
-      error: sendResult.error || 'Brevo error',
+      error: sendResult.error || "Brevo error",
     };
   }
 
@@ -402,16 +424,16 @@ export async function sendGroupMeetNoResponseReminderEmail(args: {
   if (!apiKey) {
     return {
       success: false,
-      error: 'Brevo not configured in runtime env.',
+      error: "Brevo not configured in runtime env.",
     };
   }
 
   const { senderEmail, senderName } = getGroupMeetSenderIdentity();
-  const internalBcc = [{ email: 'info@fitwithpulse.ai', name: 'Pulse Info' }];
+  const internalBcc = [{ email: "info@fitwithpulse.ai", name: "Pulse Info" }];
   const deadlineLabel = args.deadlineAt
-    ? new Date(args.deadlineAt).toLocaleString('en-US', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
+    ? new Date(args.deadlineAt).toLocaleString("en-US", {
+        dateStyle: "medium",
+        timeStyle: "short",
         timeZone: args.timezone,
       })
     : null;
@@ -457,12 +479,12 @@ export async function sendGroupMeetNoResponseReminderEmail(args: {
         </div>
       `;
     })
-    .join('');
+    .join("");
 
   const subject = `${args.requestTitle}: we still need your availability`;
   const htmlContent = `
     <div style="font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b;">
-      <p>Hi ${escapeHtml(args.recipientName || 'there')},</p>
+      <p>Hi ${escapeHtml(args.recipientName || "there")},</p>
       <p>
         Group Meet still needs your availability for <strong>${escapeHtml(args.requestTitle)}</strong>.
         To make this easier, here are a few of the strongest times still in play based on what the rest of the group has already submitted.
@@ -470,7 +492,7 @@ export async function sendGroupMeetNoResponseReminderEmail(args: {
       </p>
       <p>
         Month: <strong>${escapeHtml(args.targetMonth)}</strong><br/>
-        ${deadlineLabel ? `Deadline: <strong>${escapeHtml(deadlineLabel)}</strong><br/>` : ''}
+        ${deadlineLabel ? `Deadline: <strong>${escapeHtml(deadlineLabel)}</strong><br/>` : ""}
         Timezone: <strong>${escapeHtml(args.timezone)}</strong>
       </p>
       <div style="margin-top:18px;">
@@ -491,12 +513,15 @@ export async function sendGroupMeetNoResponseReminderEmail(args: {
     sender: { email: senderEmail, name: senderName },
     replyTo: { email: senderEmail, name: senderName },
     bcc: internalBcc,
-    tags: ['group-meet', 'group-meet-no-response-reminder'],
+    tags: ["group-meet", "group-meet-no-response-reminder"],
     idempotencyKey: buildEmailDedupeKey([
-      'group-meet-no-response-reminder-v1',
+      "group-meet-no-response-reminder-v1",
       args.requestId,
       args.recipientEmail,
-      args.options.slice(0, 3).map((option) => option.candidateKey).join('|'),
+      args.options
+        .slice(0, 3)
+        .map((option) => option.candidateKey)
+        .join("|"),
     ]),
     idempotencyMetadata: {
       requestId: args.requestId,
@@ -510,7 +535,7 @@ export async function sendGroupMeetNoResponseReminderEmail(args: {
     return {
       success: false,
       skipped: Boolean(sendResult.skipped),
-      error: sendResult.error || 'Brevo error',
+      error: sendResult.error || "Brevo error",
     };
   }
 
@@ -533,23 +558,23 @@ export async function sendGroupMeetManualFlexPromptEmail(args: {
   shareUrl: string;
   baseUrl: string;
   options: GroupMeetFlexPromptOption[];
-  strategy: 'blocker' | 'group_options';
+  strategy: "blocker" | "group_options";
   dispatchKey?: string;
 }) {
   const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
   if (!apiKey) {
     return {
       success: false,
-      error: 'Brevo not configured in runtime env.',
+      error: "Brevo not configured in runtime env.",
     };
   }
 
   const { senderEmail, senderName } = getGroupMeetSenderIdentity();
-  const internalBcc = [{ email: 'info@fitwithpulse.ai', name: 'Pulse Info' }];
+  const internalBcc = [{ email: "info@fitwithpulse.ai", name: "Pulse Info" }];
   const deadlineLabel = args.deadlineAt
-    ? new Date(args.deadlineAt).toLocaleString('en-US', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
+    ? new Date(args.deadlineAt).toLocaleString("en-US", {
+        dateStyle: "medium",
+        timeStyle: "short",
         timeZone: args.timezone,
       })
     : null;
@@ -566,11 +591,13 @@ export async function sendGroupMeetManualFlexPromptEmail(args: {
   });
 
   const introText =
-    args.strategy === 'blocker'
-      ? 'These are some of the strongest remaining options, and you are currently one of the people still needed to make them work.'
-      : 'These are the strongest remaining options based on the availability the rest of the group has already submitted.';
+    args.strategy === "blocker"
+      ? "These are some of the strongest remaining options, and you are currently one of the people still needed to make them work."
+      : "These are the strongest remaining options based on the availability the rest of the group has already submitted.";
   const buttonLabel =
-    args.strategy === 'blocker' ? 'I can flex for this time' : 'This time works for me';
+    args.strategy === "blocker"
+      ? "I can flex for this time"
+      : "This time works for me";
 
   const htmlOptions = optionCards
     .map(({ option, token }) => {
@@ -602,12 +629,12 @@ export async function sendGroupMeetManualFlexPromptEmail(args: {
         </div>
       `;
     })
-    .join('');
+    .join("");
 
   const subject = `${args.requestTitle}: can any of these times work for you?`;
   const htmlContent = `
     <div style="font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b;">
-      <p>Hi ${escapeHtml(args.recipientName || 'there')},</p>
+      <p>Hi ${escapeHtml(args.recipientName || "there")},</p>
       <p>
         We’re trying to lock in <strong>${escapeHtml(args.requestTitle)}</strong>.
         To make this easier, here are a few strong remaining times based on what the group has already submitted.
@@ -615,7 +642,7 @@ export async function sendGroupMeetManualFlexPromptEmail(args: {
       </p>
       <p>
         Month: <strong>${escapeHtml(args.targetMonth)}</strong><br/>
-        ${deadlineLabel ? `Deadline: <strong>${escapeHtml(deadlineLabel)}</strong><br/>` : ''}
+        ${deadlineLabel ? `Deadline: <strong>${escapeHtml(deadlineLabel)}</strong><br/>` : ""}
         Timezone: <strong>${escapeHtml(args.timezone)}</strong>
       </p>
       <div style="margin-top:18px;">
@@ -636,13 +663,16 @@ export async function sendGroupMeetManualFlexPromptEmail(args: {
     sender: { email: senderEmail, name: senderName },
     replyTo: { email: senderEmail, name: senderName },
     bcc: internalBcc,
-    tags: ['group-meet', 'group-meet-manual-flex'],
+    tags: ["group-meet", "group-meet-manual-flex"],
     idempotencyKey: buildEmailDedupeKey([
-      'group-meet-manual-flex-v1',
+      "group-meet-manual-flex-v1",
       args.requestId,
       args.recipientEmail,
-      args.options.slice(0, 3).map((option) => option.candidateKey).join('|'),
-      args.dispatchKey || 'default',
+      args.options
+        .slice(0, 3)
+        .map((option) => option.candidateKey)
+        .join("|"),
+      args.dispatchKey || "default",
     ]),
     idempotencyMetadata: {
       requestId: args.requestId,
@@ -657,7 +687,7 @@ export async function sendGroupMeetManualFlexPromptEmail(args: {
     return {
       success: false,
       skipped: Boolean(sendResult.skipped),
-      error: sendResult.error || 'Brevo error',
+      error: sendResult.error || "Brevo error",
     };
   }
 
@@ -669,43 +699,56 @@ export async function sendGroupMeetManualFlexPromptEmail(args: {
 }
 
 export function mapGroupMeetInviteSummary(
-  docSnap: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot
+  docSnap:
+    | FirebaseFirestore.QueryDocumentSnapshot
+    | FirebaseFirestore.DocumentSnapshot,
 ): GroupMeetInviteSummary {
   const data = docSnap.data() || {};
   return {
     token: docSnap.id,
-    name: data.name || '',
+    name: data.name || "",
     email: data.email || null,
     imageUrl: data.imageUrl || null,
-    participantType: data.participantType === 'host' ? 'host' : 'participant',
+    participantType: data.participantType === "host" ? "host" : "participant",
     contactId: data.contactId || null,
-    shareUrl: data.shareUrl || '',
-    emailStatus: data.emailStatus || 'not_sent',
+    shareUrl: data.shareUrl || "",
+    emailStatus: data.emailStatus || "not_sent",
     emailedAt: toIso(data.emailedAt),
-    calendarImport: buildGroupMeetGuestCalendarImportSummary(data.calendarImport),
+    calendarImport: buildGroupMeetGuestCalendarImportSummary(
+      data.calendarImport,
+    ),
     emailError: data.emailError || null,
     respondedAt: toIso(data.responseSubmittedAt),
-    availabilityCount: Array.isArray(data.availabilityEntries) ? data.availabilityEntries.length : 0,
+    availabilityCount: Array.isArray(data.availabilityEntries)
+      ? data.availabilityEntries.length
+      : 0,
   };
 }
 
 export function mapGroupMeetInviteDetail(
-  docSnap: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot,
-  targetMonth: string
+  docSnap:
+    | FirebaseFirestore.QueryDocumentSnapshot
+    | FirebaseFirestore.DocumentSnapshot,
+  targetMonth: string,
 ): GroupMeetInviteDetail {
   const data = docSnap.data() || {};
-  const availabilityEntries = normalizeGroupMeetAvailabilitySlots(data.availabilityEntries, targetMonth);
+  const availabilityEntries = normalizeGroupMeetAvailabilitySlots(
+    data.availabilityEntries,
+    targetMonth,
+  );
   return {
     token: docSnap.id,
-    name: data.name || '',
+    name: data.name || "",
     email: data.email || null,
     imageUrl: data.imageUrl || null,
-    participantType: data.participantType === 'host' ? 'host' : 'participant',
+    participantType: data.participantType === "host" ? "host" : "participant",
     contactId: data.contactId || null,
-    shareUrl: data.shareUrl || '',
-    emailStatus: data.emailStatus || 'not_sent',
+    shareUrl: data.shareUrl || "",
+    emailStatus: data.emailStatus || "not_sent",
     emailedAt: toIso(data.emailedAt),
-    calendarImport: buildGroupMeetGuestCalendarImportSummary(data.calendarImport),
+    calendarImport: buildGroupMeetGuestCalendarImportSummary(
+      data.calendarImport,
+    ),
     emailError: data.emailError || null,
     respondedAt: toIso(data.responseSubmittedAt),
     availabilityCount: availabilityEntries.length,
@@ -714,12 +757,14 @@ export function mapGroupMeetInviteDetail(
 }
 
 export function mapGroupMeetContact(
-  docSnap: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot
+  docSnap:
+    | FirebaseFirestore.QueryDocumentSnapshot
+    | FirebaseFirestore.DocumentSnapshot,
 ): GroupMeetContact {
   const data = docSnap.data() || {};
   return {
     id: docSnap.id,
-    name: data.name || '',
+    name: data.name || "",
     email: data.email || null,
     imageUrl: data.imageUrl || null,
     createdAt: toIso(data.createdAt),
@@ -729,28 +774,36 @@ export function mapGroupMeetContact(
 }
 
 export async function mapGroupMeetRequestSummary(
-  docSnap: FirebaseFirestore.QueryDocumentSnapshot
+  docSnap: FirebaseFirestore.QueryDocumentSnapshot,
 ): Promise<GroupMeetRequestSummary> {
   const data = docSnap.data();
   const invitesSnapshot = await docSnap.ref
     .collection(GROUP_MEET_INVITES_SUBCOLLECTION)
-    .orderBy('createdAt', 'asc')
+    .orderBy("createdAt", "asc")
     .get();
   const deadlineAt = toIso(data.deadlineAt);
   const invites = invitesSnapshot.docs.map(mapGroupMeetInviteSummary);
 
   return {
     id: docSnap.id,
-    title: data.title || 'Group Meet',
-    targetMonth: data.targetMonth || '',
+    title: data.title || "Group Meet",
+    targetMonth: data.targetMonth || "",
     deadlineAt,
-    timezone: data.timezone || 'America/New_York',
+    timezone: data.timezone || "America/New_York",
     meetingDurationMinutes: Number(data.meetingDurationMinutes) || 30,
     createdByEmail: data.createdByEmail || null,
     createdAt: toIso(data.createdAt),
     participantCount: Number(data.participantCount) || invitesSnapshot.size,
     responseCount: Number(data.responseCount) || 0,
-    status: resolveGroupMeetStatusFromInvites(deadlineAt, data.status, invites),
+    status: resolveGroupMeetStatusFromInvites(
+      deadlineAt,
+      data.status,
+      invites,
+      {
+        finalSelection: data.finalSelection || null,
+        calendarInvite: data.calendarInvite || null,
+      },
+    ),
     invites,
   };
 }
@@ -763,73 +816,73 @@ export async function sendGroupMeetInviteEmail(args: {
   recipientName: string;
   recipientEmail: string;
   shareUrl: string;
-  mode?: 'live' | 'test' | 'preview';
+  mode?: "live" | "test" | "preview";
   bypassDeliveryGuards?: boolean;
 }) {
   const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
   if (!apiKey) {
     return {
       success: false,
-      error: 'Brevo not configured in runtime env.',
+      error: "Brevo not configured in runtime env.",
     };
   }
 
-  const mode = args.mode || 'live';
+  const mode = args.mode || "live";
   const bypassDeliveryGuards = Boolean(
-    args.bypassDeliveryGuards || mode === 'preview' || mode === 'test'
+    args.bypassDeliveryGuards || mode === "preview" || mode === "test",
   );
-  const senderEmail = process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
-  const senderName = process.env.BREVO_SENDER_NAME || 'Pulse';
+  const senderEmail = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
+  const senderName = process.env.BREVO_SENDER_NAME || "Pulse";
   const internalBcc =
-    mode === 'live'
-      ? [{ email: 'info@fitwithpulse.ai', name: 'Pulse Info' }]
+    mode === "live"
+      ? [{ email: "info@fitwithpulse.ai", name: "Pulse Info" }]
       : undefined;
   const subject =
-    mode === 'test'
+    mode === "test"
       ? `[Test] ${args.requestTitle} availability request`
-      : mode === 'preview'
+      : mode === "preview"
         ? `[Preview] ${args.requestTitle} availability request`
         : `${args.requestTitle} availability request`;
-  const deadlineLabel = new Date(args.deadlineAt).toLocaleString('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+  const deadlineLabel = new Date(args.deadlineAt).toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
     timeZone: args.timezone,
   });
   const introHtml =
-    mode === 'test'
+    mode === "test"
       ? `<p style="margin:0 0 14px;padding:12px 14px;border-radius:12px;background:#f4f4f5;color:#18181b;"><strong>Test email:</strong> this is a standalone Group Meet delivery preview. The button below is only for previewing the email experience.</p>`
-      : mode === 'preview'
+      : mode === "preview"
         ? `<p style="margin:0 0 14px;padding:12px 14px;border-radius:12px;background:#f4f4f5;color:#18181b;"><strong>Preview email:</strong> this message uses a real Group Meet guest link so you can walk through the recipient experience before sending the full batch.</p>`
-      : '';
+        : "";
   const promptCopy =
-    mode === 'test'
-      ? 'This is how a Group Meet invite email will look when you send a real request.'
-      : mode === 'preview'
-        ? 'This preview opens the real guest scheduling flow for the selected participant.'
-      : `Please send your availability for <strong>${escapeHtml(args.requestTitle)}</strong>.`;
+    mode === "test"
+      ? "This is how a Group Meet invite email will look when you send a real request."
+      : mode === "preview"
+        ? "This preview opens the real guest scheduling flow for the selected participant."
+        : `Please send your availability for <strong>${escapeHtml(args.requestTitle)}</strong>.`;
   const buttonLabel =
-    mode === 'test'
-      ? 'Open Group Meet admin'
-      : mode === 'preview'
-        ? 'Open guest link'
-        : 'Enter availability';
+    mode === "test"
+      ? "Open Group Meet admin"
+      : mode === "preview"
+        ? "Open guest link"
+        : "Enter availability";
   const footerCopy =
-    mode === 'test'
-      ? 'Because this is only a test email, the button routes back to the internal Group Meet tool.'
-      : mode === 'preview'
-        ? 'Because this is a preview email, the button opens the selected participant link directly.'
-      : 'If the button does not work, use this link:';
+    mode === "test"
+      ? "Because this is only a test email, the button routes back to the internal Group Meet tool."
+      : mode === "preview"
+        ? "Because this is a preview email, the button opens the selected participant link directly."
+        : "If the button does not work, use this link:";
 
   const htmlContent = `
     <div style="font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b;">
       ${introHtml}
-      <p>Hi ${escapeHtml(args.recipientName || 'there')},</p>
+      <p>Hi ${escapeHtml(args.recipientName || "there")},</p>
       <p>${promptCopy}</p>
       <p>
         Month: <strong>${escapeHtml(args.targetMonth)}</strong><br/>
         Deadline: <strong>${escapeHtml(deadlineLabel)}</strong>
       </p>
-      <p>${mode === 'test' ? 'Open the internal tool preview here:' : 'Open your link and tap the days that work for you:'}</p>
+      <p>${mode === "test" ? "Open the internal tool preview here:" : "Open your link and tap the days that work for you:"}</p>
       <p>
         <a href="${args.shareUrl}" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#18181b;color:#fff;text-decoration:none;font-weight:600;">
           ${buttonLabel}
@@ -850,7 +903,7 @@ export async function sendGroupMeetInviteEmail(args: {
     idempotencyKey: bypassDeliveryGuards
       ? undefined
       : buildEmailDedupeKey([
-          'group-meet-invite-v1',
+          "group-meet-invite-v1",
           args.shareUrl,
           args.recipientEmail,
           mode,
@@ -858,17 +911,17 @@ export async function sendGroupMeetInviteEmail(args: {
     idempotencyMetadata: bypassDeliveryGuards
       ? undefined
       : {
-          sequence: 'group-meet-invite',
+          sequence: "group-meet-invite",
           shareUrl: args.shareUrl,
           recipientEmail: args.recipientEmail,
           mode,
         },
     bypassDailyRecipientLimit: bypassDeliveryGuards,
-    dailyRecipientLimit: mode === 'test' ? 2 : 1,
+    dailyRecipientLimit: mode === "test" ? 2 : 1,
     dailyRecipientMetadata: bypassDeliveryGuards
       ? undefined
       : {
-          sequence: 'group-meet-invite',
+          sequence: "group-meet-invite",
           shareUrl: args.shareUrl,
           mode,
         },
@@ -877,7 +930,7 @@ export async function sendGroupMeetInviteEmail(args: {
   if (!sendResult.success) {
     return {
       success: false,
-      error: sendResult.error || 'Brevo error',
+      error: sendResult.error || "Brevo error",
     };
   }
 
@@ -896,14 +949,18 @@ export async function createGroupMeetInviteRecord(args: {
   baseUrl: string;
   createdAt?: FirebaseFirestore.FieldValue;
 }) {
-  const token = admin.firestore().collection('_').doc().id + admin.firestore().collection('_').doc().id.slice(0, 16);
+  const token =
+    admin.firestore().collection("_").doc().id +
+    admin.firestore().collection("_").doc().id.slice(0, 16);
   const shareUrl = buildGroupMeetShareUrl(args.baseUrl, token);
-  const inviteRef = args.requestRef.collection(GROUP_MEET_INVITES_SUBCOLLECTION).doc(token);
-  const emailStatus: GroupMeetInviteSummary['emailStatus'] = args.email
+  const inviteRef = args.requestRef
+    .collection(GROUP_MEET_INVITES_SUBCOLLECTION)
+    .doc(token);
+  const emailStatus: GroupMeetInviteSummary["emailStatus"] = args.email
     ? args.sendEmails
-      ? 'not_sent'
-      : 'manual_only'
-    : 'no_email';
+      ? "not_sent"
+      : "manual_only"
+    : "no_email";
 
   return {
     token,
@@ -919,14 +976,17 @@ export async function maybeNotifyGroupMeetHostAfterAvailabilitySave(args: {
   requestData: FirebaseFirestore.DocumentData;
   invites: GroupMeetInviteDetail[];
   responderToken: string;
-  responseAction: 'added' | 'updated';
+  responseAction: "added" | "updated";
   baseUrl: string;
 }) {
-  const responder = args.invites.find((invite) => invite.token === args.responderToken) || null;
+  const responder =
+    args.invites.find((invite) => invite.token === args.responderToken) || null;
   const hostInvite =
-    args.invites.find((invite) => invite.participantType === 'host' && invite.email) || null;
+    args.invites.find(
+      (invite) => invite.participantType === "host" && invite.email,
+    ) || null;
 
-  if (!responder || !hostInvite || responder.participantType === 'host') {
+  if (!responder || !hostInvite || responder.participantType === "host") {
     return { notified: false, mode: null };
   }
 
@@ -934,18 +994,29 @@ export async function maybeNotifyGroupMeetHostAfterAvailabilitySave(args: {
     return { notified: false, mode: null };
   }
 
-  const participantCount = Math.max(1, Number(args.requestData.participantCount) || args.invites.length);
-  const responseCount = args.invites.filter((invite) => invite.respondedAt || invite.availabilityEntries.length > 0).length;
+  const participantCount = Math.max(
+    1,
+    Number(args.requestData.participantCount) || args.invites.length,
+  );
+  const responseCount = args.invites.filter(
+    (invite) => invite.respondedAt || invite.availabilityEntries.length > 0,
+  ).length;
   const pendingParticipantNames = args.invites
-    .filter((invite) => invite.token !== hostInvite.token && invite.token !== responder.token)
-    .filter((invite) => !invite.respondedAt && !invite.availabilityEntries.length)
-    .map((invite) => invite.name || 'Unknown');
+    .filter(
+      (invite) =>
+        invite.token !== hostInvite.token && invite.token !== responder.token,
+    )
+    .filter(
+      (invite) => !invite.respondedAt && !invite.availabilityEntries.length,
+    )
+    .map((invite) => invite.name || "Unknown");
 
   if (responseCount >= participantCount) {
     const { recommendation } = await computeGroupMeetAiRecommendation({
-      requestTitle: args.requestData.title || 'Group Meet',
-      targetMonth: args.requestData.targetMonth || '',
-      meetingDurationMinutes: Number(args.requestData.meetingDurationMinutes) || 30,
+      requestTitle: args.requestData.title || "Group Meet",
+      targetMonth: args.requestData.targetMonth || "",
+      meetingDurationMinutes:
+        Number(args.requestData.meetingDurationMinutes) || 30,
       invites: args.invites,
       allowFallback: true,
     });
@@ -954,18 +1025,18 @@ export async function maybeNotifyGroupMeetHostAfterAvailabilitySave(args: {
       {
         aiRecommendation: recommendation,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        aiRecommendationGeneratedByEmail: 'group-meet-host-notifier',
+        aiRecommendationGeneratedByEmail: "group-meet-host-notifier",
       },
-      { merge: true }
+      { merge: true },
     );
 
     const sendResult = await sendGroupMeetHostCompletionEmail({
       requestId: args.requestId,
-      requestTitle: args.requestData.title || 'Group Meet',
-      targetMonth: args.requestData.targetMonth || '',
-      timezone: args.requestData.timezone || 'America/New_York',
-      hostName: hostInvite.name || 'Host',
-      hostEmail: hostInvite.email || '',
+      requestTitle: args.requestData.title || "Group Meet",
+      targetMonth: args.requestData.targetMonth || "",
+      timezone: args.requestData.timezone || "America/New_York",
+      hostName: hostInvite.name || "Host",
+      hostEmail: hostInvite.email || "",
       baseUrl: args.baseUrl,
       recommendation,
     });
@@ -973,16 +1044,17 @@ export async function maybeNotifyGroupMeetHostAfterAvailabilitySave(args: {
     if (sendResult.success && !sendResult.skipped) {
       await args.requestRef.set(
         {
-          hostAllRespondedEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+          hostAllRespondedEmailSentAt:
+            admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
-        { merge: true }
+        { merge: true },
       );
     }
 
     return {
       notified: Boolean(sendResult.success),
-      mode: 'completion' as const,
+      mode: "completion" as const,
       skipped: Boolean(sendResult.skipped),
       recommendation,
     };
@@ -990,12 +1062,12 @@ export async function maybeNotifyGroupMeetHostAfterAvailabilitySave(args: {
 
   const sendResult = await sendGroupMeetHostProgressEmail({
     requestId: args.requestId,
-    requestTitle: args.requestData.title || 'Group Meet',
-    targetMonth: args.requestData.targetMonth || '',
-    timezone: args.requestData.timezone || 'America/New_York',
-    hostName: hostInvite.name || 'Host',
-    hostEmail: hostInvite.email || '',
-    responderName: responder.name || 'A guest',
+    requestTitle: args.requestData.title || "Group Meet",
+    targetMonth: args.requestData.targetMonth || "",
+    timezone: args.requestData.timezone || "America/New_York",
+    hostName: hostInvite.name || "Host",
+    hostEmail: hostInvite.email || "",
+    responderName: responder.name || "A guest",
     responseAction: args.responseAction,
     respondedAt: responder.respondedAt,
     responseCount,
@@ -1006,17 +1078,18 @@ export async function maybeNotifyGroupMeetHostAfterAvailabilitySave(args: {
   if (sendResult.success && !sendResult.skipped) {
     await args.requestRef.set(
       {
-        hostLastAvailabilityEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        hostLastAvailabilityEmailSentAt:
+          admin.firestore.FieldValue.serverTimestamp(),
         hostLastAvailabilityResponderToken: responder.token,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
-      { merge: true }
+      { merge: true },
     );
   }
 
   return {
     notified: Boolean(sendResult.success),
-    mode: 'progress' as const,
+    mode: "progress" as const,
     skipped: Boolean(sendResult.skipped),
   };
 }

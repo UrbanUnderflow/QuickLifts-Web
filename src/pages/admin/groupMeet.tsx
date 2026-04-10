@@ -32,6 +32,7 @@ import { auth, storage } from "../../api/firebase/config";
 import {
   buildGroupMeetCandidateKey,
   formatMinutesAsTime,
+  hasGroupMeetDeadlinePassed,
   hasGroupMeetInviteBeenSent,
   resolveGroupMeetStatusFromInvites,
   type GroupMeetAvailabilitySlot,
@@ -231,6 +232,15 @@ const formatCandidateLabel = (candidate: GroupMeetCandidateWindow) => {
 
 const getRequestStatusLabel = (status: GroupMeetRequestSummary["status"]) =>
   status === "collecting" ? "active" : status;
+
+const getRequestStatusClassName = (
+  status: GroupMeetRequestSummary["status"],
+) =>
+  status === "draft"
+    ? "border border-amber-500/30 bg-amber-500/10 text-amber-200"
+    : status === "closed"
+      ? "border border-zinc-700 bg-zinc-900 text-zinc-300"
+      : "border border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
 
 const getInviteActionLabel = (
   invite: Pick<GroupMeetInviteSummary, "emailStatus" | "emailedAt">,
@@ -822,6 +832,10 @@ const GroupMeetAdminPage: React.FC = () => {
                   current.deadlineAt,
                   current.status,
                   nextInvites,
+                  {
+                    finalSelection: current.finalSelection,
+                    calendarInvite: current.calendarInvite,
+                  },
                 ),
               invites: nextInvites,
             };
@@ -2188,22 +2202,32 @@ const GroupMeetAdminPage: React.FC = () => {
                       >
                         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                           <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <div className="font-semibold text-white">
-                                {request.title}
-                              </div>
-                              <span
-                                className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
-                                  request.status === "draft"
-                                    ? "border border-amber-500/30 bg-amber-500/10 text-amber-200"
-                                    : request.status === "closed"
-                                      ? "border border-zinc-700 bg-zinc-900 text-zinc-300"
-                                      : "border border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                                }`}
-                              >
-                                {getRequestStatusLabel(request.status)}
-                              </span>
-                            </div>
+                            {(() => {
+                              const deadlinePassed = hasGroupMeetDeadlinePassed(
+                                request.deadlineAt,
+                              );
+
+                              return (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="font-semibold text-white">
+                                    {request.title}
+                                  </div>
+                                  <span
+                                    className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${getRequestStatusClassName(
+                                      request.status,
+                                    )}`}
+                                  >
+                                    {getRequestStatusLabel(request.status)}
+                                  </span>
+                                  {deadlinePassed &&
+                                    request.status !== "closed" && (
+                                      <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-100">
+                                        Past deadline
+                                      </span>
+                                    )}
+                                </div>
+                              );
+                            })()}
                             <div className="text-sm text-zinc-400 mt-1">
                               Month {request.targetMonth} • Deadline{" "}
                               {toReadableDateTime(
@@ -2291,16 +2315,20 @@ const GroupMeetAdminPage: React.FC = () => {
                           {selectedRequest.meetingDurationMinutes} min
                         </span>
                         <span
-                          className={`rounded-full border px-3 py-1.5 ${
-                            selectedRequest.status === "draft"
-                              ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
-                              : selectedRequest.status === "closed"
-                                ? "border-zinc-700 bg-zinc-900 text-zinc-300"
-                                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                          }`}
+                          className={`rounded-full border px-3 py-1.5 ${getRequestStatusClassName(
+                            selectedRequest.status,
+                          )}`}
                         >
                           {getRequestStatusLabel(selectedRequest.status)}
                         </span>
+                        {hasGroupMeetDeadlinePassed(
+                          selectedRequest.deadlineAt,
+                        ) &&
+                          selectedRequest.status !== "closed" && (
+                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-amber-100">
+                              Past deadline
+                            </span>
+                          )}
                       </div>
                     )}
                   </div>
@@ -2371,6 +2399,14 @@ const GroupMeetAdminPage: React.FC = () => {
                                 {selectedRequest.analysis.bestCandidates.length}{" "}
                                 ranked candidates
                               </span>
+                              {hasGroupMeetDeadlinePassed(
+                                selectedRequest.deadlineAt,
+                              ) &&
+                                selectedRequest.status !== "closed" && (
+                                  <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-amber-100">
+                                    Deadline passed
+                                  </span>
+                                )}
                             </div>
                           </div>
 

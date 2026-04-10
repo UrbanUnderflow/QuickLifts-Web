@@ -4,17 +4,17 @@ export type GroupMeetAvailabilitySlot = {
   endMinutes: number;
 };
 
-export type GroupMeetGuestCalendarImportProvider = 'google';
+export type GroupMeetGuestCalendarImportProvider = "google";
 
 export type GroupMeetGuestCalendarImportStatus =
-  | 'connected'
-  | 'disconnected'
-  | 'error';
+  | "connected"
+  | "disconnected"
+  | "error";
 
 export type GroupMeetGuestCalendarImportSyncStatus =
-  | 'success'
-  | 'error'
-  | 'never';
+  | "success"
+  | "error"
+  | "never";
 
 export type GroupMeetGuestCalendarImportSummary = {
   provider: GroupMeetGuestCalendarImportProvider;
@@ -27,25 +27,21 @@ export type GroupMeetGuestCalendarImportSummary = {
   googleAccountEmail: string | null;
 };
 
-export type GroupMeetImportedAvailabilitySuggestion = GroupMeetAvailabilitySlot & {
-  source: 'google_calendar';
-  importedAt: string | null;
-};
+export type GroupMeetImportedAvailabilitySuggestion =
+  GroupMeetAvailabilitySlot & {
+    source: "google_calendar";
+    importedAt: string | null;
+  };
 
 export type GroupMeetInviteSummary = {
   token: string;
   name: string;
   email: string | null;
   imageUrl?: string | null;
-  participantType?: 'host' | 'participant';
+  participantType?: "host" | "participant";
   contactId?: string | null;
   shareUrl: string;
-  emailStatus:
-    | 'sent'
-    | 'failed'
-    | 'not_sent'
-    | 'no_email'
-    | 'manual_only';
+  emailStatus: "sent" | "failed" | "not_sent" | "no_email" | "manual_only";
   emailedAt?: string | null;
   calendarImport?: GroupMeetGuestCalendarImportSummary | null;
   emailError?: string | null;
@@ -71,12 +67,12 @@ export type GroupMeetSharedAvailabilityParticipant = {
   token: string;
   name: string;
   imageUrl: string | null;
-  participantType: 'host' | 'participant';
+  participantType: "host" | "participant";
   respondedAt: string | null;
   availabilityEntries: GroupMeetAvailabilitySlot[];
 };
 
-export type GroupMeetRequestStatus = 'draft' | 'collecting' | 'closed';
+export type GroupMeetRequestStatus = "draft" | "collecting" | "closed";
 
 export type GroupMeetRequestSummary = {
   id: string;
@@ -163,7 +159,7 @@ export type GroupMeetFinalSelection = {
 };
 
 export type GroupMeetCalendarInvite = {
-  status: 'scheduled' | 'updated';
+  status: "scheduled" | "updated";
   eventId: string;
   htmlLink: string | null;
   meetLink: string | null;
@@ -177,7 +173,7 @@ export type GroupMeetCalendarInvite = {
 
 export type GroupMeetCalendarSetup = {
   ready: boolean;
-  source: 'oauth' | 'env_json' | 'secret_manager' | 'split_env' | 'missing';
+  source: "oauth" | "env_json" | "secret_manager" | "split_env" | "missing";
   message: string;
   secretName: string | null;
   delegatedUserEmail: string | null;
@@ -185,7 +181,10 @@ export type GroupMeetCalendarSetup = {
   calendarId: string | null;
 };
 
-export type GroupMeetRequestDetail = Omit<GroupMeetRequestSummary, 'invites'> & {
+export type GroupMeetRequestDetail = Omit<
+  GroupMeetRequestSummary,
+  "invites"
+> & {
   invites: GroupMeetInviteDetail[];
   analysis: GroupMeetAnalysis;
   aiRecommendation: GroupMeetAiRecommendation | null;
@@ -195,33 +194,38 @@ export type GroupMeetRequestDetail = Omit<GroupMeetRequestSummary, 'invites'> & 
 };
 
 export function isValidGroupMeetMonth(value: string): boolean {
-  return /^\d{4}-\d{2}$/.test((value || '').trim());
+  return /^\d{4}-\d{2}$/.test((value || "").trim());
 }
 
 export function resolveGroupMeetStatus(
   deadlineAt: string | null,
-  rawStatus?: string | null
+  rawStatus?: string | null,
+  options?: {
+    finalSelection?: unknown;
+    calendarInvite?: unknown;
+  },
 ): GroupMeetRequestStatus {
-  if (rawStatus === 'draft') {
-    return 'draft';
+  if (rawStatus === "draft") {
+    return "draft";
   }
 
-  if (rawStatus === 'closed') {
-    return 'closed';
+  if (
+    rawStatus === "closed" &&
+    (options?.finalSelection || options?.calendarInvite)
+  ) {
+    return "closed";
   }
 
-  if (!deadlineAt) {
-    return 'collecting';
-  }
-
-  return new Date(deadlineAt).getTime() <= Date.now() ? 'closed' : 'collecting';
+  return "collecting";
 }
 
 export function hasGroupMeetInviteBeenSent(invite: {
   emailStatus?: string | null;
   emailedAt?: string | null;
 }) {
-  return Boolean((invite.emailedAt || '').trim()) || invite.emailStatus === 'sent';
+  return (
+    Boolean((invite.emailedAt || "").trim()) || invite.emailStatus === "sent"
+  );
 }
 
 export function resolveGroupMeetStatusFromInvites(
@@ -230,46 +234,64 @@ export function resolveGroupMeetStatusFromInvites(
   invites: Array<{
     emailStatus?: string | null;
     emailedAt?: string | null;
-  }>
+  }>,
+  options?: {
+    finalSelection?: unknown;
+    calendarInvite?: unknown;
+  },
 ): GroupMeetRequestStatus {
-  if (rawStatus === 'closed') {
-    return 'closed';
+  if (
+    rawStatus === "closed" &&
+    (options?.finalSelection || options?.calendarInvite)
+  ) {
+    return "closed";
   }
 
-  const hasSentInvite = invites.some((invite) => hasGroupMeetInviteBeenSent(invite));
+  const hasSentInvite = invites.some((invite) =>
+    hasGroupMeetInviteBeenSent(invite),
+  );
   if (hasSentInvite) {
-    return resolveGroupMeetStatus(deadlineAt, 'collecting');
+    return resolveGroupMeetStatus(deadlineAt, "collecting", options);
   }
 
-  return resolveGroupMeetStatus(deadlineAt, rawStatus);
+  return resolveGroupMeetStatus(deadlineAt, rawStatus, options);
+}
+
+export function hasGroupMeetDeadlinePassed(deadlineAt: string | null) {
+  if (!deadlineAt) return false;
+  const timestamp = new Date(deadlineAt).getTime();
+  return Number.isFinite(timestamp) && timestamp <= Date.now();
 }
 
 export function buildGroupMeetShareUrl(baseUrl: string, token: string): string {
-  const trimmed = baseUrl.replace(/\/+$/, '');
+  const trimmed = baseUrl.replace(/\/+$/, "");
   return `${trimmed}/group-meet/${encodeURIComponent(token)}`;
 }
 
 export function formatMinutesAsTime(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  const suffix = hours >= 12 ? 'PM' : 'AM';
+  const suffix = hours >= 12 ? "PM" : "AM";
   const normalizedHour = hours % 12 || 12;
-  return `${normalizedHour}:${String(minutes).padStart(2, '0')} ${suffix}`;
+  return `${normalizedHour}:${String(minutes).padStart(2, "0")} ${suffix}`;
 }
 
-export function buildGroupMeetCandidateKey(date: string, startMinutes: number): string {
+export function buildGroupMeetCandidateKey(
+  date: string,
+  startMinutes: number,
+): string {
   return `${date}|${startMinutes}`;
 }
 
 export function minutesToTimeInputValue(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
 export function timeInputValueToMinutes(value: string): number {
   if (!/^\d{2}:\d{2}$/.test(value)) return NaN;
-  const [hoursRaw, minutesRaw] = value.split(':');
+  const [hoursRaw, minutesRaw] = value.split(":");
   const hours = Number(hoursRaw);
   const minutes = Number(minutesRaw);
   if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return NaN;
@@ -279,22 +301,27 @@ export function timeInputValueToMinutes(value: string): number {
 
 export function normalizeGroupMeetAvailabilitySlots(
   rawSlots: unknown,
-  targetMonth: string
+  targetMonth: string,
 ): GroupMeetAvailabilitySlot[] {
   if (!Array.isArray(rawSlots)) return [];
 
   const deduped = new Map<string, GroupMeetAvailabilitySlot>();
 
   for (const rawSlot of rawSlots) {
-    const slot = rawSlot as Partial<GroupMeetAvailabilitySlot> | null | undefined;
-    const date = typeof slot?.date === 'string' ? slot.date.trim() : '';
+    const slot = rawSlot as
+      | Partial<GroupMeetAvailabilitySlot>
+      | null
+      | undefined;
+    const date = typeof slot?.date === "string" ? slot.date.trim() : "";
     const startMinutes = Number(slot?.startMinutes);
     const endMinutes = Number(slot?.endMinutes);
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
     if (!date.startsWith(`${targetMonth}-`)) continue;
-    if (!Number.isInteger(startMinutes) || !Number.isInteger(endMinutes)) continue;
-    if (startMinutes < 0 || endMinutes > 24 * 60 || startMinutes >= endMinutes) continue;
+    if (!Number.isInteger(startMinutes) || !Number.isInteger(endMinutes))
+      continue;
+    if (startMinutes < 0 || endMinutes > 24 * 60 || startMinutes >= endMinutes)
+      continue;
 
     const key = `${date}:${startMinutes}:${endMinutes}`;
     deduped.set(key, { date, startMinutes, endMinutes });
@@ -302,7 +329,8 @@ export function normalizeGroupMeetAvailabilitySlots(
 
   return Array.from(deduped.values()).sort((a, b) => {
     if (a.date !== b.date) return a.date.localeCompare(b.date);
-    if (a.startMinutes !== b.startMinutes) return a.startMinutes - b.startMinutes;
+    if (a.startMinutes !== b.startMinutes)
+      return a.startMinutes - b.startMinutes;
     return a.endMinutes - b.endMinutes;
   });
 }
@@ -313,19 +341,26 @@ type CandidateAccumulator = GroupMeetCandidateWindow & {
 
 export function computeGroupMeetAnalysis(
   invites: GroupMeetInviteDetail[],
-  meetingDurationMinutes: number
+  meetingDurationMinutes: number,
 ): GroupMeetAnalysis {
   const totalParticipants = invites.length;
-  const respondedInvites = invites.filter((invite) => invite.respondedAt || invite.availabilityEntries.length > 0);
-  const pendingInvites = invites.filter((invite) => !respondedInvites.some((respondedInvite) => respondedInvite.token === invite.token));
+  const respondedInvites = invites.filter(
+    (invite) => invite.respondedAt || invite.availabilityEntries.length > 0,
+  );
+  const pendingInvites = invites.filter(
+    (invite) =>
+      !respondedInvites.some(
+        (respondedInvite) => respondedInvite.token === invite.token,
+      ),
+  );
   const minimumCandidateParticipants = totalParticipants > 1 ? 2 : 1;
   const stepMinutes = 15;
   const allDates = Array.from(
     new Set(
       invites.flatMap((invite) =>
-        invite.availabilityEntries.map((slot) => slot.date)
-      )
-    )
+        invite.availabilityEntries.map((slot) => slot.date),
+      ),
+    ),
   ).sort((a, b) => a.localeCompare(b));
 
   const candidates: CandidateAccumulator[] = [];
@@ -333,15 +368,19 @@ export function computeGroupMeetAnalysis(
   for (const date of allDates) {
     let previousCandidate: CandidateAccumulator | null = null;
 
-    for (let startMinutes = 0; startMinutes <= 24 * 60 - meetingDurationMinutes; startMinutes += stepMinutes) {
+    for (
+      let startMinutes = 0;
+      startMinutes <= 24 * 60 - meetingDurationMinutes;
+      startMinutes += stepMinutes
+    ) {
       const endMinutes = startMinutes + meetingDurationMinutes;
       const availableInvites = invites.filter((invite) =>
         invite.availabilityEntries.some(
           (slot) =>
             slot.date === date &&
             slot.startMinutes <= startMinutes &&
-            slot.endMinutes >= endMinutes
-        )
+            slot.endMinutes >= endMinutes,
+        ),
       );
 
       if (availableInvites.length < minimumCandidateParticipants) {
@@ -349,12 +388,16 @@ export function computeGroupMeetAnalysis(
         continue;
       }
 
-      const participantTokens = availableInvites.map((invite) => invite.token).sort((a, b) => a.localeCompare(b));
-      const participantKey = participantTokens.join('|');
+      const participantTokens = availableInvites
+        .map((invite) => invite.token)
+        .sort((a, b) => a.localeCompare(b));
+      const participantKey = participantTokens.join("|");
       const participantNames = invites
         .filter((invite) => participantTokens.includes(invite.token))
         .map((invite) => invite.name);
-      const missingInvites = invites.filter((invite) => !participantTokens.includes(invite.token));
+      const missingInvites = invites.filter(
+        (invite) => !participantTokens.includes(invite.token),
+      );
 
       if (
         previousCandidate &&
@@ -364,8 +407,10 @@ export function computeGroupMeetAnalysis(
       ) {
         previousCandidate.latestStartMinutes = startMinutes;
         previousCandidate.flexibilityMinutes =
-          previousCandidate.latestStartMinutes - previousCandidate.earliestStartMinutes;
-        previousCandidate.suggestedEndMinutes = previousCandidate.suggestedStartMinutes + meetingDurationMinutes;
+          previousCandidate.latestStartMinutes -
+          previousCandidate.earliestStartMinutes;
+        previousCandidate.suggestedEndMinutes =
+          previousCandidate.suggestedStartMinutes + meetingDurationMinutes;
         continue;
       }
 
@@ -409,21 +454,23 @@ export function computeGroupMeetAnalysis(
       return left.earliestStartMinutes - right.earliestStartMinutes;
     });
 
-  const dateSummaries = allDates.map((date) => {
-    const availableInvites = invites.filter((invite) =>
-      invite.availabilityEntries.some((slot) => slot.date === date)
-    );
-    return {
-      date,
-      availableParticipantCount: availableInvites.length,
-      participantNames: availableInvites.map((invite) => invite.name),
-    };
-  }).sort((left, right) => {
-    if (left.availableParticipantCount !== right.availableParticipantCount) {
-      return right.availableParticipantCount - left.availableParticipantCount;
-    }
-    return left.date.localeCompare(right.date);
-  });
+  const dateSummaries = allDates
+    .map((date) => {
+      const availableInvites = invites.filter((invite) =>
+        invite.availabilityEntries.some((slot) => slot.date === date),
+      );
+      return {
+        date,
+        availableParticipantCount: availableInvites.length,
+        participantNames: availableInvites.map((invite) => invite.name),
+      };
+    })
+    .sort((left, right) => {
+      if (left.availableParticipantCount !== right.availableParticipantCount) {
+        return right.availableParticipantCount - left.availableParticipantCount;
+      }
+      return left.date.localeCompare(right.date);
+    });
 
   return {
     totalParticipants,
@@ -431,7 +478,9 @@ export function computeGroupMeetAnalysis(
     pendingParticipantCount: pendingInvites.length,
     respondedParticipantNames: respondedInvites.map((invite) => invite.name),
     pendingParticipantNames: pendingInvites.map((invite) => invite.name),
-    fullMatchCandidates: sortedCandidates.filter((candidate) => candidate.allAvailable).slice(0, 12),
+    fullMatchCandidates: sortedCandidates
+      .filter((candidate) => candidate.allAvailable)
+      .slice(0, 12),
     bestCandidates: sortedCandidates.slice(0, 20),
     dateSummaries: dateSummaries.slice(0, 12),
   };
