@@ -55,6 +55,20 @@ interface InvoiceLineItem {
   unitPrice: number;
 }
 
+interface InvoiceCreationInput {
+  companyName: string;
+  invoiceNumber?: string;
+  issueDate: string;
+  dueDate: string;
+  billToName: string;
+  billToEmail: string;
+  billToAddress: string;
+  lineItems: InvoiceLineItem[];
+  memo: string;
+  sourceInvoiceNumber?: string;
+  sourceDocumentId?: string;
+}
+
 // Types
 interface LegalDocument {
   id: string;
@@ -209,6 +223,116 @@ He is backed by LAUNCH, the fund behind early investments in Uber, Calm, Robinho
 - https://www.youtube.com/watch?v=UdxPaU28IW8
 `;
 
+const createEmptyInvoiceLineItem = (): InvoiceLineItem => ({ description: '', qty: 1, unitPrice: 0 });
+
+const sanitizeInvoiceLineItem = (item?: Partial<InvoiceLineItem>): InvoiceLineItem => ({
+  description: item?.description || '',
+  qty: typeof item?.qty === 'number' && Number.isFinite(item.qty) && item.qty > 0 ? item.qty : 1,
+  unitPrice: typeof item?.unitPrice === 'number' && Number.isFinite(item.unitPrice) && item.unitPrice >= 0 ? item.unitPrice : 0,
+});
+
+const cloneInvoiceLineItems = (lineItems?: InvoiceLineItem[]): InvoiceLineItem[] =>
+  lineItems?.length ? lineItems.map((item) => sanitizeInvoiceLineItem(item)) : [createEmptyInvoiceLineItem()];
+
+const getPopulatedInvoiceLineItems = (lineItems: InvoiceLineItem[]): InvoiceLineItem[] =>
+  cloneInvoiceLineItems(lineItems).filter((item) => item.description.trim());
+
+const calculateInvoiceTotal = (lineItems: InvoiceLineItem[]): number =>
+  getPopulatedInvoiceLineItems(lineItems).reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
+
+const toDateStr = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateInput = (value: string): Date | null => {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const [, year, month, day] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const shiftDateInputByDays = (value: string, days: number): string => {
+  const date = parseDateInput(value);
+  if (!date) return '';
+  date.setDate(date.getDate() + days);
+  return toDateStr(date);
+};
+
+const shiftDateInputByMonths = (value: string, months: number): string => {
+  const date = parseDateInput(value);
+  if (!date) return '';
+  date.setMonth(date.getMonth() + months);
+  return toDateStr(date);
+};
+
+const getDefaultInvoiceDates = (anchorDate: Date = new Date()): { issueDate: string; dueDate: string } => {
+  const issueDate = toDateStr(anchorDate);
+  const dueDate = toDateStr(new Date(anchorDate.getFullYear(), anchorDate.getMonth(), anchorDate.getDate() + 4));
+  return { issueDate, dueDate };
+};
+
+const getNextInvoiceDates = (issueDate?: string, dueDate?: string): { issueDate: string; dueDate: string } => {
+  const fallback = getDefaultInvoiceDates();
+  const nextIssueDate = issueDate ? shiftDateInputByMonths(issueDate, 1) : fallback.issueDate;
+  const nextDueDate = dueDate
+    ? shiftDateInputByMonths(dueDate, 1)
+    : shiftDateInputByDays(nextIssueDate, 4) || fallback.dueDate;
+
+  return {
+    issueDate: nextIssueDate || fallback.issueDate,
+    dueDate: nextDueDate || fallback.dueDate,
+  };
+};
+
+const buildNextInvoiceNumber = (currentInvoiceNumber?: string, issueDate?: string): string => {
+  const targetYear = parseDateInput(issueDate || '')?.getFullYear() || new Date().getFullYear();
+
+  if (!currentInvoiceNumber?.trim()) {
+    return `INV-${targetYear}-${Math.floor(Math.random() * 9000) + 1000}`;
+  }
+
+  const yearSequenceMatch = currentInvoiceNumber.match(/^(.*?)(\d{4})-(\d+)$/);
+  if (yearSequenceMatch) {
+    const [, prefix, , sequence] = yearSequenceMatch;
+    return `${prefix}${targetYear}-${String(Number(sequence) + 1).padStart(sequence.length, '0')}`;
+  }
+
+  const trailingSequenceMatch = currentInvoiceNumber.match(/^(.*?)(\d+)$/);
+  if (trailingSequenceMatch) {
+    const [, prefix, sequence] = trailingSequenceMatch;
+    return `${prefix}${String(Number(sequence) + 1).padStart(sequence.length, '0')}`;
+  }
+
+  return `INV-${targetYear}-${Math.floor(Math.random() * 9000) + 1000}`;
+};
+
+const adjustInvoiceLineItemsToTargetTotal = (lineItems: InvoiceLineItem[], targetTotal: number): InvoiceLineItem[] => {
+  const safeTargetTotal = Number.isFinite(targetTotal) && targetTotal >= 0 ? targetTotal : 0;
+  const nextLineItems = cloneInvoiceLineItems(lineItems);
+  const primaryIndex = nextLineItems.findIndex((item) => item.description.trim());
+  const lineIndexToAdjust = primaryIndex >= 0 ? primaryIndex : 0;
+  const primaryItem = sanitizeInvoiceLineItem(nextLineItems[lineIndexToAdjust]);
+  const otherTotal = nextLineItems.reduce((sum, item, index) => {
+    if (index === lineIndexToAdjust || !item.description.trim()) return sum;
+    return sum + item.qty * item.unitPrice;
+  }, 0);
+  const primaryQty = primaryItem.qty > 0 ? primaryItem.qty : 1;
+  const adjustedUnitPrice = Math.max(0, safeTargetTotal - otherTotal) / primaryQty;
+
+  nextLineItems[lineIndexToAdjust] = {
+    ...primaryItem,
+    qty: primaryQty,
+    unitPrice: Number(adjustedUnitPrice.toFixed(2)),
+  };
+
+  return nextLineItems;
+};
+
 // Utility function to format Firestore Timestamps or Dates
 const formatDate = (date: Timestamp | Date | undefined): string => {
   if (!date) return 'N/A';
@@ -296,8 +420,22 @@ const LegalDocumentsAdmin: React.FC = () => {
   const [invoiceBillToName, setInvoiceBillToName] = useState('');
   const [invoiceBillToEmail, setInvoiceBillToEmail] = useState('');
   const [invoiceBillToAddress, setInvoiceBillToAddress] = useState('');
-  const [invoiceLineItems, setInvoiceLineItems] = useState<InvoiceLineItem[]>([{ description: '', qty: 1, unitPrice: 0 }]);
+  const [invoiceLineItems, setInvoiceLineItems] = useState<InvoiceLineItem[]>([createEmptyInvoiceLineItem()]);
   const [invoiceMemo, setInvoiceMemo] = useState('');
+
+  // Reprint Invoice Modal State
+  const [isReprintModalOpen, setIsReprintModalOpen] = useState(false);
+  const [reprintingDocument, setReprintingDocument] = useState<LegalDocument | null>(null);
+  const [reprintInvoiceNumber, setReprintInvoiceNumber] = useState('');
+  const [reprintIssueDate, setReprintIssueDate] = useState('');
+  const [reprintDueDate, setReprintDueDate] = useState('');
+  const [reprintBillToName, setReprintBillToName] = useState('');
+  const [reprintBillToEmail, setReprintBillToEmail] = useState('');
+  const [reprintBillToAddress, setReprintBillToAddress] = useState('');
+  const [reprintLineItems, setReprintLineItems] = useState<InvoiceLineItem[]>([createEmptyInvoiceLineItem()]);
+  const [reprintMemo, setReprintMemo] = useState('');
+  const [reprintAmount, setReprintAmount] = useState('0.00');
+  const [isReprinting, setIsReprinting] = useState(false);
 
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -474,15 +612,11 @@ const LegalDocumentsAdmin: React.FC = () => {
     setRequiresSignatureChecked(SIGNATURE_REQUIRED_TYPES.includes(selectedType));
     // Auto-populate invoice defaults when switching to invoice type
     if (selectedType === 'invoice') {
-      const now = new Date();
-      const pad = (n: number) => String(n).padStart(2, '0');
-      const toDateStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-      const due = new Date(now); due.setDate(due.getDate() + 4);
-      setInvoiceIssueDate(toDateStr(now));
-      setInvoiceDueDate(toDateStr(due));
+      const defaults = getDefaultInvoiceDates();
+      setInvoiceIssueDate(defaults.issueDate);
+      setInvoiceDueDate(defaults.dueDate);
       if (!invoiceNumber) {
-        const rand = Math.floor(Math.random() * 9000) + 1000;
-        setInvoiceNumber(`INV-${now.getFullYear()}-${rand}`);
+        setInvoiceNumber(buildNextInvoiceNumber(undefined, defaults.issueDate));
       }
     }
   }, [selectedType]);
@@ -550,6 +684,84 @@ const LegalDocumentsAdmin: React.FC = () => {
     }
   };
 
+  const createInvoiceDocument = async (input: InvoiceCreationInput) => {
+    const lineItems = getPopulatedInvoiceLineItems(input.lineItems);
+    const total = calculateInvoiceTotal(lineItems);
+    const companyName = input.companyName || 'Pulse Intelligence Labs, Inc.';
+    const wire = WIRE_INSTRUCTIONS[companyName] || WIRE_INSTRUCTIONS['Pulse Intelligence Labs, Inc.'];
+    const invoiceNumberToUse = input.invoiceNumber?.trim() || buildNextInvoiceNumber(input.sourceInvoiceNumber, input.issueDate);
+
+    const lineItemsText = lineItems
+      .map((item) => `  • ${item.description}  ×${item.qty}  @$${item.unitPrice.toFixed(2)}  =  $${(item.qty * item.unitPrice).toFixed(2)}`)
+      .join('\n');
+
+    const content = [
+      `INVOICE ${invoiceNumberToUse}`,
+      ``,
+      `Date of Issue: ${input.issueDate}`,
+      `Past Due After: ${input.dueDate}`,
+      ``,
+      `From: ${companyName}`,
+      `To: ${input.billToName}${input.billToEmail ? ' <' + input.billToEmail + '>' : ''}${input.billToAddress ? '\n     ' + input.billToAddress : ''}`,
+      ``,
+      `Line Items:`,
+      lineItemsText,
+      ``,
+      `Total Due: $${total.toFixed(2)} USD`,
+      ``,
+      `Wire Instructions:`,
+      `  Bank: ${wire.bankName}`,
+      `  Routing: ${wire.routingNumber}`,
+      `  Account: ${wire.accountNumber}`,
+      wire.accountType ? `  Type: ${wire.accountType}` : '',
+      wire.swift ? `  SWIFT: ${wire.swift}` : '',
+      input.memo ? `\nNotes: ${input.memo}` : '',
+    ].filter((line) => line !== '').join('\n');
+
+    const invoiceData = {
+      invoiceNumber: invoiceNumberToUse,
+      issueDate: input.issueDate,
+      dueDate: input.dueDate,
+      billToName: input.billToName,
+      billToEmail: input.billToEmail,
+      billToAddress: input.billToAddress,
+      lineItems,
+      memo: input.memo,
+      total,
+    };
+
+    const prompt = input.sourceInvoiceNumber
+      ? `Invoice reprint of ${input.sourceInvoiceNumber} for ${input.billToName}, amount $${total.toFixed(2)}`
+      : `Invoice for ${input.billToName}, amount $${total.toFixed(2)}`;
+
+    const payload: Record<string, unknown> = {
+      title: `Invoice ${invoiceNumberToUse} — ${input.billToName}`,
+      prompt,
+      content,
+      invoiceData,
+      documentType: 'invoice',
+      companyName,
+      requiresSignature: false,
+      createdAt: Timestamp.now(),
+      status: 'completed',
+    };
+
+    if (input.sourceDocumentId || input.sourceInvoiceNumber) {
+      payload.reprintedFrom = {
+        documentId: input.sourceDocumentId || null,
+        invoiceNumber: input.sourceInvoiceNumber || null,
+      };
+    }
+
+    const docRef = await addDoc(collection(db, 'legal-documents'), payload);
+
+    return {
+      documentId: docRef.id,
+      invoiceNumber: invoiceNumberToUse,
+      total,
+    };
+  };
+
   // Generate document using AI (or directly for invoice type)
   const handleGenerate = async () => {
     // For invoice type, validate invoice fields instead of prompt
@@ -558,7 +770,11 @@ const LegalDocumentsAdmin: React.FC = () => {
         setMessage({ type: 'error', text: 'Please enter a Bill To name' });
         return;
       }
-      if (invoiceLineItems.every(item => !item.description.trim() || item.unitPrice === 0)) {
+      if (!invoiceIssueDate || !invoiceDueDate) {
+        setMessage({ type: 'error', text: 'Please enter both the issue date and due date' });
+        return;
+      }
+      if (getPopulatedInvoiceLineItems(invoiceLineItems).length === 0) {
         setMessage({ type: 'error', text: 'Please add at least one line item with a description and price' });
         return;
       }
@@ -667,76 +883,153 @@ const LegalDocumentsAdmin: React.FC = () => {
     setGenerating(true);
     setMessage(null);
     try {
-      const total = invoiceLineItems.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
-      const wire = WIRE_INSTRUCTIONS[selectedCompany] || WIRE_INSTRUCTIONS['Pulse Intelligence Labs, Inc.'];
-      const num = invoiceNumber || `INV-${new Date().getFullYear()}-${Math.floor(Math.random() * 9000) + 1000}`;
-
-      const lineItemsText = invoiceLineItems
-        .filter(i => i.description.trim())
-        .map(i => `  • ${i.description}  ×${i.qty}  @$${i.unitPrice.toFixed(2)}  =  $${(i.qty * i.unitPrice).toFixed(2)}`)
-        .join('\n');
-
-      // Store clean plain-text content (actual PDF comes from generateInvoicePdf)
-      const content = [
-        `INVOICE ${num}`,
-        ``,
-        `Date of Issue: ${invoiceIssueDate}`,
-        `Past Due After: ${invoiceDueDate}`,
-        ``,
-        `From: ${selectedCompany}`,
-        `To: ${invoiceBillToName}${invoiceBillToEmail ? ' <' + invoiceBillToEmail + '>' : ''}${invoiceBillToAddress ? '\n     ' + invoiceBillToAddress : ''}`,
-        ``,
-        `Line Items:`,
-        lineItemsText,
-        ``,
-        `Total Due: $${total.toFixed(2)} USD`,
-        ``,
-        `Wire Instructions:`,
-        `  Bank: ${wire.bankName}`,
-        `  Routing: ${wire.routingNumber}`,
-        `  Account: ${wire.accountNumber}`,
-        wire.accountType ? `  Type: ${wire.accountType}` : '',
-        wire.swift ? `  SWIFT: ${wire.swift}` : '',
-        invoiceMemo ? `\nNotes: ${invoiceMemo}` : '',
-      ].filter(line => line !== '').join('\n');
-
-      const invoiceData = {
-        invoiceNumber: num,
+      const createdInvoice = await createInvoiceDocument({
+        companyName: selectedCompany,
+        invoiceNumber,
         issueDate: invoiceIssueDate,
         dueDate: invoiceDueDate,
         billToName: invoiceBillToName,
         billToEmail: invoiceBillToEmail,
         billToAddress: invoiceBillToAddress,
-        lineItems: invoiceLineItems.filter(i => i.description.trim()),
+        lineItems: invoiceLineItems,
         memo: invoiceMemo,
-        total,
-      };
-
-      await addDoc(collection(db, 'legal-documents'), {
-        title: `Invoice ${num} — ${invoiceBillToName}`,
-        prompt: `Invoice for ${invoiceBillToName}, amount $${total.toFixed(2)}`,
-        content,
-        invoiceData,
-        documentType: 'invoice',
-        companyName: selectedCompany,
-        requiresSignature: false,
-        createdAt: Timestamp.now(),
-        status: 'completed',
       });
 
-      setMessage({ type: 'success', text: 'Invoice created successfully!' });
+      const nextDefaults = getDefaultInvoiceDates();
+      setMessage({ type: 'success', text: `Invoice ${createdInvoice.invoiceNumber} created successfully!` });
       // Reset invoice fields
+      setInvoiceNumber(buildNextInvoiceNumber(createdInvoice.invoiceNumber, nextDefaults.issueDate));
+      setInvoiceIssueDate(nextDefaults.issueDate);
+      setInvoiceDueDate(nextDefaults.dueDate);
       setInvoiceBillToName('');
       setInvoiceBillToEmail('');
       setInvoiceBillToAddress('');
-      setInvoiceLineItems([{ description: '', qty: 1, unitPrice: 0 }]);
+      setInvoiceLineItems([createEmptyInvoiceLineItem()]);
       setInvoiceMemo('');
-      loadDocuments();
+      await loadDocuments();
     } catch (error) {
       console.error('Error creating invoice:', error);
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to create invoice' });
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const closeReprintModal = () => {
+    setIsReprintModalOpen(false);
+    setReprintingDocument(null);
+    setReprintInvoiceNumber('');
+    setReprintIssueDate('');
+    setReprintDueDate('');
+    setReprintBillToName('');
+    setReprintBillToEmail('');
+    setReprintBillToAddress('');
+    setReprintLineItems([createEmptyInvoiceLineItem()]);
+    setReprintMemo('');
+    setReprintAmount('0.00');
+  };
+
+  const syncReprintLineItems = (nextLineItems: InvoiceLineItem[]) => {
+    const normalizedLineItems = nextLineItems.length ? nextLineItems.map((item) => sanitizeInvoiceLineItem(item)) : [createEmptyInvoiceLineItem()];
+    setReprintLineItems(normalizedLineItems);
+    setReprintAmount(calculateInvoiceTotal(normalizedLineItems).toFixed(2));
+  };
+
+  const openReprintModal = (document: LegalDocument) => {
+    if (!document.invoiceData) {
+      setMessage({ type: 'error', text: 'This invoice is missing structured invoice details and cannot be reprinted yet.' });
+      return;
+    }
+
+    const nextDates = getNextInvoiceDates(document.invoiceData.issueDate, document.invoiceData.dueDate);
+    const sourceLineItems = cloneInvoiceLineItems(document.invoiceData.lineItems);
+
+    setReprintingDocument(document);
+    setReprintInvoiceNumber(buildNextInvoiceNumber(document.invoiceData.invoiceNumber, nextDates.issueDate));
+    setReprintIssueDate(nextDates.issueDate);
+    setReprintDueDate(nextDates.dueDate);
+    setReprintBillToName(document.invoiceData.billToName || '');
+    setReprintBillToEmail(document.invoiceData.billToEmail || '');
+    setReprintBillToAddress(document.invoiceData.billToAddress || '');
+    setReprintLineItems(sourceLineItems);
+    setReprintMemo(document.invoiceData.memo || '');
+    setReprintAmount(calculateInvoiceTotal(sourceLineItems).toFixed(2));
+    setIsReprintModalOpen(true);
+  };
+
+  const handleReprintAmountChange = (value: string) => {
+    setReprintAmount(value);
+
+    if (value === '') return;
+
+    const targetTotal = Number(value);
+    if (!Number.isFinite(targetTotal) || targetTotal < 0) return;
+
+    setReprintLineItems(adjustInvoiceLineItemsToTargetTotal(reprintLineItems, targetTotal));
+  };
+
+  const handleReprintAmountBlur = () => {
+    const targetTotal = Number(reprintAmount);
+    if (!Number.isFinite(targetTotal) || targetTotal < 0) {
+      setReprintAmount(calculateInvoiceTotal(reprintLineItems).toFixed(2));
+      return;
+    }
+
+    const adjustedLineItems = adjustInvoiceLineItemsToTargetTotal(reprintLineItems, targetTotal);
+    setReprintLineItems(adjustedLineItems);
+    setReprintAmount(calculateInvoiceTotal(adjustedLineItems).toFixed(2));
+  };
+
+  const handleReprintInvoice = async () => {
+    if (!reprintingDocument?.invoiceData) return;
+
+    if (!reprintBillToName.trim()) {
+      setMessage({ type: 'error', text: 'Please enter a Bill To name before reprinting.' });
+      return;
+    }
+
+    if (!reprintIssueDate || !reprintDueDate) {
+      setMessage({ type: 'error', text: 'Please enter both the invoice date and due date before reprinting.' });
+      return;
+    }
+
+    const requestedAmount = Number(reprintAmount);
+    const normalizedLineItems = Number.isFinite(requestedAmount) && requestedAmount >= 0
+      ? adjustInvoiceLineItemsToTargetTotal(reprintLineItems, requestedAmount)
+      : reprintLineItems;
+
+    if (getPopulatedInvoiceLineItems(normalizedLineItems).length === 0) {
+      setMessage({ type: 'error', text: 'Please add at least one line item with a description and price.' });
+      return;
+    }
+
+    setIsReprinting(true);
+    setMessage(null);
+
+    try {
+      const createdInvoice = await createInvoiceDocument({
+        companyName: reprintingDocument.companyName || 'Pulse Intelligence Labs, Inc.',
+        invoiceNumber: reprintInvoiceNumber,
+        issueDate: reprintIssueDate,
+        dueDate: reprintDueDate,
+        billToName: reprintBillToName,
+        billToEmail: reprintBillToEmail,
+        billToAddress: reprintBillToAddress,
+        lineItems: normalizedLineItems,
+        memo: reprintMemo,
+        sourceInvoiceNumber: reprintingDocument.invoiceData.invoiceNumber,
+        sourceDocumentId: reprintingDocument.id,
+      });
+
+      await loadDocuments();
+      closeReprintModal();
+      setMessage({ type: 'success', text: `Invoice ${createdInvoice.invoiceNumber} created successfully!` });
+      window.open(`/legal-doc/${createdInvoice.documentId}`, '_blank');
+    } catch (error) {
+      console.error('Error reprinting invoice:', error);
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to reprint invoice' });
+    } finally {
+      setIsReprinting(false);
     }
   };
 
@@ -2805,7 +3098,7 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Line Items</p>
-                    <button type="button" onClick={() => setInvoiceLineItems(prev => [...prev, { description: '', qty: 1, unitPrice: 0 }])} className="text-xs text-[#d7ff00] hover:text-white transition-colors">+ Add Line</button>
+                    <button type="button" onClick={() => setInvoiceLineItems(prev => [...prev, createEmptyInvoiceLineItem()])} className="text-xs text-[#d7ff00] hover:text-white transition-colors">+ Add Line</button>
                   </div>
                   <div className="space-y-2">
                     <div className="grid grid-cols-12 gap-2 px-1">
@@ -2824,7 +3117,7 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                     ))}
                     <div className="flex justify-end pt-2 pr-8">
                       <span className="text-zinc-400 text-sm mr-4">Total</span>
-                      <span className="text-white font-bold text-lg">${invoiceLineItems.reduce((sum, i) => sum + i.qty * i.unitPrice, 0).toFixed(2)} USD</span>
+                      <span className="text-white font-bold text-lg">${calculateInvoiceTotal(invoiceLineItems).toFixed(2)} USD</span>
                     </div>
                   </div>
                 </div>
@@ -2971,6 +3264,7 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                   const signingRequest = signingRequestsForDoc[0];
                   const needsSignature = requiresSignature(document);
                   const promptPreview = (document.prompt || '').trim();
+                  const isInvoiceDocument = document.documentType === 'invoice' || !!document.invoiceData;
 
                   return (
                     <div key={document.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-[0_1px_0_rgba(255,255,255,0.02)] transition-colors hover:bg-zinc-900/80">
@@ -3056,6 +3350,15 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
                                 <Edit3 className="w-4 h-4" />
                                 Edit
                               </button>
+                              {isInvoiceDocument && (
+                                <button
+                                  onClick={() => openReprintModal(document)}
+                                  className="flex items-center gap-1 px-3 py-2 bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-300 rounded-lg text-sm transition-colors"
+                                >
+                                  <Copy className="w-4 h-4" />
+                                  Reprint Invoice
+                                </button>
+                              )}
                               <button
                                 onClick={() => openAuditModal(document)}
                                 className="flex items-center gap-1 px-3 py-2 bg-purple-900/30 hover:bg-purple-900/50 text-purple-400 rounded-lg text-sm transition-colors"
@@ -3230,6 +3533,237 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
           </div>
         </div>
       </div>
+
+      {/* Reprint Invoice Modal */}
+      {isReprintModalOpen && reprintingDocument && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-3xl max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-zinc-700">
+              <div>
+                <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                  <Copy className="w-5 h-5 text-emerald-300" />
+                  Reprint Invoice
+                </h2>
+                <p className="text-sm text-zinc-400 mt-1">{reprintingDocument.title}</p>
+              </div>
+              <button
+                onClick={closeReprintModal}
+                className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-zinc-400" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[68vh] space-y-4">
+              <div className="rounded-xl border border-zinc-700 bg-zinc-900/50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Reprinting From</p>
+                <p className="mt-2 text-white font-medium">{reprintingDocument.invoiceData?.invoiceNumber || reprintingDocument.title}</p>
+                <p className="mt-1 text-sm text-zinc-400">
+                  {reprintingDocument.companyName || 'Pulse Intelligence Labs, Inc.'}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1">Invoice #</label>
+                  <input
+                    type="text"
+                    value={reprintInvoiceNumber}
+                    onChange={(e) => setReprintInvoiceNumber(e.target.value)}
+                    placeholder="INV-2026-0001"
+                    className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-400 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1">Date of Issue</label>
+                  <input
+                    type="date"
+                    value={reprintIssueDate}
+                    onChange={(e) => setReprintIssueDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-400 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1">Past Due After</label>
+                  <input
+                    type="date"
+                    value={reprintDueDate}
+                    onChange={(e) => setReprintDueDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-400 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1">Amount to Invoice</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={reprintAmount}
+                    onChange={(e) => handleReprintAmountChange(e.target.value)}
+                    onBlur={handleReprintAmountBlur}
+                    className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-400 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-zinc-700 bg-zinc-900/50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 mb-3">Bill To</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-zinc-500 mb-1">Name *</label>
+                    <input
+                      type="text"
+                      value={reprintBillToName}
+                      onChange={(e) => setReprintBillToName(e.target.value)}
+                      placeholder="Client or company name"
+                      className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-400 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-zinc-500 mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={reprintBillToEmail}
+                      onChange={(e) => setReprintBillToEmail(e.target.value)}
+                      placeholder="client@company.com"
+                      className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-400 transition-colors"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs text-zinc-500 mb-1">Address</label>
+                    <input
+                      type="text"
+                      value={reprintBillToAddress}
+                      onChange={(e) => setReprintBillToAddress(e.target.value)}
+                      placeholder="123 Main St, City, State ZIP"
+                      className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-400 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Line Items</p>
+                    <p className="text-xs text-zinc-500 mt-1">Updating the amount above rebalances the first line item so the total stays in sync.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => syncReprintLineItems([...reprintLineItems, createEmptyInvoiceLineItem()])}
+                    className="text-xs text-emerald-300 hover:text-white transition-colors"
+                  >
+                    + Add Line
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-12 gap-2 px-1">
+                    <div className="col-span-5 text-xs text-zinc-500">Description</div>
+                    <div className="col-span-2 text-xs text-zinc-500 text-center">Qty</div>
+                    <div className="col-span-2 text-xs text-zinc-500 text-right">Unit Price</div>
+                    <div className="col-span-2 text-xs text-zinc-500 text-right">Amount</div>
+                    <div className="col-span-1" />
+                  </div>
+                  {reprintLineItems.map((item, index) => (
+                    <div key={`${reprintingDocument.id}-${index}`} className="grid grid-cols-12 gap-2 items-center">
+                      <input
+                        type="text"
+                        value={item.description}
+                        onChange={(e) => {
+                          const updatedLineItems = [...reprintLineItems];
+                          updatedLineItems[index] = { ...updatedLineItems[index], description: e.target.value };
+                          syncReprintLineItems(updatedLineItems);
+                        }}
+                        placeholder="Service description"
+                        className="col-span-5 px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-400 transition-colors"
+                      />
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.qty}
+                        onChange={(e) => {
+                          const updatedLineItems = [...reprintLineItems];
+                          updatedLineItems[index] = { ...updatedLineItems[index], qty: Math.max(1, Number(e.target.value) || 1) };
+                          syncReprintLineItems(updatedLineItems);
+                        }}
+                        className="col-span-2 px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm text-center focus:outline-none focus:border-emerald-400 transition-colors"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.unitPrice || ''}
+                        onChange={(e) => {
+                          const updatedLineItems = [...reprintLineItems];
+                          updatedLineItems[index] = { ...updatedLineItems[index], unitPrice: Number(e.target.value) };
+                          syncReprintLineItems(updatedLineItems);
+                        }}
+                        placeholder="0.00"
+                        className="col-span-2 px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm text-right focus:outline-none focus:border-emerald-400 transition-colors"
+                      />
+                      <div className="col-span-2 px-3 py-2 text-right text-sm text-zinc-300">
+                        ${(item.qty * item.unitPrice).toFixed(2)}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => syncReprintLineItems(reprintLineItems.filter((_, lineIndex) => lineIndex !== index))}
+                        disabled={reprintLineItems.length === 1}
+                        className="col-span-1 flex items-center justify-center text-zinc-500 hover:text-red-400 disabled:opacity-30 transition-colors"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex justify-end pt-2">
+                    <span className="text-zinc-400 text-sm mr-4">Total</span>
+                    <span className="text-white font-bold text-lg">${calculateInvoiceTotal(reprintLineItems).toFixed(2)} USD</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">Notes / Memo</label>
+                <textarea
+                  value={reprintMemo}
+                  onChange={(e) => setReprintMemo(e.target.value)}
+                  placeholder="Any additional notes or payment terms..."
+                  rows={3}
+                  className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-400 transition-colors resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-zinc-700">
+              <button
+                onClick={closeReprintModal}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReprintInvoice}
+                disabled={isReprinting}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isReprinting
+                  ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                  : 'bg-emerald-500 text-black hover:bg-emerald-400'
+                  }`}
+              >
+                {isReprinting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Reprinting...
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    Reprint Invoice
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {isEditModalOpen && editingDocument && (

@@ -101,6 +101,26 @@ type ApiPreviewEmailResponse = {
   messageId?: string | null;
 };
 
+type ApiConfirmationEmailResponse = {
+  success?: boolean;
+  skipped?: boolean;
+  messageId?: string | null;
+  mode?: "preview" | "live";
+  sentCount?: number;
+  failedCount?: number;
+  skippedCount?: number;
+  recipientCount?: number;
+  confirmationEmail?: {
+    attempted: boolean;
+    sentCount: number;
+    failedCount: number;
+    skippedCount: number;
+    recipientCount: number;
+    mode: "automatic";
+  };
+  errors?: string[];
+};
+
 type ApiManualFlexPreviewResponse = {
   success?: boolean;
   skipped?: boolean;
@@ -254,6 +274,67 @@ const getFinalSelectionDisplayEmail = (
   request.finalSelection?.selectedByEmail ||
   "host";
 
+const getFinalConfirmationStatusLabel = (
+  request: Pick<GroupMeetRequestDetail, "finalConfirmationEmail" | "timezone">,
+) => {
+  const sentAt = request.finalConfirmationEmail?.sentAt;
+  if (!sentAt) {
+    return null;
+  }
+
+  const recipientCount = Math.max(
+    0,
+    Number(request.finalConfirmationEmail?.recipientCount) || 0,
+  );
+  const mode = request.finalConfirmationEmail?.sendMode;
+  const modeLabel =
+    mode === "automatic"
+      ? "automatically"
+      : mode === "manual"
+        ? "manually"
+        : null;
+  const sentLabel = toReadableDateTime(sentAt, request.timezone);
+  const countLabel =
+    recipientCount > 0
+      ? ` to ${recipientCount} guest${recipientCount === 1 ? "" : "s"}`
+      : "";
+
+  return `Confirmation email sent ${modeLabel || ""}${countLabel} on ${sentLabel}.`
+    .replace(/\s+/g, " ")
+    .replace("sent on", "sent on")
+    .trim();
+};
+
+const getFinalReminderStatusLabel = (
+  request: Pick<GroupMeetRequestDetail, "finalReminderEmail" | "timezone">,
+) => {
+  const sentAt = request.finalReminderEmail?.sentAt;
+  if (!sentAt) {
+    return null;
+  }
+
+  const recipientCount = Math.max(
+    0,
+    Number(request.finalReminderEmail?.recipientCount) || 0,
+  );
+  const mode = request.finalReminderEmail?.sendMode;
+  const modeLabel =
+    mode === "automatic"
+      ? "automatically"
+      : mode === "manual"
+        ? "manually"
+        : null;
+  const sentLabel = toReadableDateTime(sentAt, request.timezone);
+  const countLabel =
+    recipientCount > 0
+      ? ` to ${recipientCount} guest${recipientCount === 1 ? "" : "s"}`
+      : "";
+
+  return `One-hour reminder sent ${modeLabel || ""}${countLabel} on ${sentLabel}.`
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
 const getInviteDeliveryMeta = (
   invite: Pick<
     GroupMeetInviteSummary,
@@ -361,6 +442,10 @@ const GroupMeetAdminPage: React.FC = () => {
   const [recommendLoading, setRecommendLoading] = useState(false);
   const [finalizeLoading, setFinalizeLoading] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [confirmationEmailSending, setConfirmationEmailSending] =
+    useState(false);
+  const [confirmationPreviewSending, setConfirmationPreviewSending] =
+    useState(false);
   const [savingEdits, setSavingEdits] = useState(false);
   const [resendingInviteToken, setResendingInviteToken] = useState<
     string | null
@@ -1402,7 +1487,9 @@ const GroupMeetAdminPage: React.FC = () => {
       );
       const schedulePayload = (await scheduleResponse
         .json()
-        .catch(() => ({}))) as { error?: string };
+        .catch(() => ({}))) as ApiConfirmationEmailResponse & {
+        error?: string;
+      };
       if (!scheduleResponse.ok) {
         await loadRequestDetail(selectedRequestId);
         throw new Error(
@@ -1412,9 +1499,17 @@ const GroupMeetAdminPage: React.FC = () => {
       }
 
       await loadRequestDetail(selectedRequestId);
-      const successText = hadCalendarInvite
-        ? "Meeting time selected and Google Calendar invite updated."
-        : "Meeting time selected and Google Calendar invite sent.";
+      const confirmationEmail = schedulePayload.confirmationEmail || null;
+      const successText =
+        confirmationEmail && confirmationEmail.sentCount > 0
+          ? hadCalendarInvite
+            ? `Meeting time selected, Google Calendar invite updated, and confirmation email sent to ${confirmationEmail.sentCount} guest${confirmationEmail.sentCount === 1 ? "" : "s"}.`
+            : `Meeting time selected, Google Calendar invite sent, and confirmation email sent to ${confirmationEmail.sentCount} guest${confirmationEmail.sentCount === 1 ? "" : "s"}.`
+          : confirmationEmail && confirmationEmail.failedCount > 0
+            ? "Meeting time selected and Google Calendar invite created, but the Group Meet confirmation email needs a manual resend."
+            : hadCalendarInvite
+              ? "Meeting time selected and Google Calendar invite updated."
+              : "Meeting time selected and Google Calendar invite sent.";
       setMessage({ type: "success", text: successText });
       setRequestModalMessage({ type: "success", text: successText });
       closeCalendarDayModal();
@@ -1431,9 +1526,10 @@ const GroupMeetAdminPage: React.FC = () => {
   };
 
   const scheduleCalendarInvite = async () => {
-    if (!selectedRequestId) return;
+    if (!selectedRequestId || !selectedRequest?.finalSelection) return;
     setScheduleLoading(true);
     setMessage(null);
+    setRequestModalMessage(null);
 
     try {
       const headers = await getAdminHeaders();
@@ -1444,7 +1540,9 @@ const GroupMeetAdminPage: React.FC = () => {
           headers,
         },
       );
-      const payload = (await response.json().catch(() => ({}))) as {
+      const payload = (await response
+        .json()
+        .catch(() => ({}))) as ApiConfirmationEmailResponse & {
         error?: string;
       };
       if (!response.ok) {
@@ -1453,14 +1551,112 @@ const GroupMeetAdminPage: React.FC = () => {
         );
       }
       await loadRequestDetail(selectedRequestId);
-      setMessage({ type: "success", text: "Google Calendar invite created." });
+      const confirmationEmail = payload.confirmationEmail || null;
+      const successText =
+        confirmationEmail && confirmationEmail.sentCount > 0
+          ? `Google Calendar invite created and confirmation email sent to ${confirmationEmail.sentCount} guest${confirmationEmail.sentCount === 1 ? "" : "s"}.`
+          : confirmationEmail && confirmationEmail.failedCount > 0
+            ? "Google Calendar invite created, but the Group Meet confirmation email needs a manual resend."
+            : "Google Calendar invite created.";
+      setMessage({ type: "success", text: successText });
+      setRequestModalMessage({ type: "success", text: successText });
     } catch (error: any) {
+      const errorText =
+        error?.message || "Failed to create Google Calendar invite.";
       setMessage({
         type: "error",
-        text: error?.message || "Failed to create Google Calendar invite.",
+        text: errorText,
+      });
+      setRequestModalMessage({
+        type: "error",
+        text: errorText,
       });
     } finally {
       setScheduleLoading(false);
+    }
+  };
+
+  const sendFinalConfirmationEmail = async (mode: "preview" | "live") => {
+    if (!selectedRequestId || !selectedRequest?.finalSelection) return;
+
+    if (mode === "preview" && !activeAdminEmail) {
+      const errorText =
+        "Sign in with an email address before sending a preview confirmation email.";
+      setMessage({ type: "error", text: errorText });
+      setRequestModalMessage({ type: "error", text: errorText });
+      return;
+    }
+
+    if (mode === "preview") {
+      setConfirmationPreviewSending(true);
+    } else {
+      setConfirmationEmailSending(true);
+    }
+    setMessage(null);
+    setRequestModalMessage(null);
+
+    try {
+      const headers = await getAdminHeaders();
+      const response = await fetch(
+        `/api/admin/group-meet/${encodeURIComponent(selectedRequestId)}/confirmation-email`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            mode,
+            recipientName: auth.currentUser?.displayName || "Preview Recipient",
+            recipientEmail: activeAdminEmail || "",
+          }),
+        },
+      );
+      const payload = (await response
+        .json()
+        .catch(() => ({}))) as ApiConfirmationEmailResponse & {
+        error?: string;
+      };
+
+      if (!response.ok || !payload.success) {
+        throw new Error(
+          payload.error || "Failed to send the Group Meet confirmation email.",
+        );
+      }
+
+      await loadRequestDetail(selectedRequestId);
+
+      let successText = "Confirmation email sent.";
+      if (mode === "preview") {
+        successText = payload.skipped
+          ? `Confirmation preview email was skipped for ${activeAdminEmail}.`
+          : `Confirmation preview email sent to ${activeAdminEmail}.`;
+      } else {
+        const sentCount = Number(payload.sentCount) || 0;
+        const failedCount = Number(payload.failedCount) || 0;
+        const skippedCount = Number(payload.skippedCount) || 0;
+        const summary = [
+          `${sentCount} sent`,
+          failedCount ? `${failedCount} failed` : null,
+          skippedCount ? `${skippedCount} skipped` : null,
+        ]
+          .filter(Boolean)
+          .join(" • ");
+        successText = failedCount
+          ? `Confirmation email send finished with issues: ${summary}.`
+          : `Confirmation email sent. ${summary}.`;
+      }
+
+      setMessage({ type: "success", text: successText });
+      setRequestModalMessage({ type: "success", text: successText });
+    } catch (error: any) {
+      const errorText =
+        error?.message || "Failed to send the Group Meet confirmation email.";
+      setMessage({ type: "error", text: errorText });
+      setRequestModalMessage({ type: "error", text: errorText });
+    } finally {
+      if (mode === "preview") {
+        setConfirmationPreviewSending(false);
+      } else {
+        setConfirmationEmailSending(false);
+      }
     }
   };
 
@@ -3025,6 +3221,39 @@ const GroupMeetAdminPage: React.FC = () => {
                                   Open event
                                 </a>
                               )}
+                              {selectedRequest.calendarInvite && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      sendFinalConfirmationEmail("preview")
+                                    }
+                                    disabled={confirmationPreviewSending}
+                                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 px-4 py-2.5 text-sm hover:bg-zinc-900 disabled:opacity-50"
+                                  >
+                                    <Mail className="w-4 h-4" />
+                                    {confirmationPreviewSending
+                                      ? "Sending preview…"
+                                      : "Preview confirmation email"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      sendFinalConfirmationEmail("live")
+                                    }
+                                    disabled={confirmationEmailSending}
+                                    className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 hover:bg-emerald-500/15 disabled:opacity-50"
+                                  >
+                                    <Mail className="w-4 h-4" />
+                                    {confirmationEmailSending
+                                      ? "Sending confirmation…"
+                                      : selectedRequest.finalConfirmationEmail
+                                            ?.sentAt
+                                        ? "Resend confirmation"
+                                        : "Send confirmation email"}
+                                  </button>
+                                </>
+                              )}
                             </div>
                             {selectedRequest.calendarInvite?.organizerEmail && (
                               <div className="mt-3 text-xs text-emerald-50/80">
@@ -3032,6 +3261,37 @@ const GroupMeetAdminPage: React.FC = () => {
                                 {selectedRequest.calendarInvite.organizerEmail}
                               </div>
                             )}
+                            {selectedRequest.finalConfirmationEmail?.sentAt && (
+                              <div className="mt-2 text-xs text-emerald-50/80">
+                                {getFinalConfirmationStatusLabel(
+                                  selectedRequest,
+                                )}
+                              </div>
+                            )}
+                            {selectedRequest.finalReminderEmail?.sentAt && (
+                              <div className="mt-1 text-xs text-emerald-50/70">
+                                {getFinalReminderStatusLabel(selectedRequest)}
+                              </div>
+                            )}
+                            {selectedRequest.finalConfirmationEmail
+                              ?.previewSentAt &&
+                              selectedRequest.finalConfirmationEmail
+                                ?.previewRecipientEmail && (
+                                <div className="mt-1 text-xs text-emerald-50/70">
+                                  Preview last sent to{" "}
+                                  {
+                                    selectedRequest.finalConfirmationEmail
+                                      .previewRecipientEmail
+                                  }{" "}
+                                  on{" "}
+                                  {toReadableDateTime(
+                                    selectedRequest.finalConfirmationEmail
+                                      .previewSentAt,
+                                    selectedRequest.timezone,
+                                  )}
+                                  .
+                                </div>
+                              )}
                             {!selectedRequest.calendarSetup.ready && (
                               <div className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-100">
                                 {selectedRequest.calendarSetup.message ||

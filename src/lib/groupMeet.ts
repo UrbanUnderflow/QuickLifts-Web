@@ -171,6 +171,23 @@ export type GroupMeetCalendarInvite = {
   organizerEmail: string | null;
 };
 
+export type GroupMeetFinalConfirmationEmail = {
+  sentAt: string | null;
+  sentByEmail: string | null;
+  sendMode: "automatic" | "manual" | null;
+  recipientCount: number;
+  previewSentAt: string | null;
+  previewRecipientEmail: string | null;
+};
+
+export type GroupMeetFinalReminderEmail = {
+  sentAt: string | null;
+  sentByEmail: string | null;
+  sendMode: "automatic" | "manual" | null;
+  recipientCount: number;
+  selectionSignature: string | null;
+};
+
 export type GroupMeetCalendarSetup = {
   ready: boolean;
   source: "oauth" | "env_json" | "secret_manager" | "split_env" | "missing";
@@ -190,6 +207,8 @@ export type GroupMeetRequestDetail = Omit<
   aiRecommendation: GroupMeetAiRecommendation | null;
   finalSelection: GroupMeetFinalSelection | null;
   calendarInvite: GroupMeetCalendarInvite | null;
+  finalConfirmationEmail: GroupMeetFinalConfirmationEmail | null;
+  finalReminderEmail: GroupMeetFinalReminderEmail | null;
   calendarSetup: GroupMeetCalendarSetup;
 };
 
@@ -300,6 +319,30 @@ export function buildGroupMeetCandidateKey(
   startMinutes: number,
 ): string {
   return `${date}|${startMinutes}`;
+}
+
+export function buildGroupMeetFinalSelectionSignature(
+  finalSelection:
+    | Pick<GroupMeetFinalSelection, "date" | "startMinutes" | "endMinutes">
+    | null
+    | undefined,
+) {
+  const date =
+    typeof finalSelection?.date === "string" ? finalSelection.date : "";
+  const startMinutes = Number(finalSelection?.startMinutes);
+  const endMinutes = Number(finalSelection?.endMinutes);
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    !Number.isInteger(startMinutes) ||
+    !Number.isInteger(endMinutes) ||
+    startMinutes < 0 ||
+    endMinutes <= startMinutes
+  ) {
+    return null;
+  }
+
+  return `${date}|${startMinutes}|${endMinutes}`;
 }
 
 export function minutesToTimeInputValue(totalMinutes: number): string {

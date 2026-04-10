@@ -6,10 +6,15 @@ import {
 } from "../../netlify/functions/utils/emailSequenceHelpers";
 import {
   buildGroupMeetShareUrl,
+  buildGroupMeetFinalSelectionSignature,
   formatMinutesAsTime,
   resolveGroupMeetStatusFromInvites,
   normalizeGroupMeetAvailabilitySlots,
+  type GroupMeetCalendarInvite,
   type GroupMeetContact,
+  type GroupMeetFinalConfirmationEmail,
+  type GroupMeetFinalReminderEmail,
+  type GroupMeetFinalSelection,
   type GroupMeetInviteDetail,
   type GroupMeetInviteSummary,
   type GroupMeetRequestSummary,
@@ -88,6 +93,51 @@ function getGroupMeetSenderIdentity() {
   return { senderEmail, senderName };
 }
 
+export function mapGroupMeetFinalConfirmationEmail(
+  data: any,
+): GroupMeetFinalConfirmationEmail | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  return {
+    sentAt: toIso(data.sentAt),
+    sentByEmail: typeof data.sentByEmail === "string" ? data.sentByEmail : null,
+    sendMode:
+      data.sendMode === "automatic" || data.sendMode === "manual"
+        ? data.sendMode
+        : null,
+    recipientCount: Math.max(0, Number(data.recipientCount) || 0),
+    previewSentAt: toIso(data.previewSentAt),
+    previewRecipientEmail:
+      typeof data.previewRecipientEmail === "string"
+        ? data.previewRecipientEmail
+        : null,
+  };
+}
+
+export function mapGroupMeetFinalReminderEmail(
+  data: any,
+): GroupMeetFinalReminderEmail | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  return {
+    sentAt: toIso(data.sentAt),
+    sentByEmail: typeof data.sentByEmail === "string" ? data.sentByEmail : null,
+    sendMode:
+      data.sendMode === "automatic" || data.sendMode === "manual"
+        ? data.sendMode
+        : null,
+    recipientCount: Math.max(0, Number(data.recipientCount) || 0),
+    selectionSignature:
+      typeof data.selectionSignature === "string"
+        ? data.selectionSignature
+        : null,
+  };
+}
+
 function buildGroupMeetRecommendationSignature(
   recommendation: Awaited<
     ReturnType<typeof computeGroupMeetAiRecommendation>
@@ -107,6 +157,409 @@ function buildGroupMeetRecommendationSignature(
     `${recommendation.summary}|${caveatSignature}` ||
     "no-recommendations"
   );
+}
+
+function buildGroupMeetFinalBlockLabel(args: {
+  finalSelection: GroupMeetFinalSelection;
+  timezone: string;
+}) {
+  return formatGroupMeetCandidateLabel({
+    date: args.finalSelection.date,
+    startMinutes: args.finalSelection.startMinutes,
+    endMinutes: args.finalSelection.endMinutes,
+    timezone: args.timezone,
+  });
+}
+
+function buildGroupMeetFinalConfirmationRecipientInvites(
+  invites: GroupMeetInviteDetail[],
+) {
+  return invites.filter(
+    (invite) =>
+      invite.participantType !== "host" &&
+      typeof invite.email === "string" &&
+      invite.email.trim().length > 0,
+  );
+}
+
+function buildGroupMeetParticipantRoster(invites: GroupMeetInviteDetail[]) {
+  const hostInvites = invites.filter(
+    (invite) => invite.participantType === "host",
+  );
+  const participantInvites = invites.filter(
+    (invite) => invite.participantType !== "host",
+  );
+
+  return [...hostInvites, ...participantInvites]
+    .map((invite) =>
+      invite.participantType === "host" ? `${invite.name} (Host)` : invite.name,
+    )
+    .filter(Boolean);
+}
+
+async function sendSingleGroupMeetFinalConfirmationEmail(args: {
+  requestId: string;
+  requestTitle: string;
+  timezone: string;
+  recipientName: string;
+  recipientEmail: string;
+  finalSelection: GroupMeetFinalSelection;
+  calendarInvite: GroupMeetCalendarInvite;
+  mode: "automatic" | "manual" | "preview";
+  previewIntroText?: string | null;
+}) {
+  const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
+  if (!apiKey) {
+    return {
+      success: false,
+      error: "Brevo not configured in runtime env.",
+    };
+  }
+
+  const { senderEmail, senderName } = getGroupMeetSenderIdentity();
+  const internalBcc =
+    args.mode === "preview"
+      ? undefined
+      : [{ email: "info@fitwithpulse.ai", name: "Pulse Info" }];
+  const subjectPrefix = args.mode === "preview" ? "[Preview] " : "";
+  const subject = `${subjectPrefix}${args.requestTitle}: final meeting time selected`;
+  const finalBlockLabel = buildGroupMeetFinalBlockLabel({
+    finalSelection: args.finalSelection,
+    timezone: args.timezone,
+  });
+  const previewBanner =
+    args.mode === "preview"
+      ? `<p style="margin:0 0 14px;padding:12px 14px;border-radius:12px;background:#f4f4f5;color:#18181b;"><strong>Preview email:</strong> this is how the final Group Meet confirmation email will look when it goes out to guests.</p>`
+      : "";
+  const previewIntroText = (args.previewIntroText || "").trim();
+  const introParagraph =
+    args.mode === "preview" && previewIntroText
+      ? `<p>${escapeHtml(previewIntroText)}</p>`
+      : "";
+  const hostNoteHtml = args.finalSelection.hostNote
+    ? `<p style="margin-top:14px;padding:12px 14px;border-radius:12px;background:#f4f4f5;color:#18181b;"><strong>Host note:</strong> ${escapeHtml(args.finalSelection.hostNote)}</p>`
+    : "";
+  const meetLinkHtml = args.calendarInvite.meetLink
+    ? `
+        <p style="margin-top:16px;">
+          <a href="${args.calendarInvite.meetLink}" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#18181b;color:#fff;text-decoration:none;font-weight:600;">
+            Open Google Meet link
+          </a>
+        </p>
+        <p style="color:#52525b;font-size:13px;">If the button does not work, use this link:<br/>${escapeHtml(args.calendarInvite.meetLink)}</p>
+      `
+    : "";
+
+  const htmlContent = `
+    <div style="font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b;">
+      ${previewBanner}
+      <p>Hi ${escapeHtml(args.recipientName || "there")},</p>
+      ${introParagraph}
+      <p>
+        Group Meet has successfully selected the final meeting block for
+        <strong>${escapeHtml(args.requestTitle)}</strong>.
+        Looking forward to hosting you.
+      </p>
+      <p>
+        Final time: <strong>${escapeHtml(finalBlockLabel)}</strong><br/>
+        Timezone: <strong>${escapeHtml(args.timezone)}</strong>
+      </p>
+      <p>
+        A Google Calendar invite has been created and sent to
+        <strong>${escapeHtml(args.recipientEmail)}</strong>.
+        This is a gentle reminder to check your calendar and confirm the meeting details there.
+      </p>
+      ${hostNoteHtml}
+      ${meetLinkHtml}
+      <p style="margin-top:14px;color:#52525b;">
+        This meeting time was finalized through Group Meet after reviewing the submitted availability.
+      </p>
+    </div>
+  `;
+
+  const sendResult = await sendBrevoTransactionalEmail({
+    toEmail: args.recipientEmail,
+    toName: args.recipientName || args.recipientEmail,
+    subject,
+    htmlContent,
+    sender: { email: senderEmail, name: senderName },
+    replyTo: { email: senderEmail, name: senderName },
+    bcc: internalBcc,
+    tags: ["group-meet", "group-meet-final-confirmation"],
+    idempotencyKey:
+      args.mode === "automatic"
+        ? buildEmailDedupeKey([
+            "group-meet-final-confirmation-v1",
+            args.requestId,
+            args.recipientEmail.toLowerCase(),
+            args.calendarInvite.eventId,
+          ])
+        : undefined,
+    idempotencyMetadata:
+      args.mode === "automatic"
+        ? {
+            requestId: args.requestId,
+            recipientEmail: args.recipientEmail.toLowerCase(),
+            eventId: args.calendarInvite.eventId,
+            mode: args.mode,
+          }
+        : undefined,
+    bypassDailyRecipientLimit: true,
+  });
+
+  if (!sendResult.success) {
+    return {
+      success: false,
+      skipped: Boolean(sendResult.skipped),
+      error: sendResult.error || "Brevo error",
+      messageId: null,
+    };
+  }
+
+  return {
+    success: true,
+    skipped: Boolean(sendResult.skipped),
+    error: null,
+    messageId: sendResult.messageId || null,
+  };
+}
+
+export async function sendGroupMeetFinalConfirmationEmailBatch(args: {
+  requestId: string;
+  requestTitle: string;
+  timezone: string;
+  finalSelection: GroupMeetFinalSelection;
+  calendarInvite: GroupMeetCalendarInvite;
+  invites: GroupMeetInviteDetail[];
+  mode: "automatic" | "manual";
+}) {
+  const recipients = buildGroupMeetFinalConfirmationRecipientInvites(
+    args.invites,
+  );
+  const results = await Promise.all(
+    recipients.map((invite) =>
+      sendSingleGroupMeetFinalConfirmationEmail({
+        requestId: args.requestId,
+        requestTitle: args.requestTitle,
+        timezone: args.timezone,
+        recipientName: invite.name || "there",
+        recipientEmail: invite.email || "",
+        finalSelection: args.finalSelection,
+        calendarInvite: args.calendarInvite,
+        mode: args.mode,
+      }),
+    ),
+  );
+
+  return {
+    recipientCount: recipients.length,
+    sentCount: results.filter((result) => result.success && !result.skipped)
+      .length,
+    skippedCount: results.filter((result) => result.success && result.skipped)
+      .length,
+    failedCount: results.filter((result) => !result.success).length,
+    messageIds: results
+      .map((result) => result.messageId)
+      .filter((value): value is string => Boolean(value)),
+    errors: results
+      .map((result, index) =>
+        result.success || !result.error
+          ? null
+          : `${recipients[index]?.email || recipients[index]?.name || "Recipient"}: ${result.error}`,
+      )
+      .filter((value): value is string => Boolean(value)),
+  };
+}
+
+export async function sendGroupMeetFinalConfirmationPreviewEmail(args: {
+  requestId: string;
+  requestTitle: string;
+  timezone: string;
+  finalSelection: GroupMeetFinalSelection;
+  calendarInvite: GroupMeetCalendarInvite;
+  recipientName: string;
+  recipientEmail: string;
+}) {
+  return sendSingleGroupMeetFinalConfirmationEmail({
+    requestId: args.requestId,
+    requestTitle: args.requestTitle,
+    timezone: args.timezone,
+    recipientName: args.recipientName,
+    recipientEmail: args.recipientEmail,
+    finalSelection: args.finalSelection,
+    calendarInvite: args.calendarInvite,
+    mode: "preview",
+    previewIntroText:
+      "The real Google Calendar invite has already been created separately. This preview shows the companion Group Meet confirmation email guests receive right after that happens.",
+  });
+}
+
+async function sendSingleGroupMeetFinalReminderEmail(args: {
+  requestId: string;
+  requestTitle: string;
+  timezone: string;
+  recipientName: string;
+  recipientEmail: string;
+  finalSelection: GroupMeetFinalSelection;
+  calendarInvite: GroupMeetCalendarInvite;
+  participantRoster: string[];
+  mode: "automatic" | "manual";
+}) {
+  const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
+  if (!apiKey) {
+    return {
+      success: false,
+      error: "Brevo not configured in runtime env.",
+    };
+  }
+
+  const { senderEmail, senderName } = getGroupMeetSenderIdentity();
+  const finalBlockLabel = buildGroupMeetFinalBlockLabel({
+    finalSelection: args.finalSelection,
+    timezone: args.timezone,
+  });
+  const lineupHtml = args.participantRoster.length
+    ? `
+        <div style="margin-top:16px;padding:14px 16px;border-radius:14px;background:#f4f4f5;color:#18181b;">
+          <div style="font-weight:700;margin-bottom:8px;">Guest lineup</div>
+          ${args.participantRoster
+            .map(
+              (participant) =>
+                `<div style="margin:0 0 6px;">• ${escapeHtml(participant)}</div>`,
+            )
+            .join("")}
+        </div>
+      `
+    : "";
+  const meetLinkHtml = args.calendarInvite.meetLink
+    ? `
+        <p style="margin-top:16px;">
+          <a href="${args.calendarInvite.meetLink}" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#18181b;color:#fff;text-decoration:none;font-weight:600;">
+            Join Google Meet
+          </a>
+        </p>
+        <p style="color:#52525b;font-size:13px;">If the button does not work, use this link:<br/>${escapeHtml(args.calendarInvite.meetLink)}</p>
+      `
+    : "";
+  const subject = `${args.requestTitle}: starting in 1 hour`;
+  const selectionSignature =
+    buildGroupMeetFinalSelectionSignature(args.finalSelection) ||
+    args.calendarInvite.eventId;
+  const htmlContent = `
+    <div style="font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b;">
+      <p>Hi ${escapeHtml(args.recipientName || "there")},</p>
+      <p>
+        We are excited to host you in about one hour for
+        <strong>${escapeHtml(args.requestTitle)}</strong>.
+      </p>
+      <p>
+        Final meeting time: <strong>${escapeHtml(finalBlockLabel)}</strong><br/>
+        Timezone: <strong>${escapeHtml(args.timezone)}</strong>
+      </p>
+      <p>
+        Your Google Calendar invite should already be on your calendar. This is a gentle Group Meet reminder to check the event details and be ready to join.
+      </p>
+      ${lineupHtml}
+      ${meetLinkHtml}
+      <p style="margin-top:14px;color:#52525b;">
+        This reminder was sent through Group Meet to help the whole group stay on track for the final selected time.
+      </p>
+    </div>
+  `;
+
+  const sendResult = await sendBrevoTransactionalEmail({
+    toEmail: args.recipientEmail,
+    toName: args.recipientName || args.recipientEmail,
+    subject,
+    htmlContent,
+    sender: { email: senderEmail, name: senderName },
+    replyTo: { email: senderEmail, name: senderName },
+    bcc: [{ email: "info@fitwithpulse.ai", name: "Pulse Info" }],
+    tags: ["group-meet", "group-meet-final-reminder"],
+    idempotencyKey:
+      args.mode === "automatic"
+        ? buildEmailDedupeKey([
+            "group-meet-final-reminder-v1",
+            args.requestId,
+            args.recipientEmail.toLowerCase(),
+            selectionSignature,
+          ])
+        : undefined,
+    idempotencyMetadata:
+      args.mode === "automatic"
+        ? {
+            requestId: args.requestId,
+            recipientEmail: args.recipientEmail.toLowerCase(),
+            selectionSignature,
+          }
+        : undefined,
+    bypassDailyRecipientLimit: true,
+  });
+
+  if (!sendResult.success) {
+    return {
+      success: false,
+      skipped: Boolean(sendResult.skipped),
+      error: sendResult.error || "Brevo error",
+      messageId: null,
+    };
+  }
+
+  return {
+    success: true,
+    skipped: Boolean(sendResult.skipped),
+    error: null,
+    messageId: sendResult.messageId || null,
+  };
+}
+
+export async function sendGroupMeetFinalReminderEmailBatch(args: {
+  requestId: string;
+  requestTitle: string;
+  timezone: string;
+  finalSelection: GroupMeetFinalSelection;
+  calendarInvite: GroupMeetCalendarInvite;
+  invites: GroupMeetInviteDetail[];
+  mode: "automatic" | "manual";
+}) {
+  const recipients = buildGroupMeetFinalConfirmationRecipientInvites(
+    args.invites,
+  );
+  const participantRoster = buildGroupMeetParticipantRoster(args.invites);
+  const results = await Promise.all(
+    recipients.map((invite) =>
+      sendSingleGroupMeetFinalReminderEmail({
+        requestId: args.requestId,
+        requestTitle: args.requestTitle,
+        timezone: args.timezone,
+        recipientName: invite.name || "there",
+        recipientEmail: invite.email || "",
+        finalSelection: args.finalSelection,
+        calendarInvite: args.calendarInvite,
+        participantRoster,
+        mode: args.mode,
+      }),
+    ),
+  );
+
+  return {
+    recipientCount: recipients.length,
+    sentCount: results.filter((result) => result.success && !result.skipped)
+      .length,
+    skippedCount: results.filter((result) => result.success && result.skipped)
+      .length,
+    failedCount: results.filter((result) => !result.success).length,
+    messageIds: results
+      .map((result) => result.messageId)
+      .filter((value): value is string => Boolean(value)),
+    errors: results
+      .map((result, index) =>
+        result.success || !result.error
+          ? null
+          : `${recipients[index]?.email || recipients[index]?.name || "Recipient"}: ${result.error}`,
+      )
+      .filter((value): value is string => Boolean(value)),
+  };
 }
 
 async function sendGroupMeetHostProgressEmail(args: {
