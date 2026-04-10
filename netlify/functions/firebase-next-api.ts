@@ -369,6 +369,11 @@ const ROUTE_ENTRIES: RouteEntry[] = [
       import("../../src/pages/api/admin/group-meet/[requestId]/invites/[token]/flex.ts"),
   },
   {
+    pattern: "/api/admin/group-meet/[requestId]/invites/[token]",
+    loadHandler: () =>
+      import("../../src/pages/api/admin/group-meet/[requestId]/invites/[token]/index.ts"),
+  },
+  {
     pattern: "/api/admin/group-meet/[requestId]/invites/[token]/resend",
     loadHandler: () =>
       import("../../src/pages/api/admin/group-meet/[requestId]/invites/[token]/resend.ts"),

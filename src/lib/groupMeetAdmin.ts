@@ -182,6 +182,15 @@ function buildGroupMeetFinalConfirmationRecipientInvites(
   );
 }
 
+function buildGroupMeetFinalReminderRecipientInvites(
+  invites: GroupMeetInviteDetail[],
+) {
+  return invites.filter(
+    (invite) =>
+      typeof invite.email === "string" && invite.email.trim().length > 0,
+  );
+}
+
 function buildGroupMeetParticipantRoster(invites: GroupMeetInviteDetail[]) {
   const hostInvites = invites.filter(
     (invite) => invite.participantType === "host",
@@ -522,9 +531,7 @@ export async function sendGroupMeetFinalReminderEmailBatch(args: {
   invites: GroupMeetInviteDetail[];
   mode: "automatic" | "manual";
 }) {
-  const recipients = buildGroupMeetFinalConfirmationRecipientInvites(
-    args.invites,
-  );
+  const recipients = buildGroupMeetFinalReminderRecipientInvites(args.invites);
   const participantRoster = buildGroupMeetParticipantRoster(args.invites);
   const results = await Promise.all(
     recipients.map((invite) =>

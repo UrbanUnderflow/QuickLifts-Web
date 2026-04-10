@@ -18,6 +18,7 @@ import {
   Mail,
   RefreshCw,
   Sparkles,
+  Trash2,
   Upload,
   Users,
 } from "lucide-react";
@@ -73,6 +74,14 @@ type ApiUpdateResponse = {
 type ApiInviteResponse = {
   invite?: GroupMeetInviteSummary;
   status?: GroupMeetRequestSummary["status"];
+};
+
+type ApiRemoveInviteResponse = {
+  success?: boolean;
+  removedInviteName?: string;
+  participantCount?: number;
+  responseCount?: number;
+  calendarInviteUpdated?: boolean;
 };
 
 type ApiContactsResponse = {
@@ -450,6 +459,9 @@ const GroupMeetAdminPage: React.FC = () => {
   const [resendingInviteToken, setResendingInviteToken] = useState<
     string | null
   >(null);
+  const [removingInviteToken, setRemovingInviteToken] = useState<string | null>(
+    null,
+  );
   const [sendingRequestId, setSendingRequestId] = useState<string | null>(null);
   const [previewInviteToken, setPreviewInviteToken] = useState("");
   const [previewRecipientName, setPreviewRecipientName] = useState("");
@@ -1764,6 +1776,59 @@ const GroupMeetAdminPage: React.FC = () => {
       setRequestModalMessage({ type: "error", text: errorText });
     } finally {
       setResendingInviteToken(null);
+    }
+  };
+
+  const removeInvite = async (invite: GroupMeetInviteSummary) => {
+    if (!selectedRequestId || invite.participantType === "host") return;
+
+    const confirmed = window.confirm(
+      selectedRequest?.calendarInvite
+        ? `Remove ${invite.name} from this Group Meet? This will also update the live Google Calendar invite attendee list.`
+        : `Remove ${invite.name} from this Group Meet?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setRemovingInviteToken(invite.token);
+    setMessage(null);
+    setRequestModalMessage(null);
+
+    try {
+      const headers = await getAdminHeaders();
+      const response = await fetch(
+        `/api/admin/group-meet/${encodeURIComponent(selectedRequestId)}/invites/${encodeURIComponent(invite.token)}`,
+        {
+          method: "DELETE",
+          headers,
+        },
+      );
+
+      const payload = (await response
+        .json()
+        .catch(() => ({}))) as ApiRemoveInviteResponse & { error?: string };
+
+      if (!response.ok || !payload.success) {
+        throw new Error(
+          payload.error || `Failed to remove ${invite.name} from Group Meet.`,
+        );
+      }
+
+      await Promise.all([loadRequests(), loadRequestDetail(selectedRequestId)]);
+
+      const successText = payload.calendarInviteUpdated
+        ? `${invite.name} was removed and the Google Calendar invite was updated.`
+        : `${invite.name} was removed from the Group Meet request.`;
+      setMessage({ type: "success", text: successText });
+      setRequestModalMessage({ type: "success", text: successText });
+    } catch (error: any) {
+      const errorText =
+        error?.message || `Failed to remove ${invite.name} from Group Meet.`;
+      setMessage({ type: "error", text: errorText });
+      setRequestModalMessage({ type: "error", text: errorText });
+    } finally {
+      setRemovingInviteToken(null);
     }
   };
 
@@ -3407,6 +3472,21 @@ const GroupMeetAdminPage: React.FC = () => {
                                             : inviteActionLabel}
                                         </button>
                                       )}
+                                    {invite.participantType !== "host" && (
+                                      <button
+                                        type="button"
+                                        onClick={() => removeInvite(invite)}
+                                        disabled={
+                                          removingInviteToken === invite.token
+                                        }
+                                        className="inline-flex items-center gap-2 rounded-lg border border-red-500/20 px-3 py-1.5 text-xs text-red-100 hover:bg-red-500/10 disabled:opacity-50"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                        {removingInviteToken === invite.token
+                                          ? "Removing…"
+                                          : "Remove guest"}
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
 
