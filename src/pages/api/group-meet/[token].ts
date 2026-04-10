@@ -122,7 +122,7 @@ function buildInvitePayload(args: {
         deadlineAt,
         timezone: args.requestData.timezone || 'America/New_York',
         meetingDurationMinutes: Number(args.requestData.meetingDurationMinutes) || 30,
-        status: args.requestData.status === 'closed' || deadlinePassed ? 'closed' : 'collecting',
+        status: args.requestData.status === 'closed' ? 'closed' : 'collecting',
       },
     },
   };
@@ -149,9 +149,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     inviteDocs: invitesSnapshot.docs,
     targetMonth: requestData.targetMonth || '',
   });
-  const deadlineAt = toIso(requestData.deadlineAt);
-  const deadlinePassed = deadlineAt ? new Date(deadlineAt).getTime() <= Date.now() : false;
-
   if (req.method === 'GET') {
     return res.status(200).json(
       buildInvitePayload({
@@ -169,10 +166,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (requestData.status === 'closed') {
-    return res.status(403).json({ error: 'This availability window is closed.' });
-  }
-
-  if (deadlinePassed) {
     return res.status(403).json({ error: 'This availability window is closed.' });
   }
 

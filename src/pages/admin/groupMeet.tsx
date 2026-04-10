@@ -175,12 +175,10 @@ const shouldUseDevFirebaseForAdminApi = () => {
     return true;
   }
 
-  const hostname = window.location.hostname;
-  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
   const forceDevFirebase = window.localStorage.getItem('forceDevFirebase') === 'true';
   const devMode = window.localStorage.getItem('devMode') === 'true';
 
-  return forceDevFirebase || devMode || isLocalhost;
+  return forceDevFirebase || devMode;
 };
 
 const AvatarBubble: React.FC<{ name: string; imageUrl?: string | null; size?: string }> = ({
@@ -287,6 +285,7 @@ const GroupMeetAdminPage: React.FC = () => {
   const [requests, setRequests] = useState<GroupMeetRequestSummary[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<GroupMeetRequestDetail | null>(null);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [recommendLoading, setRecommendLoading] = useState(false);
@@ -346,6 +345,31 @@ const GroupMeetAdminPage: React.FC = () => {
       ),
     [selectedRequest]
   );
+
+  const selectedCalendarDayParticipants = useMemo(() => {
+    if (!selectedRequest || !selectedCalendarDate) {
+      return [];
+    }
+
+    return selectedRequest.invites
+      .map((invite) => {
+        const daySlots = invite.availabilityEntries.filter((slot) => slot.date === selectedCalendarDate);
+        return daySlots.length
+          ? {
+              ...invite,
+              daySlots,
+            }
+          : null;
+      })
+      .filter((invite): invite is GroupMeetRequestDetail['invites'][number] & { daySlots: GroupMeetAvailabilitySlot[] } => Boolean(invite))
+      .sort((left, right) => {
+        if ((left.participantType === 'host') !== (right.participantType === 'host')) {
+          return left.participantType === 'host' ? -1 : 1;
+        }
+
+        return left.name.localeCompare(right.name);
+      });
+  }, [selectedCalendarDate, selectedRequest]);
 
   const previewGuestInvites = useMemo(
     () => (selectedRequest?.invites || []).filter((invite) => invite.participantType !== 'host'),
@@ -469,6 +493,42 @@ const GroupMeetAdminPage: React.FC = () => {
     if (!selectedRequestId) return;
     loadRequestDetail(selectedRequestId);
   }, [selectedRequestId]);
+
+  useEffect(() => {
+    if (!selectedRequest || !requestCalendarDays.length) {
+      setSelectedCalendarDate(null);
+      return;
+    }
+
+    setSelectedCalendarDate((current) => {
+      if (
+        current &&
+        requestCalendarDays.some((day) => format(day, 'yyyy-MM-dd') === current)
+      ) {
+        return current;
+      }
+
+      const firstWithAvailability = requestCalendarDays.find((day) => {
+        const dateKey = format(day, 'yyyy-MM-dd');
+        return (
+          isSameMonth(day, parse(`${selectedRequest.targetMonth}-01`, 'yyyy-MM-dd', new Date())) &&
+          selectedRequest.invites.some((invite) =>
+            invite.availabilityEntries.some((slot) => slot.date === dateKey)
+          )
+        );
+      });
+
+      if (firstWithAvailability) {
+        return format(firstWithAvailability, 'yyyy-MM-dd');
+      }
+
+      const firstTargetMonthDay = requestCalendarDays.find((day) =>
+        isSameMonth(day, parse(`${selectedRequest.targetMonth}-01`, 'yyyy-MM-dd', new Date()))
+      );
+
+      return firstTargetMonthDay ? format(firstTargetMonthDay, 'yyyy-MM-dd') : null;
+    });
+  }, [requestCalendarDays, selectedRequest]);
 
   useEffect(() => {
     if (!selectedRequest) return;
@@ -1918,7 +1978,7 @@ const GroupMeetAdminPage: React.FC = () => {
                           <div>
                             <h3 className="text-xl font-semibold">Full availability calendar</h3>
                             <p className="mt-1 text-sm text-zinc-400">
-                              Each date shows the people who have supplied availability for that day.
+                              Each date shows the people who have supplied availability for that day. Click a day to inspect the exact submitted times.
                             </p>
                           </div>
                         </div>
@@ -1941,14 +2001,23 @@ const GroupMeetAdminPage: React.FC = () => {
                             const dayInvites = resolveSelectedInvitesForDate(dateKey);
 
                             return (
-                              <div
+                              <button
+                                type="button"
                                 key={dateKey}
-                                className={`min-h-[145px] rounded-2xl border p-3 ${
+                                onClick={() => inTargetMonth && setSelectedCalendarDate(dateKey)}
+                                disabled={!inTargetMonth}
+                                className={`min-h-[145px] rounded-2xl border p-3 text-left transition-colors ${
                                   inTargetMonth
                                     ? dayInvites.length
                                       ? 'border-[#E0FE10]/30 bg-[#E0FE10]/6'
                                       : 'border-zinc-800 bg-zinc-950/60'
                                     : 'border-zinc-900 bg-zinc-950/30 text-zinc-700'
+                                } ${
+                                  inTargetMonth
+                                    ? selectedCalendarDate === dateKey
+                                      ? 'ring-2 ring-[#E0FE10]/70'
+                                      : 'hover:border-zinc-700 hover:bg-zinc-900/80 cursor-pointer'
+                                    : 'cursor-default'
                                 }`}
                               >
                                 <div className="flex items-start justify-between gap-2">
@@ -1983,10 +2052,71 @@ const GroupMeetAdminPage: React.FC = () => {
                                     {dayInvites.map((invite) => invite.name).join(', ')}
                                   </div>
                                 )}
-                              </div>
+                              </button>
                             );
                           })}
                         </div>
+
+                        {selectedCalendarDate && (
+                          <div className="mt-5 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+                            <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                              <div>
+                                <div className="text-sm font-semibold text-white">
+                                  {formatMonthDate(selectedCalendarDate)}
+                                </div>
+                                <div className="mt-1 text-sm text-zinc-400">
+                                  {selectedCalendarDayParticipants.length
+                                    ? `${selectedCalendarDayParticipants.length} participant${selectedCalendarDayParticipants.length === 1 ? '' : 's'} added time on this day.`
+                                    : 'No one has submitted availability on this day yet.'}
+                                </div>
+                              </div>
+                              {selectedCalendarDayParticipants.length > 0 && (
+                                <div className="rounded-full border border-zinc-800 bg-black px-3 py-1.5 text-xs text-zinc-300">
+                                  {selectedCalendarDayParticipants.length}/{selectedRequest.analysis.totalParticipants} available
+                                </div>
+                              )}
+                            </div>
+
+                            {selectedCalendarDayParticipants.length > 0 ? (
+                              <div className="mt-4 space-y-3">
+                                {selectedCalendarDayParticipants.map((invite) => (
+                                  <div
+                                    key={`${selectedCalendarDate}-${invite.token}`}
+                                    className="rounded-2xl border border-zinc-800/80 bg-black/50 px-4 py-3"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <AvatarBubble name={invite.name} imageUrl={invite.imageUrl} />
+                                      <div>
+                                        <div className="font-medium text-white">
+                                          {invite.name}
+                                          {invite.participantType === 'host' ? ' • Host' : ''}
+                                        </div>
+                                        <div className="text-xs text-zinc-500">
+                                          {invite.daySlots.length} time slot{invite.daySlots.length === 1 ? '' : 's'}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                      {invite.daySlots.map((slot, slotIndex) => (
+                                        <span
+                                          key={`${invite.token}-${selectedCalendarDate}-${slot.startMinutes}-${slotIndex}`}
+                                          className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300"
+                                        >
+                                          {formatMinutesAsTime(slot.startMinutes)} - {formatMinutesAsTime(slot.endMinutes)}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="mt-4 rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                                Select another date to inspect the submitted availability for that day.
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">

@@ -91,6 +91,10 @@ interface ParseExpenseImportResponse {
   };
 }
 
+const EXPENSE_IMPORT_FUNCTION_ENDPOINT = '/.netlify/functions/founder-budget-parse-expenses';
+const EXPENSE_IMPORT_OPENAI_BRIDGE_ENDPOINT = '/api/openai/v1/chat/completions';
+const EXPENSE_IMPORT_API_ENDPOINT = '/api/admin/founder-budget/parse-expenses';
+
 const CURRENT_DATE = new Date();
 const DEFAULT_MONTH = CURRENT_DATE.getMonth() + 1;
 const DEFAULT_YEAR = CURRENT_DATE.getFullYear();
@@ -121,6 +125,8 @@ const PAYMENT_METHOD_OPTIONS = [
   'Debit',
   'Other',
 ];
+
+const EXPENSE_IMPORT_PAYMENT_OPTIONS = PAYMENT_METHOD_OPTIONS.join(', ');
 
 const BUSINESS_RECURRING_TEMPLATE = [
   { label: 'Figma', amount: '40' },
@@ -261,6 +267,149 @@ const buildBudgetDocId = (scope: BudgetScope, year: number, month: number) =>
 
 const normalizePaymentMethod = (value?: string) =>
   PAYMENT_METHOD_OPTIONS.includes(value || '') ? (value as string) : 'Other';
+
+const cleanJsonResponse = (value: string) =>
+  value
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .replace(/^[^{[]*/, '')
+    .replace(/[^}\]]*$/, '')
+    .replace(/,(\s*[}\]])/g, '$1')
+    .trim();
+
+const parseExpenseImportModelResponse = (value: string) => {
+  const cleaned = cleanJsonResponse(value);
+
+  try {
+    return JSON.parse(cleaned) as Record<string, unknown>;
+  } catch (_error) {
+    const objectMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (objectMatch) {
+      return JSON.parse(objectMatch[0]) as Record<string, unknown>;
+    }
+
+    throw new Error('AI returned invalid JSON while parsing founder budget screenshot expenses.');
+  }
+};
+
+const extractOpenAIMessageText = (value: unknown) => {
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((part) => {
+        if (typeof part === 'string') {
+          return part;
+        }
+
+        if (part && typeof part === 'object' && 'text' in part && typeof part.text === 'string') {
+          return part.text;
+        }
+
+        return '';
+      })
+      .join('\n')
+      .trim();
+  }
+
+  return '';
+};
+
+const normalizeParsedImportedExpense = (value: unknown): ParsedExpenseImport | null => {
+  if (!value || typeof value !== 'object') return null;
+
+  const candidate = value as Record<string, unknown>;
+  const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
+  const amount = moneyStringToNumber(String(candidate.amount ?? ''));
+  if (!label || amount === 0) return null;
+
+  return {
+    date: typeof candidate.date === 'string' ? candidate.date : '',
+    label,
+    amount,
+    paymentMethod: normalizePaymentMethod(typeof candidate.paymentMethod === 'string' ? candidate.paymentMethod : undefined),
+    notes: typeof candidate.notes === 'string' ? candidate.notes.trim() : '',
+  };
+};
+
+const buildExpenseImportPrompt = ({
+  existingExpenses,
+  targetMonth,
+  targetYear,
+}: {
+  existingExpenses: Array<{
+    date?: string;
+    label?: string;
+    amount?: number | string;
+    paymentMethod?: string;
+    notes?: string;
+  }>;
+  targetMonth: number;
+  targetYear: number;
+}) => `You are extracting expense line items from screenshot images for a founder budget dashboard.
+
+Target budget month: ${targetMonth}
+Target budget year: ${targetYear}
+
+Existing misc expenses already on the month:
+${JSON.stringify(existingExpenses.slice(0, 150), null, 2)}
+
+Your job:
+1. Read the uploaded screenshot images.
+2. Extract only actual expense rows that belong in a misc / line-item expense list.
+3. Ignore totals, balances, headers, section labels, notes blocks, checkbox columns, and summary metrics.
+4. Normalize dates to YYYY-MM-DD when the image shows enough information.
+5. If the image shows only month/day but not year, use the target month/year above.
+6. If the payment method is visible, map it to one of: ${EXPENSE_IMPORT_PAYMENT_OPTIONS}. Otherwise use "Other".
+7. Set notes to "" unless a short note is genuinely useful.
+8. Deduplicate aggressively against the existing misc expenses list. If an expense already exists, do not include it again.
+9. Also deduplicate across overlapping screenshots in this same request.
+
+Duplicate guidance:
+- Treat rows as duplicates when the merchant/description is the same expense even if OCR punctuation, case, spacing, or long reference digits differ.
+- Same label + same amount + same date is a duplicate.
+- If date is missing, same label + same amount should usually be treated as a duplicate.
+
+Return JSON only in this exact shape:
+{
+  "expenses": [
+    {
+      "date": "YYYY-MM-DD or empty string",
+      "label": "Merchant or expense description",
+      "amount": 123.45,
+      "paymentMethod": "Discover|Amex|Apple Card|Chase|Checking|Cash|Debit|Other",
+      "notes": ""
+    }
+  ],
+  "summary": {
+    "parsedCount": 0,
+    "duplicateCount": 0
+  }
+}`;
+
+const normalizeExpenseImportResult = (value: Record<string, unknown>): ParseExpenseImportResponse => {
+  const parsedExpensesRaw = Array.isArray(value.expenses) ? value.expenses : [];
+  const normalizedExpenses = parsedExpensesRaw
+    .map((expense) => normalizeParsedImportedExpense(expense))
+    .filter((expense): expense is ParsedExpenseImport => !!expense);
+
+  const summary = value.summary && typeof value.summary === 'object' ? (value.summary as Record<string, unknown>) : {};
+
+  return {
+    success: true,
+    expenses: normalizedExpenses,
+    summary: {
+      parsedCount:
+        typeof summary.parsedCount === 'number' ? summary.parsedCount : normalizedExpenses.length,
+      duplicateCount:
+        typeof summary.duplicateCount === 'number' ? summary.duplicateCount : 0,
+      newCount:
+        typeof summary.newCount === 'number' ? summary.newCount : normalizedExpenses.length,
+    },
+  };
+};
 
 const normalizeExpenseLabel = (value: string) =>
   value
@@ -530,6 +679,7 @@ const buildDraftForSelection = (
 const FounderBudgetAdminPage: React.FC = () => {
   const router = useRouter();
   const expenseScreenshotInputRef = useRef<HTMLInputElement | null>(null);
+  const expenseDropZoneDepthRef = useRef(0);
   const [records, setRecords] = useState<FounderBudgetRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -546,6 +696,7 @@ const FounderBudgetAdminPage: React.FC = () => {
   const [expenseImportMessage, setExpenseImportMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [expenseScreenshotFiles, setExpenseScreenshotFiles] = useState<File[]>([]);
   const [expenseScreenshotPreviewUrls, setExpenseScreenshotPreviewUrls] = useState<string[]>([]);
+  const [isExpenseDropZoneActive, setIsExpenseDropZoneActive] = useState(false);
 
   const comparableDraft = JSON.stringify(buildComparableDraft(draft));
   const comparableBaseline = JSON.stringify(buildComparableDraft(baselineDraft));
@@ -771,6 +922,145 @@ const FounderBudgetAdminPage: React.FC = () => {
     return getDownloadURL(screenshotRef);
   };
 
+  const buildExpenseImportRequestPayload = (imageUrls: string[]) => ({
+    imageUrls,
+    targetMonth: selectedMonth,
+    targetYear: selectedYear,
+    existingExpenses: draft.miscExpenses.map((expense) => ({
+      date: expense.date,
+      label: expense.label,
+      amount: moneyStringToNumber(expense.amount),
+      paymentMethod: expense.paymentMethod,
+      notes: expense.notes,
+    })),
+  });
+
+  const readExpenseImportError = (payload: unknown, fallbackMessage: string) => {
+    if (payload && typeof payload === 'object') {
+      const candidate = payload as Record<string, unknown>;
+      if (typeof candidate.error === 'string' && candidate.error.trim()) {
+        return candidate.error;
+      }
+
+      if (candidate.error && typeof candidate.error === 'object') {
+        const nestedError = candidate.error as Record<string, unknown>;
+        if (typeof nestedError.message === 'string' && nestedError.message.trim()) {
+          return nestedError.message;
+        }
+      }
+
+      if (typeof candidate.message === 'string' && candidate.message.trim()) {
+        return candidate.message;
+      }
+    }
+
+    return fallbackMessage;
+  };
+
+  const requestExpenseImportFromJsonEndpoint = async (
+    endpoint: string,
+    requestPayload: ReturnType<typeof buildExpenseImportRequestPayload>,
+    options?: { allowMissing?: boolean }
+  ) => {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestPayload),
+    });
+
+    if (response.status === 404 && options?.allowMissing) {
+      return null;
+    }
+
+    let parsedResponse: ParseExpenseImportResponse;
+    try {
+      parsedResponse = (await response.json()) as ParseExpenseImportResponse;
+    } catch (_error) {
+      parsedResponse = { error: 'Expense import endpoint returned an unreadable response.' };
+    }
+
+    if (!response.ok || !parsedResponse.success) {
+      throw new Error(readExpenseImportError(parsedResponse, 'Unable to parse screenshot expenses.'));
+    }
+
+    return parsedResponse;
+  };
+
+  const requestExpenseImportFromOpenAIBridge = async (
+    requestPayload: ReturnType<typeof buildExpenseImportRequestPayload>
+  ) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Sign in again to use screenshot import.');
+    }
+
+    const idToken = await currentUser.getIdToken();
+    const response = await fetch(EXPENSE_IMPORT_OPENAI_BRIDGE_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+        'OpenAI-Organization': 'founderBudgetExpenseImport',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        temperature: 0.1,
+        max_tokens: 900,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a precise finance OCR assistant. You extract structured expense rows from screenshots and return strict JSON only.',
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: buildExpenseImportPrompt(requestPayload),
+              },
+              ...requestPayload.imageUrls.map((url) => ({
+                type: 'image_url',
+                image_url: {
+                  url,
+                  detail: 'high',
+                },
+              })),
+            ],
+          },
+        ],
+      }),
+    });
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch (_error) {
+      payload = null;
+    }
+
+    if (!response.ok) {
+      throw new Error(readExpenseImportError(payload, 'Unable to parse screenshot expenses.'));
+    }
+
+    const rawContent = extractOpenAIMessageText(
+      (payload as { choices?: Array<{ message?: { content?: unknown } }> } | null)?.choices?.[0]?.message?.content
+    );
+
+    if (!rawContent) {
+      throw new Error('OpenAI did not return any screenshot extraction content.');
+    }
+
+    return normalizeExpenseImportResult(parseExpenseImportModelResponse(rawContent));
+  };
+
   const importExpenseScreenshots = async (filesToImport: File[]) => {
     if (!filesToImport.length) {
       setExpenseImportMessage({
@@ -785,29 +1075,37 @@ const FounderBudgetAdminPage: React.FC = () => {
 
     try {
       const imageUrls = await Promise.all(filesToImport.map((file) => uploadExpenseImportImageToStorage(file)));
+      const requestPayload = buildExpenseImportRequestPayload(imageUrls);
 
-      const response = await fetch('/api/admin/founder-budget/parse-expenses', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          imageUrls,
-          targetMonth: selectedMonth,
-          targetYear: selectedYear,
-          existingExpenses: draft.miscExpenses.map((expense) => ({
-            date: expense.date,
-            label: expense.label,
-            amount: moneyStringToNumber(expense.amount),
-            paymentMethod: expense.paymentMethod,
-            notes: expense.notes,
-          })),
-        }),
-      });
+      let result: ParseExpenseImportResponse | null = null;
+      let lastError: Error | null = null;
 
-      const result = (await response.json()) as ParseExpenseImportResponse;
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Unable to parse screenshot expenses.');
+      const importStrategies = [
+        () =>
+          requestExpenseImportFromJsonEndpoint(EXPENSE_IMPORT_FUNCTION_ENDPOINT, requestPayload, {
+            allowMissing: true,
+          }),
+        () => requestExpenseImportFromOpenAIBridge(requestPayload),
+        () => requestExpenseImportFromJsonEndpoint(EXPENSE_IMPORT_API_ENDPOINT, requestPayload),
+      ];
+
+      for (const strategy of importStrategies) {
+        try {
+          const candidate = await strategy();
+          if (!candidate) {
+            continue;
+          }
+
+          result = candidate;
+          break;
+        } catch (error) {
+          lastError =
+            error instanceof Error ? error : new Error('Unable to parse screenshot expenses.');
+        }
+      }
+
+      if (!result?.success) {
+        throw lastError || new Error('Unable to parse screenshot expenses.');
       }
 
       const parsedExpenses = Array.isArray(result.expenses) ? result.expenses : [];
@@ -863,7 +1161,12 @@ const FounderBudgetAdminPage: React.FC = () => {
     const files = Array.from(event.target.files || []);
     event.target.value = '';
 
+    await queueExpenseScreenshotsForImport(files);
+  };
+
+  const queueExpenseScreenshotsForImport = async (files: File[]) => {
     if (!files.length) return;
+    if (parsingExpenseScreenshots) return;
 
     const imageFiles = files.filter((file) => file.type.startsWith('image/'));
     if (!imageFiles.length) {
@@ -887,6 +1190,48 @@ const FounderBudgetAdminPage: React.FC = () => {
     }
 
     await importExpenseScreenshots(imageFiles);
+  };
+
+  const handleExpenseDropZoneDragEnter = (event: React.DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (parsingExpenseScreenshots) return;
+
+    expenseDropZoneDepthRef.current += 1;
+    setIsExpenseDropZoneActive(true);
+  };
+
+  const handleExpenseDropZoneDragOver = (event: React.DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!parsingExpenseScreenshots) {
+      setIsExpenseDropZoneActive(true);
+    }
+  };
+
+  const handleExpenseDropZoneDragLeave = (event: React.DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    expenseDropZoneDepthRef.current = Math.max(0, expenseDropZoneDepthRef.current - 1);
+    if (expenseDropZoneDepthRef.current === 0) {
+      setIsExpenseDropZoneActive(false);
+    }
+  };
+
+  const handleExpenseDropZoneDrop = async (event: React.DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    expenseDropZoneDepthRef.current = 0;
+    setIsExpenseDropZoneActive(false);
+
+    if (parsingExpenseScreenshots) return;
+
+    const files = Array.from(event.dataTransfer.files || []);
+    await queueExpenseScreenshotsForImport(files);
   };
 
   const handleResetDraft = () => {
@@ -1463,6 +1808,65 @@ const FounderBudgetAdminPage: React.FC = () => {
                           Retry import
                         </button>
                       )}
+                    </div>
+
+                    <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <button
+                        type="button"
+                        onClick={() => expenseScreenshotInputRef.current?.click()}
+                        onDragEnter={handleExpenseDropZoneDragEnter}
+                        onDragOver={handleExpenseDropZoneDragOver}
+                        onDragLeave={handleExpenseDropZoneDragLeave}
+                        onDrop={handleExpenseDropZoneDrop}
+                        disabled={parsingExpenseScreenshots}
+                        className={`flex min-h-[220px] w-full flex-col items-center justify-center rounded-[28px] border-2 border-dashed px-6 py-6 text-center transition lg:max-w-[240px] ${
+                          parsingExpenseScreenshots
+                            ? 'cursor-wait border-zinc-700 bg-[#0f1216] text-zinc-500'
+                            : isExpenseDropZoneActive
+                              ? 'border-[#E0FE10]/70 bg-[#E0FE10]/10 text-[#F3FFBD]'
+                              : 'border-zinc-700 bg-[#0f1216] text-zinc-300 hover:border-sky-400/50 hover:bg-sky-400/5 hover:text-white'
+                        }`}
+                      >
+                        <div
+                          className={`mb-4 rounded-2xl p-4 ${
+                            isExpenseDropZoneActive && !parsingExpenseScreenshots
+                              ? 'bg-[#E0FE10]/12 text-[#E0FE10]'
+                              : 'bg-[#1a1e24] text-sky-300'
+                          }`}
+                        >
+                          {parsingExpenseScreenshots ? (
+                            <Loader2 className="h-7 w-7 animate-spin" />
+                          ) : (
+                            <Upload className="h-7 w-7" />
+                          )}
+                        </div>
+                        <div className="text-base font-semibold text-white">
+                          {parsingExpenseScreenshots
+                            ? 'Importing screenshots...'
+                            : isExpenseDropZoneActive
+                              ? 'Drop screenshots here'
+                              : 'Drag screenshots here'}
+                        </div>
+                        <p className="mt-2 max-w-[16rem] text-sm text-zinc-400">
+                          {parsingExpenseScreenshots
+                            ? 'Hang tight while we parse the expenses into misc line items.'
+                            : 'Drop one or more images into this square, or click here to browse.'}
+                        </p>
+                        <span className="mt-4 rounded-full border border-zinc-700 px-3 py-1 text-xs uppercase tracking-[0.18em] text-zinc-500">
+                          PNG, JPG, HEIC
+                        </span>
+                      </button>
+
+                      <div className="flex-1 rounded-[24px] border border-zinc-800 bg-[#0f1216] p-4">
+                        <div className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+                          How it works
+                        </div>
+                        <div className="mt-3 space-y-3 text-sm text-zinc-400">
+                          <p>1. Drag screenshots into the square or use the upload button above.</p>
+                          <p>2. We parse each visible expense row and compare it to this month&apos;s misc list.</p>
+                          <p>3. Existing matches are skipped, so re-uploading a full list only adds anything new.</p>
+                        </div>
+                      </div>
                     </div>
 
                     {expenseImportMessage && (

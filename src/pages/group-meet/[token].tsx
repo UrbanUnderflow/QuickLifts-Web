@@ -386,9 +386,13 @@ const GroupMeetInvitePage: React.FC = () => {
   const googleCalendarHint = googleCalendarConnected
     ? 'Import busy blocks from Google Calendar to prefill your draft availability. Nothing is submitted until you press Save availability.'
     : 'Optionally connect Google Calendar to prefill your draft availability from busy-block data. We never submit anything automatically.';
+  const isClosed = invite?.request.status === 'closed';
+  const deadlinePassedButStillOpen = Boolean(invite?.deadlinePassed && !isClosed);
   const pickerSubtitle = googleCalendarConnected
     ? 'Tap the days that work, add your times, or import Google Calendar to prefill your draft. Hover the guest images to see who has already replied.'
-    : 'Tap the days that work, add one or more time windows, and save before the deadline.';
+    : deadlinePassedButStillOpen
+      ? 'The deadline has passed, but you can still add or update your availability here.'
+      : 'Tap the days that work, add one or more time windows, and save when you are ready.';
 
   return (
     <div className="min-h-screen bg-[#05070b] text-white">
@@ -425,7 +429,7 @@ const GroupMeetInvitePage: React.FC = () => {
                   )}
                   <h1 className="mt-4 text-3xl sm:text-4xl font-semibold">{invite.request.title}</h1>
                   <p className="mt-3 max-w-2xl text-zinc-300">
-                    Hi {invite.name}. Tap any day that works for you, add one or more time windows, and save before the deadline.
+                    Hi {invite.name}. Tap any day that works for you, add one or more time windows, and save your availability. You can still come back later to update it if needed.
                   </p>
                 </div>
 
@@ -466,6 +470,12 @@ const GroupMeetInvitePage: React.FC = () => {
               </div>
             )}
 
+            {deadlinePassedButStillOpen && (
+              <div className="mt-6 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                The deadline has passed, but this request is still open. You can continue adding or updating your availability.
+              </div>
+            )}
+
             <section className="mt-6 rounded-[28px] border border-white/10 bg-white/[0.03] p-5 sm:p-6">
               <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                 <div className="max-w-3xl">
@@ -500,7 +510,7 @@ const GroupMeetInvitePage: React.FC = () => {
                     <button
                       type="button"
                       onClick={startGoogleCalendarConnect}
-                      disabled={calendarAction === 'connect' || invite.deadlinePassed}
+                      disabled={calendarAction === 'connect' || isClosed}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#E0FE10] px-5 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-60 sm:w-auto"
                     >
                       {calendarAction === 'connect' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
@@ -511,7 +521,7 @@ const GroupMeetInvitePage: React.FC = () => {
                       <button
                         type="button"
                         onClick={importGoogleCalendarAvailability}
-                        disabled={calendarAction === 'import' || invite.deadlinePassed}
+                        disabled={calendarAction === 'import' || isClosed}
                         className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#E0FE10] px-5 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-60 sm:w-auto"
                       >
                         {calendarAction === 'import' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
@@ -544,11 +554,11 @@ const GroupMeetInvitePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={submitAvailability}
-                  disabled={saving || invite.deadlinePassed}
+                  disabled={saving || isClosed}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#E0FE10] px-5 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                  {invite.deadlinePassed ? 'Deadline passed' : 'Save availability'}
+                  {isClosed ? 'Availability closed' : 'Save availability'}
                 </button>
               </div>
 
@@ -558,14 +568,14 @@ const GroupMeetInvitePage: React.FC = () => {
                   importedSuggestions={importedSuggestions}
                   peerAvailability={invite.peerAvailability}
                   meetingDurationMinutes={invite.request.meetingDurationMinutes}
-                currentParticipant={{
+                  currentParticipant={{
                   token: invite.token,
                   name: invite.name,
                   imageUrl: invite.imageUrl || null,
                   participantType: invite.participantType,
                   }}
                   onChange={setAvailabilityEntries}
-                  disabled={invite.deadlinePassed}
+                  disabled={isClosed}
                   title="Calendar"
                   subtitle={pickerSubtitle}
                 />

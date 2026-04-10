@@ -10,6 +10,7 @@ import { firebaseStorageService } from '../api/firebase/storage/service';
 import { Camera, Eye, EyeOff, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import {
   buildCurrentLegalAcceptance,
+  cacheCurrentLegalAcceptance,
   PRIVACY_POLICY_PATH,
   TERMS_PATH,
 } from '../utils/legalAcceptance';
@@ -274,6 +275,7 @@ const SignUpPage: React.FC = () => {
       // Create User instance and save to Firestore
       const user = new User(firebaseUser.uid, userData);
       await userService.updateUser(firebaseUser.uid, user);
+      cacheCurrentLegalAcceptance(firebaseUser.uid, 'web-signup-email');
 
       // Send welcome email (best-effort; does not block signup)
       try {
