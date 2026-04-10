@@ -193,6 +193,25 @@ export type GroupMeetRequestDetail = Omit<
   calendarSetup: GroupMeetCalendarSetup;
 };
 
+export function buildGroupMeetCalendarEventOpenUrl(
+  invite: Pick<GroupMeetCalendarInvite, "htmlLink" | "organizerEmail"> | null,
+) {
+  const htmlLink = invite?.htmlLink?.trim();
+  if (!htmlLink) {
+    return null;
+  }
+
+  try {
+    const url = new URL(htmlLink);
+    if (invite?.organizerEmail?.trim()) {
+      url.searchParams.set("authuser", invite.organizerEmail.trim());
+    }
+    return url.toString();
+  } catch (_error) {
+    return htmlLink;
+  }
+}
+
 export function isValidGroupMeetMonth(value: string): boolean {
   return /^\d{4}-\d{2}$/.test((value || "").trim());
 }
