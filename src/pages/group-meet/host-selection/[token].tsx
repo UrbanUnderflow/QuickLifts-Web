@@ -1,8 +1,13 @@
-import Head from 'next/head';
-import { useRouter } from 'next/router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarCheck2, CheckCircle2, Loader2 } from 'lucide-react';
-import { formatMinutesAsTime, type GroupMeetCalendarInvite, type GroupMeetFinalSelection } from '../../../lib/groupMeet';
+import Head from "next/head";
+import { useRouter } from "next/router";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { CalendarCheck2, CheckCircle2, Loader2 } from "lucide-react";
+import {
+  buildGroupMeetCalendarEventOpenUrl,
+  formatMinutesAsTime,
+  type GroupMeetCalendarInvite,
+  type GroupMeetFinalSelection,
+} from "../../../lib/groupMeet";
 
 type HostSelectionResponse = {
   requestTitle: string;
@@ -16,18 +21,19 @@ function formatSelectionDate(date: string) {
     return date;
   }
 
-  const [year, month, day] = date.split('-').map(Number);
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    timeZone: 'UTC',
+  const [year, month, day] = date.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
   }).format(new Date(Date.UTC(year, (month || 1) - 1, day || 1, 12, 0, 0)));
 }
 
 const GroupMeetHostSelectionPage: React.FC = () => {
   const router = useRouter();
-  const token = typeof router.query.token === 'string' ? router.query.token : '';
+  const token =
+    typeof router.query.token === "string" ? router.query.token : "";
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<HostSelectionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,21 +51,31 @@ const GroupMeetHostSelectionPage: React.FC = () => {
       setError(null);
 
       try {
-        const response = await fetch(`/api/group-meet/host-selection/${encodeURIComponent(token)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        const payload = (await response.json().catch(() => ({}))) as Partial<HostSelectionResponse> & {
+        const response = await fetch(
+          `/api/group-meet/host-selection/${encodeURIComponent(token)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+        const payload = (await response
+          .json()
+          .catch(() => ({}))) as Partial<HostSelectionResponse> & {
           error?: string;
         };
 
         if (!response.ok || !payload.finalSelection) {
-          throw new Error(payload.error || 'Failed to finalize the selected meeting time.');
+          throw new Error(
+            payload.error || "Failed to finalize the selected meeting time.",
+          );
         }
 
         setResult(payload as HostSelectionResponse);
       } catch (caughtError: any) {
-        setError(caughtError?.message || 'Failed to finalize the selected meeting time.');
+        setError(
+          caughtError?.message ||
+            "Failed to finalize the selected meeting time.",
+        );
       } finally {
         setLoading(false);
       }
@@ -69,7 +85,7 @@ const GroupMeetHostSelectionPage: React.FC = () => {
   }, [router.isReady, token]);
 
   const confirmationLabel = useMemo(() => {
-    if (!result?.finalSelection) return '';
+    if (!result?.finalSelection) return "";
     return `${formatSelectionDate(result.finalSelection.date)} • ${formatMinutesAsTime(result.finalSelection.startMinutes)} - ${formatMinutesAsTime(result.finalSelection.endMinutes)} (${result.timezone})`;
   }, [result]);
 
@@ -88,9 +104,12 @@ const GroupMeetHostSelectionPage: React.FC = () => {
                 <Loader2 className="h-7 w-7 animate-spin text-[#E0FE10]" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold">Finalizing your selected Group Meet time</h1>
+                <h1 className="text-2xl font-semibold">
+                  Finalizing your selected Group Meet time
+                </h1>
                 <p className="mt-2 text-sm leading-6 text-zinc-400 sm:text-base">
-                  Group Meet is saving the selected slot, creating the calendar invite, and sending it out now.
+                  Group Meet is saving the selected slot, creating the calendar
+                  invite, and sending it out now.
                 </p>
               </div>
             </div>
@@ -100,8 +119,9 @@ const GroupMeetHostSelectionPage: React.FC = () => {
                 {error}
               </div>
               <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-6 text-sm leading-7 text-zinc-300">
-                The recommendation link may have expired or the invite could not be created from this browser session.
-                You can return to Group Meet and choose a slot again from the latest host email.
+                The recommendation link may have expired or the invite could not
+                be created from this browser session. You can return to Group
+                Meet and choose a slot again from the latest host email.
               </div>
             </div>
           ) : result ? (
@@ -118,8 +138,9 @@ const GroupMeetHostSelectionPage: React.FC = () => {
                     Time selected and calendar invite created.
                   </h1>
                   <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-300 sm:text-base">
-                    Group Meet saved the selected meeting window for <strong>{result.requestTitle}</strong> and sent the
-                    calendar invite out to the attendees.
+                    Group Meet saved the selected meeting window for{" "}
+                    <strong>{result.requestTitle}</strong> and sent the calendar
+                    invite out to the attendees.
                   </p>
                 </div>
               </div>
@@ -130,19 +151,28 @@ const GroupMeetHostSelectionPage: React.FC = () => {
                     <CalendarCheck2 className="h-4 w-4 text-[#E0FE10]" />
                     Selected time
                   </div>
-                  <div className="mt-4 text-xl font-semibold">{confirmationLabel}</div>
+                  <div className="mt-4 text-xl font-semibold">
+                    {confirmationLabel}
+                  </div>
                   <p className="mt-3 text-sm leading-6 text-zinc-400">
-                    Everyone on the invite will receive the calendar event update. If you need to choose a different
-                    slot later, open a more recent host recommendation email and pick a new option.
+                    Everyone on the invite will receive the calendar event
+                    update. If you need to choose a different slot later, open a
+                    more recent host recommendation email and pick a new option.
                   </p>
                 </div>
 
                 <div className="rounded-3xl border border-white/10 bg-black/20 p-6">
-                  <div className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-400">Links</div>
+                  <div className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-400">
+                    Links
+                  </div>
                   <div className="mt-4 flex flex-col gap-3">
                     {result.calendarInvite?.htmlLink ? (
                       <a
-                        href={result.calendarInvite.htmlLink}
+                        href={
+                          buildGroupMeetCalendarEventOpenUrl(
+                            result.calendarInvite,
+                          ) || result.calendarInvite.htmlLink
+                        }
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center justify-center rounded-full bg-[#E0FE10] px-4 py-3 text-sm font-semibold text-black transition hover:bg-lime-300"
@@ -161,6 +191,11 @@ const GroupMeetHostSelectionPage: React.FC = () => {
                       </a>
                     ) : null}
                   </div>
+                  {result.calendarInvite?.organizerEmail ? (
+                    <div className="mt-4 text-xs leading-5 text-zinc-400">
+                      Organizer calendar: {result.calendarInvite.organizerEmail}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>

@@ -30,6 +30,7 @@ import AdminRouteGuard from "../../components/auth/AdminRouteGuard";
 import GroupMeetAvailabilityPicker from "../../components/group-meet/GroupMeetAvailabilityPicker";
 import { auth, storage } from "../../api/firebase/config";
 import {
+  buildGroupMeetCalendarEventOpenUrl,
   buildGroupMeetCandidateKey,
   formatMinutesAsTime,
   hasGroupMeetDeadlinePassed,
@@ -245,6 +246,13 @@ const getRequestStatusClassName = (
 const getInviteActionLabel = (
   invite: Pick<GroupMeetInviteSummary, "emailStatus" | "emailedAt">,
 ) => (hasGroupMeetInviteBeenSent(invite) ? "Resend invite" : "Send invite");
+
+const getFinalSelectionDisplayEmail = (
+  request: Pick<GroupMeetRequestDetail, "invites" | "finalSelection">,
+) =>
+  request.invites.find((invite) => invite.participantType === "host")?.email ||
+  request.finalSelection?.selectedByEmail ||
+  "host";
 
 const getInviteDeliveryMeta = (
   invite: Pick<
@@ -2978,8 +2986,7 @@ const GroupMeetAdminPage: React.FC = () => {
                             </div>
                             <div className="text-sm text-emerald-50/90 mt-2">
                               Selected by{" "}
-                              {selectedRequest.finalSelection.selectedByEmail ||
-                                "host"}{" "}
+                              {getFinalSelectionDisplayEmail(selectedRequest)}{" "}
                               on{" "}
                               {toReadableDateTime(
                                 selectedRequest.finalSelection.selectedAt,
@@ -3005,7 +3012,11 @@ const GroupMeetAdminPage: React.FC = () => {
                               </button>
                               {selectedRequest.calendarInvite?.htmlLink && (
                                 <a
-                                  href={selectedRequest.calendarInvite.htmlLink}
+                                  href={
+                                    buildGroupMeetCalendarEventOpenUrl(
+                                      selectedRequest.calendarInvite,
+                                    ) || selectedRequest.calendarInvite.htmlLink
+                                  }
                                   target="_blank"
                                   rel="noreferrer"
                                   className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 px-4 py-2.5 text-sm hover:bg-zinc-900"
@@ -3015,6 +3026,12 @@ const GroupMeetAdminPage: React.FC = () => {
                                 </a>
                               )}
                             </div>
+                            {selectedRequest.calendarInvite?.organizerEmail && (
+                              <div className="mt-3 text-xs text-emerald-50/80">
+                                Calendar event organizer:{" "}
+                                {selectedRequest.calendarInvite.organizerEmail}
+                              </div>
+                            )}
                             {!selectedRequest.calendarSetup.ready && (
                               <div className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-100">
                                 {selectedRequest.calendarSetup.message ||
