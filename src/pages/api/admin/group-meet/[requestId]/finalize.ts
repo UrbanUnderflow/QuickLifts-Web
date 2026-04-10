@@ -1,7 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import admin, { getFirebaseAdminApp } from "../../../../../lib/firebase-admin";
 import { requireAdminRequest } from "../../_auth";
-import { computeGroupMeetAnalysis } from "../../../../../lib/groupMeet";
+import {
+  buildGroupMeetFinalSelectionSignature,
+  computeGroupMeetAnalysis,
+} from "../../../../../lib/groupMeet";
 import {
   buildGroupMeetFinalSelection,
   mapGroupMeetInviteDocs,
@@ -82,10 +85,23 @@ export default async function handler(
       selectedByEmail: hostInvite?.email || adminUser.email,
       hostNote,
     });
+    const previousSelectionSignature = buildGroupMeetFinalSelectionSignature(
+      requestData.finalSelection || null,
+    );
+    const nextSelectionSignature =
+      buildGroupMeetFinalSelectionSignature(finalSelection);
+    const selectionChanged =
+      previousSelectionSignature !== nextSelectionSignature;
 
     await requestRef.set(
       {
         finalSelection,
+        ...(selectionChanged
+          ? {
+              finalConfirmationEmail: null,
+              finalReminderEmail: null,
+            }
+          : {}),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedByEmail: adminUser.email || null,
       },

@@ -5,6 +5,8 @@ import {
   computeGroupMeetAnalysis,
   type GroupMeetAiRecommendation,
   type GroupMeetCalendarInvite,
+  type GroupMeetFinalConfirmationEmail,
+  type GroupMeetFinalReminderEmail,
   type GroupMeetFinalSelection,
   type GroupMeetRequestDetail,
   isValidGroupMeetMonth,
@@ -45,6 +47,8 @@ async function buildRequestDetail(
   const invites = invitesSnapshot.docs.map((docSnap) =>
     mapGroupMeetInviteDetail(docSnap, targetMonth),
   );
+  const finalConfirmationEmailData = requestData.finalConfirmationEmail || null;
+  const finalReminderEmailData = requestData.finalReminderEmail || null;
 
   return {
     id: requestDoc.id,
@@ -74,6 +78,51 @@ async function buildRequestDetail(
       null) as GroupMeetFinalSelection | null,
     calendarInvite: (requestData.calendarInvite ||
       null) as GroupMeetCalendarInvite | null,
+    finalConfirmationEmail: finalConfirmationEmailData
+      ? ({
+          sentAt: toIso(finalConfirmationEmailData.sentAt),
+          sentByEmail:
+            typeof finalConfirmationEmailData.sentByEmail === "string"
+              ? finalConfirmationEmailData.sentByEmail
+              : null,
+          sendMode:
+            finalConfirmationEmailData.sendMode === "automatic" ||
+            finalConfirmationEmailData.sendMode === "manual"
+              ? finalConfirmationEmailData.sendMode
+              : null,
+          recipientCount: Math.max(
+            0,
+            Number(finalConfirmationEmailData.recipientCount) || 0,
+          ),
+          previewSentAt: toIso(finalConfirmationEmailData.previewSentAt),
+          previewRecipientEmail:
+            typeof finalConfirmationEmailData.previewRecipientEmail === "string"
+              ? finalConfirmationEmailData.previewRecipientEmail
+              : null,
+        } satisfies GroupMeetFinalConfirmationEmail)
+      : null,
+    finalReminderEmail: finalReminderEmailData
+      ? ({
+          sentAt: toIso(finalReminderEmailData.sentAt),
+          sentByEmail:
+            typeof finalReminderEmailData.sentByEmail === "string"
+              ? finalReminderEmailData.sentByEmail
+              : null,
+          sendMode:
+            finalReminderEmailData.sendMode === "automatic" ||
+            finalReminderEmailData.sendMode === "manual"
+              ? finalReminderEmailData.sendMode
+              : null,
+          recipientCount: Math.max(
+            0,
+            Number(finalReminderEmailData.recipientCount) || 0,
+          ),
+          selectionSignature:
+            typeof finalReminderEmailData.selectionSignature === "string"
+              ? finalReminderEmailData.selectionSignature
+              : null,
+        } satisfies GroupMeetFinalReminderEmail)
+      : null,
     calendarSetup: await getGoogleCalendarSetupStatus(),
   };
 }
@@ -194,6 +243,8 @@ export default async function handler(
       updatePayload.aiRecommendation = null;
       updatePayload.finalSelection = null;
       updatePayload.calendarInvite = null;
+      updatePayload.finalConfirmationEmail = null;
+      updatePayload.finalReminderEmail = null;
       updatePayload.finalizedByEmail = null;
       updatePayload.calendarInviteUpdatedByEmail = null;
     }

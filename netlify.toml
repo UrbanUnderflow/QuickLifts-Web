@@ -478,3 +478,7 @@
 [functions.scheduled-group-meet-flex-prompts]
   # Runs every 30 minutes, but only sends the Group Meet flex round at 8 AM America/New_York on the deadline date.
   schedule = "*/30 * * * *"
+
+[functions.scheduled-group-meet-final-reminders]
+  # Runs every 15 minutes and sends the Group Meet guest reminder on the first sweep inside the hour before the final meeting block.
+  schedule = "*/15 * * * *"
