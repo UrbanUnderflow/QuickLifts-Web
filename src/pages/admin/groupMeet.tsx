@@ -3015,6 +3015,12 @@ const GroupMeetAdminPage: React.FC = () => {
                                 </a>
                               )}
                             </div>
+                            {!selectedRequest.calendarSetup.ready && (
+                              <div className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+                                {selectedRequest.calendarSetup.message ||
+                                  "Google Calendar is not configured for this request yet."}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="mt-4 rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
@@ -3237,8 +3243,8 @@ const GroupMeetAdminPage: React.FC = () => {
                             </div>
                             {!selectedRequest.calendarSetup.ready && (
                               <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-100">
-                                Google Calendar setup is not ready for this
-                                request.
+                                {selectedRequest.calendarSetup.message ||
+                                  "Google Calendar setup is not ready for this request."}
                               </div>
                             )}
                           </div>
