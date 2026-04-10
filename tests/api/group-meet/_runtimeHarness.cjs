@@ -1141,6 +1141,7 @@ function createGuestCalendarConnectStartHandlerRuntime({
   },
   helperOverrides = {},
 } = {}) {
+  compiledRuntimeCache = null;
   const { connectStartHandlerPath } = compileGroupMeetRuntime();
   clearCompiledRuntimeModuleCache();
 

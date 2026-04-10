@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       { name: 'Bert', apr1Amount: 50, apr1Note: 'T' },
       { name: 'Jackie', apr1Amount: 50, apr1Note: 'T' },
       { name: 'Javon', apr1Amount: 50, apr1Note: 'T' },
-      { name: 'Willie', apr1Amount: 50, apr1Note: 'T' },
+      { name: "Sharon P (Jackie's Friend)", apr1Amount: 50, apr1Note: 'T' },
 
       // Second page
       { name: 'Olivia & Noel', apr1Amount: 100, apr1Note: 'T' },
@@ -45,7 +45,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       { name: 'Christine & Neville', apr1Amount: 100, apr1Note: 'T' },
       { name: 'Myles', apr1Amount: 50, apr1Note: 'T' },
       { name: 'Mavis', apr1Amount: 50, apr1Note: 'T' },
-      { name: 'Viviene', apr1Amount: 50, apr1Note: 'T' }
+      { name: 'Viviene', apr1Amount: 50, apr1Note: 'T' },
+
+      // Manual list additions requested after the original photo-based seed
+      { name: 'Jermaine' },
+      { name: 'Haley' },
+      { name: 'Isaiah' },
+      { name: 'Iyla' },
+      { name: 'Jasmine' },
+      { name: 'Jamal' }
     ];
 
     const results: any[] = [];
@@ -59,5 +67,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ ok: false, error: e?.message || 'Unknown error' });
   }
 }
-
 

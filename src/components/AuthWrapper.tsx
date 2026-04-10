@@ -9,7 +9,7 @@ import SignInModal from './SignInModal';
 import type { RootState } from '../redux/store';
 import { useUser } from '../hooks/useUser';
 import { setLoginRedirectPath } from '../redux/tempRedirectSlice';
-import { hasAcceptedCurrentLegal } from '../utils/legalAcceptance';
+import { cacheLegalAcceptance, hasAcceptedCurrentLegal } from '../utils/legalAcceptance';
 
 interface AuthWrapperProps {
   children: React.ReactNode;
@@ -310,6 +310,16 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               prevUserRef.current = newUserDict;
             }
             userService.nonUICurrentUser = activeUser;
+
+            if (
+              activeUser?.id &&
+              hasAcceptedCurrentLegal(activeUser, {
+                userId: activeUser.id,
+                includeLocalCache: false,
+              })
+            ) {
+              cacheLegalAcceptance(activeUser.id, activeUser.legalAcceptance);
+            }
 
             // Background: ensure subscription record is fresh on every app open
             try {

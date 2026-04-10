@@ -7,7 +7,6 @@ import {
   getPublicGuestCalendarDebugInfo,
   shouldForceDevFirebase,
   toPublicGuestCalendarErrorMessage,
-  toIso,
 } from '../../../../../../../lib/groupMeetGuestGoogleCalendar';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -28,9 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const requestData = found.requestDoc.data() || {};
-    const deadlineAt = toIso(requestData.deadlineAt);
-    const deadlinePassed = deadlineAt ? new Date(deadlineAt).getTime() <= Date.now() : false;
-    if (deadlinePassed) {
+    if (requestData.status === 'closed') {
       return res.status(403).json({ error: 'This availability window is closed.' });
     }
 

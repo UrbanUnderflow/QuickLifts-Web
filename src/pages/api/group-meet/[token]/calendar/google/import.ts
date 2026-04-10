@@ -9,7 +9,6 @@ import {
   getGuestGoogleCalendarAccessToken,
   shouldForceDevFirebase,
   toPublicGuestCalendarErrorMessage,
-  toIso,
 } from '../../../../../../lib/groupMeetGuestGoogleCalendar';
 
 function dedupeAgainstSavedAvailability(
@@ -44,9 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { inviteDoc, requestDoc } = found;
   const requestData = requestDoc.data() || {};
   const inviteData = inviteDoc.data() || {};
-  const deadlineAt = toIso(requestData.deadlineAt);
-  const deadlinePassed = deadlineAt ? new Date(deadlineAt).getTime() <= Date.now() : false;
-  if (deadlinePassed) {
+  if (requestData.status === 'closed') {
     return res.status(403).json({ error: 'This availability window is closed.' });
   }
 

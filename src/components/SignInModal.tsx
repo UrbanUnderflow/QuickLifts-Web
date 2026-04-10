@@ -28,7 +28,10 @@ import { workoutService } from '../api/firebase/workout/service'; // Import work
 import { Challenge } from '../api/firebase/workout/types'; // Import workout types
 import {
   buildCurrentLegalAcceptance,
+  cacheCurrentLegalAcceptance,
+  cacheLegalAcceptance,
   hasAcceptedCurrentLegal,
+  hasAnyRecordedLegalAcceptance,
   PRIVACY_POLICY_PATH,
   TERMS_PATH,
 } from '../utils/legalAcceptance';
@@ -164,6 +167,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
     setErrors((prev) => ({ ...prev, legal: undefined }));
   };
 
+  const resolveLegalUserId = () => currentUser?.id ?? auth.currentUser?.uid ?? null;
+
+  const userHasAcceptedCurrentLegal = (
+    user: { id?: string; legalAcceptance?: any } | null | undefined
+  ) => hasAcceptedCurrentLegal(user, { userId: user?.id ?? resolveLegalUserId() });
+
+  const userHasAnyRecordedLegalAcceptance = (
+    user: { id?: string; legalAcceptance?: any } | null | undefined
+  ) => hasAnyRecordedLegalAcceptance(user, { userId: user?.id ?? resolveLegalUserId() });
+
   const openLegalAcceptanceStep = (context: 'signup' | 'signin' = 'signin') => {
     setLegalFlowContext(context);
     setHasAcceptedLegal(false);
@@ -178,6 +191,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
     acceptanceMethod: string
   ) => {
     const acceptedAt = new Date();
+    cacheCurrentLegalAcceptance(userId, acceptanceMethod, acceptedAt);
+
     await userService.updateUser(userId, {
       legalAcceptance: {
         ...buildCurrentLegalAcceptance(acceptanceMethod, acceptedAt),
@@ -188,6 +203,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
     const refreshedUser = await userService.fetchUserFromFirestore(userId);
     if (refreshedUser) {
+      cacheLegalAcceptance(userId, refreshedUser.legalAcceptance);
       userService.nonUICurrentUser = refreshedUser;
     }
 
@@ -216,7 +232,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
       const onboardingStatus = isOnboardingComplete(currentUser);
       console.log('[SignInModal Onboarding Check Effect] isOnboardingComplete result:', onboardingStatus);
 
-      if (!hasAcceptedCurrentLegal(currentUser)) {
+      if (!userHasAcceptedCurrentLegal(currentUser)) {
         console.log('[SignInModal Onboarding Check Effect] Current user missing current legal acceptance. Opening legal step.');
         if (signUpStep !== 'legal') {
           openLegalAcceptanceStep('signin');
@@ -313,7 +329,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           timestamp: new Date().toISOString()
         });
 
-        if (!hasAcceptedCurrentLegal(firestoreUser)) {
+        if (!userHasAcceptedCurrentLegal(firestoreUser)) {
           console.log('[SignInModal] User missing current legal acceptance, pausing auth flow.');
           openLegalAcceptanceStep('signin');
           setIsLoading(false);
@@ -407,7 +423,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           
           userService.nonUICurrentUser = firestoreUser; // Use nonUICurrentUser
 
-          if (!hasAcceptedCurrentLegal(firestoreUser)) {
+          if (!userHasAcceptedCurrentLegal(firestoreUser)) {
             console.log('[SignInModal] Apple sign-in: legal acceptance missing, opening legal step');
             openLegalAcceptanceStep('signin');
             setIsLoading(false);
@@ -498,7 +514,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         }
         userService.nonUICurrentUser = firestoreUser; // Use nonUICurrentUser
         console.log('Google Sign In - Current User Set:', userService.nonUICurrentUser); // Use nonUICurrentUser
-        if (!hasAcceptedCurrentLegal(firestoreUser)) {
+        if (!userHasAcceptedCurrentLegal(firestoreUser)) {
           console.log('[SignInModal] Google sign-in: legal acceptance missing, opening legal step');
           openLegalAcceptanceStep('signin');
           setIsLoading(false);
@@ -693,7 +709,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           await userService.updateUser(user.uid, firestoreUser);
           addLog(`Created new Firestore user: ${firestoreUser.id}`);
         } else if (firestoreUser) {
-          if (!hasAcceptedCurrentLegal(firestoreUser)) {
+          if (!userHasAcceptedCurrentLegal(firestoreUser)) {
             setIsSignUp(true);
             setLegalFlowContext('signin');
             setHasAcceptedLegal(false);
@@ -931,7 +947,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         });
 
         if (userDoc) {
-          if (!hasAcceptedCurrentLegal(userDoc)) {
+          if (!userHasAcceptedCurrentLegal(userDoc)) {
             console.log('[SignInModal] Existing user missing legal acceptance, opening legal step');
             openLegalAcceptanceStep('signin');
             setIsLoading(false);
@@ -2279,7 +2295,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
           Review our legal terms
         </h2>
         <p className="text-zinc-400 font-['HK Grotesk'] text-sm">
-          We&apos;ve updated our Terms of Service and Privacy Policy. Please review them before continuing.
+          {userHasAnyRecordedLegalAcceptance(currentUser)
+            ? "We&apos;ve updated our Terms of Service and Privacy Policy. Please review the new version before continuing."
+            : "Please review our Terms of Service and Privacy Policy before continuing."}
         </p>
       </div>
 
@@ -2307,7 +2325,11 @@ const SignInModal: React.FC<SignInModalProps> = ({
           </div>
         </div>
 
-        {renderLegalAcceptanceField('You only need to do this when creating an account or when the current legal version changes.')}
+        {renderLegalAcceptanceField(
+          userHasAnyRecordedLegalAcceptance(currentUser)
+            ? 'You only need to reaccept when the current legal version changes.'
+            : 'You only need to do this once when creating your account, unless the legal version changes later.'
+        )}
       </div>
     </>
   );
@@ -2709,7 +2731,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         return;
       }
 
-      if (!hasAcceptedCurrentLegal(userDoc)) {
+      if (!userHasAcceptedCurrentLegal(userDoc)) {
         console.log('[SignInModal] handleSignInSuccess: Missing current legal acceptance. Opening legal step.');
         openLegalAcceptanceStep('signin');
         setIsLoading(false);

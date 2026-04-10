@@ -51,13 +51,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     }
 
     const requestData = requestDoc.data() || {};
-    const deadlineAt = toIso(requestData.deadlineAt);
-    const deadlinePassed = deadlineAt ? new Date(deadlineAt).getTime() <= Date.now() : false;
     if (requestData.status === 'draft') {
       return res.status(403).json({ error: 'This Group Meet request is not live yet.' });
     }
 
-    if (requestData.status === 'closed' || deadlinePassed) {
+    if (requestData.status === 'closed') {
       return res.status(403).json({ error: 'This availability window is closed.' });
     }
 

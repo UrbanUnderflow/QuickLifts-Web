@@ -380,6 +380,69 @@ test('public guest invite save triggers host notification context after a partic
   assert.equal(state.hostNotificationCalls[0].baseUrl, 'https://fitwithpulse.ai');
 });
 
+test('public guest invite remains open for saves after the deadline until the request is explicitly closed', { concurrency: false }, async () => {
+  const { handler, state } = createPublicInviteHandlerRuntime({
+    requestData: {
+      title: 'Pulse Intelligence Labs Advisory Board Meeting',
+      targetMonth: '2026-04',
+      deadlineAt: makeTimestamp('2026-04-01T13:00:00.000Z'),
+      timezone: 'America/New_York',
+      meetingDurationMinutes: 60,
+      status: 'collecting',
+      participantCount: 2,
+    },
+    inviteDocs: [
+      {
+        id: 'host-token',
+        data: {
+          token: 'host-token',
+          name: 'Tremaine Grant',
+          email: 'tre@fitwithpulse.ai',
+          participantType: 'host',
+          shareUrl: 'https://fitwithpulse.ai/group-meet/host-token',
+          availabilityEntries: [{ date: '2026-04-01', startMinutes: 540, endMinutes: 600 }],
+          responseSubmittedAt: makeTimestamp('2026-03-31T12:00:00.000Z'),
+          hasResponse: true,
+        },
+      },
+      {
+        id: 'guest-token',
+        data: {
+          token: 'guest-token',
+          name: 'Bobby Weke',
+          email: 'bobby@fitwithpulse.ai',
+          participantType: 'participant',
+          shareUrl: 'https://fitwithpulse.ai/group-meet/guest-token',
+          availabilityEntries: [],
+          responseSubmittedAt: null,
+          hasResponse: false,
+        },
+      },
+    ],
+  });
+
+  const res = createApiResponseRecorder();
+
+  await handler(
+    {
+      method: 'POST',
+      query: { token: 'guest-token' },
+      headers: { host: 'fitwithpulse.ai' },
+      body: {
+        availabilityEntries: [{ date: '2026-04-02', startMinutes: 600, endMinutes: 660 }],
+      },
+    },
+    res
+  );
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.invite.request.status, 'collecting');
+  assert.deepEqual(res.payload.invite.availabilityEntries, [
+    { date: '2026-04-02', startMinutes: 600, endMinutes: 660 },
+  ]);
+  assert.equal(state.requestData.responseCount, 2);
+});
+
 test('guest Google Calendar config retries after an initial Secret Manager failure', { concurrency: false }, () => {
   const harnessPath = '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/group-meet/_runtimeHarness.cjs';
   const script = `
@@ -584,6 +647,34 @@ test('guest Google connect start route returns structured debug metadata on fail
   assert.deepEqual(state.firebaseAppSelections, [true]);
 });
 
+test('guest Google connect start route still returns an auth url after the deadline while the request remains open', { concurrency: false }, async () => {
+  const { handler } = createGuestCalendarConnectStartHandlerRuntime({
+    requestData: {
+      title: 'Group Meet',
+      targetMonth: '2026-04',
+      deadlineAt: makeTimestamp('2026-04-01T13:00:00.000Z'),
+      timezone: 'America/New_York',
+      meetingDurationMinutes: 60,
+      status: 'collecting',
+    },
+    helperOverrides: {
+      buildGuestGoogleCalendarConnectUrl: async () => 'https://accounts.google.com/o/oauth2/v2/auth',
+    },
+  });
+
+  const req = {
+    method: 'POST',
+    query: { token: 'guest-token' },
+    headers: { host: 'fitwithpulse.ai' },
+  };
+  const res = createApiResponseRecorder();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.url, 'https://accounts.google.com/o/oauth2/v2/auth');
+});
+
 test('public flex endpoint adds the selected slot and notifies the host', { concurrency: false }, async () => {
   const { handler, state } = createPublicFlexHandlerRuntime();
   const response = createApiResponseRecorder();
@@ -617,6 +708,39 @@ test('public flex endpoint adds the selected slot and notifies the host', { conc
   assert.equal(state.requestData.responseCount, 2);
   assert.equal(state.hostNotificationCalls.length, 1);
   assert.equal(state.hostNotificationCalls[0].responseAction, 'added');
+});
+
+test('public flex endpoint remains usable after the deadline while the request is still collecting', { concurrency: false }, async () => {
+  const { handler, state } = createPublicFlexHandlerRuntime({
+    requestData: {
+      title: 'Group Meet',
+      targetMonth: '2026-04',
+      deadlineAt: makeTimestamp('2026-04-01T13:00:00.000Z'),
+      timezone: 'America/New_York',
+      meetingDurationMinutes: 60,
+      status: 'collecting',
+    },
+  });
+  const response = createApiResponseRecorder();
+
+  await handler(
+    {
+      method: 'POST',
+      query: { token: 'flex-token-123' },
+      headers: { host: 'fitwithpulse.ai' },
+    },
+    response
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(state.requestData.responseCount, 2);
+  assert.deepEqual(state.inviteDocs.get('guest-token').availabilityEntries, [
+    {
+      date: '2026-04-08',
+      startMinutes: 600,
+      endMinutes: 660,
+    },
+  ]);
 });
 
 test('guest Google debug classification explains generic config-unavailable failures', { concurrency: false }, () => {
