@@ -44,6 +44,7 @@ const WIRE_INSTRUCTIONS: Record<string, {
     accountNumber: '888397715',
     accountType: 'Checking',
     beneficiaryName: 'TresProperties LLC',
+    bankAddress: '383 Madison Avenue\nNew York, NY 10179',
     note: 'Routing number 021000021 applies to both ACH/direct deposit and wire transfers.',
   },
 };
@@ -711,6 +712,7 @@ const LegalDocumentsAdmin: React.FC = () => {
       ``,
       `Wire Instructions:`,
       `  Bank: ${wire.bankName}`,
+      wire.bankAddress ? `  Bank Address: ${wire.bankAddress.replace(/\n/g, ', ')}` : '',
       `  Routing: ${wire.routingNumber}`,
       `  Account: ${wire.accountNumber}`,
       wire.accountType ? `  Type: ${wire.accountType}` : '',
@@ -2053,10 +2055,11 @@ const LegalDocumentsAdmin: React.FC = () => {
   const generateInvoicePdf = (doc: LegalDocument): string => {
     const inv = doc.invoiceData;
     const company = doc.companyName || 'Pulse Intelligence Labs, Inc.';
-    const wire = WIRE_INSTRUCTIONS[company] || WIRE_INSTRUCTIONS['Pulse Intelligence Labs, Inc.'];
-    const isTres = company.includes('TresProperties');
-    const accent = isTres ? '#3B82F6' : '#d7ff00';
-    const accentText = isTres ? '#ffffff' : '#000000';
+  const wire = WIRE_INSTRUCTIONS[company] || WIRE_INSTRUCTIONS['Pulse Intelligence Labs, Inc.'];
+  const isTres = company.includes('TresProperties');
+  const accent = isTres ? '#3B82F6' : '#d7ff00';
+  const accentText = isTres ? '#ffffff' : '#000000';
+  const bankAddressHtml = wire.bankAddress ? wire.bankAddress.replace(/\n/g, '<br />') : '';
 
     const lineItemRows = (inv?.lineItems || []).map(item => {
       const amount = item.qty * item.unitPrice;
@@ -2103,6 +2106,7 @@ const LegalDocumentsAdmin: React.FC = () => {
   .wire-field { }
   .wire-field-label { font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
   .wire-field-value { font-size: 14px; font-weight: 600; color: #111827; font-family: 'Courier New', monospace; }
+  .wire-field-subvalue { margin-top: 6px; font-size: 12px; line-height: 1.45; color: #6b7280; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
   .wire-note { padding: 12px 20px; background: #f9fafb; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; }
   .memo { margin-top: 24px; padding: 16px 20px; background: #f9fafb; border-radius: 8px; border-left: 3px solid ${accent}; font-size: 13px; color: #374151; }
   .memo-label { font-size: 11px; text-transform: uppercase; color: #9ca3af; margin-bottom: 6px; font-weight: 600; }
@@ -2156,7 +2160,7 @@ const LegalDocumentsAdmin: React.FC = () => {
   <div class="wire-header">Wire Transfer Instructions</div>
   <div class="wire-body">
     <div class="wire-field"><div class="wire-field-label">Beneficiary Name</div><div class="wire-field-value">${wire.beneficiaryName}</div></div>
-    <div class="wire-field"><div class="wire-field-label">Bank Name</div><div class="wire-field-value">${wire.bankName}</div></div>
+    <div class="wire-field"><div class="wire-field-label">Bank Name</div><div class="wire-field-value">${wire.bankName}</div>${bankAddressHtml ? `<div class="wire-field-subvalue">${bankAddressHtml}</div>` : ''}</div>
     <div class="wire-field"><div class="wire-field-label">Routing Number (ABA)</div><div class="wire-field-value">${wire.routingNumber}</div></div>
     <div class="wire-field"><div class="wire-field-label">Account Number</div><div class="wire-field-value">${wire.accountNumber}</div></div>
     ${wire.accountType ? `<div class="wire-field"><div class="wire-field-label">Account Type</div><div class="wire-field-value">${wire.accountType}</div></div>` : ''}
