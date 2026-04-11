@@ -378,6 +378,12 @@ const adminCardsData = [
     link: "/product-demos"
   },
   {
+    title: "Presentations",
+    description: "Internal registry of live decks, interactive demos, and presentation links across Pulse surfaces.",
+    icon: <ImageIcon className="w-5 h-5" />,
+    link: "/admin/presentations"
+  },
+  {
     title: "PulseCheck Escalation Conditions",
     description: "Manage escalation conditions by tier for AI fine-tuning. Define triggers for Monitor, Elevated, and Critical risk levels.",
     icon: <AlertTriangle className="w-5 h-5" />,
