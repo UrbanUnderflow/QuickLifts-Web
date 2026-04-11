@@ -171,14 +171,12 @@ function buildGroupMeetFinalBlockLabel(args: {
   });
 }
 
-function buildGroupMeetFinalConfirmationRecipientInvites(
+export function buildGroupMeetFinalConfirmationRecipientInvites(
   invites: GroupMeetInviteDetail[],
 ) {
   return invites.filter(
     (invite) =>
-      invite.participantType !== "host" &&
-      typeof invite.email === "string" &&
-      invite.email.trim().length > 0,
+      typeof invite.email === "string" && invite.email.trim().length > 0,
   );
 }
 
