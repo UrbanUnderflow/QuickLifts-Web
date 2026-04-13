@@ -27,6 +27,15 @@ const PRESENTATION_REGISTRY: PresentationLink[] = [
     description: 'Patriots-focused Pulse Check walkthrough for mental performance and escalation flow.',
   },
   {
+    id: 'box-breathing-simulator',
+    title: 'Box Breathing Simulator',
+    href: '/box-breathing-simulator',
+    category: 'Interactive Demos',
+    typeLabel: 'Interactive presentation',
+    accessLabel: 'Live route',
+    description: 'Four-slide Pulse Check x AuntEdna presentation centered on anxiety data and the live box breathing simulation.',
+  },
+  {
     id: 'wunnarundemo',
     title: 'Wunna Run Demo',
     href: '/wunnarundemo',
