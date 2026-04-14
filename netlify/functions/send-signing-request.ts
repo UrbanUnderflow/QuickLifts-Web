@@ -20,13 +20,13 @@ function resolveBranding(companyName: string) {
   };
 }
 
-const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
+const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
   }
 
   try {
-    const { documentId, documentName, documentType, recipientName, recipientEmail, companyName, previewMode } = JSON.parse(event.body || "{}");
+    const { documentId, documentName, documentType: _documentType, recipientName, recipientEmail, companyName, previewMode } = JSON.parse(event.body || "{}");
 
     if (!documentId || !recipientEmail) {
       return { statusCode: 400, body: JSON.stringify({ message: "Missing required fields." }) };
@@ -165,7 +165,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
                 <p class="message">
                   ${previewMode
                     ? 'This is a sandbox preview of the signing flow. You can click through, sign, and test the full experience without affecting the live document packet.'
-                    : 'Please review and sign this document at your earliest convenience. The signing process takes less than a minute.'}
+                    : 'Please use the secure link below to review, download, and sign this document. The signing process takes less than a minute.'}
                 </p>
                 
                 <div style="text-align: center;">
@@ -250,4 +250,3 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 };
 
 export { handler };
-

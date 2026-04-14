@@ -7,9 +7,13 @@ import {
   Brain,
   Briefcase,
   Building2,
+  FileText,
   GraduationCap,
   Layers3,
+  Link2,
+  Mail,
   Mic2,
+  PenTool,
   Rocket,
   Shield,
   Sparkles,
@@ -18,74 +22,212 @@ import {
   Users,
 } from 'lucide-react';
 
-const TOTAL_SLIDES = 12;
+const TOTAL_SLIDES = 17;
 
 const SLIDE_META = [
   { label: 'Opening', eyebrow: 'Slide 1' },
-  { label: 'Pulse Intelligence Labs', eyebrow: 'Slide 2' },
-  { label: 'Fit With Pulse', eyebrow: 'Slide 3' },
-  { label: 'Pulse Check', eyebrow: 'Slide 4' },
-  { label: 'Q1 Momentum', eyebrow: 'Slide 5' },
-  { label: 'AuntEdna', eyebrow: 'Slide 6' },
-  { label: 'Partnerships', eyebrow: 'Slide 7' },
-  { label: '30firstDay', eyebrow: 'Slide 8' },
-  { label: 'Founder Brand', eyebrow: 'Slide 9' },
-  { label: 'Quarter Focus', eyebrow: 'Slide 10' },
-  { label: 'Priorities', eyebrow: 'Slide 11' },
-  { label: 'Fundraising', eyebrow: 'Slide 12' },
+  { label: 'Equity Grants', eyebrow: 'Slide 2' },
+  { label: 'Pulse Intelligence Labs', eyebrow: 'Slide 3' },
+  { label: 'Why Now', eyebrow: 'Slide 4' },
+  { label: 'Fit With Pulse', eyebrow: 'Slide 5' },
+  { label: 'Pulse Check', eyebrow: 'Slide 6' },
+  { label: 'Q1 Momentum', eyebrow: 'Slide 7' },
+  { label: 'AuntEdna', eyebrow: 'Slide 8' },
+  { label: 'Partnerships', eyebrow: 'Slide 9' },
+  { label: 'New Categories', eyebrow: 'Slide 10' },
+  { label: 'Creator Clubs', eyebrow: 'Slide 11' },
+  { label: '30firstDay', eyebrow: 'Slide 12' },
+  { label: 'Founder Brand', eyebrow: 'Slide 13' },
+  { label: 'Quarter Focus', eyebrow: 'Slide 14' },
+  { label: 'Priorities', eyebrow: 'Slide 15' },
+  { label: 'Fundraising', eyebrow: 'Slide 16' },
+  { label: 'Q2 Summary', eyebrow: 'Slide 17' },
 ] as const;
 
 const transition = { duration: 0.6, ease: [0.22, 1, 0.36, 1] as const };
 
+const EQUITY_GRANT_STEPS = [
+  {
+    title: 'Receive the grant email.',
+    accent: '#38BDF8',
+    icon: Mail,
+    chips: ['CEO e-sign', 'Grantee e-sign'],
+  },
+  {
+    title: 'Review the documents.',
+    accent: '#E0FE10',
+    icon: FileText,
+    chips: ['Grant docs'],
+  },
+  {
+    title: 'Sign.',
+    accent: '#8B5CF6',
+    icon: PenTool,
+    chips: ['Complete the grant'],
+  },
+] as const;
+
+const AI_LAB_OUTCOMES = [
+  {
+    title: 'AI agents expand our surface area far beyond our headcount.',
+    accent: '#8B5CF6',
+    icon: Layers3,
+  },
+  {
+    title: 'Continuous R&D is already producing immediate product outcomes.',
+    accent: '#38BDF8',
+    icon: Brain,
+  },
+  {
+    title: 'Pulse Check, white papers, and publishable research all come from the same engine.',
+    accent: '#E0FE10',
+    icon: FileText,
+  },
+] as const;
+
+const AI_LAB_AGENTS = [
+  {
+    title: 'Antigravity',
+    role: 'Strategy + architecture',
+    duty: 'Product strategy, system architecture, and cross-agent review.',
+    accent: '#A78BFA',
+    icon: Building2,
+  },
+  {
+    title: 'Nora',
+    role: 'System ops',
+    duty: 'Orchestration, telemetry, and the operating nerve center.',
+    accent: '#38BDF8',
+    icon: Layers3,
+  },
+  {
+    title: 'Scout',
+    role: 'Discovery',
+    duty: 'Creator research, fit analysis, and qualified outbound.',
+    accent: '#F59E0B',
+    icon: Target,
+  },
+  {
+    title: 'Sage',
+    role: 'Health intelligence',
+    duty: 'Field research, insight packaging, and white-paper signal.',
+    accent: '#34D399',
+    icon: GraduationCap,
+  },
+  {
+    title: 'Solara',
+    role: 'Brand voice',
+    duty: 'Messaging systems, tone guardrails, and outward narrative.',
+    accent: '#FB7185',
+    icon: Sparkles,
+  },
+] as const;
+
 const AUNT_EDNA_UNLOCKS = [
   {
-    title: 'Clinical adjacency',
-    body: 'Pulse Check now has a credible answer for what happens when a signal moves beyond performance coaching.',
+    title: 'Beyond performance coaching.',
   },
   {
-    title: 'Escalation path',
-    body: 'The story is no longer just detection. It becomes detection, routing, and real human follow-through.',
+    title: 'Detection becomes routing and follow-through.',
   },
   {
-    title: 'Enterprise credibility',
-    body: 'AuntEdna makes the team, school, and organization conversation sharper because care infrastructure is visible.',
+    title: 'Visible care infrastructure for teams, schools, and orgs.',
   },
   {
-    title: 'Stronger company story',
-    body: 'It widens the narrative from a training app to a company building the stack around human performance and health intelligence.',
+    title: 'A bigger human performance company story.',
   },
 ] as const;
 
 const PARTNERSHIP_MOMENTUM = [
   {
     title: 'Wunna Run',
-    detail: 'Community activation proof and a live operator story inside the Pulse ecosystem.',
+    detail: 'Community operator proof.',
     accent: '#E0FE10',
   },
   {
     title: 'Gabby Thomas',
-    detail: 'Elite performance adjacency and credibility inside the athlete-performance conversation.',
+    detail: 'Elite-performance credibility.',
     accent: '#F59E0B',
   },
   {
     title: 'Clark Atlanta University',
-    detail: 'Pilot kicked off and giving us real institutional proof in the university lane.',
+    detail: 'Pilot kicked off.',
     accent: '#38BDF8',
   },
   {
     title: 'UMES',
-    detail: 'Pilot in motion and expanding the university pipeline behind Pulse Check.',
+    detail: 'Pilot in motion.',
     accent: '#A78BFA',
   },
   {
     title: 'Polar',
-    detail: 'A meaningful technical and ecosystem partnership lane for the performance stack.',
+    detail: 'Technical partnership lane.',
     accent: '#FB7185',
   },
   {
     title: '30firstDay',
-    detail: 'Opening a partnership lane that spills directly into brand, content, and founder visibility.',
+    detail: 'Brand and founder visibility.',
     accent: '#E0FE10',
+  },
+] as const;
+
+const CREATOR_CLUBS = [
+  {
+    title: 'The Pact',
+    tag: 'Signature club',
+    detail: 'Our clearest creator-club signal inside the ecosystem.',
+    chips: ['Signature club', 'Value testing', 'Scale signal'],
+    accent: '#E0FE10',
+    image: '/advisory-clubs/the-pact.jpg',
+  },
+  {
+    title: "Jaidus's Stretch Club",
+    tag: 'Active test club',
+    detail: 'Helping us learn where mobility-focused community programming hits.',
+    chips: ['Benefit clarity', 'Format fit', 'Iteration'],
+    accent: '#38BDF8',
+    image: '/advisory-clubs/stretch-club.jpg',
+  },
+  {
+    title: 'Fitness With Benefits',
+    tag: 'Active test club',
+    detail: 'Giving us live readouts on member value and partner readiness.',
+    chips: ['Retention', 'Experience', 'Readiness'],
+    accent: '#FB7185',
+    image: '/advisory-clubs/fitness-with-benefits.jpg',
+  },
+] as const;
+
+const NEW_CATEGORIES = [
+  {
+    title: 'Run',
+    detail: 'Cardio and endurance',
+    accent: '#3B82F6',
+    image: '/advisory-categories/run.png',
+  },
+  {
+    title: 'Bike',
+    detail: 'Cycling and output',
+    accent: '#06B6D4',
+    image: '/advisory-categories/bike.png',
+  },
+  {
+    title: 'Lift',
+    detail: 'Strength and power',
+    accent: '#E0FE10',
+    image: '/advisory-categories/lift.png',
+  },
+  {
+    title: 'Stretch',
+    detail: 'Mobility and recovery',
+    accent: '#8B5CF6',
+    image: '/advisory-categories/stretch.png',
+  },
+  {
+    title: 'Fat Burn',
+    detail: 'High-intensity conditioning',
+    accent: '#EF4444',
+    image: '/advisory-categories/fat-burn.png',
   },
 ] as const;
 
@@ -139,6 +281,14 @@ const FUNDRAISE_STEPS = [
     title: 'Then ask LAUNCH for the intro',
     body: 'Once the partner lands, we will request the Alexis Ohanian intro through LAUNCH in the right environment.',
   },
+] as const;
+
+const Q2_SUMMARY = [
+  { title: 'Land one flagship partner.', accent: '#E0FE10' },
+  { title: 'Turn 30firstDay into apparel + talent.', accent: '#F59E0B' },
+  { title: 'Grow founder visibility through content.', accent: '#38BDF8' },
+  { title: 'Lock a research-ready university lane.', accent: '#8B5CF6' },
+  { title: 'Set up the Alexis intro environment.', accent: '#FB7185' },
 ] as const;
 
 const SceneFrame: React.FC<{
@@ -264,7 +414,7 @@ const SceneCover: React.FC = () => (
         <SlideKicker>Advisory Board Meeting</SlideKicker>
         <div className="mt-5 text-sm font-semibold uppercase tracking-[0.34em] text-zinc-500">April 2026</div>
         <h1 className="mt-4 text-5xl font-black leading-[0.94] text-white md:text-7xl">
-          Pulse Intelligence Labs, Inc.
+          Pulse Intelligence Labs, Inc. <span className="whitespace-nowrap text-[#E0FE10]">(PIL)</span>
         </h1>
         <p className="mt-5 max-w-3xl text-2xl font-semibold leading-relaxed text-[#E0FE10] md:text-3xl">
           The Human Performance Company.
@@ -291,6 +441,75 @@ const SceneCover: React.FC = () => (
             </div>
           </div>
         </GlassCard>
+      </div>
+    </div>
+  </SceneFrame>
+);
+
+const SceneEquityGrants: React.FC = () => (
+  <SceneFrame accent="#38BDF8">
+    <div className="grid h-full min-h-0 content-center gap-7">
+      <div className="grid items-end gap-6 lg:grid-cols-[0.98fr_1.02fr]">
+        <div>
+          <SlideKicker>Equity Grants</SlideKicker>
+          <h1 className="mt-5 max-w-5xl text-5xl font-black leading-[0.95] text-white md:text-6xl">
+            Equity grants happen in three steps.
+          </h1>
+        </div>
+
+        <GlassCard accentColor="#38BDF8">
+          <div className="p-6 md:p-7">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">Later</div>
+            <div className="mt-3 flex items-start gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-sky-400/12 text-sky-300">
+                <Link2 className="h-7 w-7" />
+              </div>
+              <div className="text-3xl font-black leading-tight text-white md:text-4xl">
+                We send a vesting link later for tracking.
+              </div>
+            </div>
+          </div>
+        </GlassCard>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        {EQUITY_GRANT_STEPS.map((step, index) => {
+          const Icon = step.icon;
+
+          return (
+            <motion.div
+              key={step.title}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.08 * index }}
+            >
+              <GlassCard accentColor={step.accent} className="h-full">
+                <div className="flex h-full min-h-[18rem] flex-col justify-between p-6 md:p-7">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="text-6xl font-black leading-none text-white/14">{index + 1}</div>
+                    <div
+                      className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl"
+                      style={{ background: `${step.accent}14`, color: step.accent }}
+                    >
+                      <Icon className="h-8 w-8" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-4xl font-black leading-[1.02] text-white">{step.title}</h3>
+                    <div className="mt-5 flex flex-wrap gap-2.5">
+                      {step.chips.map((chip) => (
+                        <Chip key={chip} accent={step.accent}>
+                          {chip}
+                        </Chip>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </GlassCard>
+            </motion.div>
+          );
+        })}
       </div>
     </div>
   </SceneFrame>
@@ -331,6 +550,128 @@ const ScenePulseIntelligenceLabs: React.FC = () => (
           </div>
         </GlassCard>
         <MissionBand />
+      </div>
+    </div>
+  </SceneFrame>
+);
+
+const SceneWhyAiLab: React.FC = () => (
+  <SceneFrame accent="#8B5CF6">
+    <div className="grid h-full min-h-0 content-center gap-6">
+      <div className="grid items-end gap-6 lg:grid-cols-[0.94fr_1.06fr]">
+        <div>
+          <SlideKicker>Why the shift now</SlideKicker>
+          <h1 className="mt-5 max-w-5xl text-5xl font-black leading-[0.94] text-white md:text-6xl">
+            AI agents let a small team cover much greater surface area.
+          </h1>
+          <p className="mt-4 max-w-4xl text-2xl font-semibold leading-tight text-[#A78BFA] md:text-4xl">
+            That makes the move to an AI lab more credible and more ambitious.
+          </p>
+        </div>
+
+        <GlassCard accentColor="#8B5CF6">
+          <div className="p-6 md:p-7">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">Why this matters</div>
+            <div className="mt-4 text-3xl font-black leading-tight text-white md:text-4xl">
+              We can now build, research, write, and operate in parallel.
+            </div>
+            <div className="mt-5 flex flex-wrap gap-2.5">
+              <Chip accent="#8B5CF6">AI agents</Chip>
+              <Chip accent="#38BDF8">Continuous R&amp;D</Chip>
+              <Chip accent="#E0FE10">Immediate outcomes</Chip>
+              <Chip accent="#FB7185">Research lane</Chip>
+            </div>
+          </div>
+        </GlassCard>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[0.84fr_1.16fr]">
+        <div className="grid gap-4">
+          {AI_LAB_OUTCOMES.map((item, index) => {
+            const Icon = item.icon;
+
+            return (
+              <motion.div
+                key={item.title}
+                initial={{ opacity: 0, x: -18 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.08 * index }}
+              >
+                <GlassCard accentColor={item.accent}>
+                  <div className="flex items-start gap-4 p-6 md:p-7">
+                    <div
+                      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl"
+                      style={{ background: `${item.accent}14`, color: item.accent }}
+                    >
+                      <Icon className="h-7 w-7" />
+                    </div>
+                    <h3 className="text-3xl font-black leading-[1.04] text-white md:text-[2rem]">
+                      {item.title}
+                    </h3>
+                  </div>
+                </GlassCard>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        <GlassCard accentColor="#38BDF8" className="h-full">
+          <div className="p-6 md:p-7">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">Agent system</div>
+                <div className="mt-3 text-3xl font-black leading-tight text-white md:text-4xl">
+                  The lab already has specialized operators.
+                </div>
+              </div>
+              <div className="hidden h-16 w-16 items-center justify-center rounded-2xl bg-sky-400/12 text-sky-300 md:flex">
+                <Brain className="h-8 w-8" />
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-3 md:grid-cols-2">
+              {AI_LAB_AGENTS.map((agent, index) => {
+                const Icon = agent.icon;
+
+                return (
+                  <motion.div
+                    key={agent.title}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 * index }}
+                    className={index === AI_LAB_AGENTS.length - 1 ? 'md:col-span-2' : ''}
+                  >
+                    <div
+                      className="h-full rounded-[24px] border p-4"
+                      style={{ borderColor: `${agent.accent}35`, background: `${agent.accent}10` }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl"
+                          style={{ background: `${agent.accent}16`, color: agent.accent }}
+                        >
+                          <Icon className="h-6 w-6" />
+                        </div>
+                        <div className="min-w-0">
+                          <div
+                            className="text-[11px] font-semibold uppercase tracking-[0.3em]"
+                            style={{ color: agent.accent }}
+                          >
+                            {agent.role}
+                          </div>
+                          <h3 className="mt-1 text-2xl font-black text-white">{agent.title}</h3>
+                          <div className="mt-2 text-lg font-semibold leading-tight text-zinc-200">
+                            {agent.duty}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        </GlassCard>
       </div>
     </div>
   </SceneFrame>
@@ -424,17 +765,85 @@ const ScenePulseCheckProduct: React.FC = () => (
   </SceneFrame>
 );
 
+const SceneNewCategories: React.FC = () => (
+  <SceneFrame accent="#E0FE10">
+    <div className="grid h-full min-h-0 content-center gap-6">
+      <div className="grid items-end gap-5 lg:grid-cols-[0.96fr_1.04fr]">
+        <div>
+          <SlideKicker>Training Categories</SlideKicker>
+          <h1 className="mt-5 max-w-5xl text-5xl font-black leading-[0.95] text-white md:text-6xl">
+            Q1 expanded us across five training categories.
+          </h1>
+        </div>
+
+        <GlassCard accentColor="#E0FE10">
+          <div className="p-5 md:p-6">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">What it means</div>
+            <div className="mt-3 text-2xl font-black leading-tight text-white md:text-3xl">
+              More consumer entry points.
+              <br />
+              More live demand signals.
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2.5">
+              <Chip accent="#E0FE10">Top-of-funnel expansion</Chip>
+              <Chip accent="#E0FE10">More demand signals</Chip>
+              <Chip accent="#E0FE10">Broader consumer surface</Chip>
+            </div>
+          </div>
+        </GlassCard>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        {NEW_CATEGORIES.map((category, index) => {
+          return (
+            <motion.div
+              key={category.title}
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.07 * index }}
+            >
+              <GlassCard accentColor={category.accent} className="h-full">
+                <div className="relative h-[23rem] overflow-hidden">
+                  <img
+                    src={category.image}
+                    alt={category.title}
+                    className="absolute inset-0 h-full w-full object-cover object-top"
+                  />
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      background: `linear-gradient(180deg, ${category.accent}18 0%, rgba(7,9,13,0.14) 28%, rgba(7,9,13,0.92) 100%)`,
+                    }}
+                  />
+                  <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: category.accent }} />
+
+                  <div className="relative flex h-full flex-col justify-end p-5">
+                    <div className="rounded-[24px] border border-white/10 bg-black/35 p-4 backdrop-blur-md">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.3em]" style={{ color: category.accent }}>
+                        Training category
+                      </div>
+                      <h3 className="mt-2 text-3xl font-black text-white">{category.title}</h3>
+                      <p className="mt-2 text-base leading-relaxed text-zinc-300">{category.detail}</p>
+                    </div>
+                  </div>
+                </div>
+              </GlassCard>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  </SceneFrame>
+);
+
 const SceneAuntEdna: React.FC = () => (
   <SceneFrame accent="#FB7185">
     <div className="grid items-center gap-8 lg:grid-cols-[0.92fr_1.08fr]">
       <div>
         <SlideKicker>AuntEdna</SlideKicker>
         <h1 className="mt-5 text-5xl font-black leading-[0.95] text-white md:text-6xl">
-          AuntEdna is our strongest clinical adjacency story.
+          AuntEdna gives Pulse Check a credible path from signal to care.
         </h1>
-        <p className="mt-5 max-w-2xl text-lg leading-relaxed text-zinc-300 md:text-xl">
-          This relationship makes Pulse Check more believable at the organizational level because we can now tell a fuller story around signal detection, routing, and care continuity.
-        </p>
 
         <div className="mt-7 rounded-[28px] border border-white/10 bg-black/20 p-5">
           <div className="flex items-center justify-between gap-4">
@@ -475,9 +884,7 @@ const SceneAuntEdna: React.FC = () => (
           >
             <GlassCard accentColor="#FB7185">
               <div className="p-6">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">Why it matters</div>
-                <h3 className="mt-3 text-2xl font-black text-white">{item.title}</h3>
-                <p className="mt-3 text-base leading-7 text-zinc-300">{item.body}</p>
+                <h3 className="text-3xl font-black leading-tight text-white md:text-[2rem]">{item.title}</h3>
               </div>
             </GlassCard>
           </motion.div>
@@ -510,16 +917,14 @@ const ScenePartnerships: React.FC = () => (
               </div>
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-2.5">
-              <Chip accent="#E0FE10">3 former Patriots players</Chip>
-              <Chip accent="#E0FE10">1 current player</Chip>
-              <Chip accent="#E0FE10">1 Patriots donor</Chip>
-              <Chip accent="#E0FE10">Re-engage after the draft</Chip>
+            <div className="mt-5 grid gap-3">
+              <div className="text-3xl font-black leading-tight text-zinc-100 md:text-4xl">
+                3 former players. 1 current. 1 donor.
+              </div>
+              <div className="text-3xl font-black leading-tight text-[#E0FE10] md:text-4xl">
+                Re-engage after the draft.
+              </div>
             </div>
-
-            <p className="mt-5 max-w-2xl text-lg leading-relaxed text-zinc-300">
-              The Patriots lane remains strategically important. The next step is deliberate re-engagement once the draft passes and timing improves.
-            </p>
           </div>
         </GlassCard>
 
@@ -532,10 +937,11 @@ const ScenePartnerships: React.FC = () => (
               transition={{ delay: 0.06 * index }}
             >
               <GlassCard accentColor={item.accent}>
-                <div className="p-5">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">Momentum</div>
-                  <h3 className="mt-2 text-2xl font-black text-white">{item.title}</h3>
-                  <p className="mt-3 text-base leading-7 text-zinc-300">{item.detail}</p>
+                <div className="p-5 md:p-6">
+                  <h3 className="text-2xl font-black leading-tight text-white md:text-3xl">{item.title}</h3>
+                  <div className="mt-3 text-2xl font-black leading-tight text-zinc-300 md:text-[2rem]">
+                    {item.detail}
+                  </div>
                 </div>
               </GlassCard>
             </motion.div>
@@ -608,6 +1014,86 @@ const Scene30FirstDay: React.FC = () => (
             </div>
           </div>
         </GlassCard>
+      </div>
+    </div>
+  </SceneFrame>
+);
+
+const SceneCreatorClubs: React.FC = () => (
+  <SceneFrame accent="#E0FE10">
+    <div className="grid h-full min-h-0 content-center gap-6">
+      <div className="grid items-end gap-6 lg:grid-cols-[1.02fr_0.98fr]">
+        <div>
+          <SlideKicker>Creator Clubs</SlideKicker>
+          <h1 className="mt-5 max-w-5xl text-5xl font-black leading-[0.95] text-white md:text-6xl">
+            Creator clubs are our proving ground.
+          </h1>
+          <p className="mt-5 max-w-3xl text-xl leading-relaxed text-zinc-300 md:text-2xl">
+            We are using these clubs to test value, understand benefits, and find what to improve before bigger partners come in.
+          </p>
+        </div>
+
+        <GlassCard accentColor="#E0FE10">
+          <div className="p-6 md:p-7">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">What we are learning</div>
+            <div className="mt-4 flex flex-wrap gap-2.5">
+              <Chip accent="#E0FE10">Value</Chip>
+              <Chip accent="#E0FE10">Benefits</Chip>
+              <Chip accent="#E0FE10">Improvement areas</Chip>
+              <Chip accent="#E0FE10">Bigger partner readiness</Chip>
+            </div>
+            <div className="mt-5 text-2xl font-black leading-tight text-white md:text-3xl">
+              Small club environments are helping us sharpen the product and the operating model before scale.
+            </div>
+          </div>
+        </GlassCard>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        {CREATOR_CLUBS.map((club, index) => {
+          return (
+            <motion.div
+              key={club.title}
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.08 * index }}
+            >
+              <GlassCard accentColor={club.accent}>
+                <div className="overflow-hidden">
+                  <div className="relative h-56">
+                    <img src={club.image} alt={club.title} className="absolute inset-0 h-full w-full object-cover object-center" />
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        background: `linear-gradient(180deg, rgba(5,7,11,0.08) 0%, rgba(5,7,11,0.16) 32%, rgba(5,7,11,0.88) 100%)`,
+                      }}
+                    />
+                    <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: club.accent }} />
+
+                    <div className="absolute inset-x-0 bottom-0 p-5">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.3em]" style={{ color: club.accent }}>
+                        {club.tag}
+                      </div>
+                      <h3 className="mt-2 text-3xl font-black leading-tight text-white">{club.title}</h3>
+                    </div>
+                  </div>
+
+                  <div className="p-6 md:p-7">
+                    <p className="text-lg leading-relaxed text-zinc-300">{club.detail}</p>
+
+                    <div className="mt-5 flex flex-wrap gap-2.5">
+                      {club.chips.map((chip) => (
+                        <Chip key={chip} accent={club.accent}>
+                          {chip}
+                        </Chip>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </GlassCard>
+            </motion.div>
+          );
+        })}
       </div>
     </div>
   </SceneFrame>
@@ -803,6 +1289,38 @@ const SceneFundraising: React.FC = () => (
   </SceneFrame>
 );
 
+const SceneQ2Summary: React.FC = () => (
+  <SceneFrame accent="#E0FE10">
+    <div className="grid h-full min-h-0 content-center gap-8">
+      <div>
+        <SlideKicker>Q2 Summary</SlideKicker>
+        <h1 className="mt-5 max-w-5xl text-5xl font-black leading-[0.95] text-white md:text-7xl">
+          Q2 in plain terms.
+        </h1>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        {Q2_SUMMARY.map((item, index) => (
+          <motion.div
+            key={item.title}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.07 * index }}
+          >
+            <GlassCard accentColor={item.accent} className="h-full">
+              <div className="flex min-h-[16rem] items-end p-6 md:p-7">
+                <h3 className="text-3xl font-black leading-[1.02] text-white md:text-4xl">
+                  {item.title}
+                </h3>
+              </div>
+            </GlassCard>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  </SceneFrame>
+);
+
 const AdvisoryBoardPage: React.FC = () => {
   const [slide, setSlide] = useState(0);
 
@@ -831,10 +1349,12 @@ const AdvisoryBoardPage: React.FC = () => {
 
   const scene = useMemo(() => {
     if (slide === 0) return <SceneCover />;
-    if (slide === 1) return <ScenePulseIntelligenceLabs />;
-    if (slide === 2) return <SceneFitWithPulse />;
-    if (slide === 3) return <ScenePulseCheckProduct />;
-    if (slide === 4) {
+    if (slide === 1) return <SceneEquityGrants />;
+    if (slide === 2) return <ScenePulseIntelligenceLabs />;
+    if (slide === 3) return <SceneWhyAiLab />;
+    if (slide === 4) return <SceneFitWithPulse />;
+    if (slide === 5) return <ScenePulseCheckProduct />;
+    if (slide === 6) {
       return (
         <SectionBridgeScene
           kicker="Q1 Momentum"
@@ -853,11 +1373,13 @@ const AdvisoryBoardPage: React.FC = () => {
         />
       );
     }
-    if (slide === 5) return <SceneAuntEdna />;
-    if (slide === 6) return <ScenePartnerships />;
-    if (slide === 7) return <Scene30FirstDay />;
-    if (slide === 8) return <SceneFounderBrand />;
-    if (slide === 9) {
+    if (slide === 7) return <SceneAuntEdna />;
+    if (slide === 8) return <ScenePartnerships />;
+    if (slide === 9) return <SceneNewCategories />;
+    if (slide === 10) return <SceneCreatorClubs />;
+    if (slide === 11) return <Scene30FirstDay />;
+    if (slide === 12) return <SceneFounderBrand />;
+    if (slide === 13) {
       return (
         <SectionBridgeScene
           kicker="Quarter Focus"
@@ -874,8 +1396,9 @@ const AdvisoryBoardPage: React.FC = () => {
         />
       );
     }
-    if (slide === 10) return <ScenePriorities />;
-    return <SceneFundraising />;
+    if (slide === 14) return <ScenePriorities />;
+    if (slide === 15) return <SceneFundraising />;
+    return <SceneQ2Summary />;
   }, [slide]);
 
   return (

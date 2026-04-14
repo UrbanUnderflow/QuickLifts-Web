@@ -77,7 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 <p class="document-name">${documentName}</p>
               </div>
               <p class="message">
-                Please review and sign this document at your earliest convenience. The signing process takes less than a minute.
+                Please use the secure link below to review, download, and sign this document. The signing process takes less than a minute.
               </p>
               <div style="text-align: center;">
                 <a href="${signingUrl}" class="cta-button">

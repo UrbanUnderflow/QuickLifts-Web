@@ -4,6 +4,7 @@ import Head from 'next/head';
 import { FileText, Check, AlertCircle, Download } from 'lucide-react';
 import { doc, getDoc, updateDoc, serverTimestamp, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
+import { renderHtmlToPdf } from '../../utils/pdf';
 
 interface SigningRequest {
   id: string;
@@ -278,23 +279,41 @@ const SignDocument: React.FC = () => {
   };
 
   const generatePdf = (downloadSignedVersion: boolean) => {
-    if (!request) return;
-
-    const documentContent = getDocumentHtmlContent(downloadSignedVersion);
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(documentContent);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-      }, 250);
-    }
+    downloadPdf(downloadSignedVersion);
   };
 
   // Legacy wrapper
   const generateSignedPdf = () => generatePdf(true);
+
+  const buildDownloadFilename = (downloadSignedVersion: boolean) => {
+    if (!request) return 'document.pdf';
+
+    const base = (request.documentName || 'document')
+      .replace(/[^a-z0-9]+/gi, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase();
+
+    return `${base}${downloadSignedVersion ? '-signed' : ''}.pdf`;
+  };
+
+  const downloadPdf = async (downloadSignedVersion: boolean) => {
+    if (!request) return;
+
+    try {
+      const pdfBlob = await renderHtmlToPdf(getDocumentHtmlContent(downloadSignedVersion));
+      const url = window.URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = buildDownloadFilename(downloadSignedVersion);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to generate PDF download:', err);
+      setError('Unable to generate the PDF download right now. Please try again.');
+    }
+  };
 
   const formatTextToHtml = (text: string) => {
     return text
