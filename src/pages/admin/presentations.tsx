@@ -90,6 +90,15 @@ const PRESENTATION_REGISTRY: PresentationLink[] = [
     description: 'Interactive company presentation covering Pulse, Pulse Check, partners, team, and raise narrative.',
   },
   {
+    id: 'advisory-board',
+    title: 'Advisory Board Deck',
+    href: '/advisory-board',
+    category: 'Presentation Decks',
+    typeLabel: 'Board deck',
+    accessLabel: 'Auth protected',
+    description: 'Advisory board presentation covering the PIL positioning shift, Q1 partnership momentum, founder-brand visibility, and this quarter’s priorities.',
+  },
+  {
     id: 'pulse-overview',
     title: 'Pulse 2 Minute Overview',
     href: '/pulse-overview',
