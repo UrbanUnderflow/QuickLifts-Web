@@ -297,7 +297,7 @@ const SceneFrame: React.FC<{
   className?: string;
 }> = ({ children, accent = '#E0FE10', className = '' }) => (
   <motion.div
-    className={`relative h-full w-full overflow-hidden bg-[#07090d] ${className}`}
+    className={`relative h-full w-full overflow-y-auto overflow-x-hidden bg-[#07090d] md:overflow-hidden ${className}`}
     initial={{ opacity: 0, y: 24 }}
     animate={{ opacity: 1, y: 0 }}
     exit={{ opacity: 0, y: -24 }}
@@ -314,7 +314,7 @@ const SceneFrame: React.FC<{
         backgroundSize: '80px 80px',
       }}
     />
-    <div className="relative z-10 flex h-full items-center px-8 py-10 md:px-14 md:py-12">
+    <div className="relative z-10 flex min-h-full items-start px-6 py-8 md:h-full md:items-center md:px-14 md:py-12">
       <div className="w-full">{children}</div>
     </div>
   </motion.div>
@@ -1423,7 +1423,7 @@ const AdvisoryBoardPage: React.FC = () => {
             <AnimatePresence mode="wait">{scene}</AnimatePresence>
           </main>
 
-          <footer className="mx-4 mb-4 mt-2 flex items-center justify-between gap-4 rounded-[28px] border border-white/10 bg-black/25 px-5 py-4 backdrop-blur-xl md:mx-6">
+          <footer className="sticky bottom-0 z-20 mx-4 mb-4 mt-2 flex items-center justify-between gap-4 rounded-[28px] border border-white/10 bg-black/25 px-5 py-4 backdrop-blur-xl md:mx-6">
             <button
               type="button"
               onClick={goBack}
