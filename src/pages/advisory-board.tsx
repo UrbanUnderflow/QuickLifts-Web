@@ -314,8 +314,8 @@ const SceneFrame: React.FC<{
         backgroundSize: '80px 80px',
       }}
     />
-    <div className="relative z-10 flex min-h-full items-start px-6 py-8 md:h-full md:items-center md:px-14 md:py-12">
-      <div className="w-full">{children}</div>
+    <div className="relative z-10 flex min-h-full px-6 py-8 md:h-full md:px-14 md:py-12">
+      <div className="my-auto w-full">{children}</div>
     </div>
   </motion.div>
 );
