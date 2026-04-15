@@ -89,6 +89,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/wunnarundemo',
     // Box breathing simulator deck (public for stakeholder demos)
     '/box-breathing-simulator',
+    // Advisory board deck (public for stakeholder access)
+    '/advisory-board',
     // Pulse Intelligence Labs deck (public for stakeholder demos)
     '/pulseintelligencelabs',
     // AuntEdna demo (public for stakeholder demos)
