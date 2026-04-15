@@ -10,6 +10,7 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   parseMacrosFromLabelImage: { maxTokens: 1000, modelPattern: /gpt-4o|gpt-4/i },
   generateResponse: { maxTokens: 2000, modelPattern: /gpt-4o|gpt-4/i }, // Nora Chat
   generateWorkout: { maxTokens: 4000, modelPattern: /gpt-4o|gpt-4/i }, // Workout Generation
+  groundedFoodLookup: { maxTokens: 3000, modelPattern: /gpt-5|gpt-4|gpt-4o|o[1-4]/i },
   // Default bounds for generic actions
   default: { maxTokens: 1000, modelPattern: /gpt-4o|gpt-4|gpt-3.5/i }
 };
@@ -104,7 +105,9 @@ export const handler: Handler = async (event) => {
       const maxTokensBound = process.env.OPENAI_MAX_TOKENS ? parseInt(process.env.OPENAI_MAX_TOKENS) : 4000;
       const effectiveTokenCap = Math.min(featureConfig.maxTokens, Number.isFinite(maxTokensBound) ? maxTokensBound : 4000);
 
-      if (typeof parsedBody.max_completion_tokens === 'number') {
+      if (typeof parsedBody.max_output_tokens === 'number') {
+        parsedBody.max_output_tokens = Math.min(parsedBody.max_output_tokens, effectiveTokenCap);
+      } else if (typeof parsedBody.max_completion_tokens === 'number') {
         parsedBody.max_completion_tokens = Math.min(parsedBody.max_completion_tokens, effectiveTokenCap);
       } else if (!parsedBody.max_tokens || parsedBody.max_tokens > effectiveTokenCap) {
         parsedBody.max_tokens = effectiveTokenCap;
@@ -135,6 +138,15 @@ export const handler: Handler = async (event) => {
 
     const response = await fetch(openApiUrl, fetchOptions);
     const data = await response.text();
+
+    if (!response.ok) {
+      console.error('[openai-bridge] OpenAI upstream error:', {
+        status: response.status,
+        path: openApiPath,
+        featureId,
+        body: data.slice(0, 1000)
+      });
+    }
 
     return {
       statusCode: response.status,
