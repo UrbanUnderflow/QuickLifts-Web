@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import {
   escapeHtml,
+  getBaseSiteUrl,
   resolveRecipient,
   resolveSequenceTemplate,
   sendBrevoTransactionalEmail,
@@ -68,6 +69,7 @@ const OUTREACH_COLLECTION = 'pulsecheck-pilot-athlete-communications';
 const OUTREACH_CHANNEL = 'email';
 const DEFAULT_OPEN_APP_URL = 'pulsecheck://open';
 const DEFAULT_IOS_APP_STORE_URL = 'https://apps.apple.com/by/app/pulsecheck-mindset-coaching/id6747253393';
+const EMAIL_SAFE_PULSECHECK_OPEN_PATH = '/PulseCheck/open';
 
 function normalizeString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -98,6 +100,41 @@ function buildEmailStatusRecord(docId: string, data: Record<string, any> | null 
       ctaUrl: normalizeString(data.preview?.ctaUrl),
     },
   };
+}
+
+function isAbsoluteHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
+function buildEmailSafeOpenAppUrl(args: { openAppUrl: string; iosAppUrl: string }): string {
+  const normalizedOpenAppUrl = normalizeString(args.openAppUrl) || DEFAULT_OPEN_APP_URL;
+  const normalizedIosAppUrl = normalizeString(args.iosAppUrl) || DEFAULT_IOS_APP_STORE_URL;
+
+  if (isAbsoluteHttpUrl(normalizedOpenAppUrl)) {
+    return normalizedOpenAppUrl;
+  }
+
+  if (normalizedOpenAppUrl.startsWith('/')) {
+    return `${getBaseSiteUrl()}${normalizedOpenAppUrl}`;
+  }
+
+  const params = new URLSearchParams({
+    dl: normalizedOpenAppUrl,
+    ios: normalizedIosAppUrl,
+  });
+
+  return `${getBaseSiteUrl()}${EMAIL_SAFE_PULSECHECK_OPEN_PATH}?${params.toString()}`;
+}
+
+function replacePulseCheckSchemeLinks(html: string, iosAppUrl: string): string {
+  if (!html) return html;
+
+  return html.replace(/pulsecheck:\/\/[^\s"'<>]+/gi, (matchedUrl) =>
+    buildEmailSafeOpenAppUrl({
+      openAppUrl: matchedUrl,
+      iosAppUrl,
+    })
+  );
 }
 
 function stripHtmlToPreviewText(html: string): string {
@@ -220,8 +257,12 @@ export const handler: Handler = async (event) => {
     const organizationName = normalizeString(body.organizationName) || 'your organization';
     const teamName = normalizeString(body.teamName) || 'your team';
     const pilotName = normalizeString(body.pilotName) || 'your PulseCheck pilot';
-    const openAppUrl = normalizeString(body.openAppUrl) || DEFAULT_OPEN_APP_URL;
+    const nativeOpenAppUrl = normalizeString(body.openAppUrl) || DEFAULT_OPEN_APP_URL;
     const iosAppUrl = normalizeString(body.iosAppUrl) || DEFAULT_IOS_APP_STORE_URL;
+    const openAppUrl = buildEmailSafeOpenAppUrl({
+      openAppUrl: nativeOpenAppUrl,
+      iosAppUrl,
+    });
     const fallbackSubject = `${teamName} access is ready in PulseCheck`;
     const fallbackHtml = renderFallbackHtml({
       firstName: recipient.firstName,
@@ -249,16 +290,19 @@ export const handler: Handler = async (event) => {
         pilot_name: pilotName,
         openAppUrl,
         open_app_url: openAppUrl,
+        nativeOpenAppUrl,
+        native_open_app_url: nativeOpenAppUrl,
         iosAppUrl,
         ios_app_url: iosAppUrl,
       },
     });
+    const emailHtml = replacePulseCheckSchemeLinks(template.html, iosAppUrl);
 
     const preview: OutreachPreview = {
       channel: OUTREACH_CHANNEL,
       subject: template.subject,
-      body: stripHtmlToPreviewText(template.html),
-      html: template.html,
+      body: stripHtmlToPreviewText(emailHtml),
+      html: emailHtml,
       ctaLabel: 'Open Pulse Check App',
       ctaUrl: openAppUrl,
     };
@@ -291,7 +335,7 @@ export const handler: Handler = async (event) => {
       toEmail: recipient.toEmail,
       toName: recipient.toName,
       subject: template.subject,
-      htmlContent: template.html,
+      htmlContent: emailHtml,
       tags: ['pulsecheck', 'pilot-activation', isTest ? 'test' : 'manual-admin-send'],
       scheduledAt,
       sender: {
