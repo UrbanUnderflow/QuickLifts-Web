@@ -99,6 +99,15 @@ const PRESENTATION_REGISTRY: PresentationLink[] = [
     description: 'Advisory board presentation covering the PIL positioning shift, Q1 partnership momentum, founder-brand visibility, and this quarter’s priorities.',
   },
   {
+    id: 'pulse-auntedna-pitch',
+    title: 'Pulse x AuntEdna Pitch',
+    href: '/pulse-auntedna-pitch',
+    category: 'Presentation Decks',
+    typeLabel: 'Pitch deck',
+    accessLabel: 'Auth protected',
+    description: 'Competition-style 10-slide pitch deck for the Pulse Check x AuntEdna signal-to-care platform.',
+  },
+  {
     id: 'pulse-overview',
     title: 'Pulse 2 Minute Overview',
     href: '/pulse-overview',

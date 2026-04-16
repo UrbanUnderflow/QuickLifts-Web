@@ -1,7 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import {
   escapeHtml,
-  getBaseSiteUrl,
   resolveRecipient,
   resolveSequenceTemplate,
   sendBrevoTransactionalEmail,
@@ -69,6 +68,7 @@ const OUTREACH_COLLECTION = 'pulsecheck-pilot-athlete-communications';
 const OUTREACH_CHANNEL = 'email';
 const DEFAULT_OPEN_APP_URL = 'pulsecheck://open';
 const DEFAULT_IOS_APP_STORE_URL = 'https://apps.apple.com/by/app/pulsecheck-mindset-coaching/id6747253393';
+const PULSECHECK_CANONICAL_WEB_ORIGIN = 'https://fitwithpulse.ai';
 const EMAIL_SAFE_PULSECHECK_OPEN_PATH = '/PulseCheck/open';
 
 function normalizeString(value: unknown): string {
@@ -106,6 +106,10 @@ function isAbsoluteHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
 }
 
+function getPulseCheckEmailSafeBaseUrl(): string {
+  return PULSECHECK_CANONICAL_WEB_ORIGIN;
+}
+
 function buildEmailSafeOpenAppUrl(args: { openAppUrl: string; iosAppUrl: string }): string {
   const normalizedOpenAppUrl = normalizeString(args.openAppUrl) || DEFAULT_OPEN_APP_URL;
   const normalizedIosAppUrl = normalizeString(args.iosAppUrl) || DEFAULT_IOS_APP_STORE_URL;
@@ -115,7 +119,7 @@ function buildEmailSafeOpenAppUrl(args: { openAppUrl: string; iosAppUrl: string 
   }
 
   if (normalizedOpenAppUrl.startsWith('/')) {
-    return `${getBaseSiteUrl()}${normalizedOpenAppUrl}`;
+    return `${getPulseCheckEmailSafeBaseUrl()}${normalizedOpenAppUrl}`;
   }
 
   const params = new URLSearchParams({
@@ -123,7 +127,7 @@ function buildEmailSafeOpenAppUrl(args: { openAppUrl: string; iosAppUrl: string 
     ios: normalizedIosAppUrl,
   });
 
-  return `${getBaseSiteUrl()}${EMAIL_SAFE_PULSECHECK_OPEN_PATH}?${params.toString()}`;
+  return `${getPulseCheckEmailSafeBaseUrl()}${EMAIL_SAFE_PULSECHECK_OPEN_PATH}?${params.toString()}`;
 }
 
 function replacePulseCheckSchemeLinks(html: string, iosAppUrl: string): string {
