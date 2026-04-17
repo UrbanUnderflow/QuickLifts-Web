@@ -100,12 +100,12 @@ const PRESENTATION_REGISTRY: PresentationLink[] = [
   },
   {
     id: 'pulse-auntedna-pitch',
-    title: 'Pulse x AuntEdna Pitch',
+    title: 'Pulse x auntEDNA.ai Pitch',
     href: '/pulse-auntedna-pitch',
     category: 'Presentation Decks',
     typeLabel: 'Pitch deck',
     accessLabel: 'Auth protected',
-    description: 'Competition-style 10-slide pitch deck for the Pulse Check x AuntEdna signal-to-care platform.',
+    description: 'Competition-style 10-slide pitch deck for the Pulse Check x auntEDNA.ai signal-to-care platform.',
   },
   {
     id: 'pulse-overview',
