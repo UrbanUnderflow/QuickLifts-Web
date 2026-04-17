@@ -89,7 +89,7 @@ const SOLUTION_PROOF_CHIPS = [
     accent: '#5B8DEF',
   },
   {
-    label: 'Calmer than crisis-only',
+    label: 'Support before crisis',
     title: 'In-flow regulation',
     detail: 'intervenes before the spiral starts.',
     accent: COLORS.lime,
@@ -124,7 +124,7 @@ const SOLUTION_STAGES = [
   {
     number: '3',
     title: 'Route',
-    detail: 'AuntEdna becomes the clinical destination when escalation is needed.',
+    detail: 'auntEDNA.ai becomes the clinical destination when escalation is needed.',
     tagLead: 'Clinical',
     tagValue: 'Handoff',
     accent: '#EC4899',
@@ -445,14 +445,14 @@ const ATHLETE_SPOTLIGHT = {
   role: 'Pilot athlete spotlight',
   imageSrc: '/nakyala-cau.jpg',
   quote: 'A live university athlete is how we anchor the product story, the care story, and the commercial story.',
-  quoteAttribution: 'Pulse Check × AuntEdna Pilot Thesis',
+  quoteAttribution: 'Pulse Check × auntEDNA.ai Pilot Thesis',
   biometrics: [
     { label: 'HRV baseline', value: '62 ms', accent: COLORS.sky },
     { label: 'Pre-match focus', value: 'High', accent: COLORS.lime },
     { label: 'Nora check-ins', value: '14 / wk', accent: COLORS.pink },
   ],
   focus: [
-    { title: 'Game-day pressure', detail: 'The signal starts before a visible breakdown.', accent: COLORS.sky },
+    { title: 'The Challenge', detail: 'The challenge often starts before a visible breakdown.', accent: COLORS.sky },
     { title: 'In-the-moment support', detail: 'Help needs to live inside the athlete flow.', accent: COLORS.lime },
     { title: 'Care if needed', detail: 'Escalation is available when the moment goes beyond coaching.', accent: COLORS.red },
   ],
@@ -498,7 +498,7 @@ const TEAM_MEMBERS_V2 = [
     imagePosition: 'center 16%',
     accent: '#A855F7',
     accentGradient: '#A855F7',
-    org: 'AuntEdna',
+    org: 'auntEDNA.ai',
     orgTag: { color: '#EC4899', borderColor: 'rgba(236,72,153,0.2)', bg: 'rgba(236,72,153,0.08)' },
     credentials: [
       { key: 'umass', mark: 'UB', label: 'UMass Boston', markBg: '#005A8B', markColor: '#fff', textColor: '#7FAED3', markFontSize: '9px' },
@@ -514,7 +514,7 @@ const TEAM_MEMBERS_V2 = [
     imagePosition: 'center',
     accent: '#EC4899',
     accentGradient: '#EC4899',
-    org: 'AuntEdna',
+    org: 'auntEDNA.ai',
     orgTag: { color: '#EC4899', borderColor: 'rgba(236,72,153,0.2)', bg: 'rgba(236,72,153,0.08)' },
     credentials: [
       { key: 'lilly', mark: 'Ly', label: 'Eli Lilly', markBg: '#D52B1E', markColor: '#fff', textColor: '#F5998F', markFontSize: '9px' },
@@ -889,9 +889,8 @@ const SceneTitle: React.FC = () => (
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.9, delay: 0.9 }}
           >
-            The <span className="font-medium text-[#E0FE10]">signal-to-care platform</span> for{' '}
-            <span className="font-medium text-white">elite athlete mental performance</span> and{' '}
-            <span className="font-medium text-white">mental care.</span>
+            A <span className="font-medium text-[#E0FE10]">mental performance-to-care platform</span> for{' '}
+            <span className="font-medium text-white">elite athletes.</span>
           </motion.div>
 
           <motion.div
@@ -930,7 +929,7 @@ const SceneTitle: React.FC = () => (
             <div className="flex items-center gap-3 text-sm text-white/65 md:text-base">
               <span className="font-semibold tracking-[0.04em] text-white">Pulse Intelligence Labs, Inc.</span>
               <span className="text-white/20">×</span>
-              <span className="font-semibold tracking-[0.04em] text-white">AuntEdna.ai</span>
+              <span className="font-semibold tracking-[0.04em] text-white">auntEDNA.ai</span>
             </div>
           </motion.div>
         </motion.div>
@@ -1126,7 +1125,7 @@ const SceneMeetNakyala: React.FC = () => (
         </div>
         <div className="text-[13px] leading-[1.45] text-zinc-300 md:text-[0.92rem]">
           <span className="font-semibold text-white">A real athlete journey inside a live university environment.</span>{' '}
-          {ATHLETE_SPOTLIGHT.name}&apos;s story is what Pulse Check × AuntEdna is built to support before, during, and
+          {ATHLETE_SPOTLIGHT.name}&apos;s story is what Pulse Check × auntEDNA.ai is built to support before, during, and
           after the breakdown.
         </div>
       </motion.div>
@@ -1147,7 +1146,7 @@ const SceneProblem: React.FC = () => (
               Performance pressure gets seen too late.
             </h1>
             <p className="mt-4 max-w-4xl text-2xl font-semibold leading-tight text-[#FB7185] md:text-4xl">
-              The signal spikes before the support system does.
+              Athlete pressure rises before support systems respond.
             </p>
           </div>
 
@@ -1688,7 +1687,7 @@ const SceneClinicalRouting: React.FC = () => (
       <div className="max-w-6xl">
         <SlideKicker>How it works</SlideKicker>
         <h1 className="mt-5 text-5xl font-black leading-[0.94] text-white md:text-6xl">
-          When it moves beyond Nora, the signal routes into <span className="text-purple-400">AuntEdna.</span>
+          When it moves beyond Nora, the signal routes into <span className="text-purple-400">auntEDNA.ai.</span>
         </h1>
         <div className="mt-4 max-w-5xl text-xl font-semibold leading-tight text-purple-300 md:text-3xl">
           The trigger shows up in the chat first. Then Pulse Check packages the context and routes it to clinical care.
@@ -1817,7 +1816,7 @@ const SceneClinicalRouting: React.FC = () => (
                     large: true,
                   },
                   {
-                    name: 'AuntEdna',
+                    name: 'auntEDNA.ai',
                     sub: 'Clinical platform',
                     accent: '#EC4899',
                     icon: Shield,
@@ -1861,7 +1860,7 @@ const SceneClinicalRouting: React.FC = () => (
             {[
               { title: 'Trigger', detail: 'Flagged chat context + biometric snapshot', accent: COLORS.lime },
               { title: 'Decision', detail: 'Signal layer determines clinical routing', accent: COLORS.purple },
-              { title: 'Destination', detail: 'AuntEdna chart seed + response path', accent: '#EC4899' },
+              { title: 'Destination', detail: 'auntEDNA.ai chart seed + response path', accent: '#EC4899' },
             ].map((card, index) => (
               <motion.div
                 key={card.title}
@@ -1911,7 +1910,7 @@ const SceneWelfareCheck: React.FC = () => {
             A clinician can immediately start the welfare check.
           </h1>
           <div className="mt-4 max-w-4xl text-2xl font-semibold leading-tight text-[#FB7185] md:text-4xl">
-            This is not just a score. It creates a live human response path.
+            This is not just a score. It creates a live human response experience.
           </div>
           <div className="mt-7 grid gap-3">
             {[
@@ -2021,8 +2020,7 @@ const SceneCompetitiveNarrative: React.FC = () => (
       <div className="max-w-6xl">
         <SlideKicker>Uniqueness / superiority</SlideKicker>
         <h1 className="mt-4 text-[2.9rem] font-black leading-[0.92] text-white md:text-[4.1rem]">
-          WHOOP meets Calm, then extends into <span className="text-[#E0FE10]">BetterHelp</span> and{' '}
-          <span className="text-[#E0FE10]">988.</span>
+          One workflow across performance, regulation, and care
         </h1>
         <div className="mt-3 text-lg font-medium text-zinc-300 md:text-[1.35rem]">
           Four fragmented systems become one end-to-end athlete workflow.
@@ -2094,7 +2092,7 @@ const SceneCompetitiveNarrative: React.FC = () => (
             <div className="relative">
               <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#00D4AA]">Unified here</div>
               <div className="mt-3 text-[2.4rem] font-black leading-[0.95] text-white md:text-[3.1rem]">
-                Pulse Check x AuntEdna turns that stack into one system.
+                Pulse Check x auntEDNA.ai turns that stack into one system.
               </div>
 
               <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
@@ -2131,7 +2129,7 @@ const SceneCompetitiveProof: React.FC = () => (
       <div className="max-w-6xl">
         <SlideKicker>Competitive advantage</SlideKicker>
         <h1 className="mt-5 text-6xl font-black leading-[0.9] text-white md:text-7xl">
-          One platform. <span className="text-[#E0FE10]">Every capability.</span>
+          One platform. <span className="text-[#E0FE10]">End-to-end athlete support.</span>
         </h1>
         <div className="mt-4 text-2xl font-medium text-zinc-300 md:text-3xl">
           No other single product covers detection, regulation, clinical routing, and crisis escalation for athletes.
@@ -2158,7 +2156,7 @@ const SceneCompetitiveProof: React.FC = () => (
                 </div>
               ))}
               <div className="flex items-center justify-center border-l border-[#E0FE10]/10 bg-[#E0FE10]/10 px-4 py-5 text-center text-[12px] font-semibold uppercase tracking-[0.18em] text-[#E0FE10] md:text-[13px]">
-                Pulse Check × AuntEdna
+                Pulse Check × auntEDNA.ai
               </div>
             </div>
 
@@ -2200,7 +2198,7 @@ const SceneCompetitiveProof: React.FC = () => (
           </div>
           <div className="text-base leading-relaxed text-zinc-300 md:text-lg">
             <span className="font-bold text-white">No single competitor covers the full pipeline.</span> Athletes today
-            need multiple disconnected tools. Pulse Check x AuntEdna is the system that owns the workflow from signal
+            need multiple disconnected tools. Pulse Check x auntEDNA.ai is the system that owns the workflow from signal
             detection through crisis escalation.
           </div>
         </div>
@@ -2311,9 +2309,9 @@ const SceneMarket: React.FC = () => {
       time += 0.012;
       ctx.clearRect(0, 0, W, H);
 
-      const cx = W / 2;
+      const cx = W / 2 + Math.min(W, H) * 0.11;
       const cy = H / 2;
-      const baseR = Math.min(W, H);
+      const baseR = Math.min(W, H) * 1.03;
 
       circles.forEach((c, i) => {
         const x = cx + c.offsetX * baseR;
@@ -2429,7 +2427,7 @@ const SceneMarket: React.FC = () => {
       <div className="pointer-events-none absolute left-[20%] top-[-10%] h-[55vh] w-[50vw] rounded-full" style={{ background: 'radial-gradient(circle,rgba(200,255,0,0.05),transparent 55%)' }} />
       <div className="pointer-events-none absolute bottom-[-15%] right-[10%] h-[45vh] w-[45vw] rounded-full" style={{ background: 'radial-gradient(circle,rgba(91,141,239,0.04),transparent 55%)' }} />
 
-      <div className="relative z-10 grid h-full items-center px-10 py-10 md:px-14 xl:grid-cols-[1fr_1.3fr] xl:gap-10">
+      <div className="relative z-10 grid h-full items-center px-10 py-10 md:px-14 xl:grid-cols-[0.92fr_1.08fr] xl:gap-12">
         {/* LEFT */}
         <motion.div
           className="flex flex-col"
@@ -2508,12 +2506,14 @@ const SceneMarket: React.FC = () => {
 
         {/* RIGHT: Venn canvas */}
         <motion.div
-          className="relative hidden min-h-[500px] xl:block xl:h-full"
+          className="relative hidden min-h-[560px] xl:flex xl:h-full xl:items-center xl:justify-center"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1.2, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
         >
-          <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+          <div className="relative mx-auto aspect-square h-full max-h-[46rem] w-full max-w-[46rem]">
+            <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+          </div>
         </motion.div>
       </div>
     </motion.div>
@@ -2853,7 +2853,7 @@ const SceneGTM: React.FC = () => (
       <div>
         <SlideKicker>Go-to-Market · Boston Corridor</SlideKicker>
         <h1 className="mt-4 text-[2.6rem] font-black leading-[1.05] tracking-tight text-white md:text-[3.2rem]">
-          Three active conversations. <span style={{ color: COLORS.lime }}>One corridor.</span>
+          Three prospective partners already in the <span style={{ color: COLORS.lime }}>pipeline.</span>
         </h1>
         <p className="mt-3 max-w-[780px] text-[15px] leading-relaxed text-white/55">
           Boston-affiliated relationships are already active across every tier we care about — <strong className="font-medium text-white">campus, research, and pro.</strong> The wedge is visible.
@@ -3625,7 +3625,7 @@ const SceneEvidence: React.FC = () => {
               />
             ))}
 
-            <svg viewBox="0 0 100 100" className="absolute inset-0 z-10 h-full w-full">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 z-10 h-full w-full">
               <motion.circle
                 cx={centerPoint.x}
                 cy={centerPoint.y}
@@ -3723,10 +3723,14 @@ const SceneEvidence: React.FC = () => {
                     key={`${sport.name}-${sport.sourceIndex}`}
                     className="absolute -translate-x-1/2 -translate-y-1/2"
                     style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
-                    animate={{ scale: isActive ? 1.08 : 1, y: isActive ? -4 : 0 }}
+                    animate={{ scale: isActive ? 1.08 : 1, y: 0 }}
                     transition={{ duration: 0.35, ease: 'easeOut' }}
                   >
-                    <button type="button" onClick={() => setActiveSportIndex(sport.sourceIndex)} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setActiveSportIndex(sport.sourceIndex)}
+                      className="relative block appearance-none border-0 bg-transparent p-0"
+                    >
                       {isActive && (
                         <motion.div
                           className="absolute inset-[-12px] rounded-full blur-xl"
@@ -3888,7 +3892,7 @@ const SceneSummary: React.FC = () => (
           className="close-thesis mx-auto mb-9 max-w-[750px] leading-relaxed text-white/55"
           style={{ fontSize: 'clamp(16px, 1.6vw, 22px)' }}
         >
-          Pulse Check × AuntEdna closes the gap between{' '}
+          Pulse Check × auntEDNA.ai closes the gap between{' '}
           <span className="font-medium text-white">
             performance tech, real-time regulation, and licensed care
           </span>{' '}
@@ -3944,7 +3948,7 @@ const SceneSummary: React.FC = () => (
         </div>
         <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[12px] font-medium text-white/55">
           <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#EC4899]" style={{ boxShadow: '0 0 6px #EC4899' }} />
-          auntedna.ai
+          auntEDNA.ai
         </div>
 
       </div>
@@ -4018,7 +4022,7 @@ const PulseAuntEdnaPitchPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Pulse Check x AuntEdna Pitch | Pulse Intelligence Labs</title>
+        <title>Pulse Check x auntEDNA.ai Pitch | Pulse Intelligence Labs</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
@@ -4027,7 +4031,7 @@ const PulseAuntEdnaPitchPage: React.FC = () => {
         />
         <meta
           name="description"
-          content="Pitch presentation for Pulse Check x AuntEdna, the signal-to-care platform for elite athlete mental performance training and mental care."
+          content="Pitch presentation for Pulse Check x auntEDNA.ai, a mental performance-to-care platform for elite athletes."
         />
       </Head>
 
