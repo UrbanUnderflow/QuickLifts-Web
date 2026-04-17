@@ -10,7 +10,6 @@ import {
   Globe,
   GraduationCap,
   Landmark,
-  Mail,
   Medal,
   PhoneCall,
   School,
@@ -57,6 +56,9 @@ const COLORS = {
   red: '#FB7185',
   amber: '#F59E0B',
 } as const;
+
+const TREMAINE_TRACK_PORTRAIT_SRC =
+  'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/press_assets%2Ffounder%2Fportrait2.png?alt=media&token=d47ea14c-c2ff-4d60-940a-4ce138a5e931';
 
 const PROBLEM_STATS = [
   {
@@ -433,27 +435,6 @@ const PATH_PHASE_TWO = [
   },
 ] as const;
 
-const GTM_LANES = [
-  {
-    title: 'Start with pilots',
-    detail: 'University and team pilots prove workflow fit and create case studies.',
-    chips: ['Clark Atlanta pilot', 'UMES in motion', 'Live product demos'],
-    accent: COLORS.sky,
-  },
-  {
-    title: 'Sell to organizations',
-    detail: 'Annual organization contracts with per-athlete pricing and implementation support.',
-    chips: ['Athletic departments', 'Performance staff', 'Student support teams'],
-    accent: COLORS.lime,
-  },
-  {
-    title: 'Expand through trust',
-    detail: 'Clinical adjacency and research credibility widen the path into larger programs.',
-    chips: ['AuntEdna partnership', 'Research lane', 'Team referrals'],
-    accent: COLORS.red,
-  },
-] as const;
-
 const ATHLETE_SPOTLIGHT = {
   name: 'Nakyala',
   sport: 'Volleyball',
@@ -477,53 +458,71 @@ const ATHLETE_SPOTLIGHT = {
   ],
 } as const;
 
-const TEAM_MEMBERS = [
+const TEAM_MEMBERS_V2 = [
   {
     name: 'Tremaine Grant',
     role: 'Founder & CEO',
-    imageSrc: '/TremaineFounder.jpg',
+    imageSrc: TREMAINE_TRACK_PORTRAIT_SRC,
+    imagePosition: 'center 5%',
     accent: COLORS.lime,
-    org: 'Pulse Intelligence Labs',
-    email: 'tre@fitwithpulse.ai',
-    badges: ['D1 Athlete', 'Biotech', 'Engineer'],
+    accentGradient: `linear-gradient(90deg, ${COLORS.lime}, #00D4AA)`,
+    org: 'PIL',
+    orgTag: { color: COLORS.lime, borderColor: 'rgba(200,255,0,0.2)', bg: 'rgba(200,255,0,0.12)' },
+    credentials: [
+      { key: 'fsu', mark: 'F', label: 'FSU · D1 Track', markBg: '#782F40', markColor: '#CEB888', textColor: '#d4a73a' },
+      { key: 'clinical', mark: 'IQ', label: 'Clinical Research', markBg: '#1B3B8F', markColor: '#fff', textColor: '#89A5E8', markFontSize: '9px' },
+      { key: 'eng', mark: 'PE', label: 'Principal Engineer', markBg: '#0a0a0b', markColor: '#E0FE10', textColor: '#E0FE10', markFontSize: '9px' },
+    ],
+    focusArea: '<strong>20+ yrs</strong> software · <strong>100K+</strong> downloads on prior app · NPC Overall Champion',
   },
   {
     name: 'Bobby Nweke',
     role: 'Chief of Staff',
     imageSrc: '/bobbyAdvisor.jpg',
-    accent: COLORS.sky,
-    org: 'Pulse Intelligence Labs',
-    email: 'bobby@fitwithpulse.ai',
-    badges: ['TED', 'Harvard', 'TFA'],
+    imagePosition: 'center 15%',
+    accent: '#5B8DEF',
+    accentGradient: '#5B8DEF',
+    org: 'PIL',
+    orgTag: { color: COLORS.lime, borderColor: 'rgba(200,255,0,0.2)', bg: 'rgba(200,255,0,0.12)' },
+    credentials: [
+      { key: 'harvard', mark: 'H', label: 'Harvard', markBg: '#A51C30', markColor: '#fff', textColor: '#E8A5AF', markFont: "'Playfair Display', serif" },
+      { key: 'ted', mark: 'TED', label: 'TED Coach', markBg: '#E62B1E', markColor: '#fff', textColor: '#F5998F', markFontSize: '8px' },
+      { key: 'tfa', mark: 'TFA', label: 'Teach For America', markBg: '#005AE1', markColor: '#fff', textColor: '#7FA8F5', markFontSize: '9px' },
+    ],
+    focusArea: '<strong>Operations, partnerships,</strong> and organizational design across education and venture',
   },
   {
-    name: 'Dr. Tracey',
+    name: 'Dr. Tracey Hathoway',
     role: 'Clinical Partner',
-    imageSrc: '/dr-tracey.png',
-    accent: COLORS.pink,
+    imageSrc: '/dr-tracey-basketball.jpeg',
+    imagePosition: 'center 16%',
+    accent: '#A855F7',
+    accentGradient: '#A855F7',
     org: 'AuntEdna',
-    email: 'tracey@auntedna.ai',
-    badges: ['Clinical care', 'Escalation path', 'Provider workflow'],
+    orgTag: { color: '#EC4899', borderColor: 'rgba(236,72,153,0.2)', bg: 'rgba(236,72,153,0.08)' },
+    credentials: [
+      { key: 'umass', mark: 'UB', label: 'UMass Boston', markBg: '#005A8B', markColor: '#fff', textColor: '#7FAED3', markFontSize: '9px' },
+      { key: 'salem', mark: 'SS', label: 'Salem State', markBg: '#E86100', markColor: '#fff', textColor: '#F5A868', markFontSize: '9px' },
+      { key: 'ncaa', mark: 'NC', label: 'NCAA Committees', markBg: '#004B87', markColor: '#fff', textColor: '#7FAED3', markFontSize: '9px' },
+    ],
+    focusArea: '<strong>NCAA Track \u0026 Field Committee, Infractions Committee</strong> — clinical care, escalation path, and provider workflow',
   },
   {
-    name: 'Jelanna',
-    role: 'AuntEdna Team Contact',
+    name: 'Jelanna Salas Olivera',
+    role: 'Team Contact & Coordination',
     imageSrc: '/jelanna.jpg',
-    accent: COLORS.red,
+    imagePosition: 'center',
+    accent: '#EC4899',
+    accentGradient: '#EC4899',
     org: 'AuntEdna',
-    email: 'jelanna@auntedna.ai',
-    badges: ['Operations', 'Care coordination', 'Pilot support'],
+    orgTag: { color: '#EC4899', borderColor: 'rgba(236,72,153,0.2)', bg: 'rgba(236,72,153,0.08)' },
+    credentials: [
+      { key: 'lilly', mark: 'Ly', label: 'Eli Lilly', markBg: '#D52B1E', markColor: '#fff', textColor: '#F5998F', markFontSize: '9px' },
+      { key: 'iu', mark: 'IU', label: 'Indiana University', markBg: '#990000', markColor: '#fff', textColor: '#E8A5A5', markFont: "'Playfair Display', serif", markFontSize: '10px' },
+      { key: 'kpmg', mark: 'KP', label: 'KPMG', markBg: '#00338D', markColor: '#fff', textColor: '#7FA8F5', markFontSize: '9px' },
+    ],
+    focusArea: '<strong>Operations, care coordination,</strong> and pilot-stage execution support',
   },
-] as const;
-
-const SUPPORT_NETWORK = [
-  { name: 'NCAA', detail: 'College athletics ecosystem credibility', accent: COLORS.lime },
-  { name: 'ACC CMO', detail: 'Conference-level sports medicine support', accent: COLORS.sky },
-  { name: 'Cooley', detail: 'Legal and venture infrastructure', accent: COLORS.purple },
-  { name: 'National Science Foundation', detail: 'Scientific and research validation', accent: COLORS.red },
-  { name: 'AWS Startups', detail: 'Startup infrastructure and technical backing', accent: COLORS.orange },
-  { name: 'Techstars', detail: 'Venture network and founder support', accent: COLORS.teal },
-  { name: 'LAUNCH', detail: 'Jason Calacanis ecosystem and investor adjacency', accent: COLORS.pink },
 ] as const;
 
 const SPORT_PRECISION_MAP = [
@@ -619,41 +618,6 @@ const MINDMAP_PARTICLES = Array.from({ length: 42 }, (_, index) => ({
   opacity: 0.12 + (index % 4) * 0.05,
 }));
 
-const FINAL_IMPACT_LINES = [
-  {
-    title: 'See the signal earlier',
-    detail: 'Pressure gets surfaced before it becomes a staff surprise.',
-    accent: COLORS.sky,
-  },
-  {
-    title: 'Stabilize inside the athlete flow',
-    detail: 'The first intervention happens in the moment, not after the breakdown.',
-    accent: COLORS.lime,
-  },
-  {
-    title: 'Route to real care',
-    detail: 'When it moves beyond coaching, AuntEdna becomes the clinical destination.',
-    accent: COLORS.pink,
-  },
-] as const;
-
-const FINAL_WEBSITES = [
-  {
-    name: 'Pulse Check',
-    url: 'fitwithpulse.ai/pulsecheck',
-    href: 'https://fitwithpulse.ai/pulsecheck',
-    detail: 'Signal detection + athlete regulation',
-    accent: COLORS.lime,
-  },
-  {
-    name: 'AuntEdna',
-    url: 'AuntEdna.ai',
-    href: 'https://auntedna.ai',
-    detail: 'Clinical destination + response path',
-    accent: COLORS.pink,
-  },
-] as const;
-
 const SceneFrame: React.FC<{
   children: React.ReactNode;
   accent?: string;
@@ -709,18 +673,6 @@ const SlideKicker: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     <Sparkles className="h-3.5 w-3.5 text-[#E0FE10]" />
     <span>{children}</span>
   </div>
-);
-
-const Chip: React.FC<{
-  children: React.ReactNode;
-  accent?: string;
-}> = ({ children, accent = COLORS.lime }) => (
-  <span
-    className="rounded-full border px-3 py-1.5 text-sm font-medium text-zinc-100"
-    style={{ borderColor: `${accent}40`, background: `${accent}12` }}
-  >
-    {children}
-  </span>
 );
 
 const WhoopWordmark: React.FC<{ className?: string }> = ({ className = '' }) => (
@@ -791,38 +743,6 @@ const Lifeline988Wordmark: React.FC<{ className?: string }> = ({ className = '' 
           Lifeline
         </div>
       </div>
-    </div>
-  </div>
-);
-
-const ContactCard: React.FC<(typeof TEAM_MEMBERS)[number]> = ({ name, role, imageSrc, accent, org, badges }) => (
-  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-    <div className="flex items-center gap-4">
-      <div
-        className="h-18 w-18 overflow-hidden rounded-2xl border md:h-20 md:w-20"
-        style={{ borderColor: `${accent}55`, background: `linear-gradient(135deg, ${accent}22, rgba(255,255,255,0.05))` }}
-      >
-        <img src={imageSrc} alt={name} className="h-full w-full object-cover" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-xl font-semibold text-white md:text-2xl">{name}</div>
-        <div className="text-base text-zinc-400">{role}</div>
-        <div className="mt-1 text-[11px] uppercase tracking-[0.28em]" style={{ color: accent }}>
-          {org}
-        </div>
-      </div>
-    </div>
-
-    <div className="mt-5 flex flex-wrap gap-2">
-      {badges.map((badge) => (
-        <span
-          key={`${name}-${badge}`}
-          className="rounded px-2.5 py-1 text-xs font-semibold"
-          style={{ background: `${accent}1e`, color: accent }}
-        >
-          {badge}
-        </span>
-      ))}
     </div>
   </div>
 );
@@ -940,8 +860,8 @@ const SceneTitle: React.FC = () => (
             className="flex flex-wrap items-center justify-center gap-3 text-center leading-[0.88] md:gap-8"
             style={{ fontFamily: '"Bebas Neue", Impact, "Arial Narrow", sans-serif' }}
           >
-            <span className="text-[4.8rem] tracking-[-0.05em] text-white drop-shadow-[0_0_40px_rgba(255,255,255,0.08)] md:text-[10rem] xl:text-[11.2rem]">
-              Pulse Check
+            <span className="text-[4.2rem] tracking-[-0.05em] text-white drop-shadow-[0_0_40px_rgba(255,255,255,0.08)] md:text-[8rem] xl:text-[9.6rem]">
+              Mental Sports Performance
             </span>
             <motion.span
               className="relative text-[3.8rem] leading-none text-[#E0FE10] md:text-[7rem] xl:text-[8rem]"
@@ -952,14 +872,14 @@ const SceneTitle: React.FC = () => (
               <span className="pointer-events-none absolute inset-[-28%] -z-10 rounded-full bg-[radial-gradient(circle,rgba(224,254,16,0.24),transparent_62%)]" />
             </motion.span>
             <span
-              className="text-[4.8rem] tracking-[-0.05em] md:text-[10rem] xl:text-[11.2rem]"
+              className="text-[4.2rem] tracking-[-0.05em] md:text-[8rem] xl:text-[9.6rem]"
               style={{
                 background: 'linear-gradient(135deg, #ffffff 0%, #ffffff 30%, #EC4899 55%, #FF6B35 82%, #F59E0B 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
               }}
             >
-              AuntEdna
+              Mental Care
             </span>
           </div>
 
@@ -998,22 +918,23 @@ const SceneTitle: React.FC = () => (
               </React.Fragment>
             ))}
           </motion.div>
+
+          {/* Company callout — centered */}
+          <motion.div
+            className="mt-8 flex flex-col items-center gap-1.5 md:mt-10"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.9, delay: 1.35 }}
+          >
+            <div className="text-[9px] uppercase tracking-[0.3em] text-white/28">Codesigned by</div>
+            <div className="flex items-center gap-3 text-sm text-white/65 md:text-base">
+              <span className="font-semibold tracking-[0.04em] text-white">Pulse Intelligence Labs, Inc.</span>
+              <span className="text-white/20">×</span>
+              <span className="font-semibold tracking-[0.04em] text-white">AuntEdna.ai</span>
+            </div>
+          </motion.div>
         </motion.div>
       </div>
-
-      <motion.div
-        className="absolute bottom-9 left-6 z-10 flex flex-col gap-2 md:left-14"
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.9, delay: 1.35 }}
-      >
-        <div className="text-[9px] uppercase tracking-[0.3em] text-white/28">A co-production between</div>
-        <div className="flex items-center gap-3 text-sm text-white/65 md:text-base">
-          <span className="font-semibold tracking-[0.04em] text-white">Pulse Intelligence Labs</span>
-          <span className="text-white/20">×</span>
-          <span className="font-semibold tracking-[0.04em] text-white">AuntEdna.ai</span>
-        </div>
-      </motion.div>
     </div>
   </SceneFrame>
 );
@@ -2689,126 +2610,763 @@ const SceneHundredMPath: React.FC = () => (
   </SceneFrame>
 );
 
+const GTM_NODES = [
+  {
+    stage: 'Campus Pilot',
+    icon: '🏫',
+    name: 'Worcester State',
+    type: 'University · D3',
+    statusBold: 'Pilot lane',
+    statusDetail: 'student-athlete workflow',
+    accent: '#5B8DEF',
+    accentDim: 'rgba(91,141,239,0.12)',
+    accentBorder: 'rgba(91,141,239,0.25)',
+    accentGlow: 'rgba(91,141,239,0.2)',
+  },
+  {
+    stage: 'Research Lane',
+    icon: '🎓',
+    name: 'Northeastern',
+    type: 'University · R1',
+    statusBold: 'Active',
+    statusDetail: 'institutional credibility',
+    accent: '#10B981',
+    accentDim: 'rgba(16,185,129,0.12)',
+    accentBorder: 'rgba(16,185,129,0.25)',
+    accentGlow: 'rgba(16,185,129,0.2)',
+  },
+  {
+    stage: 'Pro Team',
+    icon: '🏆',
+    name: 'New England Patriots',
+    type: 'NFL · Professional',
+    statusBold: '3rd meeting',
+    statusDetail: 'post-draft',
+    accent: '#FF6B35',
+    accentDim: 'rgba(255,107,53,0.12)',
+    accentBorder: 'rgba(255,107,53,0.25)',
+    accentGlow: 'rgba(255,107,53,0.2)',
+  },
+] as const;
+
+const GTM_ADDITIONAL_PILOTS = [
+  { school: 'Clark Atlanta University', meta: 'Atlanta, GA · HBCU · Active pilot' },
+  { school: 'Hampton University', meta: 'Hampton, VA · HBCU · Active pilot' },
+  { school: 'UMES', meta: 'Princess Anne, MD · HBCU · Active pilot' },
+] as const;
+
 const SceneGTM: React.FC = () => (
   <SceneFrame accent={COLORS.lime}>
-    <div className="grid h-full min-h-0 content-center gap-6">
-      <div className="max-w-5xl">
-        <SlideKicker>Go-to-market</SlideKicker>
-        <h1 className="mt-5 text-5xl font-black leading-[0.94] text-white md:text-6xl">
-          Pilot first. Prove workflow. Convert to contracts.
+    {/* Injected keyframes for corridor animations */}
+    <style>{`
+      @keyframes gtmPulseTravel {
+        0%   { left: 5%;  background: #5B8DEF; box-shadow: 0 0 8px #5B8DEF; opacity: 0; }
+        8%   { opacity: 1; }
+        40%  { background: #10B981; box-shadow: 0 0 8px #10B981; }
+        80%  { background: #FF6B35; box-shadow: 0 0 8px #FF6B35; }
+        92%  { opacity: 1; }
+        100% { left: 95%; opacity: 0; }
+      }
+      @keyframes gtmBadgeRing {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+      }
+      @keyframes gtmStatusPulse {
+        0%, 100% { opacity: 1; }
+        50%      { opacity: 0.4; }
+      }
+    `}</style>
+
+    <div className="flex h-full min-h-0 flex-col justify-center gap-4">
+      {/* Header */}
+      <div>
+        <SlideKicker>Go-to-Market · Boston Corridor</SlideKicker>
+        <h1 className="mt-4 text-[2.6rem] font-black leading-[1.05] tracking-tight text-white md:text-[3.2rem]">
+          Three active conversations. <span style={{ color: COLORS.lime }}>One corridor.</span>
         </h1>
+        <p className="mt-3 max-w-[780px] text-[15px] leading-relaxed text-white/55">
+          Boston-affiliated relationships are already active across every tier we care about — <strong className="font-medium text-white">campus, research, and pro.</strong> The wedge is visible.
+        </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {GTM_LANES.map((lane, index) => (
-          <motion.div
-            key={lane.title}
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 * index }}
+      {/* ── THE CORRIDOR TRACK ── */}
+      <div className="relative flex flex-1 flex-col justify-center py-4" style={{ minHeight: 0 }}>
+        <div className="relative px-10">
+          {/* Track line */}
+          <div
+            className="pointer-events-none absolute left-10 right-10 top-1/2 z-[1] h-px -translate-y-1/2 hidden xl:block"
+            style={{
+              background:
+                'linear-gradient(90deg, rgba(91,141,239,0.4) 0%, rgba(16,185,129,0.4) 50%, rgba(255,107,53,0.4) 100%)',
+            }}
+          />
+
+          {/* Traveling pulses */}
+          {[0, 1.7, 3.4].map((delay, i) => (
+            <div
+              key={i}
+              className="pointer-events-none absolute top-1/2 z-[2] h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full hidden xl:block"
+              style={{
+                animation: `gtmPulseTravel 5s linear ${delay}s infinite`,
+              }}
+            />
+          ))}
+
+          {/* Institution nodes */}
+          <div className="relative z-[3] grid gap-6 md:grid-cols-3">
+            {GTM_NODES.map((node, index) => (
+              <motion.div
+                key={node.name}
+                className="flex flex-col items-center text-center"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 + index * 0.2, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+              >
+                {/* Stage label */}
+                <div
+                  className="mb-4 rounded-full border px-3 py-1 text-[9px] font-bold uppercase tracking-[0.22em]"
+                  style={{
+                    color: node.accent,
+                    borderColor: node.accentBorder,
+                    background: node.accentDim,
+                  }}
+                >
+                  {node.stage}
+                </div>
+
+                {/* Circular badge */}
+                <div
+                  className="group relative mb-5 flex h-[120px] w-[120px] items-center justify-center rounded-full transition-transform duration-300 hover:scale-105 md:h-[140px] md:w-[140px]"
+                  style={{
+                    background: '#07090d',
+                    border: `2px solid ${node.accent}`,
+                    boxShadow: `0 0 40px ${node.accentGlow}`,
+                  }}
+                >
+                  {/* Dashed orbit ring */}
+                  <div
+                    className="pointer-events-none absolute rounded-full opacity-30"
+                    style={{
+                      inset: '-8px',
+                      border: `1px dashed ${node.accent}`,
+                      animation: `gtmBadgeRing 8s linear infinite${index === 2 ? ' reverse' : ''}`,
+                    }}
+                  />
+                  <span className="text-[42px] leading-none">{node.icon}</span>
+                </div>
+
+                {/* Institution name */}
+                <div className="text-[26px] font-black uppercase leading-none tracking-wide text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+                  {node.name}
+                </div>
+                <div
+                  className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.15em]"
+                  style={{ color: node.accent }}
+                >
+                  {node.type}
+                </div>
+
+                {/* Status chip */}
+                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-white/55">
+                  <span
+                    className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
+                    style={{
+                      background: node.accent,
+                      boxShadow: `0 0 6px ${node.accent}`,
+                      animation: `gtmStatusPulse 2s ease-in-out ${index * 0.5}s infinite`,
+                    }}
+                  />
+                  <strong className="font-semibold text-white">{node.statusBold}</strong> · {node.statusDetail}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── ADDITIONAL PILOTS ROW ── */}
+      <motion.div
+        className="grid items-stretch gap-3.5 md:grid-cols-[auto_1fr_1fr]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.9, duration: 0.6 }}
+      >
+        {/* "+2" label card */}
+        <div className="flex items-center gap-2.5 whitespace-nowrap rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3.5 text-xs font-medium tracking-wide text-white/55">
+          <span className="text-2xl font-black leading-none tracking-wide text-[#E0FE10]" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>+3</span>
+          <span>Additional active pilots outside Boston</span>
+        </div>
+
+        {/* Pilot cards */}
+        {GTM_ADDITIONAL_PILOTS.map((pilot) => (
+          <div
+            key={pilot.school}
+            className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.14]"
           >
-            <GlassCard accentColor={lane.accent} className="h-full">
-              <div className="flex min-h-[18rem] flex-col justify-between p-6 md:p-7">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.3em]" style={{ color: lane.accent }}>
-                    Lane {index + 1}
-                  </div>
-                  <div className="mt-3 text-3xl font-black leading-tight text-white">{lane.title}</div>
-                  <div className="mt-4 text-xl leading-snug text-zinc-300">{lane.detail}</div>
-                </div>
-
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {lane.chips.map((chip) => (
-                    <Chip key={`${lane.title}-${chip}`} accent={lane.accent}>
-                      {chip}
-                    </Chip>
-                  ))}
-                </div>
-              </div>
-            </GlassCard>
-          </motion.div>
+            <span
+              className="h-2 w-2 flex-shrink-0 rounded-full"
+              style={{
+                background: COLORS.lime,
+                boxShadow: '0 0 6px rgba(200,255,0,0.3)',
+                animation: 'gtmStatusPulse 2s ease-in-out infinite',
+              }}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-bold leading-tight text-white">{pilot.school}</div>
+              <div className="text-[10px] tracking-wide text-white/30">{pilot.meta}</div>
+            </div>
+          </div>
         ))}
-      </div>
+      </motion.div>
+
+      {/* ── FOOTER ── */}
+      <motion.div
+        className="flex flex-wrap items-center gap-3.5 rounded-xl border px-5 py-4 md:flex-nowrap"
+        style={{
+          background: 'linear-gradient(90deg, rgba(224,254,16,0.12), transparent 70%)',
+          borderColor: 'rgba(224,254,16,0.1)',
+        }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1, duration: 0.6 }}
+      >
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#E0FE10]">
+            <Zap className="h-3.5 w-3.5 text-[#0a0a0b]" />
+          </div>
+          <div className="text-[13px] leading-snug text-white/55">
+            <strong className="font-semibold text-white">Pilot first. Prove workflow. Convert to contracts.</strong>
+          </div>
+        </div>
+      </motion.div>
     </div>
   </SceneFrame>
 );
 
 const SceneTeam: React.FC = () => (
   <SceneFrame accent={COLORS.purple}>
-    <div className="grid h-full min-h-0 content-center gap-6">
-      <div className="max-w-5xl">
+    {/* Scoped keyframes for member card entrance */}
+    <style>{`
+      @keyframes teamMemberUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+    `}</style>
+
+    <div className="flex h-full min-h-0 flex-col justify-center gap-4">
+      {/* Header */}
+      <div>
         <SlideKicker>Team</SlideKicker>
-        <h1 className="mt-5 text-5xl font-black leading-[0.94] text-white md:text-6xl">
-          The right mix of performance, product, and care.
+        <h1 className="mt-4 text-[2.6rem] font-bold leading-[1.05] tracking-tight text-white md:text-[3.2rem]">
+          The right mix of performance, <span style={{ color: COLORS.lime }}>product, and care.</span>
         </h1>
+        <p className="mt-2 max-w-[780px] text-[15px] leading-relaxed text-white/55">
+          Four operators, four lenses — elite athlete, operational muscle, clinical authority, and care coordination.
+        </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {TEAM_MEMBERS.map((member, index) => (
+      {/* Team Grid */}
+      <div className="grid flex-1 gap-4 md:grid-cols-2 xl:grid-cols-4" style={{ minHeight: 0 }}>
+        {TEAM_MEMBERS_V2.map((member, index) => (
           <motion.div
             key={member.name}
-            initial={{ opacity: 0, y: 18 }}
+            className="relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 transition-all duration-300 hover:-translate-y-[3px] hover:border-white/[0.14]"
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 * index }}
+            transition={{ delay: 0.15 + index * 0.15, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
           >
-            <GlassCard accentColor={member.accent} className="h-full">
-              <div className="p-4">
-                <ContactCard {...member} />
-              </div>
-            </GlassCard>
+            {/* Accent top bar */}
+            <div
+              className="absolute left-0 right-0 top-0 h-[2px] opacity-70"
+              style={{ background: member.accentGradient }}
+            />
+
+
+            {/* Photo */}
+	            <div className="mb-4 w-full overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.05]" style={{ aspectRatio: '1' }}>
+	              <img
+	                src={member.imageSrc}
+	                alt={member.name}
+	                className="h-full w-full object-cover"
+	                style={{ objectPosition: member.imagePosition ?? 'center' }}
+	              />
+	            </div>
+
+            {/* Name + org badge + role */}
+            <div className="mb-1 flex items-center gap-2 leading-tight">
+              <span className="text-lg font-bold text-white">{member.name}</span>
+              <span
+                className="flex-shrink-0 rounded-[5px] border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.15em]"
+                style={{
+                  color: member.orgTag.color,
+                  borderColor: member.orgTag.borderColor,
+                  background: member.orgTag.bg,
+                }}
+              >
+                {member.org}
+              </span>
+            </div>
+            <div className="mb-4 text-xs leading-snug text-white/55">{member.role}</div>
+
+            {/* Credentials */}
+            <div className="mb-2.5 text-[8px] font-bold uppercase tracking-[0.15em] text-white/30">Credentials</div>
+            <div className="mb-auto flex flex-wrap gap-2">
+              {member.credentials.map((cred) => (
+                <div
+                  key={cred.key}
+                  className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-bold tracking-wide transition-all duration-200 hover:-translate-y-px hover:border-white/[0.14]"
+                >
+                  {/* Mark square */}
+                  <span
+                    className="flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded leading-none"
+                    style={{
+                      background: cred.markBg,
+                      color: cred.markColor,
+                      fontFamily: ('markFont' in cred && cred.markFont) || "'DM Sans', sans-serif",
+                      fontWeight: 900,
+                      fontSize: ('markFontSize' in cred && cred.markFontSize) || '11px',
+                    }}
+                  >
+                    {cred.mark}
+                  </span>
+                  {/* Label */}
+                  {'textGradient' in cred && cred.textGradient ? (
+                    <span
+                      className="font-bold"
+                      style={{
+                        background: cred.textGradient as string,
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                      }}
+                    >
+                      {cred.label}
+                    </span>
+                  ) : (
+                    <span style={{ color: cred.textColor || 'rgba(255,255,255,0.55)' }}>{cred.label}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Focus area */}
+            <div
+              className="mt-3.5 border-t border-white/[0.08] pt-3.5 text-[10.5px] leading-snug text-white/55 [&_strong]:font-semibold [&_strong]:text-white"
+              dangerouslySetInnerHTML={{ __html: member.focusArea }}
+            />
           </motion.div>
         ))}
       </div>
+
+      {/* Footer */}
+      <motion.div
+        className="flex items-center gap-3.5 rounded-xl border px-5 py-3.5"
+        style={{
+          background: 'linear-gradient(90deg, rgba(224,254,16,0.12), transparent 70%)',
+          borderColor: 'rgba(224,254,16,0.1)',
+        }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.9, duration: 0.6 }}
+      >
+        <div className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-full bg-[#E0FE10]">
+          <Zap className="h-3.5 w-3.5 text-[#0a0a0b]" />
+        </div>
+        <div className="text-[13px] leading-snug text-white/55">
+          <strong className="font-semibold text-white">Performance-native founder. Clinical-native partner.</strong>{' '}
+          The team already spans both sides of the signal-to-care platform.
+        </div>
+      </motion.div>
     </div>
   </SceneFrame>
 );
 
+const SUPPORTERS_V2 = [
+  {
+    key: 'ncaa',
+    category: 'Sports Institution',
+    categoryColor: '#5B8DEF',
+    topBar: '#004B87',
+    colSpan: 'xl:col-span-5',
+    description: '<strong>College athletics ecosystem credibility</strong> — direct institutional alignment',
+  },
+  {
+    key: 'acc',
+    category: 'Conference',
+    categoryColor: '#3B82F6',
+    topBar: '#00447C',
+    colSpan: 'xl:col-span-4',
+    description: '<strong>Conference-level sports medicine</strong> — Marques Zak, CMO',
+  },
+  {
+    key: 'nsf',
+    category: 'Scientific',
+    categoryColor: '#60A5FA',
+    topBar: '#2563EB',
+    colSpan: 'xl:col-span-3',
+    description: '<strong>Research validation</strong>',
+  },
+  {
+    key: 'cooley',
+    category: 'Legal',
+    categoryColor: '#EC4899',
+    topBar: '#8B1E41',
+    colSpan: 'xl:col-span-3',
+    description: '<strong>Legal & venture infrastructure</strong> — Erik Edwards',
+  },
+  {
+    key: 'aws',
+    category: 'Infrastructure',
+    categoryColor: '#FF9900',
+    topBar: '#FF9900',
+    colSpan: 'xl:col-span-3',
+    description: '<strong>Technical backing</strong> & credits',
+  },
+  {
+    key: 'techstars',
+    category: 'Venture Network',
+    categoryColor: '#00D4AA',
+    topBar: '#00D4AA',
+    colSpan: 'xl:col-span-3',
+    description: '<strong>Founder network</strong> & support',
+  },
+  {
+    key: 'launch',
+    category: 'Lead Investor',
+    categoryColor: '#c8ff00',
+    topBar: '#c8ff00',
+    colSpan: 'xl:col-span-3',
+    description: '<strong>Investor adjacency</strong> & ecosystem',
+  },
+  {
+    key: 'kelley',
+    category: 'Academic',
+    categoryColor: '#990000',
+    topBar: '#990000',
+    colSpan: 'xl:col-span-4',
+    description: '<strong>MSIS Program · HOPE Digital Project</strong> — Indiana University',
+  },
+  {
+    key: 'army',
+    category: 'Military',
+    categoryColor: '#4B5320',
+    topBar: '#4B5320',
+    colSpan: 'xl:col-span-4',
+    description: '<strong>Service-connected credibility</strong> — leadership and discipline',
+  },
+  {
+    key: 'stanford-biz',
+    category: 'Academic',
+    categoryColor: '#8C1515',
+    topBar: '#8C1515',
+    colSpan: 'xl:col-span-4',
+    description: '<strong>Graduate School of Business</strong> — Stanford University',
+  },
+] as const;
+
+const BOARD_ADVISORS = [
+  {
+    name: 'Marques Zak',
+    role: 'CMO @ ACC',
+    accent: '#3B82F6',
+    imageSrc: '/zak.jpg',
+    imagePosition: 'center top',
+    imageFit: 'cover',
+  },
+  {
+    name: 'Valerie Alexander',
+    role: 'Fortune 500 Consultant, IP Attorney',
+    accent: '#A855F7',
+    imageSrc: '/Val.jpg',
+    imagePosition: 'center top',
+    imageFit: 'cover',
+  },
+  {
+    name: 'DeRay Mckesson',
+    role: 'Campaign Zero, Activist',
+    accent: '#38BDF8',
+    imageSrc: '/Deray.png',
+    imagePosition: 'center top',
+    imageFit: 'cover',
+  },
+  {
+    name: 'Erik Edwards',
+    role: 'Partner @ Cooley',
+    accent: '#EC4899',
+    imageSrc: '/ErikEdwards.png',
+    imagePosition: 'center top',
+    imageFit: 'cover',
+  },
+  {
+    name: 'Evan Poncelet',
+    role: 'Lead Partner @ Venture Black',
+    accent: '#10B981',
+    imageSrc: '/evan-poncelet.jpeg',
+    imagePosition: 'center 18%',
+    imageFit: 'cover',
+  },
+  {
+    name: 'Garin Varis',
+    role: 'Retired Patriots Player, Attorney',
+    accent: '#FF6B35',
+    imageSrc: '/garin-varis.webp',
+    imagePosition: 'center 24%',
+    imageFit: 'contain',
+  },
+  {
+    name: 'Dr. Malikia Johnson',
+    role: 'Director of Counseling, Council Lead of Clinical Directors — East Coast',
+    accent: '#F59E0B',
+    imageSrc: '/malkia-advisor.png',
+    imagePosition: 'center 18%',
+    imageFit: 'cover',
+  },
+] as const;
+
+/* Typographic logo renderers per supporter key */
+const SupporterLogo: React.FC<{ supporterKey: string }> = ({ supporterKey }) => {
+  switch (supporterKey) {
+    case 'ncaa':
+      return (
+        <div className="text-[44px] font-black leading-none tracking-tight text-white" style={{ letterSpacing: '-1px' }}>
+          NCAA<span className="ml-0.5 align-super text-xs font-semibold text-white/30">®</span>
+        </div>
+      );
+    case 'acc':
+      return (
+        <div>
+          <div className="text-[52px] font-black italic leading-none text-white" style={{ fontFamily: "'Playfair Display', serif", letterSpacing: '-2px' }}>
+            ACC
+          </div>
+          <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/55">Atlantic Coast Conference</div>
+        </div>
+      );
+    case 'nsf':
+      return (
+        <div className="flex items-center gap-3">
+          <div
+            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 border-[#60A5FA] text-lg font-black text-white"
+            style={{
+              background: 'radial-gradient(circle, #1E40AF, #0C2D6B)',
+              fontFamily: "'Playfair Display', serif",
+              boxShadow: 'inset 0 0 12px rgba(255,255,255,0.1)',
+            }}
+          >
+            NSF
+          </div>
+          <div className="font-extrabold text-white">
+            <div className="text-2xl leading-tight" style={{ letterSpacing: '0.5px' }}>NSF</div>
+            <div className="mt-0.5 text-[9px] uppercase tracking-[0.12em] text-white/55">National Science Foundation</div>
+          </div>
+        </div>
+      );
+    case 'cooley':
+      return (
+        <div>
+          <div className="text-[34px] font-bold leading-none tracking-[2px] text-white" style={{ fontFamily: "'Playfair Display', serif" }}>
+            COOLEY
+          </div>
+          <div className="mt-1.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-white/30">LLP · Est. 1920</div>
+        </div>
+      );
+    case 'aws':
+      return (
+        <div className="flex flex-col items-start gap-1">
+          <div className="relative text-[38px] font-black leading-[0.9] text-[#FF9900]" style={{ letterSpacing: '-2px' }}>
+            aws
+            <div className="mt-0.5 h-[3px] w-[34px] rounded-sm bg-[#FF9900]" style={{ transform: 'skewX(-15deg)' }} />
+          </div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-white/55">Startups</div>
+        </div>
+      );
+    case 'techstars':
+      return (
+        <div className="flex items-center gap-1.5 text-[22px] font-black leading-none text-white" style={{ letterSpacing: '-0.5px' }}>
+          <span className="text-2xl text-[#00D4AA]">★</span>
+          techstars
+        </div>
+      );
+    case 'launch':
+      return (
+        <div>
+          <div className="text-[32px] font-black leading-none text-white" style={{ letterSpacing: '-1px' }}>
+            LAUNCH<span className="ml-1 align-super text-sm text-[#c8ff00]">▲</span>
+          </div>
+          <div className="mt-1.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-white/30">Jason Calacanis</div>
+        </div>
+      );
+    case 'kelley':
+      return (
+        <div className="flex items-center gap-4">
+          <div
+            className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl border-2 text-2xl font-black text-white"
+            style={{
+              borderColor: '#990000',
+              background: 'linear-gradient(135deg, #990000, #7A0000)',
+              fontFamily: "'Playfair Display', serif",
+            }}
+          >
+            IU
+          </div>
+          <div>
+            <div className="text-[28px] font-black leading-none tracking-tight text-white" style={{ letterSpacing: '-0.5px' }}>
+              KELLEY
+            </div>
+            <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.15em] text-white/55">School of Business · Indiana University</div>
+          </div>
+        </div>
+      );
+    case 'army':
+      return (
+        <div className="flex items-center gap-3">
+          <div
+            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-black text-white"
+            style={{
+              borderColor: '#C5A84A',
+              background: 'radial-gradient(circle, #4B5320, #2D3310)',
+              boxShadow: 'inset 0 0 10px rgba(197,168,74,0.2)',
+            }}
+          >
+            US
+          </div>
+          <div>
+            <div className="text-[22px] font-black uppercase leading-none tracking-wide text-white">U.S. Army</div>
+            <div className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.15em] text-white/55">United States Army</div>
+          </div>
+        </div>
+      );
+    case 'stanford-biz':
+      return (
+        <div className="flex items-center gap-3">
+          <div
+            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border-2 text-xl font-black text-white"
+            style={{
+              borderColor: '#8C1515',
+              background: 'linear-gradient(135deg, #8C1515, #5E0E0E)',
+              fontFamily: "'Playfair Display', serif",
+            }}
+          >
+            S
+          </div>
+          <div>
+            <div className="text-[20px] font-black leading-none tracking-tight text-white" style={{ letterSpacing: '-0.5px' }}>Stanford</div>
+            <div className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-white/55">Graduate School of Business</div>
+          </div>
+        </div>
+      );
+    default:
+      return null;
+  }
+};
+
 const SceneSupporters: React.FC = () => (
   <SceneFrame accent={COLORS.lime}>
-    <div className="grid h-full min-h-0 content-center gap-6">
-      <div className="max-w-5xl">
-        <SlideKicker>Who supports us</SlideKicker>
-        <h1 className="mt-5 text-5xl font-black leading-[0.94] text-white md:text-6xl">
-          We are backed by serious institutional support.
+    <div className="flex h-full min-h-0 flex-col justify-center gap-4">
+      {/* Header */}
+      <div>
+        <SlideKicker>Who Supports Us</SlideKicker>
+        <h1 className="mt-4 text-[2.4rem] font-bold leading-[1.05] tracking-tight text-white md:text-[3rem]">
+          We are not building <span style={{ color: COLORS.lime }}>in isolation.</span>
         </h1>
-        <div className="mt-4 max-w-4xl text-2xl font-medium text-zinc-300 md:text-3xl">
-          From sports institutions to venture networks to scientific infrastructure, the support around us is real.
-        </div>
+        <p className="mt-2 max-w-[780px] text-[15px] leading-relaxed text-white/55">
+          Institutional support already spans <strong className="font-medium text-white">sports, science, legal, startup, and venture.</strong>
+        </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {SUPPORT_NETWORK.map((supporter, index) => (
+      {/* Logo Wall */}
+      <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-6 xl:grid-cols-12" style={{ minHeight: 0, gridAutoRows: '1fr' }}>
+        {SUPPORTERS_V2.map((s, index) => (
           <motion.div
-            key={supporter.name}
-            initial={{ opacity: 0, y: 18 }}
+            key={s.key}
+            className={`relative flex flex-col justify-between overflow-hidden rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-5 transition-all duration-300 hover:-translate-y-[3px] hover:border-white/[0.14] md:col-span-3 ${s.colSpan}`}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.06 * index }}
+            transition={{ delay: 0.15 + index * 0.1, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           >
-            <GlassCard accentColor={supporter.accent} className="h-full">
-              <div className="flex min-h-[14rem] flex-col justify-between p-6 md:p-7">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.3em]" style={{ color: supporter.accent }}>
-                    Supporter
-                  </div>
-                  <div className="mt-4 text-3xl font-black leading-tight text-white">{supporter.name}</div>
-                </div>
-                <div className="mt-6 text-lg leading-snug text-zinc-300">{supporter.detail}</div>
-              </div>
-            </GlassCard>
+            {/* Accent top bar */}
+            <div className="absolute left-0 right-0 top-0 h-[2px] opacity-60" style={{ background: s.topBar }} />
+
+            {/* Category */}
+            <div className="flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-[0.16em]" style={{ color: s.categoryColor }}>
+              <span className="h-1 w-1 rounded-full" style={{ background: s.categoryColor }} />
+              {s.category}
+            </div>
+
+            {/* Logo area */}
+            <div className="my-3 flex min-h-[50px] flex-1 items-center">
+              <SupporterLogo supporterKey={s.key} />
+            </div>
+
+            {/* Description */}
+            <div
+              className="border-t border-white/[0.08] pt-3 text-[11px] leading-snug text-white/55 [&_strong]:font-semibold [&_strong]:text-white"
+              dangerouslySetInnerHTML={{ __html: s.description }}
+            />
           </motion.div>
         ))}
       </div>
 
-      <GlassCard accentColor={COLORS.lime}>
-        <div className="flex items-center justify-between gap-6 p-5 md:p-6">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">What it signals</div>
-            <div className="mt-2 text-2xl font-semibold text-zinc-200 md:text-3xl">
-              This company is not building in isolation. We already have support spanning athletics, science, startups, and venture.
-            </div>
-          </div>
+      {/* ── BOARD OF ADVISORS ── */}
+      <motion.div
+        className="rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-5"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.85, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <div className="mb-4 flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#E0FE10]" style={{ boxShadow: '0 0 6px rgba(224,254,16,0.4)' }} />
+          <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#E0FE10]">Board of Advisors</span>
         </div>
-      </GlassCard>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+          {BOARD_ADVISORS.map((advisor, index) => (
+            <motion.div
+              key={advisor.name}
+              className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3.5 py-3 transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.14]"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.95 + index * 0.08, duration: 0.5 }}
+            >
+              <div
+                className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-xl border-2 bg-white/[0.04]"
+                style={{ borderColor: `${advisor.accent}55` }}
+              >
+                <img
+                  src={advisor.imageSrc}
+                  alt={advisor.name}
+                  className="h-full w-full"
+                  style={{
+                    objectFit: advisor.imageFit,
+                    objectPosition: advisor.imagePosition,
+                  }}
+                />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[13px] font-bold leading-tight text-white">{advisor.name}</div>
+                <div className="text-[10px] tracking-wide" style={{ color: advisor.accent }}>{advisor.role}</div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Footer */}
+      <motion.div
+        className="flex items-center gap-3.5 rounded-xl border px-5 py-3.5"
+        style={{
+          background: 'linear-gradient(90deg, rgba(224,254,16,0.12), transparent 70%)',
+          borderColor: 'rgba(224,254,16,0.1)',
+        }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.1, duration: 0.6 }}
+      >
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#E0FE10]">
+          <Zap className="h-3.5 w-3.5 text-[#0a0a0b]" />
+        </div>
+        <div className="text-[13px] leading-snug text-white/55">
+          <strong className="font-semibold text-white">Athletics, science, legal, startup, and venture.</strong>{' '}
+          The support around us is real — and already in motion.
+        </div>
+      </motion.div>
     </div>
   </SceneFrame>
 );
@@ -3081,119 +3639,147 @@ const SceneEvidence: React.FC = () => {
 };
 
 const SceneSummary: React.FC = () => (
-  <SceneFrame accent={COLORS.lime}>
-    <div className="grid h-full items-center gap-6 xl:grid-cols-[0.94fr_1.06fr]">
-      <div className="max-w-3xl">
-        <SlideKicker>Why pick us</SlideKicker>
-        <h1 className="mt-5 text-5xl font-black leading-[0.9] tracking-[-0.04em] text-white md:text-7xl">
-          Athletes should not have to <span className="text-[#FB7185]">break down</span> before the system
-          <span className="text-[#E0FE10]"> responds.</span>
+  <motion.div
+    className="relative h-full w-full overflow-hidden"
+    style={{ background: '#050507' }}
+    initial={{ opacity: 0, y: 24 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -24 }}
+    transition={transition}
+  >
+    {/* Injected styles for close slide */}
+    <style>{`
+      @keyframes closeD1{0%,100%{transform:translate(0,0)}50%{transform:translate(60px,40px)}}
+      @keyframes closeD2{0%,100%{transform:translate(0,0)}50%{transform:translate(-50px,-30px)}}
+      @keyframes closeD3{0%,100%{transform:translate(0,0)}50%{transform:translate(30px,-50px)}}
+      @keyframes closeCornerIn{from{opacity:0}to{opacity:0.5}}
+      @keyframes closeStmtIn{
+        from{opacity:0;transform:translateY(40px);filter:blur(6px);}
+        to{opacity:1;transform:translateY(0);filter:blur(0);}
+      }
+      @keyframes closeFadeUp{from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:translateY(0)}}
+      .close-amb{position:absolute;pointer-events:none;z-index:0;}
+      .close-a1{top:-20%;left:-10%;width:60vw;height:60vh;background:radial-gradient(circle,rgba(0,212,170,0.06),transparent 55%);animation:closeD1 20s ease-in-out infinite;}
+      .close-a2{bottom:-25%;right:-10%;width:65vw;height:65vh;background:radial-gradient(circle,rgba(200,255,0,0.05),transparent 55%);animation:closeD2 24s ease-in-out infinite;}
+      .close-a3{top:30%;left:40%;width:40vw;height:40vh;background:radial-gradient(circle,rgba(168,85,247,0.03),transparent 55%);animation:closeD3 28s ease-in-out infinite;}
+      .close-corner{position:absolute;width:28px;height:28px;z-index:15;opacity:0;animation:closeCornerIn 1s ease 0.3s both;}
+      .close-corner::before,.close-corner::after{content:'';position:absolute;background:#c8ff00;}
+      .close-corner::before{top:0;left:0;width:16px;height:1.5px;}
+      .close-corner::after{top:0;left:0;width:1.5px;height:16px;}
+      .close-corner.close-tl{top:24px;left:24px;}
+      .close-corner.close-tr{top:24px;right:24px;transform:scaleX(-1);}
+      .close-corner.close-bl{bottom:24px;left:24px;transform:scaleY(-1);}
+      .close-corner.close-br{bottom:24px;right:24px;transform:scale(-1);}
+      .close-statement{animation:closeStmtIn 1.6s cubic-bezier(0.22,1,0.36,1) 0.3s both;max-width:1100px;}
+      .close-thesis{animation:closeFadeUp 1s ease 1s both;}
+      .close-signal{animation:closeFadeUp 1s ease 1.3s both;}
+      .close-contact{animation:closeFadeUp 1s ease 1.6s both;}
+      .close-grain{
+        position:absolute;inset:0;z-index:1;pointer-events:none;opacity:0.04;
+        background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      }
+    `}</style>
+
+    {/* Ambient blobs */}
+    <div className="close-amb close-a1" />
+    <div className="close-amb close-a2" />
+    <div className="close-amb close-a3" />
+    <div className="close-grain" />
+
+    {/* Corner marks */}
+    <div className="close-corner close-tl" />
+    <div className="close-corner close-tr" />
+    <div className="close-corner close-bl" />
+    <div className="close-corner close-br" />
+
+    {/* Main content */}
+    <div className="relative z-10 flex h-full w-full flex-col items-center justify-center px-6 py-24 text-center md:px-14">
+      <div className="close-statement">
+        {/* Headline */}
+        <h1
+          className="mb-8 leading-[0.92]"
+          style={{
+            fontFamily: "'Bebas Neue', sans-serif",
+            fontSize: 'clamp(48px, 7vw, 110px)',
+            letterSpacing: '-1px',
+          }}
+        >
+          <span className="text-white">Athletes should not have to</span>
+          <br />
+          <span className="text-[#EC4899]">break down </span>
+          <span className="text-white">before the</span>
+          <br />
+          <span className="text-white">system </span>
+          <span className="text-[#00D4AA]">responds.</span>
         </h1>
-        <p className="mt-5 max-w-2xl text-lg leading-relaxed text-zinc-300 md:text-[22px]">
-          Pulse Check × AuntEdna turns performance pressure into an earlier, calmer, clinically connected
-          response for elite athletes.
+
+        {/* Thesis */}
+        <p
+          className="close-thesis mx-auto mb-9 max-w-[750px] leading-relaxed text-white/55"
+          style={{ fontSize: 'clamp(16px, 1.6vw, 22px)' }}
+        >
+          Pulse Check × AuntEdna closes the gap between{' '}
+          <span className="font-medium text-white">
+            performance tech, real-time regulation, and licensed care
+          </span>{' '}
+          — so the signal gets caught before the spiral starts.
         </p>
 
-        <div className="mt-7 grid gap-3">
-          {FINAL_IMPACT_LINES.map((line, index) => (
-            <motion.div
-              key={line.title}
-              initial={{ opacity: 0, x: -18 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.08 * index }}
-              className="flex items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4"
-            >
-              <span
-                className="mt-1.5 h-2.5 w-2.5 flex-shrink-0 rounded-full"
-                style={{ background: line.accent, boxShadow: `0 0 14px ${line.accent}88` }}
-              />
-              <div>
-                <div className="text-lg font-black text-white md:text-xl">{line.title}</div>
-                <div className="mt-1 text-sm leading-relaxed text-zinc-400 md:text-base">{line.detail}</div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid gap-4">
-        <GlassCard accentColor={COLORS.lime}>
-          <div className="p-6 md:p-7">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.32em] text-zinc-500">Closing statement</div>
-            <div className="mt-3 text-3xl font-black leading-[1.02] text-white md:text-4xl">
-              We close the gap between performance tech, real-time regulation, and licensed care.
-            </div>
-            <div className="mt-5 flex flex-wrap gap-2.5 text-sm font-semibold md:text-base">
-              <span className="rounded-full border border-sky-400/30 bg-sky-400/10 px-3.5 py-2 text-sky-300">Detect earlier</span>
-              <span className="rounded-full border border-lime-300/30 bg-lime-300/10 px-3.5 py-2 text-lime-200">Regulate sooner</span>
-              <span className="rounded-full border border-pink-400/30 bg-pink-400/10 px-3.5 py-2 text-pink-300">Route to care</span>
-            </div>
-          </div>
-        </GlassCard>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          {FINAL_WEBSITES.map((site, index) => (
-            <motion.a
-              key={site.name}
-              href={site.href}
-              target="_blank"
-              rel="noreferrer"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.18 + 0.08 * index }}
-              className="block"
-            >
-              <GlassCard accentColor={site.accent}>
-                <div className="flex h-full items-start justify-between gap-4 p-5">
-                  <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.28em]" style={{ color: site.accent }}>
-                      Website
-                    </div>
-                    <div className="mt-2 text-2xl font-black text-white">{site.name}</div>
-                    <div className="mt-2 break-all text-base font-semibold text-zinc-100">{site.url}</div>
-                    <div className="mt-2 text-sm leading-relaxed text-zinc-400">{site.detail}</div>
-                  </div>
-                  <div
-                    className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl border"
-                    style={{ borderColor: `${site.accent}44`, background: `${site.accent}12`, color: site.accent }}
-                  >
-                    <Globe className="h-5 w-5" />
-                  </div>
-                </div>
-              </GlassCard>
-            </motion.a>
-          ))}
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          {TEAM_MEMBERS.map((member, index) => (
-            <motion.div
-              key={member.name}
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.28 + 0.06 * index }}
-            >
-              <GlassCard accentColor={member.accent}>
-                <div className="flex items-start justify-between gap-4 p-4">
-                  <div className="min-w-0">
-                    <div className="text-lg font-black text-white">{member.name}</div>
-                    <div className="text-sm text-zinc-400">{member.role}</div>
-                    <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.24em]" style={{ color: member.accent }}>
-                      {member.org}
-                    </div>
-                    <div className="mt-3 flex min-w-0 items-center gap-2 text-sm font-semibold text-white">
-                      <Mail className="h-4 w-4 flex-shrink-0" style={{ color: member.accent }} />
-                      <span className="min-w-0 break-all text-zinc-100">{member.email}</span>
-                    </div>
-                  </div>
-                </div>
-              </GlassCard>
-            </motion.div>
-          ))}
+        {/* Signal flow */}
+        <div className="close-signal mb-4 flex flex-wrap items-center justify-center gap-4 text-[11px] uppercase tracking-[0.18em] text-white/30 md:gap-6">
+          <span className="flex items-center gap-2">
+            <span className="h-[7px] w-[7px] rounded-full bg-[#5B8DEF]" style={{ boxShadow: '0 0 6px #5B8DEF' }} />
+            Detect
+          </span>
+          <span className="text-[10px] text-white/18">→</span>
+          <span className="flex items-center gap-2">
+            <span className="h-[7px] w-[7px] rounded-full bg-[#c8ff00]" style={{ boxShadow: '0 0 6px rgba(200,255,0,0.3)' }} />
+            Regulate
+          </span>
+          <span className="text-[10px] text-white/18">→</span>
+          <span className="flex items-center gap-2">
+            <span className="h-[7px] w-[7px] rounded-full bg-[#A855F7]" style={{ boxShadow: '0 0 6px rgba(168,85,247,0.5)' }} />
+            Route
+          </span>
+          <span className="text-[10px] text-white/18">→</span>
+          <span className="flex items-center gap-2">
+            <span className="h-[7px] w-[7px] rounded-full bg-[#EC4899]" style={{ boxShadow: '0 0 6px rgba(236,72,153,0.5)' }} />
+            Care
+          </span>
         </div>
       </div>
     </div>
-  </SceneFrame>
+
+    {/* Contact strip — fixed at bottom */}
+    <div className="close-contact absolute bottom-8 left-6 right-6 z-20 flex flex-col gap-4 md:left-14 md:right-14 md:flex-row md:items-end md:justify-between">
+      {/* Left: team contacts */}
+      <div>
+        <div className="mb-2 text-[9px] font-bold uppercase tracking-[0.2em] text-white/30">Get in touch</div>
+        <div className="flex flex-col gap-1.5 text-[12px] text-white/55 md:flex-row md:flex-wrap md:items-center md:gap-x-4">
+          <span><strong className="font-semibold text-white">Tremaine Grant</strong> · tre@fitwithpulse.ai</span>
+          <span className="hidden text-white/18 md:inline">|</span>
+          <span><strong className="font-semibold text-white">Bobby Nweke</strong> · bobby@fitwithpulse.ai</span>
+          <span className="hidden text-white/18 md:inline">|</span>
+          <span><strong className="font-semibold text-white">Dr. Tracey Hathoway</strong> · tracey@auntedna.ai</span>
+          <span className="hidden text-white/18 md:inline">|</span>
+          <span><strong className="font-semibold text-white">Jelanna Salas Olivera</strong> · jelanna@auntedna.ai</span>
+        </div>
+      </div>
+
+      {/* Right: site chips + raise */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[12px] font-medium text-white/55">
+          <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#00D4AA]" style={{ boxShadow: '0 0 6px #00D4AA' }} />
+          fitwithpulse.ai
+        </div>
+        <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[12px] font-medium text-white/55">
+          <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#EC4899]" style={{ boxShadow: '0 0 6px #EC4899' }} />
+          auntedna.ai
+        </div>
+
+      </div>
+    </div>
+  </motion.div>
 );
 
 const PulseAuntEdnaPitchPage: React.FC = () => {
@@ -3266,7 +3852,7 @@ const PulseAuntEdnaPitchPage: React.FC = () => {
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Playfair+Display:wght@700;900&display=swap"
           rel="stylesheet"
         />
         <meta
