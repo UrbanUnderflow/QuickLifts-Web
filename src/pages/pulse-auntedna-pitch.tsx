@@ -301,7 +301,7 @@ const BUILDING_BLOCK_TIERS = [
   },
 ] as const;
 
-const FULL_TAM_MARKETS = [
+const _FULL_TAM_MARKETS = [
   {
     title: 'Sports analytics',
     scope: 'Performance data, wearable tech, and athlete monitoring infrastructure.',
@@ -322,7 +322,7 @@ const FULL_TAM_MARKETS = [
   },
 ] as const;
 
-const FULL_TAM_TOTAL = '$33.34B';
+const _FULL_TAM_TOTAL = '$33.34B';
 
 const BEACHHEAD_MARKET_SEGMENTS = [
   {
@@ -2388,7 +2388,7 @@ const SceneMarket: React.FC = () => {
       });
 
       // Connecting lines from center
-      circles.forEach((c, i) => {
+      circles.forEach((c) => {
         const x = cx + c.offsetX * baseR;
         const y = cy + c.offsetY * baseR;
         ctx.save();
@@ -2508,32 +2508,17 @@ const SceneMarket: React.FC = () => {
 
         {/* RIGHT: Venn canvas */}
         <motion.div
-          className="relative hidden h-full xl:flex xl:items-center xl:justify-center"
+          className="relative hidden min-h-[500px] xl:block xl:h-full"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1.2, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
         >
-          <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+          <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
         </motion.div>
       </div>
     </motion.div>
   );
 };
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">TAM framing</div>
-            <div className="mt-2 text-xl font-semibold text-zinc-200 md:text-[1.6rem]">
-              Full TAM includes adjacent markets because we are not selling one narrow point solution.
-            </div>
-          </div>
-          <div className="shrink-0 text-right">
-            <div className="text-4xl font-black text-[#E0FE10] md:text-5xl">{FULL_TAM_TOTAL}</div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-500">Full opportunity</div>
-          </div>
-        </div>
-      </GlassCard>
-    </div>
-  </SceneFrame>
-);
 
 const SceneBeachhead: React.FC = () => (
   <SceneFrame accent={COLORS.teal}>
@@ -3446,24 +3431,24 @@ const SupporterLogo: React.FC<{ supporterKey: string }> = ({ supporterKey }) => 
 
 const SceneSupporters: React.FC = () => (
   <SceneFrame accent={COLORS.lime}>
-    <div className="flex h-full min-h-0 flex-col justify-center gap-4">
+    <div className="flex h-full min-h-0 flex-col justify-start gap-3">
       {/* Header */}
       <div>
         <SlideKicker>Who Supports Us</SlideKicker>
-        <h1 className="mt-4 text-[2.4rem] font-bold leading-[1.05] tracking-tight text-white md:text-[3rem]">
+        <h1 className="mt-3 text-[2.15rem] font-bold leading-[1.05] tracking-tight text-white md:text-[2.65rem]">
           We are not building <span style={{ color: COLORS.lime }}>in isolation.</span>
         </h1>
-        <p className="mt-2 max-w-[780px] text-[15px] leading-relaxed text-white/55">
+        <p className="mt-1.5 max-w-[780px] text-[13px] leading-relaxed text-white/55 md:text-[14px]">
           Institutional support already spans <strong className="font-medium text-white">sports, science, legal, startup, and venture.</strong>
         </p>
       </div>
 
       {/* Logo Wall */}
-      <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-6 xl:grid-cols-12" style={{ minHeight: 0, gridAutoRows: '1fr' }}>
+      <div className="grid flex-1 grid-cols-1 gap-2.5 md:grid-cols-6 xl:grid-cols-12" style={{ minHeight: 0, gridAutoRows: '1fr' }}>
         {SUPPORTERS_V2.map((s, index) => (
           <motion.div
             key={s.key}
-            className={`relative flex flex-col justify-between overflow-hidden rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-5 transition-all duration-300 hover:-translate-y-[3px] hover:border-white/[0.14] md:col-span-3 ${s.colSpan}`}
+            className={`relative flex flex-col justify-between overflow-hidden rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-4 transition-all duration-300 hover:-translate-y-[3px] hover:border-white/[0.14] md:col-span-3 ${s.colSpan}`}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 + index * 0.1, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
@@ -3478,13 +3463,13 @@ const SceneSupporters: React.FC = () => (
             </div>
 
             {/* Logo area */}
-            <div className="my-3 flex min-h-[50px] flex-1 items-center">
+            <div className="my-2 flex min-h-[42px] flex-1 items-center">
               <SupporterLogo supporterKey={s.key} />
             </div>
 
             {/* Description */}
             <div
-              className="border-t border-white/[0.08] pt-3 text-[11px] leading-snug text-white/55 [&_strong]:font-semibold [&_strong]:text-white"
+              className="border-t border-white/[0.08] pt-2.5 text-[10px] leading-snug text-white/55 md:text-[10.5px] [&_strong]:font-semibold [&_strong]:text-white"
               dangerouslySetInnerHTML={{ __html: s.description }}
             />
           </motion.div>
@@ -3493,26 +3478,26 @@ const SceneSupporters: React.FC = () => (
 
       {/* ── BOARD OF ADVISORS ── */}
       <motion.div
-        className="rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-5"
+        className="rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-4"
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.85, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="mb-4 flex items-center gap-2">
+        <div className="mb-3 flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-[#E0FE10]" style={{ boxShadow: '0 0 6px rgba(224,254,16,0.4)' }} />
           <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#E0FE10]">Board of Advisors</span>
         </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
           {BOARD_ADVISORS.map((advisor, index) => (
             <motion.div
               key={advisor.name}
-              className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3.5 py-3 transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.14]"
+              className="flex items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.14]"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.95 + index * 0.08, duration: 0.5 }}
             >
               <div
-                className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-xl border-2 bg-white/[0.04]"
+                className="h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl border-2 bg-white/[0.04]"
                 style={{ borderColor: `${advisor.accent}55` }}
               >
                 <img
@@ -3526,8 +3511,8 @@ const SceneSupporters: React.FC = () => (
                 />
               </div>
               <div className="min-w-0">
-                <div className="text-[13px] font-bold leading-tight text-white">{advisor.name}</div>
-                <div className="text-[10px] tracking-wide" style={{ color: advisor.accent }}>{advisor.role}</div>
+                <div className="text-[12px] font-bold leading-tight text-white">{advisor.name}</div>
+                <div className="text-[9px] leading-snug tracking-wide" style={{ color: advisor.accent }}>{advisor.role}</div>
               </div>
             </motion.div>
           ))}
@@ -3536,7 +3521,7 @@ const SceneSupporters: React.FC = () => (
 
       {/* Footer */}
       <motion.div
-        className="flex items-center gap-3.5 rounded-xl border px-5 py-3.5"
+        className="flex items-center gap-3 rounded-xl border px-4 py-3"
         style={{
           background: 'linear-gradient(90deg, rgba(224,254,16,0.12), transparent 70%)',
           borderColor: 'rgba(224,254,16,0.1)',
@@ -3548,7 +3533,7 @@ const SceneSupporters: React.FC = () => (
         <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#E0FE10]">
           <Zap className="h-3.5 w-3.5 text-[#0a0a0b]" />
         </div>
-        <div className="text-[13px] leading-snug text-white/55">
+        <div className="text-[11px] leading-snug text-white/55 md:text-[12px]">
           <strong className="font-semibold text-white">Athletics, science, legal, startup, and venture.</strong>{' '}
           The support around us is real — and already in motion.
         </div>
@@ -3886,17 +3871,16 @@ const SceneSummary: React.FC = () => (
           className="mb-8 leading-[0.92]"
           style={{
             fontFamily: "'Bebas Neue', sans-serif",
-            fontSize: 'clamp(48px, 7vw, 110px)',
+            fontSize: 'clamp(40px, 5.5vw, 90px)',
             letterSpacing: '-1px',
           }}
         >
-          <span className="text-white">Athletes should not have to</span>
+          <span className="text-white">An ecosystem where athletes can be</span>
           <br />
-          <span className="text-[#EC4899]">break down </span>
-          <span className="text-white">before the</span>
+          <span className="text-[#c8ff00]">high-performing </span>
+          <span className="text-white">without being</span>
           <br />
-          <span className="text-white">system </span>
-          <span className="text-[#00D4AA]">responds.</span>
+          <span className="text-[#EC4899]">hollowed out.</span>
         </h1>
 
         {/* Thesis */}
