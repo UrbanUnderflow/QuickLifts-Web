@@ -2260,79 +2260,265 @@ const SceneBuildingBlocks: React.FC = () => (
   </SceneFrame>
 );
 
-const SceneMarket: React.FC = () => (
-  <SceneFrame accent={COLORS.sky}>
-    <div className="grid h-full min-h-0 content-center gap-5">
-      <div className="max-w-5xl">
-        <SlideKicker>Full TAM</SlideKicker>
-        <h1 className="mt-4 text-[2.9rem] font-black leading-[0.94] text-white md:text-[4.1rem]">
-          The full opportunity is already <span className="text-[#E0FE10]">$10B+</span>.
-        </h1>
-        <div className="mt-3 max-w-4xl text-xl font-medium text-zinc-300 md:text-[1.75rem]">
-          We sit at the intersection of performance tech, digital mental health, and connected care.
-        </div>
-      </div>
+const SceneMarket: React.FC = () => {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
-      <div className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
-        <GlassCard accentColor={COLORS.lime} className="h-full">
-          <div className="flex h-full flex-col justify-between p-5 md:p-6">
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#E0FE10]">Full adjacent market TAM</div>
-              <div className="mt-3 text-[4.6rem] font-black leading-none text-white md:text-[5.7rem]">{FULL_TAM_TOTAL}</div>
-              <div className="mt-4 text-[1.35rem] font-semibold leading-tight text-zinc-200 md:text-[1.65rem]">
-                That number does not come from one narrow contract model. It comes from the full stack we are touching.
-              </div>
-            </div>
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-            <div className="mt-5 rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-zinc-500">Why it belongs together</div>
-              <div className="mt-3 grid gap-2.5">
-                <div className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-2.5">
-                  <span className="text-sm font-medium text-zinc-300">Performance signal</span>
-                  <span className="text-lg font-black text-white">Pulse Check</span>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-2.5">
-                  <span className="text-sm font-medium text-zinc-300">In-the-moment support</span>
-                  <span className="text-lg font-black text-white">AI + intervention</span>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-2.5">
-                  <span className="text-sm font-medium text-zinc-300">Clinical routing</span>
-                  <span className="text-lg font-black text-white">AuntEdna</span>
-                </div>
-              </div>
-            </div>
+    let animId: number;
+    let W = 0, H = 0;
+
+    function resize() {
+      if (!canvas) return;
+      const rect = canvas.parentElement!.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx!.scale(dpr, dpr);
+      W = rect.width;
+      H = rect.height;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const circles = [
+      { label: ['Sports', 'Analytics'], sub: '$4.79B', color: [91,141,239] as [number,number,number], offsetX: -0.14, offsetY: -0.12, r: 0.28 },
+      { label: ['Mental', 'Health'], sub: '$6.52B', color: [168,85,247] as [number,number,number], offsetX: 0.14, offsetY: -0.12, r: 0.28 },
+      { label: ['Remote', 'Monitoring'], sub: '$22.03B', color: [236,72,153] as [number,number,number], offsetX: 0, offsetY: 0.14, r: 0.3 },
+    ];
+
+    const orbitParticles = circles.flatMap((_, ci) =>
+      Array.from({ length: 12 }, () => ({
+        ci,
+        angle: Math.random() * Math.PI * 2,
+        speed: (Math.random() * 0.3 + 0.2) * (Math.random() > 0.5 ? 1 : -1),
+        dist: 0.9 + Math.random() * 0.25,
+        size: Math.random() * 1.5 + 0.5,
+        opacity: Math.random() * 0.5 + 0.2,
+      }))
+    );
+
+    let time = 0;
+
+    function draw() {
+      if (!ctx) return;
+      time += 0.012;
+      ctx.clearRect(0, 0, W, H);
+
+      const cx = W / 2;
+      const cy = H / 2;
+      const baseR = Math.min(W, H);
+
+      circles.forEach((c, i) => {
+        const x = cx + c.offsetX * baseR;
+        const y = cy + c.offsetY * baseR;
+        const r = c.r * baseR;
+        const breathe = 1 + Math.sin(time * 0.8 + i * 2) * 0.015;
+        const rr = r * breathe;
+
+        const grad = ctx.createRadialGradient(x, y, 0, x, y, rr);
+        grad.addColorStop(0, `rgba(${c.color.join(',')}, 0.12)`);
+        grad.addColorStop(0.7, `rgba(${c.color.join(',')}, 0.04)`);
+        grad.addColorStop(1, `rgba(${c.color.join(',')}, 0)`);
+        ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2);
+        ctx.fillStyle = grad; ctx.fill();
+
+        ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(${c.color.join(',')}, 0.25)`;
+        ctx.lineWidth = 1.5; ctx.stroke();
+
+        ctx.save();
+        ctx.setLineDash([3, 8]);
+        ctx.lineDashOffset = -time * 15 * (i % 2 === 0 ? 1 : -1);
+        ctx.beginPath(); ctx.arc(x, y, rr + 10, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(${c.color.join(',')}, 0.1)`;
+        ctx.lineWidth = 1; ctx.stroke();
+        ctx.restore();
+
+        const lx = cx + c.offsetX * 1.8 * baseR;
+        const ly = cy + c.offsetY * 1.8 * baseR;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = '700 16px "DM Sans", sans-serif';
+        ctx.fillStyle = `rgba(${c.color.join(',')}, 0.85)`;
+        c.label.forEach((line, li) => ctx.fillText(line, lx, ly - 12 + li * 20));
+        ctx.font = '32px "Bebas Neue", sans-serif';
+        ctx.fillStyle = `rgba(${c.color.join(',')}, 0.7)`;
+        ctx.fillText(c.sub, lx, ly + 28);
+      });
+
+      // Center glow
+      const intGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, baseR * 0.12);
+      intGrad.addColorStop(0, 'rgba(200,255,0,0.2)');
+      intGrad.addColorStop(1, 'rgba(200,255,0,0)');
+      ctx.beginPath(); ctx.arc(cx, cy, baseR * 0.12, 0, Math.PI * 2);
+      ctx.fillStyle = intGrad; ctx.fill();
+
+      // Pulsing ring
+      const pulseR = baseR * 0.08 + Math.sin(time * 2) * baseR * 0.01;
+      ctx.beginPath(); ctx.arc(cx, cy, pulseR, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(200,255,0,${0.35 + Math.sin(time * 2) * 0.15})`;
+      ctx.lineWidth = 2; ctx.stroke();
+
+      // Center labels
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '900 11px "DM Sans", sans-serif';
+      ctx.fillStyle = 'rgba(200,255,0,0.9)';
+      ctx.fillText('PULSE CHECK', cx, cy - 8);
+      ctx.fillStyle = 'rgba(200,255,0,0.6)';
+      ctx.fillText('× AUNTEDNA', cx, cy + 8);
+
+      // Orbit particles
+      orbitParticles.forEach(p => {
+        const c = circles[p.ci];
+        const x = cx + c.offsetX * baseR;
+        const y = cy + c.offsetY * baseR;
+        const r = c.r * baseR * p.dist;
+        p.angle += p.speed * 0.016;
+        const px = x + Math.cos(p.angle) * r;
+        const py = y + Math.sin(p.angle) * r;
+        ctx.beginPath(); ctx.arc(px, py, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${c.color.join(',')},${p.opacity * (0.6 + Math.sin(time + p.angle) * 0.4)})`;
+        ctx.fill();
+      });
+
+      // Connecting lines from center
+      circles.forEach((c, i) => {
+        const x = cx + c.offsetX * baseR;
+        const y = cy + c.offsetY * baseR;
+        ctx.save();
+        ctx.setLineDash([2, 6]);
+        ctx.lineDashOffset = -time * 20;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y);
+        ctx.strokeStyle = 'rgba(200,255,0,0.08)';
+        ctx.lineWidth = 1; ctx.stroke();
+        ctx.restore();
+      });
+
+      animId = requestAnimationFrame(draw);
+    }
+    draw();
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener('resize', resize);
+    };
+  }, []);
+
+  const markets = [
+    { name: 'Sports Analytics', desc: 'Performance data, wearables, athlete monitoring', value: '$4.79B', color: '#5B8DEF' },
+    { name: 'Mental Health Apps', desc: 'Meditation, stress support, digital wellness', value: '$6.52B', color: '#A855F7' },
+    { name: 'Remote Patient Monitoring', desc: 'Connected care, escalation, intervention systems', value: '$22.03B', color: '#EC4899' },
+  ];
+
+  return (
+    <motion.div
+      className="relative h-full w-full overflow-hidden"
+      style={{ background: '#0a0a0b' }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      transition={transition}
+    >
+      {/* Ambient blobs */}
+      <div className="pointer-events-none absolute left-[20%] top-[-10%] h-[55vh] w-[50vw] rounded-full" style={{ background: 'radial-gradient(circle,rgba(200,255,0,0.05),transparent 55%)' }} />
+      <div className="pointer-events-none absolute bottom-[-15%] right-[10%] h-[45vh] w-[45vw] rounded-full" style={{ background: 'radial-gradient(circle,rgba(91,141,239,0.04),transparent 55%)' }} />
+
+      <div className="relative z-10 grid h-full items-center px-10 py-10 md:px-14 xl:grid-cols-[1fr_1.3fr] xl:gap-10">
+        {/* LEFT */}
+        <motion.div
+          className="flex flex-col"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.9, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {/* Kicker */}
+          <div className="mb-3.5 inline-flex items-center gap-2 self-start text-[11px] font-semibold uppercase tracking-[0.22em] text-[#c8ff00]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#c8ff00]" style={{ boxShadow: '0 0 8px rgba(200,255,0,0.4)' }} />
+            Full TAM
           </div>
-        </GlassCard>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          {FULL_TAM_MARKETS.map((segment, index) => (
-            <motion.div
-              key={segment.title}
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.06 * index }}
+          <h1 className="mb-2.5 text-[1.9rem] font-bold leading-[1.05] tracking-tight text-white md:text-[2.6rem]">
+            Three markets.{' '}
+            <span className="text-[#c8ff00]">One intersection.</span>
+          </h1>
+
+          <p className="mb-8 max-w-[520px] text-[15px] leading-relaxed text-white/55">
+            We sit where performance tech, digital mental health, and connected care overlap. That full stack is why the TAM is $33B — not $5B.
+          </p>
+
+          {/* TAM Hero card */}
+          <div
+            className="relative mb-7 overflow-hidden rounded-[18px] border p-7"
+            style={{
+              background: 'linear-gradient(135deg, rgba(200,255,0,0.12), rgba(0,212,170,0.06))',
+              borderColor: 'rgba(200,255,0,0.15)',
+            }}
+          >
+            <div className="pointer-events-none absolute -right-[30%] top-[-50%] h-[200%] w-[80%]" style={{ background: 'radial-gradient(circle,rgba(200,255,0,0.06),transparent 60%)' }} />
+            <div className="mb-2 text-[9px] font-bold uppercase tracking-[0.22em] text-white/30">Full Adjacent Market TAM</div>
+            <div
+              className="leading-[0.9] text-[#c8ff00]"
+              style={{
+                fontFamily: "'Bebas Neue', sans-serif",
+                fontSize: 'clamp(60px, 7vw, 88px)',
+                letterSpacing: '-1px',
+                textShadow: '0 0 40px rgba(200,255,0,0.3)',
+              }}
             >
-              <GlassCard accentColor={segment.accent} className="h-full">
-                <div className="flex min-h-[15.5rem] flex-col justify-between p-4 md:p-5">
+              $33.34B
+            </div>
+            <p className="mt-2.5 text-[13px] leading-relaxed text-white/55">
+              <strong className="font-semibold text-white">Not a narrow point solution.</strong> Full TAM includes adjacent markets because we touch all three.
+            </p>
+          </div>
+
+          {/* Market rows */}
+          <div className="flex flex-col gap-2.5">
+            {markets.map((m, i) => (
+              <motion.div
+                key={m.name}
+                className="flex items-center justify-between rounded-xl border border-white/[0.08] bg-white/[0.03] px-[18px] py-3.5 transition-all duration-300 hover:translate-x-[3px] hover:border-white/[0.14]"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.6 + i * 0.15 }}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ background: m.color, boxShadow: `0 0 8px ${m.color}88` }} />
                   <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.28em]" style={{ color: segment.accent }}>
-                      Adjacent market
-                    </div>
-                    <div className="mt-3 text-[2rem] font-black leading-tight text-white">{segment.title}</div>
-                    <div className="mt-3 text-base leading-snug text-zinc-300">{segment.scope}</div>
-                  </div>
-                  <div className="mt-5 text-[2.6rem] font-black md:text-[3.3rem]" style={{ color: segment.accent }}>
-                    {segment.value}
+                    <div className="text-[13px] font-semibold text-white">{m.name}</div>
+                    <div className="mt-0.5 text-[10px] leading-snug text-white/30">{m.desc}</div>
                   </div>
                 </div>
-              </GlassCard>
-            </motion.div>
-          ))}
-        </div>
-      </div>
+                <div
+                  className="text-[26px] leading-none tracking-wide"
+                  style={{ fontFamily: "'Bebas Neue', sans-serif", color: m.color }}
+                >
+                  {m.value}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
 
-      <GlassCard accentColor={COLORS.pink}>
-        <div className="flex items-center justify-between gap-5 p-4 md:p-5">
+        {/* RIGHT: Venn canvas */}
+        <motion.div
+          className="relative hidden h-full xl:flex xl:items-center xl:justify-center"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 1.2, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+};
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">TAM framing</div>
             <div className="mt-2 text-xl font-semibold text-zinc-200 md:text-[1.6rem]">
