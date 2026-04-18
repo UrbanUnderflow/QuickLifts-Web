@@ -363,6 +363,49 @@ const formatLegalDate = (date?: Timestamp | Date): string => {
   });
 };
 
+const getDateInputValue = (date?: Timestamp | Date | string | null): string => {
+  if (!date) return '';
+
+  const resolved =
+    date instanceof Timestamp
+      ? date.toDate()
+      : date instanceof Date
+      ? date
+      : new Date(date);
+
+  if (Number.isNaN(resolved.getTime())) return '';
+
+  const year = resolved.getFullYear();
+  const month = `${resolved.getMonth() + 1}`.padStart(2, '0');
+  const day = `${resolved.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateInputValue = (value: string): Date | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const [, yearRaw, monthRaw, dayRaw] = match;
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  const day = Number(dayRaw);
+  const resolved = new Date(year, month - 1, day, 12, 0, 0, 0);
+
+  if (
+    Number.isNaN(resolved.getTime()) ||
+    resolved.getFullYear() !== year ||
+    resolved.getMonth() !== month - 1 ||
+    resolved.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return resolved;
+};
+
 const isLocalEquityRuntime = () =>
   typeof window !== 'undefined' &&
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
@@ -988,9 +1031,10 @@ const EquityAdminPage: React.FC = () => {
   const [boardConsentSelection, setBoardConsentSelection] = useState<Record<string, string>>({});
   const [boardConsentVerification, setBoardConsentVerification] = useState<Record<string, { status: 'idle' | 'verifying' | 'verified' | 'failed'; approvalDate?: string; issues?: string[] }>>({});
 
-  // Edit Grant Options state
+  // Edit Grant Terms state
   const [editingGrantStakeholderId, setEditingGrantStakeholderId] = useState<string | null>(null);
   const [editGrantOptionsValue, setEditGrantOptionsValue] = useState<number>(0);
+  const [editGrantDateValue, setEditGrantDateValue] = useState(new Date().toISOString().split('T')[0]);
   const [isSavingGrantOptions, setIsSavingGrantOptions] = useState(false);
   
   // Form States
@@ -3167,7 +3211,12 @@ const EquityAdminPage: React.FC = () => {
     const currentOptions = stakeholder.optionsGranted || 
       stakeholder.grants?.[0]?.numberOfShares || 
       stakeholder.totalShares || 0;
+    const currentGrantDate =
+      stakeholder.grants?.[0]?.vestingStartDate ||
+      stakeholder.grants?.[0]?.grantDate ||
+      stakeholder.startDate;
     setEditGrantOptionsValue(currentOptions);
+    setEditGrantDateValue(getDateInputValue(currentGrantDate) || new Date().toISOString().split('T')[0]);
     setEditingGrantStakeholderId(stakeholder.id);
   };
 
@@ -3189,19 +3238,46 @@ const EquityAdminPage: React.FC = () => {
       return;
     }
 
+    const oldOptions = stakeholder.optionsGranted || stakeholder.grants?.[0]?.numberOfShares || stakeholder.totalShares || 0;
+    const currentAdvisorGrantDateValue =
+      stakeholder.type === 'advisor'
+        ? getDateInputValue(
+            stakeholder.grants?.[0]?.vestingStartDate ||
+              stakeholder.grants?.[0]?.grantDate ||
+              stakeholder.startDate
+          )
+        : '';
+    const advisorGrantDateChanged =
+      stakeholder.type === 'advisor' && currentAdvisorGrantDateValue !== editGrantDateValue;
+
+    if (stakeholder.type === 'advisor' && !parseDateInputValue(editGrantDateValue)) {
+      setMessage({ type: 'error', text: 'Choose a valid advisor grant / vesting date before saving.' });
+      return;
+    }
+
+    if (editGrantOptionsValue === oldOptions && !advisorGrantDateChanged) {
+      setMessage({ type: 'info', text: 'No grant changes to save.' });
+      return;
+    }
+
     setIsSavingGrantOptions(true);
     try {
-      const oldOptions = stakeholder.optionsGranted || stakeholder.grants?.[0]?.numberOfShares || stakeholder.totalShares || 0;
       const difference = editGrantOptionsValue - oldOptions;
-      const revisedGrantDate = new Date();
+      const revisedGrantDate =
+        stakeholder.type === 'advisor'
+          ? parseDateInputValue(editGrantDateValue) || new Date()
+          : new Date();
       const revisedGrantTimestamp = Timestamp.fromDate(revisedGrantDate);
       const revisedGrantDateIso = revisedGrantDate.toISOString();
+      const revisedGrantDateLabel = formatLegalDate(revisedGrantDate);
+      const optionsChanged = editGrantOptionsValue !== oldOptions;
 
       console.log('[saveGrantOptions] Starting update:', {
         stakeholderId: stakeholder.id,
         oldOptions,
         newOptions: editGrantOptionsValue,
         difference,
+        revisedGrantDate: revisedGrantDateLabel,
       });
 
       // Update stakeholder
@@ -3236,7 +3312,9 @@ const EquityAdminPage: React.FC = () => {
           await updateDoc(doc(db, 'equity-grants', grantId), {
             numberOfShares: editGrantOptionsValue,
             unvestedShares: editGrantOptionsValue - (stakeholder.grants[0].vestedShares || 0),
-            ...(stakeholder.type === 'advisor' ? { vestingStartDate: revisedGrantTimestamp } : {}),
+            ...(stakeholder.type === 'advisor'
+              ? { grantDate: revisedGrantTimestamp, vestingStartDate: revisedGrantTimestamp }
+              : {}),
             updatedAt: serverTimestamp(),
           });
           console.log('[saveGrantOptions] Grant updated:', grantId);
@@ -3266,7 +3344,7 @@ const EquityAdminPage: React.FC = () => {
         vestingMonths: 24,
       };
 
-      const revisedBoardApprovalDate = formatLegalDate(new Date());
+      const revisedBoardApprovalDate = revisedGrantDateLabel;
       let effectiveBoardApprovalDate = revisedBoardApprovalDate;
       let effectiveBoardConsentDocId = stakeholder.boardConsentDocId || null;
 
@@ -3284,8 +3362,12 @@ const EquityAdminPage: React.FC = () => {
       if (boardConsentDoc) {
         const boardDocState = getEquityDocSignatureState(boardConsentDoc);
         const boardConsentExecuted = Boolean(boardConsentDoc.autoSigned || boardConsentDoc.autoSignedAt) || boardDocState.isFullyExecuted;
+        const canRefreshBoardConsentInPlace =
+          Boolean(boardConsentDoc.autoSigned || boardConsentDoc.autoSignedAt) &&
+          advisorGrantDateChanged &&
+          !optionsChanged;
 
-        if (boardConsentExecuted) {
+        if (boardConsentExecuted && !canRefreshBoardConsentInPlace) {
           console.log('[saveGrantOptions] Board Consent is executed, creating amendment');
           setMessage({ type: 'info', text: 'Creating auto-executed Board Consent Amendment...' });
 
@@ -3352,7 +3434,12 @@ const EquityAdminPage: React.FC = () => {
           }
         } else {
           console.log('[saveGrantOptions] Updating in-flight Board Consent with new options');
-          setMessage({ type: 'info', text: 'Updating Board Consent with the new options amount...' });
+          setMessage({
+            type: 'info',
+            text: optionsChanged
+              ? 'Updating Board Consent with the new grant terms...'
+              : 'Refreshing Board Consent with the updated approval date...',
+          });
 
           try {
             if (boardDocState.hasSignatureFlow) {
@@ -3447,7 +3534,9 @@ const EquityAdminPage: React.FC = () => {
             type: 'info',
             text: hasBeenSent
               ? 'Invalidating old signature links and regenerating the Advisor Agreement...'
-              : 'Regenerating Advisor Agreement with updated options...',
+              : optionsChanged
+              ? 'Regenerating Advisor Agreement with updated grant terms...'
+              : 'Regenerating Advisor Agreement with the updated grant date...',
           });
 
           try {
@@ -3537,11 +3626,25 @@ const EquityAdminPage: React.FC = () => {
               ...s, 
               optionsGranted: editGrantOptionsValue,
               optionsUnvested: editGrantOptionsValue - (s.optionsVested || 0),
+              ...(s.type === 'advisor'
+                ? {
+                    startDate: revisedGrantTimestamp,
+                    boardApprovalDate: effectiveBoardApprovalDate,
+                    boardConsentDocId: effectiveBoardConsentDocId,
+                  }
+                : {}),
               totalShares: s.totalShares ? editGrantOptionsValue : s.totalShares,
               totalUnvested: s.totalShares ? editGrantOptionsValue - (s.totalVested || 0) : s.totalUnvested,
               grants: s.grants?.map((g, idx) => 
                 idx === 0 
-                  ? { ...g, numberOfShares: editGrantOptionsValue, unvestedShares: editGrantOptionsValue - (g.vestedShares || 0) }
+                  ? {
+                      ...g,
+                      numberOfShares: editGrantOptionsValue,
+                      unvestedShares: editGrantOptionsValue - (g.vestedShares || 0),
+                      ...(s.type === 'advisor'
+                        ? { grantDate: revisedGrantTimestamp, vestingStartDate: revisedGrantTimestamp }
+                        : {}),
+                    }
                   : g
               )
             }
@@ -3557,7 +3660,13 @@ const EquityAdminPage: React.FC = () => {
       }
 
       // Build success message based on what was done
-      let successMessage = `Options updated to ${formatNumber(editGrantOptionsValue)}`;
+      let successMessage = optionsChanged
+        ? `Grant updated to ${formatNumber(editGrantOptionsValue)} options`
+        : `Grant / vesting date updated to ${revisedGrantDateLabel}`;
+
+      if (advisorGrantDateChanged && optionsChanged) {
+        successMessage += ` with a ${revisedGrantDateLabel} vesting start`;
+      }
       const docActions: string[] = [];
       
       if (regeneratedDocCount > 0) {
@@ -3573,6 +3682,7 @@ const EquityAdminPage: React.FC = () => {
       
       setMessage({ type: 'success', text: successMessage });
       setEditingGrantStakeholderId(null);
+      setEditGrantDateValue(new Date().toISOString().split('T')[0]);
       console.log('[saveGrantOptions] Update completed successfully');
       
       // Auto-dismiss success message after 3 seconds
@@ -3844,18 +3954,43 @@ const EquityAdminPage: React.FC = () => {
                                 </div>
                                 
                                 {editingGrantStakeholderId === stakeholder.id ? (
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="number"
-                                      value={editGrantOptionsValue}
-                                      onChange={(e) => setEditGrantOptionsValue(parseInt(e.target.value) || 0)}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="w-32 px-3 py-2 bg-zinc-900 border border-zinc-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-                                      min={1}
-                                    />
+                                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="number"
+                                        value={editGrantOptionsValue}
+                                        onChange={(e) => setEditGrantOptionsValue(parseInt(e.target.value) || 0)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="w-32 px-3 py-2 bg-zinc-900 border border-zinc-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                                        min={1}
+                                      />
+                                      {stakeholder.type === 'advisor' && (
+                                        <>
+                                          <input
+                                            type="date"
+                                            value={editGrantDateValue}
+                                            onChange={(e) => setEditGrantDateValue(e.target.value)}
+                                            onClick={(e) => e.stopPropagation()}
+                                            aria-label="Advisor grant and vesting date"
+                                            className="px-3 py-2 bg-zinc-900 border border-zinc-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                                          />
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setEditGrantDateValue(new Date().toISOString().split('T')[0]);
+                                            }}
+                                            type="button"
+                                            title="Set the advisor grant and vesting date to today"
+                                            className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs transition-colors"
+                                          >
+                                            Today
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
                                     <button
                                       onClick={(e) => { e.stopPropagation(); saveGrantOptions(stakeholder); }}
-                                      disabled={isSavingGrantOptions}
+                                      disabled={isSavingGrantOptions || (stakeholder.type === 'advisor' && !editGrantDateValue)}
                                       className="flex items-center gap-1 px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
                                     >
                                       {isSavingGrantOptions ? (
@@ -3865,7 +4000,10 @@ const EquityAdminPage: React.FC = () => {
                                       )}
                                     </button>
                                     <button
-                                      onClick={(e) => { e.stopPropagation(); setEditingGrantStakeholderId(null); }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingGrantStakeholderId(null);
+                                      }}
                                       className="flex items-center gap-1 px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm transition-colors"
                                     >
                                       <X className="w-4 h-4" />

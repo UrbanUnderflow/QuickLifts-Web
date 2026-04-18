@@ -1690,7 +1690,7 @@ const SceneClinicalRouting: React.FC = () => (
           When it moves beyond Nora, the signal routes into <span className="text-purple-400">auntEDNA.ai.</span>
         </h1>
         <div className="mt-4 max-w-5xl text-xl font-semibold leading-tight text-purple-300 md:text-3xl">
-          The trigger shows up in the chat first. Then Pulse Check packages the context and routes it to clinical care.
+          The trigger shows up in the chat first. Then Pulse Check packages the context and routes it to HIPAA-compliant clinical care.
         </div>
       </div>
 
