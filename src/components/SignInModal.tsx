@@ -171,11 +171,18 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   const userHasAcceptedCurrentLegal = (
     user: { id?: string; legalAcceptance?: any } | null | undefined
-  ) => hasAcceptedCurrentLegal(user, { userId: user?.id ?? resolveLegalUserId() });
+  ) => hasAcceptedCurrentLegal(user, {
+    userId: user?.id ?? resolveLegalUserId(),
+    // Firestore should be the source of truth for existing-user acceptance checks.
+    includeLocalCache: false,
+  });
 
   const userHasAnyRecordedLegalAcceptance = (
     user: { id?: string; legalAcceptance?: any } | null | undefined
-  ) => hasAnyRecordedLegalAcceptance(user, { userId: user?.id ?? resolveLegalUserId() });
+  ) => hasAnyRecordedLegalAcceptance(user, {
+    userId: user?.id ?? resolveLegalUserId(),
+    includeLocalCache: false,
+  });
 
   const openLegalAcceptanceStep = (context: 'signup' | 'signin' = 'signin') => {
     setLegalFlowContext(context);
