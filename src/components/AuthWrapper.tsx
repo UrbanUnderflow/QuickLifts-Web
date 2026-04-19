@@ -354,7 +354,13 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               return;
             }
 
-            if (activeUser && !hasAcceptedCurrentLegal(activeUser)) {
+            if (
+              activeUser &&
+              !hasAcceptedCurrentLegal(activeUser, {
+                userId: activeUser.id,
+                includeLocalCache: false,
+              })
+            ) {
               if (isCreatorLandingPath(router.asPath || router.pathname) || isClubCheckInPath(router.asPath || router.pathname)) {
                 console.log('[AuthWrapper] Authenticated but missing current legal acceptance on public landing/check-in page. Not showing modal.');
                 setShowSignInModal(false);
