@@ -569,39 +569,39 @@ const SPORT_ORBIT_SLOTS = [
 
 const SPORT_MARKER_SLOT_MAP = [
   [
-    { x: 14, y: 13 },
-    { x: 31, y: 8 },
-    { x: 50, y: 6 },
-    { x: 69, y: 8 },
-    { x: 86, y: 13 },
+    { x: 18, y: 15 },
+    { x: 33, y: 10 },
+    { x: 50, y: 8 },
+    { x: 67, y: 10 },
+    { x: 82, y: 15 },
   ],
   [
-    { x: 88, y: 18 },
-    { x: 94, y: 28 },
-    { x: 96, y: 40 },
-    { x: 95, y: 52 },
-    { x: 90, y: 62 },
+    { x: 82, y: 22 },
+    { x: 85, y: 31 },
+    { x: 86, y: 40 },
+    { x: 85, y: 49 },
+    { x: 82, y: 58 },
   ],
   [
-    { x: 90, y: 68 },
-    { x: 94, y: 78 },
-    { x: 95, y: 88 },
-    { x: 88, y: 96 },
-    { x: 78, y: 98 },
+    { x: 82, y: 66 },
+    { x: 85, y: 74 },
+    { x: 84, y: 82 },
+    { x: 78, y: 88 },
+    { x: 68, y: 91 },
   ],
   [
-    { x: 22, y: 98 },
-    { x: 12, y: 96 },
-    { x: 5, y: 88 },
-    { x: 6, y: 78 },
-    { x: 10, y: 68 },
+    { x: 32, y: 91 },
+    { x: 22, y: 88 },
+    { x: 16, y: 82 },
+    { x: 15, y: 74 },
+    { x: 18, y: 66 },
   ],
   [
-    { x: 10, y: 62 },
-    { x: 5, y: 52 },
-    { x: 4, y: 40 },
-    { x: 6, y: 28 },
-    { x: 12, y: 18 },
+    { x: 18, y: 58 },
+    { x: 15, y: 49 },
+    { x: 14, y: 40 },
+    { x: 15, y: 31 },
+    { x: 18, y: 22 },
   ],
 ] as const;
 
@@ -3729,54 +3729,100 @@ const SceneEvidence: React.FC = () => {
                 >
                   {activeSport.markers.map((marker, index) => {
                     const point = activeMarkerSlots[index];
-                    const textAnchor =
-                      point.x < activeNodePoint.x - 4 ? 'end' : point.x > activeNodePoint.x + 4 ? 'start' : 'middle';
-                    const textX = textAnchor === 'end' ? point.x - 1.2 : textAnchor === 'start' ? point.x + 1.2 : point.x;
 
                     return (
-                      <g key={`${activeSport.name}-${marker}`}>
-                        <motion.line
-                          x1={activeNodePoint.x}
-                          y1={activeNodePoint.y}
-                          x2={point.x}
-                          y2={point.y}
-                          stroke={activeSport.accent}
-                          strokeWidth={0.28}
-                          initial={{ pathLength: 0, opacity: 0 }}
-                          animate={{ pathLength: 1, opacity: 0.7 }}
-                          exit={{ pathLength: 0, opacity: 0 }}
-                          transition={{ duration: 0.45, delay: index * 0.08 }}
-                        />
-                        <motion.circle
-                          cx={point.x}
-                          cy={point.y}
-                          r="0.55"
-                          fill={activeSport.accent}
+                      <motion.line
+                        key={`${activeSport.name}-${marker}-line`}
+                        x1={activeNodePoint.x}
+                        y1={activeNodePoint.y}
+                        x2={point.x}
+                        y2={point.y}
+                        stroke={activeSport.accent}
+                        strokeWidth={0.28}
+                        initial={{ pathLength: 0, opacity: 0 }}
+                        animate={{ pathLength: 1, opacity: 0.7 }}
+                        exit={{ pathLength: 0, opacity: 0 }}
+                        transition={{ duration: 0.45, delay: index * 0.08 }}
+                      />
+                    );
+                  })}
+                </motion.g>
+              </AnimatePresence>
+            </svg>
+
+            <div className="pointer-events-none absolute inset-0 z-[15]">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={`${activeSport.name}-markers`}
+                  className="absolute inset-0"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.35 }}
+                >
+                  {activeSport.markers.map((marker, index) => {
+                    const point = activeMarkerSlots[index];
+                    const dx = point.x - activeNodePoint.x;
+                    const dy = point.y - activeNodePoint.y;
+                    const horizontal = Math.abs(dx) >= Math.abs(dy);
+                    const side = horizontal
+                      ? dx >= 0
+                        ? 'right'
+                        : 'left'
+                      : dy >= 0
+                      ? 'below'
+                      : 'above';
+
+                    const labelTransform =
+                      side === 'right'
+                        ? 'translate(12px, -50%)'
+                        : side === 'left'
+                        ? 'translate(calc(-100% - 12px), -50%)'
+                        : side === 'above'
+                        ? 'translate(-50%, calc(-100% - 10px))'
+                        : 'translate(-50%, 10px)';
+                    const textAlign = side === 'left' ? 'right' : side === 'right' ? 'left' : 'center';
+
+                    return (
+                      <React.Fragment key={`${activeSport.name}-${marker}`}>
+                        <motion.div
+                          className="absolute h-2 w-2 rounded-full"
+                          style={{
+                            left: `${point.x}%`,
+                            top: `${point.y}%`,
+                            background: activeSport.accent,
+                            transform: 'translate(-50%, -50%)',
+                            boxShadow: `0 0 8px ${activeSport.accent}aa`,
+                          }}
                           initial={{ scale: 0, opacity: 0 }}
                           animate={{ scale: 1, opacity: 0.95 }}
                           exit={{ scale: 0, opacity: 0 }}
                           transition={{ duration: 0.25, delay: index * 0.08 + 0.18 }}
                         />
-                        <motion.text
-                          x={textX}
-                          y={point.y - 1.1}
-                          fill={activeSport.accent}
-                          fontSize="1.45"
-                          fontWeight="600"
-                          textAnchor={textAnchor}
+                        <motion.div
+                          className="absolute text-[11px] font-semibold leading-tight md:text-xs"
+                          style={{
+                            left: `${point.x}%`,
+                            top: `${point.y}%`,
+                            transform: labelTransform,
+                            color: activeSport.accent,
+                            maxWidth: '160px',
+                            textAlign,
+                            whiteSpace: 'normal',
+                          }}
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 0.95 }}
                           exit={{ opacity: 0 }}
                           transition={{ duration: 0.25, delay: index * 0.08 + 0.24 }}
                         >
                           {marker}
-                        </motion.text>
-                      </g>
+                        </motion.div>
+                      </React.Fragment>
                     );
                   })}
-                </motion.g>
+                </motion.div>
               </AnimatePresence>
-            </svg>
+            </div>
 
             <div className="absolute inset-0 z-20">
               {sports.map((sport, index) => {
