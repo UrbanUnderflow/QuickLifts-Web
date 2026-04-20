@@ -29,6 +29,8 @@ interface RequestBody {
   dietaryPreference?: string;
   mealsPerDay?: number;
   forceRegenerate?: boolean;
+  extraContext?: string;
+  imageUrls?: string[];
 }
 
 const MACRA_PLAN_COLLECTION = 'macraSuggestedMealPlans';
@@ -74,12 +76,20 @@ const buildPrompt = (req: RequestBody, mealsCount: number): string => {
   const dietLine = req.dietaryPreference && req.dietaryPreference.toLowerCase() !== 'none'
     ? `They follow a ${req.dietaryPreference} diet — respect it strictly.`
     : '';
+  const extraLine = req.extraContext && req.extraContext.trim().length > 0
+    ? `Additional context from the user for you to weigh: """${req.extraContext.trim().slice(0, 1200)}"""`
+    : '';
+  const imageHintLine = (req.imageUrls && req.imageUrls.length > 0)
+    ? `The user also attached ${req.imageUrls.length} image(s). Use them as context — e.g. food they have on hand, their fridge, prior meals, a restaurant menu, their physique for context on goals, etc.`
+    : '';
   return [
     `Build a simple one-day meal plan with exactly ${mealsCount} meals.`,
     `Label meals "Meal 1", "Meal 2", "Meal 3", etc. Do NOT use breakfast / lunch / dinner / snack labels.`,
     `Daily totals must sum close to: ${req.calories} kcal, ${req.protein}g protein, ${req.carbs}g carbs, ${req.fat}g fat. Within ~5% is acceptable.`,
     goalLine,
     dietLine,
+    extraLine,
+    imageHintLine,
     `Each meal should list 2-4 food items. For each item provide: name, quantity (e.g. "4 oz", "1 cup", "2 large"), calories (integer), protein (integer g), carbs (integer g), fat (integer g).`,
     `Keep foods common and approachable — things people can buy at a normal grocery store and prepare in under 15 minutes.`,
     `Respond with JSON only, matching this schema exactly:`,
@@ -200,6 +210,30 @@ export const handler: Handler = async (event) => {
     };
 
     const generatedAt = Date.now();
+
+    // Archive the current plan into the history subcollection before overwriting,
+    // so users can revisit/reapply a previous Nora-generated plan from the UI.
+    try {
+      const currentSnap = await docRef.get();
+      if (currentSnap.exists) {
+        const current = currentSnap.data();
+        if (current && current.plan) {
+          const historyId = String(current.generatedAt ?? Date.now());
+          await db.collection('users').doc(uid)
+            .collection(MACRA_PLAN_COLLECTION)
+            .doc('history').collection('items')
+            .doc(historyId)
+            .set({
+              ...current,
+              archivedAt: generatedAt,
+              source: 'nora'
+            }, { merge: false });
+        }
+      }
+    } catch (err) {
+      console.warn('[generate-macra-meal-plan] Failed to archive previous plan:', err);
+    }
+
     await docRef.set({
       userId: uid,
       plan: normalized,
@@ -212,7 +246,9 @@ export const handler: Handler = async (event) => {
       goal: body.goal || '',
       dietaryPreference: body.dietaryPreference || '',
       mealsPerDay: mealsCount,
-      generatedAt
+      generatedAt,
+      extraContext: body.extraContext || null,
+      imageUrls: body.imageUrls || []
     }, { merge: false });
 
     return {
