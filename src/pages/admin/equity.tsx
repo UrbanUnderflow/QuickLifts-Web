@@ -589,7 +589,8 @@ const formatContentForPdf = (content: string): string => {
     if (numberedMatch) {
       if (!inList || listType !== 'ol') {
         if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-        processedLines.push('<ol>');
+        const startAttr = /^\d+$/.test(numberedMatch[1]) ? ` start="${numberedMatch[1]}"` : '';
+        processedLines.push(`<ol${startAttr}>`);
         inList = true;
         listType = 'ol';
       }
@@ -653,6 +654,7 @@ const generateExhibitsHtml = (exhibits: EquityDocument[]): string => {
 const generatePdfFromEquityDoc = (document: EquityDocument, exhibits: EquityDocument[] = []) => {
   const exhibitsHtml = generateExhibitsHtml(exhibits);
   const hasExhibits = exhibits.length > 0;
+  const documentTimestamp = document.updatedAt || document.createdAt;
   
   const html = `
     <!DOCTYPE html>
@@ -703,7 +705,7 @@ const generatePdfFromEquityDoc = (document: EquityDocument, exhibits: EquityDocu
       <body>
         <div class="header">
           <div class="company-name">PULSE INTELLIGENCE LABS, INC.</div>
-          <div class="document-date">Created: ${formatDate(document.createdAt)}</div>
+          <div class="document-date">Last Updated: ${formatDate(documentTimestamp)}</div>
         </div>
         <h1>${document.title}</h1>
         <div class="content">
