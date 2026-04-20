@@ -103,6 +103,34 @@ const formatAdditionalContext = (prompt?: string) => {
   return `\n\nADDITIONAL CONTEXT / INSTRUCTIONS:\n${trimmed}\n`;
 };
 
+const normalizeBoardConsentResolutionNumbering = (content: string) => {
+  let sawGrantApprovalHeading = false;
+
+  return content
+    .split('\n')
+    .map((line) => {
+      if (/^\s*(?:#{1,6}\s*)?1[\.)]\s+Approval of .*Grant\s*$/i.test(line)) {
+        sawGrantApprovalHeading = true;
+        return line;
+      }
+
+      if (sawGrantApprovalHeading && /^\s*(?:#{1,6}\s*)?1[\.)]\s+Authorization to Execute Documents\s*$/i.test(line)) {
+        return line.replace(/^(\s*(?:#{1,6}\s*)?)1([\.)])/, (_match, prefix, punctuation) => `${prefix}2${punctuation}`);
+      }
+
+      return line;
+    })
+    .join('\n');
+};
+
+const normalizeGeneratedContent = (documentType: string, content: string) => {
+  if (documentType === 'board_consent') {
+    return normalizeBoardConsentResolutionNumbering(content);
+  }
+
+  return content;
+};
+
 const DOCUMENT_TEMPLATES: Record<string, { title: string; systemPrompt: string; userPrompt: (data: RequestBody) => string }> = {
   option_agreement: {
     title: 'Stock Option Agreement',
@@ -196,9 +224,13 @@ DOCUMENT STRUCTURE REQUIREMENTS:
    - Note that granting equity to ${data.stakeholderName} is in the best interest of the Company
 
 4. RESOLUTIONS ("NOW, THEREFORE, BE IT RESOLVED"):
-   - Resolution approving the grant of the ${data.grantDetails?.equityType === 'nso' ? 'Non-Qualified Stock Option' : data.grantDetails?.equityType === 'iso' ? 'Incentive Stock Option' : 'equity award'} to ${data.stakeholderName}
+   - Use exactly two numbered resolution headings, in this order:
+     1. Approval of Non-Qualified Stock Option Grant
+     2. Authorization to Execute Documents
+   - Do NOT restart numbering. The authorization resolution must be numbered "2.", never "1."
+   - Under heading 1, include a resolution approving the grant of the ${data.grantDetails?.equityType === 'nso' ? 'Non-Qualified Stock Option' : data.grantDetails?.equityType === 'iso' ? 'Incentive Stock Option' : 'equity award'} to ${data.stakeholderName}
    - CRITICAL: Include this exact sentence in the grant resolution: "The Option is granted pursuant to, and subject in all respects to, the terms and conditions of the Pulse Intelligence Labs, Inc. Equity Incentive Plan (the 'Plan')."
-   - Resolution authorizing officers to execute the Option Agreement and any related documents
+   - Under heading 2, include a resolution authorizing officers to execute the Option Agreement and any related documents
    - Do NOT say the Board is ratifying prior actions or approving the grant retroactively unless the prompt explicitly asks for ratification
    - Do NOT include a separate FMV resolution - the FMV is already established in the recitals
    ${getVestingInstructionBlock(data.grantDetails, currentDate)}
@@ -561,11 +593,13 @@ BULLET & LIST FORMATTING (CRITICAL - follow exactly):
       max_tokens: 4000,
     });
 
-    const content = completion.choices[0]?.message?.content;
+    const rawContent = completion.choices[0]?.message?.content;
 
-    if (!content) {
+    if (!rawContent) {
       throw new Error('No content generated');
     }
+
+    const content = normalizeGeneratedContent(documentType, rawContent);
 
     // Generate title based on document type and stakeholder
     const title = documentType === 'eip' 
