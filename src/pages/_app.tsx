@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { Provider, useSelector } from 'react-redux';
 import { store, persistor } from '../redux/store';
 import { PersistGate } from 'redux-persist/integration/react';
@@ -22,9 +23,55 @@ import RouterErrorBoundary from '../components/RouterErrorBoundary';
 // og:title / og:image via <PageHead> or raw <Head>, Next.js will
 // append both — but crawlers pick the LAST occurrence, so page-level
 // tags win. Pages that set nothing get this baseline.
-const DEFAULT_OG_IMAGE = 'https://fitwithpulse.ai/og-image.png?title=Pulse';
+//
+// The default image is the Pulse Intelligence Labs splash (dark gradient,
+// soft orbs, "PIL" wordmark in white→lime gradient). ?v=2 busts the iMessage
+// / WhatsApp / Slack cache that was pinned to the old title=Pulse URL.
+const DEFAULT_OG_IMAGE = 'https://fitwithpulse.ai/og-image.png?variant=pil&v=2';
 const DEFAULT_TITLE = 'Pulse Community Fitness';
 const DEFAULT_DESCRIPTION = 'Real workouts, Real people, move together.';
+
+// Pages that deserve a hand-picked fallback title when they don't set ogMeta.
+// Everything else is derived from the URL path.
+const PAGE_TITLE_MAP: Record<string, string> = {
+  '/': DEFAULT_TITLE,
+  '/about': 'About — Pulse',
+  '/pricing': 'Pricing — Pulse',
+  '/coach': 'Coach — Pulse',
+  '/investor': 'Investor — Pulse',
+  '/auntedna': 'auntEDNA.ai — Pulse',
+  '/pulse-auntedna-pitch': 'Pulse × auntEDNA.ai',
+  '/pulse-auntedna-stakeholder-deck': 'Pulse × auntEDNA.ai — Stakeholder Deck',
+  '/pulsecheck': 'Pulse Check',
+  '/morning-mobility-challenge': 'Morning Mobility — Pulse',
+  '/mobility': 'Mobility — Pulse',
+  '/terms': 'Terms — Pulse',
+  '/delete-account': 'Delete Account — Pulse',
+};
+
+function humanizeSlug(slug: string): string {
+  return slug
+    .replace(/\.(html?|md)$/i, '')
+    .replace(/[-_]/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => (word.length <= 3 ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1)))
+    .join(' ');
+}
+
+function deriveDefaultTitle(pathname: string, asPath: string): string {
+  if (PAGE_TITLE_MAP[pathname]) return PAGE_TITLE_MAP[pathname];
+
+  // Dynamic routes give us pathname like '/press/[slug]'; asPath has the real slug.
+  const cleanPath = (asPath || pathname).split('?')[0].split('#')[0];
+  const segments = cleanPath.split('/').filter(Boolean);
+  if (segments.length === 0) return DEFAULT_TITLE;
+
+  const lastSegment = segments[segments.length - 1];
+  if (!lastSegment || lastSegment.startsWith('[')) return DEFAULT_TITLE;
+
+  return `${humanizeSlug(lastSegment)} — Pulse`;
+}
 
 // Only import in development mode
 const isDev = process.env.NODE_ENV === 'development';
@@ -93,6 +140,8 @@ const MixpanelInitializer: React.FC = () => {
 };
 
 const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
+  const router = useRouter();
+
   // Add debugging for Android issues
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -128,7 +177,11 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
     | { title: string; description: string; image: string; url: string }
     | undefined;
 
-  const ogTitle = ogMeta?.title || DEFAULT_TITLE;
+  const derivedTitle = ogMeta?.title
+    ? ogMeta.title
+    : deriveDefaultTitle(router?.pathname || '/', router?.asPath || '/');
+
+  const ogTitle = derivedTitle;
   const ogDescription = ogMeta?.description || DEFAULT_DESCRIPTION;
   const ogImage = ogMeta?.image || DEFAULT_OG_IMAGE;
   const ogUrl = ogMeta?.url || '';
