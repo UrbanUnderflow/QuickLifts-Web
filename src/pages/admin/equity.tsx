@@ -6,9 +6,9 @@ import { db } from '../../api/firebase/config';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   PieChart, Users, FileText, Download, Trash2, Loader2, Sparkles, Clock, 
-  AlertCircle, CheckCircle, RefreshCw, Eye, ChevronUp, Edit3, X, 
-  Plus, TrendingUp, Calendar, DollarSign, Award, Briefcase, 
-  UserPlus, Send, Check, Share2, Copy, ChevronDown, ExternalLink,
+  AlertCircle, CheckCircle, RefreshCw, Eye, Edit3, X,
+  Plus, TrendingUp, Calendar, DollarSign, Award,
+  UserPlus, Send, Check, Share2, Copy, ChevronDown,
   Shield, Building, Scale, PenTool, Mail, ClipboardCheck, AlertTriangle,
   Paperclip, Link2
 } from 'lucide-react';
@@ -281,16 +281,19 @@ const DOCUMENT_TYPES = [
 // UTILITY FUNCTIONS
 // ============================================================================
 
-const formatDate = (date: Timestamp | Date | undefined): string => {
+const formatDate = (date: Timestamp | Date | string | undefined): string => {
   if (!date) return 'N/A';
   let dateObject: Date;
   if (date instanceof Timestamp) {
     dateObject = date.toDate();
   } else if (date instanceof Date) {
     dateObject = date;
+  } else if (typeof date === 'string') {
+    dateObject = new Date(date);
   } else {
     return 'Invalid Date';
   }
+  if (Number.isNaN(dateObject.getTime())) return 'Invalid Date';
   return dateObject.toLocaleDateString('en-US', { 
     year: 'numeric', 
     month: 'short', 
@@ -334,9 +337,6 @@ const getEquityDocumentRevisionEntries = (equityDoc: EquityDocument) =>
   [...(equityDoc.revisionHistory || [])].sort(
     (a, b) => getDateValue(b.timestamp) - getDateValue(a.timestamp)
   );
-
-const getEquityDocumentHistoryCount = (equityDoc: EquityDocument, documents: EquityDocument[]) =>
-  getDocumentFamilyHistory(equityDoc, documents).length + getEquityDocumentRevisionEntries(equityDoc).length;
 
 const AUTO_EXECUTED_COMPANY_DOC_TYPES = ['board_consent', 'stockholder_consent', 'eip'] as const;
 const LOCAL_EQUITY_FUNCTION_FALLBACK_ORIGIN = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
@@ -761,33 +761,6 @@ const getStakeholderTypeConfig = (type: StakeholderType) => {
   return STAKEHOLDER_TYPES.find(t => t.id === type) || STAKEHOLDER_TYPES[0];
 };
 
-const calculateVestedShares = (grant: Grant): { vested: number; unvested: number; percentage: number } => {
-  const now = new Date();
-  const vestingStart = grant.vestingStartDate instanceof Timestamp 
-    ? grant.vestingStartDate.toDate() 
-    : grant.vestingStartDate;
-  
-  const monthsSinceStart = Math.floor(
-    (now.getTime() - vestingStart.getTime()) / (1000 * 60 * 60 * 24 * 30)
-  );
-  
-  if (grant.vestingSchedule === 'immediate') {
-    return { vested: grant.numberOfShares, unvested: 0, percentage: 100 };
-  }
-  
-  if (monthsSinceStart < grant.cliffMonths) {
-    return { vested: 0, unvested: grant.numberOfShares, percentage: 0 };
-  }
-  
-  const vestingMonths = grant.vestingMonths || 48;
-  const monthsVested = Math.min(monthsSinceStart, vestingMonths);
-  const vested = Math.floor((grant.numberOfShares * monthsVested) / vestingMonths);
-  const unvested = grant.numberOfShares - vested;
-  const percentage = (vested / grant.numberOfShares) * 100;
-  
-  return { vested, unvested, percentage };
-};
-
 // ============================================================================
 // COMPONENTS
 // ============================================================================
@@ -842,27 +815,6 @@ const GlassCard: React.FC<{
     </div>
   </motion.div>
 );
-
-// Status Badge Component
-const StatusBadge: React.FC<{ status: GrantStatus | 'draft' | 'pending' | 'signed' }> = ({ status }) => {
-  const configs = {
-    draft: { bg: 'bg-zinc-800', text: 'text-zinc-400', border: 'border-zinc-700', label: 'Draft' },
-    pending_signature: { bg: 'bg-yellow-900/30', text: 'text-yellow-400', border: 'border-yellow-800', label: 'Pending Signature' },
-    pending: { bg: 'bg-yellow-900/30', text: 'text-yellow-400', border: 'border-yellow-800', label: 'Pending' },
-    active: { bg: 'bg-green-900/30', text: 'text-green-400', border: 'border-green-800', label: 'Active' },
-    signed: { bg: 'bg-green-900/30', text: 'text-green-400', border: 'border-green-800', label: 'Signed' },
-    terminated: { bg: 'bg-red-900/30', text: 'text-red-400', border: 'border-red-800', label: 'Terminated' },
-    exercised: { bg: 'bg-blue-900/30', text: 'text-blue-400', border: 'border-blue-800', label: 'Exercised' },
-  };
-  const config = configs[status] || configs.draft;
-  
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 ${config.bg} ${config.text} rounded-full text-xs font-medium border ${config.border}`}>
-      <span className="w-1.5 h-1.5 rounded-full bg-current" />
-      {config.label}
-    </span>
-  );
-};
 
 const AuditStatusBadge: React.FC<{ status: AuditResult['overallStatus']; score: number }> = ({ status, score }) => {
   const configs = {
@@ -996,11 +948,9 @@ const EquityAdminPage: React.FC = () => {
   
   // Modal States
   const [isAddStakeholderModalOpen, setIsAddStakeholderModalOpen] = useState(false);
-  const [isAddGrantModalOpen, setIsAddGrantModalOpen] = useState(false);
-  const [isGenerateDocModalOpen, setIsGenerateDocModalOpen] = useState(false);
   const [selectedStakeholder, setSelectedStakeholder] = useState<Stakeholder | null>(null);
   const [expandedStakeholder, setExpandedStakeholder] = useState<string | null>(null);
-  const [expandedEquityDoc, setExpandedEquityDoc] = useState<string | null>(null);
+  const [expandedEquityDoc] = useState<string | null>(null);
   const [isEditEquityDocModalOpen, setIsEditEquityDocModalOpen] = useState(false);
   const [editingEquityDoc, setEditingEquityDoc] = useState<EquityDocument | null>(null);
   const [editEquityDocTitle, setEditEquityDocTitle] = useState('');
@@ -1264,7 +1214,7 @@ const EquityAdminPage: React.FC = () => {
         const snapshot = await getDocs(q);
         const reqs = snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as SigningRequest[];
         setSigningRequests(reqs);
-      } catch (error) {
+      } catch {
         // Fallback when compound index isn't available
         try {
           const fallbackQ = query(collection(db, 'signingRequests'), orderBy('createdAt', 'desc'));
@@ -1282,10 +1232,8 @@ const EquityAdminPage: React.FC = () => {
       // IMPORTANT: Options are NOT issued shares - they come from the pool
       // Only count actual shares (founder stock, exercised options, direct grants)
       let totalIssuedShares = 0;  // Actual shares issued
-      let totalOptionsGranted = 0; // Options granted (from pool)
       let founderShares = 0;
       let advisorOptions = 0;
-      let employeeOptions = 0;
       let investorShares = 0;
       
       stakeholderData.forEach(sh => {
@@ -1298,15 +1246,11 @@ const EquityAdminPage: React.FC = () => {
             break;
           case 'employee': 
             // Employees typically have options (not issued shares yet)
-            const empOpts = sh.optionsGranted || sh.totalShares || 0;
-            employeeOptions += empOpts;
-            totalOptionsGranted += empOpts;
             break;
           case 'advisor': 
             // Advisors typically have options (not issued shares yet)
             const advOpts = sh.optionsGranted || sh.totalShares || 0;
             advisorOptions += advOpts;
-            totalOptionsGranted += advOpts;
             break;
           case 'investor': 
             // Investors have actual shares
@@ -3097,11 +3041,6 @@ const EquityAdminPage: React.FC = () => {
     </div>
   );
 
-  // Helper to determine if stakeholder has options (not actual shares)
-  const hasOptions = (stakeholder: Stakeholder): boolean => {
-    return stakeholder.type === 'advisor' || stakeholder.type === 'employee' || stakeholder.type === 'contractor';
-  };
-
   // Get the display values for a stakeholder
   const getStakeholderMetrics = (stakeholder: Stakeholder) => {
     // Check if they have option grants (optionsGranted field or grants with nso/iso)
@@ -3198,8 +3137,19 @@ const EquityAdminPage: React.FC = () => {
     return requiresExternalSignature(equityDoc) && getEquityDocSignatureState(equityDoc).isFullyExecuted;
   };
 
-  // Start editing grant options for a stakeholder
-  const startEditingGrantOptions = (stakeholder: Stakeholder) => {
+  const getCurrentStakeholderGrantOptions = (stakeholder: Stakeholder) =>
+    stakeholder.optionsGranted ||
+    stakeholder.grants?.[0]?.numberOfShares ||
+    stakeholder.totalShares ||
+    0;
+
+  const getCurrentStakeholderGrantDate = (stakeholder: Stakeholder) =>
+    stakeholder.grants?.[0]?.vestingStartDate ||
+    stakeholder.grants?.[0]?.grantDate ||
+    stakeholder.startDate;
+
+  // Start editing grant terms for a stakeholder
+  const startEditingGrantTerms = (stakeholder: Stakeholder) => {
     if (isStakeholderGrantLocked(stakeholder)) {
       setMessage({
         type: 'info',
@@ -3208,23 +3158,31 @@ const EquityAdminPage: React.FC = () => {
       return;
     }
 
-    const currentOptions = stakeholder.optionsGranted || 
-      stakeholder.grants?.[0]?.numberOfShares || 
-      stakeholder.totalShares || 0;
-    const currentGrantDate =
-      stakeholder.grants?.[0]?.vestingStartDate ||
-      stakeholder.grants?.[0]?.grantDate ||
-      stakeholder.startDate;
-    setEditGrantOptionsValue(currentOptions);
-    setEditGrantDateValue(getDateInputValue(currentGrantDate) || new Date().toISOString().split('T')[0]);
+    setEditGrantOptionsValue(getCurrentStakeholderGrantOptions(stakeholder));
+    setEditGrantDateValue(getDateInputValue(getCurrentStakeholderGrantDate(stakeholder)) || new Date().toISOString().split('T')[0]);
     setEditingGrantStakeholderId(stakeholder.id);
   };
 
   // Save updated grant options
-  const saveGrantOptions = async (stakeholder: Stakeholder) => {
-    console.log('[saveGrantOptions] Function called with:', { stakeholderId: stakeholder.id, value: editGrantOptionsValue });
+  const saveGrantOptions = async (
+    stakeholder: Stakeholder,
+    options: {
+      forceRegenerateDocuments?: boolean;
+      optionsValue?: number;
+      grantDateValue?: string;
+    } = {}
+  ) => {
+    const nextOptionsValue = options.optionsValue ?? editGrantOptionsValue;
+    const nextGrantDateValue = options.grantDateValue ?? editGrantDateValue;
+    const forceRegenerateDocuments = Boolean(options.forceRegenerateDocuments);
+
+    console.log('[saveGrantOptions] Function called with:', {
+      stakeholderId: stakeholder.id,
+      value: nextOptionsValue,
+      forceRegenerateDocuments,
+    });
     
-    if (editGrantOptionsValue <= 0) {
+    if (nextOptionsValue <= 0) {
       setMessage({ type: 'error', text: 'Options granted must be greater than 0' });
       return;
     }
@@ -3238,52 +3196,49 @@ const EquityAdminPage: React.FC = () => {
       return;
     }
 
-    const oldOptions = stakeholder.optionsGranted || stakeholder.grants?.[0]?.numberOfShares || stakeholder.totalShares || 0;
+    const oldOptions = getCurrentStakeholderGrantOptions(stakeholder);
     const currentAdvisorGrantDateValue =
       stakeholder.type === 'advisor'
-        ? getDateInputValue(
-            stakeholder.grants?.[0]?.vestingStartDate ||
-              stakeholder.grants?.[0]?.grantDate ||
-              stakeholder.startDate
-          )
+        ? getDateInputValue(getCurrentStakeholderGrantDate(stakeholder))
         : '';
     const advisorGrantDateChanged =
-      stakeholder.type === 'advisor' && currentAdvisorGrantDateValue !== editGrantDateValue;
+      stakeholder.type === 'advisor' && currentAdvisorGrantDateValue !== nextGrantDateValue;
 
-    if (stakeholder.type === 'advisor' && !parseDateInputValue(editGrantDateValue)) {
+    if (stakeholder.type === 'advisor' && !parseDateInputValue(nextGrantDateValue)) {
       setMessage({ type: 'error', text: 'Choose a valid advisor grant / vesting date before saving.' });
       return;
     }
 
-    if (editGrantOptionsValue === oldOptions && !advisorGrantDateChanged) {
+    if (nextOptionsValue === oldOptions && !advisorGrantDateChanged && !forceRegenerateDocuments) {
       setMessage({ type: 'info', text: 'No grant changes to save.' });
       return;
     }
 
     setIsSavingGrantOptions(true);
     try {
-      const difference = editGrantOptionsValue - oldOptions;
+      const difference = nextOptionsValue - oldOptions;
       const revisedGrantDate =
         stakeholder.type === 'advisor'
-          ? parseDateInputValue(editGrantDateValue) || new Date()
+          ? parseDateInputValue(nextGrantDateValue) || new Date()
           : new Date();
       const revisedGrantTimestamp = Timestamp.fromDate(revisedGrantDate);
       const revisedGrantDateIso = revisedGrantDate.toISOString();
       const revisedGrantDateLabel = formatLegalDate(revisedGrantDate);
-      const optionsChanged = editGrantOptionsValue !== oldOptions;
+      const optionsChanged = nextOptionsValue !== oldOptions;
 
       console.log('[saveGrantOptions] Starting update:', {
         stakeholderId: stakeholder.id,
         oldOptions,
-        newOptions: editGrantOptionsValue,
+        newOptions: nextOptionsValue,
         difference,
         revisedGrantDate: revisedGrantDateLabel,
+        forceRegenerateDocuments,
       });
 
       // Update stakeholder
       const stakeholderUpdate: Record<string, any> = {
-        optionsGranted: editGrantOptionsValue,
-        optionsUnvested: editGrantOptionsValue - (stakeholder.optionsVested || 0),
+        optionsGranted: nextOptionsValue,
+        optionsUnvested: nextOptionsValue - (stakeholder.optionsVested || 0),
         updatedAt: serverTimestamp(),
       };
 
@@ -3293,8 +3248,8 @@ const EquityAdminPage: React.FC = () => {
 
       // Also update totalShares for backward compatibility
       if (!stakeholder.optionsGranted && stakeholder.totalShares) {
-        stakeholderUpdate.totalShares = editGrantOptionsValue;
-        stakeholderUpdate.totalUnvested = editGrantOptionsValue - (stakeholder.totalVested || 0);
+        stakeholderUpdate.totalShares = nextOptionsValue;
+        stakeholderUpdate.totalUnvested = nextOptionsValue - (stakeholder.totalVested || 0);
       }
 
       try {
@@ -3310,8 +3265,8 @@ const EquityAdminPage: React.FC = () => {
         const grantId = stakeholder.grants[0].id;
         try {
           await updateDoc(doc(db, 'equity-grants', grantId), {
-            numberOfShares: editGrantOptionsValue,
-            unvestedShares: editGrantOptionsValue - (stakeholder.grants[0].vestedShares || 0),
+            numberOfShares: nextOptionsValue,
+            unvestedShares: nextOptionsValue - (stakeholder.grants[0].vestedShares || 0),
             ...(stakeholder.type === 'advisor'
               ? { grantDate: revisedGrantTimestamp, vestingStartDate: revisedGrantTimestamp }
               : {}),
@@ -3328,7 +3283,7 @@ const EquityAdminPage: React.FC = () => {
       const grant = stakeholder.grants?.[0];
       const grantDetails = grant ? {
         equityType: grant.equityType || 'nso',
-        numberOfShares: editGrantOptionsValue,
+        numberOfShares: nextOptionsValue,
         strikePrice: grant.strikePrice || 0.001,
         vestingSchedule: grant.vestingSchedule || 'monthly',
         vestingStartDate: stakeholder.type === 'advisor' ? revisedGrantDateIso : (grant.vestingStartDate || stakeholder.startDate),
@@ -3336,7 +3291,7 @@ const EquityAdminPage: React.FC = () => {
         vestingMonths: grant.vestingMonths || 24,
       } : {
         equityType: 'nso',
-        numberOfShares: editGrantOptionsValue,
+        numberOfShares: nextOptionsValue,
         strikePrice: 0.001,
         vestingSchedule: 'monthly',
         vestingStartDate: stakeholder.type === 'advisor' ? revisedGrantDateIso : stakeholder.startDate,
@@ -3364,18 +3319,20 @@ const EquityAdminPage: React.FC = () => {
         const boardConsentExecuted = Boolean(boardConsentDoc.autoSigned || boardConsentDoc.autoSignedAt) || boardDocState.isFullyExecuted;
         const canRefreshBoardConsentInPlace =
           Boolean(boardConsentDoc.autoSigned || boardConsentDoc.autoSignedAt) &&
-          advisorGrantDateChanged &&
+          (advisorGrantDateChanged || forceRegenerateDocuments) &&
           !optionsChanged;
 
-        if (boardConsentExecuted && !canRefreshBoardConsentInPlace) {
+        if (boardConsentExecuted && !canRefreshBoardConsentInPlace && forceRegenerateDocuments && !optionsChanged) {
+          console.log('[saveGrantOptions] Skipping locked Board Consent refresh because no terms changed');
+        } else if (boardConsentExecuted && !canRefreshBoardConsentInPlace) {
           console.log('[saveGrantOptions] Board Consent is executed, creating amendment');
           setMessage({ type: 'info', text: 'Creating auto-executed Board Consent Amendment...' });
 
           try {
-            const amendmentTitle = `Board Consent Amendment - ${stakeholder.name} (Options: ${formatNumber(editGrantOptionsValue)})`;
+            const amendmentTitle = `Board Consent Amendment - ${stakeholder.name} (Options: ${formatNumber(nextOptionsValue)})`;
             const placeholder = await addDoc(collection(db, 'equity-documents'), {
               title: amendmentTitle,
-              prompt: `Generate a Board Consent Amendment to update the previously approved equity grant for ${stakeholder.name} from ${formatNumber(oldOptions)} options to ${formatNumber(editGrantOptionsValue)} options.`,
+              prompt: `Generate a Board Consent Amendment to update the previously approved equity grant for ${stakeholder.name} from ${formatNumber(oldOptions)} options to ${formatNumber(nextOptionsValue)} options.`,
               content: '',
               documentType: 'board_consent',
               requiresSignature: false,
@@ -3401,8 +3358,8 @@ const EquityAdminPage: React.FC = () => {
               requiresSignature: false,
               isAmendment: true,
               previousOptionsAmount: oldOptions,
-              newOptionsAmount: editGrantOptionsValue,
-              prompt: `Generate a Board Consent Amendment to update the previously approved equity grant for ${stakeholder.name}. The original grant was for ${formatNumber(oldOptions)} Non-Qualified Stock Options. This amendment approves increasing the grant to ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options. Include all standard board consent language and signature lines.`,
+              newOptionsAmount: nextOptionsValue,
+              prompt: `Generate a Board Consent Amendment to update the previously approved equity grant for ${stakeholder.name}. The original grant was for ${formatNumber(oldOptions)} Non-Qualified Stock Options. This amendment approves increasing the grant to ${formatNumber(nextOptionsValue)} Non-Qualified Stock Options. Include all standard board consent language and signature lines.`,
               boardApprovalDate: revisedBoardApprovalDate,
               documentDate: revisedBoardApprovalDate,
               grantDetails,
@@ -3438,6 +3395,8 @@ const EquityAdminPage: React.FC = () => {
             type: 'info',
             text: optionsChanged
               ? 'Updating Board Consent with the new grant terms...'
+              : forceRegenerateDocuments
+              ? 'Refreshing Board Consent from the current grant terms...'
               : 'Refreshing Board Consent with the updated approval date...',
           });
 
@@ -3468,7 +3427,7 @@ const EquityAdminPage: React.FC = () => {
               stakeholderType: stakeholder.type,
               documentType: 'board_consent',
               requiresSignature: false,
-              prompt: `Generate a Board Consent approving equity grants. For ${stakeholder.name}: ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
+              prompt: `Generate a Board Consent approving equity grants. For ${stakeholder.name}: ${formatNumber(nextOptionsValue)} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
               boardApprovalDate: revisedBoardApprovalDate,
               documentDate: revisedBoardApprovalDate,
               grantDetails,
@@ -3536,13 +3495,15 @@ const EquityAdminPage: React.FC = () => {
               ? 'Invalidating old signature links and regenerating the Advisor Agreement...'
               : optionsChanged
               ? 'Regenerating Advisor Agreement with updated grant terms...'
+              : forceRegenerateDocuments
+              ? 'Refreshing Advisor Agreement from the current grant terms...'
               : 'Regenerating Advisor Agreement with the updated grant date...',
           });
 
           try {
             const updatedGrantDetails = {
               ...(equityDoc.grantDetails || {}),
-              numberOfShares: editGrantOptionsValue,
+              numberOfShares: nextOptionsValue,
               ...(stakeholder.type === 'advisor' ? { vestingStartDate: revisedGrantDateIso } : {}),
             };
 
@@ -3571,7 +3532,7 @@ const EquityAdminPage: React.FC = () => {
               documentType: 'advisor_nso_agreement',
               requiresSignature: true,
               boardApprovalDate: effectiveBoardApprovalDate,
-              prompt: `Generate a combined Advisor Services Agreement and Non-Qualified Stock Option Grant for ${stakeholder.name}. The grant is for ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options.`,
+              prompt: `Generate a combined Advisor Services Agreement and Non-Qualified Stock Option Grant for ${stakeholder.name}. The grant is for ${formatNumber(nextOptionsValue)} Non-Qualified Stock Options.`,
               grantDetails: updatedGrantDetails,
             });
 
@@ -3624,8 +3585,8 @@ const EquityAdminPage: React.FC = () => {
         s.id === stakeholder.id 
           ? { 
               ...s, 
-              optionsGranted: editGrantOptionsValue,
-              optionsUnvested: editGrantOptionsValue - (s.optionsVested || 0),
+              optionsGranted: nextOptionsValue,
+              optionsUnvested: nextOptionsValue - (s.optionsVested || 0),
               ...(s.type === 'advisor'
                 ? {
                     startDate: revisedGrantTimestamp,
@@ -3633,14 +3594,14 @@ const EquityAdminPage: React.FC = () => {
                     boardConsentDocId: effectiveBoardConsentDocId,
                   }
                 : {}),
-              totalShares: s.totalShares ? editGrantOptionsValue : s.totalShares,
-              totalUnvested: s.totalShares ? editGrantOptionsValue - (s.totalVested || 0) : s.totalUnvested,
+              totalShares: s.totalShares ? nextOptionsValue : s.totalShares,
+              totalUnvested: s.totalShares ? nextOptionsValue - (s.totalVested || 0) : s.totalUnvested,
               grants: s.grants?.map((g, idx) => 
                 idx === 0 
                   ? {
                       ...g,
-                      numberOfShares: editGrantOptionsValue,
-                      unvestedShares: editGrantOptionsValue - (g.vestedShares || 0),
+                      numberOfShares: nextOptionsValue,
+                      unvestedShares: nextOptionsValue - (g.vestedShares || 0),
                       ...(s.type === 'advisor'
                         ? { grantDate: revisedGrantTimestamp, vestingStartDate: revisedGrantTimestamp }
                         : {}),
@@ -3660,8 +3621,10 @@ const EquityAdminPage: React.FC = () => {
       }
 
       // Build success message based on what was done
-      let successMessage = optionsChanged
-        ? `Grant updated to ${formatNumber(editGrantOptionsValue)} options`
+      let successMessage = forceRegenerateDocuments && !optionsChanged && !advisorGrantDateChanged
+        ? 'Documents refreshed from current grant terms'
+        : optionsChanged
+        ? `Grant updated to ${formatNumber(nextOptionsValue)} options`
         : `Grant / vesting date updated to ${revisedGrantDateLabel}`;
 
       if (advisorGrantDateChanged && optionsChanged) {
@@ -3901,8 +3864,28 @@ const EquityAdminPage: React.FC = () => {
                           {/* Quick Stats */}
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                             <div className="p-3 rounded-lg bg-zinc-800/50">
-                              <p className="text-zinc-500 text-xs mb-1">Start Date</p>
-                              <p className="text-white font-medium">{formatDate(stakeholder.startDate)}</p>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-zinc-500 text-xs mb-1">Start Date</p>
+                                  <p className="text-white font-medium">{formatDate(stakeholder.startDate)}</p>
+                                </div>
+                                {stakeholder.type === 'advisor' && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startEditingGrantTerms(stakeholder);
+                                    }}
+                                    disabled={isStakeholderGrantLocked(stakeholder)}
+                                    title="Update grant date and regenerate active documents"
+                                    aria-label="Update grant date"
+                                    className="shrink-0 flex items-center gap-1 px-2 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-md text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    <Calendar className="w-3 h-3" />
+                                    Update
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             <div className="p-3 rounded-lg bg-zinc-800/50">
                               <p className="text-zinc-500 text-xs mb-1">Title / Role</p>
@@ -3934,101 +3917,140 @@ const EquityAdminPage: React.FC = () => {
                             )}
                           </div>
 
-                          {/* Edit Options Granted (only for option holders, and only if documents haven't been sent) */}
+                          {/* Edit Grant Terms (only for option holders, and only if documents haven't been signed) */}
                           {['advisor', 'employee', 'contractor'].includes(stakeholder.type) && (
                             <div className="mb-6 p-4 rounded-xl bg-zinc-800/50 border border-zinc-700">
                               {(() => {
                                 const grantLocked = isStakeholderGrantLocked(stakeholder);
+                                const currentGrantOptions = getCurrentStakeholderGrantOptions(stakeholder);
+                                const currentGrantDate = getCurrentStakeholderGrantDate(stakeholder);
+                                const currentGrantDateInputValue = getDateInputValue(currentGrantDate) || new Date().toISOString().split('T')[0];
+                                const canRefreshDocuments = stakeholder.type === 'advisor' && !grantLocked;
                                 return (
-                              <div className="flex items-center justify-between gap-4">
-                                <div>
-                                  <h5 className="text-sm font-semibold text-white flex items-center gap-2">
-                                    <TrendingUp className="w-4 h-4 text-blue-400" />
-                                    Options Granted
-                                  </h5>
-                                  <p className="text-xs text-zinc-500 mt-1">
-                                    {grantLocked
-                                      ? 'This grant is locked because the advisor agreement has already been signed. Issue any additional equity as a separate new grant for this stakeholder.'
-                                      : 'Before signature, editing the grant will regenerate the active documents and align all grant dates consistently.'}
-                                  </p>
-                                </div>
-                                
-                                {editingGrantStakeholderId === stakeholder.id ? (
-                                  <div className="flex items-center gap-2 flex-wrap justify-end">
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="number"
-                                        value={editGrantOptionsValue}
-                                        onChange={(e) => setEditGrantOptionsValue(parseInt(e.target.value) || 0)}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="w-32 px-3 py-2 bg-zinc-900 border border-zinc-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-                                        min={1}
-                                      />
-                                      {stakeholder.type === 'advisor' && (
-                                        <>
+                                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                                    <div>
+                                      <h5 className="text-sm font-semibold text-white flex items-center gap-2">
+                                        <TrendingUp className="w-4 h-4 text-blue-400" />
+                                        Grant Terms
+                                      </h5>
+                                      <p className="text-xs text-zinc-500 mt-1">
+                                        {grantLocked
+                                          ? 'This grant is locked because the advisor agreement has already been signed. Issue any additional equity as a separate new grant for this stakeholder.'
+                                          : 'Update options or the grant date here. Saving regenerates active documents and refreshes stale signature links.'}
+                                      </p>
+                                    </div>
+
+                                    {editingGrantStakeholderId === stakeholder.id ? (
+                                      <div className="flex items-end gap-2 flex-wrap justify-end">
+                                        <label className="block">
+                                          <span className="block text-[11px] text-zinc-500 mb-1">Options</span>
                                           <input
-                                            type="date"
-                                            value={editGrantDateValue}
-                                            onChange={(e) => setEditGrantDateValue(e.target.value)}
+                                            type="number"
+                                            value={editGrantOptionsValue}
+                                            onChange={(e) => setEditGrantOptionsValue(parseInt(e.target.value) || 0)}
                                             onClick={(e) => e.stopPropagation()}
-                                            aria-label="Advisor grant and vesting date"
-                                            className="px-3 py-2 bg-zinc-900 border border-zinc-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                                            className="w-32 px-3 py-2 bg-zinc-900 border border-zinc-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                                            min={1}
                                           />
+                                        </label>
+                                        {stakeholder.type === 'advisor' && (
+                                          <>
+                                            <label className="block">
+                                              <span className="block text-[11px] text-zinc-500 mb-1">Grant / Vesting Date</span>
+                                              <input
+                                                type="date"
+                                                value={editGrantDateValue}
+                                                onChange={(e) => setEditGrantDateValue(e.target.value)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                aria-label="Advisor grant and vesting date"
+                                                className="px-3 py-2 bg-zinc-900 border border-zinc-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                                              />
+                                            </label>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setEditGrantDateValue(new Date().toISOString().split('T')[0]);
+                                              }}
+                                              type="button"
+                                              title="Set the advisor grant and vesting date to today"
+                                              className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs transition-colors"
+                                            >
+                                              Today
+                                            </button>
+                                          </>
+                                        )}
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); saveGrantOptions(stakeholder); }}
+                                          disabled={isSavingGrantOptions || (stakeholder.type === 'advisor' && !editGrantDateValue)}
+                                          title="Save grant terms and update active documents"
+                                          className="flex items-center gap-1 px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+                                        >
+                                          {isSavingGrantOptions ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                          ) : (
+                                            <Check className="w-4 h-4" />
+                                          )}
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingGrantStakeholderId(null);
+                                          }}
+                                          className="flex items-center gap-1 px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm transition-colors"
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-3 flex-wrap justify-end">
+                                        <div className="text-right">
+                                          <p className="text-white font-semibold text-lg leading-none">{formatNumber(currentGrantOptions)}</p>
+                                          <p className="text-[11px] text-zinc-500 mt-1">Options</p>
+                                        </div>
+                                        {stakeholder.type === 'advisor' && (
+                                          <div className="text-right">
+                                            <p className="text-white font-semibold text-sm leading-none">{formatDate(currentGrantDate)}</p>
+                                            <p className="text-[11px] text-zinc-500 mt-1">Grant Date</p>
+                                          </div>
+                                        )}
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); startEditingGrantTerms(stakeholder); }}
+                                          disabled={grantLocked}
+                                          className={`flex items-center gap-1 px-3 py-1.5 border rounded-lg text-xs transition-colors ${
+                                            grantLocked
+                                              ? 'bg-zinc-800 text-zinc-500 border-zinc-700 cursor-not-allowed'
+                                              : 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border-blue-500/40'
+                                          }`}
+                                        >
+                                          <Edit3 className="w-3 h-3" />
+                                          {grantLocked ? 'Locked After Signature' : 'Edit Terms'}
+                                        </button>
+                                        {canRefreshDocuments && (
                                           <button
+                                            type="button"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              setEditGrantDateValue(new Date().toISOString().split('T')[0]);
+                                              saveGrantOptions(stakeholder, {
+                                                forceRegenerateDocuments: true,
+                                                optionsValue: currentGrantOptions,
+                                                grantDateValue: currentGrantDateInputValue,
+                                              });
                                             }}
-                                            type="button"
-                                            title="Set the advisor grant and vesting date to today"
-                                            className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs transition-colors"
+                                            disabled={isSavingGrantOptions}
+                                            title="Regenerate active documents from current grant terms"
+                                            className="flex items-center gap-1 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 border border-zinc-600 rounded-lg text-xs transition-colors disabled:opacity-50"
                                           >
-                                            Today
+                                            {isSavingGrantOptions ? (
+                                              <Loader2 className="w-3 h-3 animate-spin" />
+                                            ) : (
+                                              <RefreshCw className="w-3 h-3" />
+                                            )}
+                                            Refresh Docs
                                           </button>
-                                        </>
-                                      )}
-                                    </div>
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); saveGrantOptions(stakeholder); }}
-                                      disabled={isSavingGrantOptions || (stakeholder.type === 'advisor' && !editGrantDateValue)}
-                                      className="flex items-center gap-1 px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
-                                    >
-                                      {isSavingGrantOptions ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                      ) : (
-                                        <Check className="w-4 h-4" />
-                                      )}
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setEditingGrantStakeholderId(null);
-                                      }}
-                                      className="flex items-center gap-1 px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm transition-colors"
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </button>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
-                                ) : (
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-white font-semibold text-lg">
-                                      {formatNumber(stakeholder.optionsGranted || stakeholder.grants?.[0]?.numberOfShares || stakeholder.totalShares || 0)}
-                                    </span>
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); startEditingGrantOptions(stakeholder); }}
-                                      disabled={grantLocked}
-                                      className={`flex items-center gap-1 px-3 py-1.5 border rounded-lg text-xs transition-colors ${
-                                        grantLocked
-                                          ? 'bg-zinc-800 text-zinc-500 border-zinc-700 cursor-not-allowed'
-                                          : 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border-blue-500/40'
-                                      }`}
-                                    >
-                                      <Edit3 className="w-3 h-3" />
-                                      {grantLocked ? 'Locked After Signature' : 'Edit'}
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
                                 );
                               })()}
                             </div>
