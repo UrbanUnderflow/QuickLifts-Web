@@ -95,6 +95,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/pulseintelligencelabs',
     // AuntEdna demo (public for stakeholder demos)
     '/auntedna',
+    // Pulse x auntEDNA stakeholder deck (public for stakeholder demos)
+    '/pulse-auntedna-stakeholder-deck',
     // PulseCheck marketing landing (public)
     '/PulseCheck',
   ].map(route => route?.toLowerCase());
