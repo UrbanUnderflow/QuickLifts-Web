@@ -1,4 +1,5 @@
 import { User, FollowRequest } from './types';
+import { isUserDictionaryLike, normalizeUserCreatePayload, normalizeUserPatch } from './writeContract';
 import { Workout } from '../workout';
 import { Exercise, ExerciseVideo, ExerciseAuthor, ExerciseLog } from '../exercise/types';
 import { ProfileImage, SubscriptionType } from '../user';
@@ -57,32 +58,32 @@ class UserService {
     return new User(userId, userData);
   }
 
-  async updateUser(userId: string, user: User | Record<string, any>): Promise<void> {
+  async createUser(userId: string, user: User | Record<string, unknown>): Promise<void> {
     const userRef = doc(db, 'users', userId);
-    // Allow callers to pass either a User instance or a plain object
-    const userData: any = (user && typeof (user as any).toDictionary === 'function')
-      ? (user as any).toDictionary()
-      : user;
+    const existingUser = await getDoc(userRef);
 
-    // Deep-sanitize undefined → null for Firestore compatibility
-    const sanitizeForFirestore = (value: any): any => {
-      if (value === undefined) return null;
-      if (value === null) return null;
-      if (Array.isArray(value)) return value.map(sanitizeForFirestore);
-      if (typeof value === 'object') {
-        const out: Record<string, any> = {};
-        Object.keys(value).forEach((k) => {
-          const v = (value as any)[k];
-          out[k] = sanitizeForFirestore(v);
-        });
-        return out;
-      }
-      return value;
-    };
+    if (existingUser.exists()) {
+      throw new Error(`User ${userId} already exists`);
+    }
 
-    const safeData = sanitizeForFirestore(userData);
-    console.log(`[UserService Update] Updating user ${userId} with data:`, JSON.parse(JSON.stringify(safeData)));
-    await setDoc(userRef, safeData, { merge: true });
+    const userData = normalizeUserCreatePayload(user);
+    console.log(`[UserService Create] Creating user ${userId} with data:`, JSON.parse(JSON.stringify(userData)));
+    await setDoc(userRef, userData);
+  }
+
+  async updateUser(userId: string, patch: Record<string, unknown>): Promise<void> {
+    const userRef = doc(db, 'users', userId);
+    if (isUserDictionaryLike(patch)) {
+      throw new Error('userService.updateUser expects an explicit field patch. Use userService.createUser for full User documents.');
+    }
+
+    const safePatch = normalizeUserPatch(patch);
+    if (Object.keys(safePatch).length === 0) {
+      throw new Error('userService.updateUser requires at least one field.');
+    }
+
+    console.log(`[UserService Update] Patching user ${userId} with data:`, JSON.parse(JSON.stringify(safePatch)));
+    await updateDoc(userRef, safePatch);
   }
 
   async getUsersByIds(ids: string[]): Promise<User[]> {
@@ -278,12 +279,10 @@ class UserService {
           toType: SubscriptionType.beta
         });
 
-        const updatedUser = new User(user.id, {
-          ...user,
-          subscriptionType: SubscriptionType.beta
+        await this.updateUser(user.id, {
+          subscriptionType: SubscriptionType.beta,
+          updatedAt: new Date(),
         });
-        
-        await this.updateUser(user.id, updatedUser);
         console.log('Successfully upgraded user to beta');
       } else {
         if (user.subscriptionType == SubscriptionType.beta) {
@@ -292,12 +291,10 @@ class UserService {
             toType: SubscriptionType.unsubscribed
           });
           
-          const updatedUser = new User(user.id, {
-            ...user,
-            subscriptionType: SubscriptionType.unsubscribed
+          await this.updateUser(user.id, {
+            subscriptionType: SubscriptionType.unsubscribed,
+            updatedAt: new Date(),
           });
-          
-          await this.updateUser(user.id, updatedUser);
           console.log('Successfully downgraded user from beta');
         } else {
           console.log('No subscription change needed:', {

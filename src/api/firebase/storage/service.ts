@@ -271,7 +271,14 @@ export class FirebaseStorageService {
     });
 
     // Update user in Firestore
-    await userService.updateUser(updatedUser.id, updatedUser);
+    await userService.updateUser(updatedUser.id, {
+      profileImage: {
+        profileImageURL: imageURL,
+        imageOffsetWidth: 0,
+        imageOffsetHeight: 0
+      },
+      updatedAt: new Date()
+    });
     userService.nonUICurrentUser = updatedUser; // Update cached user
   }
 

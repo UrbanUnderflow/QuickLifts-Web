@@ -1,9 +1,11 @@
 // src/api/firebase/user/types.ts
 import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
 import type { LegalAcceptanceRecord } from '../../../utils/legalAcceptance';
+import type { UserWritePatch } from './writeContract';
 
 export interface UserService {
-    updateUser: (userId: string, user: User) => Promise<void>;
+    createUser: (userId: string, user: User | UserWritePatch) => Promise<void>;
+    updateUser: (userId: string, patch: UserWritePatch) => Promise<void>;
     fetchUserFromFirestore: (userId: string) => Promise<User>;
     fetchUsersWithVideosUploaded: () => Promise<User[]>;
     currentUser: User | null;

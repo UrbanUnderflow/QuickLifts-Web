@@ -127,7 +127,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
       },
     };
 
-    await userService.updateUser(user.uid, userData);
+    await userService.createUser(user.uid, userData);
   };
 
   const handleCreateAccount = async (event: React.FormEvent) => {

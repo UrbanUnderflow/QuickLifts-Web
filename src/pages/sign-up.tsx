@@ -231,7 +231,7 @@ const SignUpPage: React.FC = () => {
       // Create Firestore user document
       const userData: any = {
         id: firebaseUser.uid,
-        email: formData.email,
+        email: firebaseUser.email || formData.email,
         username: uname,
         displayName: uname, // Use username as display name initially
         role: isCoachSignUp ? 'coach' : 'athlete',
@@ -274,7 +274,7 @@ const SignUpPage: React.FC = () => {
       
       // Create User instance and save to Firestore
       const user = new User(firebaseUser.uid, userData);
-      await userService.updateUser(firebaseUser.uid, user);
+      await userService.createUser(firebaseUser.uid, user);
       cacheCurrentLegalAcceptance(firebaseUser.uid, 'web-signup-email');
 
       // Send welcome email (best-effort; does not block signup)

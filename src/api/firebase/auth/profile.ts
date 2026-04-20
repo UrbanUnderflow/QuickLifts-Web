@@ -47,6 +47,36 @@ const toSerializableValue = (value: unknown) => {
     : value;
 };
 
+const toPlainBodyWeight = (bodyWeight: unknown[] | undefined) =>
+  bodyWeight?.map((weight) =>
+    typeof (weight as { toDictionary?: () => Record<string, unknown> }).toDictionary === 'function'
+      ? (weight as { toDictionary: () => Record<string, unknown> }).toDictionary()
+      : weight
+  ) || [];
+
+const buildAthleteUserPatch = (profile: User) => ({
+  email: profile.email,
+  username: profile.username,
+  displayName: profile.displayName,
+  role: profile.role,
+  registrationComplete: profile.registrationComplete,
+  subscriptionType: profile.subscriptionType,
+  subscriptionPlatform: profile.subscriptionPlatform,
+  encouragement: profile.encouragement || [],
+  blockedUsers: profile.blockedUsers || [],
+  goal: profile.goal || [],
+  bodyWeight: toPlainBodyWeight(profile.bodyWeight),
+  macros: profile.macros || {},
+  creator: profile.creator ? profile.creator.toDictionary() : null,
+  winner: profile.winner ? profile.winner.toDictionary() : null,
+  checkinsPrivacy: profile.checkinsPrivacy,
+  checkinsAccessList: profile.checkinsAccessList || [],
+  updatedAt: profile.updatedAt,
+  ...(profile.profileImage?.profileImageURL
+    ? { profileImage: profile.profileImage.toDictionary() }
+    : {}),
+});
+
 export const buildAthleteUserProfile = ({
   firebaseUser,
   email,
@@ -115,7 +145,11 @@ export const createOrRepairAthleteUserProfile = async ({
     await claimUsername(firebaseUser.uid, normalizedUsername);
   }
 
-  await userService.updateUser(firebaseUser.uid, profile);
+  if (!existingUser) {
+    await userService.createUser(firebaseUser.uid, profile);
+  } else {
+    await userService.updateUser(firebaseUser.uid, buildAthleteUserPatch(profile));
+  }
   userService.nonUICurrentUser = profile;
 
   return profile;

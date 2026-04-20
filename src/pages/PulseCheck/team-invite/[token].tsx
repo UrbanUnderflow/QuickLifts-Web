@@ -328,7 +328,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     const normalizedName = normalizeUsername(username);
     const isAthlete = invite.teamMembershipRole === 'athlete';
 
-    await userService.updateUser(user.uid, {
+    await userService.createUser(user.uid, {
       id: user.uid,
       email: user.email || createForm.email.trim().toLowerCase(),
       username: normalizedName,

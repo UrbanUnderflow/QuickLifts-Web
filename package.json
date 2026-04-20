@@ -77,6 +77,7 @@
     "typecheck": "tsc --noEmit",
     "guard:firebase-admin": "node scripts/check-firebase-admin-guardrails.js",
     "audit:firebase-next-api": "node scripts/audit-firebase-next-api-runtime-risk.js",
+    "audit:user-write-contract": "node scripts/verify-user-write-contract.js",
     "probe:firebase-next-api:live": "node scripts/probe-firebase-next-api-live.cjs",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings 0",
     "test:unit:club-onboarding": "node --import tsx --test tests/unit/club-links.test.ts tests/unit/club-onboarding-routing.test.ts",
