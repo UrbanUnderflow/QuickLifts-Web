@@ -28,7 +28,6 @@ import { workoutService } from '../api/firebase/workout/service'; // Import work
 import { Challenge } from '../api/firebase/workout/types'; // Import workout types
 import {
   buildCurrentLegalAcceptance,
-  cacheCurrentLegalAcceptance,
   cacheLegalAcceptance,
   hasAcceptedCurrentLegal,
   hasAnyRecordedLegalAcceptance,
@@ -198,15 +197,18 @@ const SignInModal: React.FC<SignInModalProps> = ({
     acceptanceMethod: string
   ) => {
     const acceptedAt = new Date();
-    cacheCurrentLegalAcceptance(userId, acceptanceMethod, acceptedAt);
+    const currentLegalAcceptance = buildCurrentLegalAcceptance(acceptanceMethod, acceptedAt);
+    const legalAcceptance = {
+      ...currentLegalAcceptance,
+      acceptedAt: dateToUnixTimestamp(acceptedAt),
+    };
 
     await userService.updateUser(userId, {
-      legalAcceptance: {
-        ...buildCurrentLegalAcceptance(acceptanceMethod, acceptedAt),
-        acceptedAt: dateToUnixTimestamp(acceptedAt),
-      },
+      legalAcceptance,
       updatedAt: dateToUnixTimestamp(acceptedAt),
     });
+
+    cacheLegalAcceptance(userId, currentLegalAcceptance);
 
     const refreshedUser = await userService.fetchUserFromFirestore(userId);
     if (refreshedUser) {
