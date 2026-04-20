@@ -4,16 +4,15 @@ import { Handler } from '@netlify/functions';
  * Dynamic OG image generator.
  *
  * Query params:
- *   variant – "pil" (default when no title provided) renders the Pulse
- *             Intelligence Labs splash (dark gradient + soft orbs + "PIL"
- *             wordmark in white→lime gradient, styled after the Macra / Fit
- *             With Pulse app splash screens).
- *   title   – a short label (e.g. "Research", "Coach") rendered centered on a
- *             dark background with "PULSE" wordmark below.
- *
- * When neither is provided, returns the PIL splash as the universal default.
- *
- * Produces a 1200×630 PNG via SVG → sharp. No external assets required.
+ *   variant=pil – 302 redirect to the pre-rendered static /pil-og.png
+ *                 (Pulse Intelligence Labs splash). Also triggered by no
+ *                 params at all or the legacy title="Pulse" URL, which covers
+ *                 anything pinned in crawler caches.
+ *   title       – a short label (e.g. "Research", "Coach") rendered on a dark
+ *                 card with "PULSE" wordmark below. Note: the Lambda's
+ *                 librsvg has no system fonts, so text renders as tofu in
+ *                 production — prefer setting explicit ogMeta.image on pages
+ *                 that need a specific title card.
  */
 
 const handler: Handler = async (event) => {
@@ -36,11 +35,25 @@ const handler: Handler = async (event) => {
     const rawTitle = params.title ? decodeURIComponent(params.title) : '';
 
     // The PIL splash is the universal default: no title passed, variant=pil,
-    // or the legacy title="Pulse" URL that's pinned in crawler caches.
+    // or the legacy title="Pulse" URL that's pinned in crawler caches. Serve
+    // it as a 302 to the pre-rendered static PNG — the Lambda's librsvg has
+    // no system fonts available and would render text as tofu. The static
+    // PNG is generated locally via scripts/generate-pil-og.js.
     const usePilSplash =
       variant === 'pil' || !rawTitle || rawTitle.toLowerCase() === 'pulse';
 
-    const svg = Buffer.from(usePilSplash ? renderPilSplash() : renderTitleCard(rawTitle));
+    if (usePilSplash) {
+      return {
+        statusCode: 302,
+        headers: {
+          Location: 'https://fitwithpulse.ai/pil-og.png',
+          'Cache-Control': 'public, max-age=3600',
+        },
+        body: '',
+      };
+    }
+
+    const svg = Buffer.from(renderTitleCard(rawTitle));
 
     const pngBuffer = await sharp(svg).png().toBuffer();
 
@@ -66,66 +79,6 @@ const handler: Handler = async (event) => {
 
 const ROUNDED_FONT_STACK =
   "-apple-system, BlinkMacSystemFont, 'SF Pro Rounded', 'SF Pro Display', 'Segoe UI', Inter, Arial, Helvetica, sans-serif";
-
-function renderPilSplash(): string {
-  return `<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#050608"/>
-      <stop offset="55%" stop-color="#0A0A0B"/>
-      <stop offset="100%" stop-color="#101218"/>
-    </linearGradient>
-    <linearGradient id="wordmark" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="100%" stop-color="#DFFD10"/>
-    </linearGradient>
-    <radialGradient id="orbGreen" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#DFFD10" stop-opacity="0.28"/>
-      <stop offset="100%" stop-color="#DFFD10" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="orbBlue" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#007AFF" stop-opacity="0.22"/>
-      <stop offset="100%" stop-color="#007AFF" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="orbPurple" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#8A2BE2" stop-opacity="0.24"/>
-      <stop offset="100%" stop-color="#8A2BE2" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="orbRed" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#EF4444" stop-opacity="0.16"/>
-      <stop offset="100%" stop-color="#EF4444" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
-
-  <rect width="1200" height="630" fill="url(#bg)"/>
-
-  <ellipse cx="170" cy="110" rx="340" ry="340" fill="url(#orbGreen)"/>
-  <ellipse cx="1060" cy="180" rx="300" ry="300" fill="url(#orbBlue)"/>
-  <ellipse cx="980" cy="560" rx="280" ry="280" fill="url(#orbPurple)"/>
-  <ellipse cx="160" cy="540" rx="220" ry="220" fill="url(#orbRed)"/>
-
-  <rect x="300" y="90" width="1" height="450" fill="#FFFFFF" opacity="0.05"/>
-  <rect x="900" y="90" width="1" height="450" fill="#FFFFFF" opacity="0.06"/>
-
-  <text x="600" y="320"
-        font-family="${ROUNDED_FONT_STACK}"
-        font-size="260"
-        font-weight="900"
-        fill="url(#wordmark)"
-        text-anchor="middle"
-        dominant-baseline="central"
-        letter-spacing="8">PIL</text>
-
-  <text x="600" y="475"
-        font-family="${ROUNDED_FONT_STACK}"
-        font-size="26"
-        font-weight="600"
-        fill="#FFFFFF"
-        fill-opacity="0.55"
-        text-anchor="middle"
-        letter-spacing="7">PULSE INTELLIGENCE LABS</text>
-</svg>`;
-}
 
 function renderTitleCard(rawTitle: string): string {
   const displayTitle =

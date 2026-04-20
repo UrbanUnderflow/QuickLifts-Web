@@ -24,10 +24,13 @@ import RouterErrorBoundary from '../components/RouterErrorBoundary';
 // append both — but crawlers pick the LAST occurrence, so page-level
 // tags win. Pages that set nothing get this baseline.
 //
-// The default image is the Pulse Intelligence Labs splash (dark gradient,
-// soft orbs, "PIL" wordmark in white→lime gradient). ?v=2 busts the iMessage
-// / WhatsApp / Slack cache that was pinned to the old title=Pulse URL.
-const DEFAULT_OG_IMAGE = 'https://fitwithpulse.ai/og-image.png?variant=pil&v=2';
+// The default image is the Pulse Intelligence Labs splash — a pre-rendered
+// static PNG (dark gradient, soft orbs, "PIL" wordmark in white→lime
+// gradient, styled after the Macra / Fit With Pulse app splash screens).
+// We use a static PNG instead of the og-image Lambda because the Lambda's
+// librsvg has no access to system fonts and renders text as tofu. The image
+// is generated locally via scripts/generate-pil-og.js where macOS fonts work.
+const DEFAULT_OG_IMAGE = 'https://fitwithpulse.ai/pil-og.png';
 const DEFAULT_TITLE = 'Pulse Community Fitness';
 const DEFAULT_DESCRIPTION = 'Real workouts, Real people, move together.';
 
