@@ -108,6 +108,15 @@ const PRESENTATION_REGISTRY: PresentationLink[] = [
     description: 'Competition-style 10-slide pitch deck for the Pulse Check x auntEDNA.ai signal-to-care platform.',
   },
   {
+    id: 'pulse-auntedna-stakeholder-deck',
+    title: 'Pulse x auntEDNA.ai Stakeholder Deck',
+    href: '/pulse-auntedna-stakeholder-deck',
+    category: 'Presentation Decks',
+    typeLabel: 'Stakeholder deck',
+    accessLabel: 'Live route',
+    description: 'Story-driven stakeholder presentation for the Pulse Check x auntEDNA.ai signal-to-care vision without market-size or fundraising content.',
+  },
+  {
     id: 'pulse-overview',
     title: 'Pulse 2 Minute Overview',
     href: '/pulse-overview',
