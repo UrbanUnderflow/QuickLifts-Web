@@ -221,7 +221,10 @@ const Profile: React.FC = () => {
           profileImage: { profileImageURL: uploadResult.downloadURL, imageOffsetWidth: 0, imageOffsetHeight: 0 },
           updatedAt: new Date()
         });
-        await userService.updateUser(hookCurrentUser.id, updatedUser);
+        await userService.updateUser(hookCurrentUser.id, {
+          profileImage: { profileImageURL: uploadResult.downloadURL, imageOffsetWidth: 0, imageOffsetHeight: 0 },
+          updatedAt: new Date()
+        });
         userService.nonUICurrentUser = updatedUser;
         // Dispatch update to Redux only if it's the current user's profile being viewed (which it always is here)
         dispatch(setUser(updatedUser.toDictionary()));

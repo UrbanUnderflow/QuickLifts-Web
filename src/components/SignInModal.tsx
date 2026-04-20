@@ -29,6 +29,8 @@ import { Challenge } from '../api/firebase/workout/types'; // Import workout typ
 import {
   buildCurrentLegalAcceptance,
   cacheLegalAcceptance,
+  CURRENT_PRIVACY_VERSION,
+  CURRENT_TERMS_VERSION,
   hasAcceptedCurrentLegal,
   hasAnyRecordedLegalAcceptance,
   PRIVACY_POLICY_PATH,
@@ -419,6 +421,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
           // Fetch or create user in Firestore
           let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
           if (!firestoreUser) {
+            if (!user.email) {
+              throw new Error('Apple sign-in did not return an email address.');
+            }
             firestoreUser = new User(user.uid, {
               id: user.uid,
               email: user.email || "",
@@ -427,7 +432,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 ? buildCurrentLegalAcceptance('web-modal-social-signup-apple')
                 : null,
             });
-            await userService.updateUser(user.uid, firestoreUser);
+            await userService.createUser(user.uid, firestoreUser);
           }
           
           userService.nonUICurrentUser = firestoreUser; // Use nonUICurrentUser
@@ -513,13 +518,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
               ? buildCurrentLegalAcceptance('web-modal-social-signup-google')
               : null,
           });
-          await userService.updateUser(user.uid, firestoreUser);
+          await userService.createUser(user.uid, firestoreUser);
           console.log('Google Sign In - Created New User:', firestoreUser);
         } else if (!firestoreUser.email && user.email) {
           // If user exists but email is missing, update it
           console.log('[SignInModal] Firestore user missing email, updating with Firebase user email');
           firestoreUser.email = user.email;
-          await userService.updateUser(user.uid, firestoreUser);
+          await userService.updateUser(user.uid, {
+            email: user.email,
+            updatedAt: new Date(),
+          });
         }
         userService.nonUICurrentUser = firestoreUser; // Use nonUICurrentUser
         console.log('Google Sign In - Current User Set:', userService.nonUICurrentUser); // Use nonUICurrentUser
@@ -715,7 +723,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
             displayName: user.displayName || "",
             legalAcceptance: null,
           });
-          await userService.updateUser(user.uid, firestoreUser);
+          await userService.createUser(user.uid, firestoreUser);
           addLog(`Created new Firestore user: ${firestoreUser.id}`);
         } else if (firestoreUser) {
           if (!userHasAcceptedCurrentLegal(firestoreUser)) {
@@ -848,7 +856,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
           console.warn('[SignInModal Profile Step] Username claim failed, but continuing with user update');
         }
         
-        await userService.updateUser(userId, updatedUser);
+        await userService.updateUser(userId, {
+          displayName: currentUserData.displayName || auth.currentUser?.displayName || normalizedUsername,
+          username: normalizedUsername,
+          email: currentEmail,
+          registrationComplete: true,
+          updatedAt: new Date(),
+        });
         console.log('[SignInModal Profile Step] User update successful. Moving to quiz prompt.');
         
         // Update local state immediately
@@ -913,6 +927,17 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
         if (!refreshedUser) {
           throw new Error('Could not refresh the account after legal acceptance');
+        }
+
+        if (!userHasAcceptedCurrentLegal(refreshedUser)) {
+          console.error('[SignInModal Legal Step] Legal acceptance did not round-trip from Firestore.', {
+            userId,
+            expectedTermsVersion: CURRENT_TERMS_VERSION,
+            expectedPrivacyVersion: CURRENT_PRIVACY_VERSION,
+            receivedLegalAcceptance: refreshedUser.legalAcceptance,
+            timestamp: new Date().toISOString(),
+          });
+          throw new Error('We could not confirm your legal acceptance was saved. Please refresh and try again.');
         }
 
         setHasAcceptedLegal(false);
@@ -1097,7 +1122,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
               // *** IMMEDIATELY CREATE FIRESTORE DOC ***
               console.log('[SignInModal] Attempting to create initial Firestore document...');
               try {
-                  await userService.updateUser(user.uid, newUser);
+                  await userService.createUser(user.uid, newUser);
                   console.log('[SignInModal] Initial Firestore document created/updated successfully.');
               } catch (firestoreError) {
                   console.error('[SignInModal] FATAL: Failed to create initial Firestore document:', firestoreError);
@@ -1478,7 +1503,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
                   if (currentUserData) {
                     currentUserData.gender = genderValue;
                     currentUserData.updatedAt = new Date();
-                    await userService.updateUser(userId, currentUserData); // Save the fetched and modified object
+                    await userService.updateUser(userId, {
+                      gender: genderValue,
+                      updatedAt: new Date(),
+                    });
 
                     // --- NEW: Refresh user and update Redux ---
                     const refreshedUser = await userService.fetchUserFromFirestore(userId);
@@ -1536,7 +1564,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
                   if (currentUserData) {
                     currentUserData.height = newHeight;
                     currentUserData.updatedAt = new Date();
-                    await userService.updateUser(userId, currentUserData);
+                    await userService.updateUser(userId, {
+                      height: newHeight,
+                      updatedAt: new Date(),
+                    });
 
                     // --- NEW: Refresh user and update Redux ---
                     const refreshedUser = await userService.fetchUserFromFirestore(userId);
@@ -1573,7 +1604,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
                   if (currentUserData) {
                     currentUserData.height = newHeight;
                     currentUserData.updatedAt = new Date();
-                    await userService.updateUser(userId, currentUserData);
+                    await userService.updateUser(userId, {
+                      height: newHeight,
+                      updatedAt: new Date(),
+                    });
 
                     // --- NEW: Refresh user and update Redux ---
                     const refreshedUser = await userService.fetchUserFromFirestore(userId);
@@ -1630,7 +1664,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
                   currentUserData.bodyWeight = [...currentUserData.bodyWeight, newBodyWeight];
                   currentUserData.updatedAt = new Date();
-                  await userService.updateUser(userId, currentUserData);
+                  await userService.updateUser(userId, {
+                    bodyWeight: [...currentUserData.bodyWeight, newBodyWeight.toDictionary()],
+                    updatedAt: new Date(),
+                  });
 
                   // --- NEW: Refresh user and update Redux ---
                   const refreshedUser = await userService.fetchUserFromFirestore(userId);
@@ -1678,7 +1715,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
                   if (currentUserData) {
                     currentUserData.level = levelMap[level as keyof typeof levelMap];
                     currentUserData.updatedAt = new Date();
-                    await userService.updateUser(userId, currentUserData);
+                    await userService.updateUser(userId, {
+                      level: levelMap[level as keyof typeof levelMap],
+                      updatedAt: new Date(),
+                    });
 
                     // --- NEW: Refresh user and update Redux ---
                     const refreshedUser = await userService.fetchUserFromFirestore(userId);
@@ -1744,7 +1784,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
                   if (currentUserData) {
                     currentUserData.goal = updatedGoals.map(g => goalsMap[g]);
                     currentUserData.updatedAt = new Date();
-                    await userService.updateUser(userId, currentUserData);
+                    await userService.updateUser(userId, {
+                      goal: updatedGoals.map(g => goalsMap[g]),
+                      updatedAt: new Date(),
+                    });
 
                     // --- NEW: Refresh user and update Redux ---
                     const refreshedUser = await userService.fetchUserFromFirestore(userId);
@@ -1808,7 +1851,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 if (currentUserData) {
                   currentUserData.birthdate = date;
                   currentUserData.updatedAt = new Date();
-                  await userService.updateUser(userId, currentUserData);
+                  await userService.updateUser(userId, {
+                    birthdate: date,
+                    updatedAt: new Date(),
+                  });
 
                   // --- NEW: Refresh user and update Redux ---
                   const refreshedUser = await userService.fetchUserFromFirestore(userId);
@@ -1843,7 +1889,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 if (currentUserData) {
                   currentUserData.birthdate = date;
                   currentUserData.updatedAt = new Date();
-                  await userService.updateUser(userId, currentUserData);
+                  await userService.updateUser(userId, {
+                    birthdate: date,
+                    updatedAt: new Date(),
+                  });
 
                   // --- NEW: Refresh user and update Redux ---
                   const refreshedUser = await userService.fetchUserFromFirestore(userId);
@@ -1878,7 +1927,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 if (currentUserData) {
                   currentUserData.birthdate = date;
                   currentUserData.updatedAt = new Date();
-                  await userService.updateUser(userId, currentUserData);
+                  await userService.updateUser(userId, {
+                    birthdate: date,
+                    updatedAt: new Date(),
+                  });
 
                   // --- NEW: Refresh user and update Redux ---
                   const refreshedUser = await userService.fetchUserFromFirestore(userId);

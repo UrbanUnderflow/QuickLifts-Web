@@ -229,6 +229,9 @@ const PulseCheckLoginPage: NextPage = () => {
   const ensureFirestoreUser = async (firebaseUser: any) => {
     let firestoreUser = await userService.fetchUserFromFirestore(firebaseUser.uid);
     if (!firestoreUser) {
+      if (!firebaseUser.email) {
+        throw new Error('Authentication did not provide an email address.');
+      }
       firestoreUser = new User(firebaseUser.uid, {
         id: firebaseUser.uid,
         email: firebaseUser.email || '',
@@ -236,7 +239,7 @@ const PulseCheckLoginPage: NextPage = () => {
         registrationComplete: false,
         subscriptionType: SubscriptionType.unsubscribed,
       });
-      await userService.updateUser(firebaseUser.uid, firestoreUser);
+      await userService.createUser(firebaseUser.uid, firestoreUser);
     }
     userService.nonUICurrentUser = firestoreUser;
     return firestoreUser;
@@ -386,12 +389,15 @@ const PulseCheckLoginPage: NextPage = () => {
         // Fetch or create user in Firestore — mirrors SignInModal lines 322-330
         let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
         if (!firestoreUser) {
+          if (!user.email) {
+            throw new Error('Apple sign-in did not return an email address.');
+          }
           firestoreUser = new User(user.uid, {
             id: user.uid,
             email: user.email || '',
             displayName: user.displayName || '',
           });
-          await userService.updateUser(user.uid, firestoreUser);
+          await userService.createUser(user.uid, firestoreUser);
         }
 
         userService.nonUICurrentUser = firestoreUser;

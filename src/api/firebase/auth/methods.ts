@@ -13,6 +13,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../config';
 import { SignUpData, AuthService } from './types';
 import { claimUsername, normalizeUsername } from './username';
+import { userService } from '../user';
 import {
   APP_VERSION_PRODUCT_CONFIGS,
   AppVersionMediaItem,
@@ -30,8 +31,9 @@ export const authMethods: AuthService = {
         await claimUsername(userCredential.user.uid, normalizedName);
       }
 
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        email,
+      await userService.createUser(userCredential.user.uid, {
+        id: userCredential.user.uid,
+        email: userCredential.user.email || email,
         username: normalizedName,
         createdAt: new Date(),
         quizData: quizData || null

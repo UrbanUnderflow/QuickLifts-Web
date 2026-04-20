@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { useUser } from '../../hooks/useUser';
+import { auth } from '../../api/firebase/config';
 import { firebaseStorageService, UploadImageType } from '../../api/firebase/storage/service';
 import { db } from '../../api/firebase/config';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
+import { userService } from '../../api/firebase/user';
 import { showToast } from '../../redux/toastSlice';
 import CoachLayout from '../../components/CoachLayout';
 import { motion } from 'framer-motion';
@@ -144,24 +146,34 @@ const CoachProfilePage: React.FC = () => {
     
     setSaving(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         bio,
         username: normalizedUsername || currentUser.username || '', // Use normalized username
-        email: email || '',
-        profileImage: { ...(currentUser.profileImage || {}), profileImageURL: imageUrl },
+        email: auth.currentUser?.email || email || currentUser.email || '',
         links: {
           instagram: instagram || '',
           youtube: youtube || '',
           website: website || '',
           other: otherLink || ''
         }
-      } as any;
-      await setDoc(doc(db, 'users', currentUser.id), payload, { merge: true });
+      };
+
+      if (imageUrl) {
+        payload.profileImage = {
+          ...(currentUser.profileImage || {}),
+          profileImageURL: imageUrl,
+        };
+      }
+
+      await userService.updateUser(currentUser.id, {
+        ...payload,
+        updatedAt: new Date(),
+      });
       // Update local state with normalized username
       setUsername(normalizedUsername || currentUser.username || '');
       // Persist services alongside user doc (keep immediate writes but ensure merged here too)
       if (services) {
-        await setDoc(doc(db, 'users', currentUser.id), { services }, { merge: true });
+        await userService.updateUser(currentUser.id, { services, updatedAt: new Date() });
       }
       dispatch(showToast({ message: 'Profile saved successfully!', type: 'success' }));
     } finally {
@@ -181,7 +193,7 @@ const CoachProfilePage: React.FC = () => {
     setServices(next);
     // Persist immediately
     if (currentUser) {
-      setDoc(doc(db, 'users', currentUser.id), { services: next }, { merge: true }).catch(() => {});
+      userService.updateUser(currentUser.id, { services: next, updatedAt: new Date() }).catch(() => {});
     }
     setServiceTitle('');
     setServiceDescription('');
@@ -193,7 +205,7 @@ const CoachProfilePage: React.FC = () => {
     setServices(next);
     // Persist immediately
     if (currentUser) {
-      setDoc(doc(db, 'users', currentUser.id), { services: next }, { merge: true }).catch(() => {});
+      userService.updateUser(currentUser.id, { services: next, updatedAt: new Date() }).catch(() => {});
     }
   };
 
@@ -549,4 +561,3 @@ const CoachProfilePage: React.FC = () => {
 };
 
 export default CoachProfilePage;
-

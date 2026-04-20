@@ -9,7 +9,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Pulse architecture, products, data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-04-08',
+  lastUpdated: '2026-04-20',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -462,6 +462,41 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     },
   ],
   dataCollections: [
+    {
+      id: 'coll-user-write-contract',
+      name: 'users.write-contract',
+      purpose:
+        'Canonical write contract for root /users/{uid} documents across Fit With Pulse, Pulse Check, Macra, Android, and Web: create-only flows may write a full user payload, while existing user docs must receive explicit field patches and never a wholesale User.toDictionary/User-model merge from the client.',
+      writtenBy: 'All product clients through patch-only user services; brand-new account creation through create-only helpers',
+      readBy: 'All product clients, Firestore rules, backend user handlers, and recovery/audit tooling',
+      criticalFields: [
+        'id',
+        'email',
+        'username',
+        'displayName',
+        'birthdate',
+        'createdAt',
+        'profileImage.profileImageURL',
+        'registrationComplete',
+        'didCompleteProfileQuiz',
+        'legalAcceptance',
+        'registrationEntryPoint',
+        'subscriptionType',
+        'subscriptionPlatform',
+        'isFoundingTrainer',
+        'lifetimePulsePoints',
+        'categoryPoints',
+        'level',
+        'creator',
+        'updatedAt',
+      ],
+      sourceRefs: [
+        { label: 'Firestore Rules', path: 'firestore.rules' },
+        { label: 'User Service', path: 'src/api/firebase/user/service.ts' },
+        { label: 'Sign-In Modal', path: 'src/components/SignInModal.tsx' },
+        { label: 'Write Contract Verifier', path: 'scripts/verify-user-write-contract.js' },
+      ],
+    },
     {
       id: 'coll-users',
       name: 'users',

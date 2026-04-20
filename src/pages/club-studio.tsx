@@ -153,7 +153,10 @@ const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club)
                 featuredRoundIds: draftFeatured,
                 updatedAt: new Date(),
             });
-            await userService.updateUser(currentUser.id, updatedUser);
+            await userService.updateUser(currentUser.id, {
+                featuredRoundIds: draftFeatured,
+                updatedAt: new Date(),
+            });
             dispatch(setUser(updatedUser.toDictionary()));
             setShowRoundsModal(false);
         } catch (error) {

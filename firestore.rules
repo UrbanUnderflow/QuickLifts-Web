@@ -26,6 +26,107 @@ service cloud.firestore {
         && request.resource.data.updatedByEmail == request.auth.token.email;
     }
 
+    function isNonEmptyString(value) {
+      return value is string && value.size() > 0;
+    }
+
+    function isValidUsernameValue(value) {
+      return value == null || (value is string && value.matches('^[a-z0-9_.-]{3,20}$'));
+    }
+
+    function isValidProfileImageValue(value) {
+      return value == null
+        || (
+          value is map
+          && value.profileImageURL is string
+          && value.profileImageURL.size() > 0
+          && value.imageOffsetWidth is number
+          && value.imageOffsetHeight is number
+        );
+    }
+
+    function isValidUserLevelValue(value) {
+      return value == null || value in ['novice', 'intermediate', 'expert'];
+    }
+
+    function isValidSubscriptionTypeValue(value) {
+      return value == null || value in [
+        'Unsubscribed',
+        'Team Plan Access',
+        'Beta User',
+        'Monthly Subscriber',
+        'Annual Subscriber',
+        'Sweat Equity Partner',
+        'Executive Partner',
+      ];
+    }
+
+    function isValidSubscriptionPlatformValue(value) {
+      return value == null || value in ['ios', 'web', 'android'];
+    }
+
+    function isValidCheckinsPrivacyValue(value) {
+      return value == null || value in ['privateOnly', 'followersOnly', 'publicAccess'];
+    }
+
+    function isValidLegalAcceptanceValue(value) {
+      return value is map
+        && value.termsVersion is string
+        && value.termsVersion.size() > 0
+        && value.privacyVersion is string
+        && value.privacyVersion.size() > 0
+        && (value.acceptedAt is timestamp || value.acceptedAt is number || value.acceptedAt is string)
+        && value.acceptanceMethod is string
+        && value.acceptanceMethod.size() > 0
+        && value.termsPath is string
+        && value.termsPath.size() > 0
+        && value.privacyPath is string
+        && value.privacyPath.size() > 0;
+    }
+
+    function hasValidLegalAcceptanceOnCreate() {
+      return !request.resource.data.keys().hasAny(['legalAcceptance'])
+        || isValidLegalAcceptanceValue(request.resource.data.legalAcceptance);
+    }
+
+    function preservesOrValidlyUpdatesLegalAcceptance() {
+      return request.resource.data.legalAcceptance == resource.data.legalAcceptance
+        || isValidLegalAcceptanceValue(request.resource.data.legalAcceptance);
+    }
+
+    function isCanonicalRootUserCreate(userId) {
+      return isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.id == userId
+        && request.resource.data.email == request.auth.token.email
+        && hasValidLegalAcceptanceOnCreate();
+    }
+
+    function isCanonicalRootUserUpdate(userId) {
+      return isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.lifetimePulsePoints == resource.data.lifetimePulsePoints
+        && request.resource.data.categoryPoints == resource.data.categoryPoints
+        && request.resource.data.creator == resource.data.creator
+        && (request.resource.data.username == resource.data.username || isValidUsernameValue(request.resource.data.username))
+        && (request.resource.data.displayName == resource.data.displayName || isNonEmptyString(request.resource.data.displayName))
+        && (request.resource.data.birthdate == resource.data.birthdate || request.resource.data.birthdate == null || request.resource.data.birthdate is timestamp || request.resource.data.birthdate is number)
+        && (request.resource.data.profileImage == resource.data.profileImage || isValidProfileImageValue(request.resource.data.profileImage))
+        && (
+          request.resource.data.registrationComplete == resource.data.registrationComplete
+          || request.resource.data.registrationComplete == true
+          || request.resource.data.registrationComplete == null
+        )
+        && (request.resource.data.level == resource.data.level || isValidUserLevelValue(request.resource.data.level))
+        && (request.resource.data.subscriptionType == resource.data.subscriptionType || isValidSubscriptionTypeValue(request.resource.data.subscriptionType))
+        && (request.resource.data.subscriptionPlatform == resource.data.subscriptionPlatform || isValidSubscriptionPlatformValue(request.resource.data.subscriptionPlatform))
+        && (request.resource.data.checkinsPrivacy == resource.data.checkinsPrivacy || isValidCheckinsPrivacyValue(request.resource.data.checkinsPrivacy))
+        && preservesOrValidlyUpdatesLegalAcceptance();
+    }
+
     // North Star is writable only by authenticated admin humans through the UI.
     match /company-config/north-star {
       allow read: if true;
@@ -39,11 +140,9 @@ service cloud.firestore {
     // After creation, partnerSource is treated as immutable and can only be
     // changed by trusted backends using the Admin SDK (which bypasses rules).
     match /users/{userId} {
-      allow create: if true;
+      allow create: if isCanonicalRootUserCreate(userId);
 
-      allow update: if
-        // All fields except partnerSource can change freely for now
-        request.resource.data.partnerSource == resource.data.partnerSource;
+      allow update: if isCanonicalRootUserUpdate(userId);
 
       allow read: if true;
     }
