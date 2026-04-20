@@ -11,6 +11,8 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   generateResponse: { maxTokens: 2000, modelPattern: /gpt-4o|gpt-4/i }, // Nora Chat
   generateWorkout: { maxTokens: 4000, modelPattern: /gpt-4o|gpt-4/i }, // Workout Generation
   groundedFoodLookup: { maxTokens: 3000, modelPattern: /gpt-5|gpt-4|gpt-4o|o[1-4]/i },
+  macraMealPlan: { maxTokens: 2000, modelPattern: /gpt-4o|gpt-4/i }, // Macra: Nora-generated meal plans
+  noraNutritionChat: { maxTokens: 700, modelPattern: /gpt-4o|gpt-4/i }, // Macra: Nora coach Q&A
   // Default bounds for generic actions
   default: { maxTokens: 1000, modelPattern: /gpt-4o|gpt-4|gpt-3.5/i }
 };

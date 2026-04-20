@@ -50,8 +50,10 @@ const verifyAuth = async (authHeader: string | undefined): Promise<string | null
   }
 };
 
-const resolveOpenAIKey = (): string | null => {
-  return process.env.OPENAI_API_KEY?.trim() || process.env.OPEN_AI_SECRET_KEY?.trim() || null;
+const resolveBridgeBaseUrl = (event: { headers?: Record<string, string | undefined> }): string => {
+  const host = getHeader(event.headers, 'host') || process.env.URL || 'https://fitwithpulse.ai';
+  if (host.startsWith('http://') || host.startsWith('https://')) return host;
+  return `https://${host}`;
 };
 
 const buildContextBlock = (body: RequestBody): string => {
@@ -107,13 +109,10 @@ export const handler: Handler = async (event) => {
     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'meals array required' }) };
   }
 
-  const apiKey = resolveOpenAIKey();
-  if (!apiKey) {
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'OpenAI key not configured' })
-    };
+  const bridgeBase = resolveBridgeBaseUrl(event);
+  const userToken = (getHeader(event.headers, 'authorization') || '').split('Bearer ')[1];
+  if (!userToken) {
+    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'Unauthorized' }) };
   }
 
   const systemPrompt = [
@@ -139,11 +138,12 @@ export const handler: Handler = async (event) => {
   messages.push({ role: 'user', content: body.query.trim().slice(0, 800) });
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(`${bridgeBase}/api/openai/v1/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${userToken}`,
+        'openai-organization': 'noraNutritionChat'
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
@@ -158,7 +158,7 @@ export const handler: Handler = async (event) => {
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`OpenAI ${response.status}: ${errText.slice(0, 500)}`);
+      throw new Error(`AI bridge ${response.status}: ${errText.slice(0, 500)}`);
     }
 
     const payload = await response.json() as any;
