@@ -919,9 +919,8 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
                                         const blockedUsers = userDoc.data().blockedUsers || [];
                                         if (!blockedUsers.includes(user.id)) {
                                           await userService.updateUser(currentUser.id, {
-                                            ...currentUser,
                                             blockedUsers: [...blockedUsers, user.id],
-                                          } as User);
+                                          });
                                           alert(`${user.username} has been blocked.`);
                                           router.push('/');
                                         }
