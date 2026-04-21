@@ -232,6 +232,25 @@ const resolveLogDateContext = (body: RequestBody): LogDateContext => {
   };
 };
 
+const directNoraReply = (reply: string): string => {
+  return reply
+    .trim()
+    .replace(
+      /^Nora suggests the following observations for your current eating day, especially with your goal of ([^:\n]+):/i,
+      "Here's what I'm seeing in this log, especially with your goal of $1:"
+    )
+    .replace(
+      /^Nora suggests the following observations for your current eating day:/i,
+      "Here's what I'm seeing in this log:"
+    )
+    .replace(/^Nora suggests the following observations:/i, "Here's what I'm seeing:")
+    .replace(/^Nora suggests that you\b/i, 'I suggest you')
+    .replace(/^Nora suggests\b/i, 'I suggest')
+    .replace(/^Nora recommends that you\b/i, 'I recommend you')
+    .replace(/^Nora recommends\b/i, 'I recommend')
+    .replace(/^Nora (notices|sees)\b/i, 'I notice');
+};
+
 const loadMacraProfile = async (uid: string): Promise<MacraProfileContext | null> => {
   try {
     const snap = await db.collection('users').doc(uid).collection('macra').doc('profile').get();
@@ -539,6 +558,7 @@ export const handler: Handler = async (event) => {
 
   const systemPrompt = [
     "You are Nora, Macra's warm but direct performance nutrition coach.",
+    "Speak directly as Nora in first person. Use 'I' and 'you'; never refer to yourself in third person or begin with phrases like 'Nora suggests', 'Nora recommends', or 'Nora notices'.",
     "Reason in this order: athlete context, phase, goal/division, risk, then macro feedback.",
     "Honor the selected food log date exactly. If the context says Yesterday or another past date, discuss that log in past tense and never call it today.",
     "For completed past logs, never ask how the user will adjust meals for the rest of that day. Give next comparable day or going-forward guidance instead.",
@@ -599,7 +619,8 @@ export const handler: Handler = async (event) => {
     }
 
     const payload = await response.json() as any;
-    const reply = payload?.choices?.[0]?.message?.content?.trim();
+    const rawReply = payload?.choices?.[0]?.message?.content?.trim();
+    const reply = rawReply ? directNoraReply(rawReply) : '';
     if (!reply) throw new Error('Nora returned no content');
 
     return {
