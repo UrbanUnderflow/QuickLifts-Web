@@ -47,6 +47,9 @@ const sections = [
   { id: 'contact', label: 'Contact' },
 ];
 
+const TREMAINE_TRACK_IMAGE =
+  'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/press_assets%2Ffounder%2Fportrait2.png?alt=media&token=d47ea14c-c2ff-4d60-940a-4ce138a5e931';
+
 const founderLenses: Record<LensKey, {
   label: string;
   title: string;
@@ -54,6 +57,8 @@ const founderLenses: Record<LensKey, {
   icon: LucideIcon;
   color: string;
   stats: string[];
+  image?: string;
+  imagePosition?: string;
 }> = {
   athlete: {
     label: 'Athlete',
@@ -62,6 +67,8 @@ const founderLenses: Record<LensKey, {
     icon: Medal,
     color: PULSE_GREEN,
     stats: ['D1 Track and Field', 'Florida State', 'Trainer'],
+    image: TREMAINE_TRACK_IMAGE,
+    imagePosition: 'center 15%',
   },
   engineer: {
     label: 'Engineer',
@@ -674,19 +681,38 @@ const PILOnePage: NextPage = () => {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, ease: 'easeOut' }}
-              className="border border-white/10 bg-white/[0.04] p-6 rounded-lg"
+              className="overflow-hidden border border-white/10 bg-white/[0.04] rounded-lg"
             >
-              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-lg" style={{ backgroundColor: `${currentLens.color}24` }}>
-                <CurrentLensIcon className="h-7 w-7" style={{ color: currentLens.color }} />
-              </div>
-              <h3 className="text-3xl font-black leading-tight sm:text-4xl">{currentLens.title}</h3>
-              <p className="mt-5 max-w-3xl text-lg leading-8 text-zinc-300">{currentLens.body}</p>
-              <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                {currentLens.stats.map((stat) => (
-                  <div key={stat} className="border border-white/10 bg-black/20 p-4 rounded-lg">
-                    <div className="text-sm font-black" style={{ color: currentLens.color }}>{stat}</div>
+              <div className={currentLens.image ? 'grid gap-0 md:grid-cols-[0.95fr_1.05fr]' : ''}>
+                {currentLens.image && (
+                  <div className="relative h-64 overflow-hidden md:h-full">
+                    <img
+                      src={currentLens.image}
+                      alt={`${currentLens.label} — Tremaine Grant`}
+                      className="h-full w-full object-cover"
+                      style={{ objectPosition: currentLens.imagePosition ?? 'center top' }}
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent md:bg-gradient-to-r md:from-transparent md:to-[#0E0F12]/40" />
+                    <div className="absolute bottom-3 left-3 flex items-center gap-2 border border-white/15 bg-black/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-white backdrop-blur rounded">
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: currentLens.color }} />
+                      FSU · D1 Track and Field
+                    </div>
                   </div>
-                ))}
+                )}
+                <div className="p-6">
+                  <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-lg" style={{ backgroundColor: `${currentLens.color}24` }}>
+                    <CurrentLensIcon className="h-7 w-7" style={{ color: currentLens.color }} />
+                  </div>
+                  <h3 className="text-3xl font-black leading-tight sm:text-4xl">{currentLens.title}</h3>
+                  <p className="mt-5 max-w-3xl text-lg leading-8 text-zinc-300">{currentLens.body}</p>
+                  <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                    {currentLens.stats.map((stat) => (
+                      <div key={stat} className="border border-white/10 bg-black/20 p-4 rounded-lg">
+                        <div className="text-sm font-black" style={{ color: currentLens.color }}>{stat}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </motion.div>
           </div>
