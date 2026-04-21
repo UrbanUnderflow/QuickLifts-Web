@@ -7,14 +7,18 @@ import {
   ArrowLeft,
   ArrowUp,
   Check,
+  ChevronDown,
+  ChevronRight,
   Loader2,
   Plus,
   RefreshCw,
   Save,
   Settings2,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
+import { auth } from '../../api/firebase/config';
 import {
   fetchPulseCheckSportConfiguration,
   getDefaultPulseCheckSports,
@@ -46,6 +50,78 @@ type EditableSport = Omit<PulseCheckSportConfigurationEntry, 'attributes' | 'met
 
 const ATTRIBUTE_TYPES: PulseCheckSportAttributeType[] = ['text', 'number', 'date', 'boolean', 'singleSelect', 'multiSelect'];
 const ATTRIBUTE_SCOPES: PulseCheckSportAttributeScope[] = ['athlete', 'team', 'season', 'competition', 'nutrition', 'recovery'];
+const SPORT_INTELLIGENCE_BRIDGE_ENDPOINT = '/api/openai/v1/chat/completions';
+const SPORT_INTELLIGENCE_FEATURE_ID = 'pulsecheckSportIntelligence';
+
+const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+
+type SportSeedingFeedback = {
+  sportId: string;
+  type: 'success' | 'error';
+  message: string;
+};
+
+type GeneratedSportIntelligencePayload = {
+  summary: string;
+  sport: Pick<PulseCheckSportConfigurationEntry, 'emoji' | 'positions' | 'schemaVersion' | 'attributes' | 'metrics' | 'prompting'>;
+};
+
+const extractFirstJSONObject = (value: string): string | null => {
+  const startIndex = value.indexOf('{');
+  if (startIndex < 0) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = startIndex; index < value.length; index += 1) {
+    const char = value[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (char === '{') depth += 1;
+    if (char === '}') depth -= 1;
+
+    if (depth === 0) {
+      return value.slice(startIndex, index + 1);
+    }
+  }
+
+  return null;
+};
+
+const parseSportIntelligenceJSON = (content: string): GeneratedSportIntelligencePayload => {
+  const trimmed = content.trim();
+  const withoutFence = trimmed
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  const objectSlice = extractFirstJSONObject(withoutFence);
+  const candidates = [trimmed, withoutFence, objectSlice].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      return typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+    } catch (_error) {
+      // Try the next representation. Models sometimes wrap JSON in prose or markdown fences.
+    }
+  }
+
+  throw new Error('OpenAI bridge returned sport intelligence that was not valid JSON.');
+};
 
 const makeEditableAttribute = (attribute: PulseCheckSportAttributeDefinition): EditableAttribute => ({
   ...attribute,
@@ -175,6 +251,216 @@ const parseOptionsInput = (value: string): PulseCheckSportAttributeOption[] => {
     }, []);
 };
 
+const normalizeGeneratedOptions = (value: unknown): PulseCheckSportAttributeOption[] => {
+  const source = Array.isArray(value) ? value : [];
+  const seen = new Set<string>();
+
+  return source.reduce<PulseCheckSportAttributeOption[]>((acc, entry) => {
+    if (!entry || typeof entry !== 'object') return acc;
+    const candidate = entry as Record<string, unknown>;
+    const label = normalizeString(candidate.label);
+    const optionValue = normalizeString(candidate.value) || slugifyKey(label);
+    if (!label || !optionValue) return acc;
+    const key = optionValue.toLowerCase();
+    if (seen.has(key)) return acc;
+    seen.add(key);
+    acc.push({ label, value: optionValue });
+    return acc;
+  }, []);
+};
+
+const normalizeGeneratedAttribute = (
+  raw: unknown,
+  sportId: string,
+  index: number
+): PulseCheckSportAttributeDefinition | null => {
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = raw as Record<string, unknown>;
+  const label = normalizeString(candidate.label);
+  const key = normalizeString(candidate.key) || slugifyKey(label);
+  if (!label || !key) return null;
+
+  const typeCandidate = normalizeString(candidate.type) as PulseCheckSportAttributeType;
+  const type = ATTRIBUTE_TYPES.includes(typeCandidate) ? typeCandidate : 'text';
+  const scopeCandidate = normalizeString(candidate.scope) as PulseCheckSportAttributeScope;
+  const scope = ATTRIBUTE_SCOPES.includes(scopeCandidate) ? scopeCandidate : 'athlete';
+
+  return {
+    id: normalizeString(candidate.id) || `${sportId}-${key}`,
+    key,
+    label,
+    type,
+    scope,
+    required: Boolean(candidate.required),
+    includeInNoraContext: candidate.includeInNoraContext !== false,
+    includeInMacraContext: Boolean(candidate.includeInMacraContext),
+    options: type === 'singleSelect' || type === 'multiSelect' ? normalizeGeneratedOptions(candidate.options) : [],
+    placeholder: normalizeString(candidate.placeholder),
+    sortOrder: Number.isFinite(Number(candidate.sortOrder)) ? Number(candidate.sortOrder) : index,
+  };
+};
+
+const normalizeGeneratedMetric = (
+  raw: unknown,
+  sportId: string,
+  index: number
+): PulseCheckSportMetricDefinition | null => {
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = raw as Record<string, unknown>;
+  const label = normalizeString(candidate.label);
+  const key = normalizeString(candidate.key) || slugifyKey(label);
+  if (!label || !key) return null;
+
+  const scopeCandidate = normalizeString(candidate.scope) as PulseCheckSportAttributeScope;
+  const scope = ATTRIBUTE_SCOPES.includes(scopeCandidate) ? scopeCandidate : 'athlete';
+
+  return {
+    id: normalizeString(candidate.id) || `${sportId}-${key}`,
+    key,
+    label,
+    unit: normalizeString(candidate.unit),
+    scope,
+    includeInNoraContext: candidate.includeInNoraContext !== false,
+    sortOrder: Number.isFinite(Number(candidate.sortOrder)) ? Number(candidate.sortOrder) : index,
+  };
+};
+
+const normalizeGeneratedPrompting = (raw: unknown) => {
+  const candidate = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  return {
+    noraContext: normalizeString(candidate.noraContext),
+    macraNutritionContext: normalizeString(candidate.macraNutritionContext),
+    riskFlags: Array.isArray(candidate.riskFlags) ? normalizeListInput(candidate.riskFlags.join('\n')) : [],
+    restrictedAdvice: Array.isArray(candidate.restrictedAdvice) ? normalizeListInput(candidate.restrictedAdvice.join('\n')) : [],
+    recommendedLanguage: Array.isArray(candidate.recommendedLanguage) ? normalizeListInput(candidate.recommendedLanguage.join('\n')) : [],
+  };
+};
+
+const normalizeGeneratedSportIntelligence = (raw: unknown, sportName: string): GeneratedSportIntelligencePayload['sport'] => {
+  const sportId = slugifySportId(sportName) || 'custom-sport';
+  const candidate = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const positions = Array.isArray(candidate.positions) ? normalizePositionsInput(candidate.positions.join('\n')) : [];
+  const attributes = Array.isArray(candidate.attributes)
+    ? candidate.attributes
+        .map((attribute, index) => normalizeGeneratedAttribute(attribute, sportId, index))
+        .filter((attribute): attribute is PulseCheckSportAttributeDefinition => Boolean(attribute))
+        .slice(0, 10)
+    : [];
+  const metrics = Array.isArray(candidate.metrics)
+    ? candidate.metrics
+        .map((metric, index) => normalizeGeneratedMetric(metric, sportId, index))
+        .filter((metric): metric is PulseCheckSportMetricDefinition => Boolean(metric))
+        .slice(0, 10)
+    : [];
+
+  return {
+    emoji: normalizeString(candidate.emoji) || '🏅',
+    positions: positions.length > 0 ? positions.slice(0, 18) : ['Individual'],
+    schemaVersion: 2,
+    attributes,
+    metrics,
+    prompting: normalizeGeneratedPrompting(candidate.prompting),
+  };
+};
+
+const buildSportIntelligencePrompt = (sport: EditableSport) => {
+  const existingSummary = {
+    name: sport.name.trim(),
+    emoji: sport.emoji.trim(),
+    positions: normalizePositionsInput(sport.positionsInput),
+    existingAttributeLabels: sport.attributes.map((attribute) => attribute.label.trim()).filter(Boolean),
+    existingMetricLabels: sport.metrics.map((metric) => metric.label.trim()).filter(Boolean),
+  };
+
+  return [
+    'Generate a production-ready PulseCheck Sports Intelligence Configuration for this sport.',
+    '',
+    'Sport card:',
+    JSON.stringify(existingSummary, null, 2),
+    '',
+    'Return valid JSON only with exactly this shape:',
+    JSON.stringify(
+      {
+        summary: 'One sentence explaining what you generated.',
+        sport: {
+          emoji: 'single emoji',
+          positions: ['sport-specific role or event names'],
+          attributes: [
+            {
+              id: 'sport-slug-field-key',
+              key: 'field_key',
+              label: 'User-facing field label',
+              type: 'singleSelect',
+              scope: 'athlete',
+              required: false,
+              includeInNoraContext: true,
+              includeInMacraContext: false,
+              options: [{ label: 'Option label', value: 'option_value' }],
+              placeholder: 'Short placeholder when useful',
+              sortOrder: 0,
+            },
+          ],
+          metrics: [
+            {
+              id: 'sport-slug-metric-key',
+              key: 'metric_key',
+              label: 'Metric label',
+              unit: 'unit or empty string',
+              scope: 'athlete',
+              includeInNoraContext: true,
+              sortOrder: 0,
+            },
+          ],
+          prompting: {
+            noraContext: 'Sport-specific coaching context Nora should inherit.',
+            macraNutritionContext: 'Sport-specific nutrition context Macra should inherit.',
+            riskFlags: ['specific risk to watch'],
+            restrictedAdvice: ['specific advice Nora/Macra should avoid'],
+            recommendedLanguage: ['specific phrasing style to use'],
+          },
+        },
+      },
+      null,
+      2
+    ),
+    '',
+    'Generation rules:',
+    '- Create exactly 5 dynamic athlete fields and exactly 5 metrics.',
+    '- Be deeply sport-specific across sports psychology, biomechanics, performance demands, training load, competition phase, role/event demands, and nutrition context.',
+    '- Dynamic fields should help onboarding collect the minimum sport-specific context Nora and Macra need later.',
+    '- Metrics should be vocabulary Nora can reference, not medical diagnostics.',
+    `- Use only these attribute types: ${ATTRIBUTE_TYPES.join(', ')}.`,
+    `- Use only these scopes: ${ATTRIBUTE_SCOPES.join(', ')}.`,
+    '- For singleSelect and multiSelect fields, include 3-4 useful options with stable snake_case values.',
+    '- includeInMacraContext should be true only when the field affects fueling, body composition, hydration, weight class, digestion, competition timeline, or recovery.',
+    '- Restricted advice must prevent generic coaching mistakes for this sport.',
+    '- Do not prescribe injury rehab, medical diagnosis, eating-disorder guidance, or unsafe weight manipulation.',
+    '- If the current positions are generic like Individual, replace them with better sport-specific roles/events when appropriate.',
+    '- Keep noraContext, macraNutritionContext, risk flags, restricted advice, and recommended language concise but sport-specific.',
+    '- Return one JSON object only. The first character must be { and the last character must be }. Do not use markdown fences.',
+  ].join('\n');
+};
+
+const readBridgeError = (payload: unknown, fallbackMessage: string) => {
+  if (payload && typeof payload === 'object') {
+    const candidate = payload as Record<string, unknown>;
+    if (typeof candidate.error === 'string' && candidate.error.trim()) {
+      return candidate.error;
+    }
+    if (candidate.error && typeof candidate.error === 'object') {
+      const nestedError = candidate.error as Record<string, unknown>;
+      if (typeof nestedError.message === 'string' && nestedError.message.trim()) {
+        return nestedError.message;
+      }
+    }
+    if (typeof candidate.message === 'string' && candidate.message.trim()) {
+      return candidate.message;
+    }
+  }
+
+  return fallbackMessage;
+};
+
 const PulseCheckSportConfigurationPage: React.FC = () => {
   const router = useRouter();
   const [sports, setSports] = useState<EditableSport[]>([]);
@@ -183,6 +469,9 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [expandedSportIds, setExpandedSportIds] = useState<Set<string>>(() => new Set());
+  const [aiSeedingSportId, setAiSeedingSportId] = useState<string | null>(null);
+  const [sportSeedingFeedback, setSportSeedingFeedback] = useState<SportSeedingFeedback | null>(null);
 
   const loadConfiguration = useCallback(async () => {
     setIsLoading(true);
@@ -190,6 +479,7 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
 
     const nextSports = await fetchPulseCheckSportConfiguration();
     setSports(buildEditableSports(nextSports));
+    setExpandedSportIds(new Set());
     setHasChanges(false);
     setIsLoading(false);
   }, []);
@@ -207,6 +497,19 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
     setHasChanges(true);
     setSuccessMessage(null);
     setErrorMessage(null);
+    setSportSeedingFeedback(null);
+  };
+
+  const handleToggleSportExpanded = (id: string) => {
+    setExpandedSportIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   const handleSportFieldChange = (
@@ -314,18 +617,25 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
   };
 
   const handleAddSport = () => {
+    const nextSport = buildNewSport();
     setSports((current) => [
       ...current,
       {
-        ...buildNewSport(),
+        ...nextSport,
         sortOrder: current.length,
       },
     ]);
+    setExpandedSportIds((current) => new Set(current).add(nextSport.id));
     markChanged();
   };
 
   const handleRemoveSport = (id: string) => {
     setSports((current) => current.filter((sport) => sport.id !== id));
+    setExpandedSportIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
     markChanged();
   };
 
@@ -347,6 +657,7 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
 
   const handleResetDefaults = () => {
     setSports(buildEditableSports(getDefaultPulseCheckSports()));
+    setExpandedSportIds(new Set());
     markChanged();
   };
 
@@ -446,6 +757,142 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to save sport configuration.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSeedSportWithAI = async (sport: EditableSport) => {
+    const sportName = sport.name.trim();
+    if (!sportName) {
+      setErrorMessage('Add a sport name before seeding with AI.');
+      setSportSeedingFeedback({
+        sportId: sport.id,
+        type: 'error',
+        message: 'Add a sport name before seeding with AI.',
+      });
+      setSuccessMessage(null);
+      return;
+    }
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setErrorMessage('Firebase auth session required for the OpenAI bridge. Sign in again, then retry.');
+      setSportSeedingFeedback({
+        sportId: sport.id,
+        type: 'error',
+        message: 'Firebase auth session required for the OpenAI bridge. Sign in again, then retry.',
+      });
+      setSuccessMessage(null);
+      return;
+    }
+
+    setAiSeedingSportId(sport.id);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setSportSeedingFeedback({
+      sportId: sport.id,
+      type: 'success',
+      message: `Seeding ${sportName} with AI...`,
+    });
+
+    try {
+      const idToken = await currentUser.getIdToken();
+      const response = await fetch(SPORT_INTELLIGENCE_BRIDGE_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          'openai-organization': SPORT_INTELLIGENCE_FEATURE_ID,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          temperature: 0.25,
+          max_tokens: 6500,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are PulseCheck Sports Intelligence architect. You design sport-specific onboarding fields, metric vocabularies, and AI coaching constraints for an athlete mental performance and nutrition product. Return exactly one JSON object only. No markdown fences, no prose before or after the JSON.',
+            },
+            {
+              role: 'user',
+              content: buildSportIntelligencePrompt(sport),
+            },
+          ],
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(readBridgeError(payload, 'Failed to seed sport intelligence through the OpenAI bridge.'));
+      }
+
+      const content = payload?.choices?.[0]?.message?.content;
+      if (typeof content !== 'string' || !content.trim()) {
+        throw new Error('OpenAI bridge returned an empty sport intelligence response.');
+      }
+
+      let parsed: GeneratedSportIntelligencePayload;
+      try {
+        parsed = parseSportIntelligenceJSON(content);
+      } catch (error) {
+        console.warn('[PulseCheckSportConfiguration] Invalid sport intelligence JSON excerpt:', content.slice(0, 1200));
+        throw error;
+      }
+
+      const generated = normalizeGeneratedSportIntelligence(parsed?.sport, sportName);
+      if (generated.attributes.length < 3 || generated.metrics.length < 3) {
+        throw new Error('AI response did not include sport configuration.');
+      }
+
+      const nextSportEntry: PulseCheckSportConfigurationEntry = {
+        id: sport.id,
+        name: sportName,
+        emoji: typeof generated.emoji === 'string' && generated.emoji.trim() ? generated.emoji.trim() : sport.emoji,
+        positions: Array.isArray(generated.positions) && generated.positions.length > 0
+          ? generated.positions
+          : normalizePositionsInput(sport.positionsInput),
+        sortOrder: sport.sortOrder,
+        schemaVersion: generated.schemaVersion || 2,
+        attributes: Array.isArray(generated.attributes) ? generated.attributes : sport.attributes,
+        metrics: Array.isArray(generated.metrics) ? generated.metrics : sport.metrics,
+        prompting: generated.prompting || {
+          noraContext: sport.noraContextInput,
+          macraNutritionContext: sport.macraNutritionContextInput,
+          riskFlags: normalizeListInput(sport.riskFlagsInput),
+          restrictedAdvice: normalizeListInput(sport.restrictedAdviceInput),
+          recommendedLanguage: normalizeListInput(sport.recommendedLanguageInput),
+        },
+      };
+      const [nextEditableSport] = buildEditableSports([nextSportEntry]);
+
+      setSports((current) =>
+        current.map((currentSport) =>
+          currentSport.id === sport.id
+            ? { ...nextEditableSport, id: currentSport.id, sortOrder: currentSport.sortOrder }
+            : currentSport
+        )
+      );
+      setExpandedSportIds((current) => new Set(current).add(sport.id));
+      setHasChanges(true);
+      const nextMessage = normalizeString(parsed?.summary) || `Seeded ${sportName} with AI-generated sport intelligence.`;
+      setSportSeedingFeedback({
+        sportId: sport.id,
+        type: 'success',
+        message: nextMessage,
+      });
+      setSuccessMessage(nextMessage);
+    } catch (error) {
+      console.error('[PulseCheckSportConfiguration] Failed to seed sport intelligence:', error);
+      const nextMessage = error instanceof Error ? error.message : 'Failed to seed sport intelligence.';
+      setSportSeedingFeedback({
+        sportId: sport.id,
+        type: 'error',
+        message: nextMessage,
+      });
+      setErrorMessage(nextMessage);
+    } finally {
+      setAiSeedingSportId(null);
     }
   };
 
@@ -557,15 +1004,58 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                   </div>
 
                   <div className="mt-5 space-y-4">
-                    {sports.map((sport, index) => (
-                      <div key={sport.id} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                          <div>
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Sport {index + 1}</div>
-                            <div className="mt-1 text-sm text-zinc-400">Order controls affect the picker order in the app.</div>
-                          </div>
+                    {sports.map((sport, index) => {
+                      const isExpanded = expandedSportIds.has(sport.id);
+                      const isSeedingThisSport = aiSeedingSportId === sport.id;
+                      const feedbackForSport = sportSeedingFeedback?.sportId === sport.id ? sportSeedingFeedback : null;
+                      const sportLabel = sport.name.trim() || `Sport ${index + 1}`;
+                      const positionCount = normalizePositionsInput(sport.positionsInput).length;
 
-                          <div className="flex items-center gap-2">
+                      return (
+                        <div key={sport.id} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                          <div className={`flex flex-col gap-3 md:flex-row md:items-center md:justify-between ${isExpanded ? 'mb-4 border-b border-zinc-800 pb-4' : ''}`}>
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-zinc-700 bg-[#111417] text-2xl">
+                                {sport.emoji || '🏅'}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Sport {index + 1}</div>
+                                <div className="mt-1 flex flex-wrap items-center gap-2">
+                                  <h3 className="max-w-full truncate text-base font-semibold text-white">{sportLabel}</h3>
+                                  <span className="rounded-full border border-zinc-800 bg-[#111417] px-2 py-1 text-[11px] text-zinc-400">
+                                    {positionCount} {positionCount === 1 ? 'position' : 'positions'}
+                                  </span>
+                                  <span className="rounded-full border border-zinc-800 bg-[#111417] px-2 py-1 text-[11px] text-zinc-400">
+                                    {sport.attributes.length} fields
+                                  </span>
+                                  <span className="rounded-full border border-zinc-800 bg-[#111417] px-2 py-1 text-[11px] text-zinc-400">
+                                    {sport.metrics.length} metrics
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleSeedSportWithAI(sport)}
+                                disabled={Boolean(aiSeedingSportId) || isSaving || !sport.name.trim()}
+                                className="inline-flex items-center gap-2 rounded-lg border border-[#d7ff00]/40 bg-[#d7ff00]/10 px-3 py-2 text-sm font-medium text-[#d7ff00] transition hover:border-[#d7ff00]/70 hover:bg-[#d7ff00]/15 disabled:cursor-not-allowed disabled:opacity-45"
+                                aria-label={`Seed ${sport.name || `sport ${index + 1}`} with AI`}
+                              >
+                                {isSeedingThisSport ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                                {isSeedingThisSport ? 'Seeding...' : 'Seed with AI'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleSportExpanded(sport.id)}
+                                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-[#171a1f] px-3 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:text-white"
+                                aria-expanded={isExpanded}
+                                aria-controls={`sport-editor-${sport.id}`}
+                              >
+                                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                {isExpanded ? 'Collapse' : 'Expand'}
+                              </button>
                             <button
                               type="button"
                               onClick={() => handleMoveSport(sport.id, 'up')}
@@ -595,6 +1085,20 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                           </div>
                         </div>
 
+                        {feedbackForSport && (
+                          <div
+                            className={`mt-3 rounded-xl border px-3 py-2 text-sm ${
+                              feedbackForSport.type === 'error'
+                                ? 'border-red-900/60 bg-red-950/30 text-red-200'
+                                : 'border-[#d7ff00]/30 bg-[#d7ff00]/10 text-[#d7ff00]'
+                            }`}
+                          >
+                            {feedbackForSport.message}
+                          </div>
+                        )}
+
+                        {isExpanded && (
+                          <div id={`sport-editor-${sport.id}`}>
                         <div className="grid gap-4 md:grid-cols-[96px_minmax(0,1fr)]">
                           <label className="space-y-2">
                             <span className="text-xs uppercase tracking-wide text-zinc-500">Emoji</span>
@@ -902,8 +1406,11 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
 	                            ))}
 	                          </div>
 	                        </div>
+                          </div>
+                        )}
 	                      </div>
-	                    ))}
+                      );
+                    })}
 	                  </div>
                 </div>
 

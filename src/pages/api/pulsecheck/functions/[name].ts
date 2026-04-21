@@ -13,6 +13,7 @@ const SUPPORTED_FUNCTIONS = new Set([
   'backfill-pilot-athlete-outcomes',
   'tts-mental-step',
   'pulsecheck-chat',
+  'pulsecheck-avatar-session',
   'pulsecheck-escalation',
   'oura-auth-start',
   'oura-callback',

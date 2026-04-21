@@ -100,7 +100,7 @@ const convertTimestamp = (timestamp) => {
 
 const headers = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, OpenAI-Organization, X-PulseCheck-Firebase-Mode, X-Force-Dev-Firebase, X-PulseCheck-Dev-Firebase',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
 };
 

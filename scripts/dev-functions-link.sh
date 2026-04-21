@@ -74,6 +74,7 @@ CORE_FUNCTIONS=(
   get-coach-profile
 
   # Admin tools
+  openai-bridge
   firebase-next-api
   get-dashboard-link
   get-earnings

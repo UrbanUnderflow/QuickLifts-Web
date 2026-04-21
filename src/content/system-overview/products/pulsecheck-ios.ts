@@ -191,6 +191,25 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       ],
     },
     {
+      id: 'pulsecheck-athlete-showroom-avatar',
+      name: 'Optional Multi-View 3D Athlete Avatar',
+      persona: 'Athletes who want a premium profile identity surface',
+      outcome:
+        'Let athletes optionally create a personalized 3D profile avatar from front, left-side, back, and right-side full-body captures, rendered in the Profile showroom without affecting onboarding or product access.',
+      entryPoints: ['Profile image area only', 'Avatar settings from Profile'],
+      dependentServices: ['Avatar capture validator', 'Avatar upload service', 'Avatar generation job service', 'RealityKit showroom renderer'],
+      firestoreCollections: ['users/{uid}.avatarShowroom', 'profile-avatars/{uid}/sessions/{sessionId}'],
+      integrations: ['Apple Vision', 'RealityKit', 'Firebase Storage', 'backend avatar generation pipeline'],
+      owner: 'PulseCheck Team + Platform + 3D Generation',
+      releaseChannel: 'Planned optional profile feature',
+      status: 'planned',
+      sourceRefs: [
+        { label: 'Avatar Spec', path: '../PulseCheck/docs/specs/athlete-showroom-avatar.md' },
+        { label: 'Avatar Implementation Plan', path: '../PulseCheck/docs/specs/athlete-showroom-avatar-implementation-plan.md' },
+        { label: 'Profile View', path: '../PulseCheck/PulseCheck/Views/UserProfileView.swift' },
+      ],
+    },
+    {
       id: 'pulsecheck-daily-reflection-settings',
       name: 'Daily Reflection and Settings Controls',
       persona: 'Athletes',

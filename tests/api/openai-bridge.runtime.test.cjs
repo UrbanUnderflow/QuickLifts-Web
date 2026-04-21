@@ -34,8 +34,11 @@ function compileOpenAIBridgeRuntime() {
     encoding: 'utf8',
   });
 
-  const candidatePath = path.join(outDir, 'openai-bridge.js');
-  if (!fs.existsSync(candidatePath)) {
+  const candidatePath = [
+    path.join(outDir, 'openai-bridge.js'),
+    path.join(outDir, 'netlify/functions/openai-bridge.js'),
+  ].find((candidate) => fs.existsSync(candidate));
+  if (!candidatePath) {
     throw new Error(`Failed to compile openai-bridge runtime:\n${result.stderr || result.stdout || 'Unknown tsc failure'}`);
   }
 
@@ -89,7 +92,7 @@ function createFirebaseMock(uid = 'user-1') {
 }
 
 async function withPatchedEnvironment(patch, run) {
-  const keys = ['OPENAI_API_KEY', 'OPEN_AI_SECRET_KEY', 'OPENAI_MAX_TOKENS'];
+  const keys = ['OPENAI_API_KEY', 'OPEN_AI_SECRET_KEY', 'OPENAI_MAX_TOKENS', 'OPENAI_BRIDGE_FALLBACK_ORIGIN', 'NEXT_PUBLIC_SITE_URL'];
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 
   for (const key of keys) {
@@ -156,6 +159,56 @@ test('openai-bridge returns a clear 500 when no server-side provider key is conf
   });
 });
 
+test('openai-bridge relays local dev calls to the deployed bridge when no local provider key is configured', async () => {
+  await withPatchedEnvironment({
+    OPENAI_API_KEY: null,
+    OPEN_AI_SECRET_KEY: null,
+    OPENAI_MAX_TOKENS: null,
+    OPENAI_BRIDGE_FALLBACK_ORIGIN: 'https://fitwithpulse.ai',
+  }, async () => {
+    const fetchCalls = [];
+    global.fetch = async (url, options) => {
+      fetchCalls.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({ choices: [{ message: { content: 'ok' } }] });
+        },
+        headers: {
+          get(name) {
+            return name.toLowerCase() === 'content-type' ? 'application/json' : null;
+          },
+        },
+      };
+    };
+
+    const { handler } = loadOpenAIBridgeRuntime(createFirebaseMock());
+    const response = await handler({
+      httpMethod: 'POST',
+      path: '/api/openai/v1/chat/completions',
+      headers: {
+        host: 'localhost:8888',
+        authorization: 'Bearer firebase-id-token',
+        'openai-organization': 'pulsecheckSportIntelligence',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: 'seed gymnastics' }],
+      }),
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(fetchCalls.length, 1);
+    assert.equal(fetchCalls[0].url, 'https://fitwithpulse.ai/api/openai/v1/chat/completions');
+    assert.equal(fetchCalls[0].options.headers.Authorization, 'Bearer firebase-id-token');
+    assert.equal(fetchCalls[0].options.headers['openai-organization'], 'generateWorkout');
+    assert.equal(fetchCalls[0].options.headers['x-pulsecheck-original-openai-organization'], 'pulsecheckSportIntelligence');
+    assert.equal(fetchCalls[0].options.headers['x-pulsecheck-firebase-mode'], 'prod');
+  });
+});
+
 test('openai-bridge falls back to OPEN_AI_SECRET_KEY and caps tokens by feature policy', async () => {
   await withPatchedEnvironment({
     OPENAI_API_KEY: '',
@@ -166,6 +219,7 @@ test('openai-bridge falls back to OPEN_AI_SECRET_KEY and caps tokens by feature 
     global.fetch = async (url, options) => {
       fetchCalls.push({ url, options });
       return {
+        ok: true,
         status: 200,
         async text() {
           return JSON.stringify({ ok: true });

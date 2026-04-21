@@ -112,7 +112,7 @@ function parseBody(event: HandlerEvent) {
   if (contentType.includes("application/json")) {
     try {
       return JSON.parse(event.body);
-    } catch (error) {
+    } catch (_error) {
       return event.body;
     }
   }
