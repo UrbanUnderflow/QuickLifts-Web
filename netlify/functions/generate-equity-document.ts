@@ -34,12 +34,46 @@ const formatHumanDate = (value?: string) => {
   });
 };
 
+const parseDateLike = (value?: string | null) => {
+  if (!value) return null;
+
+  const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateOnlyMatch) {
+    const [, yearRaw, monthRaw, dayRaw] = dateOnlyMatch;
+    const parsed = new Date(Number(yearRaw), Number(monthRaw) - 1, Number(dayRaw), 12, 0, 0, 0);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 12, 0, 0, 0);
+};
+
+const formatDatePlusYears = (value: string | null, years: number) => {
+  const parsed = parseDateLike(value);
+  if (!parsed) return null;
+
+  const resolved = new Date(parsed);
+  resolved.setFullYear(resolved.getFullYear() + years);
+
+  return resolved.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
+
 const getGrantDate = (data: RequestBody) => {
   return data.boardApprovalDate || formatHumanDate(data.grantDetails?.vestingStartDate) || formatHumanDate(new Date().toISOString());
 };
 
 const getVestingCommencementDate = (data: RequestBody) => {
   return data.boardApprovalDate || formatHumanDate(data.grantDetails?.vestingStartDate) || getGrantDate(data);
+};
+
+const getOptionExpirationDate = (data: RequestBody) => {
+  return formatDatePlusYears(getGrantDate(data), 10) || 'the tenth anniversary of the Grant Date';
 };
 
 const getCurrentHumanDate = () =>
@@ -123,9 +157,31 @@ const normalizeBoardConsentResolutionNumbering = (content: string) => {
     .join('\n');
 };
 
-const normalizeGeneratedContent = (documentType: string, content: string) => {
+const normalizeAdvisorAgreementOptionExpiration = (content: string, data: RequestBody) => {
+  const optionExpirationDate = getOptionExpirationDate(data);
+  if (optionExpirationDate === 'the tenth anniversary of the Grant Date') return content;
+
+  const explicitExpirationSentence =
+    `The Option shall expire ten (10) years from the Grant Date, on ${optionExpirationDate}, unless earlier terminated pursuant to the Plan or this Agreement.`;
+
+  return content
+    .replace(
+      /The Option shall expire (?:ten\s*\(10\)|10) years from (?:the )?Grant Date(?:,?\s*which is [^.]+)?\./gi,
+      explicitExpirationSentence
+    )
+    .replace(
+      /The Option shall expire on the tenth anniversary of (?:the )?Grant Date\./gi,
+      explicitExpirationSentence
+    );
+};
+
+const normalizeGeneratedContent = (documentType: string, content: string, data: RequestBody) => {
   if (documentType === 'board_consent') {
     return normalizeBoardConsentResolutionNumbering(content);
+  }
+
+  if (documentType === 'advisor_nso_agreement') {
+    return normalizeAdvisorAgreementOptionExpiration(content, data);
   }
 
   return content;
@@ -374,6 +430,7 @@ GRANT DETAILS:
 - Vesting Schedule: Monthly vesting after cliff
 - Cliff Period: ${data.grantDetails?.cliffMonths || 3} months
 - Option Term: 10 years from Grant Date
+- Option Expiration Date: ${getOptionExpirationDate(data)}
 ${data.boardApprovalDate ? `- Board Approval Date: ${data.boardApprovalDate}` : ''}
 
 ${formatAdditionalContext(data.prompt)}
@@ -394,7 +451,7 @@ SECTION 2 - GRANT OF NON-QUALIFIED STOCK OPTIONS:
 2.2 Exercise Price - Fair market value as determined by the Board
 2.3 Vesting Schedule
 ${getVestingInstructionBlock(data.grantDetails, getVestingCommencementDate(data))}
-2.4 Term of Option - 10 years from Grant Date
+2.4 Term of Option - Include this exact sentence: "The Option shall expire ten (10) years from the Grant Date, on ${getOptionExpirationDate(data)}, unless earlier terminated pursuant to the Plan or this Agreement." Do NOT say only that the Option expires 10 years from the Grant Date, and do NOT say the Grant Date itself is the expiration date.
 2.5 Termination of Service - Unvested options terminate. For advisors, set the post-termination exercise window to six (6) months for vested options (not 90 days). Include clear mechanics and any Plan override language.
 2.6 No Stockholder Rights - Until Option is exercised
 
@@ -599,7 +656,7 @@ BULLET & LIST FORMATTING (CRITICAL - follow exactly):
       throw new Error('No content generated');
     }
 
-    const content = normalizeGeneratedContent(documentType, rawContent);
+    const content = normalizeGeneratedContent(documentType, rawContent, body);
 
     // Generate title based on document type and stakeholder
     const title = documentType === 'eip' 
