@@ -31,7 +31,7 @@ import {
 /* ─────────────────────────── Types ───────────────────────────── */
 
 type DeliveryMethod = 'fcm-remote' | 'local' | 'scheduled-function' | 'fcm-or-local';
-type ProductScope = 'pulse' | 'pulsecheck';
+type ProductScope = 'pulse' | 'pulsecheck' | 'macra';
 
 type NotificationCategory =
     | 'onboarding'
@@ -46,6 +46,7 @@ type NotificationCategory =
     | 'step-challenge'
     | 'mental-training'
     | 'watch'
+    | 'macra-nutrition'
     | 'system';
 
 type NotificationRow = {
@@ -488,6 +489,47 @@ const NOTIFICATIONS: NotificationRow[] = [
         ],
         notes: 'Personalised per recipient (shows their rank). Tapping opens the Round detail and shows a summary modal with top 3 leaderboard, daily highlights, and days remaining. Implemented on both iOS (RoundDailySummaryView) and Android (RoundDailySummaryScreen). Idempotent — skips if already sent today. Logs batch results to notification-logs collection.',
     },
+
+    // ── Macra Nutrition ─────────────────────────────────
+    {
+        id: 'macra-meal-reminder',
+        name: 'Macra — Meal Reminder',
+        trigger: 'Locally scheduled at each meal time the user selected during onboarding (default Meal 1–4 at 8am / 12:30pm / 5pm / 8pm)',
+        title: 'Meal {{mealNumber}} time',
+        body: 'Log Meal {{mealNumber}} so Nora can keep your macros on point.',
+        category: 'macra-nutrition',
+        productScope: 'macra',
+        deliveryMethod: 'local',
+        source: 'iOS — NotificationService.syncScheduledNotifications()',
+        dataKeys: ['type: macra_meal_reminder', 'mealIndex'],
+        notes: 'Opt-in during the Macra notification preferences onboarding step. Respects user mealReminders pref on users.macraNotificationPreferences.',
+    },
+    {
+        id: 'macra-morning-log-reminder',
+        name: 'Macra — Morning Log Reminder',
+        trigger: 'Locally scheduled at the user-chosen morning time (default 8 AM local)',
+        title: "Log today's food",
+        body: "Get ahead of today — log your first meal and stay on track with Nora.",
+        category: 'macra-nutrition',
+        productScope: 'macra',
+        deliveryMethod: 'local',
+        source: 'iOS — NotificationService.syncScheduledNotifications()',
+        dataKeys: ['type: macra_morning_log_reminder'],
+        notes: 'Opt-in via the Macra onboarding notification step. Respects morningLogReminder pref on users.macraNotificationPreferences.',
+    },
+    {
+        id: 'macra-end-of-day-checkin',
+        name: 'Macra — End-of-Day Check-in',
+        trigger: 'Locally scheduled at the user-chosen evening time (default 8 PM local)',
+        title: 'How did eating go today?',
+        body: "Let's check in with Nora on how you ate today. Quick reflection keeps you consistent.",
+        category: 'macra-nutrition',
+        productScope: 'macra',
+        deliveryMethod: 'local',
+        source: 'iOS — NotificationService.syncScheduledNotifications()',
+        dataKeys: ['type: macra_end_of_day_checkin'],
+        notes: 'Opt-in via the Macra onboarding notification step. Respects endOfDayCheckin pref on users.macraNotificationPreferences.',
+    },
 ];
 
 /* ─────────────────────────── Helpers ─────────────────────────── */
@@ -508,6 +550,7 @@ const CATEGORY_META: Record<
     'step-challenge': { label: 'Step Challenge', icon: <Footprints className="w-3.5 h-3.5" />, color: 'text-teal-400' },
     'mental-training': { label: 'Mental Training', icon: <Brain className="w-3.5 h-3.5" />, color: 'text-violet-400' },
     watch: { label: 'Apple Watch', icon: <Watch className="w-3.5 h-3.5" />, color: 'text-rose-400' },
+    'macra-nutrition': { label: 'Macra Nutrition', icon: <Flame className="w-3.5 h-3.5" />, color: 'text-green-400' },
     system: { label: 'System', icon: <Server className="w-3.5 h-3.5" />, color: 'text-zinc-400' },
 };
 
@@ -521,6 +564,7 @@ const DELIVERY_META: Record<DeliveryMethod, { label: string; color: string }> = 
 const PRODUCT_META: Record<ProductScope, { label: string; accent: string }> = {
     pulse: { label: 'Pulse', accent: 'text-[#d7ff00]' },
     pulsecheck: { label: 'PulseCheck', accent: 'text-cyan-300' },
+    macra: { label: 'Macra', accent: 'text-green-400' },
 };
 
 const DEFAULT_TEMPLATE_VALUES: Record<string, string> = {
@@ -604,6 +648,12 @@ const getPreviewAppChrome = (notification: NotificationRow) => {
         return {
             label: 'Pulse Check',
             badgeClassName: 'bg-cyan-400 text-slate-950',
+        };
+    }
+    if (scope === 'macra') {
+        return {
+            label: 'Macra',
+            badgeClassName: 'bg-green-400 text-slate-950',
         };
     }
 

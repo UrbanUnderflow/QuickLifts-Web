@@ -87,11 +87,13 @@ const buildPrompt = (req: RequestBody, mealsCount: number): string => {
   return [
     `Build a simple one-day meal plan with exactly ${mealsCount} meals.`,
     `Label meals "Meal 1", "Meal 2", "Meal 3", etc. Do NOT use breakfast / lunch / dinner / snack labels.`,
-    `Daily totals must sum close to: ${req.calories} kcal, ${req.protein}g protein, ${req.carbs}g carbs, ${req.fat}g fat. Within ~5% is acceptable.`,
+    `Daily totals must sum close to: ${req.calories} kcal, ${req.protein}g protein, ${req.carbs}g carbs, ${req.fat}g fat. Within ~5% is acceptable, but treat user-set macros as context to satisfy, not proof that the plan is appropriate for every goal.`,
     goalLine,
     dietLine,
     extraLine,
     imageHintLine,
+    `If the user context implies physique competition prep, men's physique, bodybuilding, peak week, post-show reverse, or being within 8 weeks of a show, use prep-coach logic: predictable foods, repeatable digestion, small changes, and no casual additions of fruit, whole grains, high-variance foods, or generic starchy vegetables unless explicitly requested or already part of their plan.`,
+    `For near-show physique athletes, prefer controlled carb sources such as rice, cream of rice, potatoes, or already-tolerated oats, paired with lean proteins and measured fats.`,
     `Each meal should list 2-4 food items. For each item provide: name, quantity (e.g. "4 oz", "1 cup", "2 large"), calories (integer), protein (integer g), carbs (integer g), fat (integer g).`,
     `Keep foods common and approachable — things people can buy at a normal grocery store and prepare in under 15 minutes.`,
     `Respond with JSON only, matching this schema exactly:`,
@@ -111,7 +113,7 @@ const callBridge = async (prompt: string, bridgeBase: string, userToken: string)
       model: 'gpt-4o-mini',
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: 'You are a registered dietitian creating simple daily meal plans. Return valid JSON only, no prose.' },
+        { role: 'system', content: 'You are Nora, Macra\'s performance nutrition coach. Build context-aware meal plans, and when physique-prep context exists, prioritize stage-readiness, digestion consistency, and predictable foods. Return valid JSON only, no prose.' },
         { role: 'user', content: prompt }
       ],
       max_tokens: 1500,
