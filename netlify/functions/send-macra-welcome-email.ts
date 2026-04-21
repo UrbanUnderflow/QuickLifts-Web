@@ -4,6 +4,7 @@ import {
   applyTemplateVars,
   buildEmailDedupeKey,
   escapeHtml,
+  getBaseSiteUrl,
   loadTemplateFromFirestore,
   resolveRecipient,
   sendBrevoTransactionalEmail,
@@ -29,6 +30,7 @@ const FALLBACK_SUBJECT = 'Welcome to Macra — your plan is ready';
 
 function renderFallbackHtml(firstName: string) {
   const greeting = firstName ? firstName : 'there';
+  const logoUrl = `${getBaseSiteUrl()}/macra-icon.png`;
   return `
   <!doctype html>
   <html>
@@ -44,12 +46,14 @@ function renderFallbackHtml(firstName: string) {
             <table role="presentation" cellpadding="0" cellspacing="0" width="640" style="max-width:640px;width:100%;">
               <tr>
                 <td style="padding: 6px 8px 18px 8px;">
-                  <div style="display:flex;align-items:center;justify-content:center;gap:12px;">
-                    <div style="width:44px;height:44px;border-radius:12px;background:#E0FE10;display:inline-flex;align-items:center;justify-content:center;">
-                      <span style="font-weight:900;color:#0a0a0b;font-size:20px;">M</span>
-                    </div>
-                    <div style="font-weight:800;color:#ffffff;font-size:18px;letter-spacing:0.2px;">Macra</div>
-                  </div>
+                  <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;">
+                    <tr>
+                      <td style="vertical-align:middle;padding-right:12px;">
+                        <img src="${logoUrl}" width="44" height="44" alt="Macra" style="display:block;width:44px;height:44px;border-radius:12px;border:0;outline:none;text-decoration:none;" />
+                      </td>
+                      <td style="vertical-align:middle;font-weight:800;color:#ffffff;font-size:18px;letter-spacing:0.2px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;">Macra</td>
+                    </tr>
+                  </table>
                 </td>
               </tr>
               <tr>

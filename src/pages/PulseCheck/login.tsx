@@ -9,13 +9,12 @@ import {
 } from 'firebase/auth';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { auth, initializeFirebase } from '../../api/firebase/config';
+import { auth, initializeFirebase, isUsingDevFirebase } from '../../api/firebase/config';
 import authService from '../../api/firebase/auth';
 import { userService, User, SubscriptionType } from '../../api/firebase/user';
 import { useUser } from '../../hooks/useUser';
 import PageHead from '../../components/PageHead';
-import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from '../../redux/store';
+import { useDispatch } from 'react-redux';
 import { toggleDevMode } from '../../redux/devModeSlice';
 
 const PULSECHECK_PURPLE = '#8B5CF6';
@@ -77,25 +76,24 @@ const GlassSurface: React.FC<{
 // ─────────────────────────────────────────────────
 const DevModeToggle: React.FC = () => {
   const dispatch = useDispatch();
-  const isDevelopment = useSelector((state: RootState) => state.devMode.isDevelopment);
   const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  // Reflect the actual Firebase mode, not Redux (which can drift when
+  // localStorage has no explicit devMode key on first localhost visit).
+  const [isDevelopment, setIsDevelopment] = useState<boolean>(false);
 
   useEffect(() => {
-    const savedMode = window.localStorage.getItem('devMode') === 'true';
-    if (savedMode !== isDevelopment) {
-      console.log('[PulseCheck Login DevMode] Syncing with saved mode:', { savedMode, currentMode: isDevelopment });
-      dispatch(toggleDevMode());
-      initializeFirebase(savedMode);
+    const actualMode = isUsingDevFirebase();
+    setIsDevelopment(actualMode);
+    const savedMode = window.localStorage.getItem('devMode');
+    if (savedMode !== String(actualMode)) {
+      window.localStorage.setItem('devMode', String(actualMode));
     }
   }, []);
 
   const handleToggle = () => {
     const newMode = !isDevelopment;
-    console.log('[PulseCheck Login DevMode] Toggling:', {
-      from: isDevelopment ? 'development' : 'production',
-      to: newMode ? 'development' : 'production',
-    });
     window.localStorage.setItem('devMode', String(newMode));
+    window.localStorage.setItem('dopplerConfig', newMode ? 'dev_backend' : 'prd_backend');
     dispatch(toggleDevMode());
     initializeFirebase(newMode);
     setTimeout(() => window.location.reload(), 300);

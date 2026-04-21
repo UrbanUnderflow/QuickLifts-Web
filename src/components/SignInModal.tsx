@@ -20,7 +20,7 @@ import { firebaseStorageService, UploadImageType } from '../api/firebase/storage
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
 import { toggleDevMode } from '../redux/devModeSlice';
-import { initializeFirebase } from '../api/firebase/config';
+import { initializeFirebase, isUsingDevFirebase } from '../api/firebase/config';
 import { useUser } from '../hooks/useUser';
 import { clearRoundIdRedirect, clearLoginRedirectPath } from '../redux/tempRedirectSlice'; // Import clear actions
 import { showToast } from '../redux/toastSlice'; // Import showToast
@@ -53,38 +53,27 @@ interface SignInModalProps {
 
 const DevModeToggle: React.FC = () => {
   const dispatch = useDispatch();
-  const isDevelopment = useSelector((state: RootState) => state.devMode.isDevelopment);
   const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  // Source of truth is the actual Firebase mode, not Redux, so the badge
+  // can't drift when localStorage has no explicit devMode key.
+  const [isDevelopment, setIsDevelopment] = useState<boolean>(false);
 
-  // On component mount, check if we should be in dev mode
   useEffect(() => {
-    const savedMode = window.localStorage.getItem('devMode') === 'true';
-    if (savedMode !== isDevelopment) {
-      console.log('[DevMode] Initializing with saved mode:', {
-        savedMode,
-        currentMode: isDevelopment,
-        isLocalhost,
-        timestamp: new Date().toISOString()
-      });
-      dispatch(toggleDevMode());
-      initializeFirebase(savedMode);
+    const actualMode = isUsingDevFirebase();
+    setIsDevelopment(actualMode);
+    // Sync Redux + localStorage so any other consumers match reality.
+    const savedMode = window.localStorage.getItem('devMode');
+    if (savedMode !== String(actualMode)) {
+      window.localStorage.setItem('devMode', String(actualMode));
     }
   }, []);
 
   const handleToggle = () => {
     const newMode = !isDevelopment;
-    console.log('[DevMode] Toggling mode:', {
-      from: isDevelopment ? 'development' : 'production',
-      to: newMode ? 'development' : 'production',
-      isLocalhost,
-      source: isLocalhost ? '.env.local' : (newMode ? 'firebaseConfigs' : 'Netlify'),
-      timestamp: new Date().toISOString()
-    });
     window.localStorage.setItem('devMode', String(newMode));
+    window.localStorage.setItem('dopplerConfig', newMode ? 'dev_backend' : 'prd_backend');
     dispatch(toggleDevMode());
     initializeFirebase(newMode);
-    
-    // Add a slight delay before reloading to ensure Firebase initialization completes
     setTimeout(() => {
       window.location.reload();
     }, 300);
@@ -93,15 +82,51 @@ const DevModeToggle: React.FC = () => {
   return (
     <button
       onClick={handleToggle}
-      className="absolute top-4 left-4 z-20 px-2 py-1 rounded text-xs font-medium transition-colors flex items-center gap-2 shadow-lg"
+      className="px-2 py-1 rounded text-xs font-medium transition-colors flex items-center gap-1 shadow-lg whitespace-nowrap"
       style={{
         background: isDevelopment ? '#E0FE10' : '#3f3f46',
         color: isDevelopment ? 'black' : 'white'
       }}
-      title={`Using ${isDevelopment ? 'development' : 'production'} configuration from ${isLocalhost ? '.env.local' : (isDevelopment ? 'firebaseConfigs' : 'Netlify')}`}
+      title={`Using ${isDevelopment ? 'development' : 'production'} Firebase config${isLocalhost ? ' (Local)' : ''}`}
     >
       {isDevelopment ? '🔧 Dev' : '🚀 Prod'}{isLocalhost ? ' (Local)' : ''}
     </button>
+  );
+};
+
+const SignedInBadge: React.FC<{ user: { username?: string; profileImage?: { profileImageURL?: string } | null } | null | undefined }> = ({ user }) => {
+  const username = user?.username;
+  const imageUrl = user?.profileImage?.profileImageURL;
+  const isSignedIn = !!user;
+  const label = isSignedIn ? (username ? `Signed in as ${username}` : 'Signed in') : 'Not signed in';
+
+  return (
+    <div
+      className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium shadow-lg whitespace-nowrap"
+      style={{
+        background: isSignedIn ? '#065f46' : '#3f3f46',
+        color: 'white',
+      }}
+      title={label}
+    >
+      {isSignedIn ? (
+        <>
+          {imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imageUrl}
+              alt={username || 'profile'}
+              className="w-4 h-4 rounded-full object-cover"
+            />
+          ) : (
+            <span className="w-4 h-4 rounded-full bg-zinc-600 inline-block" />
+          )}
+          <span>{username ? `@${username}` : 'Signed in'}</span>
+        </>
+      ) : (
+        <span>Signed out</span>
+      )}
+    </div>
   );
 };
 
@@ -2898,7 +2923,12 @@ const SignInModal: React.FC<SignInModalProps> = ({
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black z-[200] sm:p-6">
       <div className="relative bg-zinc-900 w-full h-full sm:h-auto sm:w-[480px] sm:rounded-xl p-6 sm:p-8 border-none sm:border sm:border-zinc-700 shadow-xl overflow-y-auto">
-        {mounted && window.location.hostname === 'localhost' && <DevModeToggle />}
+        {mounted && window.location.hostname === 'localhost' && (
+          <div className="absolute top-4 left-4 z-20 flex items-center gap-2 max-w-[calc(100%-4rem)] overflow-hidden">
+            <DevModeToggle />
+            <SignedInBadge user={currentUser} />
+          </div>
+        )}
         {/* iPhone App Download Banner */}
         {iphoneBanner}
         
