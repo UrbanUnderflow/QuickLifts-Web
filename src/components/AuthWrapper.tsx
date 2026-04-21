@@ -93,6 +93,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/advisory-board',
     // Pulse Intelligence Labs deck (public for stakeholder demos)
     '/pulseintelligencelabs',
+    // Pulse Intelligence Labs one-pager and executive summary
+    '/PILOne',
     // AuntEdna demo (public for stakeholder demos)
     '/auntedna',
     // Pulse x auntEDNA stakeholder deck (public for stakeholder demos)
