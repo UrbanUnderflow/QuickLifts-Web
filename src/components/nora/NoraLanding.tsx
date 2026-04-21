@@ -40,8 +40,8 @@ const NoraLanding: React.FC = () => {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const rafRef = useRef<number | null>(null);
-  const freqRef = useRef<Uint8Array | null>(null);
-  const timeRef = useRef<Uint8Array | null>(null);
+  const freqRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  const timeRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
 
   const stopOrb = useCallback(() => {
     if (rafRef.current) {
@@ -73,8 +73,8 @@ const NoraLanding: React.FC = () => {
         analyser.connect(ctx.destination);
         sourceRef.current = src;
         analyserRef.current = analyser;
-        freqRef.current = new Uint8Array(analyser.frequencyBinCount);
-        timeRef.current = new Uint8Array(analyser.fftSize);
+        freqRef.current = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
+        timeRef.current = new Uint8Array(new ArrayBuffer(analyser.fftSize));
       }
 
       const tick = () => {

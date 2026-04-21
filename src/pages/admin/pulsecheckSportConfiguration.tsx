@@ -66,6 +66,11 @@ type GeneratedSportIntelligencePayload = {
   sport: Pick<PulseCheckSportConfigurationEntry, 'emoji' | 'positions' | 'schemaVersion' | 'attributes' | 'metrics' | 'prompting'>;
 };
 
+type NormalizedGeneratedSportIntelligence = Omit<GeneratedSportIntelligencePayload['sport'], 'attributes' | 'metrics'> & {
+  attributes: PulseCheckSportAttributeDefinition[];
+  metrics: PulseCheckSportMetricDefinition[];
+};
+
 const extractFirstJSONObject = (value: string): string | null => {
   const startIndex = value.indexOf('{');
   if (startIndex < 0) return null;
@@ -336,7 +341,7 @@ const normalizeGeneratedPrompting = (raw: unknown) => {
   };
 };
 
-const normalizeGeneratedSportIntelligence = (raw: unknown, sportName: string): GeneratedSportIntelligencePayload['sport'] => {
+const normalizeGeneratedSportIntelligence = (raw: unknown, sportName: string): NormalizedGeneratedSportIntelligence => {
   const sportId = slugifySportId(sportName) || 'custom-sport';
   const candidate = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const positions = Array.isArray(candidate.positions) ? normalizePositionsInput(candidate.positions.join('\n')) : [];
