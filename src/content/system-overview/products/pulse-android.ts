@@ -2,16 +2,16 @@ import type { ProductHandbook } from '../schema';
 
 export const pulseAndroidHandbook: ProductHandbook = {
   id: 'pulse-android',
-  name: 'Pulse Android',
+  name: 'Fit With Pulse Android',
   platform: 'Android (Kotlin + Jetpack Compose)',
   summary:
-    'Android client mirroring core Pulse fitness workflows with active parity work across rounds, workouts, and social systems.',
+    'Android client for the Fit With Pulse consumer fitness surface, mirroring clubs, rounds, workouts, and social accountability workflows.',
   owner: 'Android Squad',
   repo: 'Pulse-Android',
   releaseChannel: 'devDebug/devRelease internal + prodRelease rollout',
   status: 'active',
   keyOutcomes: [
-    'Cross-platform product parity for growth and retention',
+    'Cross-platform Fit With Pulse parity for growth and retention',
     'Native Android workout and round execution',
     'Shared Firestore contract consistency with iOS',
   ],
@@ -120,15 +120,15 @@ export const pulseAndroidHandbook: ProductHandbook = {
     },
     {
       id: 'android-nutrition',
-      name: 'Nutrition and Label Scan Flows',
+      name: 'Legacy Nutrition and Macra Boundary',
       persona: 'Athletes managing diet quality',
-      outcome: 'Capture meals and label scans to assess nutrition impact and quality.',
-      entryPoints: ['Nutrition screen', 'Scan food', 'Scan label', 'History views'],
+      outcome: 'Preserve legacy meal and label context where it supports the consumer fitness app while recognizing Macra as the dedicated nutrition surface.',
+      entryPoints: ['Legacy nutrition screen', 'Scan food', 'Scan label', 'History views', 'Macra handoff planning'],
       dependentServices: ['Nutrition repositories', 'Image processing'],
       firestoreCollections: ['users/{uid}/meals', 'users/{uid}/nutrition-logs'],
-      integrations: ['Camera'],
+      integrations: ['Camera', 'Macra boundary'],
       owner: 'Android Squad + Nutrition Systems',
-      releaseChannel: 'Production',
+      releaseChannel: 'Legacy / migration-aware',
       status: 'active',
       sourceRefs: [
         { label: 'Nutrition Screen', path: '../Pulse-Android/app/src/main/java/ai/fitwithpulse/pulse/ui/nutrition/NutritionScreen.kt' },

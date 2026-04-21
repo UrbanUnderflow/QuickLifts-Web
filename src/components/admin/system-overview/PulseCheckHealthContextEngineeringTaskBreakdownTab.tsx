@@ -5,9 +5,9 @@ import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentP
 const STREAM_ROWS = [
   ['Architecture lock', 'Close any remaining naming, enum, field, or ownership ambiguity before implementation starts.', 'Product / architecture', 'Immediate'],
   ['Platform foundation', 'Create canonical stores, ids, traces, source-status model, and assembler scaffolding.', 'Platform', 'Immediate'],
-  ['Bridge migration', 'Map current QuickLifts shared summaries into the canonical pipeline.', 'QuickLifts iOS + platform', 'Immediate'],
-  ['PulseCheck runtime cutover', 'Move health-backed runtime logic to canonical snapshot reads.', 'PulseCheck iOS', 'Near-term'],
-  ['Native HealthKit ingestion', 'Build PulseCheck-native source adapter targeting source records.', 'PulseCheck iOS', 'After snapshot cutover'],
+  ['Bridge migration', 'Map current Fit With Pulse shared summaries into the canonical pipeline.', 'Fit With Pulse iOS + platform', 'Immediate'],
+  ['Pulse Check runtime cutover', 'Move health-backed runtime logic to canonical snapshot reads.', 'Pulse Check iOS', 'Near-term'],
+  ['Native HealthKit ingestion', 'Build Pulse Check-native source adapter targeting source records.', 'Pulse Check iOS', 'After snapshot cutover'],
   ['Connector expansion', 'Add Oura adapter and connector-specific operational handling.', 'Platform + integrations', 'Later'],
   ['Ops + QA', 'Build trace tooling, rebuild controls, validation suites, and migration verification.', 'Ops / QA / platform', 'Continuous'],
 ];
@@ -23,24 +23,24 @@ const M1_ROWS = [
   ['Implement source-status store', 'Persist source lifecycle posture, last success, and stale/error state.', 'Platform', 'Needed for runtime branching.'],
   ['Implement snapshot store and revision pattern', 'Create latest snapshot docs plus revision docs / trace linkage.', 'Platform', 'Foundation task.'],
   ['Build assembler skeleton', 'Create deterministic assembly service with trace output contract even if first input lane is limited.', 'Platform', 'Core system task.'],
-  ['Build legacy summary bridge lane', 'Convert `daily-health-summaries` into canonical input for the assembler.', 'QuickLifts iOS + platform', 'MVP-critical bridge.'],
+  ['Build legacy summary bridge lane', 'Convert `daily-health-summaries` into canonical input for the assembler.', 'Fit With Pulse iOS + platform', 'MVP-critical bridge.'],
   ['Persist first assembled daily snapshot', 'Generate a canonical daily snapshot from the bridge lane.', 'Platform', 'MVP checkpoint.'],
   ['Add trace inspection basics', 'Provide enough trace visibility to validate winner selection and migration behavior.', 'Platform + ops', 'Required for trust.'],
 ];
 
 const M2_ROWS = [
-  ['Audit current PulseCheck health read paths', 'Identify all direct summary reads and legacy branching in chat and insights.', 'PulseCheck iOS', 'Cutover preparation.'],
-  ['Implement snapshot-backed health context resolver', 'Create one runtime resolver that reads canonical snapshots plus source posture.', 'PulseCheck iOS', 'Core cutover task.'],
-  ['Replace legacy health-chat reads in Nora paths', 'Move health-backed chat to snapshot reads and explicit freshness / posture branching.', 'PulseCheck iOS', 'MVP user-facing cutover.'],
-  ['Add feature flag or rollout control', 'Support a scoped pilot or controlled release for snapshot-backed runtime.', 'PulseCheck iOS + product', 'Risk mitigation.'],
-  ['Validate parity against current live behavior', 'Ensure shared QuickLifts context is still visible after cutover.', 'QA + PulseCheck iOS', 'Regression protection.'],
+  ['Audit current Pulse Check health read paths', 'Identify all direct summary reads and legacy branching in chat and insights.', 'Pulse Check iOS', 'Cutover preparation.'],
+  ['Implement snapshot-backed health context resolver', 'Create one runtime resolver that reads canonical snapshots plus source posture.', 'Pulse Check iOS', 'Core cutover task.'],
+  ['Replace legacy health-chat reads in Nora paths', 'Move health-backed chat to snapshot reads and explicit freshness / posture branching.', 'Pulse Check iOS', 'MVP user-facing cutover.'],
+  ['Add feature flag or rollout control', 'Support a scoped pilot or controlled release for snapshot-backed runtime.', 'Pulse Check iOS + product', 'Risk mitigation.'],
+  ['Validate parity against current live behavior', 'Ensure shared Fit With Pulse context is still visible after cutover.', 'QA + Pulse Check iOS', 'Regression protection.'],
 ];
 
 const M3_ROWS = [
-  ['Implement HealthKit source adapter contract', 'Write normalized `HealthContextSourceRecord` items from PulseCheck-native HealthKit access.', 'PulseCheck iOS', 'First standalone source.'],
-  ['Wire event-driven recompute from native records', 'When a new HealthKit record lands, rebuild affected snapshots.', 'Platform + PulseCheck iOS', 'Freshness path.'],
-  ['Update onboarding and permissions UX', 'Expose source connection, waiting, synced, stale, and denied states clearly.', 'PulseCheck iOS', 'Runtime polish and honesty.'],
-  ['Validate standalone-athlete path', 'Confirm PulseCheck can produce meaningful context without QuickLifts usage.', 'QA + PulseCheck iOS', 'Standalone milestone.'],
+  ['Implement HealthKit source adapter contract', 'Write normalized `HealthContextSourceRecord` items from Pulse Check-native HealthKit access.', 'Pulse Check iOS', 'First standalone source.'],
+  ['Wire event-driven recompute from native records', 'When a new HealthKit record lands, rebuild affected snapshots.', 'Platform + Pulse Check iOS', 'Freshness path.'],
+  ['Update onboarding and permissions UX', 'Expose source connection, waiting, synced, stale, and denied states clearly.', 'Pulse Check iOS', 'Runtime polish and honesty.'],
+  ['Validate standalone-athlete path', 'Confirm Pulse Check can produce meaningful context without Fit With Pulse usage.', 'QA + Pulse Check iOS', 'Standalone milestone.'],
 ];
 
 const M4_ROWS = [
@@ -56,15 +56,15 @@ const M5_ROWS = [
 ];
 
 const FILE_ROWS = [
-  ['QuickLifts iOS shared-summary writer', 'Bridge and eventually adapt the current `daily-health-summaries` output lane into canonical source input.', 'QuickLifts iOS', 'Current upstream dependency.'],
-  ['PulseCheck iOS health runtime', 'Replace legacy direct-read paths with snapshot-backed resolver usage.', 'PulseCheck iOS', 'Primary runtime change area.'],
+  ['Fit With Pulse iOS shared-summary writer', 'Bridge and eventually adapt the current `daily-health-summaries` output lane into canonical source input.', 'Fit With Pulse iOS', 'Current upstream dependency.'],
+  ['Pulse Check iOS health runtime', 'Replace legacy direct-read paths with snapshot-backed resolver usage.', 'Pulse Check iOS', 'Primary runtime change area.'],
   ['Platform storage and assembler layer', 'Own new Firestore shape, revision logic, traces, and recompute orchestration.', 'Platform', 'Shared system core.'],
   ['Web / admin handbook and operator tooling', 'Expose traces, statuses, rebuild controls, and internal docs.', 'Web + ops', 'Operational enablement.'],
 ];
 
 const QA_ROWS = [
-  ['Bridge-only athlete', 'Athlete uses QuickLifts data only, no native PulseCheck HealthKit yet.', 'Must remain strong through Milestone 2.'],
-  ['Standalone native athlete', 'Athlete never uses QuickLifts and only connects PulseCheck-native HealthKit.', 'Critical for Milestone 3.'],
+  ['Bridge-only athlete', 'Athlete uses Fit With Pulse data only, no native Pulse Check HealthKit yet.', 'Must remain strong through Milestone 2.'],
+  ['Standalone native athlete', 'Athlete never uses Fit With Pulse and only connects Pulse Check-native HealthKit.', 'Critical for Milestone 3.'],
   ['Stale-source athlete', 'Source connected but no recent data.', 'Runtime should branch honestly.'],
   ['Permission-denied athlete', 'User denied connector access.', 'Runtime should not imply missing sync is temporary.'],
   ['Migration mixed athlete', 'Legacy summary lane plus native records both present.', 'Trace visibility and merge correctness required.'],
@@ -84,7 +84,7 @@ const HANDOFF_CARDS = [
   {
     title: 'Milestone 3 Exit',
     accent: 'amber' as const,
-    body: 'PulseCheck can generate useful standalone context from native HealthKit records even when the athlete does not use QuickLifts.',
+    body: 'Pulse Check can generate useful standalone context from native HealthKit records even when the athlete does not use Fit With Pulse.',
   },
 ];
 
@@ -92,7 +92,7 @@ const PulseCheckHealthContextEngineeringTaskBreakdownTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="PulseCheck Health Context"
+        eyebrow="Pulse Check Health Context"
         title="Health Context Engineering Task Breakdown"
         version="Version 0.1 | March 17, 2026"
         summary="Execution-facing breakdown of the health-context rollout into concrete engineering workstreams, milestone tasks, ownership, and validation scenarios. This artifact translates the rollout plan into implementable chunks so teams can start work without re-synthesizing the architecture."

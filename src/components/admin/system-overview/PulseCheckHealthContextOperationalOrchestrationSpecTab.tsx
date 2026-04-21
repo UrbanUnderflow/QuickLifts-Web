@@ -50,7 +50,7 @@ const JOB_ROWS = [
 
 const SCHEDULING_ROWS = [
   ['On-link immediate run', 'Start first sync as soon as the source is connected.', 'Reduces time-to-value.'],
-  ['Foreground opportunistic sync', 'When the athlete opens PulseCheck or QuickLifts and a source is eligible, allow lightweight incremental sync.', 'Good for client-originated data freshness.'],
+  ['Foreground opportunistic sync', 'When the athlete opens Pulse Check or Fit With Pulse and a source is eligible, allow lightweight incremental sync.', 'Good for client-originated data freshness.'],
   ['Periodic freshness sweep', 'Run a scheduled job to detect stale sources, pending backfills, and missed recompute opportunities.', 'Catches drift and gaps.'],
   ['Low-priority historical backfill', 'Backfill older windows without blocking recent-day freshness.', 'Separates baseline building from hot-path freshness.'],
   ['Rate-limited retry schedule', 'Retry failed syncs with bounded exponential backoff and jitter.', 'Protects connectors and avoids loops.'],
@@ -75,7 +75,7 @@ const OPERATOR_ROWS = [
 const FLOW_STEPS = [
   {
     title: 'Source Connects',
-    body: 'A user links HealthKit, Oura, or another source, or PulseCheck / QuickLifts confirms an existing integration path.',
+    body: 'A user links HealthKit, Oura, or another source, or Pulse Check / Fit With Pulse confirms an existing integration path.',
     owner: 'Connector layer',
   },
   {
@@ -125,7 +125,7 @@ const PulseCheckHealthContextOperationalOrchestrationSpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="PulseCheck Health Context"
+        eyebrow="Pulse Check Health Context"
         title="Health Context Operational Orchestration Spec"
         version="Version 0.1 | March 17, 2026"
         summary="Canonical operational spec for connector lifecycle, sync scheduling, event-driven recompute, backfill, retry posture, and failure handling across the health-context system. This document defines how the system stays current and trustworthy after the underlying contracts and storage model are in place."
@@ -146,7 +146,7 @@ const PulseCheckHealthContextOperationalOrchestrationSpecTab: React.FC = () => {
       />
 
       <RuntimeAlignmentPanel
-        role="Operational runtime artifact for the health-context system. It defines source lifecycle states, sync triggers, job types, scheduled maintenance behavior, failure posture, and operator controls across QuickLifts, HealthKit, Oura, and PulseCheck-native context ingestion."
+        role="Operational runtime artifact for the health-context system. It defines source lifecycle states, sync triggers, job types, scheduled maintenance behavior, failure posture, and operator controls across Fit With Pulse, Macra, HealthKit, Oura, and Pulse Check context ingestion."
         sourceOfTruth="This document is authoritative for how connector lifecycle state should work, when syncs and recomputes should run, how backfills and retries behave, and how the runtime should interpret stale or errored health-context systems."
         masterReference="Use this page before implementing connector state machines, scheduled sync orchestration, incremental or backfill jobs, rebuild tooling, stale-source handling, or operational dashboards for the health-context architecture."
         relatedDocs={[

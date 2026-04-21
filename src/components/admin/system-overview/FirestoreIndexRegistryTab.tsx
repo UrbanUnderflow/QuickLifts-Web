@@ -119,6 +119,8 @@ const ENVIRONMENT_ROWS = [
   ['Development project', '`quicklifts-dev-01`', 'Must stay in sync with the shared registry so feature work can validate against the real contract.'],
   ['Production project', '`quicklifts-dd3f1`', 'Must stay in sync with the shared registry so prod never accumulates undocumented index debt.'],
   ['Health-context addition', '`health-context-snapshots` athlete/date query', 'Current new index added for the canonical snapshot read path.'],
+  ['Macra Nora chat', '`noraChat` day/timestamp query', 'Current new index added for Macra Ask Nora daily chat loading.'],
+  ['Macra Nora addition', '`noraChireaeRequests` user/date query', 'Current new index added for Ask Nora request thread loading.'],
 ];
 
 const LEGACY_NORMALIZATION_ROWS = [
@@ -143,7 +145,7 @@ const FirestoreIndexRegistryTab: React.FC = () => {
         eyebrow="Platform Data Operations"
         title="Firestore Index Registry"
         version="Version 0.1 | March 17, 2026"
-        summary="Internal registry and operating policy for Cloud Firestore indexes across QuickLifts and PulseCheck. This artifact makes the shared `firestore.indexes.json` file the visible source of truth, tracks current registry coverage, and defines the discipline required to keep development and production index posture in sync."
+        summary="Internal registry and operating policy for Cloud Firestore indexes across Fit With Pulse, Pulse Check, Macra, and shared platform surfaces. This artifact makes the shared `firestore.indexes.json` file the visible source of truth, tracks current registry coverage, and defines the discipline required to keep development and production index posture in sync."
         highlights={[
           {
             title: 'Registry Tied To Real File',
@@ -259,7 +261,7 @@ const FirestoreIndexRegistryTab: React.FC = () => {
           <InfoCard
             title="Current Discipline"
             accent="red"
-            body="Because QuickLifts and PulseCheck share one Firestore database contract, index drift becomes system drift. Treat index maintenance as platform configuration work, not optional cleanup."
+            body="Because Fit With Pulse, Pulse Check, and Macra share platform data contracts, index drift becomes system drift. Treat index maintenance as platform configuration work, not optional cleanup."
           />
         </CardGrid>
       </SectionBlock>

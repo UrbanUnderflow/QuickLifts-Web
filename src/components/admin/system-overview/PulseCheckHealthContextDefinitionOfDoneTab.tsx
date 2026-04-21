@@ -6,7 +6,7 @@ const DONE_CARDS = [
   {
     title: 'Runtime Done',
     accent: 'green' as const,
-    body: 'PulseCheck health-backed runtime surfaces use the canonical snapshot path for the intended rollout scope, and legacy direct reads are no longer part of the hot path for that scope.',
+    body: 'Pulse Check health-backed runtime surfaces use the canonical snapshot path for the intended rollout scope, and legacy direct reads are no longer part of the hot path for that scope.',
   },
   {
     title: 'Data Done',
@@ -21,9 +21,9 @@ const DONE_CARDS = [
 ];
 
 const MUST_HAVE_ROWS = [
-  ['Canonical snapshot is the runtime source of truth for scoped PulseCheck health flows', 'Required', 'This is the architectural cutover, not just a storage side project.'],
-  ['QuickLifts bridge lane is producing canonical docs in live environments', 'Required', 'Protects current value while the new system rolls out.'],
-  ['PulseCheck-native HealthKit lane can create useful standalone context', 'Required', 'Needed for athletes who do not use QuickLifts / FitWithPulse.'],
+  ['Canonical snapshot is the runtime source of truth for scoped Pulse Check health flows', 'Required', 'This is the architectural cutover, not just a storage side project.'],
+  ['Fit With Pulse bridge lane is producing canonical docs in live environments', 'Required', 'Protects current value while the new system rolls out.'],
+  ['Pulse Check HealthKit lane can create useful standalone context', 'Required', 'Needed for athletes who do not use Fit With Pulse.'],
   ['Health runtime exposes honest states like ready, no permission, no data, stale, and error', 'Required', 'Prevents misleading athlete messaging.'],
   ['Parity tooling exists and has been run against representative bridge scenarios', 'Required', 'Confirms the canonical snapshot matches the current system where it should.'],
   ['Freshness and source-posture semantics are trustworthy', 'Required', 'A zero-filled placeholder day cannot masquerade as real recovery context.'],
@@ -39,12 +39,12 @@ const NICE_TO_HAVE_ROWS = [
   ['Broader consumer rollout outside Nora', 'Nice to have', 'Dashboards, coach projections, and more surfaces can follow once the core path is stable.'],
   ['Richer operator UI for traces and rebuilds', 'Nice to have', 'Helpful for scale, but basic operability is enough for first close-out.'],
   ['Coach-facing privacy-filtered health projections', 'Nice to have', 'Separate sensitive-surface milestone, not required for the core pipeline close.'],
-  ['Multi-source merge depth beyond QuickLifts + HealthKit', 'Nice to have', 'Future-proofing expansion, not MVP completion.'],
+  ['Multi-source merge depth beyond Fit With Pulse + Macra + HealthKit', 'Nice to have', 'Future-proofing expansion, not MVP completion.'],
 ];
 
 const CLOSE_OUT_ROWS = [
-  ['Bridge-only athlete passes parity', 'A real or mock athlete using QuickLifts-backed context shows no meaningful parity drift on the validator fields.', 'Validates migration lane.'],
-  ['Standalone athlete path works', 'An athlete with no QuickLifts usage can still produce meaningful context from PulseCheck-native HealthKit.', 'Validates standalone promise.'],
+  ['Bridge-only athlete passes parity', 'A real or mock athlete using Fit With Pulse-backed context shows no meaningful parity drift on the validator fields.', 'Validates migration lane.'],
+  ['Standalone athlete path works', 'An athlete with no Fit With Pulse usage can still produce meaningful context from Pulse Check HealthKit.', 'Validates standalone promise.'],
   ['Runtime UX is honest under failure', 'Denied, stale, disconnected, and empty-data states are visible and understandable in the product.', 'Validates product trust.'],
   ['Operational inspection is possible', 'Team can inspect source posture, canonical presence, and rebuild/parity status without custom ad hoc scripts every time.', 'Validates supportability.'],
   ['Feature-flag decision is clear', 'Either the canonical runtime flag is enabled for the intended scope or there is a documented reason it is not yet enabled.', 'Validates rollout readiness.'],
@@ -53,7 +53,7 @@ const CLOSE_OUT_ROWS = [
 const BLOCKERS = [
   'Canonical collections still exist only on paper and are not populated in the target environment.',
   'Runtime still depends on direct `daily-health-summaries` reads for the scoped health experience.',
-  'HealthKit standalone path cannot produce context without QuickLifts present.',
+  'HealthKit standalone path cannot produce context without Fit With Pulse present.',
   'Parity shows unresolved drift on the bridge path for supported fields.',
   'Freshness or source posture is still ambiguous enough that the UX can lie to the athlete.',
   'The team cannot tell which source the runtime actually used for an answer.',
@@ -68,8 +68,8 @@ const OUT_OF_SCOPE = [
 
 const SIGNOFF_ROWS = [
   ['Product', 'The athlete experience is honest and the supported user stories work end to end.', 'Required'],
-  ['PulseCheck iOS', 'Runtime cutover is stable and new health work is building on snapshots, not legacy reads.', 'Required'],
-  ['QuickLifts / bridge owner', 'Shared-summary bridge quality and parity are acceptable for the supported scope.', 'Required'],
+  ['Pulse Check iOS', 'Runtime cutover is stable and new health work is building on snapshots, not legacy reads.', 'Required'],
+  ['Fit With Pulse bridge owner', 'Shared-summary bridge quality and parity are acceptable for the supported scope.', 'Required'],
   ['Platform / data owner', 'Canonical collections, indexes, and rebuild behavior are production-safe.', 'Required'],
   ['Ops / QA', 'Validation scenarios have been exercised and the team can inspect failures or drift quickly.', 'Required'],
 ];
@@ -78,10 +78,10 @@ const PulseCheckHealthContextDefinitionOfDoneTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="PulseCheck Health Context"
+        eyebrow="Pulse Check Health Context"
         title="Health Context Definition Of Done"
         version="Version 0.1 | March 17, 2026"
-        summary="Close-out artifact for deciding when the PulseCheck health-context feature is actually done. This document separates launch-blocking must-haves from expansion-oriented nice-to-haves so the team can stop treating open opportunity as unfinished core system work."
+        summary="Close-out artifact for deciding when the Pulse Check health-context feature is actually done. This document separates launch-blocking must-haves from expansion-oriented nice-to-haves so the team can stop treating open opportunity as unfinished core system work."
         highlights={[
           {
             title: 'Done Means Operationally Real',

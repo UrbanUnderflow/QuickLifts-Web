@@ -69,10 +69,10 @@ const PulseCheckDeviceIntegrationPartnershipMatrixTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="PulseCheck Health Context"
+        eyebrow="Pulse Check Health Context"
         title="Device Integration Partnership Matrix"
         version="Version 0.1 | March 17, 2026"
-        summary="Strategic matrix for deciding which device, platform, and enterprise partners PulseCheck should pursue, what shape those relationships should take, and how each one contributes to scale. The goal is to align technical integration quality with distribution, trust, and alliance value."
+        summary="Strategic matrix for deciding which device, platform, and enterprise partners Pulse Check should pursue, what shape those relationships should take, and how each one contributes to scale. The goal is to align technical integration quality with distribution, trust, and alliance value."
         highlights={[
           {
             title: 'Partnerships Must Scale',
@@ -90,7 +90,7 @@ const PulseCheckDeviceIntegrationPartnershipMatrixTab: React.FC = () => {
       />
 
       <RuntimeAlignmentPanel
-        role="Partnership planning artifact for devices, platforms, and performance systems that can expand PulseCheck context and distribution."
+        role="Partnership planning artifact for devices, platforms, and performance systems that can expand Pulse Check context and distribution."
         sourceOfTruth="Use this page to evaluate strategic fit, alliance shape, and scale upside before committing engineering time or partnership outreach."
         masterReference="This matrix should be read alongside the device integration strategy and health-context pipeline docs so business strategy and data architecture stay aligned."
         relatedDocs={[

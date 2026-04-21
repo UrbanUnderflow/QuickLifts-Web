@@ -150,17 +150,40 @@ interface EquityDocument {
   isAmendment?: boolean;
 }
 
+type SigningRequestStatus =
+  | 'pending'
+  | 'sent'
+  | 'delivered'
+  | 'opened'
+  | 'viewed'
+  | 'signed'
+  | 'failed'
+  | 'soft_bounce'
+  | 'hard_bounce'
+  | 'blocked'
+  | 'deferred'
+  | 'spam'
+  | 'unsubscribed';
+
 interface SigningRequest {
   id: string;
   documentType: string;
   documentName: string;
   recipientName: string;
   recipientEmail: string;
-  status: 'pending' | 'sent' | 'viewed' | 'signed';
-  createdAt: Timestamp;
-  sentAt?: Timestamp;
-  viewedAt?: Timestamp;
-  signedAt?: Timestamp;
+  status: SigningRequestStatus;
+  createdAt: Timestamp | Date | string;
+  sentAt?: Timestamp | Date | string;
+  deliveredAt?: Timestamp | Date | string;
+  openedAt?: Timestamp | Date | string;
+  viewedAt?: Timestamp | Date | string;
+  signedAt?: Timestamp | Date | string;
+  clickedAt?: Timestamp | Date | string;
+  lastEmailEvent?: string;
+  lastEmailEventAt?: Timestamp | Date | string;
+  emailStatus?: string;
+  messageId?: string | null;
+  sendCount?: number;
   equityDocumentId?: string;
   signerRole?: string;
   stakeholderId?: string;
@@ -298,6 +321,28 @@ const formatDate = (date: Timestamp | Date | string | undefined): string => {
     year: 'numeric', 
     month: 'short', 
     day: 'numeric'
+  });
+};
+
+const formatDateTime = (date: Timestamp | Date | string | undefined): string => {
+  if (!date) return 'N/A';
+  let dateObject: Date;
+  if (date instanceof Timestamp) {
+    dateObject = date.toDate();
+  } else if (date instanceof Date) {
+    dateObject = date;
+  } else if (typeof date === 'string') {
+    dateObject = new Date(date);
+  } else {
+    return 'Invalid Date';
+  }
+  if (Number.isNaN(dateObject.getTime())) return 'Invalid Date';
+  return dateObject.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
   });
 };
 
@@ -2208,7 +2253,14 @@ const EquityAdminPage: React.FC = () => {
   };
 
   const getSigningRequestsForEquityDoc = (equityDocId: string) => {
-    return signingRequests.filter(r => (r as any).equityDocumentId === equityDocId && !r.invalidatedAt);
+    return signingRequests
+      .filter(r => (r as any).equityDocumentId === equityDocId && !r.invalidatedAt)
+      .sort((a, b) => {
+        const aOrder = typeof a.signingOrder === 'number' ? a.signingOrder : Number.MAX_SAFE_INTEGER;
+        const bOrder = typeof b.signingOrder === 'number' ? b.signingOrder : Number.MAX_SAFE_INTEGER;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return getDateValue(a.createdAt as any) - getDateValue(b.createdAt as any);
+      });
   };
 
   const requiresExternalSignature = (equityDoc: EquityDocument) => {
@@ -2219,7 +2271,7 @@ const EquityAdminPage: React.FC = () => {
     const activeRequests = getSigningRequestsForEquityDoc(equityDoc.id);
     const hasSignatureFlow = activeRequests.length > 0;
     const isFullyExecuted = hasSignatureFlow && activeRequests.every(r => r.status === 'signed');
-    const hasBeenSent = activeRequests.some(r => ['sent', 'viewed', 'signed'].includes(r.status));
+    const hasBeenSent = activeRequests.some(r => ['sent', 'delivered', 'opened', 'viewed', 'signed'].includes(r.status));
 
     return {
       activeRequests,
@@ -2254,6 +2306,172 @@ const EquityAdminPage: React.FC = () => {
     }
 
     return null;
+  };
+
+  const hasSignerReachedStep = (request: SigningRequest, step: 'sent' | 'delivered' | 'opened' | 'signed') => {
+    const status = request.status;
+
+    if (step === 'signed') {
+      return Boolean(request.signedAt || status === 'signed');
+    }
+
+    if (step === 'opened') {
+      return Boolean(
+        request.openedAt ||
+        request.viewedAt ||
+        ['opened', 'viewed', 'signed'].includes(status)
+      );
+    }
+
+    if (step === 'delivered') {
+      return Boolean(
+        request.deliveredAt ||
+        ['delivered', 'opened', 'viewed', 'signed'].includes(status)
+      );
+    }
+
+    return Boolean(
+      request.sentAt ||
+      ['sent', 'delivered', 'opened', 'viewed', 'signed'].includes(status)
+    );
+  };
+
+  const getSignerStepTimestamp = (request: SigningRequest, step: 'sent' | 'delivered' | 'opened' | 'signed') => {
+    switch (step) {
+      case 'sent':
+        return request.sentAt || request.createdAt;
+      case 'delivered':
+        return request.deliveredAt;
+      case 'opened':
+        return request.openedAt || request.viewedAt;
+      case 'signed':
+        return request.signedAt;
+      default:
+        return undefined;
+    }
+  };
+
+  const getSignerCurrentStatus = (request: SigningRequest) => {
+    if (request.signedAt || request.status === 'signed') {
+      return { label: 'Signed', className: 'bg-green-900/30 text-green-300 border-green-800', icon: Check };
+    }
+    if (request.viewedAt || request.status === 'viewed') {
+      return { label: 'Opened signing page', className: 'bg-purple-900/30 text-purple-300 border-purple-800', icon: Eye };
+    }
+    if (request.openedAt || request.status === 'opened') {
+      return { label: 'Opened', className: 'bg-purple-900/30 text-purple-300 border-purple-800', icon: Eye };
+    }
+    if (request.deliveredAt || request.status === 'delivered') {
+      return { label: 'Delivered', className: 'bg-cyan-900/30 text-cyan-300 border-cyan-800', icon: CheckCircle };
+    }
+    if (request.sentAt || request.status === 'sent') {
+      return { label: 'Sent', className: 'bg-blue-900/30 text-blue-300 border-blue-800', icon: Mail };
+    }
+    if (['failed', 'soft_bounce', 'hard_bounce', 'blocked', 'spam', 'unsubscribed'].includes(request.status)) {
+      return { label: 'Needs attention', className: 'bg-red-900/30 text-red-300 border-red-800', icon: AlertTriangle };
+    }
+    if (request.status === 'deferred') {
+      return { label: 'Deferred', className: 'bg-amber-900/30 text-amber-300 border-amber-800', icon: Clock };
+    }
+    return { label: 'Pending send', className: 'bg-zinc-800 text-zinc-300 border-zinc-700', icon: Clock };
+  };
+
+  const SIGNER_STATUS_STEPS: Array<{
+    id: 'sent' | 'delivered' | 'opened' | 'signed';
+    label: string;
+    Icon: typeof Mail;
+  }> = [
+    { id: 'sent', label: 'Sent', Icon: Mail },
+    { id: 'delivered', label: 'Delivered', Icon: CheckCircle },
+    { id: 'opened', label: 'Opened', Icon: Eye },
+    { id: 'signed', label: 'Signed', Icon: Check },
+  ];
+
+  const renderSignerStatusPanel = (requests: SigningRequest[], compact = false) => {
+    if (!requests.length) return null;
+
+    return (
+      <div className={`${compact ? 'mt-3' : 'mt-4'} border-t border-zinc-800 pt-4`}>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div>
+            <p className="text-sm font-medium text-zinc-200">Signer Status</p>
+            <p className="text-xs text-zinc-500">
+              Tracking email delivery, opens, signing page views, and completed signatures per signer.
+            </p>
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              loadData();
+            }}
+            disabled={loading}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-60 text-xs text-zinc-200 transition-colors"
+          >
+            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {requests.map((request) => {
+            const status = getSignerCurrentStatus(request);
+            const StatusIcon = status.icon;
+            return (
+              <div key={request.id} className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {request.signerRole && (
+                        <span className="px-2 py-0.5 rounded-full text-[11px] bg-zinc-800 text-zinc-300 border border-zinc-700">
+                          {request.signerRole}
+                        </span>
+                      )}
+                      <p className="text-sm text-white font-medium truncate">{request.recipientName || 'Unnamed signer'}</p>
+                    </div>
+                    <p className="text-xs text-zinc-500 truncate mt-1">{request.recipientEmail}</p>
+                  </div>
+                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-xs shrink-0 ${status.className}`}>
+                    <StatusIcon className="w-3 h-3" />
+                    {status.label}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {SIGNER_STATUS_STEPS.map(({ id, label, Icon }) => {
+                    const reached = hasSignerReachedStep(request, id);
+                    const timestamp = getSignerStepTimestamp(request, id);
+                    return (
+                      <div
+                        key={id}
+                        className={`rounded-lg border px-2 py-2 ${
+                          reached
+                            ? 'border-green-800/70 bg-green-900/15 text-green-300'
+                            : 'border-zinc-800 bg-zinc-900/40 text-zinc-500'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 text-xs font-medium">
+                          <Icon className="w-3 h-3" />
+                          {label}
+                        </div>
+                        <p className="mt-1 text-[11px] leading-snug text-zinc-500">
+                          {reached ? (timestamp ? formatDateTime(timestamp) : 'Complete') : 'Waiting'}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {request.viewedAt && request.openedAt && (
+                  <p className="mt-2 text-[11px] text-zinc-500">
+                    Signing page opened: {formatDateTime(request.viewedAt)}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   };
 
   const invalidateSigningRequestsForDoc = async (equityDoc: EquityDocument, reason: string) => {
@@ -2379,6 +2597,14 @@ const EquityAdminPage: React.FC = () => {
           };
           const docRef = await addDoc(collection(db, 'signingRequests'), requestData);
           requestId = docRef.id;
+        } else {
+          await updateDoc(doc(db, 'signingRequests', requestId), {
+            recipientName: signer.name,
+            recipientEmail: signer.email,
+            signerRole: signer.role,
+            stakeholderId: signer.stakeholderId || null,
+            updatedAt: serverTimestamp(),
+          });
         }
 
         signingRequestIds.push(requestId);
@@ -2392,6 +2618,7 @@ const EquityAdminPage: React.FC = () => {
             documentType: signingDoc.documentType,
             recipientName: signer.name,
             recipientEmail: signer.email,
+            sendAttemptId: `${signingGroupId}-${requestId}`,
           }),
         });
         if (!resp.ok) {
@@ -2483,6 +2710,7 @@ const EquityAdminPage: React.FC = () => {
           recipientEmail: previewEmail,
           companyName: company.name || 'Pulse Intelligence Labs, Inc.',
           previewMode: true,
+          sendAttemptId: `preview-${signingDoc.id}-${Date.now()}`,
         }),
       });
 
@@ -4341,6 +4569,7 @@ const EquityAdminPage: React.FC = () => {
                                             </button>
                                           )}
                                         </div>
+                                        {needsSignature && docState.activeRequests.length > 0 && renderSignerStatusPanel(docState.activeRequests, true)}
                                         {/* Preview content */}
                                         {expandedEquityDoc === edoc.id && (
                                           <div className="mt-4 p-4 bg-zinc-900 rounded-lg border border-zinc-700 max-h-64 overflow-y-auto">
@@ -4928,6 +5157,8 @@ const EquityAdminPage: React.FC = () => {
                         )}
                       </div>
                     </div>
+
+                    {needsSignature && signingRequestsForDoc.length > 0 && renderSignerStatusPanel(signingRequestsForDoc)}
 
                     {isExpanded && edoc.status === 'completed' && (
                       <div className="mt-4 p-4 bg-zinc-900 rounded-xl border border-zinc-700">

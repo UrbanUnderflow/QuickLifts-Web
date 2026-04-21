@@ -14,9 +14,11 @@ interface SigningRequest {
   recipientLegalName?: string;
   recipientEmail: string;
   companyName?: string;  // Which company issued this document
-  status: 'pending' | 'sent' | 'viewed' | 'signed';
+  status: 'pending' | 'sent' | 'delivered' | 'opened' | 'viewed' | 'signed' | 'failed' | 'deferred';
   createdAt: Timestamp | Date | string;
   sentAt?: Timestamp | Date | string;
+  deliveredAt?: Timestamp | Date | string;
+  openedAt?: Timestamp | Date | string;
   viewedAt?: Timestamp | Date | string;
   signedAt?: Timestamp | Date | string;
   signatureData?: {
@@ -111,6 +113,8 @@ const SignDocument: React.FC = () => {
         await updateDoc(docRef, {
           status: 'viewed',
           viewedAt: serverTimestamp(),
+          lastSignerActivityAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         });
       }
 
@@ -195,6 +199,8 @@ const SignDocument: React.FC = () => {
         status: 'signed',
         signedAt: serverTimestamp(),
         signatureData,
+        lastSignerActivityAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
 
       // Check if all signees in the same group are signed

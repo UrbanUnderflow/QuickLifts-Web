@@ -96,7 +96,7 @@ const XCUITestingStrategyTab: React.FC = () => {
         role="Native iOS testing artifact for creator-club activation coverage, launch strategy, and testability standards."
         sourceOfTruth="This document is authoritative for how XCUITests should reach the club activation flow, which scenarios are currently covered, and which identifiers are expected to remain stable."
         masterReference="Use this page when adding or debugging iOS UI tests for club onboarding, intro gating, or creator activation settings."
-        relatedDocs={['Club Activation Architecture', 'Playwright Testing Strategy', 'QuickLifts iOS product handbook']}
+        relatedDocs={['Club Activation Architecture', 'Playwright Testing Strategy', 'Fit With Pulse iOS product handbook']}
       />
 
       <SectionBlock icon={ShieldCheck} title="Strategic Position">

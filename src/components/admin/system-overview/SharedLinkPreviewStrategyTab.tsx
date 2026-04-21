@@ -87,7 +87,7 @@ const SharedLinkPreviewStrategyTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Community"
+        eyebrow="Fit With Pulse"
         title="Shared Link Preview Strategy"
         version="Version 1.0 | March 11, 2026"
         summary="Architecture artifact for reliable social and messaging previews on shared Pulse pages. This document defines how preview metadata should be resolved, how fallback images and titles should work when a page has no custom configuration, and how protected shares should stay private without breaking previews."
@@ -112,7 +112,7 @@ const SharedLinkPreviewStrategyTab: React.FC = () => {
       />
 
       <RuntimeAlignmentPanel
-        role="Pulse Community artifact for share-link metadata reliability across iMessage, Slack, social previews, and other crawlers that inspect Open Graph and Twitter tags."
+        role="Fit With Pulse artifact for share-link metadata reliability across iMessage, Slack, social previews, and other crawlers that inspect Open Graph and Twitter tags."
         sourceOfTruth="This page is authoritative for how shared links should resolve preview title, description, image, and privacy-safe fallback behavior when a section or page lacks custom preview configuration."
         masterReference="Use this artifact when implementing previews for `shared/system-overview`, future shared document routes, or any public Pulse URL where crawler-facing metadata must remain valid even without bespoke page-level config."
         relatedDocs={[

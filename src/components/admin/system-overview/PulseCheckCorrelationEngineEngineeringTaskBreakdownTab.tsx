@@ -5,9 +5,9 @@ import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentP
 const STREAM_ROWS = [
   ['Architecture + governance', 'Freeze schema, enums, confidence rules, and shared messaging boundaries before runtime code starts drifting.', 'Product / architecture', 'Immediate'],
   ['Data foundation', 'Stand up canonical engine collections, revision posture, ids, and storage rules for evidence, patterns, and projections.', 'Platform', 'Immediate'],
-  ['Evidence generation', 'Turn health-context snapshots plus scored sims into joined Correlation Evidence Records.', 'Platform + PulseCheck iOS', 'Immediate after schema lock'],
+  ['Evidence generation', 'Turn health-context snapshots plus scored sims into joined Correlation Evidence Records.', 'Platform + Pulse Check iOS', 'Immediate after schema lock'],
   ['Pattern computation', 'Compute Athlete Pattern Models, thresholds, confidence, decay, and contradiction handling.', 'Platform / modeling', 'Near-term'],
-  ['Runtime projections', 'Generate Profile-, Nora-, coach-, and protocol-safe Recommendation Projections.', 'Platform + PulseCheck iOS + web', 'After first patterns exist'],
+  ['Runtime projections', 'Generate Profile-, Nora-, coach-, and protocol-safe Recommendation Projections.', 'Platform + Pulse Check iOS + web', 'After first patterns exist'],
   ['Assessment annotation', 'Extend canonical profile snapshots with `assessmentContextFlag` inside `stateContextAtCapture`.', 'Profile pipeline / platform', 'After pattern confidence exists'],
   ['Pilot dashboard + governance', 'Build the active-pilot directory, pilot detail dashboard, hypothesis tracking, and pilot-scoped review surfaces rooted in `PilotEnrollment` truth.', 'Web + ops + product', 'In parallel with Milestone 6'],
   ['Ops + research', 'Build operator visibility, export paths, inspection tools, and data-quality monitoring.', 'Web + ops + platform', 'Continuous'],
@@ -30,7 +30,7 @@ const M1_ROWS = [
 
 const M2_ROWS = [
   ['Map health snapshot inputs into engine-ready physiology posture', 'Transform canonical health-context domains and provenance into the physiology block used by evidence records.', 'Platform', 'Engine should ingest normalized physiology, not vendor payloads.'],
-  ['Map scored sims into normalized cognitive outcome block', 'Project sim session results into skill, pillar, and session-quality fields for the evidence record.', 'PulseCheck iOS + platform', 'Allows domain-specific learning instead of only total score learning.'],
+  ['Map scored sims into normalized cognitive outcome block', 'Project sim session results into skill, pillar, and session-quality fields for the evidence record.', 'Pulse Check iOS + platform', 'Allows domain-specific learning instead of only total score learning.'],
   ['Implement evidence writer service', 'Emit append-only Correlation Evidence Records from aligned physiology windows and scored sim sessions.', 'Platform', 'First real runtime object.'],
   ['Implement evidence correction lineage', 'If an evidence record must be corrected, preserve lineage and correction reason instead of silent mutation.', 'Platform', 'Audit safety.'],
   ['Add evidence quality flags', 'Persist missing-signal, mirrored-source, stale-source, and low-variety posture on evidence records.', 'Platform', 'Needed for later confidence scoring.'],
@@ -46,8 +46,8 @@ const M3_ROWS = [
 ];
 
 const M4_ROWS = [
-  ['Build Profile recommendation projections', 'Generate concise athlete-facing outputs for Profile using stable patterns plus current physiology posture.', 'Platform + PulseCheck iOS', 'First athlete-facing consumer.'],
-  ['Build Nora recommendation projections', 'Generate runtime-safe guidance for daily coaching, pacing, and protocol shaping.', 'Platform + PulseCheck iOS', 'Moves Nora off raw physiology interpretation.'],
+  ['Build Profile recommendation projections', 'Generate concise athlete-facing outputs for Profile using stable patterns plus current physiology posture.', 'Platform + Pulse Check iOS', 'First athlete-facing consumer.'],
+  ['Build Nora recommendation projections', 'Generate runtime-safe guidance for daily coaching, pacing, and protocol shaping.', 'Platform + Pulse Check iOS', 'Moves Nora off raw physiology interpretation.'],
   ['Build coach-grade projections', 'Generate evidence-rich coach outputs with supporting pattern keys, confidence posture, and state-specific effect summaries.', 'Platform + web', 'Needed for planning use, not just athlete UX.'],
   ['Build protocol planner projections', 'Surface body-state-specific protocol recommendations that tie into the protocol governance system.', 'Platform + planner owners', 'Connects engine to protocol personalization.'],
   ['Add projection validator', 'Ensure rendered outputs are template-safe, confidence-safe, and do not overclaim causality or medical meaning.', 'Platform + product', 'Prevents runtime overreach.'],
@@ -98,10 +98,10 @@ const PRODUCTION_GATES = [
 
 const FILE_ROWS = [
   ['Health Context Pipeline + assembler layer', 'Supply canonical physiology posture and provenance inputs for evidence writing.', 'Platform', 'Upstream dependency.'],
-  ['PulseCheck sim scoring runtime', 'Emit normalized sim outcomes and session-quality data for evidence creation.', 'PulseCheck iOS', 'Cognitive measurement dependency.'],
+  ['Pulse Check sim scoring runtime', 'Emit normalized sim outcomes and session-quality data for evidence creation.', 'Pulse Check iOS', 'Cognitive measurement dependency.'],
   ['Engine storage / compute services', 'Own evidence writers, pattern jobs, projection generation, revision handling, and recompute controls.', 'Platform', 'System core.'],
   ['Profile snapshot writer', 'Extend `stateContextAtCapture` with `assessmentContextFlag` at milestone creation time.', 'Platform / profile pipeline', 'Key integration surface.'],
-  ['Nora runtime / Profile UI / coach tooling', 'Consume projections and flags with confidence-safe copy and visibility rules.', 'PulseCheck iOS + web', 'Primary consumers.'],
+  ['Nora runtime / Profile UI / coach tooling', 'Consume projections and flags with confidence-safe copy and visibility rules.', 'Pulse Check iOS + web', 'Primary consumers.'],
   ['Pilot dashboard reporting service + UI', 'Own active-pilot listing, pilot detail KPIs, hypothesis workflow, and pilot-scoped athlete drill-down.', 'Web + ops', 'Primary monitoring surface for live pilots.'],
   ['Pilot research readout service + review UI', 'Own readout generation, frozen-frame display, section citations, review states, and supersession workflow.', 'Web + platform + product', 'Primary interpretation surface for governed pilot analysis.'],
   ['Research and ops tooling', 'Own export views, inspection surfaces, and monitoring dashboards.', 'Web + ops + research', 'Production trust layer.'],
@@ -139,7 +139,7 @@ const MILESTONE_STEPS = [
   {
     title: 'Milestone 2: Evidence Generation',
     body: 'Start emitting joined Correlation Evidence Records from physiology snapshots plus scored sim outcomes and backfill enough history to validate the system.',
-    owner: 'Platform + PulseCheck iOS',
+    owner: 'Platform + Pulse Check iOS',
   },
   {
     title: 'Milestone 3: Pattern Learning',

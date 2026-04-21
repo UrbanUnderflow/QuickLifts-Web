@@ -123,7 +123,7 @@ const AndroidTestingStrategyTab: React.FC = () => {
         role="Native Android testing artifact for instrumentation coverage, dev-database safety rules, and full-system E2E direction."
         sourceOfTruth="This document is authoritative for how Android automation should be run, what environment it should target, and how Android test data should be namespaced and cleaned up."
         masterReference="Use this page when adding Android UI tests, designing the Android E2E harness, or deciding how Android aligns with Playwright and XCUITest."
-        relatedDocs={['Playwright Testing Strategy', 'XCUITest Strategy', 'Pulse Android product handbook']}
+        relatedDocs={['Playwright Testing Strategy', 'XCUITest Strategy', 'Fit With Pulse Android product handbook']}
       />
 
       <SectionBlock icon={ShieldCheck} title="Strategic Position">

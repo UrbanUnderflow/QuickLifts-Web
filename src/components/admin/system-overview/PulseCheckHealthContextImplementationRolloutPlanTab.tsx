@@ -16,14 +16,14 @@ const PRINCIPLE_CARDS = [
   {
     title: 'Preserve Current Value While Migrating',
     accent: 'green' as const,
-    body: 'QuickLifts / FitWithPulse context should keep powering PulseCheck during rollout. Migration should add capability without regressing the current shared-context advantage.',
+    body: 'Fit With Pulse context should keep powering Pulse Check during rollout. Migration should add capability without regressing the current shared-context advantage.',
   },
 ];
 
 const MVP_ROWS = [
   ['Canonical snapshot contract locked', 'Snapshot, source-record, assembler, storage, and orchestration specs are all in place and treated as implementation constraints.', 'Already substantially defined in the handbook.'],
   ['Legacy summary bridge lane', 'Current `daily-health-summaries` can feed the new pipeline as a migration source rather than being the direct runtime contract.', 'Required for safe cutover.'],
-  ['Assembler-backed daily snapshot', 'PulseCheck can read a canonical daily snapshot produced by the new system, even if some inputs still originate from legacy shared summary data.', 'Required MVP outcome.'],
+  ['Assembler-backed daily snapshot', 'Pulse Check can read a canonical daily snapshot produced by the new system, even if some inputs still originate from legacy shared summary data.', 'Required MVP outcome.'],
   ['Basic source-status posture', 'Runtime can tell the difference between synced, waiting, stale, error, and disconnected posture.', 'Required for honest product behavior.'],
   ['Nora snapshot read path', 'At least one PulseCheck health-backed runtime surface reads the canonical snapshot instead of legacy direct summary logic.', 'Required to prove the architecture works.'],
 ];
@@ -36,7 +36,7 @@ const MILESTONE_STEPS = [
   },
   {
     title: 'Milestone 1: Bridge The Current System',
-    body: 'Build canonical storage and assembler flow using the existing shared QuickLifts summary lane as a migration input so the new runtime can produce first snapshots quickly.',
+      body: 'Build canonical storage and assembler flow using the existing shared Fit With Pulse summary lane as a migration input so the new runtime can produce first snapshots quickly.',
     owner: 'Platform + iOS',
   },
   {
@@ -46,8 +46,8 @@ const MILESTONE_STEPS = [
   },
   {
     title: 'Milestone 3: Add PulseCheck-Native HealthKit',
-    body: 'Implement the first direct source adapter so PulseCheck can generate context even when QuickLifts is not used.',
-    owner: 'PulseCheck iOS',
+    body: 'Implement the first direct source adapter so Pulse Check can generate context even when Fit With Pulse is not used.',
+    owner: 'Pulse Check iOS',
   },
   {
     title: 'Milestone 4: Add Oura And Backfill',
@@ -65,17 +65,17 @@ const WORKSTREAM_ROWS = [
   ['Runtime contract workstream', 'Finalize enums, field names, projection rules, and runtime read shape for the snapshot.', 'Architecture / platform.'],
   ['Persistence workstream', 'Create canonical Firestore collections, revision strategy, and source-status store.', 'Platform.'],
   ['Assembler workstream', 'Implement merge engine, trace persistence, and affected-window recompute logic.', 'Platform / backend leaning.'],
-  ['Bridge adapter workstream', 'Convert legacy shared summary flow into a canonical input lane.', 'QuickLifts + platform.'],
-  ['PulseCheck runtime workstream', 'Swap health chat and future insight surfaces onto snapshot-backed reads.', 'PulseCheck iOS.'],
-  ['Native source adapter workstream', 'Build HealthKit first, then Oura, both targeting source-record contracts.', 'PulseCheck iOS + integrations.'],
+  ['Bridge adapter workstream', 'Convert legacy shared summary flow into a canonical input lane.', 'Fit With Pulse + platform.'],
+  ['Pulse Check runtime workstream', 'Swap health chat and future insight surfaces onto snapshot-backed reads.', 'Pulse Check iOS.'],
+  ['Native source adapter workstream', 'Build HealthKit first, then Oura, both targeting source-record contracts.', 'Pulse Check iOS + integrations.'],
   ['Ops and QA workstream', 'Build trace inspection, rebuild controls, stale-source dashboards, and test scenarios.', 'Ops / QA / platform.'],
 ];
 
 const OWNERSHIP_ROWS = [
   ['Product / architecture', 'Own contract approval, milestone readiness, and scope discipline.', 'Prevent mid-build drift.'],
   ['Platform / backend', 'Own Firestore model, assembler, trace storage, source-status store, and rebuild job orchestration.', 'Core shared system owner.'],
-  ['QuickLifts iOS', 'Own the bridge from current shared summary generation into canonical source lanes where needed.', 'Protects current value during migration.'],
-  ['PulseCheck iOS', 'Own runtime cutover plus native HealthKit integration and source-state-aware UX.', 'Primary product consumer and new source owner.'],
+  ['Fit With Pulse iOS', 'Own the bridge from current shared summary generation into canonical source lanes where needed.', 'Protects current value during migration.'],
+  ['Pulse Check iOS', 'Own runtime cutover plus native HealthKit integration and source-state-aware UX.', 'Primary product consumer and new source owner.'],
   ['Integrations', 'Own Oura connector planning, auth, and connector-specific operational posture.', 'Connector expansion owner.'],
   ['Ops / QA', 'Own trace inspection workflows, migration validation, and stale/error scenario coverage.', 'Trust and stability owner.'],
 ];
@@ -102,7 +102,7 @@ const RISKS_ROWS = [
 ];
 
 const SUCCESS_ROWS = [
-  ['MVP success', 'PulseCheck health-backed chat can answer from a canonical snapshot path with clear source posture and without depending on legacy direct reads in the hot path.', 'Primary milestone outcome.'],
+  ['MVP success', 'Pulse Check health-backed chat can answer from a canonical snapshot path with clear source posture and without depending on legacy direct reads in the hot path.', 'Primary milestone outcome.'],
   ['Migration success', 'Legacy shared summary still contributes value, but new consumers stop coupling themselves to it directly.', 'Architectural health.'],
   ['Standalone success', 'An athlete without QuickLifts can still generate meaningful PulseCheck context through native HealthKit ingestion.', 'Standalone product promise.'],
   ['Expansion success', 'Adding Oura or future sources does not require consumer schema rewrites.', 'Future-proofing milestone.'],
@@ -112,14 +112,14 @@ const PulseCheckHealthContextImplementationRolloutPlanTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="PulseCheck Health Context"
+        eyebrow="Pulse Check Health Context"
         title="Health Context Implementation Rollout Plan"
         version="Version 0.1 | March 17, 2026"
-        summary="Execution-layer plan for delivering the PulseCheck health-context architecture as a real system. This document translates the contract stack into milestones, workstreams, ownership boundaries, cutover rules, defers, and success criteria so engineering can sequence the build without re-arguing the architecture midstream."
+        summary="Execution-layer plan for delivering the Pulse Check health-context architecture as a real system. This document translates the contract stack into milestones, workstreams, ownership boundaries, cutover rules, defers, and success criteria so engineering can sequence the build without re-arguing the architecture midstream."
         highlights={[
           {
             title: 'MVP First',
-            body: 'The first real win is a canonical snapshot path that already powers PulseCheck while preserving the current shared QuickLifts advantage.',
+            body: 'The first real win is a canonical snapshot path that already powers Pulse Check while preserving the current shared Fit With Pulse advantage.',
           },
           {
             title: 'Cut Over Deliberately',
@@ -127,7 +127,7 @@ const PulseCheckHealthContextImplementationRolloutPlanTab: React.FC = () => {
           },
           {
             title: 'Native Sources Come After Contracted Runtime',
-            body: 'PulseCheck-native HealthKit should arrive after the canonical runtime path exists, so it plugs into a stable system instead of becoming the system by accident.',
+            body: 'Pulse Check-native HealthKit should arrive after the canonical runtime path exists, so it plugs into a stable system instead of becoming the system by accident.',
           },
         ]}
       />

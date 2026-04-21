@@ -20,9 +20,11 @@ interface SigningRequest {
   documentName: string;
   recipientName: string;
   recipientEmail: string;
-  status: 'pending' | 'sent' | 'viewed' | 'signed';
+  status: 'pending' | 'sent' | 'delivered' | 'opened' | 'viewed' | 'signed' | 'failed' | 'deferred';
   createdAt: Timestamp;
   sentAt?: Timestamp;
+  deliveredAt?: Timestamp;
+  openedAt?: Timestamp;
   viewedAt?: Timestamp;
   signedAt?: Timestamp;
   signatureData?: {
@@ -124,6 +126,7 @@ const DocumentSigningAdmin: React.FC = () => {
           documentType: selectedTemplate.type,
           recipientName: selectedTemplate.recipientName,
           recipientEmail: recipientEmail.toLowerCase().trim(),
+          sendAttemptId: `${docRef.id}-${Date.now()}`,
         }),
       });
       
@@ -175,21 +178,30 @@ const DocumentSigningAdmin: React.FC = () => {
     const styles: Record<string, string> = {
       pending: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
       sent: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+      delivered: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+      opened: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
       viewed: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
       signed: 'bg-green-500/20 text-green-400 border-green-500/30',
+      failed: 'bg-red-500/20 text-red-400 border-red-500/30',
+      deferred: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
     };
     
     const icons: Record<string, React.ReactNode> = {
       pending: <Clock className="w-3 h-3" />,
       sent: <Mail className="w-3 h-3" />,
+      delivered: <Check className="w-3 h-3" />,
+      opened: <Eye className="w-3 h-3" />,
       viewed: <Eye className="w-3 h-3" />,
       signed: <Check className="w-3 h-3" />,
+      failed: <X className="w-3 h-3" />,
+      deferred: <Clock className="w-3 h-3" />,
     };
+    const label = status === 'viewed' ? 'Opened' : status.charAt(0).toUpperCase() + status.slice(1);
     
     return (
-      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${styles[status]}`}>
-        {icons[status]}
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${styles[status] || styles.pending}`}>
+        {icons[status] || icons.pending}
+        {label}
       </span>
     );
   };
@@ -236,13 +248,13 @@ const DocumentSigningAdmin: React.FC = () => {
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
               <p className="text-zinc-400 text-sm mb-1">Pending</p>
               <p className="text-2xl font-bold text-yellow-400">
-                {signingRequests.filter(r => r.status === 'pending' || r.status === 'sent').length}
+                {signingRequests.filter(r => ['pending', 'sent', 'delivered', 'opened', 'deferred'].includes(r.status)).length}
               </p>
             </div>
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
               <p className="text-zinc-400 text-sm mb-1">Viewed</p>
               <p className="text-2xl font-bold text-purple-400">
-                {signingRequests.filter(r => r.status === 'viewed').length}
+                {signingRequests.filter(r => r.status === 'opened' || r.status === 'viewed').length}
               </p>
             </div>
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
@@ -580,5 +592,3 @@ const DocumentSigningAdmin: React.FC = () => {
 };
 
 export default DocumentSigningAdmin;
-
-

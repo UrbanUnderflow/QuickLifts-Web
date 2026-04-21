@@ -3,17 +3,17 @@ import { AlertTriangle, ArrowRightLeft, Database, ShieldCheck, Workflow } from '
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
 
 const SOURCE_PATH_ROWS = [
-  ['Direct Oura OAuth/API lane', 'PulseCheck connects to Oura through the Cloud API using OAuth2 and refresh tokens.', 'Primary path for Oura-native readiness and recovery context.'],
-  ['HealthKit-derived fallback lane', 'Oura syncs into Apple Health / HealthKit and PulseCheck consumes the Apple Health mirror when the direct API is unavailable or not enabled.', 'Secondary path for compatibility and resilience.'],
+  ['Direct Oura OAuth/API lane', 'Pulse Check connects to Oura through the Cloud API using OAuth2 and refresh tokens.', 'Primary path for Oura-native readiness and recovery context.'],
+  ['HealthKit-derived fallback lane', 'Oura syncs into Apple Health / HealthKit and Pulse Check consumes the Apple Health mirror when the direct API is unavailable or not enabled.', 'Secondary path for compatibility and resilience.'],
   ['Canonical merge target', 'Both lanes should write into the same health-context source-record contract before snapshot assembly.', 'Keeps Nora and coach surfaces source-agnostic.'],
   ['Recommended default', 'Use direct Oura first, HealthKit fallback second.', 'Maximizes signal quality and keeps provenance honest.'],
 ];
 
 const OURA_SCOPE_ROWS = [
-  ['`email`', 'User email address', 'Optional; only request if PulseCheck needs it for account matching or support workflows.'],
+  ['`email`', 'User email address', 'Optional; only request if Pulse Check needs it for account matching or support workflows.'],
   ['`personal`', 'Gender, age, height, weight', 'Useful for baselines and body-metric context, but keep minimum-necessary consent in mind.'],
-  ['`daily`', 'Sleep, activity, and readiness daily summaries', 'Core scope for PulseCheck recovery and readiness context.'],
-  ['`heartrate`', 'Time-series heart rate for Gen 3 users', 'Use when PulseCheck needs richer heart-rate traces than Apple Health fallback can provide.'],
+  ['`daily`', 'Sleep, activity, and readiness daily summaries', 'Core scope for Pulse Check recovery and readiness context.'],
+  ['`heartrate`', 'Time-series heart rate for Gen 3 users', 'Use when Pulse Check needs richer heart-rate traces than Apple Health fallback can provide.'],
   ['`workout`', 'Auto-detected and user-entered workouts', 'Useful for training load and activity attribution.'],
   ['`tag`', 'User-entered tags', 'Helpful for self-reported context and event markers.'],
   ['`session`', 'Guided and unguided sessions in the Oura app', 'Useful for recovery or mindfulness context.'],
@@ -21,7 +21,7 @@ const OURA_SCOPE_ROWS = [
 ];
 
 const HEALTHKIT_ROWS = [
-  ['Exported from Oura to Apple Health', 'Active Energy, Heart Rate, Height, Mindful Minutes, Respiratory Rate, Sleep, Steps, Weight, Workouts, Workout Active Calories, Workout Distance, Workout Duration, Workout Type.', 'This is the fallback lane PulseCheck can consume without direct Oura OAuth.'],
+  ['Exported from Oura to Apple Health', 'Active Energy, Heart Rate, Height, Mindful Minutes, Respiratory Rate, Sleep, Steps, Weight, Workouts, Workout Active Calories, Workout Distance, Workout Duration, Workout Type.', 'This is the fallback lane Pulse Check can consume without direct Oura OAuth.'],
   ['Imported from Apple Health to Oura', 'Date of Birth, Heart Rate, Height, Sex, Weight, Workout Routes, Workouts, Workout Calories, Workout Distance, Workout Duration, Workout Type.', 'Important for understanding what is mirrored back into Oura, but not all of it is Oura-native signal.'],
   ['Key limitation', 'Apple Health sync is iOS-only and depends on Oura app configuration plus phone/background refresh behavior.', 'HealthKit fallback is convenient, but not a full substitute for direct Oura API access.'],
 ];
@@ -39,8 +39,9 @@ const SOURCE_RECORD_ROWS = [
 const PRECEDENCE_ROWS = [
   ['1', 'Direct Oura API', 'Use this for Oura-native daily summary, readiness, heart-rate, workout, tag, session, and SpO2 data.'],
   ['2', 'HealthKit-derived Oura mirror', 'Use this when the athlete has Oura -> Apple Health enabled but direct OAuth is missing, revoked, or not desired.'],
-  ['3', 'QuickLifts / FitWithPulse shared context', 'Keep this as the strongest training and nutrition lane when it exists, because it can include the workout and meal details Oura will never own.'],
-  ['4', 'PulseCheck self-report', 'Fill behavioral gaps only after the wearable and training lanes have been evaluated.'],
+  ['3', 'Fit With Pulse training context', 'Keep this as the strongest training lane when it exists, because it can include workout details Oura will never own.'],
+  ['4', 'Macra nutrition context', 'Keep this as the strongest nutrition lane when the athlete has Macra data, because Oura should not own meal or macro semantics.'],
+  ['5', 'Pulse Check self-report', 'Fill behavioral gaps only after the wearable, training, and nutrition lanes have been evaluated.'],
 ];
 
 const FRESHNESS_ROWS = [
@@ -53,8 +54,8 @@ const FRESHNESS_ROWS = [
 const CONNECTOR_STEPS = [
   {
     title: 'Choose Direct Oura First',
-    body: 'Register PulseCheck as an Oura Cloud API application and prefer the server-side OAuth2 flow so we can hold refresh tokens securely and keep sync stable beyond a single access token window.',
-    owner: 'PulseCheck backend',
+    body: 'Register Pulse Check as an Oura Cloud API application and prefer the server-side OAuth2 flow so we can hold refresh tokens securely and keep sync stable beyond a single access token window.',
+    owner: 'Pulse Check backend',
   },
   {
     title: 'Request Minimum Scopes',
@@ -68,12 +69,12 @@ const CONNECTOR_STEPS = [
   },
   {
     title: 'Enable HealthKit Fallback',
-    body: 'If Oura is connected to Apple Health, map the mirrored Oura data into the same source-record contract so PulseCheck still has recovery context even when direct API access is unavailable.',
-    owner: 'PulseCheck iOS',
+    body: 'If Oura is connected to Apple Health, map the mirrored Oura data into the same source-record contract so Pulse Check still has recovery context even when direct API access is unavailable.',
+    owner: 'Pulse Check iOS',
   },
   {
     title: 'Assemble One Athlete Context Snapshot',
-    body: 'Merge direct Oura, HealthKit-derived Oura, QuickLifts context, and self-report into one canonical athlete snapshot with provenance and freshness.',
+    body: 'Merge direct Oura, HealthKit-derived Oura, Fit With Pulse training context, Macra nutrition context, and self-report into one canonical athlete snapshot with provenance and freshness.',
     owner: 'Context assembler',
   },
   {
@@ -96,7 +97,7 @@ const ROADMAP_ROWS = [
   ['Phase 1', 'Launch direct Oura OAuth with `daily` plus the minimum account metadata needed for stable linking.', 'Gets the core recovery lane live.'],
   ['Phase 2', 'Add HealthKit-derived Oura fallback mapping for athletes already syncing Oura into Apple Health.', 'Prevents a single-path dependency.'],
   ['Phase 3', 'Expand to `workout`, `heartrate`, `tag`, `session`, and `spo2` where product value is clear.', 'Improves context richness without front-loading consent burden.'],
-  ['Phase 4', 'Fold Oura into the canonical source-record and snapshot merge rules used by PulseCheck health context.', 'Makes Oura source-agnostic for consumers.'],
+  ['Phase 4', 'Fold Oura into the canonical source-record and snapshot merge rules used by Pulse Check health context.', 'Makes Oura source-agnostic for consumers.'],
   ['Phase 5', 'Add operator tooling and freshness alerts for membership expiry, revoked consent, or stale mirrored data.', 'Keeps the lane maintainable.'],
 ];
 
@@ -104,10 +105,10 @@ const PulseCheckOuraIntegrationStrategyTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="PulseCheck Health Context"
+        eyebrow="Pulse Check Health Context"
         title="Oura Integration Strategy"
         version="Version 0.1 | March 17, 2026"
-        summary="Concrete strategy for bringing Oura into PulseCheck through a direct OAuth/API lane plus a HealthKit-derived fallback lane. The goal is to preserve Oura-native recovery context when available, fall back cleanly when only Apple Health is present, and normalize both into the existing canonical health-context pipeline."
+        summary="Concrete strategy for bringing Oura into Pulse Check through a direct OAuth/API lane plus a HealthKit-derived fallback lane. The goal is to preserve Oura-native recovery context when available, fall back cleanly when only Apple Health is present, and normalize both into the existing canonical health-context pipeline."
         highlights={[
           {
             title: 'Direct API Is Primary',
@@ -115,7 +116,7 @@ const PulseCheckOuraIntegrationStrategyTab: React.FC = () => {
           },
           {
             title: 'HealthKit Is The Fallback',
-            body: 'If the athlete only has Oura syncing into Apple Health, PulseCheck can still ingest mirrored Oura data through HealthKit.',
+            body: 'If the athlete only has Oura syncing into Apple Health, Pulse Check can still ingest mirrored Oura data through HealthKit.',
           },
           {
             title: 'Normalize Before Consumers',
@@ -125,9 +126,9 @@ const PulseCheckOuraIntegrationStrategyTab: React.FC = () => {
       />
 
       <RuntimeAlignmentPanel
-        role="Integration strategy artifact for the Oura lane inside PulseCheck. It defines the direct OAuth/API path, the Apple Health fallback path, the source-record mapping, the freshness posture, and the rollout order for making Oura part of the canonical athlete-context stack."
-        sourceOfTruth="This page is the operating reference for how PulseCheck should connect to Oura, what data domains should be requested, how Apple Health fallback fits, and how the merged context should remain source-aware and freshness-aware."
-        masterReference="Use this page when implementing Oura OAuth, Apple Health fallback ingestion, canonical source records, or the merge-precedence rules that decide which recovery signal PulseCheck should trust."
+        role="Integration strategy artifact for the Oura lane inside Pulse Check. It defines the direct OAuth/API path, the Apple Health fallback path, the source-record mapping, the freshness posture, and the rollout order for making Oura part of the canonical athlete-context stack."
+        sourceOfTruth="This page is the operating reference for how Pulse Check should connect to Oura, what data domains should be requested, how Apple Health fallback fits, and how the merged context should remain source-aware and freshness-aware."
+        masterReference="Use this page when implementing Oura OAuth, Apple Health fallback ingestion, canonical source records, or the merge-precedence rules that decide which recovery signal Pulse Check should trust."
         relatedDocs={[
           'Health Context Architecture',
           'Athlete Context Snapshot Spec',
@@ -183,12 +184,12 @@ const PulseCheckOuraIntegrationStrategyTab: React.FC = () => {
           <InfoCard
             title="Fallback Rule"
             accent="amber"
-            body="If the athlete only exposes Oura through Apple Health, PulseCheck should consume that mirrored data rather than failing the experience. The fallback must be labeled as mirrored so Nora and analytics do not overclaim direct Oura provenance."
+            body="If the athlete only exposes Oura through Apple Health, Pulse Check should consume that mirrored data rather than failing the experience. The fallback must be labeled as mirrored so Nora and analytics do not overclaim direct Oura provenance."
           />
           <InfoCard
             title="Limitation"
             accent="red"
-            body="Apple Health fallback is useful for sleep, activity, heart rate, and workouts, but it is not a full replacement for the direct Oura API when PulseCheck wants Oura-native readiness, tags, or richer recovery semantics."
+            body="Apple Health fallback is useful for sleep, activity, heart rate, and workouts, but it is not a full replacement for the direct Oura API when Pulse Check wants Oura-native readiness, tags, or richer recovery semantics."
           />
         </CardGrid>
       </SectionBlock>

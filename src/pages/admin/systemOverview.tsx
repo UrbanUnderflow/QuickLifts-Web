@@ -22,12 +22,14 @@ import {
   Smartphone,
   TestTube2,
   Trash2,
+  Utensils,
   Users,
   X,
 } from "lucide-react";
 import AdminRouteGuard from "../../components/auth/AdminRouteGuard";
 import SectionNav from "../../components/admin/system-overview/SectionNav";
 import ProductHandbook from "../../components/admin/system-overview/ProductHandbook";
+import MacraSystemOverviewTab from "../../components/admin/system-overview/MacraSystemOverviewTab";
 import HeartbeatProtocolTab from "../../components/admin/HeartbeatProtocolTab";
 import HunterWorldTab from "../../components/admin/HunterWorldTab";
 import SimulationTaxonomyTab from "../../components/admin/system-overview/SimulationTaxonomyTab";
@@ -137,6 +139,41 @@ const LAYER_STYLES: Record<EcosystemNode["layer"], string> = {
   agent: "bg-green-500/10 border-green-400/40",
 };
 
+const PRODUCT_POSITIONING = [
+  {
+    title: "Fit With Pulse",
+    eyebrow: "Consumer health + fitness",
+    icon: Users,
+    accent: "border-blue-400/25 bg-blue-400/[0.06] text-blue-200",
+    body:
+      "The external consumer surface for workouts, clubs, rounds, creators, profile health, and social accountability. QuickLifts remains the repo/internal lineage name.",
+  },
+  {
+    title: "Pulse Check",
+    eyebrow: "Elite athlete service tech",
+    icon: Brain,
+    accent: "border-violet-400/25 bg-violet-400/[0.06] text-violet-200",
+    body:
+      "White-glove mental performance, readiness, protocols, simulations, coach visibility, team pilots, and operator-facing athlete support.",
+  },
+  {
+    title: "Macra",
+    eyebrow: "Nutrition",
+    icon: Utensils,
+    accent: "border-lime-400/25 bg-lime-400/[0.06] text-lime-200",
+    body:
+      "Dedicated nutrition AI surface for macros, food journaling, meal scans, label scans, meal planning, supplements, and Nora nutrition chat.",
+  },
+  {
+    title: "Web + Admin",
+    eyebrow: "Platform operations",
+    icon: Server,
+    accent: "border-cyan-400/25 bg-cyan-400/[0.06] text-cyan-200",
+    body:
+      "The QuickLifts-Web repo powers public web, admin operations, bridge functions, provisioning, system docs, and internal command surfaces.",
+  },
+];
+
 /* ---- SYSTEM-LEVEL TAB DEFINITIONS ---- */
 interface SystemTab {
   id: string;
@@ -149,7 +186,7 @@ interface SystemTab {
 const SYSTEM_TABS: SystemTab[] = [
   {
     id: "pulse-community",
-    label: "Pulse Community",
+    label: "Fit With Pulse",
     icon: Users,
     accent: "#60a5fa",
     sectionIds: [
@@ -177,8 +214,15 @@ const SYSTEM_TABS: SystemTab[] = [
     ],
   },
   {
+    id: "macra",
+    label: "Macra",
+    icon: Utensils,
+    accent: "#d9f99d",
+    sectionIds: ["macra-system-overview"],
+  },
+  {
     id: "pulsecheck",
-    label: "PulseCheck",
+    label: "Pulse Check",
     icon: Brain,
     accent: "#c084fc",
     sectionIds: [
@@ -773,7 +817,7 @@ const SystemOverviewPage: React.FC = () => {
         title: "Products",
         value: String(systemOverviewManifest.products.length),
         icon: <Layers className="w-5 h-5" />,
-        caption: "QuickLifts iOS, Android, PulseCheck, Web",
+        caption: "Fit With Pulse, Pulse Check, Macra, Web/Admin",
         tone: "from-blue-500/30 to-blue-300/10",
       },
       {
@@ -829,6 +873,47 @@ const SystemOverviewPage: React.FC = () => {
                   </div>
                 </div>
               ))}
+            </div>
+
+            <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-zinc-500">
+                  Current Product Architecture
+                </p>
+                <h2 className="text-xl font-semibold mt-1">
+                  Fit With Pulse, Pulse Check, and Macra are distinct surfaces
+                </h2>
+                <p className="text-sm text-zinc-400 mt-2 max-w-4xl">
+                  The overview now treats QuickLifts naming as repo/internal
+                  lineage. The external product model is Fit With Pulse for
+                  consumer fitness and clubs, Pulse Check for white-glove elite
+                  athlete service technology, and Macra for nutrition.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4 gap-3">
+                {PRODUCT_POSITIONING.map((product) => {
+                  const Icon = product.icon;
+                  return (
+                    <article
+                      key={product.title}
+                      className={`rounded-2xl border p-4 ${product.accent}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-4 w-4" />
+                        <p className="text-sm font-semibold text-white">
+                          {product.title}
+                        </p>
+                      </div>
+                      <p className="mt-2 text-[11px] uppercase tracking-wide text-current">
+                        {product.eyebrow}
+                      </p>
+                      <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+                        {product.body}
+                      </p>
+                    </article>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
@@ -919,6 +1004,9 @@ const SystemOverviewPage: React.FC = () => {
           </div>
         );
 
+      case "macra-system-overview":
+        return <MacraSystemOverviewTab />;
+
       case "pulse-club-activation-architecture":
         return <PulseClubActivationArchitectureTab />;
 
@@ -976,7 +1064,7 @@ const SystemOverviewPage: React.FC = () => {
                     </p>
                     <ul className="mt-2 list-disc pl-5 space-y-1 text-zinc-300">
                       <li>Challenge, chat, referral, club, and workout notification functions.</li>
-                      <li>QuickLifts iOS direct send flows that still target the legacy Pulse ecosystem.</li>
+                      <li>Fit With Pulse iOS direct send flows that still target the legacy Pulse ecosystem.</li>
                       <li>Admin test tooling when the product scope is Pulse.</li>
                     </ul>
                   </div>

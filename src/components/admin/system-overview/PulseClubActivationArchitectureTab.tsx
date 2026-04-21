@@ -84,7 +84,7 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
   return (
     <div className="space-y-8">
       <DocHeader
-        eyebrow="Pulse Community"
+        eyebrow="Fit With Pulse"
         title="Club Activation Architecture"
         version="v1 First-Pass Artifact"
         summary="System-level artifact for how creator clubs should turn a passive join into an activated member relationship. This document defines the first-pass operating model for configurable club onboarding, structured introductions, and host-controlled member pairing."
@@ -110,14 +110,14 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
 
       <RuntimeAlignmentPanel
         sectionLabel="Artifact Position"
-        role="Source-of-truth artifact for the first-pass club activation layer inside Pulse Community."
+        role="Source-of-truth artifact for the first-pass club activation layer inside Fit With Pulse."
         sourceOfTruth="This document governs the reusable host settings, member state model, and sequencing for onboarding, intro completion, and pairing across creator clubs."
         masterReference="Use this page when designing club activation features, auditing creator club onboarding behavior, or deciding whether a proposed club need should become a shared platform primitive."
         relatedDocs={[
           'Product Handbooks section in the System Overview',
-          'QuickLifts Web club surfaces',
-          'QuickLifts iOS club flows',
-          'Pulse Android club parity work',
+          'Fit With Pulse Web/Admin club surfaces',
+          'Fit With Pulse iOS club flows',
+          'Fit With Pulse Android club parity work',
         ]}
       />
 

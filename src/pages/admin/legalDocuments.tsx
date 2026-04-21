@@ -4,7 +4,6 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, where, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { FileText, Download, Trash2, Loader2, Sparkles, Clock, AlertCircle, CheckCircle, RefreshCw, Eye, ChevronUp, Edit3, ClipboardCheck, X, AlertTriangle, CheckCircle2, Send, Mail, Check, PenTool, Share2, Copy, Paperclip, Link2 } from 'lucide-react';
-import { applyDocumentPatches, type DocumentPatch } from '../../utils/documentPatches';
 import { formatDiagram, previewFormattedDiagram, extractSectionHeaders, insertDiagramIntoDocument } from '../../utils/diagramFormatter';
 
 // Companies available for document generation
@@ -109,9 +108,11 @@ interface SigningRequest {
   documentName: string;
   recipientName: string;
   recipientEmail: string;
-  status: 'pending' | 'sent' | 'viewed' | 'signed';
+  status: 'pending' | 'sent' | 'delivered' | 'opened' | 'viewed' | 'signed' | 'failed' | 'deferred';
   createdAt: Timestamp;
   sentAt?: Timestamp;
+  deliveredAt?: Timestamp;
+  openedAt?: Timestamp;
   viewedAt?: Timestamp;
   signedAt?: Timestamp;
   legalDocumentId?: string; // Link back to the legal document
@@ -1109,13 +1110,12 @@ const LegalDocumentsAdmin: React.FC = () => {
   };
 
   // Build small excerpts for patch-based revision (reduce tokens + latency)
-  const buildRevisionExcerpts = (fullText: string, revisionInstructions: string, options?: { maxSections?: number; includeIntroOutro?: boolean }): string[] => {
+  const _buildRevisionExcerpts = (fullText: string, revisionInstructions: string, options?: { maxSections?: number; includeIntroOutro?: boolean }): string[] => {
     const maxSections = Math.max(1, options?.maxSections ?? 3);
     const includeIntroOutro = options?.includeIntroOutro ?? false;
 
     const text = String(fullText || '');
     const prompt = String(revisionInstructions || '');
-    const lowerText = text.toLowerCase();
     const lowerPrompt = prompt.toLowerCase();
 
     // Split into sections by markdown H2 headers. Keep header in each section.
@@ -1249,7 +1249,7 @@ const LegalDocumentsAdmin: React.FC = () => {
           if (contentType && contentType.includes('application/json')) {
             try {
               result = await response.json();
-            } catch (parseError) {
+            } catch {
               const text = await response.text();
               throw new Error(`Server returned invalid JSON. Response: ${text.substring(0, 200)}`);
             }
@@ -1286,7 +1286,6 @@ const LegalDocumentsAdmin: React.FC = () => {
 
         try {
           // Primary: Use section-based editing (fast, reliable)
-          // eslint-disable-next-line no-console
           console.log('[legalDocuments] Using section-based editing mode');
           result = await requestOnce({ ...basePayload, mode: 'sections' });
         } catch (e) {
@@ -1296,10 +1295,8 @@ const LegalDocumentsAdmin: React.FC = () => {
 
         // Handle section mode response (content is already applied server-side)
         if (result?.mode === 'sections' && typeof result?.content === 'string') {
-          // eslint-disable-next-line no-console
           console.log('[legalDocuments] Section edits applied:', result.appliedCount, 'sections modified');
           if (result.failures && result.failures.length > 0) {
-            // eslint-disable-next-line no-console
             console.warn('[legalDocuments] Section edit warnings:', result.failures);
           }
           debugInfo.mode = 'sections';
@@ -1601,6 +1598,7 @@ const LegalDocumentsAdmin: React.FC = () => {
               recipientName: signer.name,
               recipientEmail: signer.email,
               companyName: signingDocument.companyName || 'Pulse Intelligence Labs, Inc.',
+              sendAttemptId: `${signingGroupId}-${requestId}`,
             }),
           });
 
@@ -1707,6 +1705,7 @@ const LegalDocumentsAdmin: React.FC = () => {
           recipientName: signer.name,
           recipientEmail: signer.email,
           companyName: signingDocument.companyName || 'Pulse Intelligence Labs, Inc.',
+          sendAttemptId: `resend-${signer.signingRequestId}-${Date.now()}`,
         }),
       });
 
@@ -1730,8 +1729,12 @@ const LegalDocumentsAdmin: React.FC = () => {
     const configs = {
       pending: { bg: 'bg-yellow-900/30', text: 'text-yellow-400', border: 'border-yellow-800', icon: Clock, label: 'Pending' },
       sent: { bg: 'bg-blue-900/30', text: 'text-blue-400', border: 'border-blue-800', icon: Mail, label: 'Sent' },
-      viewed: { bg: 'bg-purple-900/30', text: 'text-purple-400', border: 'border-purple-800', icon: Eye, label: 'Viewed' },
+      delivered: { bg: 'bg-cyan-900/30', text: 'text-cyan-400', border: 'border-cyan-800', icon: CheckCircle, label: 'Delivered' },
+      opened: { bg: 'bg-purple-900/30', text: 'text-purple-400', border: 'border-purple-800', icon: Eye, label: 'Opened' },
+      viewed: { bg: 'bg-purple-900/30', text: 'text-purple-400', border: 'border-purple-800', icon: Eye, label: 'Opened' },
       signed: { bg: 'bg-green-900/30', text: 'text-green-400', border: 'border-green-800', icon: Check, label: 'Signed' },
+      failed: { bg: 'bg-red-900/30', text: 'text-red-400', border: 'border-red-800', icon: AlertTriangle, label: 'Needs attention' },
+      deferred: { bg: 'bg-amber-900/30', text: 'text-amber-400', border: 'border-amber-800', icon: Clock, label: 'Deferred' },
     };
     const config = configs[status] || configs.pending;
     const Icon = config.icon;
@@ -1820,7 +1823,7 @@ const LegalDocumentsAdmin: React.FC = () => {
   };
 
   // Improved content formatter that properly handles markdown
-  const formatContentForPdf = (content: string, isProject: boolean = false): string => {
+  const formatContentForPdf = (content: string, _isProject: boolean = false): string => {
     // Normalize line endings
     let result = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     const escapeAttribute = (value: string) =>
@@ -2213,7 +2216,7 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
               node.textContent = node.textContent.replace(/about:blank/gi, '');
             }
           }
-        } catch (e) {
+        } catch {
           // Ignore errors
         }
 
