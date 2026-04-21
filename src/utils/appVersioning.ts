@@ -1,6 +1,6 @@
 export type AppVersionMediaType = 'video' | 'image';
 
-export type AppVersionProduct = 'fitWithPulse' | 'pulseCheck';
+export type AppVersionProduct = 'fitWithPulse' | 'pulseCheck' | 'macra';
 
 export interface AppVersionProductConfig {
   id: AppVersionProduct;
@@ -27,6 +27,14 @@ export const APP_VERSION_PRODUCT_CONFIGS: Record<AppVersionProduct, AppVersionPr
     versionCollections: ['pulsecheck-version', 'pulsecheck-versions'],
     updateModalConfigPath: ['company-config', 'pulsecheck-app-update-modal'],
     storageRoot: 'press_assets/pulsecheck_app_updates',
+  },
+  macra: {
+    id: 'macra',
+    label: 'Macra',
+    shortLabel: 'Macra',
+    versionCollections: ['macra-version', 'macra-versions'],
+    updateModalConfigPath: ['company-config', 'macra-app-update-modal'],
+    storageRoot: 'press_assets/macra_app_updates',
   },
 };
 

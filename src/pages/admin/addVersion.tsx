@@ -32,7 +32,7 @@ const sanitizeStorageSegment = (value: string) =>
 const sanitizeFileName = (value: string) =>
   value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/-+/g, '-');
 
-const PRODUCT_TABS: AppVersionProduct[] = ['fitWithPulse', 'pulseCheck'];
+const PRODUCT_TABS: AppVersionProduct[] = ['fitWithPulse', 'pulseCheck', 'macra'];
 
 const getLatestVersionFromCollections = async (
   product: AppVersionProduct
@@ -390,7 +390,9 @@ const AddVersionPage = () => {
                   <div className="text-xs text-zinc-400">
                     {product === 'fitWithPulse'
                       ? 'Legacy Fit With Pulse live release feed'
-                      : 'PulseCheck live release feed'}
+                      : product === 'pulseCheck'
+                        ? 'PulseCheck live release feed'
+                        : 'Macra live release feed'}
                   </div>
                 </button>
               );
@@ -550,7 +552,13 @@ const AddVersionPage = () => {
                       className="w-full bg-[#262a30] border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] transition text-white placeholder-gray-500"
                       value={version}
                       onChange={(event) => setVersion(event.target.value)}
-                      placeholder={activeProduct === 'fitWithPulse' ? 'e.g. 5.70' : 'e.g. 2.11'}
+                      placeholder={
+                        activeProduct === 'fitWithPulse'
+                          ? 'e.g. 5.70'
+                          : activeProduct === 'pulseCheck'
+                            ? 'e.g. 2.11'
+                            : 'e.g. 1.2'
+                      }
                       required
                     />
                     <button
@@ -601,7 +609,7 @@ const AddVersionPage = () => {
                 <span className="font-semibold text-white">Release rule:</span>{' '}
                 {requiresBuildNumber
                   ? 'upload and wait for Apple first, then publish the matching version/build here to turn on the in-app release messaging.'
-                  : 'upload and wait for Apple first, then publish the matching version here. A build number is optional for PulseCheck.'}
+                  : `upload and wait for Apple first, then publish the matching version here. A build number is optional for ${APP_VERSION_PRODUCT_CONFIGS[activeProduct].shortLabel}.`}
               </div>
 
               <div>
@@ -738,9 +746,9 @@ const AddVersionPage = () => {
                     Is Critical Update?
                   </label>
                   <p className="text-gray-500 text-xs mt-1">
-                    {activeProduct === 'pulseCheck'
-                      ? 'Mark this only when the new build is already live. PulseCheck iOS will gate the app and keep people on the update screen until they install it.'
-                      : 'Mark this only when the new build is already live and you want the app to push people to install it.'}
+                    {activeProduct === 'fitWithPulse'
+                      ? 'Mark this only when the new build is already live and you want the app to push people to install it.'
+                      : `Mark this only when the new build is already live. ${APP_VERSION_PRODUCT_CONFIGS[activeProduct].shortLabel} iOS will gate the app and keep people on the update screen until they install it.`}
                   </p>
                 </div>
                 {isCriticalUpdate && (

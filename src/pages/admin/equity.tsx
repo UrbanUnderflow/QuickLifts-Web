@@ -3146,9 +3146,13 @@ const EquityAdminPage: React.FC = () => {
     0;
 
   const getCurrentStakeholderGrantDate = (stakeholder: Stakeholder) =>
-    stakeholder.grants?.[0]?.vestingStartDate ||
-    stakeholder.grants?.[0]?.grantDate ||
-    stakeholder.startDate;
+    stakeholder.type === 'advisor'
+      ? stakeholder.startDate ||
+        stakeholder.grants?.[0]?.vestingStartDate ||
+        stakeholder.grants?.[0]?.grantDate
+      : stakeholder.grants?.[0]?.vestingStartDate ||
+        stakeholder.grants?.[0]?.grantDate ||
+        stakeholder.startDate;
 
   // Start editing grant terms for a stakeholder
   const startEditingGrantTerms = (stakeholder: Stakeholder) => {
@@ -3252,6 +3256,21 @@ const EquityAdminPage: React.FC = () => {
       if (!stakeholder.optionsGranted && stakeholder.totalShares) {
         stakeholderUpdate.totalShares = nextOptionsValue;
         stakeholderUpdate.totalUnvested = nextOptionsValue - (stakeholder.totalVested || 0);
+      }
+
+      if (stakeholder.grants?.length) {
+        stakeholderUpdate.grants = stakeholder.grants.map((grant, index) =>
+          index === 0
+            ? {
+                ...grant,
+                numberOfShares: nextOptionsValue,
+                unvestedShares: nextOptionsValue - (grant.vestedShares || 0),
+                ...(stakeholder.type === 'advisor'
+                  ? { grantDate: revisedGrantTimestamp, vestingStartDate: revisedGrantTimestamp }
+                  : {}),
+              }
+            : grant
+        );
       }
 
       try {
@@ -4101,7 +4120,7 @@ const EquityAdminPage: React.FC = () => {
                                       )
                                         .map(d => (
                                           <option key={d.id} value={d.id}>
-                                            {d.title} ({formatDate(d.createdAt)})
+                                            {d.title} ({formatDate(d.updatedAt || d.createdAt)})
                                           </option>
                                         ))}
                                     </select>
@@ -5227,7 +5246,7 @@ const EquityAdminPage: React.FC = () => {
                           .filter(d => d.documentType === 'board_consent' && d.status === 'completed')
                           .map(doc => (
                             <option key={doc.id} value={doc.id}>
-                              {doc.title} ({formatDate(doc.createdAt)})
+                              {doc.title} ({formatDate(doc.updatedAt || doc.createdAt)})
                             </option>
                           ))
                         }
