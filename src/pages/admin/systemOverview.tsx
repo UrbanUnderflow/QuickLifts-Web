@@ -101,6 +101,7 @@ import PulseCheckPermissionsVisibilityModelTab from "../../components/admin/syst
 import PulseCheckCoachDashboardInformationArchitectureTab from "../../components/admin/system-overview/PulseCheckCoachDashboardInformationArchitectureTab";
 import PulseCheckProfileArchitectureTab from "../../components/admin/system-overview/PulseCheckProfileArchitectureTab";
 import PulseCheckProfileSnapshotExportSpecTab from "../../components/admin/system-overview/PulseCheckProfileSnapshotExportSpecTab";
+import PulseCheckAthleteShowroomAvatarTab from "../../components/admin/system-overview/PulseCheckAthleteShowroomAvatarTab";
 import QuickLiftsProfileHealthSystemTab, {
   QuickLiftsProfileHealthEnergyMergeSpecTab,
   QuickLiftsProfileHealthSnapshotContractTab,
@@ -290,6 +291,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-coach-dashboard-information-architecture",
       "pulsecheck-profile-architecture",
       "pulsecheck-profile-snapshot-export-spec",
+      "pulsecheck-athlete-showroom-avatar",
       "pulsecheck-vision-pro-immersive-tests",
     ],
   },
@@ -1841,6 +1843,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-profile-snapshot-export-spec":
         return <PulseCheckProfileSnapshotExportSpecTab />;
+
+      case "pulsecheck-athlete-showroom-avatar":
+        return <PulseCheckAthleteShowroomAvatarTab />;
 
       case "quicklifts-profile-health-system":
         return <QuickLiftsProfileHealthSystemTab />;

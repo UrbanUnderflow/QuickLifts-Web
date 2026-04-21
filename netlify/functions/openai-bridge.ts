@@ -11,8 +11,15 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   generateResponse: { maxTokens: 2000, modelPattern: /gpt-4o|gpt-4/i }, // Nora Chat
   generateWorkout: { maxTokens: 4000, modelPattern: /gpt-4o|gpt-4/i }, // Workout Generation
   groundedFoodLookup: { maxTokens: 3000, modelPattern: /gpt-5|gpt-4|gpt-4o|o[1-4]/i },
+  macraAssessMacros: { maxTokens: 2500, modelPattern: /gpt-4o|gpt-4/i },
+  macraDailyInsight: { maxTokens: 600, modelPattern: /gpt-4o|gpt-4/i },
+  macraFoodJournalFeedback: { maxTokens: 1500, modelPattern: /gpt-4o|gpt-4/i },
+  macraLabelScan: { maxTokens: 2200, modelPattern: /gpt-4o|gpt-4/i },
+  macraLabelSupplements: { maxTokens: 2500, modelPattern: /gpt-4o|gpt-4/i },
   macraMealPlan: { maxTokens: 2000, modelPattern: /gpt-4o|gpt-4/i }, // Macra: Nora-generated meal plans
+  macraMealNote: { maxTokens: 1500, modelPattern: /gpt-4o|gpt-4/i },
   noraNutritionChat: { maxTokens: 700, modelPattern: /gpt-4o|gpt-4/i }, // Macra: Nora coach Q&A
+  pulsecheckSportIntelligence: { maxTokens: 8000, modelPattern: /gpt-4o|gpt-4/i },
   // Default bounds for generic actions
   default: { maxTokens: 1000, modelPattern: /gpt-4o|gpt-4|gpt-3.5/i }
 };
@@ -31,6 +38,78 @@ const getHeader = (headers: Record<string, string | undefined> | undefined, head
 const resolveOpenAIApiKey = (): string | null => {
   const configuredKey = process.env.OPENAI_API_KEY?.trim() || process.env.OPEN_AI_SECRET_KEY?.trim();
   return configuredKey || null;
+};
+
+const REMOTE_BRIDGE_FEATURE_ALIASES: Record<string, string> = {
+  // Local dev may relay to a deployed bridge that has not received the newest
+  // feature id yet. Use a known high-token policy there to avoid truncating
+  // structured JSON before this local branch is deployed.
+  pulsecheckSportIntelligence: 'generateWorkout'
+};
+
+const resolveRemoteBridgeOrigin = (): string => {
+  return (process.env.OPENAI_BRIDGE_FALLBACK_ORIGIN || process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai')
+    .replace(/\/+$/, '');
+};
+
+const isLocalBridgeRequest = (event: { headers?: Record<string, string | undefined> }): boolean => {
+  const host = (getHeader(event.headers, 'host') || '').toLowerCase();
+  return host.includes('localhost') || host.includes('127.0.0.1') || host.startsWith('0.0.0.0');
+};
+
+const shouldRelayToRemoteBridge = (
+  event: { headers?: Record<string, string | undefined> },
+  providerApiKey: string | null
+): boolean => {
+  if (providerApiKey) return false;
+  if (!isLocalBridgeRequest(event)) return false;
+
+  try {
+    const remoteHost = new URL(resolveRemoteBridgeOrigin()).host.toLowerCase();
+    const localHost = (getHeader(event.headers, 'host') || '').toLowerCase();
+    return Boolean(remoteHost) && remoteHost !== localHost;
+  } catch (_error) {
+    return false;
+  }
+};
+
+const relayToRemoteBridge = async (
+  event: Parameters<Handler>[0],
+  openApiPath: string,
+  featureId: string
+) => {
+  const remoteUrl = `${resolveRemoteBridgeOrigin()}/api/openai${openApiPath}`;
+  const authHeader = getHeader(event.headers, 'authorization');
+  const contentType = getHeader(event.headers, 'content-type') || 'application/json';
+  const remoteFeatureId = REMOTE_BRIDGE_FEATURE_ALIASES[featureId] || featureId;
+
+  console.warn('[openai-bridge] Local provider key missing; relaying request to deployed bridge.', {
+    remoteUrl,
+    featureId,
+    remoteFeatureId
+  });
+
+  const response = await fetch(remoteUrl, {
+    method: event.httpMethod,
+    headers: {
+      'Content-Type': contentType,
+      ...(authHeader ? { Authorization: authHeader } : {}),
+      'openai-organization': remoteFeatureId,
+      'x-pulsecheck-original-openai-organization': featureId,
+      'x-pulsecheck-firebase-mode': 'prod'
+    },
+    body: event.httpMethod === 'POST' ? event.body || '{}' : undefined
+  });
+  const data = await response.text();
+
+  return {
+    statusCode: response.status,
+    headers: {
+      ...corsHeaders,
+      'Content-Type': response.headers.get('content-type') || 'application/json'
+    },
+    body: data
+  };
 };
 
 const verifyAuth = async (authHeader: string | undefined): Promise<string | null> => {
@@ -78,6 +157,19 @@ export const handler: Handler = async (event) => {
   const providerApiKey = resolveOpenAIApiKey();
 
   if (!providerApiKey) {
+    if (shouldRelayToRemoteBridge(event, providerApiKey)) {
+      try {
+        return await relayToRemoteBridge(event, openApiPath, featureId);
+      } catch (error: any) {
+        console.error('[openai-bridge] Failed to relay local request to deployed bridge:', error);
+        return {
+          statusCode: 502,
+          headers: corsHeaders,
+          body: JSON.stringify({ error: 'OpenAI bridge relay failed. Check deployed bridge availability.' })
+        };
+      }
+    }
+
     console.error('[openai-bridge] Missing provider API key. Configure OPENAI_API_KEY or OPEN_AI_SECRET_KEY.');
     return {
       statusCode: 500,
@@ -115,7 +207,7 @@ export const handler: Handler = async (event) => {
         parsedBody.max_tokens = effectiveTokenCap;
       }
 
-    } catch (e) {
+    } catch (_error) {
       return {
         statusCode: 400,
         headers: corsHeaders,

@@ -130,11 +130,7 @@ const MacraMarketingLanding: React.FC<Props> = ({
       {/* ── NAV ── */}
       <nav className={`mc2-nav ${navScrolled ? 'mc2-nav--scrolled' : ''}`}>
         <a href="#top" className="mc2-logo">
-          <span className="mc2-logo-mark">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </span>
+          <img src="/macra-icon.png" alt="Macra" className="mc2-logo-img" />
           Macra
         </a>
         <div className="mc2-nav-links">
@@ -393,15 +389,15 @@ const MacraMarketingLanding: React.FC<Props> = ({
           <span className="mc2-trust-label">From the team that built</span>
           <div className="mc2-trust-list">
             {[
-              { n: 'Fit With Pulse', s: 'Clubs & training' },
-              { n: 'QuickLifts', s: 'iOS workout OS' },
-              { n: 'PulseCheck', s: 'Mental performance' },
-              { n: 'Nora AI', s: 'Always-on coach' },
+              { n: 'Fit With Pulse', s: 'Social fitness · clubs', href: '/' },
+              { n: 'PulseCheck', s: 'Mental performance OS', href: '/PulseCheck' },
+              { n: 'Nora AI', s: 'Always-on coach', href: '/Nora' },
             ].map((b) => (
-              <div key={b.n} className="mc2-trust-brand">
+              <a key={b.n} href={b.href} className="mc2-trust-brand">
                 <strong>{b.n}</strong>
                 <span>{b.s}</span>
-              </div>
+                <span className="mc2-trust-arrow">→</span>
+              </a>
             ))}
           </div>
         </div>
@@ -926,11 +922,7 @@ const MacraMarketingLanding: React.FC<Props> = ({
         <div className="mc2-footer-inner">
           <div>
             <div className="mc2-logo" style={{ marginBottom: 12 }}>
-              <span className="mc2-logo-mark">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                </svg>
-              </span>
+              <img src="/macra-icon.png" alt="Macra" className="mc2-logo-img" />
               Macra
             </div>
             <p style={{ fontSize: 14, color: '#5a5d55', maxWidth: 280, lineHeight: 1.6 }}>
@@ -993,13 +985,11 @@ const MacraMarketingLanding: React.FC<Props> = ({
           );
           transition: color 0.4s;
         }
-        .mc2-logo-mark {
-          width: 32px; height: 32px; border-radius: 9px;
-          background: linear-gradient(135deg, rgba(224,254,16,0.22), rgba(6,182,212,0.18));
-          display: flex; align-items: center; justify-content: center;
-          box-shadow: 0 0 0 1px rgba(224,254,16,0.25), 0 4px 18px rgba(224,254,16,0.12);
+        .mc2-logo-img {
+          width: 34px; height: 34px; border-radius: 9px;
+          object-fit: cover; flex-shrink: 0;
+          box-shadow: 0 0 0 1px rgba(190,242,100,0.25), 0 4px 18px rgba(190,242,100,0.18);
         }
-        .mc2-logo-mark svg { width: 16px; height: 16px; stroke: #E0FE10; }
         .mc2-nav-links { display: flex; align-items: center; gap: 28px; }
         .mc2-nav-links a {
           text-decoration: none; font-size: 14px; font-weight: 500;
@@ -1427,17 +1417,38 @@ const MacraMarketingLanding: React.FC<Props> = ({
           flex-wrap: wrap; justify-content: center;
         }
         .mc2-trust-brand {
+          position: relative;
           display: flex; flex-direction: column; gap: 2px;
           border-left: 1px solid rgba(190,242,100,0.12);
-          padding-left: 20px;
+          padding: 2px 32px 2px 20px;
+          text-decoration: none;
+          transition: transform 0.25s cubic-bezier(0.16,1,0.3,1), border-color 0.25s;
+        }
+        .mc2-trust-brand:hover {
+          transform: translateY(-1px);
+          border-left-color: rgba(190,242,100,0.45);
         }
         .mc2-trust-brand strong {
           font-size: 14px; font-weight: 700;
           color: #F4F5EE; letter-spacing: -0.01em;
+          transition: color 0.25s;
         }
+        .mc2-trust-brand:hover strong { color: #BEF264; }
         .mc2-trust-brand span {
           font-size: 11px; color: rgba(255,255,255,0.42);
           letter-spacing: 0.03em;
+        }
+        .mc2-trust-arrow {
+          position: absolute; right: 8px; top: 50%;
+          transform: translateY(-50%) translateX(-4px);
+          opacity: 0;
+          color: #BEF264 !important;
+          font-size: 13px !important;
+          transition: opacity 0.25s, transform 0.25s;
+        }
+        .mc2-trust-brand:hover .mc2-trust-arrow {
+          opacity: 1;
+          transform: translateY(-50%) translateX(0);
         }
 
         /* ── VALUE ROW (Scan · Plan · Track) ── */
@@ -1445,12 +1456,6 @@ const MacraMarketingLanding: React.FC<Props> = ({
           background: #FAF9F4;
           padding: 120px 56px;
           position: relative;
-        }
-        .mc2-value::before {
-          content: ''; position: absolute;
-          top: -80px; left: 0; right: 0; height: 80px;
-          background: linear-gradient(to bottom, transparent, #FAF9F4);
-          pointer-events: none;
         }
         .mc2-value-inner {
           max-width: 1200px; margin: 0 auto;
@@ -1530,14 +1535,11 @@ const MacraMarketingLanding: React.FC<Props> = ({
         .mc2-section--offwhite::after {
           background: linear-gradient(to bottom, transparent, #F4F5EE);
         }
-        /* Dark section: explicit near-black bg so white headlines are always readable */
+        /* Dark section: explicit near-black bg so white headlines are always readable.
+           Clean hard edge — no gradient bleed into the light section above. */
         .mc2-section--dark {
           background: #0B0F0A;
-        }
-        .mc2-section--dark::before {
-          content: ''; position: absolute; top: -120px; left: 0; right: 0; height: 120px;
-          background: linear-gradient(to bottom, transparent, #0B0F0A);
-          pointer-events: none; z-index: 0;
+          box-shadow: 0 -1px 0 rgba(190,242,100,0.1);
         }
         .mc2-section-inner {
           max-width: 1200px; margin: 0 auto;

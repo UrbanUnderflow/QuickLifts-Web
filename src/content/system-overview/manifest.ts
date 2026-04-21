@@ -99,6 +99,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-coach-dashboard-information-architecture', label: 'Coach Dashboard IA', description: 'Coach-facing information hierarchy, workflows, and privacy boundaries for roster visibility.' },
     { id: 'pulsecheck-profile-architecture', label: 'Profile System', description: 'Parent artifact for PulseCheck profile information architecture, milestone snapshots, and export contract rules.' },
     { id: 'pulsecheck-profile-snapshot-export-spec', label: 'Profile Snapshot & Export Spec', description: 'Canonical snapshot storage, idempotent write protocol, revision history, and canonical-first research export contract.', parentSectionId: 'pulsecheck-profile-architecture' },
+    { id: 'pulsecheck-athlete-showroom-avatar', label: 'Athlete 3D Avatar', description: 'Profile-only optional multi-view 3D athlete avatar capture, generation, storage, and RealityKit showroom contract.', parentSectionId: 'pulsecheck-profile-architecture' },
     { id: 'pulsecheck-vision-pro-immersive-tests', label: 'Vision Pro - Immersive Tests', description: 'Spec stack for the football Vision Pro package, including immersive trial positioning, environment design, event schema, protocol rules, and pilot operations.' },
     { id: 'system-design-language', label: 'System Design & Language', description: 'Voice, copy posture, and human-centered UI rules for how Pulse speaks to users across products.' },
     { id: 'auntedna-integration-strategy', label: 'Integration Strategy', description: 'API layer, webhook contract, profile mirror model, and MCP positioning for the AuntEdna clinical bridge.' },
@@ -118,6 +119,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
       'Reframed the System Overview around the current product split: Fit With Pulse for consumer fitness and clubs, Pulse Check for elite athlete service technology, and Macra for nutrition.',
+      'Locked the PulseCheck Athlete 3D Avatar artifact into the Profile System as a Profile-only optional feature: front/left/back/right guided capture, local validation, backend generation, `.usdz` output, RealityKit showroom rendering, and explicit non-onboarding/privacy guardrails.',
       'Added Macra as a first-class System Overview tab with native iOS architecture, nutrition data ownership, Nora bridge behavior, subscription access, and locked 6.5-inch App Store screenshot assets.',
       'Froze the Outcome Rubric v1 spec and added it to the Agent Swarm handbook so the autonomous mission system now has a locked runtime contract for outcome-first execution.',
       'Added the Enhanced Energy Merge Spec artifact to the Fit With Pulse profile-health handbook stack, locking `ResolvedEnergySnapshot`, source precedence, segment provenance, coverage, acceptance gates, and Home/Profile migration rules for calories out.',
@@ -439,6 +441,20 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       ],
     },
     {
+      id: 'svc-pulsecheck-avatar-generation',
+      name: 'PulseCheck Avatar Generation Pipeline',
+      purpose:
+        'Planned authenticated backend pipeline for multi-view athlete avatar sessions, capture validation, generation job orchestration, `.usdz` export, thumbnails, manifests, and retention/deletion workflows.',
+      owner: 'PulseCheck Team + Platform + 3D Generation',
+      status: 'planned',
+      environments: ['Development', 'Production'],
+      keyDependencies: ['Firebase Auth', 'Cloud Firestore', 'Firebase Storage', 'job queue', '3D generation runtime', 'RealityKit-compatible export'],
+      sourceRefs: [
+        { label: 'Avatar Spec', path: '../PulseCheck/docs/specs/athlete-showroom-avatar.md' },
+        { label: 'Avatar Implementation Plan', path: '../PulseCheck/docs/specs/athlete-showroom-avatar-implementation-plan.md' },
+      ],
+    },
+    {
       id: 'svc-macra-nutrition-ai-bridge',
       name: 'Macra Nutrition AI Bridge',
       purpose:
@@ -513,6 +529,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
         'birthdate',
         'createdAt',
         'profileImage.profileImageURL',
+        'avatarShowroom',
         'registrationComplete',
         'didCompleteProfileQuiz',
         'legalAcceptance',
@@ -531,6 +548,35 @@ export const systemOverviewManifest: SystemOverviewManifest = {
         { label: 'User Service', path: 'src/api/firebase/user/service.ts' },
         { label: 'Sign-In Modal', path: 'src/components/SignInModal.tsx' },
         { label: 'Write Contract Verifier', path: 'scripts/verify-user-write-contract.js' },
+      ],
+    },
+    {
+      id: 'coll-pulsecheck-avatar-showroom',
+      name: 'users/{uid}.avatarShowroom + profile-avatars/{uid}/sessions/{sessionId}',
+      purpose:
+        'PulseCheck-owned optional profile avatar manifest and session-scoped storage contract for four-angle capture assets, masks, generated model, thumbnail, preview render, manifest, and quality report.',
+      writtenBy: 'PulseCheck iOS avatar flow and authenticated avatar generation backend only',
+      readBy: 'PulseCheck iOS Profile, avatar settings, generation status UI, retention/deletion jobs, and authorized support tooling',
+      criticalFields: [
+        'status',
+        'sessionId',
+        'captures[].angle',
+        'captures[].validationScore',
+        'modelURL',
+        'thumbnailURL',
+        'previewImageURL',
+        'manifestURL',
+        'qualityReportURL',
+        'generatorVersion',
+        'assetFormat',
+        'createdAt',
+        'updatedAt',
+        'completedAt',
+        'failureReason',
+      ],
+      sourceRefs: [
+        { label: 'Avatar Spec', path: '../PulseCheck/docs/specs/athlete-showroom-avatar.md' },
+        { label: 'Avatar Implementation Plan', path: '../PulseCheck/docs/specs/athlete-showroom-avatar-implementation-plan.md' },
       ],
     },
     {
