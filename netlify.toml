@@ -482,3 +482,17 @@
 [functions.scheduled-group-meet-final-reminders]
   # Runs every 15 minutes and sends the Group Meet guest reminder on the first sweep inside the hour before the final meeting block.
   schedule = "*/15 * * * *"
+
+# Macra: welcome email safety-net sweep (catches users who finished onboarding
+# but whose client-side welcome send never landed — e.g. app killed mid-flow).
+# The send function is idempotent via `macraWelcomeEmailSentAt` on the user doc.
+[functions.schedule-macra-welcome-email]
+  schedule = "0 * * * *"  # Hourly
+
+# Macra: inactivity winback emails at 3/7/14 days since last food log
+[functions.schedule-macra-inactivity-email]
+  schedule = "0 15 * * *"  # Once daily at 3PM UTC (10AM ET / 11AM EDT)
+
+# Macra: tips series at day 2 / 4 / 7 after Macra onboarding
+[functions.schedule-macra-tips-email]
+  schedule = "30 14 * * *"  # Once daily at 2:30PM UTC

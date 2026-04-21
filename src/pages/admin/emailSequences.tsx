@@ -147,6 +147,33 @@ const SEQUENCES: SequenceRow[] = [
     openInAdminPath: '/admin/ErrorLogs',
     openInAdminLabel: 'Open error logs',
   },
+  // ── Macra Nutrition ───────────────────────────────────
+  {
+    id: 'macra-welcome-v1',
+    name: 'Macra Welcome',
+    trigger: 'Fires once when a user finishes the Macra onboarding notification-preferences step (iOS) — plus an hourly server-side sweep that catches users whose client-side send never landed. Idempotent via users.macraWelcomeEmailSentAt.',
+    defaultSubject: 'Welcome to Macra — your plan is ready',
+    functionPath: '/.netlify/functions/send-macra-welcome-email',
+    templateDocId: 'macra-welcome-v1',
+  },
+  {
+    id: 'macra-tips-v1',
+    name: 'Macra Tips Series',
+    trigger: 'Scheduled function. Sends tip emails on day 2, day 4, and day 7 after Macra onboarding completion.',
+    defaultSubject: 'Nora tip: {{tipTitle}}',
+    functionPath: '/.netlify/functions/send-macra-tips-email',
+    templateDocId: 'macra-tips-v1',
+    scheduleConfigDocId: 'macra-tips-v1',
+  },
+  {
+    id: 'macra-inactivity-winback-v1',
+    name: 'Macra Inactivity Winback',
+    trigger: 'Scheduled function. Fires at 3, 7, and 14 days since last Macra food log.',
+    defaultSubject: "You haven't logged in {{daysInactive}} days — Nora misses you",
+    functionPath: '/.netlify/functions/send-macra-inactivity-email',
+    templateDocId: 'macra-inactivity-winback-v1',
+    scheduleConfigDocId: 'macra-inactivity-winback-v1',
+  },
 ];
 
 const EmailSequencesAdmin: React.FC = () => {
