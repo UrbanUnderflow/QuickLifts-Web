@@ -3,10 +3,9 @@ import Link from 'next/link';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
 import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical, Settings2, Wallet } from 'lucide-react';
-import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from '../../redux/store';
+import { useDispatch } from 'react-redux';
 import { toggleDevMode } from '../../redux/devModeSlice';
-import { initializeFirebase } from '../../api/firebase/config';
+import { initializeFirebase, isUsingDevFirebase } from '../../api/firebase/config';
 
 interface AdminCardProps {
   title: string;
@@ -453,9 +452,21 @@ const adminCardsData = [
 
 const EnvironmentSwitcher: React.FC = () => {
   const dispatch = useDispatch();
-  const isDevelopment = useSelector((state: RootState) => state.devMode.isDevelopment);
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
   const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  // Reflect the actual Firebase mode so the switcher can't drift from what
+  // Firebase is actually connected to (Redux state defaults to false even
+  // when resolveClientFirebaseMode returns true on fresh localhost visits).
+  const [isDevelopment, setIsDevelopment] = React.useState<boolean>(false);
+
+  React.useEffect(() => {
+    const actualMode = isUsingDevFirebase();
+    setIsDevelopment(actualMode);
+    const savedMode = window.localStorage.getItem('devMode');
+    if (savedMode !== String(actualMode)) {
+      window.localStorage.setItem('devMode', String(actualMode));
+    }
+  }, []);
 
   const handleEnvironmentSwitch = (newMode: boolean) => {
     if (newMode === isDevelopment) {

@@ -57,8 +57,8 @@ const founderLenses: Record<LensKey, {
 }> = {
   athlete: {
     label: 'Athlete',
-    title: 'Performance is not theoretical here.',
-    body: 'Division I track and field at Florida State, competitive physique athlete, and a decade in the gym as a trainer. The work starts from lived reps — pressure, recovery, discipline, and the community that makes training stick.',
+    title: 'Tremaine understands performance from the inside.',
+    body: 'Division I track and field at Florida State, competitive physique athlete, and a decade in the gym as a trainer. That background gives Pulse a practical view of pressure, recovery, discipline, and the communities that keep people training.',
     icon: Medal,
     color: PULSE_GREEN,
     stats: ['D1 Track and Field', 'Florida State', 'Trainer'],
@@ -66,15 +66,15 @@ const founderLenses: Record<LensKey, {
   engineer: {
     label: 'Engineer',
     title: 'Shipped software used by millions before building Pulse.',
-    body: 'Two decades in engineering, including Principal Engineer roles at Warby Parker and General Motors. Consumer and in-vehicle software across OnStar and Cadillac — the kind of work where an edge case costs a recall, not a refresh.',
+    body: 'Two decades in engineering, including Principal Engineer roles at Warby Parker and General Motors. Consumer and in-vehicle software across OnStar and Cadillac gave him a high bar for reliability, product quality, and scale.',
     icon: Zap,
     color: SKY,
     stats: ['20+ years', 'Principal Engineer', 'Consumer scale'],
   },
   clinical: {
     label: 'Clinical',
-    title: 'Product taste shaped by clinical rigor.',
-    body: "Clinical research roles at IQVIA and Clinical Inc on studies across Long COVID, Type 2 Diabetes, and Parkinson's — supporting Pfizer, Eli Lilly, Dexcom, and others. The habit is simple: design for outcomes, instrument everything, move on evidence.",
+    title: 'Clinical research discipline informs the product.',
+    body: "Clinical research roles at IQVIA and Clinical Inc included studies across Long COVID, Type 2 Diabetes, and Parkinson's, supporting Pfizer, Eli Lilly, Dexcom, and others. The operating habit is clear: design for outcomes, instrument the work, and move with evidence.",
     icon: ShieldCheck,
     color: VIOLET,
     stats: ['IQVIA', 'Clinical Inc', 'Evidence-led'],
@@ -95,9 +95,9 @@ const productDetails: Record<ProductKey, {
   pulse: {
     name: 'Fit With Pulse',
     eyebrow: 'Community fitness OS',
-    title: 'Infrastructure for the people who run fitness — creators, clubs, brands, and corporations.',
-    body: "Run clubs, personal trainers, strength coaches, and wellness operators don't have a dedicated home to build, manage, and monetize their community. Pulse is that home — challenges, programming, content, and commerce in one app built for the operator, not the consumer.",
-    status: 'Live on iOS and Web. Android in development.',
+    title: 'Community infrastructure for creators, clubs, brands, and corporate wellness teams.',
+    body: 'Fit With Pulse gives run clubs, trainers, strength coaches, and wellness operators one place to manage programming, challenges, content, memberships, and payments.',
+    status: 'Live on iOS, Android, and Web.',
     icon: Users,
     color: PULSE_GREEN,
     bullets: [
@@ -111,7 +111,7 @@ const productDetails: Record<ProductKey, {
     name: 'Pulse Check',
     eyebrow: 'Mental performance OS',
     title: 'Cognitive training and measurement built for athletes who compete for a living.',
-    body: 'Pulse Check trains attention, stress response, and decision-making through software-delivered simulations — assigned, scored, and adapted by Nora, the AI coach inside the system. Data flows back as readiness and cognitive-state signals teams can actually act on.',
+    body: 'Pulse Check uses software simulations and Nora, its AI coach, to train attention, stress response, and decision-making. Teams receive readiness and cognitive-state signals they can use in training.',
     status: 'Live on iOS and Web. University and professional pilots in progress.',
     icon: Brain,
     color: SKY,
@@ -134,8 +134,8 @@ const coreMetrics = [
 const tractionItems = [
   {
     label: 'Fit With Pulse',
-    title: 'Live on iOS and Web',
-    body: '50+ fitness creators onboarded — run clubs, personal trainers, strength coaches, and wellness operators building and monetizing community on the platform today.',
+    title: 'Live on iOS, Android, and Web',
+    body: '50+ fitness creators are onboarded, including run clubs, personal trainers, strength coaches, and wellness operators building and monetizing community on the platform today.',
     icon: Dumbbell,
     color: PULSE_GREEN,
   },
@@ -149,7 +149,7 @@ const tractionItems = [
   {
     label: 'Professional sports',
     title: 'NFL conversations underway',
-    body: 'Active early-stage discussions with the New England Patriots on integrating Pulse Check at the professional level — a wedge into the broader league environment.',
+    body: 'Active early-stage discussions with the New England Patriots are focused on integrating Pulse Check at the professional level and expanding into the broader league environment.',
     icon: Medal,
     color: VIOLET,
   },
@@ -169,7 +169,8 @@ const team = [
     image: '/TremaineFounder.jpg',
     color: PULSE_GREEN,
     tags: ['D1 athlete', 'Principal engineer', 'Clinical research'],
-    body: 'The rare combination of athlete experience, enterprise engineering at scale, and evidence-grounded product instinct in one operator.',
+    body: 'Leads product and company strategy from his background as an athlete, enterprise engineer, and clinical research operator.',
+    email: 'tre@fitwithpulse.ai',
   },
   {
     name: 'Bobby Nweke',
@@ -177,7 +178,8 @@ const team = [
     image: '/bobbyAdvisor.jpg',
     color: SKY,
     tags: ['Harvard', 'Teach For America', 'TED'],
-    body: 'Operational spine of the company. Institutional leadership, talent development, and strategic execution across education, policy, and public platforms.',
+    body: 'Supports operations, hiring, partnerships, and execution across the company. His background spans Harvard, Teach For America, TED, education, policy, and public leadership.',
+    email: 'bobby@fitwithpulse.ai',
   },
   {
     name: 'Lola Oluwaladun',
@@ -223,19 +225,19 @@ const advisors = [
 const whyNow = [
   {
     title: 'Social sport is becoming culture.',
-    body: 'Run clubs, training groups, recreational leagues, and community fitness are the fastest-growing modalities in sport — and still operate without a serious infrastructure layer underneath them.',
+    body: 'Run clubs, training groups, recreational leagues, and community fitness are among the fastest-growing modalities in sport. Most still operate without serious infrastructure underneath them.',
     icon: Activity,
     color: PULSE_GREEN,
   },
   {
     title: 'Mental performance is the new edge.',
-    body: 'What was taboo five years ago is now table stakes. Teams, athletes, and institutions are actively buying tools that train the mental game — but the category has no clear leader yet.',
+    body: 'Teams, athletes, and institutions are actively buying tools that train the mental game. The category is forming now, and no clear leader has emerged yet.',
     icon: HeartPulse,
     color: CORAL,
   },
   {
     title: 'AI coaching is finally real.',
-    body: 'Neuroscience, wearable data, adaptive coaching, and modern AI have converged far enough that a software-native performance lab is finally buildable — not a pitch-deck idea, a shipping product.',
+    body: 'Neuroscience, wearable data, adaptive coaching, and modern AI have matured enough to support a software-native performance lab with real products in market.',
     icon: Brain,
     color: SKY,
   },
@@ -306,6 +308,7 @@ const PersonCard: React.FC<{
     tags?: string[];
     body?: string;
     focus?: string;
+    email?: string;
   };
   compact?: boolean;
   index: number;
@@ -335,6 +338,15 @@ const PersonCard: React.FC<{
             ))}
           </div>
         )}
+        {person.email && !compact && (
+          <a
+            href={`mailto:${person.email}`}
+            className="mt-5 inline-flex items-center gap-2 border border-white/10 bg-black/20 px-3 py-2 text-xs font-bold text-zinc-200 transition hover:border-[#E0FE10]/50 hover:text-white rounded-lg"
+          >
+            <Mail className="h-3.5 w-3.5 text-[#E0FE10]" />
+            {person.email}
+          </a>
+        )}
       </div>
     </div>
   </motion.article>
@@ -346,6 +358,8 @@ const ProductSwitch: React.FC<{
 }> = ({ activeProduct, setActiveProduct }) => {
   const product = productDetails[activeProduct];
   const ProductIcon = product.icon;
+  const onWhiteColor = activeProduct === 'pulse' ? VIOLET : product.color;
+  const onWhiteBg = activeProduct === 'pulse' ? '#F5F2FF' : '#F7F9F4';
 
   return (
     <div className="grid gap-6 lg:grid-cols-[0.45fr_0.55fr]">
@@ -354,6 +368,7 @@ const ProductSwitch: React.FC<{
           const item = productDetails[key];
           const Icon = item.icon;
           const isActive = activeProduct === key;
+          const buttonAccent = key === 'pulse' ? VIOLET : item.color;
           return (
             <button
               key={key}
@@ -366,8 +381,8 @@ const ProductSwitch: React.FC<{
               }`}
             >
               <span className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-lg" style={{ backgroundColor: isActive ? `${item.color}22` : '#0B0D0C0D' }}>
-                  <Icon className="h-5 w-5" style={{ color: isActive ? item.color : '#0B0D0C' }} />
+                <span className="flex h-11 w-11 items-center justify-center rounded-lg" style={{ backgroundColor: isActive ? `${item.color}22` : `${buttonAccent}18` }}>
+                  <Icon className="h-5 w-5" style={{ color: isActive ? item.color : buttonAccent }} />
                 </span>
                 <span>
                   <span className="block text-sm font-black">{item.name}</span>
@@ -392,19 +407,19 @@ const ProductSwitch: React.FC<{
             <div className="text-xs font-bold uppercase text-zinc-500">{product.eyebrow}</div>
             <h3 className="mt-2 text-3xl font-black leading-none">{product.name}</h3>
           </div>
-          <div className="flex h-14 w-14 items-center justify-center rounded-lg" style={{ backgroundColor: `${product.color}26` }}>
-            <ProductIcon className="h-7 w-7" style={{ color: product.color }} />
+          <div className="flex h-14 w-14 items-center justify-center rounded-lg" style={{ backgroundColor: `${onWhiteColor}26` }}>
+            <ProductIcon className="h-7 w-7" style={{ color: onWhiteColor }} />
           </div>
         </div>
         <p className="max-w-2xl text-2xl font-black leading-tight">{product.title}</p>
         <p className="mt-5 text-base leading-7 text-zinc-700">{product.body}</p>
-        <div className="mt-6 border-l-4 py-3 pl-4 text-sm font-bold text-zinc-900" style={{ borderColor: product.color }}>
+        <div className="mt-6 border-l-4 py-3 pl-4 text-sm font-bold text-zinc-900" style={{ borderColor: onWhiteColor }}>
           {product.status}
         </div>
         <div className="mt-7 grid gap-4 md:grid-cols-2">
           {product.bullets.map((bullet) => (
-            <div key={bullet} className="flex items-start gap-3 border border-black/10 bg-[#F7F9F4] p-4 rounded-lg">
-              <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0" style={{ color: product.color }} />
+            <div key={bullet} className="flex items-start gap-3 border border-black/10 p-4 rounded-lg" style={{ backgroundColor: onWhiteBg }}>
+              <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0" style={{ color: onWhiteColor }} />
               <p className="text-sm leading-6 text-zinc-800">{bullet}</p>
             </div>
           ))}
@@ -529,30 +544,13 @@ const PILOnePage: NextPage = () => {
               </h1>
 
               <p className="mt-8 max-w-2xl text-lg leading-8 text-zinc-300 sm:text-xl sm:leading-9">
-                Pulse Intelligence Labs builds software for the body and the mind. Two live products. Two distinct markets. One operating thesis — performance is trainable, and the tools to train it are being rebuilt from the ground up.
+                Pulse Intelligence Labs builds applied AI software for human performance. Fit With Pulse serves fitness communities and wellness operators. Pulse Check helps teams and athletes train attention, stress response, and decision-making under pressure.
               </p>
-
-              <div className="mt-10 flex flex-wrap items-stretch gap-6">
-                {[
-                  { value: '2', label: 'live products', sub: 'iOS · Web' },
-                  { value: '50+', label: 'creators onboarded', sub: 'across Fit With Pulse' },
-                  { value: '$25K', label: 'LAUNCH pre-seed', sub: 'closed Jan 2026' },
-                ].map((stat, i) => (
-                  <React.Fragment key={stat.label}>
-                    {i > 0 && <div className="hidden h-12 w-px self-center bg-white/10 sm:block" />}
-                    <div>
-                      <div className="text-3xl font-black leading-none text-[#E0FE10] sm:text-4xl">{stat.value}</div>
-                      <div className="mt-2 text-sm font-bold text-white">{stat.label}</div>
-                      <div className="text-xs text-zinc-500">{stat.sub}</div>
-                    </div>
-                  </React.Fragment>
-                ))}
-              </div>
 
               <div className="mt-10 flex flex-wrap items-center gap-3">
                 <a href="mailto:tre@fitwithpulse.ai" className="inline-flex items-center gap-2 bg-[#E0FE10] px-5 py-3 text-sm font-black text-black transition hover:bg-white rounded-lg">
                   <Mail className="h-4 w-4" />
-                  Talk to Tremaine
+                  Connect with Pulse
                 </a>
                 <a href="#traction" className="inline-flex items-center gap-2 border border-white/20 bg-white/[0.03] px-5 py-3 text-sm font-black text-white transition hover:border-white/40 hover:bg-white/10 rounded-lg">
                   See the traction
@@ -606,6 +604,7 @@ const PILOnePage: NextPage = () => {
                       const product = productDetails[key];
                       const Icon = product.icon;
                       const oneLiner = key === 'pulse' ? 'Community fitness infrastructure' : 'Elite cognitive performance';
+                      const platformLabel = key === 'pulse' ? 'iOS · Android · Web' : 'iOS · Web';
                       return (
                         <div key={product.name} className="flex items-center justify-between gap-3 border border-white/10 bg-black/25 p-3 rounded-lg">
                           <div className="flex items-center gap-3">
@@ -617,7 +616,7 @@ const PILOnePage: NextPage = () => {
                               <div className="text-[11px] leading-tight text-zinc-500">{oneLiner}</div>
                             </div>
                           </div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">iOS · Web</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">{platformLabel}</span>
                         </div>
                       );
                     })}
@@ -639,7 +638,7 @@ const PILOnePage: NextPage = () => {
           </div>
         </section>
 
-        <SectionShell id="founder" eyebrow="Founder" title="One founder. Three disciplines that rarely share a room.">
+        <SectionShell id="founder" eyebrow="Founder" title="Tremaine Grant brings athletic experience, engineering depth, and clinical research discipline to Pulse.">
           <div className="grid gap-6 lg:grid-cols-[0.42fr_0.58fr]">
             <motion.div {...fadeUp} className="flex flex-col gap-3">
               {(Object.keys(founderLenses) as LensKey[]).map((key) => {
@@ -699,7 +698,7 @@ const PILOnePage: NextPage = () => {
           </div>
         </SectionShell>
 
-        <SectionShell id="team" eyebrow="Team and advisors" title="A small core team. Institutional reach through advisors across sport, design, law, and community.">
+        <SectionShell id="team" eyebrow="Team and advisors" title="Pulse is led by a focused core team with advisors across sport, design, law, and community.">
           <div className="grid gap-5 lg:grid-cols-3">
             {team.map((person, index) => (
               <PersonCard key={person.name} person={person} index={index} />
@@ -710,7 +709,7 @@ const PILOnePage: NextPage = () => {
             <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
               <div>
                 <div className="text-xs font-bold uppercase text-zinc-500">Advisory board and ecosystem</div>
-                <h3 className="mt-2 text-2xl font-black">Sport strategy, IP, corporate readiness, startup backing, and community weight.</h3>
+                <h3 className="mt-2 text-2xl font-black">Advisor support across sports marketing, IP, legal readiness, startup programs, and community building.</h3>
               </div>
               <div className="flex flex-wrap items-center gap-5">
                 {partnerLogos.map((logo) => (
@@ -726,14 +725,14 @@ const PILOnePage: NextPage = () => {
           </motion.div>
         </SectionShell>
 
-        <SectionShell id="business" eyebrow="Products and business model" title="Two products. Two markets. One operating thesis." tone="light">
+        <SectionShell id="business" eyebrow="Products and business model" title="Pulse sells human performance software across community fitness and competitive sport." tone="light">
           <ProductSwitch activeProduct={activeProduct} setActiveProduct={setActiveProduct} />
 
           <div className="mt-12 grid gap-4 lg:grid-cols-4">
             {[
-              { icon: Building2, title: 'Company', body: 'Pulse Intelligence Labs, Inc. — Delaware C-Corp, headquartered in Atlanta. Operates as a single company with two product units.' },
-              { icon: Compass, title: 'Vision', body: 'Own the full spectrum of human performance: fitness, athletics, wellness, cognition — all trained, all measured, all in software.' },
-              { icon: LineChart, title: 'Model', body: 'Platform revenue on Fit With Pulse; enterprise contracts and pilots on Pulse Check. Both expand through partner channels rather than paid acquisition.' },
+              { icon: Building2, title: 'Company', body: 'Pulse Intelligence Labs, Inc. is a Delaware C-Corp headquartered in Atlanta. The company operates with two product units under one strategy.' },
+              { icon: Compass, title: 'Vision', body: 'Build the software layer for human performance across fitness, athletics, wellness, and cognition.' },
+              { icon: LineChart, title: 'Model', body: 'Platform revenue on Fit With Pulse; enterprise contracts and pilots on Pulse Check. Both expand through partner channels, reducing dependence on paid acquisition.' },
               { icon: Briefcase, title: 'Counsel', body: 'Corporate and IP counsel through Erik Edwards at Cooley LLP. Structured for institutional capital from day one.' },
             ].map((item, index) => {
               const Icon = item.icon;
@@ -753,7 +752,7 @@ const PILOnePage: NextPage = () => {
           </div>
         </SectionShell>
 
-        <SectionShell id="traction" eyebrow="Traction and capital posture" title="Locking in anchor partnerships — raising $1.4M to accelerate.">
+        <SectionShell id="traction" eyebrow="Traction and capital posture" title="Pulse is securing anchor partnerships and raising $1.4M to accelerate.">
           <div className="grid gap-5 md:grid-cols-2">
             {tractionItems.map((item, index) => {
               const Icon = item.icon;
@@ -785,20 +784,20 @@ const PILOnePage: NextPage = () => {
               <div className="text-xs font-black uppercase">First outside capital</div>
               <h3 className="mt-3 text-4xl font-black">$25,000 LAUNCH pre-seed</h3>
               <p className="mt-4 text-sm leading-7 text-black/75">
-                Closed January 2026 from LAUNCH, the fund led by Jason Calacanis. Structured as a family-and-friends SAFE — the first outside check into Pulse Intelligence Labs and the signal that underwrites everything that came after.
+                Closed January 2026 from LAUNCH, the fund led by Jason Calacanis. Structured as a family-and-friends SAFE, it was the first outside check into Pulse Intelligence Labs.
               </p>
             </div>
             <div className="border border-white/10 bg-white/[0.04] p-6 rounded-lg">
-              <div className="text-xs font-bold uppercase text-zinc-500">Active seed — $1.4M</div>
-              <h3 className="mt-3 text-3xl font-black">Full speed on partnerships. Raising $1.4M to pour fuel on it.</h3>
+              <div className="text-xs font-bold uppercase text-zinc-500">Active seed: $1.4M</div>
+              <h3 className="mt-3 text-3xl font-black">Partnerships are the priority for the seed round.</h3>
               <p className="mt-5 text-sm leading-7 text-zinc-300">
-                The primary focus is locking in anchor partnerships with high-profile athletes, pro teams, and cultural creators for Fit With Pulse — the fastest route to consumer distribution at scale. The $1.4M seed is open alongside that motion to accelerate it. Planned uses: product, team, partnership infrastructure, and select tuck-in acquisitions.
+                The primary focus is locking in anchor partnerships with high-profile athletes, pro teams, and cultural creators for Fit With Pulse. The $1.4M seed is open alongside that motion. Planned uses include product, team, partnership infrastructure, and select tuck-in acquisitions.
               </p>
             </div>
           </motion.div>
         </SectionShell>
 
-        <SectionShell id="why-now" eyebrow="Why now" title="Three shifts converging into one category." tone="green">
+        <SectionShell id="why-now" eyebrow="Why now" title="The market is ready for a software company focused on human performance." tone="green">
           <div className="grid gap-5 lg:grid-cols-3">
             {whyNow.map((item, index) => {
               const Icon = item.icon;
@@ -826,13 +825,13 @@ const PILOnePage: NextPage = () => {
             <motion.div {...fadeUp}>
               <div className="mb-4 inline-flex items-center gap-2 text-xs font-bold uppercase text-zinc-400">
                 <span className="h-2 w-2 bg-[#E0FE10]" />
-                The bet
+                Company focus
               </div>
               <h2 className="max-w-4xl text-5xl font-black leading-none sm:text-6xl">
-                A founder-led bet that human performance can be trained like software.
+                Pulse is building practical AI software for human performance.
               </h2>
               <p className="mt-6 max-w-3xl text-lg leading-8 text-zinc-300">
-                The founder story isn't marketing. It's the reason Pulse Intelligence Labs can credibly bridge community fitness, elite athlete cognition, applied AI, and clinical-grade product discipline inside one operating company.
+                Tremaine's background helps the company connect community fitness, elite athlete mental performance, AI systems, and evidence-based product development.
               </p>
             </motion.div>
 
