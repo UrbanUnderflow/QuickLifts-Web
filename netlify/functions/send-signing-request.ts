@@ -26,7 +26,7 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
   }
 
   try {
-    const { documentId, documentName, documentType: _documentType, recipientName, recipientEmail, companyName, previewMode } = JSON.parse(event.body || "{}");
+    const { documentId, documentName, documentType: _documentType, recipientName, recipientEmail, companyName, previewMode, sendAttemptId } = JSON.parse(event.body || "{}");
 
     if (!documentId || !recipientEmail) {
       return { statusCode: 400, body: JSON.stringify({ message: "Missing required fields." }) };
@@ -200,11 +200,21 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
         name: branding.senderName,
         email: SENDER_EMAIL,
       },
-      idempotencyKey: buildEmailDedupeKey(['signing-request-v1', documentId, recipientEmail]),
+      tags: ['signing-request'],
+      headers: {
+        'X-Mailin-custom': JSON.stringify({
+          sequence: 'signing-request',
+          signingRequestId: documentId,
+          recipientEmail,
+          previewMode: Boolean(previewMode),
+        }),
+      },
+      idempotencyKey: buildEmailDedupeKey(['signing-request-v2', documentId, recipientEmail, sendAttemptId || Date.now()]),
       idempotencyMetadata: {
         sequence: 'signing-request',
         documentId,
         recipientEmail,
+        sendAttemptId: sendAttemptId || null,
       },
       bypassDailyRecipientLimit: true,
       dailyRecipientMetadata: {
@@ -224,10 +234,17 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
     // Update the signing request status in Firestore
     try {
       const db = admin.firestore();
-      await db.collection("signingRequests").doc(documentId).update({
+      const FieldValue = admin.firestore.FieldValue;
+      const now = new Date();
+      await db.collection("signingRequests").doc(documentId).set({
         status: "sent",
-        sentAt: new Date(),
-      });
+        sentAt: now,
+        lastSentAt: now,
+        emailStatus: "sent",
+        messageId: sendResult.messageId || null,
+        sendCount: FieldValue.increment(1),
+        updatedAt: now,
+      }, { merge: true });
     } catch (dbError) {
       console.error("Failed to update Firestore:", dbError);
       // Don't fail the request if Firestore update fails
@@ -235,7 +252,7 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
 
     console.log("Signing request email sent successfully:", sendResult.messageId);
 
-    return { statusCode: 200, body: JSON.stringify({ message: "Signing request sent successfully." }) };
+    return { statusCode: 200, body: JSON.stringify({ message: "Signing request sent successfully.", messageId: sendResult.messageId, skipped: sendResult.skipped || false }) };
 
   } catch (error: any) {
     console.error("Error in send-signing-request function:", error);

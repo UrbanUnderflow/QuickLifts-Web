@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertTriangle, Database, ShieldCheck, Workflow } from 'lucide-react';
-import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
+import { CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
 
 const PRINCIPLE_CARDS = [
   {
@@ -21,12 +21,12 @@ const PRINCIPLE_CARDS = [
 ];
 
 const COLLECTION_ROWS = [
-  ['`health-context-source-records`', 'Normalized adapter-written source records across QuickLifts, HealthKit, Oura, Apple-origin metadata, and PulseCheck self-report.', 'Primary input store.'],
+  ['`health-context-source-records`', 'Normalized adapter-written source records across Fit With Pulse, Macra, HealthKit, Oura, Apple-origin metadata, and Pulse Check self-report.', 'Primary input store.'],
   ['`health-context-snapshots`', 'Canonical assembled `AthleteHealthContextSnapshot` revisions for daily and rolling windows.', 'Primary consumer store.'],
   ['`health-context-assembly-traces`', 'Trace documents describing winner selection, dropped records, trigger reason, and contract versions.', 'Observability and QA store.'],
   ['`health-context-source-status`', 'Per-athlete source connection, permission, sync, and error posture.', 'Runtime and ingestion coordination store.'],
   ['`health-context-jobs`', 'Optional job / rebuild queue records for async assembly and backfill operations.', 'Operational control store.'],
-  ['`daily-health-summaries`', 'Legacy shared summary collection currently written primarily by QuickLifts / FitWithPulse.', 'Migration input lane, not future canonical output.'],
+  ['`daily-health-summaries`', 'Legacy shared summary collection currently written primarily by the Fit With Pulse / QuickLifts lineage.', 'Migration input lane, not future canonical output.'],
 ];
 
 const ID_ROWS = [
@@ -122,7 +122,7 @@ const PulseCheckHealthContextPersistenceStorageSpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="PulseCheck Health Context"
+        eyebrow="Pulse Check Health Context"
         title="Health Context Persistence & Storage Spec"
         version="Version 0.1 | March 17, 2026"
         summary="Canonical storage-model spec for the health-context system, covering where normalized source records, assembled snapshots, source-status posture, assembly traces, and migration bridge data should live. This document turns the contract stack into an implementation-ready persistence model."
@@ -145,7 +145,7 @@ const PulseCheckHealthContextPersistenceStorageSpecTab: React.FC = () => {
       <RuntimeAlignmentPanel
         role="Storage-model artifact for the health-context architecture. It defines collection boundaries, id schemes, revision persistence, trace storage, source-status storage, query patterns, and the migration path from the current shared summary collection."
         sourceOfTruth="This document is authoritative for Firestore collection structure, storage responsibilities, revision strategy, security boundaries, and the migration relationship between legacy `daily-health-summaries` and the new canonical health-context stores."
-        masterReference="Use this page before implementing Firestore models, indexes, migration tooling, source-status tracking, snapshot persistence, trace storage, or rebuild-job orchestration for PulseCheck health context."
+        masterReference="Use this page before implementing Firestore models, indexes, migration tooling, source-status tracking, snapshot persistence, trace storage, or rebuild-job orchestration for Pulse Check health context."
         relatedDocs={[
           'Health Context Architecture',
           'Athlete Context Snapshot Spec',

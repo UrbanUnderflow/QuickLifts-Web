@@ -43,11 +43,11 @@ const WINDOW_ROWS = [
 ];
 
 const WINNER_ROWS = [
-  ['Training', 'Prefer QuickLifts / FitWithPulse records when they exist; supplement with HealthKit sessions only where they add missing direct metrics.', 'Preserves richer workout structure and adherence context.'],
+  ['Training', 'Prefer Fit With Pulse records when they exist; supplement with HealthKit sessions only where they add missing direct metrics.', 'Preserves richer workout structure and adherence context.'],
   ['Recovery', 'Prefer direct recovery-specific records, such as Oura readiness/recovery or Apple health recovery metrics, over derived general activity heuristics.', 'Recovery should stay recovery-specific.'],
   ['Activity', 'Prefer HealthKit / Apple-device activity totals for steps, movement, stand, and general exertion.', 'Best canonical activity lane.'],
-  ['Nutrition', 'Prefer structured food journal records from QuickLifts when present; use HealthKit dietary totals only as supplements, not richer replacements.', 'Journal data is more actionable.'],
-  ['Behavioral', 'Prefer PulseCheck self-report and app-native checkins for subjective state.', 'Subjective state should not be overwritten by devices.'],
+  ['Nutrition', 'Prefer structured Macra nutrition records when present; use legacy Fit With Pulse food journal and HealthKit dietary totals only as supplements, not richer replacements.', 'Dedicated nutrition data is more actionable.'],
+  ['Behavioral', 'Prefer Pulse Check self-report and app-native check-ins for subjective state.', 'Subjective state should not be overwritten by devices.'],
   ['Conflicts', 'If two sources provide the same field, choose via domain precedence, recency, directness, and completeness in that order.', 'Stable deterministic conflict resolution.'],
 ];
 
@@ -120,7 +120,7 @@ const INVALIDATION_ROWS = [
 const BUILD_ORDER_ROWS = [
   ['1. Lock assembler rules', 'Finalize windowing, precedence, freshness, and recompute behavior.', 'Needed before adapter implementation can be judged against target runtime behavior.'],
   ['2. Implement trace-aware assembler', 'Build the assembly engine with revisioning and trace output.', 'Makes migration and QA far safer.'],
-  ['3. Route current shared summaries through assembler path', 'Treat existing QuickLifts daily summary inputs as one assembly lane during migration.', 'Bridges current system to target system.'],
+  ['3. Route current shared summaries through assembler path', 'Treat existing Fit With Pulse daily summary inputs as one assembly lane during migration.', 'Bridges current system to target system.'],
   ['4. Attach native adapters', 'Plug HealthKit, self-report, and later Oura source records into the assembler.', 'Uses the same merge engine instead of new branch logic.'],
   ['5. Move consumers fully to assembled snapshots', 'Nora and downstream surfaces should stop doing ad hoc data fetch / merge logic.', 'Completes the architectural transition.'],
 ];
@@ -129,7 +129,7 @@ const PulseCheckHealthContextSnapshotAssemblerSpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="PulseCheck Health Context"
+        eyebrow="Pulse Check Health Context"
         title="Health Context Snapshot Assembler Spec"
         version="Version 0.1 | March 17, 2026"
         summary="Canonical spec for the assembly layer that transforms normalized health-context source records into daily and rolling `AthleteHealthContextSnapshot` artifacts. This is the only layer allowed to decide merge winners, freshness posture, trend windows, and recompute behavior."
@@ -214,7 +214,7 @@ const PulseCheckHealthContextSnapshotAssemblerSpecTab: React.FC = () => {
           <InfoCard
             title="Migration Guardrail"
             accent="amber"
-            body="During migration, existing QuickLifts daily-summary data can enter the assembler as one lane, but consumer behavior should still be driven by assembled snapshots and traces rather than old direct-read shortcuts."
+            body="During migration, existing Fit With Pulse daily-summary data can enter the assembler as one lane, but consumer behavior should still be driven by assembled snapshots and traces rather than old direct-read shortcuts."
           />
           <InfoCard
             title="Runtime Guardrail"

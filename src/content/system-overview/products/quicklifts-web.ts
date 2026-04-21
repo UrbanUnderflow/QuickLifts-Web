@@ -2,10 +2,10 @@ import type { ProductHandbook } from '../schema';
 
 export const quickliftsWebHandbook: ProductHandbook = {
   id: 'quicklifts-web',
-  name: 'QuickLifts Web',
+  name: 'Fit With Pulse Web + Admin',
   platform: 'Web (Next.js + Firebase + Netlify)',
   summary:
-    'Growth, operations, creator tooling, and internal command center surfaces that orchestrate the broader Pulse ecosystem.',
+    'Web, admin, growth, provisioning, bridge-function, and command-center repo for Fit With Pulse, Pulse Check, Macra, and internal operations. The repo/internal lineage still uses QuickLifts-Web naming.',
   owner: 'Web Platform',
   repo: 'QuickLifts-Web',
   releaseChannel: 'Netlify deploys from main',
@@ -13,7 +13,7 @@ export const quickliftsWebHandbook: ProductHandbook = {
   keyOutcomes: [
     'Public growth and onboarding surfaces',
     'Internal operations and admin tooling',
-    'Creator workflows and PulseCheck commercial provisioning',
+    'Creator workflows and Pulse Check commercial provisioning',
   ],
   featureInventory: [
     {
@@ -137,10 +137,10 @@ export const quickliftsWebHandbook: ProductHandbook = {
     },
     {
       id: 'web-pulsecheck-organization-activation',
-      name: 'PulseCheck Organization Provisioning and Admin Activation',
+      name: 'Pulse Check Organization Provisioning and Admin Activation',
       persona: 'Operators, coach-led organizations, and external program admins',
       outcome:
-        'Provision PulseCheck organizations and teams, hand off admin activation, and prepare the container for downstream staff and athlete invites.',
+        'Provision Pulse Check organizations and teams, hand off admin activation, and prepare the container for downstream staff and athlete invites.',
       entryPoints: [
         '/admin/pulsecheckProvisioning',
         '/admin/pulsecheckLegacyRosterMigration',
@@ -149,7 +149,7 @@ export const quickliftsWebHandbook: ProductHandbook = {
         '/PulseCheck/team-workspace',
       ],
       dependentServices: [
-        'PulseCheck provisioning service',
+        'Pulse Check provisioning service',
         'admin activation API',
         'team invite redemption API',
         'migration tooling',
@@ -163,7 +163,7 @@ export const quickliftsWebHandbook: ProductHandbook = {
         'pulsecheck-legacy-roster-migrations',
       ],
       integrations: ['Firebase Auth', 'Next.js API routes'],
-      owner: 'PulseCheck Platform',
+      owner: 'Pulse Check Platform',
       releaseChannel: 'Production',
       status: 'active',
       sourceRefs: [

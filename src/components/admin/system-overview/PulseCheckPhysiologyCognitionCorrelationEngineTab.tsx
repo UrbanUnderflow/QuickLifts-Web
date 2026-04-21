@@ -131,14 +131,14 @@ const PulseCheckPhysiologyCognitionCorrelationEngineTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="PulseCheck Health Context"
+        eyebrow="Pulse Check Health Context"
         title="Physiology-Cognition Correlation Engine"
         version="Version 0.1 | March 19, 2026"
-        summary="Parent artifact for the PulseCheck system that learns athlete-specific mind-body patterns from normalized physiology plus PulseCheck simulation evidence. This is the layer that turns body-state inputs and measured mental-performance outcomes into personal thresholds, confidence-scored recommendations, and context-aware coaching guidance."
+        summary="Parent artifact for the Pulse Check system that learns athlete-specific mind-body patterns from normalized physiology plus Pulse Check simulation evidence. This is the layer that turns body-state inputs and measured mental-performance outcomes into personal thresholds, confidence-scored recommendations, and context-aware coaching guidance."
         highlights={[
           {
             title: 'This Is The Differentiator',
-            body: 'Wearables see the body and sims see the mind. PulseCheck can see how the mind behaves inside different physiological states.',
+            body: 'Wearables see the body and sims see the mind. Pulse Check can see how the mind behaves inside different physiological states.',
           },
           {
             title: 'Not Vendor-Specific',
@@ -152,7 +152,7 @@ const PulseCheckPhysiologyCognitionCorrelationEngineTab: React.FC = () => {
       />
 
       <RuntimeAlignmentPanel
-        role="System artifact for the joined-model layer that sits between physiology ingestion and runtime consumers. It defines how PulseCheck should learn athlete-specific patterns from body-state evidence plus sim outcomes, how confidence works, what outputs the engine owns, and how those outputs should feed Nora, profile, coaches, protocols, and trials."
+        role="System artifact for the joined-model layer that sits between physiology ingestion and runtime consumers. It defines how Pulse Check should learn athlete-specific patterns from body-state evidence plus sim outcomes, how confidence works, what outputs the engine owns, and how those outputs should feed Nora, profile, coaches, protocols, and trials."
         sourceOfTruth="Use this page when defining the shared correlation model, evidence thresholds, confidence rules, recommendation-generation policy, trial-context flags, or any consumer that wants to use physiology-to-cognition learning across devices."
         masterReference="Any source-specific implementation, including Oura, Apple Watch, Garmin, Whoop, or future wearable lanes, should follow this engine spec first. If a proposed correlation or recommendation cannot fit these governance rules, update this engine before shipping the source-specific insight."
         relatedDocs={[

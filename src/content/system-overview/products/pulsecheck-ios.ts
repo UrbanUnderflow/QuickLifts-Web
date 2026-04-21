@@ -2,18 +2,18 @@ import type { ProductHandbook } from '../schema';
 
 export const pulseCheckIosHandbook: ProductHandbook = {
   id: 'pulsecheck-ios',
-  name: 'PulseCheck iOS',
+  name: 'Pulse Check iOS',
   platform: 'iOS (SwiftUI)',
   summary:
-    'Companion mental-performance product that turns conversational context, mental notes, and health signals into athlete and coach readiness insights.',
+    'White-glove elite athlete service technology for mental performance, readiness, coach visibility, protocols, pilot operations, and governed athlete support.',
   owner: 'PulseCheck Team',
   repo: 'PulseCheck',
   releaseChannel: 'App Store beta + internal TestFlight',
   status: 'active',
   keyOutcomes: [
-    'Continuous mental-performance support for athletes',
-    'Coach visibility into athlete readiness and risk',
-    'Mental note detection and longitudinal intervention loops',
+    'Elite athlete readiness and mental-performance support',
+    'Coach and operator visibility for white-glove service delivery',
+    'Protocol, simulation, and longitudinal intervention loops governed by evidence and safety posture',
   ],
   featureInventory: [
     {
@@ -209,7 +209,7 @@ export const pulseCheckIosHandbook: ProductHandbook = {
     },
     {
       id: 'pulsecheck-subscription-access',
-      name: 'PulseCheck Subscription Access',
+      name: 'Pulse Check Subscription Access',
       persona: 'Athletes entering premium coaching loops',
       outcome: 'Gate paid features and align entitlement status with ecosystem subscriptions.',
       entryPoints: ['Subscription modal', 'subscription plans in chat'],
@@ -227,7 +227,7 @@ export const pulseCheckIosHandbook: ProductHandbook = {
     {
       id: 'pulsecheck-privacy-consent',
       name: 'Privacy Consent Flow',
-      persona: 'All PulseCheck users',
+      persona: 'All Pulse Check users',
       outcome: 'Capture explicit consent for privacy-sensitive conversation and health context processing.',
       entryPoints: ['Privacy consent modal', 'chat consent card'],
       dependentServices: ['Consent service', 'auth gate'],

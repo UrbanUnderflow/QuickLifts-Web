@@ -138,7 +138,7 @@ const PulseCheckHealthContextFirestoreSchemaIndexSpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="PulseCheck Health Context"
+        eyebrow="Pulse Check Health Context"
         title="Health Context Firestore Schema & Index Spec"
         version="Version 0.1 | March 17, 2026"
         summary="Implementation-facing Firestore schema and index spec for the health-context system. This artifact maps the persistence model into concrete collections, document fields, index requirements, query shapes, and migration rules so platform work can begin from one storage contract."

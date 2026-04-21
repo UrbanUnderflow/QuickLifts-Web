@@ -3,7 +3,7 @@ import { Cloud, Database, KeyRound, Server, ShieldCheck, Workflow } from 'lucide
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
 
 const INFRA_ROWS = [
-  ['Next.js web app', 'Netlify', 'Primary hosting layer for QuickLifts Web and its admin surfaces.'],
+  ['Next.js web app', 'Netlify', 'Primary hosting layer for Fit With Pulse Web/Admin and its admin surfaces.'],
   ['Server routes / runtime APIs', 'Netlify Functions + Next API routes', 'Web-owned server execution for admin workflows, email sends, AI orchestration, and scheduling actions.'],
   ['Core product data', 'Firebase / Firestore', 'Canonical operational store for app data, admin records, and Group Meet request state.'],
   ['Identity', 'Firebase Auth', 'Cross-surface authentication and admin role verification.'],
@@ -144,11 +144,11 @@ export default function InfrastructureSecretsStackTab() {
         eyebrow="Infrastructure Handbook"
         title="Infrastructure & Secrets Stack"
         version="Updated Apr 7, 2026"
-        summary="Source-of-truth reference for how QuickLifts Web, Firebase, Netlify, Google Cloud, Google Workspace, and Secret Manager relate to each other operationally, with explicit rules for where sensitive credentials should live."
+        summary="Source-of-truth reference for how Fit With Pulse Web/Admin, Firebase, Netlify, Google Cloud, Google Workspace, and Secret Manager relate to each other operationally, with explicit rules for where sensitive credentials should live. QuickLifts-Web remains the repo/internal lineage name."
         highlights={[
           {
             title: 'Netlify Owns App Runtime',
-            body: 'QuickLifts Web and its server-owned workflows still run through the Netlify/Next runtime layer, even when they depend on Google infrastructure or Firebase data.',
+            body: 'Fit With Pulse Web/Admin and its server-owned workflows still run through the Netlify/Next runtime layer, even when they depend on Google infrastructure or Firebase data.',
           },
           {
             title: 'Firebase Owns Product State',

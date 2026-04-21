@@ -28,7 +28,7 @@ interface BrevoWebhookEvent {
   sending_ip?: string;
   ts_epoch?: number;
   link?: string; // For click events
-  'X-Mailin-custom'?: string; // Custom headers we set (contains friendId, emailRecordId)
+  'X-Mailin-custom'?: string; // Custom headers we set (contains friendId, signingRequestId, emailRecordId)
 }
 
 const applyStatusUpdate = (
@@ -132,6 +132,110 @@ const applyPilotAthleteCommunicationStatusUpdate = (
   }
 };
 
+const SIGNING_REQUEST_STATUS_RANK: Record<string, number> = {
+  pending: 0,
+  sent: 1,
+  delivered: 2,
+  opened: 3,
+  viewed: 4,
+  signed: 5,
+};
+
+const getSigningRequestStatusForEmailEvent = (eventType: BrevoWebhookEvent['event']) => {
+  switch (eventType) {
+    case 'delivered':
+      return 'delivered';
+    case 'opened':
+    case 'click':
+      return 'opened';
+    case 'soft_bounce':
+    case 'hard_bounce':
+    case 'spam':
+    case 'unsubscribe':
+    case 'blocked':
+      return 'failed';
+    case 'deferred':
+      return 'deferred';
+    default:
+      return null;
+  }
+};
+
+const updateSigningRequestEmailStatus = async (args: {
+  signingRequestId: string;
+  eventType: BrevoWebhookEvent['event'];
+  email: string;
+  messageId?: string;
+  link?: string;
+  now: Date;
+}) => {
+  const requestRef = db.collection('signingRequests').doc(args.signingRequestId);
+  const requestSnap = await requestRef.get();
+
+  if (!requestSnap.exists) {
+    console.warn(`[brevo-webhook] Signing request ${args.signingRequestId} not found`);
+    return;
+  }
+
+  const data = requestSnap.data() || {};
+  const FieldValue = admin.firestore.FieldValue;
+  const updateData: Record<string, any> = {
+    recipientEmail: data.recipientEmail || args.email,
+    emailStatus: args.eventType,
+    lastEmailEvent: args.eventType,
+    lastEmailEventAt: args.now,
+    updatedAt: args.now,
+  };
+
+  if (args.messageId) {
+    updateData.messageId = args.messageId;
+  }
+
+  switch (args.eventType) {
+    case 'delivered':
+      updateData.deliveredAt = data.deliveredAt || args.now;
+      break;
+    case 'opened':
+      updateData.openedAt = data.openedAt || args.now;
+      updateData.openCount = FieldValue.increment(1);
+      break;
+    case 'click':
+      updateData.clickedAt = args.now;
+      updateData.clickedLink = args.link || null;
+      if (!data.openedAt) {
+        updateData.openedAt = args.now;
+      }
+      updateData.clickCount = FieldValue.increment(1);
+      break;
+    case 'soft_bounce':
+    case 'hard_bounce':
+    case 'spam':
+    case 'unsubscribe':
+    case 'blocked':
+    case 'deferred':
+      updateData.lastEmailError = args.eventType;
+      break;
+  }
+
+  const nextStatus = getSigningRequestStatusForEmailEvent(args.eventType);
+  if (nextStatus) {
+    const currentStatus = typeof data.status === 'string' ? data.status : 'pending';
+    if (['failed', 'deferred'].includes(nextStatus) && !['signed', 'viewed'].includes(currentStatus)) {
+      updateData.status = nextStatus;
+    } else {
+      const currentRank = SIGNING_REQUEST_STATUS_RANK[currentStatus] ?? 0;
+      const nextRank = SIGNING_REQUEST_STATUS_RANK[nextStatus] ?? 0;
+
+      if (currentStatus !== 'signed' && currentStatus !== 'viewed' && nextRank >= currentRank) {
+        updateData.status = nextStatus;
+      }
+    }
+  }
+
+  await requestRef.set(updateData, { merge: true });
+  console.log(`[brevo-webhook] Updated signing request ${args.signingRequestId} with ${args.eventType}`);
+};
+
 export const handler: Handler = async (event) => {
   // Only accept POST requests
   if (event.httpMethod !== 'POST') {
@@ -188,6 +292,7 @@ export const handler: Handler = async (event) => {
       let emailRecordId: string | null = null;
       let updatePeriodId: string | null = null;
       let pilotAthleteCommunicationId: string | null = null;
+      let signingRequestId: string | null = null;
       
       if (webhookEvent['X-Mailin-custom']) {
         try {
@@ -196,9 +301,21 @@ export const handler: Handler = async (event) => {
           emailRecordId = custom.emailRecordId || null;
           updatePeriodId = custom.updatePeriodId || null;
           pilotAthleteCommunicationId = custom.pilotAthleteCommunicationId || null;
+          signingRequestId = custom.signingRequestId || null;
         } catch (e) {
           console.warn('[brevo-webhook] Failed to parse X-Mailin-custom:', e);
         }
+      }
+
+      if (signingRequestId) {
+        await updateSigningRequestEmailStatus({
+          signingRequestId,
+          eventType,
+          email,
+          messageId,
+          link,
+          now,
+        });
       }
 
       if (pilotAthleteCommunicationId) {

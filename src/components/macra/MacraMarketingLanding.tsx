@@ -9,10 +9,10 @@ type Props = {
 const lerp = (a: number, b: number, t: number) => a + (b - a) * Math.max(0, Math.min(1, t));
 
 const SCAN_ITEMS = [
-  { name: 'Grilled Chicken', qty: '6 oz', kcal: 284, p: 53, c: 0, f: 6, emoji: '🍗', tint: '#E0FE10' },
-  { name: 'Jasmine Rice', qty: '1 cup', kcal: 205, p: 4, c: 45, f: 0, emoji: '🍚', tint: '#06B6D4' },
-  { name: 'Broccoli', qty: '1 cup', kcal: 55, p: 4, c: 11, f: 1, emoji: '🥦', tint: '#22C55E' },
-  { name: 'Avocado', qty: '½ med', kcal: 160, p: 2, c: 9, f: 15, emoji: '🥑', tint: '#8B5CF6' },
+  { name: 'Grilled Chicken', qty: '6 oz', kcal: 284, p: 53, c: 0, f: 6, emoji: '🍗', tint: '#BEF264' },
+  { name: 'Jasmine Rice', qty: '1 cup', kcal: 205, p: 4, c: 45, f: 0, emoji: '🍚', tint: '#2DD4BF' },
+  { name: 'Broccoli', qty: '1 cup', kcal: 55, p: 4, c: 11, f: 1, emoji: '🥦', tint: '#86EFAC' },
+  { name: 'Avocado', qty: '½ med', kcal: 160, p: 2, c: 9, f: 15, emoji: '🥑', tint: '#A78BFA' },
 ] as const;
 
 const MacraMarketingLanding: React.FC<Props> = ({
@@ -56,8 +56,8 @@ const MacraMarketingLanding: React.FC<Props> = ({
     const wrapper = wrapperRef.current;
 
     // Threshold-triggered bg morph
-    const DARK_BG = 'rgb(6,8,6)';
-    const LIGHT_BG = 'rgb(246,248,240)';
+    const DARK_BG = 'rgb(11,15,11)';
+    const LIGHT_BG = 'rgb(250,249,244)';
     const visibilityMap = new Map<Element, number>();
     const bgObserver = new IntersectionObserver(
       (entries) => {
@@ -125,7 +125,7 @@ const MacraMarketingLanding: React.FC<Props> = ({
     <div
       className="mc2"
       ref={wrapperRef}
-      style={{ '--mc2-bg': 'rgb(6,8,6)', '--mc2-nav-dark': '0' } as React.CSSProperties}
+      style={{ '--mc2-bg': 'rgb(11,15,11)', '--mc2-nav-dark': '0' } as React.CSSProperties}
     >
       {/* ── NAV ── */}
       <nav className={`mc2-nav ${navScrolled ? 'mc2-nav--scrolled' : ''}`}>
@@ -366,9 +366,9 @@ const MacraMarketingLanding: React.FC<Props> = ({
                         <span className="mc2-scan-kcal-label">kcal</span>
                       </div>
                       <div className="mc2-scan-macro-grid">
-                        <Macro label="P" value={item.p} tint="#E0FE10" />
-                        <Macro label="C" value={item.c} tint="#06B6D4" />
-                        <Macro label="F" value={item.f} tint="#8B5CF6" />
+                        <Macro label="P" value={item.p} tint="#BEF264" />
+                        <Macro label="C" value={item.c} tint="#2DD4BF" />
+                        <Macro label="F" value={item.f} tint="#A78BFA" />
                       </div>
                     </div>
                   )}
@@ -384,6 +384,64 @@ const MacraMarketingLanding: React.FC<Props> = ({
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ── TRUST STRIP ── */}
+      <section className="mc2-trust" data-bg="dark">
+        <div className="mc2-trust-inner">
+          <span className="mc2-trust-label">From the team that built</span>
+          <div className="mc2-trust-list">
+            {[
+              { n: 'Fit With Pulse', s: 'Clubs & training' },
+              { n: 'QuickLifts', s: 'iOS workout OS' },
+              { n: 'PulseCheck', s: 'Mental performance' },
+              { n: 'Nora AI', s: 'Always-on coach' },
+            ].map((b) => (
+              <div key={b.n} className="mc2-trust-brand">
+                <strong>{b.n}</strong>
+                <span>{b.s}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── VALUE ROW (Scan → Plan → Track) ── */}
+      <section className="mc2-value" data-bg="light">
+        <div className="mc2-value-inner">
+          {[
+            {
+              i: '📸',
+              k: '01 · Scan',
+              t: 'Point at any plate',
+              d: 'Macra segments every item on the plate and returns per-ingredient macros. Works on packaged labels too.',
+              tint: '#BEF264',
+            },
+            {
+              i: '✨',
+              k: '02 · Plan',
+              t: 'Nora drafts your day',
+              d: 'Tell Nora your goal. She builds Meal 1, 2, 3 to hit your exact protein and calorie target — and re-plans when you go off script.',
+              tint: '#A78BFA',
+            },
+            {
+              i: '🎯',
+              k: '03 · Track',
+              t: 'Three living rings',
+              d: 'Your day as three dials — protein, carbs, fat. A glance tells you what\'s left. No spreadsheets.',
+              tint: '#2DD4BF',
+            },
+          ].map((s) => (
+            <div key={s.k} className="mc2-value-card mc2-reveal" style={{ '--tint': s.tint } as React.CSSProperties}>
+              <div className="mc2-value-icon">{s.i}</div>
+              <span className="mc2-value-k" style={{ color: s.tint }}>
+                {s.k}
+              </span>
+              <h3>{s.t}</h3>
+              <p>{s.d}</p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -481,7 +539,14 @@ const MacraMarketingLanding: React.FC<Props> = ({
       <section className="mc2-section mc2-section--offwhite" id="nora" data-bg="light">
         <div className="mc2-section-inner">
           <div className="mc2-section-text mc2-reveal">
-            <span className="mc2-section-label" style={{ color: '#8B5CF6', background: 'rgba(139,92,246,0.08)' }}>
+            <span
+              className="mc2-section-label"
+              style={{
+                color: '#5B21B6',
+                background: 'rgba(139,92,246,0.10)',
+                borderColor: 'rgba(139,92,246,0.22)',
+              }}
+            >
               ✨ Nora AI · Meal Planning
             </span>
             <h2 className="mc2-h2">
@@ -502,7 +567,7 @@ const MacraMarketingLanding: React.FC<Props> = ({
                 'Grocery list auto-generated per week',
               ].map((t) => (
                 <li key={t}>
-                  <span className="mc2-check" style={{ color: '#8B5CF6' }}>
+                  <span className="mc2-check" style={{ color: '#7C3AED' }}>
                     ✓
                   </span>
                   {t}
@@ -541,7 +606,7 @@ const MacraMarketingLanding: React.FC<Props> = ({
                     p: 42,
                     c: 78,
                     f: 14,
-                    tint: '#E0FE10',
+                    tint: '#84CC16',
                   },
                   {
                     m: 'Meal 2',
@@ -550,7 +615,7 @@ const MacraMarketingLanding: React.FC<Props> = ({
                     p: 62,
                     c: 92,
                     f: 24,
-                    tint: '#06B6D4',
+                    tint: '#0D9488',
                   },
                   {
                     m: 'Meal 3',
@@ -559,7 +624,7 @@ const MacraMarketingLanding: React.FC<Props> = ({
                     p: 76,
                     c: 70,
                     f: 32,
-                    tint: '#8B5CF6',
+                    tint: '#7C3AED',
                   },
                 ].map((mm, i) => (
                   <div
@@ -577,13 +642,13 @@ const MacraMarketingLanding: React.FC<Props> = ({
                       <span>
                         <em>{mm.kcal}</em> kcal
                       </span>
-                      <span style={{ color: '#E0FE10' }}>
+                      <span style={{ color: '#65A30D' }}>
                         <em>{mm.p}</em>p
                       </span>
-                      <span style={{ color: '#06B6D4' }}>
+                      <span style={{ color: '#0D9488' }}>
                         <em>{mm.c}</em>c
                       </span>
-                      <span style={{ color: '#8B5CF6' }}>
+                      <span style={{ color: '#7C3AED' }}>
                         <em>{mm.f}</em>f
                       </span>
                     </div>
@@ -650,9 +715,9 @@ const MacraMarketingLanding: React.FC<Props> = ({
                 <span className="mc2-mockup-title">Macra · Today</span>
               </div>
               <div className="mc2-rings-top">
-                <BigRing label="Protein" unit="g" value={172} goal={180} tint="#E0FE10" />
-                <BigRing label="Carbs" unit="g" value={198} goal={240} tint="#06B6D4" />
-                <BigRing label="Fat" unit="g" value={58} goal={70} tint="#8B5CF6" />
+                <BigRing label="Protein" unit="g" value={172} goal={180} tint="#84CC16" />
+                <BigRing label="Carbs" unit="g" value={198} goal={240} tint="#0D9488" />
+                <BigRing label="Fat" unit="g" value={58} goal={70} tint="#7C3AED" />
               </div>
               <div className="mc2-rings-kcal">
                 <div>
@@ -688,7 +753,11 @@ const MacraMarketingLanding: React.FC<Props> = ({
           <div className="mc2-section-text mc2-reveal">
             <span
               className="mc2-section-label"
-              style={{ color: '#E0FE10', background: 'rgba(224,254,16,0.08)' }}
+              style={{
+                color: '#BEF264',
+                background: 'rgba(190,242,100,0.08)',
+                borderColor: 'rgba(190,242,100,0.22)',
+              }}
             >
               🏷 Label OCR
             </span>
@@ -710,7 +779,7 @@ const MacraMarketingLanding: React.FC<Props> = ({
                 'Saves the barcode so re-scans are a tap',
               ].map((t) => (
                 <li key={t}>
-                  <span className="mc2-check" style={{ color: '#E0FE10' }}>
+                  <span className="mc2-check" style={{ color: '#BEF264' }}>
                     ✓
                   </span>
                   <span style={{ color: '#a1a7a1' }}>{t}</span>
@@ -755,9 +824,9 @@ const MacraMarketingLanding: React.FC<Props> = ({
                   <div className="mc2-label-tokens">
                     {[
                       { l: 'kcal', v: 240, tint: '#FFAD30' },
-                      { l: 'P', v: 20, tint: '#E0FE10' },
-                      { l: 'C', v: 22, tint: '#06B6D4' },
-                      { l: 'F', v: 8, tint: '#8B5CF6' },
+                      { l: 'P', v: 20, tint: '#BEF264' },
+                      { l: 'C', v: 22, tint: '#2DD4BF' },
+                      { l: 'F', v: 8, tint: '#A78BFA' },
                       { l: 'Sugar', v: 2, tint: '#EF4444' },
                     ].map((t, i) => (
                       <div
@@ -803,30 +872,52 @@ const MacraMarketingLanding: React.FC<Props> = ({
       <section className="mc2-cta" id="waitlist">
         <div className="mc2-cta-glow" />
         <div className="mc2-cta-inner">
+          <span className="mc2-cta-eyebrow">iOS · Beta rolling out now</span>
           <h2 className="mc2-cta-h2">
-            Ready to stop guessing your <em>food?</em>
+            Stop guessing what's <em>on your plate.</em>
           </h2>
           <p>
-            Macra is rolling out to early iOS testers. Get on the list and you'll be first in when
-            we open the door.
+            Drop your email. We'll send you a TestFlight invite the moment your slot opens — no
+            spam, just the build.
           </p>
-          <div className="mc2-cta-actions">
-            <a
-              href="mailto:pulsefitnessapp@gmail.com?subject=Macra%20Waitlist"
-              className="mc2-btn-primary"
-            >
+
+          <form
+            className="mc2-cta-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const data = new FormData(e.currentTarget);
+              const email = String(data.get('email') || '').trim();
+              if (!email) return;
+              if (onJoinWaitlist) {
+                onJoinWaitlist();
+              } else {
+                window.location.href = `mailto:pulsefitnessapp@gmail.com?subject=Macra%20Waitlist&body=Please%20add%20me%20to%20the%20Macra%20waitlist.%20Email%3A%20${encodeURIComponent(
+                  email
+                )}`;
+              }
+            }}
+          >
+            <input
+              type="email"
+              name="email"
+              required
+              placeholder="you@domain.com"
+              className="mc2-cta-input"
+              autoComplete="email"
+            />
+            <button type="submit" className="mc2-btn-primary">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
               </svg>
-              Join Waitlist
-            </a>
-            {onJoinWaitlist && (
-              <button type="button" className="mc2-btn-secondary" onClick={onJoinWaitlist}>
-                Sign Up Early →
-              </button>
-            )}
+              Get Early Access
+            </button>
+          </form>
+
+          <div className="mc2-cta-trust">
+            <span>✓ Free during beta</span>
+            <span>✓ iOS first, Android soon</span>
+            <span>✓ No ads, ever</span>
           </div>
-          <p className="mc2-cta-note">Free during beta · iOS first · Android coming soon</p>
         </div>
       </section>
 
@@ -868,8 +959,8 @@ const MacraMarketingLanding: React.FC<Props> = ({
         .mc2 {
           font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
           -webkit-font-smoothing: antialiased;
-          background: var(--mc2-bg, rgb(6,8,6));
-          color: #111;
+          background: var(--mc2-bg, rgb(11,15,11));
+          color: #0F1712;
           overflow-x: hidden;
           transition: background 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
@@ -934,12 +1025,13 @@ const MacraMarketingLanding: React.FC<Props> = ({
         }
         .mc2-nav-login:hover { opacity: 1; color:#E0FE10; }
         .mc2-nav-cta {
-          background: linear-gradient(135deg,#E0FE10,#06B6D4) !important;
-          color: #06131a !important; padding: 9px 20px !important;
+          background: linear-gradient(135deg,#BEF264,#2DD4BF) !important;
+          color: #0A140E !important; padding: 9px 20px !important;
           border-radius: 8px; font-weight: 700 !important;
           opacity: 1 !important;
-          box-shadow: 0 4px 20px rgba(224,254,16,0.35);
+          box-shadow: 0 4px 20px rgba(190,242,100,0.28);
         }
+        .mc2-nav-cta:hover { transform: translateY(-1px); box-shadow: 0 8px 26px rgba(190,242,100,0.4); }
 
         /* ── HERO ── */
         .mc2-hero {
@@ -952,7 +1044,7 @@ const MacraMarketingLanding: React.FC<Props> = ({
           content: '';
           position: absolute; top: -20%; left: 50%; transform: translateX(-50%);
           width: 1100px; height: 800px;
-          background: radial-gradient(ellipse, rgba(224,254,16,0.10) 0%, transparent 65%);
+          background: radial-gradient(ellipse, rgba(190,242,100,0.09) 0%, transparent 65%);
           pointer-events: none;
         }
         .mc2-hero-glow {
@@ -960,8 +1052,8 @@ const MacraMarketingLanding: React.FC<Props> = ({
           transform: translate(-50%,-50%);
           width: 1100px; height: 800px;
           background: radial-gradient(ellipse,
-            rgba(6,182,212,0.08) 0%,
-            rgba(139,92,246,0.05) 40%,
+            rgba(45,212,191,0.07) 0%,
+            rgba(167,139,250,0.05) 40%,
             transparent 70%);
           pointer-events: none;
           animation: mcGlowPulse 5s ease-in-out infinite;
@@ -969,8 +1061,8 @@ const MacraMarketingLanding: React.FC<Props> = ({
         .mc2-hero-grid {
           position: absolute; inset: 0;
           background-image:
-            linear-gradient(rgba(224,254,16,0.035) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(224,254,16,0.035) 1px, transparent 1px);
+            linear-gradient(rgba(190,242,100,0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(190,242,100,0.03) 1px, transparent 1px);
           background-size: 48px 48px;
           mask-image: radial-gradient(ellipse at center, black 20%, transparent 70%);
           -webkit-mask-image: radial-gradient(ellipse at center, black 20%, transparent 70%);
@@ -995,20 +1087,20 @@ const MacraMarketingLanding: React.FC<Props> = ({
         .mc2-badge {
           display: inline-flex; align-items: center; gap: 8px;
           padding: 7px 16px;
-          border: 1px solid rgba(224,254,16,0.18); border-radius: 100px;
-          font-size: 12px; color: #dfe4d6;
-          background: rgba(224,254,16,0.04);
+          border: 1px solid rgba(190,242,100,0.16); border-radius: 100px;
+          font-size: 12px; color: #d8e0cf;
+          background: rgba(190,242,100,0.04);
           margin-bottom: 28px;
           opacity: 0; animation: mcFadeUp 0.8s ease 0.2s forwards;
           backdrop-filter: blur(8px);
         }
         .mc2-badge-dot {
-          width: 6px; height: 6px; background: #E0FE10; border-radius: 50%;
+          width: 6px; height: 6px; background: #BEF264; border-radius: 50%;
           animation: mcPulseDot 2s ease infinite;
-          box-shadow: 0 0 0 0 rgba(224,254,16,0.8);
+          box-shadow: 0 0 0 0 rgba(190,242,100,0.8);
         }
         @keyframes mcPulseDot {
-          0%,100% { box-shadow: 0 0 0 0 rgba(224,254,16,0.6); }
+          0%,100% { box-shadow: 0 0 0 0 rgba(190,242,100,0.6); }
           50%      { box-shadow: 0 0 0 8px transparent; }
         }
 
@@ -1020,7 +1112,7 @@ const MacraMarketingLanding: React.FC<Props> = ({
         }
         .mc2-h1 em {
           font-style: italic;
-          background: linear-gradient(135deg,#E0FE10,#06B6D4 55%,#8B5CF6);
+          background: linear-gradient(135deg,#BEF264,#2DD4BF 55%,#A78BFA);
           -webkit-background-clip: text; -webkit-text-fill-color: transparent;
           background-clip: text;
         }
@@ -1035,15 +1127,15 @@ const MacraMarketingLanding: React.FC<Props> = ({
         }
         .mc2-btn-primary {
           display: inline-flex; align-items: center; gap: 8px;
-          background: linear-gradient(135deg,#E0FE10,#06B6D4);
-          color: #06131a; padding: 14px 28px; border-radius: 12px;
+          background: linear-gradient(135deg,#BEF264,#2DD4BF);
+          color: #0A140E; padding: 14px 28px; border-radius: 12px;
           font-weight: 700; font-size: 15px; text-decoration: none;
           border: none; cursor: pointer;
-          box-shadow: 0 4px 24px rgba(224,254,16,0.30), 0 0 0 1px rgba(224,254,16,0.35) inset;
+          box-shadow: 0 6px 24px rgba(190,242,100,0.22), 0 0 0 1px rgba(190,242,100,0.28) inset;
           transition: transform 0.2s, box-shadow 0.2s;
         }
-        .mc2-btn-primary:hover { transform:translateY(-2px); box-shadow:0 12px 40px rgba(224,254,16,0.45); }
-        .mc2-btn-primary svg { width: 16px; height: 16px; flex-shrink: 0; stroke: #06131a; }
+        .mc2-btn-primary:hover { transform:translateY(-2px); box-shadow:0 12px 40px rgba(190,242,100,0.35); }
+        .mc2-btn-primary svg { width: 16px; height: 16px; flex-shrink: 0; stroke: #0A140E; }
         .mc2-btn-secondary {
           display: inline-flex; align-items: center; gap: 8px;
           color: rgba(255,255,255,0.7); background: transparent;
@@ -1052,7 +1144,7 @@ const MacraMarketingLanding: React.FC<Props> = ({
           text-decoration: none; cursor: pointer;
           transition: color 0.2s, border-color 0.2s, background 0.2s;
         }
-        .mc2-btn-secondary:hover { color:#E0FE10; border-color:rgba(224,254,16,0.4); background:rgba(224,254,16,0.05); }
+        .mc2-btn-secondary:hover { color:#BEF264; border-color:rgba(190,242,100,0.4); background:rgba(190,242,100,0.04); }
         .mc2-hero-proof {
           opacity: 0; animation: mcFadeUp 0.9s cubic-bezier(0.16,1,0.3,1) 0.9s forwards;
         }
@@ -1063,7 +1155,7 @@ const MacraMarketingLanding: React.FC<Props> = ({
         .mc2-proof-logos { display: flex; gap: 32px; flex-wrap: wrap; }
         .mc2-proof-logo {
           font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
-          color: rgba(224,254,16,0.35);
+          color: rgba(190,242,100,0.32);
         }
 
         /* HERO VISUAL */
@@ -1310,28 +1402,141 @@ const MacraMarketingLanding: React.FC<Props> = ({
           to   { opacity:1; transform:translateY(0); }
         }
 
+        /* ── TRUST STRIP (below hero, before value row) ── */
+        .mc2-trust {
+          background: #0B0F0A;
+          padding: 40px 56px;
+          position: relative;
+          border-top: 1px solid rgba(190,242,100,0.08);
+          border-bottom: 1px solid rgba(190,242,100,0.08);
+        }
+        .mc2-trust-inner {
+          max-width: 1200px; margin: 0 auto;
+          display: flex; align-items: center; gap: 40px;
+          flex-wrap: wrap; justify-content: center;
+        }
+        .mc2-trust-label {
+          font-size: 11px; text-transform: uppercase;
+          letter-spacing: 0.18em;
+          color: rgba(255,255,255,0.38);
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        .mc2-trust-list {
+          display: flex; align-items: center; gap: 44px;
+          flex-wrap: wrap; justify-content: center;
+        }
+        .mc2-trust-brand {
+          display: flex; flex-direction: column; gap: 2px;
+          border-left: 1px solid rgba(190,242,100,0.12);
+          padding-left: 20px;
+        }
+        .mc2-trust-brand strong {
+          font-size: 14px; font-weight: 700;
+          color: #F4F5EE; letter-spacing: -0.01em;
+        }
+        .mc2-trust-brand span {
+          font-size: 11px; color: rgba(255,255,255,0.42);
+          letter-spacing: 0.03em;
+        }
+
+        /* ── VALUE ROW (Scan · Plan · Track) ── */
+        .mc2-value {
+          background: #FAF9F4;
+          padding: 120px 56px;
+          position: relative;
+        }
+        .mc2-value::before {
+          content: ''; position: absolute;
+          top: -80px; left: 0; right: 0; height: 80px;
+          background: linear-gradient(to bottom, transparent, #FAF9F4);
+          pointer-events: none;
+        }
+        .mc2-value-inner {
+          max-width: 1200px; margin: 0 auto;
+          display: grid; grid-template-columns: repeat(3,1fr); gap: 32px;
+        }
+        .mc2-value-card {
+          padding: 36px 32px;
+          background: #ffffff;
+          border-radius: 22px;
+          border: 1px solid rgba(15,23,18,0.05);
+          position: relative;
+          overflow: hidden;
+          transition: transform 0.3s cubic-bezier(0.16,1,0.3,1), box-shadow 0.3s;
+          box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 10px 30px rgba(15,23,18,0.04);
+        }
+        .mc2-value-card::before {
+          content: ''; position: absolute;
+          top: 0; left: 0; right: 0; height: 3px;
+          background: linear-gradient(90deg, var(--tint,#BEF264), transparent);
+          opacity: 0.7;
+        }
+        .mc2-value-card::after {
+          content: ''; position: absolute;
+          top: -40px; right: -40px;
+          width: 160px; height: 160px; border-radius: 50%;
+          background: radial-gradient(circle, var(--tint,#BEF264), transparent 65%);
+          opacity: 0.12;
+          pointer-events: none;
+        }
+        .mc2-value-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 24px 50px rgba(15,23,18,0.08);
+        }
+        .mc2-value-icon {
+          width: 52px; height: 52px;
+          display: flex; align-items: center; justify-content: center;
+          background: #F4F5EE;
+          border-radius: 14px;
+          font-size: 26px;
+          margin-bottom: 20px;
+          position: relative;
+        }
+        .mc2-value-k {
+          font-size: 11px; font-weight: 800;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          margin-bottom: 10px;
+          display: block;
+        }
+        .mc2-value-card h3 {
+          font-size: 22px; font-weight: 700;
+          color: #0F1712;
+          letter-spacing: -0.02em;
+          margin-bottom: 12px;
+          line-height: 1.2;
+        }
+        .mc2-value-card p {
+          font-size: 14.5px;
+          color: #4a5a42;
+          line-height: 1.7;
+        }
+
         /* ── SECTIONS ── */
-        .mc2-section { padding: 110px 56px; position: relative; }
-        .mc2-section--light::before,
-        .mc2-section--offwhite::before {
-          content: ''; position: absolute; inset: 0;
-          background: rgba(255,255,255,0.60);
-          pointer-events: none; z-index: 0;
+        .mc2-section { padding: 120px 56px; position: relative; }
+        .mc2-section--light,
+        .mc2-section--offwhite {
+          /* Explicit light wash that doesn't depend on --mc2-bg during transitions */
+          background: #FAF9F4;
         }
-        .mc2-section--light::after {
-          content: ''; position: absolute; top: -80px; left: 0; right: 0; height: 80px;
-          background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.55));
-          pointer-events: none; z-index: 0;
-        }
-        .mc2-section--offwhite::before { background: rgba(244,247,238,0.6); }
+        .mc2-section--offwhite { background: #F4F5EE; }
+        .mc2-section--light::after,
         .mc2-section--offwhite::after {
           content: ''; position: absolute; top: -80px; left: 0; right: 0; height: 80px;
-          background: linear-gradient(to bottom, transparent, rgba(244,247,238,0.6));
+          background: linear-gradient(to bottom, transparent, #FAF9F4);
           pointer-events: none; z-index: 0;
         }
+        .mc2-section--offwhite::after {
+          background: linear-gradient(to bottom, transparent, #F4F5EE);
+        }
+        /* Dark section: explicit near-black bg so white headlines are always readable */
+        .mc2-section--dark {
+          background: #0B0F0A;
+        }
         .mc2-section--dark::before {
-          content: ''; position: absolute; top: -100px; left: 0; right: 0; height: 100px;
-          background: linear-gradient(to bottom, transparent, rgba(6,8,6,0.65));
+          content: ''; position: absolute; top: -120px; left: 0; right: 0; height: 120px;
+          background: linear-gradient(to bottom, transparent, #0B0F0A);
           pointer-events: none; z-index: 0;
         }
         .mc2-section-inner {
@@ -1343,31 +1548,34 @@ const MacraMarketingLanding: React.FC<Props> = ({
         .mc2-section-inner--flip .mc2-section-visual { order:1; }
 
         .mc2-section-label {
-          display: inline-block; padding: 5px 12px;
-          background: rgba(224,254,16,0.09); color:#0b8f20; border-radius: 20px;
+          display: inline-block; padding: 6px 14px;
+          background: rgba(132,204,22,0.10);
+          color:#365314;
+          border: 1px solid rgba(132,204,22,0.18);
+          border-radius: 20px;
           font-size: 11px; font-weight: 700; text-transform: uppercase;
-          letter-spacing: 0.1em; margin-bottom: 20px;
+          letter-spacing: 0.12em; margin-bottom: 20px;
         }
         .mc2-h2 {
-          font-size: clamp(30px,3.4vw,52px); line-height: 1.08; font-weight: 700;
-          letter-spacing: -0.025em; color: #0a0d08; margin-bottom: 20px;
+          font-size: clamp(32px,3.6vw,56px); line-height: 1.05; font-weight: 700;
+          letter-spacing: -0.028em; color: #0F1712; margin-bottom: 20px;
         }
         .mc2-h2 em {
-          font-style:italic;
-          background: linear-gradient(135deg,#16a34a,#06B6D4 60%,#8B5CF6);
+          font-style:italic; font-weight: 700;
+          background: linear-gradient(135deg,#65A30D 0%,#0D9488 55%,#7C3AED);
           -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
         }
         .mc2-h2--light { color:#fff; }
         .mc2-h2--light em {
-          background: linear-gradient(135deg,#E0FE10,#06B6D4 55%,#8B5CF6);
+          background: linear-gradient(135deg,#BEF264,#2DD4BF 55%,#A78BFA);
           -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
         }
-        .mc2-section-sub { font-size:17px; color:#3f4a3a; line-height:1.75; margin-bottom:32px; }
-        .mc2-section-sub--light { color:rgba(255,255,255,0.6); }
-        .mc2-checklist { list-style:none; display:flex; flex-direction:column; gap:13px; }
-        .mc2-checklist li { display:flex; align-items:flex-start; gap:10px; font-size:15px; color:#223; line-height:1.55; }
-        .mc2-checklist--dark li { color:rgba(255,255,255,0.65); }
-        .mc2-check { font-size:14px; color:#16a34a; font-weight:800; flex-shrink:0; margin-top:2px; }
+        .mc2-section-sub { font-size:17px; color:#3d4a3a; line-height:1.7; margin-bottom:32px; max-width: 540px; }
+        .mc2-section-sub--light { color:rgba(255,255,255,0.62); }
+        .mc2-checklist { list-style:none; display:flex; flex-direction:column; gap:14px; }
+        .mc2-checklist li { display:flex; align-items:flex-start; gap:12px; font-size:15px; color:#1c2519; line-height:1.55; }
+        .mc2-checklist--dark li { color:rgba(255,255,255,0.72); }
+        .mc2-check { font-size:14px; color:#65A30D; font-weight:800; flex-shrink:0; margin-top:3px; }
 
         .mc2-reveal {
           opacity: 0;
@@ -1461,12 +1669,12 @@ const MacraMarketingLanding: React.FC<Props> = ({
         .mc2-scan-total {
           margin-top: auto;
           display: flex; align-items: center; justify-content: space-between;
-          padding: 16px 18px;
-          background: linear-gradient(90deg, rgba(224,254,16,0.12), rgba(6,182,212,0.08));
-          border-top: 1px solid rgba(224,254,16,0.25);
+          padding: 18px 20px;
+          background: linear-gradient(90deg, rgba(132,204,22,0.08), rgba(13,148,136,0.05));
+          border-top: 1px solid rgba(132,204,22,0.2);
         }
         .mc2-scan-total span { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: #4a5a42; font-weight: 700; }
-        .mc2-scan-total strong { font-size: 14px; font-weight: 700; color: #0a0d08; }
+        .mc2-scan-total strong { font-size: 14px; font-weight: 700; color: #0F1712; }
 
         /* ── Nora mockup ── */
         .mc2-nora-chat { padding: 22px; display: flex; flex-direction: column; gap: 14px; }
@@ -1529,15 +1737,15 @@ const MacraMarketingLanding: React.FC<Props> = ({
         }
         .mc2-nora-summary {
           display: flex; align-items: center; gap: 12px;
-          padding: 12px 16px; margin-top: 6px;
-          background: linear-gradient(90deg, rgba(224,254,16,0.12), rgba(139,92,246,0.08));
-          border: 1px solid rgba(224,254,16,0.35);
+          padding: 14px 18px; margin-top: 8px;
+          background: linear-gradient(90deg, rgba(132,204,22,0.08), rgba(124,58,237,0.06));
+          border: 1px solid rgba(124,58,237,0.22);
           border-radius: 12px;
-          font-size: 13px; color: #0a0d08;
+          font-size: 13px; color: #0F1712;
         }
         .mc2-nora-summary strong { font-weight: 700; }
         .mc2-nora-summary span:nth-child(2) { color: #4a5a42; flex: 1; font-weight: 500; }
-        .mc2-nora-match { color: #16a34a; font-weight: 700; font-size: 12px; }
+        .mc2-nora-match { color: #65A30D; font-weight: 700; font-size: 12px; }
 
         /* ── Rings mockup ── */
         .mc2-rings-top {
@@ -1561,16 +1769,16 @@ const MacraMarketingLanding: React.FC<Props> = ({
         .mc2-rings-kcal {
           margin: 0 22px;
           padding: 16px 18px;
-          background: linear-gradient(90deg, rgba(224,254,16,0.08), rgba(6,182,212,0.04));
-          border: 1px solid rgba(224,254,16,0.2);
+          background: linear-gradient(90deg, rgba(132,204,22,0.07), rgba(13,148,136,0.04));
+          border: 1px solid rgba(132,204,22,0.18);
           border-radius: 12px;
         }
-        .mc2-rings-kcal-val { font-size: 28px; font-weight: 700; color: #0a0d08; }
+        .mc2-rings-kcal-val { font-size: 28px; font-weight: 700; color: #0F1712; }
         .mc2-rings-kcal-unit { font-size: 13px; color: #6b7a63; font-weight: 500; }
         .mc2-rings-kcal-bar { height: 6px; background: rgba(0,0,0,0.05); border-radius: 3px; overflow: hidden; margin-top: 10px; }
         .mc2-rings-kcal-fill {
           height: 100%;
-          background: linear-gradient(90deg,#E0FE10,#06B6D4);
+          background: linear-gradient(90deg,#84CC16,#0D9488);
           border-radius: 3px;
           width: 0;
           animation: mcKcalFill 2s cubic-bezier(0.22,1,0.36,1) 0.4s forwards;
@@ -1582,7 +1790,7 @@ const MacraMarketingLanding: React.FC<Props> = ({
         .mc2-rings-week-bars { display: grid; grid-template-columns: repeat(7,1fr); gap: 8px; margin-top: 12px; align-items: end; height: 90px; }
         .mc2-rings-week-bar {
           position: relative;
-          background: linear-gradient(180deg,#E0FE10,#06B6D4);
+          background: linear-gradient(180deg,#84CC16,#4D7C0F);
           border-radius: 4px;
           opacity: 0;
           transform-origin: bottom;
@@ -1650,28 +1858,95 @@ const MacraMarketingLanding: React.FC<Props> = ({
 
         /* STATS */
         .mc2-stats {
+          background: #0B0F0A;
           display: grid; grid-template-columns: repeat(3,1fr);
-          gap: 1px; background: rgba(224,254,16,0.06);
+          gap: 1px;
           position: relative; z-index: 1;
+          border-top: 1px solid rgba(190,242,100,0.08);
+          border-bottom: 1px solid rgba(190,242,100,0.08);
         }
-        .mc2-stat { padding:64px 40px; text-align:center; background: var(--mc2-bg, rgb(6,8,6)); }
-        .mc2-stat-val { font-size:54px; font-weight:700; color:#E0FE10; line-height:1; margin-bottom:16px; letter-spacing:-0.02em; text-shadow: 0 0 30px rgba(224,254,16,0.35); }
-        .mc2-stat-label { font-size:14px; color:rgba(255,255,255,0.4); max-width:240px; margin:0 auto; line-height:1.6; }
+        .mc2-stats::after {
+          content: ''; position: absolute; left: 50%; top: 0;
+          transform: translateX(-50%);
+          width: 60%; height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(190,242,100,0.3), transparent);
+        }
+        .mc2-stat {
+          padding:72px 40px; text-align:center;
+          background: rgba(255,255,255,0.015);
+          position: relative;
+        }
+        .mc2-stat + .mc2-stat { box-shadow: -1px 0 0 rgba(255,255,255,0.04); }
+        .mc2-stat-val {
+          font-size:clamp(44px,5vw,64px); font-weight:700;
+          color:#BEF264; line-height:1; margin-bottom:18px;
+          letter-spacing:-0.03em;
+          text-shadow: 0 0 40px rgba(190,242,100,0.2);
+        }
+        .mc2-stat-label {
+          font-size:14px;
+          color:rgba(255,255,255,0.62);
+          max-width:240px; margin:0 auto; line-height:1.6;
+          font-weight: 500;
+        }
 
         /* CTA */
-        .mc2-cta { padding: 130px 56px; text-align: center; position: relative; overflow: hidden; }
+        .mc2-cta { padding: 140px 56px; text-align: center; position: relative; overflow: hidden; background: #0B0F0A; }
         .mc2-cta-glow {
           position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
           width:900px; height:600px;
-          background:radial-gradient(ellipse,rgba(224,254,16,0.12) 0%,rgba(6,182,212,0.05) 40%,transparent 70%);
+          background:radial-gradient(ellipse,rgba(190,242,100,0.1) 0%,rgba(45,212,191,0.05) 40%,transparent 70%);
           pointer-events:none; animation:mcGlowPulse 5s ease-in-out infinite;
         }
         .mc2-cta-inner { position:relative; max-width:680px; margin:0 auto; }
-        .mc2-cta-h2 { font-size:clamp(30px,4vw,54px); font-weight:700; color:#fff; line-height:1.1; letter-spacing:-0.025em; margin-bottom:20px; }
-        .mc2-cta-h2 em { font-style:italic; background:linear-gradient(135deg,#E0FE10,#06B6D4); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
-        .mc2-cta p { font-size:18px; color:rgba(255,255,255,0.5); margin-bottom:40px; line-height:1.75; }
-        .mc2-cta-actions { display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-bottom:24px; }
-        .mc2-cta-note { font-size:13px; color:rgba(255,255,255,0.3); }
+        .mc2-cta-eyebrow {
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 6px 14px;
+          background: rgba(190,242,100,0.08);
+          border: 1px solid rgba(190,242,100,0.22);
+          color: #BEF264;
+          border-radius: 100px;
+          font-size: 11px; font-weight: 700;
+          text-transform: uppercase; letter-spacing: 0.14em;
+          margin-bottom: 22px;
+        }
+        .mc2-cta-h2 { font-size:clamp(32px,4.2vw,58px); font-weight:700; color:#fff; line-height:1.06; letter-spacing:-0.028em; margin-bottom:18px; }
+        .mc2-cta-h2 em { font-style:italic; background:linear-gradient(135deg,#BEF264,#2DD4BF); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+        .mc2-cta p { font-size:17px; color:rgba(255,255,255,0.55); margin-bottom:34px; line-height:1.7; max-width: 520px; margin-left: auto; margin-right: auto; }
+        .mc2-cta-form {
+          display: flex; gap: 10px;
+          max-width: 500px; margin: 0 auto 24px;
+          padding: 6px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(190,242,100,0.18);
+          border-radius: 14px;
+          backdrop-filter: blur(12px);
+          transition: border-color 0.3s, background 0.3s;
+        }
+        .mc2-cta-form:focus-within {
+          border-color: rgba(190,242,100,0.45);
+          background: rgba(255,255,255,0.06);
+          box-shadow: 0 0 0 4px rgba(190,242,100,0.08);
+        }
+        .mc2-cta-input {
+          flex: 1; min-width: 0;
+          background: transparent; border: 0; outline: 0;
+          padding: 14px 16px;
+          color: #fff; font-size: 15px;
+          font-family: inherit;
+        }
+        .mc2-cta-input::placeholder { color: rgba(255,255,255,0.35); }
+        .mc2-cta-form .mc2-btn-primary { padding: 12px 22px; border-radius: 10px; }
+        .mc2-cta-trust {
+          display: flex; justify-content: center; gap: 28px;
+          flex-wrap: wrap;
+          font-size: 12px;
+          color: rgba(255,255,255,0.4);
+          font-weight: 500;
+        }
+        .mc2-cta-trust span {
+          display: inline-flex; align-items: center; gap: 6px;
+        }
 
         /* FOOTER */
         .mc2-footer { padding:72px 56px 40px; border-top:1px solid rgba(224,254,16,0.08); }
@@ -1696,6 +1971,11 @@ const MacraMarketingLanding: React.FC<Props> = ({
           .mc2-footer-inner{grid-template-columns:1fr 1fr;}
           .mc2-scan-board { grid-template-columns: 1fr; }
           .mc2-label-inner { grid-template-columns: 1fr; }
+          .mc2-value-inner { grid-template-columns: 1fr; gap: 20px; }
+          .mc2-value { padding: 80px 32px; }
+          .mc2-trust-inner { gap: 24px; }
+          .mc2-trust-list { gap: 28px; }
+          .mc2-trust-brand { padding-left: 16px; }
         }
         @media(max-width:700px){
           .mc2-nav{padding:14px 20px;}
@@ -1706,10 +1986,16 @@ const MacraMarketingLanding: React.FC<Props> = ({
           .mc2-hero-inner{padding:90px 24px 60px;}
           .mc2-phone { width:240px; height:500px; }
           .mc2-cta{padding:90px 24px;}
+          .mc2-cta-form { flex-direction: column; padding: 8px; }
+          .mc2-cta-form .mc2-btn-primary { padding: 14px 22px; justify-content: center; }
           .mc2-footer{padding:48px 24px 32px;}
           .mc2-footer-inner{grid-template-columns:1fr;gap:32px;}
           .mc2-rings-top { gap: 6px; padding: 20px 14px; }
           .mc2-big-ring-wrap { width: 96px; height: 96px; }
+          .mc2-value { padding: 64px 24px; }
+          .mc2-trust { padding: 28px 24px; }
+          .mc2-trust-list { gap: 20px; }
+          .mc2-trust-brand { border-left: 0; padding-left: 0; align-items: center; text-align: center; }
         }
       `}</style>
     </div>

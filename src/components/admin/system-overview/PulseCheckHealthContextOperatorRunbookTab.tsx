@@ -4,8 +4,8 @@ import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentP
 
 const READINESS_ROWS = [
   ['Canonical collections populated', 'Confirm `health-context-source-records`, `health-context-snapshots`, `health-context-snapshot-revisions`, and `health-context-assembly-traces` exist for the target environment.', 'Without this, runtime cutover cannot be trusted.'],
-  ['Bridge lane producing data', 'Verify legacy `daily-health-summaries` are being bridged into canonical artifacts.', 'Required for QuickLifts-backed athletes.'],
-  ['Runtime reads using snapshots', 'Confirm PulseCheck runtime surfaces read canonical snapshots first and only use legacy fallback when appropriate.', 'Prevents hidden regression to the old path.'],
+  ['Bridge lane producing data', 'Verify legacy `daily-health-summaries` are being bridged into canonical artifacts.', 'Required for Fit With Pulse-backed athletes.'],
+  ['Runtime reads using snapshots', 'Confirm Pulse Check runtime surfaces read canonical snapshots first and only use legacy fallback when appropriate.', 'Prevents hidden regression to the old path.'],
   ['Readiness / freshness honest', 'Check that health-backed outputs branch correctly for ready, no-permission, no-data, and stale states.', 'Required for trustworthy athlete-facing behavior.'],
   ['Parity validation green', 'Confirm canonical-vs-legacy comparisons show no mismatches on scoped fields before broad rollout.', 'Protects migration correctness.'],
 ];
@@ -14,16 +14,16 @@ const SURFACE_ROWS = [
   ['Firestore collections', '`health-context-*` collections in dev and prod', 'Primary operator truth for whether the canonical pipeline is populated.'],
   ['Backfill utility', '`QuickLifts-Web/scripts/backfillHealthContext.js`', 'Seeds canonical artifacts from legacy summaries for migration and repair.'],
   ['Validation mock utility', '`QuickLifts-Web/scripts/seedHealthContextValidationMocks.js`', 'Creates representative dev scenarios for parity and freshness testing.'],
-  ['PulseCheck parity command', '`/healthparity` in debug Nora chat', 'Fast athlete-level comparison of canonical vs legacy runtime output.'],
-  ['Test harnesses', '`PulseCheckTests` and focused `QuickLiftsTests` health-context cases', 'Verification layer for bridge, freshness, and runtime cutover behavior.'],
+  ['Pulse Check parity command', '`/healthparity` in debug Nora chat', 'Fast athlete-level comparison of canonical vs legacy runtime output.'],
+  ['Test harnesses', '`PulseCheckTests` and focused Fit With Pulse / QuickLifts health-context cases', 'Verification layer for bridge, freshness, and runtime cutover behavior.'],
 ];
 
 const COMMAND_ROWS = [
   ['Backfill dev', '`node scripts/backfillHealthContext.js --project=quicklifts-dev-01`', 'Seed canonical collections in development from legacy summaries.'],
   ['Backfill one athlete', '`node scripts/backfillHealthContext.js --project=<project> --user-id=<uid>`', 'Target a specific athlete for migration validation or repair.'],
   ['Seed validation mocks', '`node scripts/seedHealthContextValidationMocks.js --project=quicklifts-dev-01`', 'Create controlled dev scenarios inspired by live shapes.'],
-  ['PulseCheck harness', '`xcodebuild test ... -only-testing:PulseCheckTests`', 'Validate runtime resolver and chat/runtime health behavior.'],
-  ['QuickLifts harness', '`xcodebuild test ... -only-testing:QuickLiftsTests/testHealthContextBridgeDoesNotTreatZeroValuedMetricsAsFreshData`', 'Validate bridge freshness logic stays honest.'],
+  ['Pulse Check harness', '`xcodebuild test ... -only-testing:PulseCheckTests`', 'Validate runtime resolver and chat/runtime health behavior.'],
+  ['Fit With Pulse harness', '`xcodebuild test ... -only-testing:QuickLiftsTests/testHealthContextBridgeDoesNotTreatZeroValuedMetricsAsFreshData`', 'Validate bridge freshness logic stays honest.'],
 ];
 
 const CUTOVER_STEPS = [
@@ -34,12 +34,12 @@ const CUTOVER_STEPS = [
   },
   {
     title: 'Run athlete-level parity',
-    owner: 'PulseCheck iOS / QA',
+    owner: 'Pulse Check iOS / QA',
     body: 'Use the debug `/healthparity` path on representative bridge-backed athletes and confirm canonical and legacy summaries align on the scoped fields before widening rollout.',
   },
   {
     title: 'Confirm freshness honesty',
-    owner: 'PulseCheck iOS / QA',
+    owner: 'Pulse Check iOS / QA',
     body: 'Validate fresh, stale, no-data, and no-permission scenarios so the runtime does not present sparse or contextual data as if it were current and complete.',
   },
   {
@@ -84,7 +84,7 @@ const PulseCheckHealthContextOperatorRunbookTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="PulseCheck Health Context"
+        eyebrow="Pulse Check Health Context"
         title="Health Context Operator Runbook"
         version="Version 0.1 | March 17, 2026"
         summary="Operator-facing validation and migration runbook for the health-context pipeline. This page translates the current bridge, snapshot, parity, and harness tooling into a repeatable internal operating surface so the team is not relying on debug-only tribal knowledge."

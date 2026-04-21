@@ -2,18 +2,19 @@ import type { ProductHandbook } from '../schema';
 
 export const quickliftsIosHandbook: ProductHandbook = {
   id: 'quicklifts-ios',
-  name: 'QuickLifts iOS',
+  name: 'Fit With Pulse iOS',
   platform: 'iOS (SwiftUI)',
   summary:
-    'Flagship mobile product for workout execution, round participation, nutrition tracking, and social fitness loops.',
+    'Externally branded consumer health and fitness app for workouts, rounds, clubs, creator-led challenges, profile health, and social accountability. The repo/internal lineage still uses QuickLifts naming.',
   owner: 'iOS Squad',
   repo: 'QuickLifts',
   releaseChannel: 'TestFlight weekly + App Store production',
   status: 'active',
   keyOutcomes: [
-    'Daily workout completion and adherence',
-    'Creator-led round engagement and retention',
-    'Physical + nutrition behavior tracking',
+    'Daily workout completion, health context, and adherence',
+    'Club-centered consumer fitness engagement and retention',
+    'Creator-led rounds, community accountability, and shareable training loops',
+    'Clear product boundary: deep nutrition AI belongs in Macra, not the Fit With Pulse core surface',
   ],
   featureInventory: [
     {
@@ -103,15 +104,15 @@ export const quickliftsIosHandbook: ProductHandbook = {
     },
     {
       id: 'ios-nutrition-tracking',
-      name: 'Food Logging and Meal Tracking',
+      name: 'Legacy Food Logging and Macra Boundary',
       persona: 'Athletes',
-      outcome: 'Track meals, labels, and nutrition quality to support training goals.',
-      entryPoints: ['Food tracker', 'Meal views', 'Label scan flows'],
+      outcome: 'Preserve existing food and label context where it supports health stories while treating Macra as the dedicated nutrition product going forward.',
+      entryPoints: ['Legacy food tracker', 'Meal views', 'Label scan flows', 'Macra handoff planning'],
       dependentServices: ['Nutrition services', 'Firestore', 'Storage'],
       firestoreCollections: ['users/{uid}/meals', 'users/{uid}/meal-plans'],
-      integrations: ['Camera', 'AI nutrition scoring'],
+      integrations: ['Camera', 'AI nutrition scoring', 'Macra boundary'],
       owner: 'iOS Squad + Nutrition Systems',
-      releaseChannel: 'Production',
+      releaseChannel: 'Legacy / migration-aware',
       status: 'active',
       sourceRefs: [
         { label: 'Scan Food View', path: '../QuickLifts/QuickLifts/View/Screens/FoodTrackerView/ScanFoodView.swift' },

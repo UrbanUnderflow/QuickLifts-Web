@@ -32,13 +32,6 @@ const WISHLIST_ROWS = [
   ['Tier 3', 'Nike ecosystem', 'Brand halo is real, but direct device/API access is weak.', 'Bridge only until a true API exists'],
 ];
 
-const INTEGRATION_PRINCIPLES = [
-  'One canonical athlete-context contract: every source normalizes into source records before anything reaches Nora or coach surfaces.',
-  'Direct vendor/API lanes win over mirrored data when both exist for the same domain and day.',
-  'Platform bridges remain first-class: HealthKit and Health Connect are not “fallback-only” if they are the native lane for the athlete.',
-  'Alliance value matters: prioritize vendors that expand athlete reach and strategic partnership options, not just raw data volume.',
-];
-
 const SOURCE_RECORD_ROWS = [
   ['Garmin daily summary / activity', '`summary_input` / `measurement`', 'Training volume, activity, recovery, sleep, and readiness-like signals.'],
   ['Polar training / HR / sleep', '`measurement` / `session` / `summary_input`', 'Workout context, heart-rate traces, sleep, and recovery inputs.'],
@@ -52,7 +45,7 @@ const SOURCE_RECORD_ROWS = [
 ];
 
 const ROUTING_ROWS = [
-  ['1', 'Shared QuickLifts / FitWithPulse training context', 'If available, keep workout and nutrition context from the shared app stack as the strongest training source.'],
+  ['1', 'Shared Fit With Pulse training context', 'If available, keep workout context from the consumer fitness stack as the strongest training source. Macra remains the dedicated nutrition source.'],
   ['2', 'Direct vendor API / partner feed', 'Use the native device or vendor feed when available and consented.'],
   ['3', 'Platform bridge', 'Use HealthKit or Health Connect when the device primarily routes through the mobile health platform.'],
   ['4', 'Self-report / check-in context', 'Fill gaps only after device and platform lanes are evaluated.'],
@@ -229,10 +222,10 @@ const DeviceIntegrationStrategyOverviewDoc: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="PulseCheck Health Context"
+        eyebrow="Pulse Check Health Context"
         title="Device Integration Strategy"
         version="Version 0.1 | March 17, 2026"
-        summary="Operating reference for how PulseCheck should integrate wearables, platform bridges, and elite performance systems. The goal is to keep device integrations source-aware, freshness-aware, and normalized into the same canonical athlete-context pipeline instead of creating one-off adapters."
+        summary="Operating reference for how Pulse Check should integrate wearables, platform bridges, and elite performance systems. The goal is to keep device integrations source-aware, freshness-aware, and normalized into the same canonical athlete-context pipeline instead of creating one-off adapters."
         highlights={[
           {
             title: 'One Pipeline',
@@ -250,7 +243,7 @@ const DeviceIntegrationStrategyOverviewDoc: React.FC = () => {
       />
 
       <RuntimeAlignmentPanel
-        role="Strategy artifact for deciding which device and platform integrations PulseCheck should pursue, how they should be classified, and how they should feed the canonical athlete-context pipeline."
+        role="Strategy artifact for deciding which device and platform integrations Pulse Check should pursue, how they should be classified, and how they should feed the canonical athlete-context pipeline."
         sourceOfTruth="This page is the reference for wearable, platform, and team-system integrations. It explains the integration taxonomy, wishlist tiers, routing rules, and why the same canonical contract must absorb every source."
         masterReference="Use this page when scoping new device work, deciding whether a vendor belongs on the roadmap, or checking how a vendor should map into source records and snapshots."
         relatedDocs={[
@@ -270,7 +263,7 @@ const DeviceIntegrationStrategyOverviewDoc: React.FC = () => {
           <InfoCard
             title="Important Boundary"
             accent="blue"
-            body="QuickLifts / FitWithPulse still matters as a shared training-context source, but it is not a device integration. This document focuses on devices and platforms that can feed the same canonical health-context pipeline."
+            body="Fit With Pulse still matters as the shared consumer training-context source, and Macra matters as the nutrition source, but neither is a device integration. This document focuses on devices and platforms that can feed the same canonical health-context pipeline."
           />
           <InfoCard
             title="Current Strength"
@@ -335,10 +328,10 @@ const RunWearableSourceOfTruthDoc: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="PulseCheck Run Runtime"
+        eyebrow="Pulse Check Run Runtime"
         title="Run Wearable System Outline"
         version="Version 0.1 | March 18, 2026"
-        summary="System outline for how PulseCheck should run active workout tracking across Apple Watch, Oura, and phone-led fallback logic. This document defines the run-session architecture, source hierarchy, metric ownership rules, safeguard behaviors, and the canonical output shape the runtime should produce."
+        summary="System outline for how Pulse Check should run active workout tracking across Apple Watch, Oura, and phone-led fallback logic. This document defines the run-session architecture, source hierarchy, metric ownership rules, safeguard behaviors, and the canonical output shape the runtime should produce."
         highlights={[
           {
             title: 'Apple Watch Wins Live',
@@ -356,7 +349,7 @@ const RunWearableSourceOfTruthDoc: React.FC = () => {
       />
 
       <RuntimeAlignmentPanel
-        role="System design artifact for active run sessions inside QuickLifts and PulseCheck. It explains which runtime components exist, how source arbitration should work, which metrics belong to which device lane, and how guardrails preserve session quality."
+        role="System design artifact for active run sessions inside Fit With Pulse and Pulse Check. It explains which runtime components exist, how source arbitration should work, which metrics belong to which device lane, and how guardrails preserve session quality."
         sourceOfTruth="This page is the outline document for the run wearable system. Use it whenever we implement or revise run-session logic involving Apple Watch, Oura, phone-led tracking, confidence rules, or the final canonical run record."
         masterReference="Use this page when building the run session controller, source arbitration layer, reconciliation layer, guardrail behaviors, and the canonical run persistence flow."
         relatedDocs={[
@@ -390,7 +383,7 @@ const RunWearableSourceOfTruthDoc: React.FC = () => {
           <InfoCard
             title="Architecture Rule"
             accent="blue"
-            body="Do not treat Oura as a live GPS replacement. If the athlete only has the ring, PulseCheck should still use the phone-led run runtime for route and pace while Oura strengthens the biometrics and session-confidence layer."
+            body="Do not treat Oura as a live GPS replacement. If the athlete only has the ring, Pulse Check should still use the phone-led run runtime for route and pace while Oura strengthens the biometrics and session-confidence layer."
           />
           <InfoCard
             title="Honest Degradation"

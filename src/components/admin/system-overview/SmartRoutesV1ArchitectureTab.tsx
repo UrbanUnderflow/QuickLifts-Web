@@ -10,7 +10,7 @@ const POSITION_ROWS = [
 ];
 
 const STACK_ROWS = [
-  ['iOS run surface', 'Collect origin, route type, target distance or time, and preference chips.', 'QuickLifts iOS'],
+  ['iOS run surface', 'Collect origin, route type, target distance or time, and preference chips.', 'Fit With Pulse iOS'],
   ['Pulse route API', 'Generate candidates, score them, and return the top route options.', 'Next API route or Netlify Function'],
   ['Routing provider', 'Produce route geometry and candidate alternatives.', 'Mapbox Directions API in v1'],
   ['Weather context', 'Add heat, rain, wind, and daylight context to route ranking.', 'Open-Meteo in v1'],
@@ -44,7 +44,7 @@ const SIGNAL_ROWS = [
 const PROVIDER_ROWS = [
   ['Routing provider', 'Generate 8 to 20 valid candidate routes for loop, out-and-back, or destination modes.', 'Server-side Pulse route API'],
   ['Pulse scoring layer', 'Normalize provider output, compute route scores, and attach explanation labels.', 'Server-side Pulse route API'],
-  ['Mobile client', 'Render the chosen route, start navigation-style guidance, and record selection events.', 'QuickLifts iOS'],
+  ['Mobile client', 'Render the chosen route, start navigation-style guidance, and record selection events.', 'Fit With Pulse iOS'],
   ['Post-run cleanup', 'Map-match completed GPS traces and calculate route quality outcomes.', 'Pulse route API'],
 ];
 
@@ -87,10 +87,10 @@ const SmartRoutesV1ArchitectureTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Community"
+        eyebrow="Fit With Pulse"
         title="Smart Routes v1 Architecture"
         version="Version 1.0 | March 11, 2026"
-        summary="Architecture artifact for the first-pass smart routing system inside Pulse Community. This document defines where route geometry comes from, what Pulse owns in the recommendation stack, how route requests should flow through the backend, and where AI is useful without becoming the routing engine."
+        summary="Architecture artifact for the first-pass smart routing system inside Fit With Pulse. This document defines where route geometry comes from, what Pulse owns in the recommendation stack, how route requests should flow through the backend, and where AI is useful without becoming the routing engine."
         highlights={[
           {
             title: 'Deterministic routes first',
@@ -108,9 +108,9 @@ const SmartRoutesV1ArchitectureTab: React.FC = () => {
       />
 
       <RuntimeAlignmentPanel
-        role="Pulse Community architecture artifact for the v1 smart-route recommendation layer across request capture, route generation, scoring, persistence, and post-run feedback."
+        role="Fit With Pulse architecture artifact for the v1 smart-route recommendation layer across request capture, route generation, scoring, persistence, and post-run feedback."
         sourceOfTruth="This page is authoritative for the first-pass smart-routes stack, the server-side route recommendation contract, Firestore persistence objects, and the boundary between deterministic routing and AI-assisted personalization."
-        masterReference="Use this artifact when designing run routing in QuickLifts iOS, deciding where route logic should live, or evaluating whether a feature belongs in the provider layer, the Pulse scoring layer, or the optional AI layer."
+        masterReference="Use this artifact when designing run routing in Fit With Pulse iOS, deciding where route logic should live, or evaluating whether a feature belongs in the provider layer, the Pulse scoring layer, or the optional AI layer."
         relatedDocs={[
           'Product Handbooks',
           'Backend and Data',

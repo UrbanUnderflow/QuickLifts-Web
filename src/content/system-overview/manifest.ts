@@ -4,22 +4,24 @@ import { quickliftsIosHandbook } from './products/quicklifts-ios';
 import { pulseAndroidHandbook } from './products/pulse-android';
 import { pulseCheckIosHandbook } from './products/pulsecheck-ios';
 import { quickliftsWebHandbook } from './products/quicklifts-web';
+import { macraIosHandbook } from './products/macra-ios';
 
 export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
-    'Document-first source of truth for Pulse architecture, products, data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-04-20',
+    'Document-first source of truth for Fit With Pulse consumer fitness, Pulse Check elite athlete service technology, Macra nutrition, shared data flows, ownership, and operational dependencies.',
+  lastUpdated: '2026-04-21',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
     { id: 'product-handbooks', label: 'Product Handbooks', description: 'Feature-by-feature inventory for each product surface.' },
-    { id: 'quicklifts-profile-health-system', label: 'QuickLifts Profile Health', description: 'Parent artifact for the story-led QuickLifts profile health surface and the shared snapshot contract underneath it.' },
-    { id: 'quicklifts-profile-health-story-spec', label: 'Profile Health Story Spec', description: 'Product and UX contract for integrating Health Data Stories into the QuickLifts profile.', parentSectionId: 'quicklifts-profile-health-system' },
+    { id: 'macra-system-overview', label: 'Macra', description: 'Native iOS nutrition AI app architecture, data ownership, Nora bridge, subscriptions, and locked App Store screenshots.' },
+    { id: 'quicklifts-profile-health-system', label: 'Fit With Pulse Profile Health', description: 'Parent artifact for the story-led Fit With Pulse profile health surface and the shared snapshot contract underneath it. QuickLifts remains the repo/internal lineage name.' },
+    { id: 'quicklifts-profile-health-story-spec', label: 'Profile Health Story Spec', description: 'Product and UX contract for integrating Health Data Stories into the Fit With Pulse profile.', parentSectionId: 'quicklifts-profile-health-system' },
     { id: 'quicklifts-profile-health-snapshot-contract', label: 'Profile Health Snapshot Contract', description: 'Runtime contract for the versioned ProfileHealthSnapshot read model, freshness rules, invalidation, and modal alignment.', parentSectionId: 'quicklifts-profile-health-system' },
-    { id: 'quicklifts-profile-health-energy-merge-spec', label: 'Enhanced Energy Merge Spec', description: 'Canonical calories-out resolution contract for Apple Health, QuickLifts-native workouts, manual corrections, estimators, and Oura validation.', parentSectionId: 'quicklifts-profile-health-system' },
+    { id: 'quicklifts-profile-health-energy-merge-spec', label: 'Enhanced Energy Merge Spec', description: 'Canonical calories-out resolution contract for Apple Health, Fit With Pulse-native workouts, manual corrections, estimators, and Oura validation.', parentSectionId: 'quicklifts-profile-health-system' },
     { id: 'pulse-club-activation-architecture', label: 'Club Activation Architecture', description: 'Generic creator-club operating model for onboarding, introductions, and member pairing.' },
-    { id: 'smart-routes-v1-architecture', label: 'Smart Routes v1 Architecture', description: 'First-pass routing recommendation stack, ownership boundaries, API contract, and AI role for Pulse Community.' },
+    { id: 'smart-routes-v1-architecture', label: 'Smart Routes v1 Architecture', description: 'First-pass routing recommendation stack, ownership boundaries, API contract, and AI role for Fit With Pulse.' },
     { id: 'shared-link-preview-strategy', label: 'Shared Link Preview Strategy', description: 'Fallback metadata, branded default image, and crawler-safe preview rules for shared Pulse pages.' },
     { id: 'notification-systems-architecture', label: 'Notification Systems', description: 'Cross-product notification architecture covering Fit With Pulse, Pulse Check, token ownership, senders, sequences, and operational debugging.' },
     { id: 'backend-data', label: 'Backend and Data', description: 'Core services and canonical data collections.' },
@@ -59,7 +61,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-checkin-signal-layer-integration-spec', label: 'Check-In Integration Spec', description: 'AI-native contract between readiness check-in, enriched state snapshots, bounded assignment candidate sets, Nora chat context, and daily task materialization.', parentSectionId: 'pulsecheck-runtime-architecture' },
     { id: 'pulsecheck-daily-task-training-plan-alignment-spec', label: 'Daily Task + Training Plan Alignment', description: 'Runtime surface-coherence contract for DailyTask, TrainingPlan, PlanStep, date-bound execution truth, and athlete-facing consistency across Home, Mental Training, and Nora chat.', parentSectionId: 'pulsecheck-runtime-architecture' },
     { id: 'pulsecheck-training-plan-authoring-spec', label: 'Training Plan Authoring Spec', description: 'Runtime contract for how Nora authors longer-horizon mental-training blocks, chooses plan types, persists provenance, and feeds daily materialization.', parentSectionId: 'pulsecheck-runtime-architecture' },
-    { id: 'pulsecheck-health-chat-architecture', label: 'Health Context Pipeline', description: 'Parent artifact for how PulseCheck should ingest, normalize, and use shared QuickLifts, HealthKit, Apple Watch, Oura, and self-reported athlete context.' },
+    { id: 'pulsecheck-health-chat-architecture', label: 'Health Context Pipeline', description: 'Parent artifact for how Pulse Check should ingest, normalize, and use shared Fit With Pulse, HealthKit, Apple Watch, Oura, and self-reported athlete context.' },
     { id: 'pulsecheck-athlete-health-context-snapshot-spec', label: 'Athlete Context Snapshot Spec', description: 'Canonical contract for the normalized AthleteHealthContextSnapshot that all ingestion lanes should target before native HealthKit or Oura pipes are built.', parentSectionId: 'pulsecheck-health-chat-architecture' },
     { id: 'pulsecheck-health-context-source-record-spec', label: 'Health Context Source Record Spec', description: 'Canonical adapter-target contract for the normalized source-record layer that feeds athlete-context snapshot assembly.', parentSectionId: 'pulsecheck-health-chat-architecture' },
     { id: 'pulsecheck-health-context-snapshot-assembler-spec', label: 'Health Context Snapshot Assembler Spec', description: 'Canonical merge-engine contract for how normalized health-context source records become daily and rolling athlete-context snapshots.', parentSectionId: 'pulsecheck-health-chat-architecture' },
@@ -68,7 +70,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-health-context-implementation-rollout-plan', label: 'Health Context Implementation Rollout Plan', description: 'Execution-layer milestone plan for MVP, migration, ownership, cutover, and native-source expansion across the health-context system.', parentSectionId: 'pulsecheck-health-chat-architecture' },
     { id: 'pulsecheck-health-context-operator-runbook', label: 'Health Context Operator Runbook', description: 'Internal validation and migration runbook for canonical collection population, parity checks, backfill, harness verification, and rollout readiness.', parentSectionId: 'pulsecheck-health-chat-architecture' },
     { id: 'pulsecheck-health-context-definition-of-done', label: 'Health Context Definition Of Done', description: 'Close-out artifact defining what is truly required versus optional before the health-context feature can be considered complete.', parentSectionId: 'pulsecheck-health-chat-architecture' },
-    { id: 'pulsecheck-health-context-engineering-task-breakdown', label: 'Health Context Engineering Task Breakdown', description: 'Execution-facing milestone task breakdown for platform, QuickLifts, PulseCheck, integrations, ops, and QA workstreams.', parentSectionId: 'pulsecheck-health-chat-architecture' },
+    { id: 'pulsecheck-health-context-engineering-task-breakdown', label: 'Health Context Engineering Task Breakdown', description: 'Execution-facing milestone task breakdown for platform, Fit With Pulse, Pulse Check, integrations, ops, and QA workstreams.', parentSectionId: 'pulsecheck-health-chat-architecture' },
     { id: 'pulsecheck-health-context-firestore-schema-index-spec', label: 'Health Context Firestore Schema & Index Spec', description: 'Implementation-facing Firestore collection, document, query, and composite-index spec for the health-context system.', parentSectionId: 'pulsecheck-health-chat-architecture' },
     { id: 'pulsecheck-physiology-cognition-correlation-engine', label: 'Physiology-Cognition Correlation Engine', description: 'Parent artifact for learning athlete-specific mind-body patterns from normalized physiology plus PulseCheck simulation evidence.', parentSectionId: 'pulsecheck-health-chat-architecture' },
     { id: 'pulsecheck-correlation-engine-contract-lock', label: 'Contract Lock & Exit Criteria', description: 'Milestone 0 contract freeze for baseline artifacts, naming, confidence tiers, messaging boundaries, and implementation exit criteria.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
@@ -111,13 +113,15 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   ],
   executiveSummary: {
     mission:
-      'Maintain a complete, implementation-grounded map of the Pulse ecosystem so product, engineering, and operations can execute from one shared system truth.',
+      'Maintain a complete, implementation-grounded map of the current Pulse product architecture: Fit With Pulse is the consumer health, fitness, clubs, and creator community surface; Pulse Check is white-glove elite athlete service technology; Macra is the dedicated nutrition surface.',
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Reframed the System Overview around the current product split: Fit With Pulse for consumer fitness and clubs, Pulse Check for elite athlete service technology, and Macra for nutrition.',
+      'Added Macra as a first-class System Overview tab with native iOS architecture, nutrition data ownership, Nora bridge behavior, subscription access, and locked 6.5-inch App Store screenshot assets.',
       'Froze the Outcome Rubric v1 spec and added it to the Agent Swarm handbook so the autonomous mission system now has a locked runtime contract for outcome-first execution.',
-      'Added the Enhanced Energy Merge Spec artifact to the QuickLifts profile-health handbook stack, locking `ResolvedEnergySnapshot`, source precedence, segment provenance, coverage, acceptance gates, and Home/Profile migration rules for calories out.',
-      'Added the QuickLifts Profile Health handbook artifact, pairing the story-led profile product spec with the ProfileHealthSnapshot runtime contract so profile hero, proof cards, and Health Data Story drill-down share one documented system truth.',
+      'Added the Enhanced Energy Merge Spec artifact to the Fit With Pulse profile-health handbook stack, locking `ResolvedEnergySnapshot`, source precedence, segment provenance, coverage, acceptance gates, and Home/Profile migration rules for calories out.',
+      'Added the Fit With Pulse Profile Health handbook artifact, pairing the story-led profile product spec with the ProfileHealthSnapshot runtime contract so profile hero, proof cards, and Health Data Story drill-down share one documented system truth.',
       'Added the Daily Task + Training Plan Alignment Spec to the PulseCheck runtime stack, locking the canonical DailyTask / TrainingPlan / PlanStep model, lifecycle rules, date-boundary behavior, event contract, and surface-coherence requirements across Home, Mental Training, and Nora chat.',
       'Added the Training Plan Authoring Spec to the PulseCheck runtime stack, defining how Nora authors longer-horizon mental-training blocks, chooses plan types and archetypes, persists provenance, and advances plan pointers over time.',
       'Added a pilot-scoped Correlation Engine dashboard stack, including the pilot dashboard, KPI addendum, and pilot ops runbook, and clarified that active-pilot monitoring is rooted in Pilot and PilotEnrollment rather than whole-team analytics.',
@@ -176,15 +180,16 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       'Added an AuntEdna Pilot Authorization Memo artifact to the handbook so athletics teams can export a polished pre-contract pilot memo with default PulseCheck and AuntEdna contacts and signature blocks.',
       'Added AuntEdna Exhibit A and Exhibit B artifacts to the handbook, locking the agreement-facing data boundary, limited operational mirror rules, Tier-based response standards, and post-receipt accountability model into the System Overview.',
       'Added the Playwright Testing Strategy artifact covering the harness, auth capture flow, commands, environment controls, and PulseCheck suite coverage.',
-      'Added Pulse Community Club Activation Architecture artifact for generic creator-club onboarding, introductions, and pairing.',
+      'Added Fit With Pulse Club Activation Architecture artifact for generic creator-club onboarding, introductions, and pairing.',
       'Replaced tab-driven architecture page with a full handbook structure and anchored navigation.',
-      'Added complete feature inventories for QuickLifts iOS, Pulse Android, PulseCheck iOS, and QuickLifts Web.',
+      'Added complete feature inventories for Fit With Pulse iOS, Fit With Pulse Android, Pulse Check iOS, Fit With Pulse Web/Admin, and Macra iOS.',
       'Normalized backend/data/integration ownership into explicit matrix rows and release cadences.',
       'Mapped seven cross-product end-to-end flows with concrete failure points and collection touch paths.',
       'Added explicit creator engagement, creator score, wallet, payout, and statement lifecycle documentation.',
       'Maintained agent and Hunter World chapters directly inside the handbook information architecture.',
     ],
     highlights: [
+      'Project-level product split is explicit: Fit With Pulse = consumer fitness/clubs, Pulse Check = elite athlete service tech, Macra = nutrition.',
       'Single-page handbook spanning consumer products, ops tooling, and autonomous agent infrastructure.',
       'Static typed content model in repo; no Firebase persistence required for handbook content updates.',
       'Dual-layer security model: admin role guard + page-level passcode gate.',
@@ -194,43 +199,53 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     nodes: [
       {
         id: 'quicklifts-ios',
-        name: 'QuickLifts iOS',
+        name: 'Fit With Pulse iOS',
         layer: 'surface',
         status: 'active',
-        description: 'Flagship mobile product for workouts, rounds, and nutrition.',
+        description: 'Consumer health and fitness app for workouts, rounds, clubs, creators, profile health, and social accountability.',
         owner: 'iOS Squad',
         x: 14,
         y: 16,
       },
       {
         id: 'pulse-android',
-        name: 'Pulse Android',
+        name: 'Fit With Pulse Android',
         layer: 'surface',
         status: 'active',
-        description: 'Android native product for parity across workout and round flows.',
+        description: 'Android parity surface for Fit With Pulse workouts, rounds, clubs, and social fitness flows.',
         owner: 'Android Squad',
         x: 32,
         y: 20,
       },
       {
         id: 'pulsecheck-ios',
-        name: 'PulseCheck iOS',
+        name: 'Pulse Check iOS',
         layer: 'surface',
         status: 'active',
-        description: 'Mental-performance companion product and coach readiness surface.',
+        description: 'White-glove elite athlete service technology for readiness, mental performance, protocols, and coach visibility.',
         owner: 'PulseCheck Team',
         x: 52,
         y: 16,
       },
       {
         id: 'quicklifts-web',
-        name: 'QuickLifts Web',
+        name: 'Fit With Pulse Web + Admin',
         layer: 'surface',
         status: 'active',
-        description: 'Growth, admin, creator, coach, and agent command surfaces.',
+        description: 'Web/admin repo for Fit With Pulse growth, clubs, Pulse Check provisioning, Macra bridge functions, and operations.',
         owner: 'Web Platform',
         x: 74,
         y: 22,
+      },
+      {
+        id: 'macra-ios',
+        name: 'Macra iOS',
+        layer: 'surface',
+        status: 'beta',
+        description: 'Standalone nutrition AI app for macros, meal planning, label scans, Nora coaching, and Plus access.',
+        owner: 'Nutrition Systems',
+        x: 88,
+        y: 14,
       },
       {
         id: 'firebase-auth',
@@ -353,6 +368,10 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       { from: 'quicklifts-web', to: 'firebase-auth', type: 'auth' },
       { from: 'quicklifts-web', to: 'cloud-firestore', type: 'data' },
       { from: 'quicklifts-web', to: 'netlify-functions', type: 'events' },
+      { from: 'macra-ios', to: 'firebase-auth', type: 'auth' },
+      { from: 'macra-ios', to: 'cloud-firestore', type: 'data' },
+      { from: 'macra-ios', to: 'firebase-storage', type: 'data' },
+      { from: 'macra-ios', to: 'netlify-functions', type: 'events' },
       { from: 'cloud-firestore', to: 'netlify-functions', type: 'events' },
       { from: 'cloud-firestore', to: 'virtual-office', type: 'data' },
       { from: 'cloud-firestore', to: 'agent-runner', type: 'data' },
@@ -360,11 +379,12 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       { from: 'netlify-functions', to: 'stripe', type: 'data' },
       { from: 'quicklifts-ios', to: 'revenuecat', type: 'events' },
       { from: 'pulse-android', to: 'revenuecat', type: 'events' },
+      { from: 'macra-ios', to: 'revenuecat', type: 'events' },
       { from: 'netlify-functions', to: 'brevo', type: 'events' },
       { from: 'netlify-functions', to: 'instantly', type: 'events' },
     ],
   },
-  products: [quickliftsIosHandbook, pulseAndroidHandbook, pulseCheckIosHandbook, quickliftsWebHandbook],
+  products: [quickliftsIosHandbook, pulseAndroidHandbook, pulseCheckIosHandbook, quickliftsWebHandbook, macraIosHandbook],
   backendServices: [
     {
       id: 'svc-firebase-auth',
@@ -416,6 +436,22 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       sourceRefs: [
         { label: 'Netlify Functions Structure', path: 'docs/netlify-functions-structure.md' },
         { label: 'Functions Directory', path: 'netlify/functions' },
+      ],
+    },
+    {
+      id: 'svc-macra-nutrition-ai-bridge',
+      name: 'Macra Nutrition AI Bridge',
+      purpose:
+        'Authenticated server-side bridge for Macra meal analysis, label and supplement analysis, Nora macro planning, and day-aware nutrition chat.',
+      owner: 'AI Systems + Nutrition Systems',
+      status: 'beta',
+      environments: ['Development', 'Production Netlify'],
+      keyDependencies: ['Firebase ID token', 'OpenAI API key', 'Macra website base URL', 'openai-organization feature labels'],
+      sourceRefs: [
+        { label: 'OpenAI Bridge Function', path: 'netlify/functions/openai-bridge.ts' },
+        { label: 'Nora Nutrition Chat', path: 'netlify/functions/nora-nutrition-chat.ts' },
+        { label: 'Generate Macra Meal Plan', path: 'netlify/functions/generate-macra-meal-plan.ts' },
+        { label: 'Macra GPT Service', path: '../Macra/Macra/Services/GPTService.swift' },
       ],
     },
     {
@@ -498,6 +534,57 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       ],
     },
     {
+      id: 'coll-macra-profile',
+      name: 'users/{uid}/macra/profile',
+      purpose: 'Macra-owned onboarding and nutrition profile answers, kept out of the shared root user document.',
+      writtenBy: 'Macra onboarding and profile setup',
+      readBy: 'Macra routing, personalization, Nora context builders, and nutrition surfaces',
+      criticalFields: ['goal', 'routine', 'dietaryPreferences', 'macroContext', 'updatedAt'],
+      sourceRefs: [
+        { label: 'Macra User Service', path: '../Macra/Macra/Services/UserService.swift' },
+        { label: 'Onboarding Coordinator', path: '../Macra/Macra/Features/Onboarding/MacraOnboardingCoordinator.swift' },
+      ],
+    },
+    {
+      id: 'coll-macra-nutrition-logs',
+      name: 'users/{uid}/mealLogs + meal-plan',
+      purpose: 'Macra daily meal logs, pinned meals, active meal plans, and reusable planning artifacts.',
+      writtenBy: 'Food journal, MealService, meal planning screens, and Nora plan application flows',
+      readBy: 'Journal dashboard, meal history, Ask Nora context, planning surfaces, and macro progress cards',
+      criticalFields: ['meal name', 'calories', 'protein', 'carbs', 'fat', 'ingredients', 'date', 'source', 'plannedMeals'],
+      sourceRefs: [
+        { label: 'Meal Service', path: '../Macra/Macra/NutritionCore/Services/MealService.swift' },
+        { label: 'Food Journal Core', path: '../Macra/Macra/Features/FoodJournal/MacraFoodJournalCore.swift' },
+        { label: 'Meal Planning Models', path: '../Macra/Macra/Features/MealPlanning/MealPlanningModels.swift' },
+      ],
+    },
+    {
+      id: 'coll-macra-label-scans',
+      name: 'users/{uid}/labelScans + pinnedLabelScans',
+      purpose: 'Macra nutrition and supplement label analysis history, pinned scan library, and storage-backed product imagery.',
+      writtenBy: 'Label scanner, label supplement analyzer, and pinned scan service',
+      readBy: 'Scan tab, food journal history, quick-add surfaces, and product deep-dive screens',
+      criticalFields: ['grade', 'productTitle', 'macros', 'ingredients', 'concerns', 'alternatives', 'imageURL', 'createdAt'],
+      sourceRefs: [
+        { label: 'Label Scan Service', path: '../Macra/Macra/NutritionCore/Services/LabelScanService.swift' },
+        { label: 'Label AI Service', path: '../Macra/Macra/Features/LabelSupplements/Services/LabelSupplementsAIService.swift' },
+        { label: 'Pinned Scan Service', path: '../Macra/Macra/NutritionCore/NutritionCoreSupport.swift' },
+      ],
+    },
+    {
+      id: 'coll-macra-nora-chat',
+      name: 'users/{uid}/noraChat',
+      purpose: 'Date-scoped Ask Nora nutrition chat history used to preserve day-level coaching context.',
+      writtenBy: 'Ask Nora home section and Nora chat persistence service',
+      readBy: 'Macra home journal, Nora nutrition chat function, and selected-date thread loader',
+      criticalFields: ['dayKey', 'role', 'content', 'createdAt', 'accentHex'],
+      sourceRefs: [
+        { label: 'Macra Nora Chat Service', path: '../Macra/Macra/Services/MacraNoraChatService.swift' },
+        { label: 'Ask Nora UI', path: '../Macra/Macra/View/Screens/Home/HomeView.swift' },
+        { label: 'Nora Nutrition Function', path: 'netlify/functions/nora-nutrition-chat.ts' },
+      ],
+    },
+    {
       id: 'coll-users',
       name: 'users',
       purpose: 'Canonical user profile and role records across products.',
@@ -548,7 +635,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       id: 'coll-engagement-events',
       name: 'engagement-events',
       purpose: 'Event log for creator content engagement including reach, likes, bookmarks, and workout usage.',
-      writtenBy: 'QuickLifts iOS engagement instrumentation',
+      writtenBy: 'Fit With Pulse iOS engagement instrumentation',
       readBy: 'Creator analytics, score pipelines, and payout computation surfaces',
       criticalFields: ['type', 'videoId', 'creatorId', 'engagerId', 'engagerSubscription', 'workoutId', 'timestamp'],
       sourceRefs: [
@@ -669,9 +756,9 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     {
       id: 'coll-mental-notes',
       name: 'mental-notes',
-      purpose: 'PulseCheck concern tracking with severity and status evolution.',
-      writtenBy: 'PulseCheck conversation analysis and user edits',
-      readBy: 'PulseCheck profile and coach views',
+      purpose: 'Pulse Check concern tracking with severity and status evolution.',
+      writtenBy: 'Pulse Check conversation analysis and user edits',
+      readBy: 'Pulse Check profile and coach views',
       criticalFields: ['category', 'severity', 'status', 'lastDiscussed'],
       sourceRefs: [
         { label: 'PulseCheck App', path: '../PulseCheck/PulseCheck/PulseCheckApp.swift' },
@@ -686,7 +773,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       purpose: 'Web checkout, connected accounts, unified payouts, and monthly statement generation.',
       owner: 'Monetization Team',
       credentialSource: 'Netlify environment variables',
-      products: ['QuickLifts Web', 'Coach Platform'],
+      products: ['Fit With Pulse Web + Admin', 'Coach Platform'],
       status: 'active',
       sourceRefs: [
         { label: 'Stripe Connect System', path: 'docs/stripe-connect-system.md' },
@@ -701,11 +788,12 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       purpose: 'Mobile entitlement lifecycle synchronization across iOS and Android.',
       owner: 'Monetization Team',
       credentialSource: 'Mobile app config + backend sync credentials',
-      products: ['QuickLifts iOS', 'Pulse Android', 'PulseCheck iOS'],
+      products: ['Fit With Pulse iOS', 'Fit With Pulse Android', 'Pulse Check iOS', 'Macra iOS'],
       status: 'active',
       sourceRefs: [
         { label: 'Subscription System Doc', path: 'docs/subscription-system.md' },
-        { label: 'Pulse Android README', path: '../Pulse-Android/README.md' },
+        { label: 'Fit With Pulse Android README', path: '../Pulse-Android/README.md' },
+        { label: 'Macra Purchase Service', path: '../Macra/Macra/Services/PurchaseService.swift' },
       ],
     },
     {
@@ -714,7 +802,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       purpose: 'Email lifecycle sequences, waitlists, and growth communications.',
       owner: 'Growth Ops',
       credentialSource: 'Runtime env vars (`BREVO_MARKETING_KEY` / `BREVO_API_KEY`) with local-machine bundle parity; not currently mirrored in documented Secret Manager projects',
-      products: ['QuickLifts Web'],
+      products: ['Fit With Pulse Web + Admin'],
       status: 'active',
       sourceRefs: [
         { label: 'Brevo Notes', path: 'docs/Brevo implementation do.md' },
@@ -729,7 +817,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       owner: 'Web Platform',
       credentialSource:
         'Dedicated guest OAuth envs (`GOOGLE_GUEST_CALENDAR_CLIENT_ID`, `GOOGLE_GUEST_CALENDAR_CLIENT_SECRET`, `GOOGLE_GUEST_CALENDAR_REDIRECT_URI`) or Secret Manager-backed guest OAuth JSON (`GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME`), plus invite-scoped secure token storage (`GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY`, `GOOGLE_GUEST_CALENDAR_ENCRYPTION_SECRET_NAME`, or equivalent)',
-      products: ['QuickLifts Web'],
+      products: ['Fit With Pulse Web + Admin'],
       status: 'planned',
       sourceRefs: [
         { label: 'Guest Google Calendar Import Spec', path: 'docs/ops/group-meet-guest-google-calendar-import-spec-2026-04-05.md' },
@@ -743,7 +831,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       purpose: 'Outbound prospecting automation and sequence execution.',
       owner: 'Growth Ops',
       credentialSource: 'Ops-managed API credentials',
-      products: ['QuickLifts Web'],
+      products: ['Fit With Pulse Web + Admin'],
       status: 'active',
       sourceRefs: [
         { label: 'Creator Prospects', path: 'src/pages/admin/creatorProspects.tsx' },
@@ -756,11 +844,13 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       purpose: 'Generation and analysis across round building, prospect extraction, and agent workflows.',
       owner: 'AI Systems',
       credentialSource: 'Server-side env vars and runner environment',
-      products: ['QuickLifts iOS', 'QuickLifts Web', 'PulseCheck iOS', 'Agent Runner'],
+      products: ['Fit With Pulse iOS', 'Fit With Pulse Web + Admin', 'Pulse Check iOS', 'Macra iOS', 'Agent Runner'],
       status: 'active',
       sourceRefs: [
         { label: 'Extract Creator Prospects API', path: 'src/pages/api/admin/extract-creator-prospects.ts' },
         { label: 'Agent Runner', path: 'scripts/agentRunner.js' },
+        { label: 'Macra OpenAI Bridge', path: 'netlify/functions/openai-bridge.ts' },
+        { label: 'Macra GPT Service', path: '../Macra/Macra/Services/GPTService.swift' },
       ],
     },
     {
@@ -769,7 +859,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       purpose: 'Apple ecosystem health and activity context ingestion.',
       owner: 'iOS Squad',
       credentialSource: 'App entitlements and runtime permissions',
-      products: ['QuickLifts iOS', 'PulseCheck iOS'],
+      products: ['Fit With Pulse iOS', 'Pulse Check iOS'],
       status: 'active',
       sourceRefs: [
         { label: 'HealthKit Manager', path: '../QuickLifts/QuickLifts/Services/HealthKitManager.swift' },
@@ -782,7 +872,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       purpose: 'Android health data integration for readiness and context.',
       owner: 'Android Squad',
       credentialSource: 'Android runtime permissions and app config',
-      products: ['Pulse Android'],
+      products: ['Fit With Pulse Android'],
       status: 'beta',
       sourceRefs: [
         { label: 'Health Connect Capture', path: '../Pulse-Android/app/src/main/java/ai/fitwithpulse/pulse/ui/health/HealthConnectCaptureScreen.kt' },
@@ -793,28 +883,35 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   flows: endToEndFlows,
   ownershipMatrix: [
     {
-      domain: 'QuickLifts iOS Core Product',
+      domain: 'Fit With Pulse iOS Core Product',
       primaryOwner: 'iOS Squad',
       backupOwner: 'Platform',
       releaseCadence: 'Weekly TestFlight / staged prod releases',
       runbookPath: '../iOS/docs/pulse-app-guide.md',
     },
     {
-      domain: 'Pulse Android Core Product',
+      domain: 'Fit With Pulse Android Core Product',
       primaryOwner: 'Android Squad',
       backupOwner: 'Platform',
       releaseCadence: 'Internal QA cycles + staged prod release',
       runbookPath: '../Pulse-Android/docs/RELEASE_CHECKLIST.md',
     },
     {
-      domain: 'PulseCheck iOS',
+      domain: 'Pulse Check iOS',
       primaryOwner: 'PulseCheck Team',
       backupOwner: 'Mental Performance Systems',
       releaseCadence: 'Beta iteration cadence',
       runbookPath: '../iOS/docs/pulsecheck-development-guide.md',
     },
     {
-      domain: 'QuickLifts Web Public + Admin',
+      domain: 'Macra iOS',
+      primaryOwner: 'Nutrition Systems',
+      backupOwner: 'iOS Squad + Platform',
+      releaseCadence: 'Beta iteration cadence with App Store screenshot lock before submission',
+      runbookPath: '../Macra/scripts/app-store-screenshots/README.md',
+    },
+    {
+      domain: 'Fit With Pulse Web + Admin',
       primaryOwner: 'Web Platform',
       backupOwner: 'Platform Ops',
       releaseCadence: 'Continuous deploy from main',
@@ -843,6 +940,26 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       impact: 'Breaking behavior across iOS/Android/web when field semantics diverge.',
       mitigation: 'Enforce Firestore contract updates and cross-platform release checklists before launches.',
       owner: 'Platform',
+    },
+    {
+      id: 'risk-macra-shared-user-boundary',
+      title: 'Macra shared user document boundary',
+      severity: 'high',
+      impact:
+        'A wholesale Macra user merge could overwrite Fit With Pulse, Pulse Check, creator, subscription, or profile fields on the shared users/{uid} document.',
+      mitigation:
+        'Keep Macra profile state in users/{uid}/macra/profile and patch only explicit Macra-owned root fields through UserService updateRootUserPatch.',
+      owner: 'Platform + Nutrition Systems',
+    },
+    {
+      id: 'risk-macra-ai-bridge-availability',
+      title: 'Macra AI bridge availability',
+      severity: 'medium',
+      impact:
+        'Food scans, label scans, Nora macro assessment, and Ask Nora can degrade together if the Netlify OpenAI bridge or provider credentials fail.',
+      mitigation:
+        'Keep feature-level bridge limits documented, monitor auth and provider failures, and preserve graceful client fallbacks for empty or failed analysis responses.',
+      owner: 'AI Systems + Web Platform',
     },
     {
       id: 'risk-agent-observability',
@@ -907,6 +1024,22 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     {
       term: 'Feature Inventory',
       definition: 'Per-product table of capabilities including dependencies, data paths, ownership, and status.',
+    },
+    {
+      term: 'Macra',
+      definition: 'Standalone SwiftUI nutrition AI app for macro tracking, meal planning, label scanning, supplement tracking, Nora coaching, and Plus access.',
+    },
+    {
+      term: 'Nora Nutrition Chat',
+      definition: 'Macra day-aware nutrition coach that answers against meals, macro targets, goals, and recent chat history through authenticated web functions.',
+    },
+    {
+      term: 'Macra Profile',
+      definition: 'Nested users/{uid}/macra/profile document containing Macra-owned onboarding and personalization answers.',
+    },
+    {
+      term: 'Pinned Scan',
+      definition: 'Macra quick-add summary for repeat label scans or food snaps, stored separately from the original scan or meal record.',
     },
   ],
 };

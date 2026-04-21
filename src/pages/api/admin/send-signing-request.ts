@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from '../../../../netlify/functions/utils/emailSequenceHelpers';
+import admin from '../../../lib/firebase-admin';
 
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:8888';
@@ -24,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
-  const { documentId, documentName, documentType: _documentType, recipientName, recipientEmail, companyName } = req.body;
+  const { documentId, documentName, documentType: _documentType, recipientName, recipientEmail, companyName, previewMode, sendAttemptId } = req.body;
 
   console.log('[send-signing-request] Sending to:', recipientEmail, '| doc:', documentName, '| company:', companyName);
 
@@ -106,11 +107,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       subject,
       htmlContent,
       sender: { name: branding.senderName, email: SENDER_EMAIL },
-      idempotencyKey: buildEmailDedupeKey(['admin-signing-request-v1', documentId, recipientEmail]),
+      tags: ['signing-request'],
+      headers: {
+        'X-Mailin-custom': JSON.stringify({
+          sequence: 'signing-request',
+          signingRequestId: documentId,
+          recipientEmail,
+          previewMode: Boolean(previewMode),
+        }),
+      },
+      idempotencyKey: buildEmailDedupeKey(['admin-signing-request-v2', documentId, recipientEmail, sendAttemptId || Date.now()]),
       idempotencyMetadata: {
         sequence: 'admin-signing-request',
         documentId,
         recipientEmail,
+        sendAttemptId: sendAttemptId || null,
       },
       bypassDailyRecipientLimit: true,
       dailyRecipientMetadata: {
@@ -127,7 +138,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     console.log('[send-signing-request] Email sent successfully to', recipientEmail, '| Brevo:', JSON.stringify({ messageId: sendResult.messageId }));
-    return res.status(200).json({ message: 'Signing request sent successfully.' });
+    try {
+      const now = new Date();
+      await admin.firestore().collection('signingRequests').doc(documentId).set({
+        status: 'sent',
+        sentAt: now,
+        lastSentAt: now,
+        emailStatus: 'sent',
+        messageId: sendResult.messageId || null,
+        sendCount: admin.firestore.FieldValue.increment(1),
+        updatedAt: now,
+      }, { merge: true });
+    } catch (dbError) {
+      console.error('[send-signing-request] Failed to update signing request status:', dbError);
+    }
+    return res.status(200).json({ message: 'Signing request sent successfully.', messageId: sendResult.messageId, skipped: sendResult.skipped || false });
   } catch (error: any) {
     console.error('[send-signing-request] Exception:', error);
     return res.status(500).json({
