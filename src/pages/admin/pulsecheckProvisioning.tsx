@@ -25,7 +25,11 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { useUser } from '../../hooks/useUser';
 import { storage } from '../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
-import { fetchPulseCheckSportConfiguration, getDefaultPulseCheckSports } from '../../api/firebase/pulsecheckSportConfig';
+import {
+  fetchPulseCheckSportConfiguration,
+  getDefaultPulseCheckSports,
+  type PulseCheckSportConfigurationEntry,
+} from '../../api/firebase/pulsecheckSportConfig';
 import {
   derivePulseCheckTeamPlanBypass,
   getDefaultPulseCheckTeamCommercialConfig,
@@ -506,7 +510,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [organizationImageUploadingId, setOrganizationImageUploadingId] = useState<string | null>(null);
   const [teamImageUploadingId, setTeamImageUploadingId] = useState<string | null>(null);
-  const [sportOptions, setSportOptions] = useState(() => getDefaultPulseCheckSports());
+  const [sportOptions, setSportOptions] = useState<PulseCheckSportConfigurationEntry[]>(() => getDefaultPulseCheckSports());
   const [teamCommercialDrafts, setTeamCommercialDrafts] = useState<Record<string, PulseCheckTeamCommercialConfig>>({});
   const [isProvisioningModalOpen, setIsProvisioningModalOpen] = useState(false);
   const [activeWizardStep, setActiveWizardStep] = useState<ProvisioningWizardStep>('org');
