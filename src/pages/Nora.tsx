@@ -15,6 +15,7 @@ const NoraPage: NextPage = () => {
           lastUpdated: new Date().toISOString(),
         }}
         pageOgUrl="https://fitwithpulse.ai/Nora"
+        pageOgImage="/nora-og.png"
       />
       <NoraLanding />
     </>
