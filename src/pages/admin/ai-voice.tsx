@@ -39,6 +39,8 @@ const sampleScripts = [
   "You're safe. Let your shoulders drop. Find one point and stay with it.",
   'Notice the urge to rush. Slow down by 5%. Precision over panic.',
   "If your mind wanders, that's the rep. Return to the target calmly.",
+  // Nora landing-page hero (generated via scripts/generate-nora-landing-audio.js → public/audio/nora/nora-hero.mp3)
+  "I notice things. That your sleep dropped before your bench stalled. That the days you skip breakfast are the days your voice goes quiet. I'm Nora. I pay attention — so you don't have to carry it alone.",
 ];
 
 // All Pulse Community app sound effects + PulseCheck sounds
