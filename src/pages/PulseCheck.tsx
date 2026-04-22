@@ -1816,6 +1816,7 @@ const PulseCheckPage: NextPage = () => {
                     lastUpdated: new Date().toISOString()
                 }}
                 pageOgUrl="https://fitwithpulse.ai/pulse-check"
+                pageOgImage="/pulsecheck-og.png"
             />
 
             <main className="isolate">
