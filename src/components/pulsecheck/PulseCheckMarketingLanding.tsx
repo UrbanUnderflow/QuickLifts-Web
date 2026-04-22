@@ -11,11 +11,57 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * Math.max(0, Math
 
 const PulseCheckMarketingLanding: React.FC<Props> = ({
   onJoinWaitlist,
-  onOpenWebApp,
-  webAppLabel = 'Log In',
+  onOpenWebApp: _onOpenWebApp,
+  webAppLabel: _webAppLabel = 'Log In',
 }) => {
   const [scrollY, setScrollY] = useState(0);
   const [activeTab, setActiveTab] = useState<'preflight' | 'game' | 'coach' | 'clinical'>('preflight');
+
+  // ── Department-pilot request modal ──
+  const [pilotModalOpen, setPilotModalOpen] = useState(false);
+  const [pilotForm, setPilotForm] = useState({
+    name: '',
+    email: '',
+    organization: '',
+    role: '',
+    athletes: '',
+    message: '',
+  });
+  const [pilotSubmitting, setPilotSubmitting] = useState(false);
+  const [pilotStatus, setPilotStatus] = useState<null | { ok: boolean; message: string }>(null);
+
+  const submitPilot = useCallback(async () => {
+    if (!pilotForm.name.trim() || !/^\S+@\S+\.\S+$/.test(pilotForm.email)) {
+      setPilotStatus({ ok: false, message: 'Name and a valid email are required.' });
+      return;
+    }
+    setPilotSubmitting(true);
+    setPilotStatus(null);
+    try {
+      const resp = await fetch('/api/brevo/pulse-check-pilot-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pilotForm),
+      });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        throw new Error(payload?.error || 'Request failed');
+      }
+      setPilotStatus({
+        ok: true,
+        message: 'Request sent. Tre will be in touch within one business day.',
+      });
+      setPilotForm({ name: '', email: '', organization: '', role: '', athletes: '', message: '' });
+    } catch (err) {
+      setPilotStatus({
+        ok: false,
+        message: err instanceof Error ? err.message : 'Something went wrong. Try again shortly.',
+      });
+    } finally {
+      setPilotSubmitting(false);
+    }
+  }, [pilotForm]);
+
   const heroRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
@@ -118,10 +164,13 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           <a href="#nora">Nora AI</a>
           <a href="#coach">Coach Dashboard</a>
           <a href="#clinical">Clinical Safety</a>
-          <button type="button" className="pc2-nav-login" onClick={onOpenWebApp}>
-            {webAppLabel}
+          <button
+            type="button"
+            className="pc2-nav-cta"
+            onClick={() => setPilotModalOpen(true)}
+          >
+            Request Pilot
           </button>
-          <a href="#pilot" className="pc2-nav-cta">Request Pilot</a>
         </div>
       </nav>
 
@@ -142,19 +191,20 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
               PulseCheck turns a 2-minute daily check-in into real-time readiness intelligence — for athletes, coaches, and clinical staff.
             </p>
             <div className="pc2-hero-ctas">
-              <button type="button" onClick={onOpenWebApp} className="pc2-btn-secondary">
-                {webAppLabel}
-              </button>
-              <a href="mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Pilot%20Inquiry" className="pc2-btn-primary">
+              <button
+                type="button"
+                onClick={() => setPilotModalOpen(true)}
+                className="pc2-btn-primary"
+              >
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
                 Request Department Pilot
-              </a>
+              </button>
               <a href="#nora" className="pc2-btn-secondary">See How It Works →</a>
             </div>
             <div className="pc2-hero-proof">
               <span className="pc2-proof-label">Trusted by forward-thinking programs</span>
               <div className="pc2-proof-logos">
-                {['ACC', 'LAUNCH', 'FOUNDER UNIVERSITY', 'COOLEY LLP'].map(l => (
+                {['ACC', 'LAUNCH', 'FOUNDER UNIVERSITY', 'COOLEY LLP', 'TECHSTARS', 'AWS STARTUPS'].map(l => (
                   <span key={l} className="pc2-proof-logo">{l}</span>
                 ))}
               </div>
@@ -341,47 +391,149 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         <div className="pc2-section-inner">
           <div className="pc2-section-text pc2-reveal">
             <span className="pc2-section-label" style={{ color: '#A05EF8', background: 'rgba(160,94,248,0.08)' }}>▶ Mental Simulations</span>
-            <h2 className="pc2-h2">Train the mind <em>before</em><br />the clutch moment.</h2>
-            <p className="pc2-section-sub">Run pressure scenarios before game day. PulseCheck coaches breathing, attention control, and execution cues in the exact moments athletes unravel.</p>
-            <div className="pc2-sim-steps">
+            <h2 className="pc2-h2">Measurable training<br /><em>for the mental side of execution.</em></h2>
+            <p className="pc2-section-sub">
+              PulseCheck is a simulation system — not a wellness app. Every session trains three
+              dimensions that decide whether a physically ready athlete actually performs under
+              pressure: <strong>Focus</strong>, <strong>Composure</strong>, and <strong>Decision</strong>.
+              Each is a skill. Each is measured. Each gets reps.
+            </p>
+
+            <div className="pc2-pillars">
               {[
-                { icon: '⚠', color: '#FF6B6B', label: 'Trigger', text: 'Missed two free throws. Crowd gets loud. Self-talk turns negative.' },
-                { icon: '◉', color: '#6A9AFA', label: 'Nora Prompt', text: '"Reset in 8 seconds: exhale long, eyes on rim center, cue: smooth follow-through."' },
-                { icon: '✦', color: '#A05EF8', label: 'Execution', text: 'Athlete slows heart rate, blocks crowd noise, commits to next-shot routine.' },
-              ].map(s => (
-                <div key={s.label} className="pc2-sim-step" style={{ borderLeftColor: s.color }}>
-                  <div className="pc2-sim-step-icon" style={{ background: `${s.color}18`, color: s.color }}>{s.icon}</div>
-                  <div><strong style={{ color: s.color }}>{s.label}</strong><p>{s.text}</p></div>
+                {
+                  name: 'Focus',
+                  color: '#60a5fa',
+                  accent: 'rgba(96,165,250,0.12)',
+                  def: "Direct, sustain, and shift attention despite distraction.",
+                  skills: ['Sustained Attention', 'Selective Attention', 'Attentional Shifting'],
+                },
+                {
+                  name: 'Composure',
+                  color: '#22c55e',
+                  accent: 'rgba(34,197,94,0.12)',
+                  def: 'Hold execution quality when errors, emotion, or evaluative pressure spike.',
+                  skills: ['Error Recovery', 'Emotional Interference Control', 'Pressure Stability'],
+                },
+                {
+                  name: 'Decision',
+                  color: '#c084fc',
+                  accent: 'rgba(192,132,252,0.12)',
+                  def: 'Process the cue, inhibit the wrong response, act on the right one in time.',
+                  skills: ['Response Inhibition', 'Working Memory Updating', 'Cue Discrimination'],
+                },
+              ].map((p) => (
+                <div key={p.name} className="pc2-pillar" style={{ borderLeftColor: p.color }}>
+                  <div className="pc2-pillar-head">
+                    <span className="pc2-pillar-dot" style={{ background: p.color, boxShadow: `0 0 12px ${p.color}66` }} />
+                    <strong style={{ color: p.color }}>{p.name}</strong>
+                  </div>
+                  <p className="pc2-pillar-def">{p.def}</p>
+                  <div className="pc2-pillar-skills">
+                    {p.skills.map((s) => (
+                      <span key={s} style={{ background: p.accent, color: p.color }}>{s}</span>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
+
+            <div className="pc2-sim-note">
+              <span>NORA · PROGRAM DIRECTOR</span>
+              <p>
+                Nora reads the morning check-in and assigns the session type — Probe, Skill Rep,
+                Recovery Rep, or Pressure Exposure — then selects the sim and tunes difficulty tier
+                live. You train at your edge, not someone else's.
+              </p>
+            </div>
           </div>
+
           <div className="pc2-section-visual pc2-reveal">
             <div className="pc2-mockup pc2-mockup--sim">
               <div className="pc2-mockup-bar">
                 <div className="pc2-mockup-dots"><span /><span /><span /></div>
-                <span className="pc2-mockup-title">Simulation State · Q4 01:42 · Down 1</span>
+                <span className="pc2-mockup-title">PulseCheck · Session · Skill Rep · Tier 4</span>
               </div>
-              <div className="pc2-sim-meters">
-                {[{ label: 'Pressure', val: 87, color: '#FF6B6B' }, { label: 'Focus', val: 62, color: '#ffc107' }, { label: 'Composure', val: 71, color: '#6A9AFA' }].map(m => (
-                  <div key={m.label} className="pc2-sim-meter">
-                    <div className="pc2-sm-label">{m.label}</div>
-                    <div className="pc2-sm-val" style={{ color: m.color }}>{m.val}%</div>
-                    <div className="pc2-sm-bar"><div className="pc2-sm-fill" style={{ width: `${m.val}%`, background: m.color }} /></div>
+
+              {/* Pillar scores — 0–100, Focus/Composure/Decision */}
+              <div className="pc2-pillar-scores">
+                {[
+                  { label: 'Focus', val: 88, color: '#60a5fa' },
+                  { label: 'Composure', val: 74, color: '#22c55e' },
+                  { label: 'Decision', val: 91, color: '#c084fc' },
+                ].map((m) => (
+                  <div key={m.label} className="pc2-pscore">
+                    <div className="pc2-pscore-ring-wrap">
+                      <svg viewBox="0 0 56 56" className="pc2-pscore-ring" aria-hidden>
+                        <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(17,24,39,0.08)" strokeWidth="4" />
+                        <circle
+                          cx="28" cy="28" r="22" fill="none"
+                          stroke={m.color} strokeWidth="4" strokeLinecap="round"
+                          strokeDasharray={`${(m.val / 100) * 138} 138`}
+                          transform="rotate(-90 28 28)"
+                        />
+                      </svg>
+                      <div className="pc2-pscore-val" style={{ color: m.color }}>{m.val}</div>
+                    </div>
+                    <div className="pc2-pscore-label">{m.label}</div>
+                    {m.val >= 85 && <div className="pc2-pscore-elite">Elite Zone</div>}
                   </div>
                 ))}
               </div>
-              <div className="pc2-sim-interventions">
-                {[{ i: '⚠', c: '#FF6B6B', t: 'Detect the Spiral', s: 'Negative self-talk flagged' },
-                { i: '◉', c: '#22D3EE', t: 'Issue Micro-Reset', s: 'Breath cadence + short cue' },
-                { i: '◎', c: '#6A9AFA', t: 'Re-Attach to Task', s: 'Attention narrows to one action' },
-                { i: '✦', c: '#A05EF8', t: 'Lock In Confidence', s: 'Reinforcement makes it automatic' },
-                ].map(s => (
-                  <div key={s.t} className="pc2-intervention">
-                    <div className="pc2-int-icon" style={{ background: `${s.c}14`, color: s.c }}>{s.i}</div>
-                    <div><strong>{s.t}</strong><span>{s.s}</span></div>
+
+              {/* Live sim card */}
+              <div className="pc2-active-sim">
+                <div className="pc2-active-sim-head">
+                  <span className="pc2-active-sim-tag" style={{ background: 'rgba(192,132,252,0.12)', color: '#c084fc' }}>
+                    Decision · Brake Point
+                  </span>
+                  <span className="pc2-active-sim-live"><span /> Live</span>
+                </div>
+                <div className="pc2-active-sim-body">
+                  <div className="pc2-asb-metric">
+                    <span>RESPONSE TIME</span>
+                    <strong>412<em>ms</em></strong>
                   </div>
-                ))}
+                  <div className="pc2-asb-metric">
+                    <span>ACCURACY</span>
+                    <strong>94.2<em>%</em></strong>
+                  </div>
+                  <div className="pc2-asb-metric">
+                    <span>FALSE STARTS</span>
+                    <strong>2<em>/24</em></strong>
+                  </div>
+                </div>
+                <div className="pc2-asb-cue">
+                  "Green cue is the go. Ignore the amber decoys — they speed up after trial 12."
+                </div>
+              </div>
+
+              {/* Sim library chips */}
+              <div className="pc2-sim-library">
+                <div className="pc2-sim-library-label">Simulation Library</div>
+                <div className="pc2-sim-chips">
+                  {[
+                    { n: 'Reset', p: 'Composure', c: '#22c55e' },
+                    { n: 'Noise Gate', p: 'Focus', c: '#60a5fa' },
+                    { n: 'Brake Point', p: 'Decision', c: '#c084fc', active: true },
+                    { n: 'Signal Window', p: 'Decision', c: '#c084fc' },
+                    { n: 'Sequence Shift', p: 'Decision', c: '#c084fc' },
+                    { n: 'Endurance Lock', p: 'Focus', c: '#60a5fa' },
+                  ].map((s) => (
+                    <div
+                      key={s.n}
+                      className={`pc2-sim-chip ${s.active ? 'pc2-sim-chip--active' : ''}`}
+                      style={
+                        s.active
+                          ? { borderColor: s.c, background: `${s.c}1a`, color: s.c }
+                          : {}
+                      }
+                    >
+                      <strong>{s.n}</strong>
+                      <em style={{ color: s.c }}>{s.p}</em>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -513,10 +665,14 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           <h2 className="pc2-cta-h2">Ready to see what your athletes <em>aren't telling you?</em></h2>
           <p>Join the programs using PulseCheck to turn mental readiness from a blind spot into a competitive advantage.</p>
           <div className="pc2-cta-actions">
-            <a href="mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Pilot%20Inquiry" className="pc2-btn-primary">
+            <button
+              type="button"
+              onClick={() => setPilotModalOpen(true)}
+              className="pc2-btn-primary"
+            >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
               Request Department Pilot
-            </a>
+            </button>
             <button className="pc2-btn-secondary" onClick={onJoinWaitlist}>Join Waitlist →</button>
           </div>
           <p className="pc2-cta-note">Free pilot for qualifying D1 programs · No commitment required</p>
@@ -538,6 +694,125 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         </div>
         <div className="pc2-footer-bottom">© 2026 Pulse Intelligence Labs, Inc. All rights reserved.</div>
       </footer>
+
+      {/* ── Department Pilot Request Modal ── */}
+      {pilotModalOpen && (
+        <div
+          className="pc2-modal-overlay"
+          onClick={() => !pilotSubmitting && setPilotModalOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Request Department Pilot"
+        >
+          <div className="pc2-modal" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="pc2-modal-close"
+              onClick={() => !pilotSubmitting && setPilotModalOpen(false)}
+              aria-label="Close"
+              disabled={pilotSubmitting}
+            >
+              ×
+            </button>
+
+            <div className="pc2-modal-head">
+              <div className="pc2-modal-eye">Department Pilot</div>
+              <h3>Let&apos;s see PulseCheck in your program.</h3>
+              <p>
+                Drop the basics and we&apos;ll reach back within one business day. Free pilot for
+                qualifying D1 programs — no commitment.
+              </p>
+            </div>
+
+            <form
+              className="pc2-modal-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitPilot();
+              }}
+            >
+              <label className="pc2-modal-field">
+                <span>Your name *</span>
+                <input
+                  type="text"
+                  required
+                  value={pilotForm.name}
+                  onChange={(e) => setPilotForm({ ...pilotForm, name: e.target.value })}
+                  disabled={pilotSubmitting}
+                  placeholder="Jane Coach"
+                />
+              </label>
+              <label className="pc2-modal-field">
+                <span>Work email *</span>
+                <input
+                  type="email"
+                  required
+                  value={pilotForm.email}
+                  onChange={(e) => setPilotForm({ ...pilotForm, email: e.target.value })}
+                  disabled={pilotSubmitting}
+                  placeholder="jane@program.edu"
+                />
+              </label>
+              <div className="pc2-modal-row">
+                <label className="pc2-modal-field">
+                  <span>Program / organization</span>
+                  <input
+                    type="text"
+                    value={pilotForm.organization}
+                    onChange={(e) => setPilotForm({ ...pilotForm, organization: e.target.value })}
+                    disabled={pilotSubmitting}
+                    placeholder="State U. Football"
+                  />
+                </label>
+                <label className="pc2-modal-field">
+                  <span>Role</span>
+                  <input
+                    type="text"
+                    value={pilotForm.role}
+                    onChange={(e) => setPilotForm({ ...pilotForm, role: e.target.value })}
+                    disabled={pilotSubmitting}
+                    placeholder="AD · Performance · Clinician"
+                  />
+                </label>
+              </div>
+              <label className="pc2-modal-field">
+                <span>Approx. athletes</span>
+                <input
+                  type="text"
+                  value={pilotForm.athletes}
+                  onChange={(e) => setPilotForm({ ...pilotForm, athletes: e.target.value })}
+                  disabled={pilotSubmitting}
+                  placeholder="e.g. 85"
+                />
+              </label>
+              <label className="pc2-modal-field">
+                <span>What are you hoping to solve?</span>
+                <textarea
+                  rows={3}
+                  value={pilotForm.message}
+                  onChange={(e) => setPilotForm({ ...pilotForm, message: e.target.value })}
+                  disabled={pilotSubmitting}
+                  placeholder="Context on the program, goals, timing, anything you want us to know."
+                />
+              </label>
+
+              {pilotStatus && (
+                <div className={`pc2-modal-status ${pilotStatus.ok ? 'pc2-modal-status--ok' : 'pc2-modal-status--err'}`}>
+                  {pilotStatus.message}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="pc2-btn-primary pc2-modal-submit"
+                disabled={pilotSubmitting}
+              >
+                {pilotSubmitting ? 'Sending…' : 'Request pilot'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       <style>{`/* ============================================================
          PULSECHECK v2 — Scroll-Driven Dynamic Styles
@@ -973,27 +1248,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           pointer-events: none;
           z-index: 0;
         }
-        /* Top gradient bleed — dark section bleeds UP into light */
-        .pc2-section--light::after {
-          content: '';
-          position: absolute; top: -80px; left: 0; right: 0; height: 80px;
-          background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.55));
-          pointer-events: none; z-index: 0;
-        }
         .pc2-section--offwhite::before { background: rgba(246,247,250,0.55); }
-        .pc2-section--offwhite::after {
-          content: '';
-          position: absolute; top: -80px; left: 0; right: 0; height: 80px;
-          background: linear-gradient(to bottom, transparent, rgba(246,247,250,0.55));
-          pointer-events: none; z-index: 0;
-        }
-        /* Dark section re-darkens — gradient from previous light section */
-        .pc2-section--dark::before {
-          content: '';
-          position: absolute; top: -100px; left: 0; right: 0; height: 100px;
-          background: linear-gradient(to bottom, transparent, rgba(6,6,8,0.6));
-          pointer-events: none; z-index: 0;
-        }
         .pc2-section-inner {
           max-width: 1200px; margin: 0 auto;
           display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center;
@@ -1079,25 +1334,221 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         .pc2-cl-metrics { display:flex; gap:10px; flex-wrap:wrap; }
         .pc2-cl-metrics span { font-size:11px; color:#6A9AFA; font-weight:600; background:rgba(106,154,250,0.1); padding:3px 9px; border-radius:20px; }
 
-        /* Sim steps */
-        .pc2-sim-steps { display:flex; flex-direction:column; gap:16px; margin-top:8px; }
-        .pc2-sim-step { display:flex; align-items:flex-start; gap:14px; padding:14px 16px; border-left:3px solid; border-radius:0 12px 12px 0; background:rgba(0,0,0,0.015); }
-        .pc2-sim-step-icon { width:38px; height:38px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
-        .pc2-sim-step strong { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px; }
-        .pc2-sim-step p { font-size:13px; color:#555; line-height:1.55; }
+        /* ── Simulation section — three pillars + live session ── */
+        .pc2-pillars { display:flex; flex-direction:column; gap:12px; margin-top:12px; }
+        .pc2-pillar {
+          padding:14px 16px 14px 18px;
+          border-left:3px solid;
+          border-radius:0 14px 14px 0;
+          background:rgba(0,0,0,0.02);
+          transition:transform 0.25s, background 0.25s;
+        }
+        .pc2-pillar:hover { transform:translateX(2px); background:rgba(0,0,0,0.035); }
+        .pc2-pillar-head { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+        .pc2-pillar-dot { width:8px; height:8px; border-radius:50%; }
+        .pc2-pillar-head strong {
+          font-size:13px; font-weight:800;
+          text-transform:uppercase;
+          letter-spacing:0.12em;
+        }
+        .pc2-pillar-def { font-size:13.5px; color:#4a4a52; line-height:1.55; margin-bottom:10px; }
+        .pc2-pillar-skills { display:flex; flex-wrap:wrap; gap:6px; }
+        .pc2-pillar-skills span {
+          font-size:10.5px; font-weight:700;
+          padding:4px 9px;
+          border-radius:100px;
+          letter-spacing:0.02em;
+        }
 
-        /* Sim mockup internals */
-        .pc2-sim-meters { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:#e8eaee; }
-        .pc2-sim-meter { background:#fff; padding:18px 14px; text-align:center; }
-        .pc2-sm-label { font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:#aaa; margin-bottom:6px; }
-        .pc2-sm-val { font-size:30px; font-weight:700; margin-bottom:10px; }
-        .pc2-sm-bar { height:3px; background:#f0f0f0; border-radius:2px; overflow:hidden; }
-        .pc2-sm-fill { height:100%; border-radius:2px; }
-        .pc2-sim-interventions { padding:16px; display:flex; flex-direction:column; gap:12px; }
-        .pc2-intervention { display:flex; align-items:flex-start; gap:12px; }
-        .pc2-int-icon { width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
-        .pc2-intervention strong { display:block; font-size:13px; font-weight:600; color:#111; margin-bottom:2px; }
-        .pc2-intervention span { font-size:12px; color:#777; }
+        .pc2-sim-note {
+          margin-top:20px;
+          padding:16px 18px;
+          border-radius:14px;
+          background:linear-gradient(135deg, rgba(160,94,248,0.06), rgba(106,154,250,0.06));
+          border:1px solid rgba(160,94,248,0.18);
+        }
+        .pc2-sim-note span {
+          display:block;
+          font-family:ui-monospace, 'SF Mono', Menlo, monospace;
+          font-size:10px; font-weight:700;
+          letter-spacing:0.16em;
+          color:#A05EF8;
+          margin-bottom:6px;
+        }
+        .pc2-sim-note p { font-size:13.5px; line-height:1.6; color:#2a2a33; }
+
+        /* Mockup — pillar scores */
+        .pc2-pillar-scores {
+          display:grid;
+          grid-template-columns:repeat(3, 1fr);
+          gap:1px;
+          background:#e8eaee;
+        }
+        .pc2-pscore {
+          background:#fff;
+          padding:18px 10px 16px;
+          text-align:center;
+          display:flex; flex-direction:column; align-items:center; gap:4px;
+          position:relative;
+        }
+        .pc2-pscore-ring-wrap {
+          position:relative;
+          width:56px;
+          height:56px;
+          flex:0 0 56px;
+          display:grid;
+          place-items:center;
+        }
+        .pc2-pscore-ring {
+          grid-area:1 / 1;
+          display:block;
+          width:56px;
+          height:56px;
+        }
+        .pc2-pscore-ring circle { transition:stroke-dasharray 0.6s cubic-bezier(0.16,1,0.3,1); }
+        .pc2-pscore-val {
+          position:absolute;
+          inset:0;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-size:16px; font-weight:800;
+          line-height:1;
+          text-align:center;
+        }
+        .pc2-pscore-label {
+          font-size:10px; font-weight:700;
+          text-transform:uppercase;
+          letter-spacing:0.1em;
+          color:#6b6b72;
+          margin-top:6px;
+        }
+        .pc2-pscore-elite {
+          font-size:9px; font-weight:700;
+          color:#c084fc;
+          background:rgba(192,132,252,0.12);
+          border:1px solid rgba(192,132,252,0.3);
+          padding:2px 7px;
+          border-radius:100px;
+          letter-spacing:0.08em;
+          text-transform:uppercase;
+          margin-top:2px;
+        }
+
+        /* Mockup — active sim */
+        .pc2-active-sim {
+          margin:16px; padding:14px;
+          border-radius:14px;
+          background:#fafbfd;
+          border:1px solid #eef0f4;
+        }
+        .pc2-active-sim-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+        .pc2-active-sim-tag {
+          font-family:ui-monospace, 'SF Mono', Menlo, monospace;
+          font-size:10.5px; font-weight:700;
+          letter-spacing:0.1em;
+          padding:5px 10px;
+          border-radius:100px;
+        }
+        .pc2-active-sim-live {
+          margin-left:auto;
+          display:inline-flex; align-items:center; gap:6px;
+          font-size:10.5px; font-weight:700;
+          color:#22c55e;
+          letter-spacing:0.08em;
+          text-transform:uppercase;
+        }
+        .pc2-active-sim-live span {
+          width:7px; height:7px; border-radius:50%;
+          background:#22c55e;
+          box-shadow:0 0 8px #22c55e;
+          animation: pc2Live 1.4s ease-in-out infinite;
+        }
+        @keyframes pc2Live {
+          0%,100% { opacity:1; transform:scale(1); }
+          50%      { opacity:0.45; transform:scale(0.85); }
+        }
+        .pc2-active-sim-body {
+          display:grid;
+          grid-template-columns:repeat(3, 1fr);
+          gap:8px;
+          padding:10px 0 12px;
+          border-bottom:1px dashed #e5e7eb;
+          margin-bottom:12px;
+        }
+        .pc2-asb-metric { text-align:center; }
+        .pc2-asb-metric span {
+          display:block;
+          font-family:ui-monospace, 'SF Mono', Menlo, monospace;
+          font-size:9px; font-weight:700;
+          letter-spacing:0.1em;
+          color:#98a0a8;
+          margin-bottom:3px;
+        }
+        .pc2-asb-metric strong {
+          font-size:20px; font-weight:800; color:#111;
+        }
+        .pc2-asb-metric em {
+          font-style:normal;
+          font-size:12px; font-weight:600;
+          color:#667085;
+          margin-left:2px;
+        }
+        .pc2-asb-cue {
+          font-size:13px; line-height:1.5;
+          color:#2a2a33;
+          font-style:italic;
+          padding:8px 12px;
+          border-left:2px solid #c084fc;
+          background:rgba(192,132,252,0.06);
+          border-radius:0 8px 8px 0;
+        }
+
+        /* Mockup — sim library chips */
+        .pc2-sim-library { padding:0 16px 18px; }
+        .pc2-sim-library-label {
+          font-family:ui-monospace, 'SF Mono', Menlo, monospace;
+          font-size:10px; font-weight:700;
+          letter-spacing:0.14em;
+          color:#98a0a8;
+          text-transform:uppercase;
+          padding-bottom:10px;
+          border-bottom:1px solid #eef0f4;
+          margin-bottom:10px;
+        }
+        .pc2-sim-chips {
+          display:grid;
+          grid-template-columns:repeat(3, 1fr);
+          gap:8px;
+        }
+        .pc2-sim-chip {
+          padding:9px 10px;
+          border-radius:10px;
+          border:1px solid #eef0f4;
+          background:#fff;
+          text-align:center;
+          transition:transform 0.25s, box-shadow 0.25s;
+        }
+        .pc2-sim-chip:hover { transform:translateY(-1px); }
+        .pc2-sim-chip strong {
+          display:block;
+          font-size:11.5px; font-weight:700;
+          color:#111;
+          letter-spacing:-0.01em;
+        }
+        .pc2-sim-chip em {
+          display:block;
+          font-style:normal;
+          font-size:9px; font-weight:700;
+          text-transform:uppercase;
+          letter-spacing:0.1em;
+          margin-top:2px;
+        }
+        .pc2-sim-chip--active {
+          font-weight:800;
+          box-shadow:0 4px 14px rgba(192,132,252,0.28);
+        }
+        .pc2-sim-chip--active strong { color:inherit; }
 
         /* Dashboard mockup */
         .pc2-dash-alert { display:flex; align-items:flex-start; gap:12px; padding:14px 16px; margin:16px; border-radius:12px; background:rgba(249,115,22,0.05); border:1px solid rgba(249,115,22,0.2); }
@@ -1179,6 +1630,158 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         .pc2-footer-col a { display:block; font-size:14px; color:rgba(255,255,255,0.35); text-decoration:none; margin-bottom:10px; transition:color 0.2s; }
         .pc2-footer-col a:hover { color:rgba(255,255,255,0.7); }
         .pc2-footer-bottom { max-width:1100px; margin:0 auto; padding-top:24px; border-top:1px solid rgba(255,255,255,0.05); font-size:13px; color:rgba(255,255,255,0.2); text-align:center; }
+
+        /* ── Pilot Request Modal ── */
+        .pc2-modal-overlay {
+          position:fixed; inset:0; z-index:1000;
+          background:rgba(5,4,10,0.72);
+          backdrop-filter:blur(10px);
+          -webkit-backdrop-filter:blur(10px);
+          display:flex; align-items:center; justify-content:center;
+          padding:32px 20px;
+          animation: pc2ModalFade 0.25s ease-out;
+        }
+        @keyframes pc2ModalFade {
+          from { opacity:0; }
+          to   { opacity:1; }
+        }
+        .pc2-modal {
+          position:relative;
+          width:100%;
+          max-width:520px;
+          max-height:min(680px, 92vh);
+          overflow-y:auto;
+          background:linear-gradient(180deg, #0f0a1a 0%, #08050e 100%);
+          border:1px solid rgba(160,94,248,0.35);
+          border-radius:22px;
+          padding:32px 28px 28px;
+          box-shadow:
+            0 40px 80px rgba(0,0,0,0.6),
+            0 0 0 1px rgba(255,255,255,0.04) inset,
+            0 0 80px rgba(160,94,248,0.25);
+          animation: pc2ModalRise 0.35s cubic-bezier(0.16,1,0.3,1);
+        }
+        @keyframes pc2ModalRise {
+          from { opacity:0; transform:translateY(16px) scale(0.98); }
+          to   { opacity:1; transform:translateY(0) scale(1); }
+        }
+        .pc2-modal-close {
+          position:absolute; top:14px; right:14px;
+          width:32px; height:32px; border-radius:50%;
+          border:1px solid rgba(255,255,255,0.1);
+          background:rgba(255,255,255,0.03);
+          color:rgba(255,255,255,0.6);
+          font-size:22px; line-height:1;
+          cursor:pointer;
+          display:flex; align-items:center; justify-content:center;
+          transition:background 0.2s, color 0.2s, transform 0.2s;
+        }
+        .pc2-modal-close:hover {
+          background:rgba(160,94,248,0.18);
+          color:#c6b1ff;
+          transform:scale(1.05);
+        }
+        .pc2-modal-close:disabled { opacity:0.4; cursor:default; }
+
+        .pc2-modal-head { margin-bottom:22px; }
+        .pc2-modal-eye {
+          display:inline-block;
+          font-family:ui-monospace, 'SF Mono', Menlo, monospace;
+          font-size:10.5px; font-weight:700;
+          letter-spacing:0.18em;
+          text-transform:uppercase;
+          color:#c6b1ff;
+          background:rgba(160,94,248,0.12);
+          border:1px solid rgba(160,94,248,0.3);
+          padding:5px 11px;
+          border-radius:100px;
+          margin-bottom:14px;
+        }
+        .pc2-modal-head h3 {
+          font-size:24px; font-weight:800;
+          color:#fff;
+          letter-spacing:-0.02em;
+          line-height:1.15;
+          margin-bottom:10px;
+        }
+        .pc2-modal-head p {
+          font-size:14px; line-height:1.6;
+          color:rgba(255,255,255,0.58);
+        }
+
+        .pc2-modal-form {
+          display:flex; flex-direction:column; gap:14px;
+        }
+        .pc2-modal-row {
+          display:grid;
+          grid-template-columns:1fr 1fr;
+          gap:14px;
+        }
+        .pc2-modal-field {
+          display:flex; flex-direction:column; gap:6px;
+        }
+        .pc2-modal-field span {
+          font-size:11px; font-weight:700;
+          color:rgba(255,255,255,0.55);
+          letter-spacing:0.06em;
+          text-transform:uppercase;
+        }
+        .pc2-modal-field input,
+        .pc2-modal-field textarea {
+          width:100%;
+          padding:11px 14px;
+          border-radius:10px;
+          border:1px solid rgba(255,255,255,0.1);
+          background:rgba(255,255,255,0.03);
+          color:#fff;
+          font-size:14px;
+          font-family:inherit;
+          transition:border-color 0.2s, background 0.2s;
+        }
+        .pc2-modal-field input::placeholder,
+        .pc2-modal-field textarea::placeholder {
+          color:rgba(255,255,255,0.28);
+        }
+        .pc2-modal-field input:focus,
+        .pc2-modal-field textarea:focus {
+          outline:none;
+          border-color:rgba(160,94,248,0.6);
+          background:rgba(160,94,248,0.06);
+        }
+        .pc2-modal-field textarea { resize:vertical; min-height:72px; }
+
+        .pc2-modal-status {
+          padding:10px 14px;
+          border-radius:10px;
+          font-size:13px; line-height:1.5;
+          font-weight:500;
+        }
+        .pc2-modal-status--ok {
+          background:rgba(34,197,94,0.1);
+          border:1px solid rgba(34,197,94,0.32);
+          color:#86efac;
+        }
+        .pc2-modal-status--err {
+          background:rgba(255,107,107,0.1);
+          border:1px solid rgba(255,107,107,0.32);
+          color:#fca5a5;
+        }
+
+        .pc2-modal-submit {
+          margin-top:4px;
+          justify-content:center;
+        }
+        .pc2-modal-submit:disabled {
+          opacity:0.6;
+          cursor:default;
+          transform:none !important;
+        }
+
+        @media (max-width: 540px) {
+          .pc2-modal { padding:26px 20px; border-radius:18px; }
+          .pc2-modal-row { grid-template-columns:1fr; }
+          .pc2-modal-head h3 { font-size:20px; }
+        }
 
         /* RESPONSIVE */
         @media(max-width:900px){

@@ -101,6 +101,10 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/pulse-auntedna-stakeholder-deck',
     // PulseCheck marketing landing (public)
     '/PulseCheck',
+    // Nora marketing landing (public)
+    '/Nora',
+    // Macra marketing landing (public)
+    '/Macra',
   ].map(route => route?.toLowerCase());
 
   const publicPathPatterns = [

@@ -1,0 +1,17 @@
+[
+  {
+    "id": "nora-hero",
+    "filename": "nora-hero.mp3",
+    "text": "I notice things. That your sleep dropped before your bench stalled. That the days you skip breakfast are the days your voice goes quiet. I'm Nora. I pay attention — so you don't have to carry it alone."
+  },
+  {
+    "id": "nora-intro",
+    "filename": "nora-intro.mp3",
+    "text": "Hi Tremaine, today is game day. How are you feeling?"
+  },
+  {
+    "id": "nora-baseline",
+    "filename": "nora-baseline.mp3",
+    "text": "Your baseline looks great today. 8 hours of sleep, RHR at 42 bpm, HRV is high — excellent CNS recovery. Your body is primed for today."
+  }
+]
