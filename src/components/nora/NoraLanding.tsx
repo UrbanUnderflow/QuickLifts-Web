@@ -323,6 +323,57 @@ const NoraLanding: React.FC = () => {
     [activeSampleId, isPlaying, attachAnalyser]
   );
 
+  // ── Autoplay the hero sample on landing ──
+  // Browser autoplay policies block unmuted audio until a user gesture, so we
+  // try once on mount (succeeds when the user came from a same-origin nav or
+  // has a recent interaction) and otherwise fire on the first pointer/key/scroll
+  // event anywhere on the page.
+  useEffect(() => {
+    let fired = false;
+    const tryPlay = () => {
+      if (fired) return;
+      const audio = audioRef.current;
+      if (!audio) return;
+      fired = true;
+      playSample(HERO_SAMPLE);
+    };
+
+    // Attempt immediately — most browsers will block without a gesture.
+    const immediate = window.setTimeout(() => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      if (audio.src !== window.location.origin + HERO_SAMPLE.src) {
+        audio.src = HERO_SAMPLE.src;
+      }
+      audio.currentTime = 0;
+      audio.play()
+        .then(() => {
+          fired = true;
+          setActiveSampleId(HERO_SAMPLE.id);
+          attachAnalyser(audio);
+        })
+        .catch(() => undefined); // blocked → wait for gesture below
+    }, 150);
+
+    // Fallback: first gesture anywhere kicks it off.
+    const events: Array<keyof WindowEventMap> = [
+      'pointerdown',
+      'touchstart',
+      'keydown',
+      'scroll',
+      'wheel',
+    ];
+    events.forEach((ev) => window.addEventListener(ev, tryPlay, { once: true, passive: true }));
+
+    return () => {
+      window.clearTimeout(immediate);
+      events.forEach((ev) => window.removeEventListener(ev, tryPlay));
+    };
+    // Intentionally excluded: playSample (stable enough) — we only want this
+    // to run once per mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const startPulseCheckBoxBreathing = useCallback(() => {
     if (isBoxBreathingActive) {
       boxBreathingPhoneRef.current?.stop();
