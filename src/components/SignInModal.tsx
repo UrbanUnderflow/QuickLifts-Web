@@ -2376,6 +2376,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   const renderLegalStep = () => (
     <>
+      <div className="mb-4 flex justify-center">
+        <SignedInBadge user={currentUser} />
+      </div>
       <div className="text-center mb-8">
         <h2 className="text-2xl font-bold text-white font-['Thunder'] mb-2">
           Review our legal terms

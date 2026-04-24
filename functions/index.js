@@ -135,6 +135,10 @@ try {
 // Export the scheduled leaderboard cache
 exports.scheduledLeaderboardCache = require('./leaderboardCache').scheduledLeaderboardCache;
 
+// Export the Evergreen Challenge cycle rollover cron (hourly).
+// See functions/cycleRollover.js for the full rollover pipeline.
+exports.rolloverChallengeCycles = require('./cycleRollover').rolloverChallengeCycles;
+
 // Export Engagement Tracking triggers
 exports.processEngagementEvent = require('./engagementTracking').processEngagementEvent;
 
