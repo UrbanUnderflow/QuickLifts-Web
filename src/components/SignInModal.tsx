@@ -230,14 +230,38 @@ const SignInModal: React.FC<SignInModalProps> = ({
       acceptedAt: dateToUnixTimestamp(acceptedAt),
     };
 
-    await userService.updateUser(userId, {
-      legalAcceptance,
-      updatedAt: dateToUnixTimestamp(acceptedAt),
+    console.log('[LegalAcceptance] attempting write', {
+      userId,
+      authUid: auth.currentUser?.uid,
+      authEmail: auth.currentUser?.email,
+      authEmailVerified: auth.currentUser?.emailVerified,
+      providers: auth.currentUser?.providerData?.map((p) => p.providerId),
+      patch: legalAcceptance,
     });
+
+    try {
+      await userService.updateUser(userId, {
+        legalAcceptance,
+        updatedAt: dateToUnixTimestamp(acceptedAt),
+      });
+      console.log('[LegalAcceptance] updateUser resolved OK');
+    } catch (writeErr: any) {
+      console.error('[LegalAcceptance] updateUser FAILED', {
+        code: writeErr?.code,
+        name: writeErr?.name,
+        message: writeErr?.message,
+        stack: writeErr?.stack,
+      });
+      throw writeErr;
+    }
 
     cacheLegalAcceptance(userId, currentLegalAcceptance);
 
     const refreshedUser = await userService.fetchUserFromFirestore(userId);
+    console.log('[LegalAcceptance] post-write fetch', {
+      found: !!refreshedUser,
+      legalAcceptance: refreshedUser?.legalAcceptance,
+    });
     if (refreshedUser) {
       cacheLegalAcceptance(userId, refreshedUser.legalAcceptance);
       userService.nonUICurrentUser = refreshedUser;
@@ -981,9 +1005,14 @@ const SignInModal: React.FC<SignInModalProps> = ({
         if (auth.currentUser) {
           await handleSignInSuccess(auth.currentUser);
         }
-      } catch (err) {
-        console.error('[SignInModal Legal Step] Error saving acceptance:', err);
-        setError(err instanceof Error ? err.message : 'An error occurred');
+      } catch (err: any) {
+        console.error('[SignInModal Legal Step] Error saving acceptance:', err, {
+          code: err?.code,
+          name: err?.name,
+          message: err?.message,
+        });
+        const code = err?.code ? ` [${err.code}]` : '';
+        setError((err instanceof Error ? err.message : 'An error occurred') + code);
       } finally {
         setIsLoading(false);
       }
