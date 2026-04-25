@@ -9,6 +9,11 @@ interface MealContext {
   fat: number;
 }
 
+interface AttachedMealContext extends MealContext {
+  loggedOnLabel?: string;
+  loggedOnKey?: string;
+}
+
 interface MacroTargetContext {
   calories?: number;
   protein?: number;
@@ -32,6 +37,35 @@ interface MacraProfileContext {
   dietaryPreference?: string;
   biggestStruggle?: string;
   goalDirection?: string;
+}
+
+interface PlannedMealContext {
+  order: number;
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  isCompleted: boolean;
+  notes?: string;
+}
+
+interface MealPlanContext {
+  planName?: string;
+  totalCalories: number;
+  totalProtein: number;
+  totalCarbs: number;
+  totalFat: number;
+  meals: PlannedMealContext[];
+}
+
+interface UserDocContext {
+  email?: string;
+  registrationEntryPoint?: string;
+  subscriptionType?: string;
+  hasCompletedMacraOnboarding?: boolean;
+  ageYears?: number;
+  extraFields: Record<string, string | number | boolean>;
 }
 
 interface PulseCheckAthleteContext {
@@ -63,6 +97,7 @@ interface PulseCheckAthleteContext {
 interface RequestBody {
   query: string;
   meals: MealContext[];
+  attachedMeals?: AttachedMealContext[];
   target?: MacroTargetContext;
   history?: ChatMessage[];
   goal?: string;
@@ -249,6 +284,138 @@ const directNoraReply = (reply: string): string => {
     .replace(/^Nora recommends that you\b/i, 'I recommend you')
     .replace(/^Nora recommends\b/i, 'I recommend')
     .replace(/^Nora (notices|sees)\b/i, 'I notice');
+};
+
+const loadActiveMealPlan = async (uid: string): Promise<MealPlanContext | null> => {
+  try {
+    // The iOS client filters by `userId` + `isActive` and orders by `createdAt`
+    // ascending, but for Nora context we want the most recently authored
+    // plan if multiples exist — sort desc and take 1.
+    const snap = await db.collection('meal-plan')
+      .where('userId', '==', uid)
+      .where('isActive', '==', true)
+      .get();
+    if (snap.empty) return null;
+
+    const docs: Array<{ id: string; data: Record<string, unknown> }> = snap.docs
+      .map((d: any) => ({ id: d.id as string, data: (d.data() || {}) as Record<string, unknown> }))
+      .sort((a: { data: Record<string, unknown> }, b: { data: Record<string, unknown> }) => {
+        const ac = numberFromUnknown(a.data.createdAt) ?? 0;
+        const bc = numberFromUnknown(b.data.createdAt) ?? 0;
+        return bc - ac;
+      });
+    const data = docs[0].data;
+
+    const planName = stringFromUnknown(data.planName);
+    const plannedRaw: Array<Record<string, unknown>> = Array.isArray(data.plannedMeals)
+      ? (data.plannedMeals as Array<Record<string, unknown>>)
+      : [];
+
+    const meals: PlannedMealContext[] = plannedRaw.map((entry) => {
+      const subRaw = Array.isArray(entry.meals)
+        ? (entry.meals as Array<Record<string, unknown>>)
+        : entry.meal && typeof entry.meal === 'object'
+          ? [entry.meal as Record<string, unknown>]
+          : [];
+      const calories = subRaw.reduce((s, m) => s + (numberFromUnknown(m.calories) || 0), 0);
+      const protein = subRaw.reduce((s, m) => s + (numberFromUnknown(m.protein) || 0), 0);
+      const carbs = subRaw.reduce((s, m) => s + (numberFromUnknown(m.carbs) || 0), 0);
+      const fat = subRaw.reduce((s, m) => s + (numberFromUnknown(m.fat) || 0), 0);
+      const name = subRaw.length === 0
+        ? 'Planned meal'
+        : subRaw.map((m) => stringFromUnknown(m.name) || 'Meal').join(' + ');
+
+      return {
+        order: numberFromUnknown(entry.order) ?? 0,
+        name,
+        calories,
+        protein,
+        carbs,
+        fat,
+        isCompleted: entry.isCompleted === true,
+        notes: stringFromUnknown(entry.notes)
+      };
+    }).sort((a, b) => a.order - b.order);
+
+    const totalCalories = meals.reduce((s, m) => s + m.calories, 0);
+    const totalProtein = meals.reduce((s, m) => s + m.protein, 0);
+    const totalCarbs = meals.reduce((s, m) => s + m.carbs, 0);
+    const totalFat = meals.reduce((s, m) => s + m.fat, 0);
+
+    return { planName, totalCalories, totalProtein, totalCarbs, totalFat, meals };
+  } catch (err) {
+    console.warn('[nora-nutrition-chat] Could not load active meal plan:', err);
+    return null;
+  }
+};
+
+const loadUserDocument = async (uid: string): Promise<UserDocContext | null> => {
+  try {
+    const snap = await db.collection('users').doc(uid).get();
+    if (!snap.exists) return null;
+    const data = snap.data() || {};
+
+    const email = stringFromUnknown(data.email);
+    const registrationEntryPoint = stringFromUnknown(data.registrationEntryPoint);
+    const subscriptionType = stringFromUnknown(data.subscriptionType);
+    const hasCompletedMacraOnboarding = data.hasCompletedMacraOnboarding === true
+      ? true
+      : data.hasCompletedMacraOnboarding === false
+        ? false
+        : undefined;
+
+    const birthdateValue = numberFromUnknown(data.birthdate);
+    let ageYears: number | undefined;
+    if (birthdateValue && birthdateValue > 0) {
+      const millis = birthdateValue > 10_000_000_000 ? birthdateValue : birthdateValue * 1000;
+      const birth = new Date(millis);
+      if (!Number.isNaN(birth.getTime())) {
+        const ageMs = Date.now() - birth.getTime();
+        const candidate = Math.floor(ageMs / (365.25 * 24 * 60 * 60 * 1000));
+        if (candidate > 0 && candidate < 120) ageYears = candidate;
+      }
+    }
+
+    // Skip noisy/sensitive/already-handled fields when dumping the rest of
+    // the user doc. Keeping a deny-list (vs. allow-list) means new onboarding
+    // fields land in Nora's context automatically.
+    const skipKeys = new Set<string>([
+      'id', 'uid', 'createdAt', 'updatedAt',
+      'birthdate',
+      'profileImageURL', 'profileImage', 'photoURL', 'photoUrl', 'imageURL', 'imageUrl',
+      'fcmToken', 'apnsToken', 'deviceToken', 'pushToken', 'tokens',
+      'stripeCustomerId', 'stripeAccountId', 'paymentMethodId',
+      'email', 'registrationEntryPoint', 'subscriptionType', 'hasCompletedMacraOnboarding',
+      'pulseCheckAthleteContext', 'macra'
+    ]);
+
+    const extraFields: Record<string, string | number | boolean> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (skipKeys.has(key)) continue;
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed.length > 0 && trimmed.length <= 240) {
+          extraFields[key] = trimmed;
+        }
+      } else if (typeof value === 'number' && Number.isFinite(value)) {
+        extraFields[key] = value;
+      } else if (typeof value === 'boolean') {
+        extraFields[key] = value;
+      }
+    }
+
+    return {
+      email,
+      registrationEntryPoint,
+      subscriptionType,
+      hasCompletedMacraOnboarding,
+      ageYears,
+      extraFields
+    };
+  } catch (err) {
+    console.warn('[nora-nutrition-chat] Could not load user document:', err);
+    return null;
+  }
 };
 
 const loadMacraProfile = async (uid: string): Promise<MacraProfileContext | null> => {
@@ -479,10 +646,68 @@ const containsPhysiquePrepSignal = (body: RequestBody): boolean => {
   return /\b(men'?s physique|bodybuild(?:er|ing)?|classic physique|bikini|figure|wellness|contest prep|competition|nationals|stage|show day|peak week|post-show|reverse diet|weeks? out|prep)\b/.test(text);
 };
 
+const buildMealPlanBlock = (mealPlan: MealPlanContext | null): string => {
+  if (!mealPlan) return 'Active meal plan: none on file. Treat day-of guidance as ad-hoc unless the user describes a plan.';
+  if (mealPlan.meals.length === 0) {
+    const name = mealPlan.planName ? ` "${mealPlan.planName}"` : '';
+    return `Active meal plan${name}: exists but has no planned meals. Treat day-of guidance as ad-hoc.`;
+  }
+
+  const pendingCount = mealPlan.meals.filter((m) => !m.isCompleted).length;
+  const completedCount = mealPlan.meals.length - pendingCount;
+  const header = `Active meal plan${mealPlan.planName ? ` "${mealPlan.planName}"` : ''} totals: ${mealPlan.totalCalories} kcal, ${mealPlan.totalProtein}g P, ${mealPlan.totalCarbs}g C, ${mealPlan.totalFat}g F across ${mealPlan.meals.length} planned meal${mealPlan.meals.length === 1 ? '' : 's'} (${pendingCount} pending / ${completedCount} completed).`;
+  const lines = mealPlan.meals.map((m) => {
+    const tag = m.isCompleted
+      ? '[COMPLETED — ALREADY EATEN — IMMUTABLE]'
+      : '[PENDING — ADJUSTABLE: this is a meal you may suggest swapping/reducing/removing]';
+    const noteSuffix = m.notes ? ` — note: ${m.notes.slice(0, 160)}` : '';
+    return `${m.order}. ${tag} ${m.name} — ${m.calories} kcal, ${m.protein}P ${m.carbs}C ${m.fat}F${noteSuffix}`;
+  }).join('\n');
+
+  return [
+    header,
+    'Treat the meal plan as the user\'s intended day. When the user asks "how should I adjust my plan to fit X", reason ONLY from PENDING planned meals (and the new food itself). NEVER suggest changes to COMPLETED or already-logged meals.',
+    `Planned meals (in order):\n${lines}`
+  ].join('\n');
+};
+
+const buildUserDocBlock = (userDoc: UserDocContext | null): string => {
+  if (!userDoc) return 'User profile document: not available.';
+
+  const headerParts: string[] = [];
+  if (userDoc.ageYears !== undefined) headerParts.push(`age ${userDoc.ageYears}`);
+  if (userDoc.registrationEntryPoint) headerParts.push(`came in via ${userDoc.registrationEntryPoint}`);
+  if (userDoc.subscriptionType) headerParts.push(`subscription ${userDoc.subscriptionType}`);
+  if (userDoc.hasCompletedMacraOnboarding !== undefined) {
+    headerParts.push(`Macra onboarding ${userDoc.hasCompletedMacraOnboarding ? 'complete' : 'incomplete'}`);
+  }
+
+  const header = headerParts.length > 0
+    ? `User profile: ${headerParts.join(', ')}.`
+    : 'User profile: minimal top-level fields on record.';
+
+  const extraEntries = Object.entries(userDoc.extraFields);
+  if (extraEntries.length === 0) return header;
+
+  // Compact dump of remaining onboarding fields. Order alphabetically so
+  // diff'ing adds vs. removes is easy to see in logs.
+  const dump = extraEntries
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => {
+      if (typeof value === 'boolean') return `${key}: ${value ? 'yes' : 'no'}`;
+      return `${key}: ${value}`;
+    })
+    .join('; ');
+
+  return `${header}\nAdditional onboarding/user fields: ${dump}.`;
+};
+
 const buildContextBlock = (
   body: RequestBody,
   profile: MacraProfileContext | null,
-  pulseCheckContext: PulseCheckAthleteContext | null
+  pulseCheckContext: PulseCheckAthleteContext | null,
+  mealPlan: MealPlanContext | null,
+  userDoc: UserDocContext | null
 ): string => {
   const sumCalories = body.meals.reduce((s, m) => s + (m.calories || 0), 0);
   const sumProtein = body.meals.reduce((s, m) => s + (m.protein || 0), 0);
@@ -505,9 +730,21 @@ const buildContextBlock = (
 
   const mealsList = body.meals.length === 0
     ? `No meals logged for ${logDateContext.logLabel}.`
-    : body.meals.map((m, i) => `${i + 1}. ${m.name} — ${m.calories} kcal, ${m.protein}P ${m.carbs}C ${m.fat}F`).join('\n');
+    : body.meals.map((m, i) => `${i + 1}. [ALREADY EATEN — IMMUTABLE] ${m.name} — ${m.calories} kcal, ${m.protein}P ${m.carbs}C ${m.fat}F`).join('\n');
+
+  const attachedMeals = Array.isArray(body.attachedMeals) ? body.attachedMeals : [];
+  const attachedMealsBlock = attachedMeals.length === 0
+    ? ''
+    : [
+        `User attached ${attachedMeals.length} meal${attachedMeals.length === 1 ? '' : 's'} from other days for additional context. These are NOT part of the selected log totals — treat them as reference examples the user wants you to consider:`,
+        attachedMeals.map((m, i) => {
+          const dateTag = m.loggedOnLabel ? ` (logged ${m.loggedOnLabel})` : '';
+          return `${i + 1}. ${m.name}${dateTag} — ${m.calories} kcal, ${m.protein}P ${m.carbs}C ${m.fat}F`;
+        }).join('\n')
+      ].join('\n');
 
   return [
+    buildUserDocBlock(userDoc),
     buildProfileLine(profile),
     buildPulseCheckSportContextLine(pulseCheckContext),
     `Current date context: ${logDateContext.currentLabel} (${logDateContext.currentValue})${logDateContext.timezone ? `, timezone ${logDateContext.timezone}` : ''}.`,
@@ -518,8 +755,10 @@ const buildContextBlock = (
     buildIntakeRatioLine(totals, profile),
     goalLine,
     prepSignalLine,
+    buildMealPlanBlock(mealPlan),
     `Selected food log (${logDateContext.logLabel}) totals: ${sumCalories} kcal, ${sumProtein}g P, ${sumCarbs}g C, ${sumFat}g F across ${body.meals.length} meal${body.meals.length === 1 ? '' : 's'}.`,
-    `Meals logged for ${logDateContext.logLabel}:\n${mealsList}`
+    `Meals logged for ${logDateContext.logLabel}:\n${mealsList}`,
+    attachedMealsBlock
   ].filter(Boolean).join('\n');
 };
 
@@ -559,9 +798,40 @@ export const handler: Handler = async (event) => {
   const systemPrompt = [
     "You are Nora, Macra's warm but direct performance nutrition coach.",
     "Speak directly as Nora in first person. Use 'I' and 'you'; never refer to yourself in third person or begin with phrases like 'Nora suggests', 'Nora recommends', or 'Nora notices'.",
-    "Reason in this order: athlete context, phase, goal/division, risk, then macro feedback.",
+    "",
+    "=== ABSOLUTE HARD RULE — LOGGED & COMPLETED MEALS CANNOT BE CHANGED ===",
+    "Any meal tagged [ALREADY EATEN — IMMUTABLE] or [COMPLETED — ALREADY EATEN — IMMUTABLE] in the Context block has been physically consumed. It is in the past. There is no way to undo, swap, replace, remove, reduce the portion of, or substitute it. Treat it like a closed entry in a journal.",
+    "ONLY meals tagged [PENDING — ADJUSTABLE] and the net-new food the user is asking about can be modified.",
+    "If you draft a response that suggests changing an immutable meal, STOP and rewrite it before sending. Do not output text that proposes editing a logged or completed meal under any circumstance.",
+    "",
+    "FORBIDDEN OUTPUTS (never produce text like these — they suggest modifying immutable meals):",
+    "  ✗ \"Replace your [logged meal] with chicken breast…\"",
+    "  ✗ \"Swap the [logged meal] for…\"",
+    "  ✗ \"Reduce your [logged meal] portion…\"",
+    "  ✗ \"Skip the [logged meal] and have…\"  (when the meal is tagged immutable)",
+    "  ✗ \"Replace the cookies and cream with…\"  (if cookies and cream is tagged immutable)",
+    "",
+    "CORRECT BEHAVIOR when the user asks how to fit a new food:",
+    "  1. Identify [PENDING — ADJUSTABLE] meals — those are your adjustment surface.",
+    "  2. Propose specific swaps/portion changes on PENDING meals to make room.",
+    "  3. If there are NO pending meals (everything is already logged or completed), say so explicitly: 'Everything you've eaten today is already locked in — I can't unwind it. Looking at your remaining options for fitting [new food]: …' Then offer (a) eat less of / skip the new food, (b) accept the overage with a clear impact note, or (c) bank it forward to tomorrow's target.",
+    "",
+    "Sample correct response when user wants to add brownies and only has logged (immutable) meals plus a pending cream of rice:",
+    "  \"Your Elev8 cookies & cream and the first brownie are already in the bank — I can't undo those. To fit a second brownie (~95 kcal, 16g carbs), I'd shrink your pending cream of rice by ~30g (drops it to ~10g carbs) so your day lands at 405 kcal / 51g carbs / 11g fat — under your 131g carb target.\"",
+    "",
+    "Sample correct response when EVERY meal on the day is immutable and there are no pending planned meals:",
+    "  \"Everything you've logged is already eaten and you don't have any pending meals on the plan today. I can't move anything that's done. Two brownies would put you at 405 kcal / 51g carbs — still well under your 131g carb target, so it's safe to have them. If you want to leave more headroom, eat one instead of two. Either way, none of your earlier meals are getting swapped.\"",
+    "",
+    "=== Reasoning order ===",
+    "Athlete context → phase → goal/division → risk → macro feedback.",
+    "Always read the full Context block before answering. The user profile (onboarding fields), Macra profile, sport context, active meal plan, daily target, and the selected day's logged meals are ALL available — use whichever are load-bearing.",
+    "Do not assume allowable intake = logged so far + new item. The plan is the intended day; logged so far is partial progress.",
+    "",
+    "=== Date / temporal rules ===",
     "Honor the selected food log date exactly. If the context says Yesterday or another past date, discuss that log in past tense and never call it today.",
     "For completed past logs, never ask how the user will adjust meals for the rest of that day. Give next comparable day or going-forward guidance instead.",
+    "",
+    "=== Sport / phase rules ===",
     "If sport-specific PulseCheck context or prompting policy is supplied, use it as product-owned context before macro target comparison.",
     "User-set macro targets are inputs to audit, not truth. If a target conflicts with body size, timeline, division, conditioning, or stated goal, flag it clearly and coach from context.",
     "Being under a user-set target is not automatically a problem; assess whether the target itself fits the athlete and phase before suggesting changes.",
@@ -569,18 +839,22 @@ export const handler: Handler = async (event) => {
     "For physique competitors within 8 weeks of a show, prioritize competition readiness, digestion consistency, visual predictability, and adherence over general health advice.",
     "In that near-show context, do not casually recommend fruit, whole grains, high-variance foods, generic starchy vegetables, or new food variables. Favor predictable sources already common in prep such as rice, cream of rice, measured white/russet potatoes if tolerated, and lean proteins.",
     "Call out relevant risks such as flatness, spillover, rebound, digestion changes, and target mismatch. Recommend small controlled adjustments only, usually 25-50g carbs max, unless the user asks for a full plan.",
+    "",
+    "=== Numbers & formatting ===",
     "Mandatory numbers rule: if you recommend adding, reducing, increasing, decreasing, bumping, pulling, or adjusting calories/macros, include an exact gram or calorie amount and the resulting target or range. Vague advice like 'increase carbs' is not allowed.",
     "When recommending a carb adjustment, say the exact delta and source, for example '+25g carbs from rice or cream of rice' or 'hold carbs at 160-175g'. If no change is needed, say no change.",
     "For non-competitor users, give balanced sports-nutrition advice while still sanity-checking targets against the profile.",
     "Keep responses under 220 words. Plain text. No markdown headers. Bullet points allowed.",
     "Do not end with generic follow-up questions. Ask one specific question only when critical context is missing and the answer would materially change the recommendation."
-  ].join(' ');
+  ].join('\n');
 
-  const [profile, pulseCheckContext] = await Promise.all([
+  const [profile, pulseCheckContext, mealPlan, userDoc] = await Promise.all([
     loadMacraProfile(uid),
-    loadPulseCheckAthleteContext(uid)
+    loadPulseCheckAthleteContext(uid),
+    loadActiveMealPlan(uid),
+    loadUserDocument(uid)
   ]);
-  const contextBlock = buildContextBlock(body, profile, pulseCheckContext);
+  const contextBlock = buildContextBlock(body, profile, pulseCheckContext, mealPlan, userDoc);
 
   const messages: ChatMessage[] = [];
   messages.push({ role: 'user', content: `Context:\n${contextBlock}` } as any);
@@ -603,7 +877,9 @@ export const handler: Handler = async (event) => {
         'openai-organization': 'noraNutritionChat'
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        // gpt-4o (full) for nutrition reasoning — mini was making logical
+        // errors like suggesting users "swap" already-logged meals.
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: systemPrompt },
           ...messages

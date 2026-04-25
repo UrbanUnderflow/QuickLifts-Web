@@ -75,7 +75,7 @@ const ALERT_THRESHOLDS = [
   ['Overtraining pattern', 'ACWR > 1.5 or microcycle load delta > +25% for 3 days, plus degraded recovery or sentiment/cognitive decline.', 'Human review required in pilot. No automated coach alert until false-positive review clears.'],
   ['Sudden sentiment shift', '48h sentiment drop crosses configured threshold and persists across at least 2 check-ins.', 'If clinical language or self-harm indicators appear, route to escalation instead of Sports Intelligence alert.'],
   ['Cognitive decline', 'Focus/Composure/Decisioning drop >= 1 confidence band or configured percentile from athlete baseline across 2 valid sessions.', 'Must include simEvidenceCount and confidence tier. Thin evidence becomes watchlist only.'],
-  ['Game-day readiness concern', 'Two or more evidence families indicate acute concern inside 48h pre-competition window.', 'Report as reviewed game-day note, not real-time automated alert, during UMES pilot.'],
+  ['Game-day readiness concern', 'Two or more evidence families indicate acute concern inside 48h pre-competition window.', 'Report as reviewed game-day note, not real-time automated alert, during early pilots.'],
   ['Data quality alert', 'Critical lane stale or missing for 3 expected sync cycles.', 'Ops/admin alert only. Never coach-facing as athlete risk.'],
 ];
 
@@ -196,7 +196,7 @@ const PulseCheckSportsIntelligenceAggregationInferenceContractTab: React.FC = ()
         <InfoCard
           title="Pilot Default"
           accent="red"
-          body="Early-warning alerts and high-trust coach recommendations are generated as review candidates only during UMES pilot. Automated coach delivery requires pilot evidence, threshold evaluation, and explicit release approval."
+          body="Early-warning alerts and high-trust coach recommendations are generated as review candidates only during early pilots. Automated coach delivery requires pilot evidence, threshold evaluation, and explicit release approval."
         />
         <DataTable columns={['Signal', 'Candidate Threshold', 'Delivery Gate']} rows={ALERT_THRESHOLDS} />
       </SectionBlock>

@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Activity,
+  Check,
   Clipboard,
+  ClipboardCopy,
   Cpu,
   Layers,
   LayoutDashboard,
@@ -21,6 +23,62 @@ import {
   RuntimeAlignmentPanel,
   SectionBlock,
 } from './PulseCheckRuntimeDocPrimitives';
+import {
+  SPORTS_INTELLIGENCE_DOCS_BUNDLE,
+  SPORTS_INTELLIGENCE_DOCS_BYTES,
+} from './sportsIntelligencePlainTextBundle';
+
+// Compact toolbar button for copying the full Sports Intelligence spec bundle
+// to the clipboard. Lives at the top of the Sports Intelligence Layer tab so a
+// reviewer can grab everything (this spec + Aggregation + Inference Contract +
+// Report Outlines + Nora Context Capture + Session Detection + Sport Load Model)
+// in one click and paste it into another agent for review without tabbing
+// across the System Overview.
+const CopyAllSportsIntelligenceDocsButton: React.FC = () => {
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
+
+  const onClick = async () => {
+    try {
+      await navigator.clipboard.writeText(SPORTS_INTELLIGENCE_DOCS_BUNDLE);
+      setState('copied');
+      window.setTimeout(() => setState('idle'), 2200);
+    } catch (err) {
+      console.error('[CopyAllSportsIntelligenceDocs] clipboard write failed', err);
+      setState('failed');
+      window.setTimeout(() => setState('idle'), 2200);
+    }
+  };
+
+  const kb = (SPORTS_INTELLIGENCE_DOCS_BYTES / 1024).toFixed(1);
+
+  return (
+    <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="space-y-0.5">
+        <p className="text-sm font-semibold text-white">Copy all Sports Intelligence specs</p>
+        <p className="text-xs text-zinc-500">
+          Bundles this page plus Aggregation + Inference Contract, Report Outlines, Nora Context Capture, Session Detection + Matching, and Sport Load Model into one markdown document — for hand-off to a reviewer agent.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition ${
+          state === 'copied'
+            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+            : state === 'failed'
+              ? 'border-rose-500/40 bg-rose-500/10 text-rose-200'
+              : 'border-zinc-700 bg-zinc-900/80 text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800'
+        }`}
+      >
+        {state === 'copied' ? <Check className="h-4 w-4" /> : <ClipboardCopy className="h-4 w-4" />}
+        <span>
+          {state === 'copied' ? 'Copied to clipboard' : state === 'failed' ? 'Copy failed — try again' : 'Copy all docs'}
+        </span>
+        <span className="text-xs text-zinc-500">{kb} KB</span>
+      </button>
+    </div>
+  );
+};
 
 const ARCHITECTURE_LAYERS = [
   ['Inputs', 'Device-agnostic biometric surface, PulseCheck sims, daily Nora check-ins, FWP workouts, Macra nutrition, sport-config policy.', 'Sources are heterogeneous. The layer treats them as inputs to a single interpretation pipeline; no consumer reads any source directly.'],
@@ -30,7 +88,7 @@ const ARCHITECTURE_LAYERS = [
 ];
 
 const DEVICE_LAYER_ROWS = [
-  ['Polar (UMES pilot device partner)', 'Polar OAuth + Accesslink → Polar adapter → Health Context Source Record.', 'Active for UMES pilot. Polar is one device, not the contract.'],
+  ['Polar (active early-pilot device)', 'Polar OAuth + Accesslink → Polar adapter → Health Context Source Record.', 'Active in current early pilots. Polar is one device, not the contract.'],
   ['Apple Watch / HealthKit', 'HealthKit bridge → Apple Health adapter → Health Context Source Record.', 'Existing Fit With Pulse path. Reused without re-implementation.'],
   ['Oura', 'Oura OAuth/API direct lane (preferred) or HealthKit-derived fallback → Oura adapter → Health Context Source Record.', 'Already speced in `Oura Integration Strategy`. Inherits engine confidence tiers.'],
   ['Whoop / Garmin / future', 'Per-vendor OAuth → vendor adapter → Health Context Source Record.', 'Implementation-only addition; no engine, schema, or messaging changes required.'],
@@ -59,7 +117,7 @@ const SPORT_PROFILE_FIELDS = [
 
 const OUTPUT_SURFACES = [
   ['Weekly Sports Intelligence Report', 'Coach', 'Sundays before the week starts.', 'Team load trend, aggregate sentiment, cognitive movement (Focus / Composure / Decisioning), athlete watchlist, recommended training adjustments. Walk-through with Pulse Check team weekly during pilot.'],
-  ['Game-Day Readiness Report', 'Coach', 'Morning of competition.', 'Athlete-by-athlete readiness combining biometric recovery, cognitive trajectory, sentiment 48h prior, optional travel impact factor, and recommended pre-competition protocols. During UMES pilot this is generated as a human-reviewed report draft.'],
+  ['Game-Day Readiness Report', 'Coach', 'Morning of competition.', 'Athlete-by-athlete readiness combining biometric recovery, cognitive trajectory, sentiment 48h prior, optional travel impact factor, and recommended pre-competition protocols. During early pilots this is generated as a human-reviewed report draft.'],
   ['Early-Warning Alert', 'Coach', 'Real-time after review gate.', 'Sustained pattern flags: trending overtrained, sudden sentiment shift, cognitive decline. Rare by design — not a stream. Clinical-threshold signals do NOT route here; they go through escalation. Fully automated delivery is blocked until the Aggregation + Inference Contract exit criteria are met.'],
   ['Macra Daily Insight Context', 'Athlete (via Nora)', 'Cloud-scheduled, ~7pm local.', 'Sport context block injected into the Macra daily-insight cloud function so nutrition guidance reflects training load, position demand, season phase, game density. Implemented Phase 2.'],
   ['Nora Coaching Context', 'Athlete (via Nora)', 'On every chat or check-in turn.', 'Sport `noraContext` + risk flags + recent biometric posture injected into Nora prompts. Already wired in `nora-nutrition-chat`.'],
@@ -78,15 +136,15 @@ const PHASE_ROADMAP = [
   ['Phase 0 — Schema lock', 'Sport config schema (`company-config/pulsecheck-sports`) frozen with attributes, metrics, prompting fields, and `includeInMacraContext` / `includeInNoraContext` flags. Admin surface live at `/admin/pulsecheckSportConfiguration`.', 'Done.'],
   ['Phase 1 — Athlete sport profile capture', 'Macra athlete onboarding adds sport selector + position. Mirrored to root user doc for cross-product reads. PulseCheck onboarding already captures sport.', 'Done.'],
   ['Phase 2 — Macra hookup', 'Cloud-scheduled daily insight pulls sport context, FWP training, longitudinal patterns, distribution, outcome trend, frequent foods. Insight type tags drive UI badges. Push notifications fire at user evening hour.', 'Done.'],
-  ['Phase 3 — Coach-facing reports', 'Weekly Sports Intelligence Report + Game-Day Readiness Report generation pipeline. Initial sport coverage: basketball, golf, bowling (UMES pilot scope). Outputs launch as human-reviewed drafts until inference evaluation clears automation gates.', 'In design.'],
-  ['Phase 4 — UMES pilot operation', '110-day pilot: 20 days onboarding + 90 days operation. Adherence as primary metric. Weekly walk-throughs with each head coach.', 'Pilot brief approved; awaiting contract finalization.'],
+  ['Phase 3 — Coach-facing reports', 'Weekly Sports Intelligence Report + Game-Day Readiness Report generation pipeline. Initial sport coverage: basketball, golf, bowling (initial pilot scope). Outputs launch as human-reviewed drafts until inference evaluation clears automation gates.', 'In design.'],
+  ['Phase 4 — Early pilot operation', '110-day pilot: 20 days onboarding + 90 days operation. Adherence as primary metric. Weekly walk-throughs with each head coach.', 'Pilot brief approved; awaiting contract finalization.'],
   ['Phase 5 — Adaptive Framing Scale', 'Persistent per-athlete framing profile (1-10) calibrated by Nora and shared back to coaches. Current Phase 2 prompts may use static sport framing policy, but durable athlete-level AFS memory is not considered shipped until this phase.', 'Specced; build follows pilot.'],
   ['Phase 6 — Cross-sport scale', 'Football, soccer, baseball, softball, volleyball, tennis configurations harden with pilot evidence. Per-sport KPIs surface on the thin Coach Dashboard via each sport\'s `kpiRefs`, while the coaching decision surface remains the narrative reports the dashboard links into.', 'Pilot-dependent.'],
 ];
 
 const TRUST_GATES = [
   ['Build now', 'Aggregation plumbing, report draft generation, Macra/Nora sport-context enrichment, evidence/provenance display.', 'May run automatically if outputs are clearly marked as context or draft intelligence.'],
-  ['Human review required', 'Weekly Sports Intelligence Reports, Game-Day Readiness Reports, high-impact training adjustment recommendations.', 'Pulse Check team reviews before coach delivery during UMES pilot.'],
+  ['Human review required', 'Weekly Sports Intelligence Reports, Game-Day Readiness Reports, high-impact training adjustment recommendations.', 'Pulse Check team reviews before coach delivery during early pilots.'],
   ['Blocked from full automation', 'Early-warning alerts, high-trust athlete watchlist promotion, sustained overtraining flags, coach-facing risk recommendations.', 'Requires locked thresholds, evaluation criteria, false-positive review, and pilot evidence in the Aggregation + Inference Contract.'],
   ['Never owned here', 'Clinical-threshold interpretation, clinical return-to-play decisions, clinician-gated disclosures.', 'Routes through AuntEDNA escalation. Sports Intelligence may provide minimum-necessary context after handoff only.'],
 ];
@@ -125,7 +183,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
         highlights={[
           {
             title: 'Device-Agnostic Surface',
-            body: 'Polar is the UMES pilot device partner, not the contract. Sports Intelligence reads from the normalized health-context surface — Apple Watch, Oura, Whoop, Garmin, and self-reported all flow through the same record shape.',
+            body: 'Polar is the active early-pilot device, not the contract. Sports Intelligence reads from the normalized health-context surface — Apple Watch, Oura, Whoop, Garmin, and self-reported all flow through the same record shape.',
           },
           {
             title: 'Sport- And Athlete-Specific',
@@ -137,6 +195,10 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           },
         ]}
       />
+
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4 sm:p-5">
+        <CopyAllSportsIntelligenceDocsButton />
+      </div>
 
       <RuntimeAlignmentPanel
         role="Interpretation layer between raw signals and consumer surfaces. Owns sport-aware aggregation, athlete-specific baselines, output formatting, and policy enforcement."
@@ -168,7 +230,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           body={
             <BulletList
               items={[
-                'Pulse runs multiple device integrations (Polar for the UMES pilot, plus Apple Watch / HealthKit, Oura, and future Whoop / Garmin). Sports Intelligence cannot couple to any one device.',
+                'Pulse runs multiple device integrations (Polar in current early pilots, plus Apple Watch / HealthKit, Oura, and future Whoop / Garmin). Sports Intelligence cannot couple to any one device.',
                 'All vendor data lands in the Health Context Source Record before any aggregator reads it. Adapters are the only code that touches vendor SDKs.',
                 'Renaming or specializing field names per vendor is forbidden. HRV is `rmssdMs` whether it came from Polar, Oura, or Apple Health.',
                 'Confidence tiers (`directional`, `emerging`, `stable`, `high_confidence`, `degraded`) are inherited from the Correlation Engine — adapters do not invent their own.',
@@ -188,11 +250,11 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
             <BulletList
               items={[
                 'Stored at Firestore `company-config/pulsecheck-sports` as an array of `PulseCheckSportConfigurationEntry`.',
-                'Each sport: id, display name, emoji, positions[], attributes[], metrics[], prompting{}.',
+                'Each sport: id, display name, emoji, positions[], attributes[], metrics[], prompting{}, reportPolicy{} (and reportPolicy.loadModel once wired).',
                 '`attributes[]` capture sport-specific athlete dimensions (competitive level, season phase, training load pattern, body composition goal, etc.). `includeInNoraContext` and `includeInMacraContext` flags control which products inject which attribute.',
                 '`metrics[]` define sport-native KPIs in their actual units (Minutes/Game, Pitch Count, Total Distance, Vertical Jump). Coach reports surface these directly.',
                 '`prompting.noraContext` and `prompting.macraNutritionContext` are injected verbatim into Nora and Macra prompts. `riskFlags`, `restrictedAdvice`, `recommendedLanguage` enforce sport-native posture.',
-                'Edited via `/admin/pulsecheckSportConfiguration`. New sports are an admin operation, not an engineering deploy.',
+                'Edit split: sport list, attributes, metrics, and prompting are edited via the Sports Intelligence Layer admin page (`/admin/pulsecheckSportConfiguration`) — adding a new sport is an admin operation, not an engineering deploy. `reportPolicy` and `reportPolicy.loadModel` are review-only on that page and edited in code so coach-facing intelligence can never be misconfigured through the UI.',
               ]}
             />
           }

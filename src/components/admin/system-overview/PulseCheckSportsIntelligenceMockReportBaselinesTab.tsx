@@ -561,7 +561,7 @@ const PulseCheckSportsIntelligenceMockReportBaselinesTab: React.FC = () => {
         <InfoCard
           title="Primary Pilot Confidence Block"
           accent="amber"
-          body="Because adherence is the UMES pilot's primary success metric, every weekly report starts with data coverage before it makes athlete-specific claims. Thin participation lowers confidence and suppresses strong coach actions."
+          body="Because adherence is the primary success metric for early pilots, every weekly report starts with data coverage before it makes athlete-specific claims. Thin participation lowers confidence and suppresses strong coach actions."
         />
         <DataTable columns={['Coverage Area', 'Report Rule']} rows={ADHERENCE_REQUIREMENTS} />
       </SectionBlock>
@@ -570,7 +570,7 @@ const PulseCheckSportsIntelligenceMockReportBaselinesTab: React.FC = () => {
         <InfoCard
           title="Where This Becomes Buildable"
           accent="blue"
-          body="The pilot report policy lives under each `PulseCheckSportConfigurationEntry.reportPolicy`, with common defaults owned by the report generator. All 18 configured sports now ship with a populated reportPolicy (UMES pilot sports — basketball, golf, bowling — were policy-backed first; the remainder followed in this rollout)."
+          body="The report policy lives under each `PulseCheckSportConfigurationEntry.reportPolicy`, with common defaults owned by the report generator. All 18 configured sports now ship with a populated reportPolicy (initial pilot sports — basketball, golf, bowling — were policy-backed first; the remainder followed in this rollout)."
         />
         <DataTable columns={['Policy Field', 'Purpose']} rows={REPORT_POLICY_SCHEMA_ROWS} />
       </SectionBlock>

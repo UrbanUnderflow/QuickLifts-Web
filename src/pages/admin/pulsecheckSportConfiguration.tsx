@@ -9,7 +9,10 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Construction,
+  Eye,
   Loader2,
+  Lock,
   Plus,
   RefreshCw,
   Save,
@@ -29,6 +32,8 @@ import {
   type PulseCheckSportAttributeType,
   type PulseCheckSportMetricDefinition,
   type PulseCheckSportConfigurationEntry,
+  type PulseCheckSportReportPolicy,
+  type PulseCheckSportsIntelligenceDimension,
 } from '../../api/firebase/pulsecheckSportConfig';
 
 type EditableAttribute = PulseCheckSportAttributeDefinition & {
@@ -466,6 +471,327 @@ const readBridgeError = (payload: unknown, fallbackMessage: string) => {
   return fallbackMessage;
 };
 
+type ReviewPanelHeaderProps = {
+  title: string;
+  description: string;
+  codePath: string;
+  badge?: { label: string; tone: 'lock' | 'planned' };
+  isOpen: boolean;
+  onToggle: () => void;
+};
+
+const ReviewPanelHeader: React.FC<ReviewPanelHeaderProps> = ({ title, description, codePath, badge, isOpen, onToggle }) => {
+  const badgeTone = badge?.tone === 'planned'
+    ? 'border-amber-700/60 bg-amber-900/30 text-amber-200'
+    : 'border-zinc-700 bg-black/30 text-zinc-300';
+  const BadgeIcon = badge?.tone === 'planned' ? Construction : Lock;
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={isOpen}
+      className="flex w-full flex-col gap-2 text-left transition hover:opacity-95 sm:flex-row sm:items-start sm:justify-between"
+    >
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          {isOpen ? <ChevronDown className="h-4 w-4 text-zinc-500" /> : <ChevronRight className="h-4 w-4 text-zinc-500" />}
+          <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">{title}</span>
+          {badge && (
+            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide ${badgeTone}`}>
+              <BadgeIcon className="h-3 w-3" />
+              {badge.label}
+            </span>
+          )}
+        </div>
+        <div className="mt-1 text-sm text-zinc-400">{description}</div>
+      </div>
+      <div className="text-[11px] text-zinc-500">
+        Defined in <code className="rounded bg-black/40 px-1.5 py-0.5 text-zinc-300">{codePath}</code>
+      </div>
+    </button>
+  );
+};
+
+const Chip: React.FC<{ children: React.ReactNode; tone?: 'default' | 'good' | 'avoid' | 'dim' | 'family' | 'focus' | 'composure' | 'decisioning' }> = ({ children, tone = 'default' }) => {
+  const toneClass = {
+    default: 'border-zinc-700 bg-black/40 text-zinc-200',
+    good: 'border-emerald-800/60 bg-emerald-950/30 text-emerald-200',
+    avoid: 'border-red-900/60 bg-red-950/30 text-red-200',
+    dim: 'border-zinc-800 bg-black/30 text-zinc-400',
+    family: 'border-sky-900/60 bg-sky-950/30 text-sky-200',
+    focus: 'border-violet-900/60 bg-violet-950/30 text-violet-200',
+    composure: 'border-rose-900/60 bg-rose-950/30 text-rose-200',
+    decisioning: 'border-amber-900/60 bg-amber-950/30 text-amber-200',
+  }[tone];
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] ${toneClass}`}>
+      {children}
+    </span>
+  );
+};
+
+const dimensionTone = (dimension: PulseCheckSportsIntelligenceDimension) => dimension as 'focus' | 'composure' | 'decisioning';
+
+const ReportPolicyPanel: React.FC<{ policy: PulseCheckSportReportPolicy | undefined; isOpen: boolean; onToggle: () => void }> = ({ policy, isOpen, onToggle }) => {
+  return (
+    <div className="mt-5 rounded-2xl border border-zinc-800 bg-[#111417] p-4">
+      <ReviewPanelHeader
+        title="Report Policy"
+        description="What this sport's coach reports actually contain — lenses, watch signals, allowed coach moves, early-warning families, dimension mapping, and language posture."
+        codePath="src/api/firebase/pulsecheckSportConfig.ts"
+        badge={{ label: 'Review only', tone: 'lock' }}
+        isOpen={isOpen}
+        onToggle={onToggle}
+      />
+
+      {isOpen && (
+        <div className="mt-5 space-y-5">
+          {!policy ? (
+            <div className="rounded-xl border border-dashed border-zinc-700 px-4 py-5 text-sm text-zinc-500">
+              No report policy is set for this sport yet. Add one to <code className="text-zinc-300">getDefaultPulseCheckSports()</code> in code.
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-zinc-500">Context Modifiers</div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {policy.contextModifiers.length === 0
+                      ? <span className="text-xs text-zinc-500">None</span>
+                      : policy.contextModifiers.map((mod) => <Chip key={mod} tone="dim">{mod}</Chip>)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-zinc-500">KPI References</div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {policy.kpiRefs.length === 0
+                      ? <span className="text-xs text-zinc-500">None</span>
+                      : policy.kpiRefs.map((kpi) => <Chip key={kpi}>{kpi}</Chip>)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <ReportLensList title="Weekly Read" lenses={policy.weeklyRead.reportLenses} />
+                <ReportLensList title="Game-Day Read" lenses={policy.gameDayRead.reportLenses} />
+              </div>
+
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-zinc-500">Watchlist Signals</div>
+                <div className="mt-2 space-y-2">
+                  {policy.watchlistSignals.length === 0
+                    ? <div className="text-xs text-zinc-500">No watchlist signals.</div>
+                    : policy.watchlistSignals.map((signal) => (
+                      <div key={signal.id} className="rounded-xl border border-zinc-800 bg-black/25 px-3 py-2">
+                        <div className="flex flex-wrap items-baseline gap-2">
+                          <span className="text-sm font-medium text-zinc-100">{signal.label}</span>
+                          <code className="text-[10px] text-zinc-500">{signal.id}</code>
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {signal.inputFamilies.map((fam) => <Chip key={fam} tone="family">{fam}</Chip>)}
+                          {signal.linkedDimensions.map((dim) => <Chip key={dim} tone={dimensionTone(dim)}>{dim}</Chip>)}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-zinc-500">Coach Actions</div>
+                <div className="mt-2 space-y-2">
+                  {policy.coachActions.length === 0
+                    ? <div className="text-xs text-zinc-500">No coach actions defined.</div>
+                    : policy.coachActions.map((action) => (
+                      <div key={action.id} className="rounded-xl border border-zinc-800 bg-black/25 px-3 py-2">
+                        <div className="flex flex-wrap items-baseline gap-2">
+                          <span className="text-sm text-zinc-100">{action.label}</span>
+                          <code className="text-[10px] text-zinc-500">{action.id}</code>
+                        </div>
+                        {action.linkedSignals.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            <span className="text-[10px] uppercase tracking-wide text-zinc-500">links →</span>
+                            {action.linkedSignals.map((sig) => <Chip key={sig} tone="dim">{sig}</Chip>)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-zinc-500">Early-Warning Families</div>
+                <div className="mt-2 space-y-2">
+                  {policy.earlyWarningFamilies.length === 0
+                    ? <div className="text-xs text-zinc-500">No early-warning families.</div>
+                    : policy.earlyWarningFamilies.map((family) => (
+                      <div key={family.id} className="rounded-xl border border-zinc-800 bg-black/25 px-3 py-2">
+                        <div className="flex flex-wrap items-baseline gap-2">
+                          <span className="text-sm text-zinc-100">{family.label}</span>
+                          <code className="text-[10px] text-zinc-500">{family.id}</code>
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {family.inputFamilies.map((fam) => <Chip key={fam} tone="family">{fam}</Chip>)}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-zinc-500">Dimension Map</div>
+                <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                  {(['focus', 'composure', 'decisioning'] as PulseCheckSportsIntelligenceDimension[]).map((dim) => (
+                    <div key={dim} className="rounded-xl border border-zinc-800 bg-black/25 p-3">
+                      <div className="mb-2 flex items-center gap-2">
+                        <Chip tone={dimensionTone(dim)}>{dim}</Chip>
+                      </div>
+                      <ul className="space-y-1 text-xs text-zinc-300">
+                        {(policy.dimensionMap[dim] || []).map((item) => (
+                          <li key={item} className="leading-snug">• {item}</li>
+                        ))}
+                        {(policy.dimensionMap[dim] || []).length === 0 && (
+                          <li className="text-zinc-500">—</li>
+                        )}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-zinc-500">Language Posture</div>
+                <div className="mt-2 rounded-xl border border-zinc-800 bg-black/25 p-3">
+                  <p className="text-sm italic text-zinc-300">{policy.languagePosture.summary || '—'}</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-emerald-400">Recommended</div>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {policy.languagePosture.recommendedLanguage.length === 0
+                          ? <span className="text-xs text-zinc-500">—</span>
+                          : policy.languagePosture.recommendedLanguage.map((phrase) => (
+                            <Chip key={phrase} tone="good">{phrase}</Chip>
+                          ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-red-400">Must Avoid</div>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {policy.languagePosture.mustAvoid.length === 0
+                          ? <span className="text-xs text-zinc-500">—</span>
+                          : policy.languagePosture.mustAvoid.map((phrase) => (
+                            <Chip key={phrase} tone="avoid">{phrase}</Chip>
+                          ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {policy.coachLanguageTranslations && Object.keys(policy.coachLanguageTranslations).length > 0 && (
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-zinc-500">Coach Language Translations</div>
+                  <div className="mt-2 overflow-hidden rounded-xl border border-zinc-800">
+                    <table className="w-full text-xs">
+                      <thead className="bg-black/40 text-zinc-500">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium uppercase tracking-wide">Internal phrase</th>
+                          <th className="px-3 py-2 text-left font-medium uppercase tracking-wide">Coach English</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(policy.coachLanguageTranslations).map(([key, value]) => (
+                          <tr key={key} className="border-t border-zinc-800">
+                            <td className="px-3 py-2 align-top text-zinc-400">{key}</td>
+                            <td className="px-3 py-2 align-top text-zinc-200">{value}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ReportLensList: React.FC<{ title: string; lenses: PulseCheckSportReportPolicy['weeklyRead']['reportLenses'] }> = ({ title, lenses }) => (
+  <div>
+    <div className="text-[11px] uppercase tracking-wide text-zinc-500">{title}</div>
+    <div className="mt-2 space-y-2">
+      {lenses.length === 0
+        ? <div className="text-xs text-zinc-500">No lenses configured.</div>
+        : lenses.map((lens) => (
+          <div key={lens.id} className="rounded-xl border border-zinc-800 bg-black/25 px-3 py-2">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="text-sm text-zinc-100">{lens.label}</span>
+              <code className="text-[10px] text-zinc-500">{lens.id}</code>
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {lens.inputFamilies.map((fam) => <Chip key={fam} tone="family">{fam}</Chip>)}
+              {lens.linkedDimensions.map((dim) => <Chip key={dim} tone={dimensionTone(dim)}>{dim}</Chip>)}
+            </div>
+          </div>
+        ))}
+    </div>
+  </div>
+);
+
+const LOAD_MODEL_FIELDS: Array<{ key: string; description: string }> = [
+  { key: 'primitives[]', description: 'Sport-relevant session inputs (sprint reps, HR-zone time, sRPE, jump count, swing reps, etc.) with per-sport blend weights.' },
+  { key: 'thresholds', description: 'Sport-tolerable load bands (low / moderate / high / concerning) used to translate the load score into coach language.' },
+  { key: 'acwrCeiling', description: 'Maximum acute-to-chronic workload ratio before the sport flags overload (e.g. ~1.4 sprinter, ~1.7 golfer).' },
+  { key: 'decayHalfLifeDays', description: 'How quickly chronic load decays for this sport (3–5d sprinter, 7–10d football lineman).' },
+  { key: 'recoveryDebtFloor', description: 'HRV / RHR / sleep deficit threshold that drags the load score even when raw output looks fine.' },
+  { key: 'contextModifiers[]', description: 'Heat, travel, schedule density, and other multipliers that bend the load score for this sport.' },
+  { key: 'prescribedComparisonWeights', description: 'How much weight to give plan-vs-actual deviation (intensity, volume, mode) per sport.' },
+];
+
+const LoadModelPanel: React.FC<{ isOpen: boolean; onToggle: () => void }> = ({ isOpen, onToggle }) => (
+  <div className="mt-5 rounded-2xl border border-zinc-800 bg-[#111417] p-4">
+    <ReviewPanelHeader
+      title="Load Model"
+      description="Per-sport load formula — primitives, ACWR ceiling, decay, and context modifiers that turn device-derived sessions into a sport-relevant load score."
+      codePath="PulseCheckSportLoadModelSpecTab.tsx · planned reportPolicy.loadModel"
+      badge={{ label: 'Specced — not yet wired', tone: 'planned' }}
+      isOpen={isOpen}
+      onToggle={onToggle}
+    />
+
+    {isOpen && (
+      <div className="mt-5 space-y-3">
+        <div className="rounded-xl border border-amber-900/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-100/80">
+          The load model is locked in the spec but not yet stored on <code className="rounded bg-black/40 px-1 text-amber-100">PulseCheckSportReportPolicy</code>. Until the field lands, this card shows the planned shape so reviewers know what is coming.
+        </div>
+        <div className="overflow-hidden rounded-xl border border-zinc-800">
+          <table className="w-full text-xs">
+            <thead className="bg-black/40 text-zinc-500">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium uppercase tracking-wide">Field</th>
+                <th className="px-3 py-2 text-left font-medium uppercase tracking-wide">What it controls</th>
+              </tr>
+            </thead>
+            <tbody>
+              {LOAD_MODEL_FIELDS.map((field) => (
+                <tr key={field.key} className="border-t border-zinc-800">
+                  <td className="px-3 py-2 align-top">
+                    <code className="text-zinc-200">{field.key}</code>
+                  </td>
+                  <td className="px-3 py-2 align-top text-zinc-300">{field.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+  </div>
+);
+
 const PulseCheckSportConfigurationPage: React.FC = () => {
   const router = useRouter();
   const [sports, setSports] = useState<EditableSport[]>([]);
@@ -475,6 +801,7 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [expandedSportIds, setExpandedSportIds] = useState<Set<string>>(() => new Set());
+  const [expandedReviewPanels, setExpandedReviewPanels] = useState<Set<string>>(() => new Set());
   const [aiSeedingSportId, setAiSeedingSportId] = useState<string | null>(null);
   const [sportSeedingFeedback, setSportSeedingFeedback] = useState<SportSeedingFeedback | null>(null);
 
@@ -512,6 +839,19 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
         next.delete(id);
       } else {
         next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleReviewPanel = (sportId: string, panelKey: 'reportPolicy' | 'loadModel') => {
+    const key = `${sportId}:${panelKey}`;
+    setExpandedReviewPanels((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
       }
       return next;
     });
@@ -907,7 +1247,7 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
   return (
     <AdminRouteGuard>
       <Head>
-        <title>PulseCheck Sport Configuration | Pulse Admin</title>
+        <title>Sports Intelligence Layer | Pulse Admin</title>
       </Head>
 
       <div className="min-h-screen bg-[#111417] px-4 py-10 text-white">
@@ -927,10 +1267,12 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                   <Settings2 className="h-6 w-6" />
                 </span>
                 <div>
-                  <h1 className="text-3xl font-bold tracking-tight">PulseCheck Sport Configuration</h1>
+                  <h1 className="text-3xl font-bold tracking-tight">Sports Intelligence Layer</h1>
                   <p className="mt-2 max-w-3xl text-sm text-zinc-400">
-                    This lookup powers sport selection in PulseCheck onboarding, PulseCheck profile editing, and the
-                    PulseCheck provisioning team form.
+                    Per-sport configuration that powers PulseCheck onboarding, the report policy that shapes coach-facing
+                    intelligence, the load model behind training-load reads, and the output schemas Nora and Macra consume.
+                    Sport list, athlete fields, metrics, and prompting are editable here. Report policy, load formulas,
+                    and schemas are review-only and edited through code so a UI mistake can never reach a coach report.
                   </p>
                 </div>
               </div>
@@ -1016,6 +1358,7 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                       const feedbackForSport = sportSeedingFeedback?.sportId === sport.id ? sportSeedingFeedback : null;
                       const sportLabel = sport.name.trim() || `Sport ${index + 1}`;
                       const positionCount = normalizePositionsInput(sport.positionsInput).length;
+                      const hasReportPolicy = Boolean(sport.reportPolicy);
 
                       return (
                         <div key={sport.id} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
@@ -1036,6 +1379,19 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                                   </span>
                                   <span className="rounded-full border border-zinc-800 bg-[#111417] px-2 py-1 text-[11px] text-zinc-400">
                                     {sport.metrics.length} metrics
+                                  </span>
+                                  <span
+                                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] ${
+                                      hasReportPolicy
+                                        ? 'border-emerald-800/60 bg-emerald-950/30 text-emerald-200'
+                                        : 'border-zinc-800 bg-[#111417] text-zinc-500'
+                                    }`}
+                                    title={hasReportPolicy
+                                      ? 'Report policy wired — review in expanded view'
+                                      : 'No report policy yet for this sport'}
+                                  >
+                                    <Lock className="h-3 w-3" />
+                                    {hasReportPolicy ? 'Policy' : 'No policy'}
                                   </span>
                                 </div>
                               </div>
@@ -1412,6 +1768,22 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
 	                            ))}
 	                          </div>
 	                        </div>
+
+                            <div className="mt-5 flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                              <Eye className="h-3.5 w-3.5" />
+                              Intelligence Layer · Review only
+                            </div>
+
+                            <ReportPolicyPanel
+                              policy={sport.reportPolicy}
+                              isOpen={expandedReviewPanels.has(`${sport.id}:reportPolicy`)}
+                              onToggle={() => handleToggleReviewPanel(sport.id, 'reportPolicy')}
+                            />
+
+                            <LoadModelPanel
+                              isOpen={expandedReviewPanels.has(`${sport.id}:loadModel`)}
+                              onToggle={() => handleToggleReviewPanel(sport.id, 'loadModel')}
+                            />
                           </div>
                         )}
 	                      </div>
@@ -1425,13 +1797,60 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                     <h2 className="text-lg font-semibold">Where This Flows</h2>
                     <div className="mt-4 space-y-3 text-sm text-zinc-300">
                       <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3">
-                        PulseCheck onboarding uses the emoji, sport label, and position list.
+                        PulseCheck onboarding, profile edit, and provisioning use the emoji, sport label, and position list.
                       </div>
                       <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3">
-                        PulseCheck profile edit uses the sport names in the dropdown.
+                        Athlete fields and metrics flow into Nora and Macra prompting via the per-attribute Nora / Macra flags.
                       </div>
                       <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3">
-                        PulseCheck provisioning uses the same lookup when attaching a sport to a team.
+                        Report policy shapes weekly + game-day coach reports, watchlist signals, coach actions, and early-warning alerts.
+                      </div>
+                      <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3">
+                        Load model converts session primitives + ACWR into the sport's load score band on coach reports.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-zinc-800 bg-[#1a1e24] p-5 shadow-2xl shadow-black/20">
+                    <div className="flex items-center gap-2">
+                      <Lock className="h-4 w-4 text-zinc-400" />
+                      <h2 className="text-lg font-semibold">Decisioning Contract</h2>
+                    </div>
+                    <p className="mt-2 text-xs text-zinc-500">
+                      Global aggregation + inference rules. Same for every sport — read-only.
+                    </p>
+                    <div className="mt-4 space-y-3 text-xs text-zinc-300">
+                      <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3">
+                        <div className="text-[10px] uppercase tracking-wide text-zinc-500">Baseline windows</div>
+                        <ul className="mt-1.5 space-y-0.5">
+                          <li>Sleep · 14–28 days</li>
+                          <li>HRV / RHR · 14–28 days</li>
+                          <li>Readiness · 7–21 days</li>
+                          <li>Training load · 7d acute / 28d chronic</li>
+                          <li>Sentiment · 5–14 check-ins</li>
+                          <li>Cognitive movement · 3 sims / 14 days</li>
+                        </ul>
+                      </div>
+                      <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3">
+                        <div className="text-[10px] uppercase tracking-wide text-zinc-500">Output schemas</div>
+                        <ul className="mt-1.5 space-y-0.5">
+                          <li>AthleteReadinessInterpretation</li>
+                          <li>TrainingLoadInterpretation</li>
+                          <li>CognitiveMovementInterpretation</li>
+                          <li>SportsRecommendation</li>
+                          <li>SportsIntelligenceWeeklyReport</li>
+                          <li>GameDayReadinessReport</li>
+                          <li>SportsEarlyWarningAlert</li>
+                        </ul>
+                      </div>
+                      <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3">
+                        <div className="text-[10px] uppercase tracking-wide text-zinc-500">Confidence ladder</div>
+                        <p className="mt-1.5">
+                          high_confidence → stable → emerging → directional → degraded. Watchlist requires <span className="text-zinc-100">stable</span>; early warnings require <span className="text-zinc-100">high_confidence</span>.
+                        </p>
+                      </div>
+                      <div className="text-[11px] text-zinc-500">
+                        Defined in <code className="rounded bg-black/40 px-1.5 py-0.5 text-zinc-300">PulseCheckSportsIntelligenceAggregationInferenceContractTab.tsx</code>
                       </div>
                     </div>
                   </div>
@@ -1441,6 +1860,11 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                     <p className="mt-2 text-amber-100/80">
                       Removing a sport takes it out of future selectors. Existing athlete profiles and team records keep whatever sport string
                       was already saved until someone updates that record.
+                    </p>
+                    <p className="mt-3 text-amber-100/80">
+                      Report policy, load model, and output schemas are intentionally read-only here. They flow straight into coach-facing
+                      reports — a UI mistake (a wrong ACWR ceiling, a typo in a watchlist signal) would reach a coach unfiltered. Edit those
+                      in code, ship a deploy, and review the result on this page.
                     </p>
                   </div>
                 </div>

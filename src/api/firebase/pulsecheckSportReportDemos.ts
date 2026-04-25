@@ -71,16 +71,16 @@ export const COACH_REPORT_DEMO_EXAMPLES: Record<string, CoachReportDemoExample> 
   basketball: {
     meta: {
       weekLabel: 'Week of Apr 21 — Apr 27, 2026',
-      opponentOrEvent: 'at Tennessee State',
+      opponentOrEvent: 'at Riverside University',
       competitionDate: 'Wednesday',
-      teamName: 'UMES Men\'s Basketball',
+      teamName: 'Pulse Demo Athletics · Men\'s Basketball',
       ...SPORT_COLORS.basketball,
       primarySportColor: SPORT_COLORS.basketball.primary,
       primarySportColorSoft: SPORT_COLORS.basketball.soft,
     },
     noteOpener: 'Quick note before the week: two of your guards are running on fumes.',
     topLine: {
-      whatChanged: 'Johnson and Davis are looking heavy heading into Wednesday\'s game at Tennessee State.',
+      whatChanged: 'Johnson and Davis are looking heavy heading into Wednesday\'s game at Riverside University.',
       who: 'M. Johnson and T. Davis (point guards)',
       firstAction: 'Pull one rep from Tuesday\'s repeat-sprint block and keep Wednesday\'s walkthrough short',
       secondaryThread: 'Separate thing — Davis\'s mood has been off since the rotation change two weeks ago. Worth a 5-minute one-on-one before Friday\'s shootaround.',
@@ -136,9 +136,9 @@ export const COACH_REPORT_DEMO_EXAMPLES: Record<string, CoachReportDemoExample> 
   golf: {
     meta: {
       weekLabel: 'Week of Apr 21 — Apr 27, 2026',
-      opponentOrEvent: 'MEAC qualifying at Eagle Landing',
+      opponentOrEvent: 'Conference qualifier at Pinehurst',
       competitionDate: 'Friday',
-      teamName: 'UMES Men\'s Golf',
+      teamName: 'Pulse Demo Athletics · Men\'s Golf',
       ...SPORT_COLORS.golf,
       primarySportColor: SPORT_COLORS.golf.primary,
       primarySportColorSoft: SPORT_COLORS.golf.soft,
@@ -199,9 +199,9 @@ export const COACH_REPORT_DEMO_EXAMPLES: Record<string, CoachReportDemoExample> 
   bowling: {
     meta: {
       weekLabel: 'Week of Apr 21 — Apr 27, 2026',
-      opponentOrEvent: 'MEAC tournament — Day 2',
+      opponentOrEvent: 'Conference tournament — Day 2',
       competitionDate: 'Saturday',
-      teamName: 'UMES Bowling',
+      teamName: 'Pulse Demo Athletics · Bowling',
       ...SPORT_COLORS.bowling,
       primarySportColor: SPORT_COLORS.bowling.primary,
       primarySportColorSoft: SPORT_COLORS.bowling.soft,
@@ -264,16 +264,16 @@ export const COACH_REPORT_DEMO_EXAMPLES: Record<string, CoachReportDemoExample> 
   'track-field': {
     meta: {
       weekLabel: 'Week of Apr 21 — Apr 27, 2026',
-      opponentOrEvent: 'Meet at Morgan State',
+      opponentOrEvent: 'Meet at Westbrook University',
       competitionDate: 'Saturday',
-      teamName: 'UMES Track & Field',
+      teamName: 'Pulse Demo Athletics · Track & Field',
       ...SPORT_COLORS['track-field'],
       primarySportColor: SPORT_COLORS['track-field'].primary,
       primarySportColorSoft: SPORT_COLORS['track-field'].soft,
     },
     noteOpener: 'Quick read going into Saturday\'s meet.',
     topLine: {
-      whatChanged: 'Smith and Adams are looking heavy in the legs going into Saturday\'s meet at Morgan State.',
+      whatChanged: 'Smith and Adams are looking heavy in the legs going into Saturday\'s meet at Westbrook University.',
       who: 'D. Smith and J. Adams (sprinters — 100/200)',
       firstAction: 'Pull one rep from Tuesday\'s 4x200 and skip the strength add-on',
       secondaryThread: 'Separate thing — Peters has been skipping pre-practice meals two days running. Stage a quick 10-minute fueling check-in Friday afternoon. Predictable carbs, hydration plan.',

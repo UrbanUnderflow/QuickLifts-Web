@@ -101,6 +101,66 @@ export interface PulseCheckSportLanguagePosture {
   mustAvoid: string[];
 }
 
+export interface PulseCheckSportLoadPrimitive {
+  /** Identifier from the canonical primitive catalog (see Sport Load Model spec tab). */
+  key: string;
+  /** Weight in the sport's blend. Weights need not sum to 1.0 — internal HR-load is the universal baseline; sport-specific primitives multiply on top. */
+  weight: number;
+  /** Where this primitive comes from in the Health Context Source Record / session_record. */
+  source: string;
+  /** Optional pre-accumulation filter (e.g., 'GPS speed > 6 m/s, sustained > 2s'). */
+  filter?: string;
+}
+
+export interface PulseCheckSportLoadThresholds {
+  /** Normalized 0–1 load_au bands. Below low = "fresh"; above concerning = "looking heavy". */
+  low: number;
+  moderate: number;
+  high: number;
+  concerning: number;
+}
+
+export interface PulseCheckSportLoadContextModifier {
+  /** Identifier (e.g., 'heatExposure', 'travelDays', 'shortTurnaround'). */
+  key: string;
+  /** Multiplier applied to load_au when this context is active (e.g., 1.10 = +10%). */
+  multiplier: number;
+  /** One-line coach-context for why this modifier exists in this sport. */
+  rationale: string;
+}
+
+export interface PulseCheckSportLoadPrescribedComparisonWeights {
+  /** Adjustment weight for (executed reps / prescribed reps). */
+  executedRepsFraction: number;
+  /** Adjustment weight for pace deviation. */
+  paceDeviation: number;
+  /** Adjustment weight for rest deviation. */
+  restDeviation: number;
+  /** Adjustment weight for volume deviation. */
+  volumeDeviation: number;
+  /** Adjustment weight for modality drift (interval vs. steady, strength vs. game, etc.). */
+  modalityDrift: number;
+}
+
+export interface PulseCheckSportLoadModel {
+  /** Plain-English one-liner used by the admin Load Model panel headline. */
+  summary: string;
+  /** Per-sport primitive blend. */
+  primitives: PulseCheckSportLoadPrimitive[];
+  /** Sport-tolerable load bands. */
+  thresholds: PulseCheckSportLoadThresholds;
+  /** Sport-tolerable acute:chronic ratio ceiling before "concerning" flag. */
+  acwrCeiling: number;
+  /** Half-life (in days) over which chronic load decays without new sessions. */
+  decayHalfLifeDays: number;
+  /** How negative the score may go before "deload — push it again" copy fires (e.g., -0.20). */
+  recoveryDebtFloor: number;
+  /** Sport-specific context modifiers (heat, travel, schedule density, etc.). */
+  contextModifiers: PulseCheckSportLoadContextModifier[];
+  /** How prescribed-vs-executed deltas adjust the load score. */
+  prescribedComparisonWeights: PulseCheckSportLoadPrescribedComparisonWeights;
+}
+
 export interface PulseCheckSportReportPolicy {
   contextModifiers: string[];
   kpiRefs: string[];
@@ -115,6 +175,10 @@ export interface PulseCheckSportReportPolicy {
   // Generators (and the demo renderer) should run output copy through this before
   // delivery so the coach never sees jargon like "HRV down 12%" or "underfueling pattern".
   coachLanguageTranslations?: Record<string, string>;
+  // Per-sport load formula (primitives, thresholds, ACWR ceiling, decay, modifiers,
+  // prescribed-comparison weights). Edited in code; rendered as a review-only panel
+  // on the Sports Intelligence Layer admin page.
+  loadModel?: PulseCheckSportLoadModel;
 }
 
 export const PULSECHECK_REPORT_POLICY_DEFAULTS = {
@@ -316,6 +380,26 @@ const basketballReportPolicy: PulseCheckSportReportPolicy = {
     'repeat-sprint readiness': 'legs',
     'cognitive load': 'film-and-walkthrough demand',
   },
+  loadModel: {
+    summary: 'Repeat-sprint plus jump-volume sport with collision and lateral overlay; load is dominated by minutes × intensity, with high-intensity efforts and jump count as the lead indicators.',
+    primitives: [
+      { key: 'internalLoadHr', weight: 1.0, source: 'TRIMP-style HR-zone integration over detected basketball sessions.' },
+      { key: 'jumpCount', weight: 0.9, source: 'Vertical accelerometer Z-spike count above basketball jump threshold.', filter: 'Z-spike > 2.0g' },
+      { key: 'lateralAccelCount', weight: 0.7, source: 'X/Y deflection count above defensive cut threshold.' },
+      { key: 'sprintReps', weight: 0.7, source: 'GPS speed > 5.5 m/s sustained > 2s during open-court play.' },
+      { key: 'impactCollisionLoad', weight: 0.4, source: 'Accelerometer impact-magnitude integration; supplemental when device exposes it.' },
+    ],
+    thresholds: { low: 0.30, moderate: 0.60, high: 0.85, concerning: 1.05 },
+    acwrCeiling: 1.5,
+    decayHalfLifeDays: 5,
+    recoveryDebtFloor: -0.20,
+    contextModifiers: [
+      { key: 'travelDays', multiplier: 1.08, rationale: 'Time-zone shifts and back-to-back travel push effective load on conference road trips.' },
+      { key: 'shortTurnaround', multiplier: 1.10, rationale: '<48h between games compounds repeat-sprint cost.' },
+      { key: 'heatExposure', multiplier: 1.05, rationale: 'Tournament gyms and summer travel runs push HR-zone load harder than usual.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.7, paceDeviation: 0.4, restDeviation: 0.6, volumeDeviation: 0.7, modalityDrift: 0.8 },
+  },
 };
 
 const golfReportPolicy: PulseCheckSportReportPolicy = {
@@ -369,6 +453,26 @@ const golfReportPolicy: PulseCheckSportReportPolicy = {
     'caffeine jitters': 'a little wired off the caffeine',
     'walking load': 'the grind of walking 18',
     'late-round dispersion': 'tightness late in the round',
+  },
+  loadModel: {
+    summary: 'Walk-volume + heat + grind-of-18 sport; walking distance and round duration anchor the read, with swing reps and tournament density driving the high end.',
+    primitives: [
+      { key: 'walkingDistance', weight: 1.0, source: 'GPS distance at sustained low speed (1–2 m/s) over multi-hour activity window.' },
+      { key: 'blockRoundDuration', weight: 0.9, source: 'Detected round duration (4–5 hours per 18 holes).' },
+      { key: 'swingReps', weight: 0.7, source: 'Accelerometer swing-signature count (driving range + course).' },
+      { key: 'heatExposure', weight: 0.6, source: 'Skin temp + ambient temperature × round duration.' },
+      { key: 'internalLoadHr', weight: 0.4, source: 'HR-zone integration; lower weight given low aerobic profile.' },
+    ],
+    thresholds: { low: 0.25, moderate: 0.50, high: 0.80, concerning: 1.05 },
+    acwrCeiling: 1.7,
+    decayHalfLifeDays: 4,
+    recoveryDebtFloor: -0.18,
+    contextModifiers: [
+      { key: 'tournamentDay', multiplier: 1.15, rationale: '36-hole tournament days double walking distance and round duration on a single day.' },
+      { key: 'heatExposure', multiplier: 1.12, rationale: 'Outdoor summer heat over a 4-5 hour round materially raises systemic cost.' },
+      { key: 'travelDays', multiplier: 1.05, rationale: 'Travel pre-tournament adds sleep disruption on top of round volume.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.5, paceDeviation: 0.3, restDeviation: 0.4, volumeDeviation: 0.7, modalityDrift: 0.5 },
   },
 };
 
@@ -426,6 +530,26 @@ const bowlingReportPolicy: PulseCheckSportReportPolicy = {
     'block length': 'long block',
     'split miss': 'tough spare miss',
   },
+  loadModel: {
+    summary: 'Block-density sport with grip-strain overlay; total shots × block length anchor the read, with Day-2 stamina and travel days driving the high end.',
+    primitives: [
+      { key: 'blockRoundDuration', weight: 1.0, source: 'Detected bowling-block duration × block density.' },
+      { key: 'swingReps', weight: 0.8, source: 'Accelerometer swing-signature count (release + approach combined).' },
+      { key: 'gripStrainProxy', weight: 0.7, source: 'Forearm accelerometer signature integrated across the day.' },
+      { key: 'travelDays', weight: 0.4, source: 'GPS-detected location change beyond home venue / hotel signature.' },
+      { key: 'internalLoadHr', weight: 0.3, source: 'HR-zone integration; minor input given low aerobic profile.' },
+    ],
+    thresholds: { low: 0.25, moderate: 0.50, high: 0.80, concerning: 1.05 },
+    acwrCeiling: 1.6,
+    decayHalfLifeDays: 5,
+    recoveryDebtFloor: -0.18,
+    contextModifiers: [
+      { key: 'multiDayTournament', multiplier: 1.15, rationale: 'Day-2 of a tournament block compounds grip and approach cost.' },
+      { key: 'travelDays', multiplier: 1.07, rationale: 'Bus + plane travel routines disrupt sleep on top of competition density.' },
+      { key: 'longBlockShift', multiplier: 1.08, rationale: 'Late-night shift bowling blocks push past the home-block design window.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.5, paceDeviation: 0.3, restDeviation: 0.4, volumeDeviation: 0.7, modalityDrift: 0.5 },
+  },
 };
 
 const soccerReportPolicy: PulseCheckSportReportPolicy = {
@@ -471,6 +595,26 @@ const soccerReportPolicy: PulseCheckSportReportPolicy = {
     focus: ['scanning', 'first touch under pressure', 'set-piece assignment'],
     composure: ['response after mistakes', 'goalkeeper confidence', 'pressure-moment posture'],
     decisioning: ['transition choices', 'pass selection under pressure', 'final-third reads'],
+  },
+  loadModel: {
+    summary: 'High-speed running plus repeat-sprint sport; total distance and HR-zone time anchor the read, with sprint count and high-speed running distance as the position-aware top end.',
+    primitives: [
+      { key: 'internalLoadHr', weight: 1.0, source: 'TRIMP-style HR-zone integration over detected soccer sessions.' },
+      { key: 'highSpeedRunDistance', weight: 0.9, source: 'GPS distance accumulated above 5.5 m/s.' },
+      { key: 'sprintReps', weight: 0.8, source: 'GPS speed > 7.0 m/s sustained > 2s.' },
+      { key: 'sprintDistance', weight: 0.7, source: 'GPS distance accumulated above 7.0 m/s.' },
+      { key: 'totalDistance', weight: 0.5, source: 'GPS total distance per session.' },
+    ],
+    thresholds: { low: 0.30, moderate: 0.60, high: 0.85, concerning: 1.05 },
+    acwrCeiling: 1.5,
+    decayHalfLifeDays: 6,
+    recoveryDebtFloor: -0.20,
+    contextModifiers: [
+      { key: 'matchDensity', multiplier: 1.10, rationale: 'Mid-week + weekend matches compound high-speed running cost beyond practice load alone.' },
+      { key: 'travelDays', multiplier: 1.07, rationale: 'Conference travel adds time-zone and routine disruption on top of match volume.' },
+      { key: 'heatExposure', multiplier: 1.06, rationale: 'Late-summer and tournament heat pushes total-distance cost.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.6, paceDeviation: 0.6, restDeviation: 0.5, volumeDeviation: 0.7, modalityDrift: 0.8 },
   },
 };
 
@@ -518,6 +662,26 @@ const footballReportPolicy: PulseCheckSportReportPolicy = {
     composure: ['next-play reset', 'arousal control', 'contact confidence'],
     decisioning: ['quarterback and coverage reads', 'unit communication', 'play responsibility'],
   },
+  loadModel: {
+    summary: 'Collision and snap-density sport; load is dominated by impact accumulation plus position-specific accelerometer signature, with HR-zone time as the conditioning baseline.',
+    primitives: [
+      { key: 'impactCollisionLoad', weight: 1.0, source: 'Accelerometer impact-magnitude integration; helmet IMU weighting when available.' },
+      { key: 'internalLoadHr', weight: 0.9, source: 'TRIMP-style HR-zone integration; lower weight than collision sports without contact.' },
+      { key: 'snapCountProxy', weight: 0.8, source: 'Position-specific accelerometer cadence × intensity per detected football session.' },
+      { key: 'sprintDistance', weight: 0.6, source: 'GPS distance above sprint threshold; weighted by position group.' },
+      { key: 'sprintReps', weight: 0.5, source: 'GPS speed > 6.5 m/s sustained > 2s.' },
+    ],
+    thresholds: { low: 0.30, moderate: 0.55, high: 0.80, concerning: 1.00 },
+    acwrCeiling: 1.4,
+    decayHalfLifeDays: 8,
+    recoveryDebtFloor: -0.22,
+    contextModifiers: [
+      { key: 'paddedPracticeBlock', multiplier: 1.15, rationale: 'Padded practice days compound contact load beyond what accelerometer counts alone capture.' },
+      { key: 'heatExposure', multiplier: 1.08, rationale: 'Camp and early-season heat raises effective load even without higher distance.' },
+      { key: 'travelDays', multiplier: 1.05, rationale: 'Long road trips disrupt sleep and recovery on top of match-week volume.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.6, paceDeviation: 0.4, restDeviation: 0.5, volumeDeviation: 0.6, modalityDrift: 0.7 },
+  },
 };
 
 const baseballReportPolicy: PulseCheckSportReportPolicy = {
@@ -563,6 +727,26 @@ const baseballReportPolicy: PulseCheckSportReportPolicy = {
     focus: ['pitch-to-pitch routine', 'plate approach', 'defensive readiness'],
     composure: ['command anxiety', 'slump reset', 'response after errors'],
     decisioning: ['pitch selection', 'swing/take approach', 'situational choices'],
+  },
+  loadModel: {
+    summary: 'Throwing-volume + at-bat-density sport; pitcher arm-care drives a hard ceiling, while position players blend throwing volume with at-bat density and HR-zone time.',
+    primitives: [
+      { key: 'pitchCount', weight: 1.0, source: 'Detected pitch events per session (pitchers); blended with throwing volume for catchers.' },
+      { key: 'throwingVolume', weight: 0.9, source: 'Accelerometer throw-signature count across the practice/game window.' },
+      { key: 'innings', weight: 0.7, source: 'Detected innings of activity per pitcher; cap-aware.' },
+      { key: 'atBatDensity', weight: 0.5, source: 'Detected swing events × game density (position players).' },
+      { key: 'internalLoadHr', weight: 0.4, source: 'HR-zone integration; secondary input for a low-aerobic-density sport.' },
+    ],
+    thresholds: { low: 0.25, moderate: 0.55, high: 0.80, concerning: 1.00 },
+    acwrCeiling: 1.4,
+    decayHalfLifeDays: 9,
+    recoveryDebtFloor: -0.20,
+    contextModifiers: [
+      { key: 'pitchCountWindow', multiplier: 1.20, rationale: 'Pitchers inside the arm-care window compound load far beyond aerobic cost.' },
+      { key: 'doubleHeader', multiplier: 1.12, rationale: 'Doubleheaders push at-bat and throwing volume past a single-game ceiling.' },
+      { key: 'travelDays', multiplier: 1.06, rationale: 'Bus + flight road trips add fatigue beyond the box score.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.8, paceDeviation: 0.4, restDeviation: 0.7, volumeDeviation: 0.8, modalityDrift: 0.6 },
   },
 };
 
@@ -610,6 +794,26 @@ const softballReportPolicy: PulseCheckSportReportPolicy = {
     focus: ['pitch-to-pitch routine', 'defensive reaction', 'dugout reset'],
     composure: ['error carryover', 'tough at-bat recovery', 'tournament pressure'],
     decisioning: ['pitch command', 'situational hitting', 'baserunning choices'],
+  },
+  loadModel: {
+    summary: 'Tournament-density sport with windmill-pitcher load profile; pitch count, throwing volume, and Day-2 stamina dominate; nutrition coverage is part of the load story.',
+    primitives: [
+      { key: 'pitchCount', weight: 1.0, source: 'Detected windmill pitch signature (pitchers); blended with throwing volume for catchers/utility.' },
+      { key: 'throwingVolume', weight: 0.8, source: 'Accelerometer throw-signature count (position players).' },
+      { key: 'tournamentDayDensity', weight: 0.7, source: 'Number of detected games × innings within a single tournament day.' },
+      { key: 'atBatDensity', weight: 0.5, source: 'Detected swing events × game density.' },
+      { key: 'internalLoadHr', weight: 0.5, source: 'HR-zone integration; tournament heat exposure can raise this disproportionately.' },
+    ],
+    thresholds: { low: 0.30, moderate: 0.60, high: 0.85, concerning: 1.05 },
+    acwrCeiling: 1.5,
+    decayHalfLifeDays: 6,
+    recoveryDebtFloor: -0.20,
+    contextModifiers: [
+      { key: 'tournamentBlock', multiplier: 1.18, rationale: 'Multi-game tournament days compound throwing and HR-zone load across the weekend.' },
+      { key: 'heatExposure', multiplier: 1.10, rationale: 'Outdoor tournament heat raises effective load on long-day events.' },
+      { key: 'thinAtBatFueling', multiplier: 1.08, rationale: 'All-day fueling thinness amplifies tournament fatigue (input from Macra coverage flag).' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.7, paceDeviation: 0.4, restDeviation: 0.6, volumeDeviation: 0.7, modalityDrift: 0.6 },
   },
 };
 
@@ -2145,6 +2349,94 @@ const normalizeDimensionMap = (value: unknown): Record<PulseCheckSportsIntellige
   };
 };
 
+const normalizeLoadModel = (value: unknown): PulseCheckSportLoadModel | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as Record<string, unknown>;
+
+  const primitives: PulseCheckSportLoadPrimitive[] = [];
+  if (Array.isArray(candidate.primitives)) {
+    for (const entry of candidate.primitives) {
+      if (!entry || typeof entry !== 'object') continue;
+      const primitive = entry as Record<string, unknown>;
+      const key = normalizeString(primitive.key);
+      const source = normalizeString(primitive.source);
+      const weight = typeof primitive.weight === 'number' ? primitive.weight : Number(primitive.weight);
+      if (!key || !source || !Number.isFinite(weight)) continue;
+      primitives.push({
+        key,
+        weight,
+        source,
+        filter: typeof primitive.filter === 'string' && primitive.filter.trim() ? primitive.filter.trim() : undefined,
+      });
+    }
+  }
+
+  const contextModifiers: PulseCheckSportLoadContextModifier[] = [];
+  if (Array.isArray(candidate.contextModifiers)) {
+    for (const entry of candidate.contextModifiers) {
+      if (!entry || typeof entry !== 'object') continue;
+      const modifier = entry as Record<string, unknown>;
+      const key = normalizeString(modifier.key);
+      const rationale = normalizeString(modifier.rationale);
+      const multiplier = typeof modifier.multiplier === 'number' ? modifier.multiplier : Number(modifier.multiplier);
+      if (!key || !rationale || !Number.isFinite(multiplier)) continue;
+      contextModifiers.push({ key, multiplier, rationale });
+    }
+  }
+
+  const thresholdsRaw = candidate.thresholds && typeof candidate.thresholds === 'object'
+    ? candidate.thresholds as Record<string, unknown>
+    : null;
+  const thresholds: PulseCheckSportLoadThresholds | null = thresholdsRaw
+    ? {
+        low: Number(thresholdsRaw.low),
+        moderate: Number(thresholdsRaw.moderate),
+        high: Number(thresholdsRaw.high),
+        concerning: Number(thresholdsRaw.concerning),
+      }
+    : null;
+
+  const weightsRaw = candidate.prescribedComparisonWeights && typeof candidate.prescribedComparisonWeights === 'object'
+    ? candidate.prescribedComparisonWeights as Record<string, unknown>
+    : null;
+  const prescribedComparisonWeights: PulseCheckSportLoadPrescribedComparisonWeights | null = weightsRaw
+    ? {
+        executedRepsFraction: Number(weightsRaw.executedRepsFraction),
+        paceDeviation: Number(weightsRaw.paceDeviation),
+        restDeviation: Number(weightsRaw.restDeviation),
+        volumeDeviation: Number(weightsRaw.volumeDeviation),
+        modalityDrift: Number(weightsRaw.modalityDrift),
+      }
+    : null;
+
+  const summary = normalizeString(candidate.summary);
+  const acwrCeiling = Number(candidate.acwrCeiling);
+  const decayHalfLifeDays = Number(candidate.decayHalfLifeDays);
+  const recoveryDebtFloor = Number(candidate.recoveryDebtFloor);
+
+  const hasContent = primitives.length > 0
+    && contextModifiers.length > 0
+    && thresholds
+    && prescribedComparisonWeights
+    && Boolean(summary)
+    && Number.isFinite(acwrCeiling)
+    && Number.isFinite(decayHalfLifeDays)
+    && Number.isFinite(recoveryDebtFloor);
+
+  if (!hasContent) return undefined;
+
+  return {
+    summary,
+    primitives,
+    thresholds: thresholds!,
+    acwrCeiling,
+    decayHalfLifeDays,
+    recoveryDebtFloor,
+    contextModifiers,
+    prescribedComparisonWeights: prescribedComparisonWeights!,
+  };
+};
+
 const normalizeReportPolicy = (value: unknown): PulseCheckSportReportPolicy | undefined => {
   if (!value || typeof value !== 'object') return undefined;
   const candidate = value as Record<string, unknown>;
@@ -2184,6 +2476,7 @@ const normalizeReportPolicy = (value: unknown): PulseCheckSportReportPolicy | un
     },
     dimensionMap: normalizeDimensionMap(candidate.dimensionMap),
     coachLanguageTranslations: Object.keys(translations).length > 0 ? translations : undefined,
+    loadModel: normalizeLoadModel(candidate.loadModel),
   };
 
   const hasPolicyContent = [

@@ -76,6 +76,9 @@ import PulseCheckCorrelationEngineContractLockTab from "../../components/admin/s
 import PulseCheckSportsIntelligenceLayerSpecTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceLayerSpecTab";
 import PulseCheckSportsIntelligenceAggregationInferenceContractTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceAggregationInferenceContractTab";
 import PulseCheckSportsIntelligenceMockReportBaselinesTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceMockReportBaselinesTab";
+import PulseCheckNoraContextCaptureSpecTab from "../../components/admin/system-overview/PulseCheckNoraContextCaptureSpecTab";
+import PulseCheckSessionDetectionMatchingSpecTab from "../../components/admin/system-overview/PulseCheckSessionDetectionMatchingSpecTab";
+import PulseCheckSportLoadModelSpecTab from "../../components/admin/system-overview/PulseCheckSportLoadModelSpecTab";
 import PulseCheckCorrelationDataModelSpecTab from "../../components/admin/system-overview/PulseCheckCorrelationDataModelSpecTab";
 import PulseCheckCorrelationEngineEngineeringTaskBreakdownTab from "../../components/admin/system-overview/PulseCheckCorrelationEngineEngineeringTaskBreakdownTab";
 import PulseCheckCorrelationEnginePilotDashboardTab from "../../components/admin/system-overview/PulseCheckCorrelationEnginePilotDashboardTab";
@@ -281,6 +284,9 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-sports-intelligence-layer-spec",
       "pulsecheck-sports-intelligence-aggregation-inference-contract",
       "pulsecheck-sports-intelligence-mock-report-baselines",
+      "pulsecheck-nora-context-capture",
+      "pulsecheck-session-detection-matching",
+      "pulsecheck-sport-load-model",
       "pulsecheck-device-integration-strategy",
       "pulsecheck-device-integration-partnership-matrix",
       "pulsecheck-school-wearable-bundle-plan",
@@ -1810,6 +1816,15 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-sports-intelligence-mock-report-baselines":
         return <PulseCheckSportsIntelligenceMockReportBaselinesTab />;
+
+      case "pulsecheck-nora-context-capture":
+        return <PulseCheckNoraContextCaptureSpecTab />;
+
+      case "pulsecheck-session-detection-matching":
+        return <PulseCheckSessionDetectionMatchingSpecTab />;
+
+      case "pulsecheck-sport-load-model":
+        return <PulseCheckSportLoadModelSpecTab />;
 
       case "pulsecheck-correlation-data-model-spec":
         return <PulseCheckCorrelationDataModelSpecTab />;
