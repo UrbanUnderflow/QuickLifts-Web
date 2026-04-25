@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import Head from 'next/head';
+import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
 import { Users } from 'lucide-react';
 import {
@@ -236,7 +237,7 @@ const CoachReportDemoPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>{sport.name} Weekly Coach Report — Pulse Sports Intelligence</title>
+        <title>{sport.name} — Sports Intelligence Report</title>
         {/* Demo route is public so stakeholders can review without auth, but we
             keep it out of search engines via noindex/nofollow. */}
         <meta name="robots" content="noindex, nofollow" />
@@ -533,6 +534,30 @@ const CoachReportDemoPage: React.FC = () => {
       </div>
     </>
   );
+};
+
+// Server-render the OG meta so iMessage / Slack / Twitter / WhatsApp link
+// previews show "Track & Field — Sports Intelligence Report" instead of the
+// slug-derived fallback ("Track Field — Pulse"). _app.tsx reads `ogMeta` from
+// pageProps and writes the og:title / og:description / og:image / og:url tags
+// into the SSR HTML before any crawler sees the page.
+export const getServerSideProps: GetServerSideProps = async (context) => {
+  const sportIdParam = context.params?.sportId;
+  const sportId = typeof sportIdParam === 'string' ? sportIdParam : Array.isArray(sportIdParam) ? sportIdParam[0] : '';
+  const sports = getDefaultPulseCheckSports();
+  const sport = sports.find((s) => s.id === sportId);
+  const sportName = sport?.name || 'Coach Report';
+
+  return {
+    props: {
+      ogMeta: {
+        title: `${sportName} — Sports Intelligence Report`,
+        description: `Weekly coach report for ${sportName}. From Pulse Sports Intelligence — read in under 60 seconds.`,
+        image: 'https://fitwithpulse.ai/pil-og.png',
+        url: `https://fitwithpulse.ai/coach-report-demo/${sportId}`,
+      },
+    },
+  };
 };
 
 export default CoachReportDemoPage;
