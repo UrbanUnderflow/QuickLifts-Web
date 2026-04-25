@@ -1,5 +1,6 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
+import { systemOverviewManifest } from '../../../content/system-overview/manifest';
 
 interface Highlight {
   title: string;
@@ -194,6 +195,84 @@ export function InlineTag({
   );
 }
 
+type RelatedDocument = string | { label: string; sectionId?: string };
+
+const normalizeRelatedDocLabel = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const RELATED_DOC_SECTION_ALIASES: Record<string, string> = {
+  [normalizeRelatedDocLabel('Aggregation + Inference Contract')]: 'pulsecheck-sports-intelligence-aggregation-inference-contract',
+  [normalizeRelatedDocLabel('AuntEDNA Integration Strategy')]: 'auntedna-integration-strategy',
+  [normalizeRelatedDocLabel('Club Activation Architecture')]: 'pulse-club-activation-architecture',
+  [normalizeRelatedDocLabel('Chromatic Glass web study')]: 'system-design-language',
+  [normalizeRelatedDocLabel('Device & Wearable Integrations')]: 'pulsecheck-device-integration-strategy',
+  [normalizeRelatedDocLabel('Fit With Pulse Android product handbook')]: 'product-handbooks',
+  [normalizeRelatedDocLabel('Fit With Pulse iOS product handbook')]: 'product-handbooks',
+  [normalizeRelatedDocLabel('iOS Pulse Design System')]: 'system-design-language',
+  [normalizeRelatedDocLabel('Macra')]: 'macra-system-overview',
+  [normalizeRelatedDocLabel('Member Onboarding Guide')]: 'pulsecheck-member-onboarding-guide',
+  [normalizeRelatedDocLabel('Mock Report Baselines')]: 'pulsecheck-sports-intelligence-mock-report-baselines',
+  [normalizeRelatedDocLabel('Sport Configuration Registry')]: 'pulsecheck-sports-intelligence-layer-spec',
+  [normalizeRelatedDocLabel('Sports Intelligence Aggregation + Inference Contract')]: 'pulsecheck-sports-intelligence-aggregation-inference-contract',
+  [normalizeRelatedDocLabel('Sports Intelligence Layer')]: 'pulsecheck-sports-intelligence-layer-spec',
+  [normalizeRelatedDocLabel('Sports Intelligence Layer: Architecture & Product Boundaries')]: 'pulsecheck-sports-intelligence-layer-spec',
+  [normalizeRelatedDocLabel('System Overview Manifest')]: 'executive-summary',
+};
+
+const sectionIdByLabel = new Map(
+  systemOverviewManifest.sections.map((section) => [
+    normalizeRelatedDocLabel(section.label),
+    section.id,
+  ]),
+);
+
+const resolveRelatedDocSectionId = (doc: RelatedDocument) => {
+  if (typeof doc !== 'string' && doc.sectionId) return doc.sectionId;
+
+  const label = typeof doc === 'string' ? doc : doc.label;
+  const normalizedLabel = normalizeRelatedDocLabel(label);
+
+  return RELATED_DOC_SECTION_ALIASES[normalizedLabel] || sectionIdByLabel.get(normalizedLabel);
+};
+
+const getRelatedDocLabel = (doc: RelatedDocument) => (typeof doc === 'string' ? doc : doc.label);
+
+const navigateToRelatedDoc = (sectionId: string) => {
+  if (typeof window === 'undefined') return;
+
+  window.dispatchEvent(
+    new CustomEvent('system-overview:navigate-section', {
+      detail: { sectionId },
+    }),
+  );
+};
+
+function RelatedDocTag({ doc }: { doc: RelatedDocument }) {
+  const label = getRelatedDocLabel(doc);
+  const sectionId = resolveRelatedDocSectionId(doc);
+
+  if (!sectionId) {
+    return <InlineTag label={label} color="blue" />;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => navigateToRelatedDoc(sectionId)}
+      className="inline-flex rounded-full border border-blue-500/25 bg-blue-500/10 px-2 py-0.5 text-left text-[11px] font-medium text-blue-200 transition-colors hover:border-blue-300/60 hover:bg-blue-500/20 focus:outline-none focus:ring-2 focus:ring-blue-300/40"
+      title={`Open ${label}`}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function RuntimeAlignmentPanel({
   sectionLabel = 'Runtime Alignment',
   role,
@@ -205,7 +284,7 @@ export function RuntimeAlignmentPanel({
   role: string;
   sourceOfTruth: string;
   masterReference: string;
-  relatedDocs: string[];
+  relatedDocs: RelatedDocument[];
 }) {
   return (
     <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
@@ -229,7 +308,7 @@ export function RuntimeAlignmentPanel({
             <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Related Documents</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {relatedDocs.map((doc) => (
-                <InlineTag key={doc} label={doc} color="blue" />
+                <RelatedDocTag key={getRelatedDocLabel(doc)} doc={doc} />
               ))}
             </div>
           </div>

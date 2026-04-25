@@ -12,7 +12,7 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   generateWorkout: { maxTokens: 4000, modelPattern: /gpt-4o|gpt-4/i }, // Workout Generation
   groundedFoodLookup: { maxTokens: 3000, modelPattern: /gpt-5|gpt-4|gpt-4o|o[1-4]/i },
   macraAssessMacros: { maxTokens: 2500, modelPattern: /gpt-4o|gpt-4/i },
-  macraDailyInsight: { maxTokens: 600, modelPattern: /gpt-4o|gpt-4/i },
+  macraDailyInsight: { maxTokens: 1000, modelPattern: /gpt-4o|gpt-4/i },
   macraFoodJournalFeedback: { maxTokens: 1500, modelPattern: /gpt-4o|gpt-4/i },
   macraLabelScan: { maxTokens: 2200, modelPattern: /gpt-4o|gpt-4/i },
   macraLabelSupplements: { maxTokens: 2500, modelPattern: /gpt-4o|gpt-4/i },

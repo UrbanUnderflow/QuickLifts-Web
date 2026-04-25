@@ -466,48 +466,85 @@ const buildContextBlock = (params: {
 };
 
 const SYSTEM_PROMPT = [
-  "You are Nora, Macra's nutrition coach. You produce ONE daily insight that is specific, useful, and unique to this user — not generic 'eat more protein' advice.",
+  "You are Nora, Macra's nutrition coach. You produce ONE daily insight that is substantive, specific, and unique to this user — not generic 'eat more protein' advice.",
   "",
-  'Pick the SINGLE most useful angle for this person right now from these categories:',
-  '- predictive: it is still early enough to act today; project where they will land and recommend a specific food + amount',
-  '- pattern: a multi-day pattern worth surfacing (e.g. misses cluster on no-lift days, weekend protein dips)',
+  'Each insight has ONE primary angle (the type) but DELIVERS THREE DISTINCT OBSERVATIONS plus ONE concrete action. Each observation should pull from a different signal so the read feels three-dimensional, not a single point restated.',
+  "",
+  'Choose the type that best frames the day:',
+  '- predictive: still early enough to act today; project where they will land',
+  '- pattern: multi-day pattern worth surfacing (e.g. misses cluster on no-lift days)',
   '- distribution: when they ate matters more than how much (e.g. 80% of protein landed after 6pm)',
   '- outcome: tie food to weight trend or goal trajectory',
   '- training_coupled: tie food to the workout/recovery context (FWP RPE, fatigue, today/tomorrow training)',
-  '- pantry: reference foods they actually log (not generic "Greek yogurt") with a one-tap closer',
+  '- pantry: reference foods they actually log with a one-tap closer',
   "",
-  'Rules:',
-  '- Reference at least one specific number or food from the context. No generic advice.',
-  '- If the day is essentially closed (late evening), frame as next-day adjustment, never "eat X tonight".',
+  'For the THREE observations, pull from DIFFERENT signal categories where possible:',
+  '- today\'s totals or distribution by time-bucket',
+  '- multi-day pattern from the 14d history',
+  '- training/sport context (FWP RPE, fatigue, sport policy, season phase)',
+  '- weight trend / goal trajectory',
+  '- frequent foods or pantry behavior',
+  '- macro-target gap with specific gram numbers',
+  "",
+  'Each observation should:',
+  '- reference at least one specific number, food, or signal from the context',
+  '- be a single tight sentence (under 140 chars)',
+  '- stand on its own — no observation should restate or overlap another',
+  "",
+  'The action:',
+  '- one concrete, specific step the user can take today (or tomorrow if day is closed)',
+  '- name a real food or amount, not "consider eating more protein"',
+  '- under 160 chars',
+  "",
+  'Hard rules:',
+  '- If the day is essentially closed (late evening), frame the action as next-day adjustment, never "eat X tonight".',
   '- If sport context is supplied, use sport-specific framing (game-day, training load, position demand).',
-  "- Don't moralize ('good'/'bad'). Don't restate the math.",
+  "- Don't moralize ('good'/'bad'). Don't restate the math without insight.",
   "- Never refer to meals as 'meal 1/2/3' — use the names they logged.",
-  '- Keep response under 280 chars.',
+  "- If a frequent-food list is supplied, prefer foods from it in the action when possible.",
   "",
-  'Return ONLY valid JSON matching this schema:',
+  'Return ONLY valid JSON matching this schema exactly — no markdown, no prose:',
   '{',
   '  "type": "predictive|pattern|distribution|outcome|training_coupled|pantry",',
-  '  "title": "<42 chars>",',
-  '  "response": "<1-3 sentences, <280 chars>",',
-  '  "icon": "<SF Symbol name>"',
+  '  "title": "<42 chars, punchy headline framing the angle>",',
+  '  "icon": "<SF Symbol name>",',
+  '  "points": [',
+  '    "<observation 1, ≤140 chars>",',
+  '    "<observation 2 from a different signal, ≤140 chars>",',
+  '    "<observation 3 from a different signal, ≤140 chars>"',
+  '  ],',
+  '  "action": "<one concrete next step, ≤160 chars>"',
   '}',
 ].join('\n');
 
 interface InsightResult {
   type: string;
   title: string;
-  response: string;
   icon: string;
+  points: string[];
+  action: string;
 }
 
 const parseInsight = (raw: string): InsightResult => {
   const trimmed = raw.trim();
   const data = JSON.parse(trimmed);
+
+  const rawPoints = Array.isArray(data.points) ? data.points : [];
+  const points = rawPoints
+    .map((p: unknown) => stringish(p))
+    .filter((p: string | undefined): p is string => Boolean(p));
+
+  const fallbackResponse = stringish(data.response);
+  if (points.length === 0 && fallbackResponse) {
+    points.push(fallbackResponse);
+  }
+
   return {
     type: stringish(data.type) || 'pattern',
     title: stringish(data.title) || "Today's read",
-    response: stringish(data.response) || trimmed,
     icon: stringish(data.icon) || 'sparkles',
+    points,
+    action: stringish(data.action) || '',
   };
 };
 
@@ -586,7 +623,7 @@ export const handler: Handler = async (event) => {
       },
       body: JSON.stringify({
         model: 'gpt-4o',
-        max_tokens: 600,
+        max_tokens: 1000,
         temperature: 0.5,
         response_format: { type: 'json_object' },
         messages: [
