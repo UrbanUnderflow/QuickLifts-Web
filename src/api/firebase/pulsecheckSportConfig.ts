@@ -862,6 +862,26 @@ const volleyballReportPolicy: PulseCheckSportReportPolicy = {
     composure: ['point-to-point reset', 'communication after errors', 'pressure serving'],
     decisioning: ['setter choice speed', 'defensive read', 'block/attack timing'],
   },
+  loadModel: {
+    summary: 'Jump-dominated sport with shoulder-volume overlay; jump count and approach intensity are the lead indicators, set/block reps anchor positional load.',
+    primitives: [
+      { key: 'jumpCount', weight: 1.0, source: 'Vertical accelerometer Z-spike count above approach jump threshold.' },
+      { key: 'approachJumpIntensity', weight: 0.8, source: 'Peak Z-velocity at takeoff (approach jumps only).' },
+      { key: 'lateralAccelCount', weight: 0.6, source: 'X/Y deflection count above defensive movement threshold.' },
+      { key: 'internalLoadHr', weight: 0.6, source: 'TRIMP-style HR-zone integration over detected volleyball sessions.' },
+      { key: 'shoulderVolumeProxy', weight: 0.5, source: 'Accelerometer overhead-swing signature count (attackers).' },
+    ],
+    thresholds: { low: 0.30, moderate: 0.60, high: 0.85, concerning: 1.05 },
+    acwrCeiling: 1.5,
+    decayHalfLifeDays: 6,
+    recoveryDebtFloor: -0.20,
+    contextModifiers: [
+      { key: 'matchDensity', multiplier: 1.12, rationale: 'Tournament weekends compound jump count past a single-match ceiling.' },
+      { key: 'travelDays', multiplier: 1.07, rationale: 'Conference travel adds disruption on top of jump-volume cost.' },
+      { key: 'heatExposure', multiplier: 1.05, rationale: 'Hot gyms and tournament summer heat lift HR-zone integration.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.7, paceDeviation: 0.4, restDeviation: 0.6, volumeDeviation: 0.7, modalityDrift: 0.7 },
+  },
 };
 
 const tennisReportPolicy: PulseCheckSportReportPolicy = {
@@ -909,6 +929,26 @@ const tennisReportPolicy: PulseCheckSportReportPolicy = {
     composure: ['momentum swings', 'break points', 'response after errors'],
     decisioning: ['point construction', 'serve + 1 choice', 'doubles positioning'],
   },
+  loadModel: {
+    summary: 'Match-duration sport with surface and heat overlays; total court time × intensity anchors load, with between-point recovery and heat exposure as the high-end drivers.',
+    primitives: [
+      { key: 'matchDuration', weight: 1.0, source: 'Total active match time per session.' },
+      { key: 'internalLoadHr', weight: 0.9, source: 'TRIMP-style HR-zone integration; rises sharply on long three-set matches.' },
+      { key: 'surfaceLoad', weight: 0.6, source: 'Surface-coefficient × match duration; clay > hard > grass for systemic cost.' },
+      { key: 'lateralAccelCount', weight: 0.5, source: 'X/Y deflection count during rally play.' },
+      { key: 'swingReps', weight: 0.4, source: 'Accelerometer swing-signature count (forehand + backhand + serve).' },
+    ],
+    thresholds: { low: 0.30, moderate: 0.60, high: 0.85, concerning: 1.05 },
+    acwrCeiling: 1.6,
+    decayHalfLifeDays: 4,
+    recoveryDebtFloor: -0.18,
+    contextModifiers: [
+      { key: 'heatExposure', multiplier: 1.12, rationale: 'Outdoor heat compounds match-duration cost; 3-set heat matches read very different from indoor.' },
+      { key: 'tournamentDay', multiplier: 1.10, rationale: 'Multiple matches in a day push beyond single-match design.' },
+      { key: 'surfaceShift', multiplier: 1.07, rationale: 'Switching surfaces between weeks (hard → clay) elevates load per match.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.5, paceDeviation: 0.5, restDeviation: 0.6, volumeDeviation: 0.6, modalityDrift: 0.7 },
+  },
 };
 
 const swimmingReportPolicy: PulseCheckSportReportPolicy = {
@@ -955,6 +995,26 @@ const swimmingReportPolicy: PulseCheckSportReportPolicy = {
     focus: ['race plan', 'start/turn execution', 'split awareness'],
     composure: ['race anxiety', 'taper nerves', 'response after a poor heat or swim'],
     decisioning: ['pacing choices', 'race-segment adjustment', 'relay exchange discipline'],
+  },
+  loadModel: {
+    summary: 'Yardage and pace-zone sport with lap-density overlay; weekly mileage in HR/pace zones anchors load, with tempo/threshold time as the high-end driver and meet-day tapers reading distinctly.',
+    primitives: [
+      { key: 'weeklyYardage', weight: 1.0, source: 'Detected lap distance accumulated across pool sessions.' },
+      { key: 'tempoThresholdTime', weight: 0.9, source: 'Time spent in tempo + threshold pace zones per session.' },
+      { key: 'internalLoadHr', weight: 0.8, source: 'TRIMP-style HR-zone integration over detected swim sessions.' },
+      { key: 'strokeReps', weight: 0.6, source: 'Detected stroke count per lap × intensity (shoulder-volume proxy).' },
+      { key: 'sessionRpe', weight: 0.4, source: 'Athlete-reported session-RPE (supports the read; never primary).' },
+    ],
+    thresholds: { low: 0.30, moderate: 0.60, high: 0.85, concerning: 1.05 },
+    acwrCeiling: 1.5,
+    decayHalfLifeDays: 6,
+    recoveryDebtFloor: -0.20,
+    contextModifiers: [
+      { key: 'taperWindow', multiplier: 0.85, rationale: 'In a true taper week the load score should read low — this modifier prevents false "fresh" alarm copy.' },
+      { key: 'meetTravelDays', multiplier: 1.07, rationale: 'Travel + meet warm-up routine adds load beyond practice volume alone.' },
+      { key: 'altitudeBlock', multiplier: 1.08, rationale: 'Altitude camp blocks raise HR-zone time per yard relative to home pool.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.7, paceDeviation: 0.7, restDeviation: 0.6, volumeDeviation: 0.8, modalityDrift: 0.6 },
   },
 };
 
@@ -1013,6 +1073,28 @@ const trackFieldReportPolicy: PulseCheckSportReportPolicy = {
     'split awareness': 'feel for splits',
     'taper state': 'how the taper is going',
   },
+  loadModel: {
+    summary: 'Multi-discipline sport: sprinter-leaning blend (sprint reps + neuromuscular fatigue) with secondary distance and throws/jumps overlays; weights re-prioritize per athlete event group.',
+    primitives: [
+      { key: 'sprintReps', weight: 1.0, source: 'GPS speed > 8.0 m/s sustained > 2s (sprinters); lower thresholds for jumpers/multi-eventers.' },
+      { key: 'sprintDistance', weight: 0.8, source: 'GPS distance accumulated above sprint threshold.' },
+      { key: 'jumpCount', weight: 0.6, source: 'Vertical accelerometer Z-spike count (jumpers + multi-eventers).' },
+      { key: 'technicalRepCount', weight: 0.6, source: 'Detected approach attempts × intensity (jumps/throws); approach speed when available.' },
+      { key: 'internalLoadHr', weight: 0.5, source: 'TRIMP-style HR-zone integration; primary for distance group.' },
+      { key: 'tempoThresholdTime', weight: 0.5, source: 'Time in tempo + threshold pace zones per session (distance group).' },
+    ],
+    thresholds: { low: 0.25, moderate: 0.55, high: 0.80, concerning: 1.00 },
+    acwrCeiling: 1.4,
+    decayHalfLifeDays: 4,
+    recoveryDebtFloor: -0.18,
+    contextModifiers: [
+      { key: 'taperState', multiplier: 0.85, rationale: 'Meet taper drops the score on purpose — modifier prevents false "fresh" alarms.' },
+      { key: 'meetSchedule', multiplier: 1.10, rationale: 'Conference + national meet weeks add competition reps beyond practice volume.' },
+      { key: 'heatExposure', multiplier: 1.07, rationale: 'Outdoor distance and multi-event heat raises HR-zone integration.' },
+      { key: 'travelImpact', multiplier: 1.05, rationale: 'National-meet travel disrupts sleep on top of training load.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.8, paceDeviation: 0.7, restDeviation: 0.7, volumeDeviation: 0.7, modalityDrift: 0.7 },
+  },
 };
 
 const wrestlingReportPolicy: PulseCheckSportReportPolicy = {
@@ -1060,6 +1142,26 @@ const wrestlingReportPolicy: PulseCheckSportReportPolicy = {
     composure: ['match-by-match reset', 'weight-class pressure', 'close-loss recovery'],
     decisioning: ['shot selection', 'escape timing', 'period strategy'],
   },
+  loadModel: {
+    summary: 'Mat-time × intensity sport with weight-cut overlay; grip readiness, mat time, and weight delta near weigh-in are the lead indicators, with hydration debt amplifying everything.',
+    primitives: [
+      { key: 'matTime', weight: 1.0, source: 'Detected wrestling-session active time × intensity zones.' },
+      { key: 'internalLoadHr', weight: 0.8, source: 'TRIMP-style HR-zone integration; live-go intervals push this hard.' },
+      { key: 'gripStrainProxy', weight: 0.7, source: 'Forearm accelerometer signature × duration; supplemented with athlete-reported grip readiness.' },
+      { key: 'impactCollisionLoad', weight: 0.5, source: 'Accelerometer impact-magnitude integration during live-go and takedown drilling.' },
+      { key: 'weightDelta', weight: 0.4, source: 'Athlete-logged weight trend approaching weigh-in (cut depth signal).' },
+    ],
+    thresholds: { low: 0.30, moderate: 0.55, high: 0.80, concerning: 1.00 },
+    acwrCeiling: 1.4,
+    decayHalfLifeDays: 6,
+    recoveryDebtFloor: -0.18,
+    contextModifiers: [
+      { key: 'weighInWindow', multiplier: 1.20, rationale: 'Cut window compounds load beyond mat time alone (hydration + glycogen debt).' },
+      { key: 'tournamentBracket', multiplier: 1.15, rationale: 'Multiple matches in a day push grip and live-go cost past single-match design.' },
+      { key: 'travelDays', multiplier: 1.06, rationale: 'Out-of-town tournaments add cut and recovery disruption.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.7, paceDeviation: 0.4, restDeviation: 0.7, volumeDeviation: 0.7, modalityDrift: 0.6 },
+  },
 };
 
 const crossfitReportPolicy: PulseCheckSportReportPolicy = {
@@ -1105,6 +1207,26 @@ const crossfitReportPolicy: PulseCheckSportReportPolicy = {
     focus: ['movement standards', 'transition discipline', 'pacing cues'],
     composure: ['response when workouts hurt', 'failed-rep recovery', 'leaderboard pressure'],
     decisioning: ['event pacing', 'limiter management', 'skill vs strength tradeoff'],
+  },
+  loadModel: {
+    summary: 'Mixed-modal density sport; grip fatigue and gymnastics volume drive the high-end, while monostructural pace and metcon density anchor the daily read.',
+    primitives: [
+      { key: 'mixedModalDensity', weight: 1.0, source: 'Detected metcon block density (work × intensity / window).' },
+      { key: 'gripStrainProxy', weight: 0.8, source: 'Forearm accelerometer signature integrated across pulling/holding work.' },
+      { key: 'gymnasticsVolume', weight: 0.7, source: 'Detected gymnastics-skill rep count (pull-up/HSPU/muscle-up signatures).' },
+      { key: 'monostructuralPace', weight: 0.6, source: 'Pace-zone time on rower/bike/run portions of metcons.' },
+      { key: 'internalLoadHr', weight: 0.6, source: 'TRIMP-style HR-zone integration; metcon HR profile is steep and fast.' },
+    ],
+    thresholds: { low: 0.30, moderate: 0.60, high: 0.85, concerning: 1.05 },
+    acwrCeiling: 1.6,
+    decayHalfLifeDays: 4,
+    recoveryDebtFloor: -0.20,
+    contextModifiers: [
+      { key: 'qualifierBlock', multiplier: 1.15, rationale: 'Open / qualifier weeks compound grip and gymnastics density beyond normal training.' },
+      { key: 'doubleSessions', multiplier: 1.10, rationale: 'AM strength + PM metcon days push density beyond single-session design.' },
+      { key: 'travelDays', multiplier: 1.05, rationale: 'Throwdown / competition travel disrupts recovery on top of competition density.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.7, paceDeviation: 0.5, restDeviation: 0.7, volumeDeviation: 0.7, modalityDrift: 0.8 },
   },
 };
 
@@ -1153,6 +1275,26 @@ const lacrosseReportPolicy: PulseCheckSportReportPolicy = {
     composure: ['turnover carryover', 'goalie confidence', 'contact response'],
     decisioning: ['dodge/pass choices', 'defensive slides', 'clearing decisions'],
   },
+  loadModel: {
+    summary: 'Repeat-sprint plus contact sport; sprint count and contact accumulation drive the read, with two-way midfield demand pushing the high end.',
+    primitives: [
+      { key: 'sprintReps', weight: 1.0, source: 'GPS speed > 6.0 m/s sustained > 2s.' },
+      { key: 'sprintDistance', weight: 0.8, source: 'GPS distance accumulated above sprint threshold.' },
+      { key: 'impactCollisionLoad', weight: 0.7, source: 'Accelerometer impact-magnitude integration; helmet IMU when available.' },
+      { key: 'internalLoadHr', weight: 0.7, source: 'TRIMP-style HR-zone integration over detected lacrosse sessions.' },
+      { key: 'lateralAccelCount', weight: 0.5, source: 'X/Y deflection count during transition and dodging play.' },
+    ],
+    thresholds: { low: 0.30, moderate: 0.60, high: 0.85, concerning: 1.05 },
+    acwrCeiling: 1.5,
+    decayHalfLifeDays: 6,
+    recoveryDebtFloor: -0.20,
+    contextModifiers: [
+      { key: 'twoWayMidfieldRole', multiplier: 1.12, rationale: 'Two-way midfielders carry both offensive and defensive sprint demand; load reads higher than a single-end role.' },
+      { key: 'matchDensity', multiplier: 1.10, rationale: 'Mid-week + weekend matches compound sprint volume.' },
+      { key: 'travelDays', multiplier: 1.05, rationale: 'Conference travel disrupts recovery on top of match volume.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.7, paceDeviation: 0.5, restDeviation: 0.6, volumeDeviation: 0.7, modalityDrift: 0.7 },
+  },
 };
 
 const hockeyReportPolicy: PulseCheckSportReportPolicy = {
@@ -1199,6 +1341,26 @@ const hockeyReportPolicy: PulseCheckSportReportPolicy = {
     focus: ['shift discipline', 'puck tracking', 'goalie visual routine'],
     composure: ['bench reset', 'contact response', 'goalie confidence swings'],
     decisioning: ['puck decisions under pressure', 'gap choice', 'shift-change timing'],
+  },
+  loadModel: {
+    summary: 'Shift-density sport with collision overlay; shift count × shift length anchors the read, while contact accumulation drives the high end and skate-repeat readiness reflects neuromuscular debt.',
+    primitives: [
+      { key: 'shiftCount', weight: 1.0, source: 'Detected shift count × shift length per game/practice.' },
+      { key: 'internalLoadHr', weight: 0.8, source: 'TRIMP-style HR-zone integration; shift HR profile is steep and repeating.' },
+      { key: 'impactCollisionLoad', weight: 0.7, source: 'Accelerometer impact-magnitude integration; helmet IMU when available.' },
+      { key: 'lateralAccelCount', weight: 0.6, source: 'X/Y deflection count during direction changes on skates.' },
+      { key: 'sprintReps', weight: 0.5, source: 'GPS speed > 6.5 m/s sustained > 2s on ice when GPS is available.' },
+    ],
+    thresholds: { low: 0.30, moderate: 0.60, high: 0.85, concerning: 1.05 },
+    acwrCeiling: 1.5,
+    decayHalfLifeDays: 6,
+    recoveryDebtFloor: -0.20,
+    contextModifiers: [
+      { key: 'backToBackGames', multiplier: 1.12, rationale: 'B2B nights compound shift cost beyond a single game.' },
+      { key: 'travelDays', multiplier: 1.08, rationale: 'Long bus + flight road trips disrupt recovery on top of game density.' },
+      { key: 'overtimeWindow', multiplier: 1.06, rationale: 'OT shifts push past game design window.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.6, paceDeviation: 0.4, restDeviation: 0.6, volumeDeviation: 0.7, modalityDrift: 0.7 },
   },
 };
 
@@ -1247,6 +1409,26 @@ const gymnasticsReportPolicy: PulseCheckSportReportPolicy = {
     composure: ['fear blocks', 'meet-day nerves', 'perfectionism spiral'],
     decisioning: ['skill readiness communication', 'routine progression', 'attempt selection'],
   },
+  loadModel: {
+    summary: 'Landing-load + skill-attempt sport; landing impact accumulation and apparatus-specific contact volume drive the read, with growth-window athletes needing tighter ceilings.',
+    primitives: [
+      { key: 'landingLoad', weight: 1.0, source: 'Vertical accelerometer landing-spike integration across detected attempts.' },
+      { key: 'skillAttemptCount', weight: 0.8, source: 'Detected attempts of skill signatures per apparatus.' },
+      { key: 'apparatusContactVolume', weight: 0.7, source: 'Apparatus-specific contact load (bars/beam/floor) integrated across the workout.' },
+      { key: 'jumpCount', weight: 0.5, source: 'Vertical Z-spike count including conditioning jumps.' },
+      { key: 'internalLoadHr', weight: 0.4, source: 'HR-zone integration; secondary input given low aerobic density.' },
+    ],
+    thresholds: { low: 0.25, moderate: 0.50, high: 0.75, concerning: 0.95 },
+    acwrCeiling: 1.3,
+    decayHalfLifeDays: 9,
+    recoveryDebtFloor: -0.22,
+    contextModifiers: [
+      { key: 'meetWeek', multiplier: 1.12, rationale: 'Meet-week run-throughs raise full-out attempt count beyond a normal training window.' },
+      { key: 'growthWindow', multiplier: 1.10, rationale: 'Growth-spurt athletes carry higher landing cost; modifier protects the ceiling.' },
+      { key: 'travelDays', multiplier: 1.05, rationale: 'Out-of-town meets disrupt recovery on top of full-out attempts.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.8, paceDeviation: 0.4, restDeviation: 0.7, volumeDeviation: 0.8, modalityDrift: 0.6 },
+  },
 };
 
 const bodybuildingPhysiqueReportPolicy: PulseCheckSportReportPolicy = {
@@ -1294,6 +1476,26 @@ const bodybuildingPhysiqueReportPolicy: PulseCheckSportReportPolicy = {
     composure: ['scale volatility', 'peak-week anxiety', 'post-show rebound pressure'],
     decisioning: ['controlled adjustments', 'coach-macro adherence', 'food variance choices'],
   },
+  loadModel: {
+    summary: 'Prep-window sport with cardio + step-volume + posing overlay; daily steps and cardio minutes anchor the read, fasted-weight trend and weeks-out proximity drive the high end.',
+    primitives: [
+      { key: 'cardioMinutes', weight: 1.0, source: 'Detected steady-state cardio minutes (LISS/HIIT) across the day.' },
+      { key: 'dailySteps', weight: 0.9, source: 'Pedometer step count integrated across the day.' },
+      { key: 'posingMinutes', weight: 0.6, source: 'Detected posing-practice duration (low aerobic, high muscular).' },
+      { key: 'fastedWeightTrend', weight: 0.5, source: 'Athlete-logged fasted weight trend (cut/fueling indicator).' },
+      { key: 'internalLoadHr', weight: 0.4, source: 'HR-zone integration; secondary input layered on weight-room work.' },
+    ],
+    thresholds: { low: 0.25, moderate: 0.50, high: 0.75, concerning: 1.00 },
+    acwrCeiling: 1.4,
+    decayHalfLifeDays: 7,
+    recoveryDebtFloor: -0.20,
+    contextModifiers: [
+      { key: 'weeksOutInside8', multiplier: 1.12, rationale: 'Inside 8 weeks-out, cardio + steps stack with deeper deficit; load score must lift accordingly.' },
+      { key: 'showWeek', multiplier: 1.20, rationale: 'Show-week dehydration + posing rehearsal pushes effective load far past raw cardio cost.' },
+      { key: 'reverseDietBlock', multiplier: 0.85, rationale: 'Post-show reverse-diet block actively reduces effective load — modifier prevents false "concerning" copy.' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.6, paceDeviation: 0.4, restDeviation: 0.4, volumeDeviation: 0.7, modalityDrift: 0.6 },
+  },
 };
 
 const otherReportPolicy: PulseCheckSportReportPolicy = {
@@ -1340,6 +1542,25 @@ const otherReportPolicy: PulseCheckSportReportPolicy = {
     focus: ['discipline-specific routine and attention demands'],
     composure: ['pressure response and recovery after disruption'],
     decisioning: ['sport-specific tactical or execution choices once context is known'],
+  },
+  loadModel: {
+    summary: 'Universal fallback blend — internal HR-load, session RPE, and recovery debt anchor the read until a sport-specific load model is configured.',
+    primitives: [
+      { key: 'internalLoadHr', weight: 1.0, source: 'TRIMP-style HR-zone integration over detected sessions; primary universal input.' },
+      { key: 'hrZoneTime', weight: 0.7, source: 'Seconds in HR zones Z1–Z5 (vendor-harmonized 0-100 scale).' },
+      { key: 'sessionRpe', weight: 0.6, source: 'Athlete-reported 1-10 effort score; secondary input.' },
+      { key: 'travelDays', weight: 0.3, source: 'GPS-detected location change beyond home venue.' },
+    ],
+    thresholds: { low: 0.30, moderate: 0.60, high: 0.85, concerning: 1.05 },
+    acwrCeiling: 1.5,
+    decayHalfLifeDays: 6,
+    recoveryDebtFloor: -0.20,
+    contextModifiers: [
+      { key: 'travelDays', multiplier: 1.06, rationale: 'Travel disrupts recovery; universal modifier applied until sport-specific overlay is configured.' },
+      { key: 'heatExposure', multiplier: 1.05, rationale: 'Outdoor heat raises HR-zone integration on long sessions.' },
+      { key: 'shortTurnaround', multiplier: 1.08, rationale: 'Reviewer-screen flag: "still baselining — read this lighter for the first four weeks."' },
+    ],
+    prescribedComparisonWeights: { executedRepsFraction: 0.6, paceDeviation: 0.5, restDeviation: 0.5, volumeDeviation: 0.6, modalityDrift: 0.6 },
   },
 };
 
