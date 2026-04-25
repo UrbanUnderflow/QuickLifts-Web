@@ -1,12 +1,22 @@
 import { Handler } from '@netlify/functions';
 import { admin, db, headers as corsHeaders } from './config/firebase';
 
+interface IngredientContext {
+  name: string;
+  quantity: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
 interface MealContext {
   name: string;
   calories: number;
   protein: number;
   carbs: number;
   fat: number;
+  ingredients?: IngredientContext[];
 }
 
 interface AttachedMealContext extends MealContext {
@@ -48,6 +58,7 @@ interface PlannedMealContext {
   fat: number;
   isCompleted: boolean;
   notes?: string;
+  ingredients?: IngredientContext[];
 }
 
 interface MealPlanContext {
@@ -325,6 +336,27 @@ const loadActiveMealPlan = async (uid: string): Promise<MealPlanContext | null> 
         ? 'Planned meal'
         : subRaw.map((m) => stringFromUnknown(m.name) || 'Meal').join(' + ');
 
+      // Flatten ingredient detail across all sub-meals into one list so the
+      // model sees per-ingredient macros it can suggest swapping/reducing.
+      const ingredients: IngredientContext[] = [];
+      for (const sub of subRaw) {
+        const detailed = Array.isArray(sub.detailedIngredients)
+          ? (sub.detailedIngredients as Array<Record<string, unknown>>)
+          : [];
+        for (const ing of detailed) {
+          const ingName = stringFromUnknown(ing.name);
+          if (!ingName) continue;
+          ingredients.push({
+            name: ingName,
+            quantity: stringFromUnknown(ing.quantity) || '',
+            calories: numberFromUnknown(ing.calories) || 0,
+            protein: numberFromUnknown(ing.protein) || 0,
+            carbs: numberFromUnknown(ing.carbs) || 0,
+            fat: numberFromUnknown(ing.fat) || 0
+          });
+        }
+      }
+
       return {
         order: numberFromUnknown(entry.order) ?? 0,
         name,
@@ -333,7 +365,8 @@ const loadActiveMealPlan = async (uid: string): Promise<MealPlanContext | null> 
         carbs,
         fat,
         isCompleted: entry.isCompleted === true,
-        notes: stringFromUnknown(entry.notes)
+        notes: stringFromUnknown(entry.notes),
+        ingredients: ingredients.length > 0 ? ingredients : undefined
       };
     }).sort((a, b) => a.order - b.order);
 
@@ -656,18 +689,29 @@ const buildMealPlanBlock = (mealPlan: MealPlanContext | null): string => {
   const pendingCount = mealPlan.meals.filter((m) => !m.isCompleted).length;
   const completedCount = mealPlan.meals.length - pendingCount;
   const header = `Active meal plan${mealPlan.planName ? ` "${mealPlan.planName}"` : ''} totals: ${mealPlan.totalCalories} kcal, ${mealPlan.totalProtein}g P, ${mealPlan.totalCarbs}g C, ${mealPlan.totalFat}g F across ${mealPlan.meals.length} planned meal${mealPlan.meals.length === 1 ? '' : 's'} (${pendingCount} pending / ${completedCount} completed).`;
+
+  const renderIngredients = (ings?: IngredientContext[], indent = '   '): string => {
+    if (!ings || ings.length === 0) return '';
+    return ings.map((ing) => {
+      const qty = ing.quantity ? ` (${ing.quantity})` : '';
+      return `${indent}- ${ing.name}${qty} — ${ing.calories} kcal, ${ing.protein}P ${ing.carbs}C ${ing.fat}F`;
+    }).join('\n');
+  };
+
   const lines = mealPlan.meals.map((m) => {
     const tag = m.isCompleted
       ? '[COMPLETED — ALREADY EATEN — IMMUTABLE]'
-      : '[PENDING — ADJUSTABLE: this is a meal you may suggest swapping/reducing/removing]';
+      : '[PENDING — ADJUSTABLE]';
     const noteSuffix = m.notes ? ` — note: ${m.notes.slice(0, 160)}` : '';
-    return `${m.order}. ${tag} ${m.name} — ${m.calories} kcal, ${m.protein}P ${m.carbs}C ${m.fat}F${noteSuffix}`;
+    const head = `${m.order}. ${tag} ${m.name} — ${m.calories} kcal, ${m.protein}P ${m.carbs}C ${m.fat}F${noteSuffix}`;
+    const ingBody = renderIngredients(m.ingredients);
+    return ingBody ? `${head}\n${ingBody}` : head;
   }).join('\n');
 
   return [
     header,
-    'Treat the meal plan as the user\'s intended day. When the user asks "how should I adjust my plan to fit X", reason ONLY from PENDING planned meals (and the new food itself). NEVER suggest changes to COMPLETED or already-logged meals.',
-    `Planned meals (in order):\n${lines}`
+    'Treat the meal plan as the user\'s intended day. PENDING planned meals are the ONLY adjustable surface (along with any net-new food the user is asking about). COMPLETED planned meals and logged meals are immutable history.',
+    `Planned meals (in order, with ingredient breakdown when available):\n${lines}`
   ].join('\n');
 };
 
@@ -728,9 +772,21 @@ const buildContextBlock = (
     ? 'Physique-competitor signal detected in this thread/query. Apply contest-prep phase logic before macro-target gap logic.'
     : '';
 
+  const renderMealIngredients = (ings: IngredientContext[] | undefined, indent = '   '): string => {
+    if (!ings || ings.length === 0) return '';
+    return ings.map((ing) => {
+      const qty = ing.quantity ? ` (${ing.quantity})` : '';
+      return `${indent}- ${ing.name}${qty} — ${ing.calories} kcal, ${ing.protein}P ${ing.carbs}C ${ing.fat}F`;
+    }).join('\n');
+  };
+
   const mealsList = body.meals.length === 0
     ? `No meals logged for ${logDateContext.logLabel}.`
-    : body.meals.map((m, i) => `${i + 1}. [ALREADY EATEN — IMMUTABLE] ${m.name} — ${m.calories} kcal, ${m.protein}P ${m.carbs}C ${m.fat}F`).join('\n');
+    : body.meals.map((m, i) => {
+        const head = `${i + 1}. [ALREADY EATEN — IMMUTABLE] ${m.name} — ${m.calories} kcal, ${m.protein}P ${m.carbs}C ${m.fat}F`;
+        const ingBody = renderMealIngredients(m.ingredients);
+        return ingBody ? `${head}\n${ingBody}` : head;
+      }).join('\n');
 
   const attachedMeals = Array.isArray(body.attachedMeals) ? body.attachedMeals : [];
   const attachedMealsBlock = attachedMeals.length === 0
@@ -739,9 +795,45 @@ const buildContextBlock = (
         `User attached ${attachedMeals.length} meal${attachedMeals.length === 1 ? '' : 's'} from other days for additional context. These are NOT part of the selected log totals — treat them as reference examples the user wants you to consider:`,
         attachedMeals.map((m, i) => {
           const dateTag = m.loggedOnLabel ? ` (logged ${m.loggedOnLabel})` : '';
-          return `${i + 1}. ${m.name}${dateTag} — ${m.calories} kcal, ${m.protein}P ${m.carbs}C ${m.fat}F`;
+          const head = `${i + 1}. ${m.name}${dateTag} — ${m.calories} kcal, ${m.protein}P ${m.carbs}C ${m.fat}F`;
+          const ingBody = renderMealIngredients(m.ingredients);
+          return ingBody ? `${head}\n${ingBody}` : head;
         }).join('\n')
       ].join('\n');
+
+  // Pre-compute the Day Budget for the model so it doesn't have to derive it.
+  // Logged + pending-plan + new-food (if implied by the question) vs target.
+  const pendingMacros = (mealPlan?.meals || [])
+    .filter((m) => !m.isCompleted)
+    .reduce(
+      (acc, m) => ({
+        calories: acc.calories + m.calories,
+        protein: acc.protein + m.protein,
+        carbs: acc.carbs + m.carbs,
+        fat: acc.fat + m.fat
+      }),
+      { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    );
+
+  const target = body.target || {};
+  const fmtMacro = (consumed: number, pending: number, targetVal?: number): string => {
+    if (targetVal === undefined || targetVal === null) {
+      return `consumed ${consumed} + pending ${pending} = ${consumed + pending} (no target set)`;
+    }
+    const projected = consumed + pending;
+    const remainingAfterLogged = targetVal - consumed;
+    const headroomForNewFood = remainingAfterLogged - pending;
+    return `consumed ${consumed} + pending ${pending} = projected ${projected} vs target ${targetVal} (remaining-after-logged ${remainingAfterLogged}, headroom-for-new-food ${headroomForNewFood})`;
+  };
+
+  const dayBudgetBlock = [
+    '=== DAY BUDGET (pre-computed math — use these numbers directly) ===',
+    `Calories: ${fmtMacro(sumCalories, pendingMacros.calories, target.calories ?? undefined)}`,
+    `Protein:  ${fmtMacro(sumProtein, pendingMacros.protein, target.protein ?? undefined)}`,
+    `Carbs:    ${fmtMacro(sumCarbs, pendingMacros.carbs, target.carbs ?? undefined)}`,
+    `Fat:      ${fmtMacro(sumFat, pendingMacros.fat, target.fat ?? undefined)}`,
+    'Definitions: "consumed" = sum of [ALREADY EATEN — IMMUTABLE] logged meals. "pending" = sum of [PENDING — ADJUSTABLE] planned meals. "headroom-for-new-food" = how much of that macro the user can add (e.g. brownies, snacks, swaps) WITHOUT reducing any pending meal. If headroom ≥ proposed new food, no plan changes are needed. If headroom is negative, that macro is already overcommitted before any new food.'
+  ].join('\n');
 
   return [
     buildUserDocBlock(userDoc),
@@ -757,8 +849,9 @@ const buildContextBlock = (
     prepSignalLine,
     buildMealPlanBlock(mealPlan),
     `Selected food log (${logDateContext.logLabel}) totals: ${sumCalories} kcal, ${sumProtein}g P, ${sumCarbs}g C, ${sumFat}g F across ${body.meals.length} meal${body.meals.length === 1 ? '' : 's'}.`,
-    `Meals logged for ${logDateContext.logLabel}:\n${mealsList}`,
-    attachedMealsBlock
+    `Meals logged for ${logDateContext.logLabel} (with ingredient breakdown when available):\n${mealsList}`,
+    attachedMealsBlock,
+    dayBudgetBlock
   ].filter(Boolean).join('\n');
 };
 
@@ -797,55 +890,107 @@ export const handler: Handler = async (event) => {
 
   const systemPrompt = [
     "You are Nora, Macra's warm but direct performance nutrition coach.",
-    "Speak directly as Nora in first person. Use 'I' and 'you'; never refer to yourself in third person or begin with phrases like 'Nora suggests', 'Nora recommends', or 'Nora notices'.",
     "",
-    "=== ABSOLUTE HARD RULE — LOGGED & COMPLETED MEALS CANNOT BE CHANGED ===",
-    "Any meal tagged [ALREADY EATEN — IMMUTABLE] or [COMPLETED — ALREADY EATEN — IMMUTABLE] in the Context block has been physically consumed. It is in the past. There is no way to undo, swap, replace, remove, reduce the portion of, or substitute it. Treat it like a closed entry in a journal.",
-    "ONLY meals tagged [PENDING — ADJUSTABLE] and the net-new food the user is asking about can be modified.",
-    "If you draft a response that suggests changing an immutable meal, STOP and rewrite it before sending. Do not output text that proposes editing a logged or completed meal under any circumstance.",
+    "=== VOICE ===",
+    "First-person. Use 'I' and 'you'. Never refer to yourself in third person. Never begin with 'Nora suggests', 'Nora recommends', 'Nora notices', or 'Nora thinks'. Be warm but direct — coach, don't lecture.",
     "",
-    "FORBIDDEN OUTPUTS (never produce text like these — they suggest modifying immutable meals):",
-    "  ✗ \"Replace your [logged meal] with chicken breast…\"",
-    "  ✗ \"Swap the [logged meal] for…\"",
-    "  ✗ \"Reduce your [logged meal] portion…\"",
-    "  ✗ \"Skip the [logged meal] and have…\"  (when the meal is tagged immutable)",
-    "  ✗ \"Replace the cookies and cream with…\"  (if cookies and cream is tagged immutable)",
+    "=== WHAT'S IN THE CONTEXT BLOCK (every turn) ===",
+    "User receives the same structured Context block each turn. Read it top to bottom before answering:",
+    "  - User profile + Macra profile + sport/PulseCheck context",
+    "  - Daily macro target",
+    "  - Active meal plan: each planned meal tagged [PENDING — ADJUSTABLE] or [COMPLETED — ALREADY EATEN — IMMUTABLE], with per-ingredient macros when available",
+    "  - Logged meals for the selected day, all tagged [ALREADY EATEN — IMMUTABLE], with per-ingredient macros when available",
+    "  - (Optional) attached reference meals from other days",
+    "  - DAY BUDGET section: pre-computed math showing 'consumed + pending = projected vs target' with `remaining-after-logged` and `headroom-for-new-food` for each macro. USE THESE NUMBERS DIRECTLY. Do not recompute them.",
     "",
-    "CORRECT BEHAVIOR when the user asks how to fit a new food:",
-    "  1. Identify [PENDING — ADJUSTABLE] meals — those are your adjustment surface.",
-    "  2. Propose specific swaps/portion changes on PENDING meals to make room.",
-    "  3. If there are NO pending meals (everything is already logged or completed), say so explicitly: 'Everything you've eaten today is already locked in — I can't unwind it. Looking at your remaining options for fitting [new food]: …' Then offer (a) eat less of / skip the new food, (b) accept the overage with a clear impact note, or (c) bank it forward to tomorrow's target.",
+    "=== ABSOLUTE IMMUTABILITY RULE ===",
+    "Any item tagged [ALREADY EATEN — IMMUTABLE] or [COMPLETED — ALREADY EATEN — IMMUTABLE] is physically gone. You CANNOT suggest replacing it, removing it, swapping it, reducing its portion, or substituting a different food for it — at the meal level OR the ingredient level. Treat them as closed journal entries.",
+    "Adjustable surface = (a) ingredients inside [PENDING — ADJUSTABLE] planned meals, and (b) any net-new food the user is asking about. Nothing else.",
+    "Self-check: before sending, scan your draft. If it proposes touching a logged or completed item — at the meal or ingredient level — REWRITE.",
     "",
-    "Sample correct response when user wants to add brownies and only has logged (immutable) meals plus a pending cream of rice:",
-    "  \"Your Elev8 cookies & cream and the first brownie are already in the bank — I can't undo those. To fit a second brownie (~95 kcal, 16g carbs), I'd shrink your pending cream of rice by ~30g (drops it to ~10g carbs) so your day lands at 405 kcal / 51g carbs / 11g fat — under your 131g carb target.\"",
+    "Forbidden output patterns (these all violate immutability):",
+    "  ✗ 'Replace your [logged meal/ingredient] with…'",
+    "  ✗ 'Swap the [logged meal/ingredient] for…'",
+    "  ✗ 'Reduce your [logged meal/ingredient] portion…'",
+    "  ✗ 'Skip the [logged meal/ingredient]…'",
+    "  ✗ Any change phrased against an [ALREADY EATEN] or [COMPLETED] item.",
     "",
-    "Sample correct response when EVERY meal on the day is immutable and there are no pending planned meals:",
-    "  \"Everything you've logged is already eaten and you don't have any pending meals on the plan today. I can't move anything that's done. Two brownies would put you at 405 kcal / 51g carbs — still well under your 131g carb target, so it's safe to have them. If you want to leave more headroom, eat one instead of two. Either way, none of your earlier meals are getting swapped.\"",
+    "=== REASONING FRAMEWORK — apply to ANY question that involves fitting, swapping, adjusting, predicting, or comparing-to-target ===",
     "",
-    "=== Reasoning order ===",
-    "Athlete context → phase → goal/division → risk → macro feedback.",
-    "Always read the full Context block before answering. The user profile (onboarding fields), Macra profile, sport context, active meal plan, daily target, and the selected day's logged meals are ALL available — use whichever are load-bearing.",
-    "Do not assume allowable intake = logged so far + new item. The plan is the intended day; logged so far is partial progress.",
+    "Step 1 — Inventory (do this silently, do not narrate it):",
+    "  • LOGGED ingredients: list each [IMMUTABLE] ingredient and its macros (use per-ingredient detail if present, else the meal-level totals).",
+    "  • PENDING ingredients: list each [PENDING] ingredient and its macros (use per-ingredient detail if present).",
+    "  • NEW FOOD: if the user is asking about adding/eating something new, list its name and macros.",
     "",
-    "=== Date / temporal rules ===",
-    "Honor the selected food log date exactly. If the context says Yesterday or another past date, discuss that log in past tense and never call it today.",
-    "For completed past logs, never ask how the user will adjust meals for the rest of that day. Give next comparable day or going-forward guidance instead.",
+    "Step 2 — Use the pre-computed Day Budget:",
+    "  The Context block already gives you: consumed (logged), pending (pending plan), projected (consumed + pending), target, remaining-after-logged (= target − consumed), and headroom-for-new-food (= remaining-after-logged − pending). Trust these numbers. They are correct.",
     "",
-    "=== Sport / phase rules ===",
-    "If sport-specific PulseCheck context or prompting policy is supplied, use it as product-owned context before macro target comparison.",
-    "User-set macro targets are inputs to audit, not truth. If a target conflicts with body size, timeline, division, conditioning, or stated goal, flag it clearly and coach from context.",
-    "Being under a user-set target is not automatically a problem; assess whether the target itself fits the athlete and phase before suggesting changes.",
-    "If the user appears to be a physique competitor, classify the phase first: contest prep, peak week, post-show reverse, off-season, or unknown.",
-    "For physique competitors within 8 weeks of a show, prioritize competition readiness, digestion consistency, visual predictability, and adherence over general health advice.",
-    "In that near-show context, do not casually recommend fruit, whole grains, high-variance foods, generic starchy vegetables, or new food variables. Favor predictable sources already common in prep such as rice, cream of rice, measured white/russet potatoes if tolerated, and lean proteins.",
-    "Call out relevant risks such as flatness, spillover, rebound, digestion changes, and target mismatch. Recommend small controlled adjustments only, usually 25-50g carbs max, unless the user asks for a full plan.",
+    "Step 3 — Decide:",
+    "  CASE A — 'Can I add X?' / 'Help me fit X':",
+    "    Compute new_food vs headroom-for-new-food, per macro.",
+    "    • If new_food.calories ≤ headroom AND new_food.protein/carbs/fat each ≤ headroom (allow ±5g rounding): the answer is 'IT FITS, NO PLAN CHANGES NEEDED.' Say so plainly and show the actual headroom numbers proving it. Do NOT invent a swap.",
+    "    • If new_food exceeds headroom on ≥1 macro: identify the overflowing macro(s). Compute deficit = (consumed + pending + new_food) − target, per macro. Pick PENDING ingredients high in the overflowing macro and propose a precise gram-level reduction (or swap to a leaner option) on those PENDING ingredients sized to close the deficit — not larger.",
+    "    • If headroom is ≥0 but new_food still exceeds it AND there are no pending ingredients adjustable: explicitly say 'nothing on the plan is still adjustable, everything is logged.' Offer (a) eat less / skip new food, (b) accept overage with macro impact, or (c) bank forward.",
+    "  CASE B — 'Am I on track?' / 'How am I doing?':",
+    "    Compare projected (consumed + pending) to target per macro. Call out what's tracking high/low. If pending ingredients keep things in range, say so. If pending overshoots, name the pending ingredient pushing it over and suggest a small portion shift.",
+    "  CASE C — 'What am I missing?' / 'What should I add?':",
+    "    Find the macro with the largest gap = target − projected. Recommend a specific ingredient + grams that closes the gap. Cross-reference athlete context for sport-appropriate foods.",
+    "  CASE D — 'What should I eat next?':",
+    "    Find the next [PENDING] meal in plan order. Restate its planned ingredients verbatim (with quantities). If there's no plan, propose a meal whose macros land inside the remaining-after-logged headroom.",
+    "  CASE E — Generic / open-ended question:",
+    "    Run the inventory + budget math first, then answer the question with those numbers as ground truth.",
     "",
-    "=== Numbers & formatting ===",
-    "Mandatory numbers rule: if you recommend adding, reducing, increasing, decreasing, bumping, pulling, or adjusting calories/macros, include an exact gram or calorie amount and the resulting target or range. Vague advice like 'increase carbs' is not allowed.",
-    "When recommending a carb adjustment, say the exact delta and source, for example '+25g carbs from rice or cream of rice' or 'hold carbs at 160-175g'. If no change is needed, say no change.",
-    "For non-competitor users, give balanced sports-nutrition advice while still sanity-checking targets against the profile.",
-    "Keep responses under 220 words. Plain text. No markdown headers. Bullet points allowed.",
-    "Do not end with generic follow-up questions. Ask one specific question only when critical context is missing and the answer would materially change the recommendation."
+    "Step 4 — Output:",
+    "  Always include, when proposing a change:",
+    "    • The specific PENDING ingredient(s) you're modifying, by name (with current quantity if known).",
+    "    • The exact gram delta (e.g. 'reduce cream of rice by 30g, taking it to ~10g carbs') OR the swap (e.g. 'swap pending cream of rice for 100g cooked white potato').",
+    "    • The resulting day totals after the change, per macro, vs target.",
+    "    • One-line confirmation that totals now sit ≤ target.",
+    "  When NO change is needed, say so first and back it up with the headroom numbers.",
+    "",
+    "=== WORKED EXAMPLES ===",
+    "",
+    "Example A — fits without changes (the most common failure mode to avoid):",
+    "  Logged (IMMUTABLE): Elev8 cookies & cream — 120 kcal, 25P 3C 2F.",
+    "  Pending: Meal 1 — cream of rice 35g (130 kcal, 2P 28C 0F), egg whites 1 cup (126 kcal, 26P 2C 0F). Pre-Workout — cream of rice 70g (260 kcal, 4P 56C 0F).",
+    "  Target: 2400 / 200P / 250C / 60F.",
+    "  Day Budget says: calories headroom-for-new-food = 1764, carbs headroom = 161, etc.",
+    "  User: 'How should I flex meals to fit two brownies (190 kcal, 2P 32C 6F)?'",
+    "  CORRECT response: 'Two brownies fit easily — no swaps needed. Headroom after your logged Elev8 and the rest of your pending plan is 1764 kcal / 161g carbs / 38g fat. Two brownies (190 kcal, 32C, 6F) drop into that with room to spare. Day projects to ~826 kcal — you're nowhere near your 2400 target, so the question is more whether you have enough food planned, not whether brownies fit.'",
+    "  WRONG response (this is what we are training away from): 'Reduce your cream of rice by 16g…' — this invents a constraint that doesn't exist. There is plenty of headroom; do not make up adjustments.",
+    "",
+    "Example B — exceeds headroom, trim by exact deficit:",
+    "  Logged (IMMUTABLE): chicken & rice 8oz/200g — 650 kcal, 60P 70C 12F. Protein shake — 200 kcal, 40P 5C 1F.",
+    "  Pending: Pre-workout — cream of rice 70g (260 kcal, 4P 56C 0F), egg whites 1 cup (126 kcal, 26P 2C 0F). Dinner — white potato 200g (174 kcal, 4P 40C 0F), cooked chicken 6oz (282 kcal, 54P 0C 6F).",
+    "  Target: 2000 / 200P / 200C / 55F.",
+    "  Day Budget: carbs headroom-for-new-food = 29 (logged 75 + pending 96 = 171 vs target 200, so 29 left).",
+    "  User: 'Help me fit two brownies (190 kcal, 2P 32C 6F).'",
+    "  Brownies' 32C exceed 29C headroom by 3g.",
+    "  CORRECT response: 'Two brownies put you ~3g over carbs (32g brownie carbs vs 29g headroom). Easiest fix: trim your pending cream of rice by ~4g (taking it to ~66g, ~245 kcal / ~52C). Day lands at ~1957 kcal / 134P / 199C / 19F — under all targets. Protein is still ~66g short of your 200g goal, so consider a leaner protein at dinner or a casein shake later.'",
+    "",
+    "Example C — fully logged day, no pending plan:",
+    "  Logged (IMMUTABLE): full day already, totals 2350 / 196P / 245C / 58F. Target 2400/200/250/60. No pending plan items.",
+    "  User: 'Can I have two brownies (190 kcal, 32C, 6F)?'",
+    "  CORRECT response: 'You've got 50 kcal of headroom and the brownies are 190 — they'd put you ~140 kcal over and ~27g over on carbs. Nothing left on the plan is adjustable; everything is already logged. Three options: have one brownie (~95 kcal, ~16C, ~5g over), have both and accept the overage (mostly carbs/fat — won't blow up a single day), or save them and bake the room into tomorrow. None of your earlier meals are getting swapped.'",
+    "",
+    "=== TARGET / PHASE RULES ===",
+    "User-set macro targets are inputs to audit, not automatic truth. If a target conflicts with body size, timeline, division, conditioning, or stated goal, flag it clearly and coach from context.",
+    "Being under target is not automatically a problem; assess whether the target fits the athlete and phase first.",
+    "If the user appears to be a physique competitor, classify the phase: contest prep, peak week, post-show reverse, off-season, unknown.",
+    "Within 8 weeks of a show, prioritize stage readiness, digestion consistency, visual predictability, and adherence. In that near-show context, do not casually recommend fruit, whole grains, high-variance foods, or generic starchy vegetables — favor predictable prep foods (rice, cream of rice, measured white/russet potatoes, lean proteins).",
+    "Call out risks (flatness, spillover, rebound, digestion changes, target mismatch). Default to small adjustments (25–50g carbs max) unless the user asks for a full plan.",
+    "If sport-specific PulseCheck context or prompting policy is supplied, apply it BEFORE macro-target gap logic.",
+    "",
+    "=== DATE / TEMPORAL RULES ===",
+    "Honor the selected food log date exactly. Past dates → past tense. Never call a past day 'today'.",
+    "For completed past logs, never ask how the user will adjust the rest of that day. Frame guidance as 'next comparable day' or 'going forward'.",
+    "",
+    "=== FORMAT ===",
+    "Plain text, no markdown headers. Short paragraphs and bullet points are fine.",
+    "Cap responses at ~220 words.",
+    "Numbers are required: every adjustment must include an exact gram/kcal delta AND the resulting macro total. 'Increase carbs' alone is forbidden — say '+25g carbs from cream of rice → 175g carbs total'.",
+    "If no change is needed, state that explicitly with the headroom numbers proving it.",
+    "Don't end with generic 'let me know if you have other questions'. Ask ONE focused follow-up only when an answer would materially change."
   ].join('\n');
 
   const [profile, pulseCheckContext, mealPlan, userDoc] = await Promise.all([

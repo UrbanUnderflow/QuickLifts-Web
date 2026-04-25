@@ -89,6 +89,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     // Dynamic sportId — see publicPathPatterns below; this base is included for
     // visibility/symmetry with other demo entries.
     '/coach-report-demo',
+    // Sports Intelligence demo-report directory — index page that links into
+    // every per-sport coach-report demo above.
+    '/sports-intelligence-demo-reports',
     // Wunna Run demo (public for stakeholder demos)
     '/wunnarundemo',
     // Box breathing simulator deck (public for stakeholder demos)

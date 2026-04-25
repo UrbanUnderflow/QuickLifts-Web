@@ -33,6 +33,7 @@ import {
   type PulseCheckSportMetricDefinition,
   type PulseCheckSportConfigurationEntry,
   type PulseCheckSportReportPolicy,
+  type PulseCheckSportLoadModel,
   type PulseCheckSportsIntelligenceDimension,
 } from '../../api/firebase/pulsecheckSportConfig';
 
@@ -741,52 +742,144 @@ const ReportLensList: React.FC<{ title: string; lenses: PulseCheckSportReportPol
   </div>
 );
 
-const LOAD_MODEL_FIELDS: Array<{ key: string; description: string }> = [
-  { key: 'primitives[]', description: 'Sport-relevant session inputs (sprint reps, HR-zone time, sRPE, jump count, swing reps, etc.) with per-sport blend weights.' },
-  { key: 'thresholds', description: 'Sport-tolerable load bands (low / moderate / high / concerning) used to translate the load score into coach language.' },
-  { key: 'acwrCeiling', description: 'Maximum acute-to-chronic workload ratio before the sport flags overload (e.g. ~1.4 sprinter, ~1.7 golfer).' },
-  { key: 'decayHalfLifeDays', description: 'How quickly chronic load decays for this sport (3–5d sprinter, 7–10d football lineman).' },
-  { key: 'recoveryDebtFloor', description: 'HRV / RHR / sleep deficit threshold that drags the load score even when raw output looks fine.' },
-  { key: 'contextModifiers[]', description: 'Heat, travel, schedule density, and other multipliers that bend the load score for this sport.' },
-  { key: 'prescribedComparisonWeights', description: 'How much weight to give plan-vs-actual deviation (intensity, volume, mode) per sport.' },
-];
+const formatNumber = (value: number, fractionDigits = 2) => {
+  if (!Number.isFinite(value)) return '—';
+  return Number.isInteger(value) && fractionDigits === 0
+    ? String(value)
+    : value.toFixed(fractionDigits);
+};
 
-const LoadModelPanel: React.FC<{ isOpen: boolean; onToggle: () => void }> = ({ isOpen, onToggle }) => (
+const LoadModelPanel: React.FC<{
+  loadModel: PulseCheckSportLoadModel | undefined;
+  isOpen: boolean;
+  onToggle: () => void;
+}> = ({ loadModel, isOpen, onToggle }) => (
   <div className="mt-5 rounded-2xl border border-zinc-800 bg-[#111417] p-4">
     <ReviewPanelHeader
       title="Load Model"
-      description="Per-sport load formula — primitives, ACWR ceiling, decay, and context modifiers that turn device-derived sessions into a sport-relevant load score."
-      codePath="PulseCheckSportLoadModelSpecTab.tsx · planned reportPolicy.loadModel"
-      badge={{ label: 'Specced — not yet wired', tone: 'planned' }}
+      description={loadModel?.summary
+        || 'Per-sport load formula — primitives, ACWR ceiling, decay, and context modifiers that turn device-derived sessions into a sport-relevant load score.'}
+      codePath="src/api/firebase/pulsecheckSportConfig.ts · reportPolicy.loadModel"
+      badge={loadModel
+        ? { label: 'Review only', tone: 'lock' }
+        : { label: 'Not yet configured', tone: 'planned' }}
       isOpen={isOpen}
       onToggle={onToggle}
     />
 
     {isOpen && (
-      <div className="mt-5 space-y-3">
-        <div className="rounded-xl border border-amber-900/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-100/80">
-          The load model is locked in the spec but not yet stored on <code className="rounded bg-black/40 px-1 text-amber-100">PulseCheckSportReportPolicy</code>. Until the field lands, this card shows the planned shape so reviewers know what is coming.
-        </div>
-        <div className="overflow-hidden rounded-xl border border-zinc-800">
-          <table className="w-full text-xs">
-            <thead className="bg-black/40 text-zinc-500">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium uppercase tracking-wide">Field</th>
-                <th className="px-3 py-2 text-left font-medium uppercase tracking-wide">What it controls</th>
-              </tr>
-            </thead>
-            <tbody>
-              {LOAD_MODEL_FIELDS.map((field) => (
-                <tr key={field.key} className="border-t border-zinc-800">
-                  <td className="px-3 py-2 align-top">
-                    <code className="text-zinc-200">{field.key}</code>
-                  </td>
-                  <td className="px-3 py-2 align-top text-zinc-300">{field.description}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <div className="mt-5 space-y-5">
+        {!loadModel ? (
+          <div className="rounded-xl border border-amber-900/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-100/80">
+            No load model configured for this sport yet. Add one to <code className="rounded bg-black/40 px-1 text-amber-100">reportPolicy.loadModel</code> in <code className="rounded bg-black/40 px-1 text-amber-100">pulsecheckSportConfig.ts</code>.
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-zinc-800 bg-black/25 p-3">
+                <div className="text-[10px] uppercase tracking-wide text-zinc-500">ACWR ceiling</div>
+                <div className="mt-1 text-xl font-semibold text-zinc-100">{formatNumber(loadModel.acwrCeiling)}</div>
+                <div className="mt-1 text-[11px] text-zinc-500">Max acute:chronic before "concerning"</div>
+              </div>
+              <div className="rounded-xl border border-zinc-800 bg-black/25 p-3">
+                <div className="text-[10px] uppercase tracking-wide text-zinc-500">Decay half-life</div>
+                <div className="mt-1 text-xl font-semibold text-zinc-100">{formatNumber(loadModel.decayHalfLifeDays, 0)} <span className="text-sm font-normal text-zinc-400">days</span></div>
+                <div className="mt-1 text-[11px] text-zinc-500">How fast chronic load relaxes</div>
+              </div>
+              <div className="rounded-xl border border-zinc-800 bg-black/25 p-3">
+                <div className="text-[10px] uppercase tracking-wide text-zinc-500">Recovery-debt floor</div>
+                <div className="mt-1 text-xl font-semibold text-zinc-100">{formatNumber(loadModel.recoveryDebtFloor)}</div>
+                <div className="mt-1 text-[11px] text-zinc-500">Most negative score before "deload over"</div>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-zinc-500">Primitive blend</div>
+              <div className="mt-2 overflow-hidden rounded-xl border border-zinc-800">
+                <table className="w-full text-xs">
+                  <thead className="bg-black/40 text-zinc-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium uppercase tracking-wide">Primitive</th>
+                      <th className="px-3 py-2 text-left font-medium uppercase tracking-wide">Weight</th>
+                      <th className="px-3 py-2 text-left font-medium uppercase tracking-wide">Source</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loadModel.primitives.map((primitive) => (
+                      <tr key={primitive.key} className="border-t border-zinc-800 align-top">
+                        <td className="px-3 py-2">
+                          <code className="text-zinc-200">{primitive.key}</code>
+                          {primitive.filter && (
+                            <div className="mt-1 text-[10px] text-zinc-500">filter: {primitive.filter}</div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-zinc-200">{formatNumber(primitive.weight)}</td>
+                        <td className="px-3 py-2 text-zinc-300">{primitive.source}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-zinc-500">Load bands</div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                {([
+                  { key: 'low', label: 'Low', tone: 'border-emerald-900/50 bg-emerald-950/30 text-emerald-200' },
+                  { key: 'moderate', label: 'Moderate', tone: 'border-zinc-800 bg-black/30 text-zinc-200' },
+                  { key: 'high', label: 'High', tone: 'border-amber-900/50 bg-amber-950/30 text-amber-200' },
+                  { key: 'concerning', label: 'Concerning', tone: 'border-red-900/60 bg-red-950/30 text-red-200' },
+                ] as const).map((band) => (
+                  <div key={band.key} className={`rounded-xl border px-3 py-2 ${band.tone}`}>
+                    <div className="text-[10px] uppercase tracking-wide opacity-80">{band.label}</div>
+                    <div className="mt-1 text-lg font-semibold">{formatNumber(loadModel.thresholds[band.key])}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-zinc-500">Context modifiers</div>
+              <div className="mt-2 space-y-2">
+                {loadModel.contextModifiers.map((modifier) => {
+                  const isReducing = modifier.multiplier < 1.0;
+                  return (
+                    <div key={modifier.key} className="rounded-xl border border-zinc-800 bg-black/25 px-3 py-2">
+                      <div className="flex flex-wrap items-baseline gap-2">
+                        <code className="text-sm text-zinc-100">{modifier.key}</code>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${isReducing
+                          ? 'border-emerald-800/60 bg-emerald-950/30 text-emerald-200'
+                          : 'border-amber-800/60 bg-amber-950/30 text-amber-200'}`}>
+                          ×{formatNumber(modifier.multiplier)}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-zinc-400">{modifier.rationale}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-zinc-500">Prescribed-comparison weights</div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-5">
+                {([
+                  { key: 'executedRepsFraction', label: 'Reps fraction' },
+                  { key: 'paceDeviation', label: 'Pace deviation' },
+                  { key: 'restDeviation', label: 'Rest deviation' },
+                  { key: 'volumeDeviation', label: 'Volume deviation' },
+                  { key: 'modalityDrift', label: 'Modality drift' },
+                ] as const).map((field) => (
+                  <div key={field.key} className="rounded-xl border border-zinc-800 bg-black/25 px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wide text-zinc-500">{field.label}</div>
+                    <div className="mt-1 text-lg font-semibold text-zinc-100">{formatNumber(loadModel.prescribedComparisonWeights[field.key])}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     )}
   </div>
@@ -1274,6 +1367,15 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                     Sport list, athlete fields, metrics, and prompting are editable here. Report policy, load formulas,
                     and schemas are review-only and edited through code so a UI mistake can never reach a coach report.
                   </p>
+                  <a
+                    href="/sports-intelligence-demo-reports"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[#A78BFA] transition hover:text-[#C4B5FD]"
+                  >
+                    View public demo-report directory
+                    <ArrowUp className="h-3 w-3 rotate-45" />
+                  </a>
                 </div>
               </div>
             </div>
@@ -1359,6 +1461,7 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                       const sportLabel = sport.name.trim() || `Sport ${index + 1}`;
                       const positionCount = normalizePositionsInput(sport.positionsInput).length;
                       const hasReportPolicy = Boolean(sport.reportPolicy);
+                      const hasLoadModel = Boolean(sport.reportPolicy?.loadModel);
 
                       return (
                         <div key={sport.id} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
@@ -1392,6 +1495,19 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                                   >
                                     <Lock className="h-3 w-3" />
                                     {hasReportPolicy ? 'Policy' : 'No policy'}
+                                  </span>
+                                  <span
+                                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] ${
+                                      hasLoadModel
+                                        ? 'border-emerald-800/60 bg-emerald-950/30 text-emerald-200'
+                                        : 'border-zinc-800 bg-[#111417] text-zinc-500'
+                                    }`}
+                                    title={hasLoadModel
+                                      ? 'Load model wired — review in expanded view'
+                                      : 'No load model yet for this sport'}
+                                  >
+                                    <Lock className="h-3 w-3" />
+                                    {hasLoadModel ? 'Load' : 'No load'}
                                   </span>
                                 </div>
                               </div>
@@ -1781,6 +1897,7 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                             />
 
                             <LoadModelPanel
+                              loadModel={sport.reportPolicy?.loadModel}
                               isOpen={expandedReviewPanels.has(`${sport.id}:loadModel`)}
                               onToggle={() => handleToggleReviewPanel(sport.id, 'loadModel')}
                             />
