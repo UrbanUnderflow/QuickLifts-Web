@@ -742,6 +742,7 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
 	          restrictedAdvice: normalizeListInput(sport.restrictedAdviceInput),
 	          recommendedLanguage: normalizeListInput(sport.recommendedLanguageInput),
 	        },
+	        reportPolicy: sport.reportPolicy,
 	      };
 	    });
 	  };

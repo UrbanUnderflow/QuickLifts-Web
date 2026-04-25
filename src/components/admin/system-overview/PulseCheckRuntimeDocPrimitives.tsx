@@ -218,6 +218,8 @@ const RELATED_DOC_SECTION_ALIASES: Record<string, string> = {
   [normalizeRelatedDocLabel('Macra')]: 'macra-system-overview',
   [normalizeRelatedDocLabel('Member Onboarding Guide')]: 'pulsecheck-member-onboarding-guide',
   [normalizeRelatedDocLabel('Mock Report Baselines')]: 'pulsecheck-sports-intelligence-mock-report-baselines',
+  [normalizeRelatedDocLabel('Report Outlines + Coach Mock Reports')]: 'pulsecheck-sports-intelligence-mock-report-baselines',
+  [normalizeRelatedDocLabel('Report Outlines + Coach Mocks')]: 'pulsecheck-sports-intelligence-mock-report-baselines',
   [normalizeRelatedDocLabel('Sport Configuration Registry')]: 'pulsecheck-sports-intelligence-layer-spec',
   [normalizeRelatedDocLabel('Sports Intelligence Aggregation + Inference Contract')]: 'pulsecheck-sports-intelligence-aggregation-inference-contract',
   [normalizeRelatedDocLabel('Sports Intelligence Layer')]: 'pulsecheck-sports-intelligence-layer-spec',

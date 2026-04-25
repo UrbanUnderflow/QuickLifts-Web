@@ -1,5 +1,7 @@
 import React from 'react';
+import Link from 'next/link';
 import {
+  ArrowUpRight,
   ClipboardList,
   FileText,
   Gauge,
@@ -15,6 +17,38 @@ import {
   RuntimeAlignmentPanel,
   SectionBlock,
 } from './PulseCheckRuntimeDocPrimitives';
+import {
+  PulseCheckSportReportPolicy,
+  composeReportTopLine,
+  enforceCoachActionSpecificity,
+  enforceNamedAthleteWatchlist,
+  getDefaultPulseCheckSports,
+} from '../../../api/firebase/pulsecheckSportConfig';
+import {
+  COACH_REPORT_DEMO_EXAMPLES,
+  getSportColor,
+} from '../../../api/firebase/pulsecheckSportReportDemos';
+
+
+const DEFAULT_SPORT_POLICIES: Record<string, PulseCheckSportReportPolicy | undefined> = (() => {
+  const map: Record<string, PulseCheckSportReportPolicy | undefined> = {};
+  for (const sport of getDefaultPulseCheckSports()) {
+    map[sport.id] = sport.reportPolicy;
+  }
+  return map;
+})();
+
+const dimensionMapFromPolicy = (sportId: string): string[] | undefined => {
+  const policy = DEFAULT_SPORT_POLICIES[sportId];
+  if (!policy) return undefined;
+  const { focus, composure, decisioning } = policy.dimensionMap || { focus: [], composure: [], decisioning: [] };
+  if (focus.length === 0 && composure.length === 0 && decisioning.length === 0) return undefined;
+  return [
+    focus.length > 0 ? `Focus: ${focus.join(', ')}.` : undefined,
+    composure.length > 0 ? `Composure: ${composure.join(', ')}.` : undefined,
+    decisioning.length > 0 ? `Decisioning: ${decisioning.join(', ')}.` : undefined,
+  ].filter((entry): entry is string => Boolean(entry));
+};
 
 type SportMockReportBaseline = {
   id: string;
@@ -38,6 +72,7 @@ const REPORT_STRUCTURE = [
 
 const REPORT_ROW_SHAPE = [
   ['Header', 'Sport, team, report window, generatedAt, reviewStatus, reviewer, confidence summary.'],
+  ['Data Coverage / Adherence', 'Device wear rate, Nora completion, protocol/sim completion, nutrition/check-in coverage, and read confidence. Weekly reports must show this before any watchlist or recommendation block.'],
   ['Team Lens', 'One paragraph: what changed, what matters this week, and where coaches should focus attention.'],
   ['Sport-Native KPIs', 'Only KPIs from sport config or verified team systems. Never raw vendor scores as coach judgment.'],
   ['Athlete Rows', 'Name, role/position, readiness band, confidence tier, evidence refs, missing inputs, recommendation, copy posture.'],
@@ -45,6 +80,72 @@ const REPORT_ROW_SHAPE = [
   ['Coach Adjustment', 'Practice, recovery, communication, pre-competition, or nutrition-context action framed in sport language.'],
   ['Trace', 'Internal-only provenance: source lanes, stale/missing data, confidence propagation, threshold path.'],
 ];
+
+const COACH_REPORT_SHAPE = [
+  ['Top Line', 'One plain-English paragraph that tells the coach what changed, why it matters, and what to do first.'],
+  ['Data Confidence', 'A small coverage block before any interpretation: device wear, Nora/check-in completion, protocol/sim completion, training/RPE coverage.'],
+  ['Team Read', 'Coach-language interpretation of load, readiness, sentiment, and Focus / Composure / Decisioning movement.'],
+  ['Watchlist', '2-4 reviewed athletes or role groups with "why this matters" and "coach move" language. No punitive ranking.'],
+  ['This Week / Game-Day Actions', 'Short, practical actions the head coach can use in practice, walkthrough, pre-game, or post-game recovery.'],
+  ['Do Not Overread', 'A small caveat that prevents raw score worship, clinical interpretation, or unsupported technical advice.'],
+];
+
+const REPORT_POLICY_SCHEMA_ROWS = [
+  ['reportPolicyDefaults', 'Shared generator defaults for interpretation-in-the-report posture (the Coach Dashboard stays thin and links into the report), adherence/data coverage, confidence thresholds, aggregate sentiment, privacy, and clinical-boundary routing.'],
+  ['contextModifiers', 'Sport-specific modifiers such as travel impact, schedule density, tee time, lane transition, block length, heat, wind, or minutes concentration.'],
+  ['kpiRefs', 'References to metric keys already defined in `metrics[]`; no report generator should invent sport KPI names outside the config.'],
+  ['weeklyRead / gameDayRead', 'Report lenses with `id`, `label`, `inputFamilies`, and linked Focus / Composure / Decisioning dimensions.'],
+  ['watchlistSignals', 'Reviewed watch candidates with evidence families and dimension mapping. These do not automatically become alerts.'],
+  ['coachActions', 'Allowed coach moves linked back to watch signals or report lenses.'],
+  ['earlyWarningFamilies', 'Candidate alert families requiring high confidence and review before coach delivery.'],
+  ['languagePosture', 'Coach-language summary, recommended terms, and must-avoid phrases mirrored into sport prompting policy.'],
+  ['dimensionMap', 'Internal sport-native mapping back to Focus, Composure, and Decisioning.'],
+];
+
+const ADHERENCE_REQUIREMENTS = [
+  ['Device coverage', 'Wearable/source coverage by athlete and team; stale or missing lanes lower confidence before interpretation.'],
+  ['Nora completion', 'Daily check-in completion and sentiment coverage; low completion suppresses strong sentiment claims.'],
+  ['Protocol / sim completion', 'Completion rate, simEvidenceCount, and recency for Focus / Composure / Decisioning movement.'],
+  ['Training / nutrition coverage', 'FWP workout/session RPE coverage and Macra nutrition availability when fueling context is used.'],
+  ['Coach-facing confidence', 'Simple visible confidence posture: strong read, usable read, thin read, or insufficient read.'],
+];
+
+const DEFAULT_DATA_POLICY = [
+  'Biometric readiness from normalized health-context snapshots.',
+  'Training load from FWP workoutSessions and session RPE.',
+  'Cognitive movement from Focus / Composure / Decisioning evidence.',
+  'Sentiment trend from aggregated Nora check-ins.',
+  'Sport-native KPIs from sport config or verified team/stat systems.',
+  'Schedule, competition, and travel context when available.',
+];
+
+const DEFAULT_MINIMUM_DATA = [
+  'Show adherence/data coverage before recommendations.',
+  'Suppress strong coach actions when the relevant evidence family is stale or missing.',
+  'Use watch language when confidence is emerging or directional.',
+  'Route clinical-threshold content away from Sports Intelligence copy.',
+];
+
+const CORE_DIMENSION_MAP: Record<string, string[]> = {
+  basketball: ['Focus: defensive reads, free-throw routine, closeout discipline.', 'Composure: late-game reset, role/minutes volatility, response after turnovers.', 'Decisioning: ball-handler reads, spacing, late-clock choices under fatigue.'],
+  soccer: ['Focus: scanning, first touch, set-piece assignment.', 'Composure: response after mistakes, goalkeeper confidence, pressure moments.', 'Decisioning: transition choices, pass selection under pressure, final-third reads.'],
+  football: ['Focus: assignment clarity, pre-snap routine, position-room install.', 'Composure: next-play reset, arousal control, contact confidence.', 'Decisioning: quarterback/coverage reads, unit communication, play responsibility.'],
+  baseball: ['Focus: pitch-to-pitch routine, plate approach, defensive readiness.', 'Composure: command anxiety, slump reset, response after errors.', 'Decisioning: pitch selection, swing/take approach, situational choices.'],
+  softball: ['Focus: pitch-to-pitch routine, defensive reaction, dugout reset.', 'Composure: error carryover, tough at-bat recovery, tournament pressure.', 'Decisioning: pitch command, situational hitting, baserunning choices.'],
+  volleyball: ['Focus: serve receive, rotation responsibility, setter attention.', 'Composure: point-to-point reset, communication after errors, pressure serving.', 'Decisioning: setter choice speed, defensive read, block/attack timing.'],
+  tennis: ['Focus: between-point routine, serve target, pattern commitment.', 'Composure: momentum swings, break points, response after errors.', 'Decisioning: point construction, serve + 1 choice, doubles positioning.'],
+  swimming: ['Focus: race plan, start/turn execution, split awareness.', 'Composure: race anxiety, taper nerves, response after poor heat/swim.', 'Decisioning: pacing choices, race-segment adjustment, relay exchange discipline.'],
+  'track-field': ['Focus: event routine, approach rhythm, split awareness.', 'Composure: meet-day arousal, response after foul/miss, body-pressure containment.', 'Decisioning: warm-up timing, tactical pacing, jump/throw attempt selection.'],
+  wrestling: ['Focus: stance, hand fighting, mat awareness.', 'Composure: match-by-match reset, weight-class pressure, close-loss recovery.', 'Decisioning: shot selection, escape timing, period strategy.'],
+  crossfit: ['Focus: movement standards, transition discipline, pacing cues.', 'Composure: response when workouts hurt, failed rep recovery, leaderboard pressure.', 'Decisioning: event pacing, limiter management, skill vs strength tradeoff.'],
+  golf: ['Focus: pre-shot routine, target clarity, putting process.', 'Composure: bad-shot recovery, qualifying pressure, late-round patience.', 'Decisioning: course management, club/target choice, risk selection in wind/heat.'],
+  bowling: ['Focus: pre-shot routine, target line, spare process.', 'Composure: strike drought response, tournament day fatigue, carry variance.', 'Decisioning: lane transition reads, ball/surface choice, adjustment timing.'],
+  lacrosse: ['Focus: stick skill under pressure, communication, ground-ball readiness.', 'Composure: turnover carryover, goalie confidence, contact response.', 'Decisioning: dodge/pass choices, defensive slides, clearing decisions.'],
+  hockey: ['Focus: shift discipline, puck tracking, goalie visual routine.', 'Composure: bench reset, contact response, goalie confidence swings.', 'Decisioning: puck decisions under pressure, gap choice, shift-change timing.'],
+  gymnastics: ['Focus: routine sequence, apparatus cue, landing attention.', 'Composure: fear blocks, meet-day nerves, perfectionism spiral.', 'Decisioning: skill readiness communication, routine progression, attempt selection.'],
+  'bodybuilding-physique': ['Focus: prep execution, posing attention, food consistency.', 'Composure: scale volatility, peak-week anxiety, post-show rebound pressure.', 'Decisioning: controlled adjustments, coach-macro adherence, food variance choices.'],
+  other: ['Focus: discipline-specific routine and attention demands.', 'Composure: pressure response and recovery after disruption.', 'Decisioning: sport-specific tactical or execution choices once context is known.'],
+};
 
 const SPORTS: SportMockReportBaseline[] = [
   {
@@ -196,12 +297,25 @@ const SPORTS: SportMockReportBaseline[] = [
     emoji: '⛳',
     roles: 'Individual',
     kpis: ['Scoring Average', 'Fairways Hit', 'Greens in Regulation', 'Putts / Round', 'Up-and-Down %', 'Club Speed', 'Shot Dispersion'],
-    weeklyFocus: ['Pre-shot routine', 'Course management', 'Bad-shot recovery', 'Late-round fatigue and heat'],
-    gameDayFocus: ['Commitment and target clarity', 'Caffeine/hydration timing', 'Walking load', 'Putting confidence'],
-    watchSignals: ['Bad-shot carryover', 'Sleep disruption before qualifying', 'Late-round dispersion increase', 'Caffeine jitters'],
-    coachActions: ['Keep cue count to one', 'Reinforce target/routine/acceptance', 'Plan steady small fueling windows'],
-    language: 'Caddie-style language: target, commitment, routine, acceptance, tempo, course management.',
+    weeklyFocus: ['Pre-shot routine', 'Course management', 'Bad-shot recovery', 'Round-state and environment: qualifying vs tournament, tee time, heat, wind, early vs late-round splits'],
+    gameDayFocus: ['Commitment and target clarity', 'Caffeine/hydration timing', 'Walking load', 'Putting confidence', 'Course/weather demand and late-round energy plan'],
+    watchSignals: ['Bad-shot carryover', 'Sleep disruption before qualifying', 'Late-round dispersion increase', 'Caffeine jitters', 'Wind/heat plus low hydration coverage'],
+    coachActions: ['Keep cue count to one', 'Reinforce target/routine/acceptance', 'Plan steady small fueling windows', 'Adjust report read by round state and environment'],
+    language: 'Caddie-style language: target, commitment, routine, acceptance, tempo, round state, course management.',
     avoid: ['Swing rebuilds', 'Multiple technical cues', 'Ignoring course conditions and round duration'],
+  },
+  {
+    id: 'bowling',
+    name: 'Bowling',
+    emoji: '🎳',
+    roles: 'Anchor, Leadoff, Middle Lineup, Baker Rotation, Individual',
+    kpis: ['Frame Average', 'Strike %', 'Spare Conversion %', 'Single-Pin Spare %', 'Open Frame Rate', 'First-Ball Count', 'Lane Transition Adjustment Quality'],
+    weeklyFocus: ['Pre-shot routine consistency', 'Lane transition reads', 'Spare process reliability', 'Tournament day fatigue and repetition load'],
+    gameDayFocus: ['Surface/ball choice confidence', 'Early frame target-line commitment', 'Anchor-frame composure', 'Multi-game hydration and hand/grip readiness'],
+    watchSignals: ['Open-frame rise with fatigue', 'Spare conversion drop after travel or long blocks', 'Composure drift after carry variance', 'Delayed lane adjustment pattern'],
+    coachActions: ['Reinforce spare routine before scoring pressure', 'Use short reset language after bad breaks', 'Review lane-transition communication cadence', 'Manage extra practice volume during multi-day tournaments'],
+    language: 'Lane and frame language: target line, breakpoint, spare process, transition, carry, fill frame, next shot.',
+    avoid: ['Blaming athletes for carry variance', 'Equipment/surface prescriptions without coach context', 'Generic confidence advice without lane-state context'],
   },
   {
     id: 'lacrosse',
@@ -281,14 +395,14 @@ const SportMockDetails = ({ sport }: { sport: SportMockReportBaseline }) => (
           <p className="mt-1 text-xs text-zinc-500">{sport.roles}</p>
         </div>
         <span className="rounded-full border border-purple-500/25 bg-purple-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-purple-200">
-          Mock report outline
+          Report outline
         </span>
       </div>
     </summary>
 
     <div className="mt-5 space-y-4">
       <DataTable
-        columns={['Report Area', 'Baseline Expectation']}
+        columns={['Report Area', 'Report Lens']}
         rows={[
           ['Weekly read', <BulletList key={`${sport.id}-weekly`} items={sport.weeklyFocus} />],
           ['Game-day read', <BulletList key={`${sport.id}-gameday`} items={sport.gameDayFocus} />],
@@ -313,37 +427,120 @@ const SportMockDetails = ({ sport }: { sport: SportMockReportBaseline }) => (
           body={<BulletList items={sport.avoid} />}
         />
       </CardGrid>
+      <CardGrid columns="lg:grid-cols-3">
+        <InfoCard
+          title="Core Dimension Map"
+          accent="purple"
+          body={<BulletList items={dimensionMapFromPolicy(sport.id) || CORE_DIMENSION_MAP[sport.id] || CORE_DIMENSION_MAP.other} />}
+        />
+        <InfoCard
+          title="Data Inputs"
+          accent="blue"
+          body={<BulletList items={DEFAULT_DATA_POLICY} />}
+        />
+        <InfoCard
+          title="Minimum Data Rules"
+          accent="amber"
+          body={<BulletList items={DEFAULT_MINIMUM_DATA} />}
+        />
+      </CardGrid>
+      <CoachDemoLinkCard sport={sport} />
     </div>
   </details>
 );
+
+// Coach Demo opens in its own tab so coaches and reviewers see the report on a clean,
+// design-forward surface — not buried inside the spec page.
+const CoachDemoLinkCard = ({ sport }: { sport: SportMockReportBaseline }) => {
+  const policy = DEFAULT_SPORT_POLICIES[sport.id];
+  const demo = COACH_REPORT_DEMO_EXAMPLES[sport.id];
+  const sportColor = getSportColor(sport.id);
+
+  // Run the gates so the link card can show whether the demo would render
+  // a Specific top line, named athletes, and concrete actions — or fall back
+  // to a thin read.
+  const topLine = composeReportTopLine(demo?.topLine || { whatChanged: '', who: '', firstAction: '' }, { sportName: sport.name });
+  const watchlistGate = enforceNamedAthleteWatchlist(demo?.watchlist || []);
+  const coachActionGate = enforceCoachActionSpecificity(demo?.coachActions || []);
+
+  const policyMissing = !policy;
+  const isSpecific = topLine.used === 'specific';
+  const namedCount = watchlistGate.rendered.length;
+  const actionCount = coachActionGate.rendered.length;
+
+  // Public stakeholder-shareable URL — moved out from /admin/coachReportDemo so
+  // the demo can be opened by reviewers and partners without admin auth.
+  const href = `/coach-report-demo/${sport.id}`;
+
+  return (
+    <Link
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group relative block overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-950 to-zinc-900 p-6 transition hover:border-zinc-700"
+    >
+      <div className="absolute inset-y-0 left-0 w-1" style={{ background: sportColor.primary }} />
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: sportColor.primary }}>
+            Coach Demo
+          </p>
+          <p className="text-base font-semibold text-white">
+            Open the {sport.name} weekly coach report
+          </p>
+          <p className="text-xs text-zinc-400">
+            Full-page, coach-first design. Opens in a new tab.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-zinc-300">
+          <span className={`rounded-full px-2.5 py-0.5 ${isSpecific ? 'bg-emerald-500/12 text-emerald-300' : 'bg-amber-500/12 text-amber-200'}`}>
+            {isSpecific ? 'Specific top line' : 'Thin-read fallback'}
+          </span>
+          <span className="rounded-full bg-zinc-800/70 px-2.5 py-0.5 text-zinc-300">
+            {namedCount} named
+          </span>
+          <span className="rounded-full bg-zinc-800/70 px-2.5 py-0.5 text-zinc-300">
+            {actionCount} action{actionCount === 1 ? '' : 's'}
+          </span>
+          {policyMissing && (
+            <span className="rounded-full bg-rose-500/12 px-2.5 py-0.5 text-rose-200">
+              No policy
+            </span>
+          )}
+          <ArrowUpRight className="h-4 w-4 text-zinc-400 transition group-hover:text-white" />
+        </div>
+      </div>
+    </Link>
+  );
+};
 
 const PulseCheckSportsIntelligenceMockReportBaselinesTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
         eyebrow="Pulse Sports Intelligence"
-        title="Mock Report Baselines"
-        version="Version 0.1 | April 25, 2026"
-        summary="Companion baseline for what Sports Intelligence reports should look like across every sport currently present in the PulseCheck sport configuration. These are not final generated reports; they are expected report shapes, sport-native language constraints, KPI anchors, and guardrails for implementation and review."
+        title="Report Outlines + Coach Mock Reports"
+        version="Version 0.2 | April 25, 2026"
+        summary="Companion baseline for what Sports Intelligence reports should look like across every sport currently present in the PulseCheck sport configuration. Each sport has a build-facing report outline plus a coach-facing mock report demo that shows the plain-English, actionable artifact a head coach could actually receive."
         highlights={[
           {
             title: 'All Configured Sports Covered',
-            body: 'Each collapsed sport section maps to the current default PulseCheck sport configuration and defines what weekly and game-day report drafts should include.',
+            body: 'Each collapsed sport section maps to the current default PulseCheck sport configuration and defines both report policy and a readable coach-report demo.',
           },
           {
-            title: 'Baseline, Not Dashboard',
-            body: 'The report pattern stays narrative and coach-actionable. KPIs support the story; they do not replace the interpretation.',
+            title: 'Reports Carry The Interpretation',
+            body: 'The report pattern stays narrative and coach-actionable. The thin Coach Dashboard is the access surface that links into these reports — KPIs support the story on the dashboard, but they do not replace the interpretation.',
           },
           {
-            title: 'Review-Ready Shape',
-            body: 'Each sport makes watch signals, coach actions, language posture, and avoid rules explicit so pilot reviewers know what acceptable copy looks like.',
+            title: 'Coach-Ready Demo',
+            body: 'The mock report is written for a head coach, not a neurobiology reader: top line, data confidence, team read, watchlist, practical actions, and caveats.',
           },
         ]}
       />
 
       <RuntimeAlignmentPanel
-        role="Report-shape companion for Sports Intelligence implementation. Defines mock weekly, game-day, and alert-candidate expectations before report generation is built."
-        sourceOfTruth="This page owns baseline report outlines by sport. The Aggregation + Inference Contract owns scoring, thresholds, confidence, and payload shape. The Architecture & Product Boundaries spec owns where reports sit in the system."
+        role="Report-policy and coach-demo companion for Sports Intelligence implementation. Defines weekly, game-day, and alert-candidate expectations before report generation is built, plus readable mock reports for coach review."
+        sourceOfTruth="This page owns baseline report outlines and coach-facing report demos by sport. The Aggregation + Inference Contract owns scoring, thresholds, confidence, and payload shape. The Architecture & Product Boundaries spec owns where reports sit in the system."
         masterReference="Sport coverage follows the default `PulseCheckSportConfigurationEntry` list in `src/api/firebase/pulsecheckSportConfig.ts`. If admins add a sport in `/admin/pulsecheckSportConfiguration`, this page should receive a matching collapsed mock-report baseline before coach delivery."
         relatedDocs={[
           'Sports Intelligence Layer',
@@ -354,22 +551,36 @@ const PulseCheckSportsIntelligenceMockReportBaselinesTab: React.FC = () => {
         ]}
       />
 
-      <SectionBlock icon={FileText} title="Universal Mock Report Shape">
+      <SectionBlock icon={FileText} title="Universal Coach Report Shape">
         <DataTable columns={['Surface', 'Audience', 'Mock Contents', 'Release Posture']} rows={REPORT_STRUCTURE} />
         <DataTable columns={['Block', 'Required Shape']} rows={REPORT_ROW_SHAPE} />
+        <DataTable columns={['Coach Report Block', 'Plain-English Requirement']} rows={COACH_REPORT_SHAPE} />
+      </SectionBlock>
+
+      <SectionBlock icon={Gauge} title="Adherence + Data Coverage">
+        <InfoCard
+          title="Primary Pilot Confidence Block"
+          accent="amber"
+          body="Because adherence is the UMES pilot's primary success metric, every weekly report starts with data coverage before it makes athlete-specific claims. Thin participation lowers confidence and suppresses strong coach actions."
+        />
+        <DataTable columns={['Coverage Area', 'Report Rule']} rows={ADHERENCE_REQUIREMENTS} />
+      </SectionBlock>
+
+      <SectionBlock icon={ListChecks} title="Config-Backed Report Policy">
+        <InfoCard
+          title="Where This Becomes Buildable"
+          accent="blue"
+          body="The pilot report policy lives under each `PulseCheckSportConfigurationEntry.reportPolicy`, with common defaults owned by the report generator. All 18 configured sports now ship with a populated reportPolicy (UMES pilot sports — basketball, golf, bowling — were policy-backed first; the remainder followed in this rollout)."
+        />
+        <DataTable columns={['Policy Field', 'Purpose']} rows={REPORT_POLICY_SCHEMA_ROWS} />
       </SectionBlock>
 
       <SectionBlock icon={Gauge} title="Configuration Coverage">
-        <CardGrid columns="md:grid-cols-2">
+        <CardGrid columns="md:grid-cols-1">
           <InfoCard
             title="Covered In This Baseline"
             accent="green"
             body={`${SPORTS.length} configured sports: ${SPORTS.map((sport) => sport.name).join(', ')}.`}
-          />
-          <InfoCard
-            title="Config Gap To Resolve"
-            accent="amber"
-            body="Bowling appears in the UMES pilot scope language, but it is not present in the current default sport configuration. Add Bowling through the sport configuration registry before locking a bowling report baseline."
           />
         </CardGrid>
       </SectionBlock>
@@ -390,10 +601,16 @@ const PulseCheckSportsIntelligenceMockReportBaselinesTab: React.FC = () => {
             <BulletList
               items={[
                 'Every generated weekly report includes the universal blocks and sport-native KPI anchors for the athlete sport.',
+                'Every weekly report opens with adherence/data coverage and suppresses strong claims when participation is thin.',
                 'Every game-day report uses the sport-specific readiness lens and avoids prohibited language for that sport.',
+                'Every sport-native theme maps internally to Focus, Composure, and Decisioning so cross-sport measurement remains coherent.',
+                'Top line requires three fills (whatChanged + who + firstAction). If any is missing, generator falls back to thin-read copy and labels the report as Thin read.',
+                'Watchlist requires named athletes at stable confidence or higher; group-only blocks (e.g. "Sprinter group") are suppressed by policy.',
+                'Coach actions must reference a named athlete or specific session; generic principles are filtered out.',
+                'Every emitted report passes the sport-localization audit against languagePosture.mustAvoid; failed audits block coach delivery until regenerated.',
                 'Every watchlist candidate carries evidence refs, confidence tier, missing inputs, and human review status.',
                 'Pilot reviewers can compare generated copy against this mock baseline before coach delivery.',
-                'New sports added through configuration are not considered report-ready until a matching mock-report baseline exists.',
+                'New sports added through configuration are not considered report-ready until reportPolicy is populated and a matching mock-report baseline exists.',
               ]}
             />
           }
