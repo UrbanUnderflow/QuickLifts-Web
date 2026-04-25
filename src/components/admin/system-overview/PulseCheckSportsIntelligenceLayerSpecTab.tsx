@@ -4,6 +4,7 @@ import {
   Clipboard,
   Cpu,
   Layers,
+  LayoutDashboard,
   Map,
   Plug,
   RadioTower,
@@ -25,7 +26,7 @@ const ARCHITECTURE_LAYERS = [
   ['Inputs', 'Device-agnostic biometric surface, PulseCheck sims, daily Nora check-ins, FWP workouts, Macra nutrition, sport-config policy.', 'Sources are heterogeneous. The layer treats them as inputs to a single interpretation pipeline; no consumer reads any source directly.'],
   ['Normalization', 'Adapters convert each source into the canonical record shape (Athlete Context Snapshot, Correlation Evidence Record, sport-config attribute values).', 'Renaming or fork-defining record types is forbidden — see Health Context Source Record Spec.'],
   ['Aggregation & inference', 'Sport-aware aggregators compute per-athlete baselines, training load, readiness, sentiment trend, Focus / Composure / Decisioning movement, and confidence tiers.', 'Inference is athlete-specific, not population-average. Same physiology produces different recommendations across sport, position, season phase.'],
-  ['Output surfaces', 'Weekly Sports Intelligence Report, Game-Day Readiness Report, Early-Warning Alerts, Macra nutrition context, Nora coaching context, AuntEDNA escalation context.', 'Each surface has its own audience, latency, and copy posture. Coaches make decisions from reports; dashboards may expose supporting KPIs for review/admin only.'],
+  ['Output surfaces', 'Weekly Sports Intelligence Report, Game-Day Readiness Report, Early-Warning Alerts, Macra nutrition context, Nora coaching context, AuntEDNA escalation context.', 'Each surface has its own audience, latency, and copy posture. Coaches make decisions from reports; the Coach Dashboard is a thin access surface that links into those reports and surfaces supporting KPIs.'],
 ];
 
 const DEVICE_LAYER_ROWS = [
@@ -80,7 +81,7 @@ const PHASE_ROADMAP = [
   ['Phase 3 — Coach-facing reports', 'Weekly Sports Intelligence Report + Game-Day Readiness Report generation pipeline. Initial sport coverage: basketball, golf, bowling (UMES pilot scope). Outputs launch as human-reviewed drafts until inference evaluation clears automation gates.', 'In design.'],
   ['Phase 4 — UMES pilot operation', '110-day pilot: 20 days onboarding + 90 days operation. Adherence as primary metric. Weekly walk-throughs with each head coach.', 'Pilot brief approved; awaiting contract finalization.'],
   ['Phase 5 — Adaptive Framing Scale', 'Persistent per-athlete framing profile (1-10) calibrated by Nora and shared back to coaches. Current Phase 2 prompts may use static sport framing policy, but durable athlete-level AFS memory is not considered shipped until this phase.', 'Specced; build follows pilot.'],
-  ['Phase 6 — Cross-sport scale', 'Football, soccer, baseball, softball, volleyball, tennis configurations harden with pilot evidence. Per-sport KPIs may surface in a supporting coach/admin dashboard, but the coaching decision surface remains narrative reports.', 'Pilot-dependent.'],
+  ['Phase 6 — Cross-sport scale', 'Football, soccer, baseball, softball, volleyball, tennis configurations harden with pilot evidence. Per-sport KPIs surface on the thin Coach Dashboard via each sport\'s `kpiRefs`, while the coaching decision surface remains the narrative reports the dashboard links into.', 'Pilot-dependent.'],
 ];
 
 const TRUST_GATES = [
@@ -102,9 +103,9 @@ const NON_NEGOTIABLES = [
     body: 'Every recommendation is interpreted through the athlete\'s sport, position, season phase, and individual baseline — not a population average. Same readiness reading produces different guidance for a starting point guard mid-back-to-back vs. a freshman bowler day three of a tournament.',
   },
   {
-    title: 'Coaches Read Reports, Not Dashboards',
+    title: 'Reports Carry The Interpretation, Dashboard Stays Thin',
     accent: 'green' as const,
-    body: 'Outputs are concise narrative reports timed to coaching decisions. The interpretation layer does the work; the coach gets language and recommendations they can act on. No raw scores delivered as judgment.',
+    body: 'Coaches do receive a dashboard, but the dashboard is intentionally thin. The interpretation layer carries the work and lands in concise narrative reports timed to coaching decisions; the dashboard exists to make those reports easy to find, scan, and act on without forcing the coach to dig through raw scores. The coach gets language and recommendations they can act on — never raw vendor scores delivered as judgment.',
   },
   {
     title: 'Clinical Boundary Is Architectural',
@@ -150,7 +151,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           'Device & Wearable Integrations',
           'Oura Integration Strategy',
           'Sports Intelligence Aggregation + Inference Contract',
-          'Mock Report Baselines',
+          'Report Outlines + Coach Mock Reports',
           'Macra',
           'AuntEDNA Integration Strategy',
         ]}
@@ -237,9 +238,40 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
             body="Sport `noraContext`, risk flags, and current sport framing policy are injected into every Nora prompt. Nora speaks the sport's language (possession, at-bat, pitch, point, set) without a separate per-sport implementation. Persistent per-athlete Adaptive Framing Scale calibration remains a Phase 5 build item."
           />
           <InfoCard
-            title="Coach Reports"
+            title="Coach Reports + Thin Coach Dashboard"
             accent="green"
-            body="Coaches make decisions from reports, not raw dashboards. Weekly and Game-Day outputs are concise, narrative reports timed to when coaching decisions get made. Supporting KPI dashboards can exist for review/admin, but they do not replace the report pipeline. Pulse Check team does a 20-minute weekly walk-through with each head coach during pilot."
+            body="Coaches make decisions from reports — concise, narrative outputs timed to when coaching decisions get made. The Coach Dashboard is the home base from which those reports are accessed; it is intentionally thin (one screen, scannable in under 60 seconds), visually polished, and easy to navigate. It surfaces the latest weekly + game-day reports, athlete watchlist, adherence/coverage state, and a small set of supporting KPIs — but it does not try to replace the interpretation that lives in the report. Pulse Check team does a 20-minute weekly walk-through with each head coach during pilot."
+          />
+        </CardGrid>
+      </SectionBlock>
+
+      <SectionBlock icon={LayoutDashboard} title="Coach Dashboard — Thin Surface, Reports Are The Truth">
+        <InfoCard
+          title="Why The Dashboard Exists"
+          accent="blue"
+          body="The dashboard is the access surface for reports, not a replacement for them. Coaches need one place to land — see the latest weekly, open the game-day read, scan watchlist names, glance at adherence — without digging. The interpretation work is already done upstream; the dashboard's job is to make that work easy to find, easy to read, and visually trustworthy."
+        />
+        <DataTable
+          columns={['Dashboard Block', 'Purpose', 'Depth Constraint']}
+          rows={[
+            ['Latest Weekly Report Card', 'One-click into this week\'s Weekly Sports Intelligence Report.', 'Show only top line, read confidence, and review status. Full report opens in a dedicated reader.'],
+            ['Game-Day Readiness Tile', 'When a competition is within 48 hours, the upcoming game-day report is one tap away.', 'Surfaces athlete-by-athlete readiness band and confidence; no raw biometric scores.'],
+            ['Athlete Watchlist Strip', 'Named watchlist athletes from the most recent reviewed report.', 'Names + confidence chip + one-line "why this matters". No leaderboards, no rankings.'],
+            ['Adherence + Coverage Strip', 'Wear rate, Nora completion, protocol/sim completion, training/RPE coverage at team level.', 'Lives at the top of the dashboard so coaches see participation state before any interpretation.'],
+            ['Supporting Sport-Native KPIs', 'A small, sport-config-defined KPI strip (e.g. minutes/game, jump count, pitch count).', 'KPIs only, never readiness scores. Filtered through `kpiRefs` in the sport reportPolicy — no invented metrics.'],
+            ['Report Archive', 'Searchable list of all reviewed weekly + game-day reports for the team.', 'Read-only; respects the same review-status filters as the report pipeline.'],
+          ]}
+        />
+        <CardGrid columns="md:grid-cols-2">
+          <InfoCard
+            title="Design Posture"
+            accent="purple"
+            body="User-friendly, stunning, and easy to navigate. Calm visual hierarchy, generous whitespace, sport-color cues that match the sport-config registry, and zero raw vendor scores rendered as judgment. The dashboard should feel like a coach's home page, not an analytics console."
+          />
+          <InfoCard
+            title="What The Dashboard Is NOT"
+            accent="red"
+            body="Not the interpretation layer. Not a place to expose raw HRV / readiness scores as athlete labels. Not a leaderboard. Not a substitute for the weekly walkthrough during pilot. If a question can only be answered by reading the full narrative report, the dashboard's job is to surface that report, not to summarize it inline."
           />
         </CardGrid>
       </SectionBlock>
@@ -273,7 +305,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
                 'Companion Aggregation + Inference Contract exists with baseline windows, source precedence, missing-data behavior, confidence propagation, output payloads, and automation gates.',
                 'Macra hookup (sport profile capture + cloud-driven daily insight + Nora context) is implemented and pulled into this spec as Phase 1 + 2.',
                 'Phased roadmap is captured with explicit pilot dependency for Phases 4–6.',
-                'Non-negotiables (device-agnostic, sport-and-athlete-specific, reports-not-dashboards, clinical-boundary-is-architectural) are written so future PRs can be measured against them.',
+                'Non-negotiables (device-agnostic, sport-and-athlete-specific, reports-carry-the-interpretation-thin-dashboard-as-access-surface, clinical-boundary-is-architectural) are written so future PRs can be measured against them.',
               ]}
             />
           }

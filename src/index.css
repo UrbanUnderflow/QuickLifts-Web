@@ -25,6 +25,30 @@ code {
 }
 
 @font-face {
+  font-family: 'Thunder';
+  src: url('../public/fonts/Thunder-BoldLC.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Thunder';
+  src: url('../public/fonts/Thunder-ExtraBoldLC.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Thunder';
+  src: url('../public/fonts/Thunder-BlackLC.ttf') format('truetype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
   font-family: 'HK Grotesk';
   src: url('../public/fonts/HKGrotesk-Regular.otf') format('opentype');
   font-weight: normal;

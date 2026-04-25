@@ -432,11 +432,31 @@ const buildContextBlock = (params: {
     lines.push(`Meals today:\n${mealList}`);
   }
 
-  if (params.history.length > 0) {
-    const window = params.history.slice(0, 14);
+  const HISTORY_WINDOW_DAYS = 14;
+  const window = params.history.slice(0, HISTORY_WINDOW_DAYS);
+  const loggedCount = window.length;
+  const unloggedCount = Math.max(0, HISTORY_WINDOW_DAYS - loggedCount);
+
+  if (loggedCount === 0) {
+    lines.push(`History: no meals were logged on any of the past ${HISTORY_WINDOW_DAYS} days (excluding today). Tracking consistency itself is the highest-leverage angle today.`);
+  } else {
     const proteinTarget = params.target?.protein || 0;
     const proteinHits = proteinTarget > 0 ? window.filter(d => d.protein >= proteinTarget * 0.92).length : 0;
-    lines.push(`Last ${window.length} days: avg ${Math.round(window.reduce((s, d) => s + d.calories, 0) / window.length)}kcal/day, avg P${Math.round(window.reduce((s, d) => s + d.protein, 0) / window.length)}g/day. Days protein hit (\u226592% target): ${proteinHits}/${window.length}.`);
+    const avgCal = Math.round(window.reduce((s, d) => s + d.calories, 0) / loggedCount);
+    const avgP = Math.round(window.reduce((s, d) => s + d.protein, 0) / loggedCount);
+
+    lines.push(
+      `History (past ${HISTORY_WINDOW_DAYS} days, excluding today): ${loggedCount} day(s) logged, ${unloggedCount} day(s) unlogged. ` +
+      `Across the ${loggedCount} logged day(s) only: avg ${avgCal}kcal, avg P${avgP}g. ` +
+      `Days protein hit (\u226592% target): ${proteinHits}/${loggedCount}. ` +
+      `IMPORTANT: averages are computed only across logged days. Never describe these as "X-day average" where X is the window size — they are the average across the days that had logs.`
+    );
+
+    if (unloggedCount >= Math.ceil(HISTORY_WINDOW_DAYS / 2)) {
+      lines.push(`Logging consistency flag: the user logged on roughly half (or fewer) of the last ${HISTORY_WINDOW_DAYS} days. This is itself a useful angle — call it out if it fits the insight.`);
+    } else if (unloggedCount >= 3) {
+      lines.push(`Logging gap: ${unloggedCount} of the last ${HISTORY_WINDOW_DAYS} days had no meals logged. Mention only if relevant — don't moralize.`);
+    }
   }
 
   if (params.frequentFoods.length > 0) {
@@ -502,6 +522,8 @@ const SYSTEM_PROMPT = [
   "- Don't moralize ('good'/'bad'). Don't restate the math without insight.",
   "- Never refer to meals as 'meal 1/2/3' — use the names they logged.",
   "- If a frequent-food list is supplied, prefer foods from it in the action when possible.",
+  "- AVERAGES ARE COMPUTED FROM LOGGED DAYS ONLY. If the context says \"4 day(s) logged, 10 day(s) unlogged\", you must say things like \"across the 4 days you logged\" or \"on logged days you averaged\" — NEVER say \"in the last 14 days you averaged\" or otherwise imply the average covers unlogged days. Never invent a window size that isn't in the context.",
+  "- If the user has many unlogged days in the window (logging gap or consistency flag is present in context), consider making one of the three observations about tracking consistency — but only if it fits naturally with the chosen type. Don't moralize about missed logging; frame it as an opportunity (\"the days you log are useful — adding 2-3 more would let me spot patterns earlier\").",
   "",
   'Return ONLY valid JSON matching this schema exactly — no markdown, no prose:',
   '{',

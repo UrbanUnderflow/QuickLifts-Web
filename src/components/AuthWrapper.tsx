@@ -85,6 +85,10 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/onboarding/set-password',
     // PulseCheck demo (public for stakeholder demos)
     '/pulsecheckdemo',
+    // Pulse Sports Intelligence coach-report demos (public for stakeholder review).
+    // Dynamic sportId — see publicPathPatterns below; this base is included for
+    // visibility/symmetry with other demo entries.
+    '/coach-report-demo',
     // Wunna Run demo (public for stakeholder demos)
     '/wunnarundemo',
     // Box breathing simulator deck (public for stakeholder demos)
@@ -108,7 +112,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   ].map(route => route?.toLowerCase());
 
   const publicPathPatterns = [
-    '/round-invitation', '/round', '/round-library', '/profile', '/challenge', '/review', '/programming', '/press', '/100trainers', '/MoveAndFuelATL', '/investor', '/invest', '/connect', '/coach-invite', '/research', '/onboarding', '/legal-doc', '/pulsecheck', '/group-meet', '/sign'
+    '/round-invitation', '/round', '/round-library', '/profile', '/challenge', '/review', '/programming', '/press', '/100trainers', '/MoveAndFuelATL', '/investor', '/invest', '/connect', '/coach-invite', '/coach-report-demo', '/research', '/onboarding', '/legal-doc', '/pulsecheck', '/group-meet', '/sign'
   ].map(pattern => pattern.toLowerCase());
 
   const isPublicClubPath = (path: string) => {
