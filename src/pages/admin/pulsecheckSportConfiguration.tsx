@@ -1368,7 +1368,7 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                     and schemas are review-only and edited through code so a UI mistake can never reach a coach report.
                   </p>
                   <a
-                    href="/sports-intelligence-demo-reports"
+                    href="/coach-report-demo"
                     target="_blank"
                     rel="noreferrer"
                     className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[#A78BFA] transition hover:text-[#C4B5FD]"

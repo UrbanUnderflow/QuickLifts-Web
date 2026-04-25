@@ -5,18 +5,17 @@ import { ArrowRight, Lock } from 'lucide-react';
 import {
   getDefaultPulseCheckSports,
   type PulseCheckSportConfigurationEntry,
-} from '../api/firebase/pulsecheckSportConfig';
+} from '../../api/firebase/pulsecheckSportConfig';
 import {
   COACH_REPORT_DEMO_EXAMPLES,
   CoachReportDemoExample,
   getSportColor,
-} from '../api/firebase/pulsecheckSportReportDemos';
+} from '../../api/firebase/pulsecheckSportReportDemos';
 
-// Public directory listing every per-sport coach-report demo. The /coach-report-demo
-// route is also public, so this page just makes the full set of stakeholder demos
-// discoverable in one place. Each card links to /coach-report-demo/{sportId}.
-//
-// Whitelisted in AuthWrapper so stakeholders can browse without an account.
+// Public directory listing every per-sport coach-report demo. Sits at the root
+// of /coach-report-demo as the index, with /coach-report-demo/[sportId] serving
+// the individual report. Whitelisted in AuthWrapper as part of the existing
+// `/coach-report-demo` public-path coverage.
 
 interface DirectoryCard {
   sport: PulseCheckSportConfigurationEntry;
@@ -58,7 +57,7 @@ const buildCards = (): DirectoryCard[] => {
     });
 };
 
-const SportsIntelligenceDemoReportsPage: React.FC = () => {
+const CoachReportDemoIndexPage: React.FC = () => {
   const cards = useMemo(buildCards, []);
   const totalSports = cards.length;
   const totalFullDemos = cards.filter((card) => card.hasFullDemo && !card.isThinEvidence).length;
@@ -232,4 +231,4 @@ const SportsIntelligenceDemoReportsPage: React.FC = () => {
   );
 };
 
-export default SportsIntelligenceDemoReportsPage;
+export default CoachReportDemoIndexPage;
