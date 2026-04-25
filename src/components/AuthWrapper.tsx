@@ -86,12 +86,10 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     // PulseCheck demo (public for stakeholder demos)
     '/pulsecheckdemo',
     // Pulse Sports Intelligence coach-report demos (public for stakeholder review).
-    // Dynamic sportId — see publicPathPatterns below; this base is included for
-    // visibility/symmetry with other demo entries.
+    // Both the directory at /coach-report-demo and the per-sport reports at
+    // /coach-report-demo/[sportId] are public. Dynamic descendants are also
+    // covered by publicPathPatterns below.
     '/coach-report-demo',
-    // Sports Intelligence demo-report directory — index page that links into
-    // every per-sport coach-report demo above.
-    '/sports-intelligence-demo-reports',
     // Wunna Run demo (public for stakeholder demos)
     '/wunnarundemo',
     // Box breathing simulator deck (public for stakeholder demos)
