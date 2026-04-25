@@ -74,6 +74,8 @@ import PulseCheckHealthContextFirestoreSchemaIndexSpecTab from "../../components
 import PulseCheckPhysiologyCognitionCorrelationEngineTab from "../../components/admin/system-overview/PulseCheckPhysiologyCognitionCorrelationEngineTab";
 import PulseCheckCorrelationEngineContractLockTab from "../../components/admin/system-overview/PulseCheckCorrelationEngineContractLockTab";
 import PulseCheckSportsIntelligenceLayerSpecTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceLayerSpecTab";
+import PulseCheckSportsIntelligenceAggregationInferenceContractTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceAggregationInferenceContractTab";
+import PulseCheckSportsIntelligenceMockReportBaselinesTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceMockReportBaselinesTab";
 import PulseCheckCorrelationDataModelSpecTab from "../../components/admin/system-overview/PulseCheckCorrelationDataModelSpecTab";
 import PulseCheckCorrelationEngineEngineeringTaskBreakdownTab from "../../components/admin/system-overview/PulseCheckCorrelationEngineEngineeringTaskBreakdownTab";
 import PulseCheckCorrelationEnginePilotDashboardTab from "../../components/admin/system-overview/PulseCheckCorrelationEnginePilotDashboardTab";
@@ -277,6 +279,8 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-oura-integration-strategy",
       "pulsecheck-oura-cognitive-correlation-spec",
       "pulsecheck-sports-intelligence-layer-spec",
+      "pulsecheck-sports-intelligence-aggregation-inference-contract",
+      "pulsecheck-sports-intelligence-mock-report-baselines",
       "pulsecheck-device-integration-strategy",
       "pulsecheck-device-integration-partnership-matrix",
       "pulsecheck-school-wearable-bundle-plan",
@@ -364,6 +368,10 @@ const SYSTEM_TABS: SystemTab[] = [
 function getSystemForSection(sectionId: string): string {
   for (const tab of SYSTEM_TABS) {
     if (tab.sectionIds.includes(sectionId)) return tab.id;
+  }
+  const section = systemOverviewManifest.sections.find((item) => item.id === sectionId);
+  if (section?.parentSectionId) {
+    return getSystemForSection(section.parentSectionId);
   }
   return SYSTEM_TABS[0].id;
 }
@@ -469,7 +477,11 @@ const SystemOverviewPage: React.FC = () => {
   const filteredSections = useMemo(
     () =>
       systemOverviewManifest.sections.filter((s) =>
-        activeSystemTab.sectionIds.includes(s.id) && !s.parentSectionId,
+        activeSystemTab.sectionIds.includes(s.id) ||
+        Boolean(
+          s.parentSectionId &&
+            activeSystemTab.sectionIds.includes(s.parentSectionId),
+        ),
       ),
     [activeSystemTab],
   );
@@ -638,12 +650,40 @@ const SystemOverviewPage: React.FC = () => {
         (s) => s.id === hash,
       );
       if (matchingSection) {
-        const rootSectionId = getArtifactRootSectionId(hash);
-        setActiveSectionId(rootSectionId);
+        setActiveSectionId(hash);
         // Also set the correct system tab
-        setActiveSystemId(getSystemForSection(rootSectionId));
+        setActiveSystemId(getSystemForSection(hash));
       }
     }
+  }, []);
+
+  useEffect(() => {
+    const handleRelatedDocumentNavigation = (event: Event) => {
+      const sectionId = (event as CustomEvent<{ sectionId?: string }>).detail?.sectionId;
+      if (!sectionId) return;
+
+      const matchingSection = systemOverviewManifest.sections.find(
+        (section) => section.id === sectionId,
+      );
+      if (!matchingSection) return;
+
+      setActiveSystemId(getSystemForSection(sectionId));
+      setActiveSectionId(sectionId);
+      window.history.replaceState(null, "", `#${sectionId}`);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    window.addEventListener(
+      "system-overview:navigate-section",
+      handleRelatedDocumentNavigation,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "system-overview:navigate-section",
+        handleRelatedDocumentNavigation,
+      );
+    };
   }, []);
 
   const handleSystemChange = (systemId: string) => {
@@ -1764,6 +1804,12 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-sports-intelligence-layer-spec":
         return <PulseCheckSportsIntelligenceLayerSpecTab />;
+
+      case "pulsecheck-sports-intelligence-aggregation-inference-contract":
+        return <PulseCheckSportsIntelligenceAggregationInferenceContractTab />;
+
+      case "pulsecheck-sports-intelligence-mock-report-baselines":
+        return <PulseCheckSportsIntelligenceMockReportBaselinesTab />;
 
       case "pulsecheck-correlation-data-model-spec":
         return <PulseCheckCorrelationDataModelSpecTab />;

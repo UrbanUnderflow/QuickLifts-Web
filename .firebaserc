@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "quicklifts-dev-01"
+    "default": "quicklifts-dev-01",
+    "production": "quicklifts-dd3f1"
   }
 }

@@ -25,7 +25,7 @@ const ARCHITECTURE_LAYERS = [
   ['Inputs', 'Device-agnostic biometric surface, PulseCheck sims, daily Nora check-ins, FWP workouts, Macra nutrition, sport-config policy.', 'Sources are heterogeneous. The layer treats them as inputs to a single interpretation pipeline; no consumer reads any source directly.'],
   ['Normalization', 'Adapters convert each source into the canonical record shape (Athlete Context Snapshot, Correlation Evidence Record, sport-config attribute values).', 'Renaming or fork-defining record types is forbidden — see Health Context Source Record Spec.'],
   ['Aggregation & inference', 'Sport-aware aggregators compute per-athlete baselines, training load, readiness, sentiment trend, Focus / Composure / Decisioning movement, and confidence tiers.', 'Inference is athlete-specific, not population-average. Same physiology produces different recommendations across sport, position, season phase.'],
-  ['Output surfaces', 'Weekly Sports Intelligence Report, Game-Day Readiness Report, Early-Warning Alerts, Macra nutrition context, Nora coaching context, AuntEDNA escalation context.', 'Each surface has its own audience, latency, and copy posture. Coaches do not read dashboards; they read reports.'],
+  ['Output surfaces', 'Weekly Sports Intelligence Report, Game-Day Readiness Report, Early-Warning Alerts, Macra nutrition context, Nora coaching context, AuntEDNA escalation context.', 'Each surface has its own audience, latency, and copy posture. Coaches make decisions from reports; dashboards may expose supporting KPIs for review/admin only.'],
 ];
 
 const DEVICE_LAYER_ROWS = [
@@ -42,6 +42,7 @@ const NORMALIZED_FIELDS = [
   ['Recovery & readiness', 'recoveryScore (0-100), readinessScore (0-100), recoveryTrend7d, sourceConfidence.', 'Score scales harmonized across vendors before recovery is read by any consumer.'],
   ['Training load', 'externalLoadAU, internalLoadRpeAU, acwr (acute:chronic), microcycleLoadDelta, sessionRpe.', 'External load: distance, jumps, etc. Internal: HR-derived. RPE: athlete-reported.'],
   ['Workout sessions', 'sessionId, sport, modality, durationMin, intensity, sessionRpe, completedAt.', 'Reads from FWP `workoutSessions`; never re-stores the truth.'],
+  ['Competition / travel context', 'competitionId, scheduledAt, opponentOrEventName, locationTimezone, travelDistanceMiles, travelDays, travelDirection, travelImpactFactor.', 'Optional first-class context record. Game-day readiness may use travel only when schedule/travel provenance is present; otherwise it omits the factor.'],
   ['Cognitive performance', 'focusScore, composureScore, decisioningScore, simEvidenceCount, lastUpdatedAt.', 'Driven by simulation results + Correlation Engine. Always paired with confidence tier.'],
   ['Sentiment / mental state', 'sentimentRollingAvg, riskFlags[], protocolEffectiveness.', 'Rolled up from daily check-ins; aggregated only — individual disclosures stay clinician-gated.'],
 ];
@@ -57,8 +58,8 @@ const SPORT_PROFILE_FIELDS = [
 
 const OUTPUT_SURFACES = [
   ['Weekly Sports Intelligence Report', 'Coach', 'Sundays before the week starts.', 'Team load trend, aggregate sentiment, cognitive movement (Focus / Composure / Decisioning), athlete watchlist, recommended training adjustments. Walk-through with Pulse Check team weekly during pilot.'],
-  ['Game-Day Readiness Report', 'Coach', 'Morning of competition.', 'Athlete-by-athlete readiness combining biometric recovery, cognitive trajectory, sentiment 48h prior, travel impact factor, recommended pre-competition protocols.'],
-  ['Early-Warning Alert', 'Coach', 'Real-time.', 'Sustained pattern flags: trending overtrained, sudden sentiment shift, cognitive decline. Rare by design — not a stream. Clinical-threshold signals do NOT route here; they go through escalation.'],
+  ['Game-Day Readiness Report', 'Coach', 'Morning of competition.', 'Athlete-by-athlete readiness combining biometric recovery, cognitive trajectory, sentiment 48h prior, optional travel impact factor, and recommended pre-competition protocols. During UMES pilot this is generated as a human-reviewed report draft.'],
+  ['Early-Warning Alert', 'Coach', 'Real-time after review gate.', 'Sustained pattern flags: trending overtrained, sudden sentiment shift, cognitive decline. Rare by design — not a stream. Clinical-threshold signals do NOT route here; they go through escalation. Fully automated delivery is blocked until the Aggregation + Inference Contract exit criteria are met.'],
   ['Macra Daily Insight Context', 'Athlete (via Nora)', 'Cloud-scheduled, ~7pm local.', 'Sport context block injected into the Macra daily-insight cloud function so nutrition guidance reflects training load, position demand, season phase, game density. Implemented Phase 2.'],
   ['Nora Coaching Context', 'Athlete (via Nora)', 'On every chat or check-in turn.', 'Sport `noraContext` + risk flags + recent biometric posture injected into Nora prompts. Already wired in `nora-nutrition-chat`.'],
   ['AuntEDNA Escalation Context', 'Clinician', 'On clinical handoff only.', 'Recent readiness trends, sentiment patterns, simulation performance — minimum-necessary set. After handoff, clinical authority owns the relationship.'],
@@ -76,10 +77,17 @@ const PHASE_ROADMAP = [
   ['Phase 0 — Schema lock', 'Sport config schema (`company-config/pulsecheck-sports`) frozen with attributes, metrics, prompting fields, and `includeInMacraContext` / `includeInNoraContext` flags. Admin surface live at `/admin/pulsecheckSportConfiguration`.', 'Done.'],
   ['Phase 1 — Athlete sport profile capture', 'Macra athlete onboarding adds sport selector + position. Mirrored to root user doc for cross-product reads. PulseCheck onboarding already captures sport.', 'Done.'],
   ['Phase 2 — Macra hookup', 'Cloud-scheduled daily insight pulls sport context, FWP training, longitudinal patterns, distribution, outcome trend, frequent foods. Insight type tags drive UI badges. Push notifications fire at user evening hour.', 'Done.'],
-  ['Phase 3 — Coach-facing reports', 'Weekly Sports Intelligence Report + Game-Day Readiness Report generation pipeline. Initial sport coverage: basketball, golf, bowling (UMES pilot scope).', 'In design.'],
+  ['Phase 3 — Coach-facing reports', 'Weekly Sports Intelligence Report + Game-Day Readiness Report generation pipeline. Initial sport coverage: basketball, golf, bowling (UMES pilot scope). Outputs launch as human-reviewed drafts until inference evaluation clears automation gates.', 'In design.'],
   ['Phase 4 — UMES pilot operation', '110-day pilot: 20 days onboarding + 90 days operation. Adherence as primary metric. Weekly walk-throughs with each head coach.', 'Pilot brief approved; awaiting contract finalization.'],
-  ['Phase 5 — Adaptive Framing Scale', 'Per-athlete framing profile (1-10) calibrated by Nora and shared back to coaches. Same data tunes Nora voice and primes face-to-face coach conversations.', 'Specced; build follows pilot.'],
-  ['Phase 6 — Cross-sport scale', 'Football, soccer, baseball, softball, volleyball, tennis configurations harden with pilot evidence. Per-sport KPIs surface in coach dashboard.', 'Pilot-dependent.'],
+  ['Phase 5 — Adaptive Framing Scale', 'Persistent per-athlete framing profile (1-10) calibrated by Nora and shared back to coaches. Current Phase 2 prompts may use static sport framing policy, but durable athlete-level AFS memory is not considered shipped until this phase.', 'Specced; build follows pilot.'],
+  ['Phase 6 — Cross-sport scale', 'Football, soccer, baseball, softball, volleyball, tennis configurations harden with pilot evidence. Per-sport KPIs may surface in a supporting coach/admin dashboard, but the coaching decision surface remains narrative reports.', 'Pilot-dependent.'],
+];
+
+const TRUST_GATES = [
+  ['Build now', 'Aggregation plumbing, report draft generation, Macra/Nora sport-context enrichment, evidence/provenance display.', 'May run automatically if outputs are clearly marked as context or draft intelligence.'],
+  ['Human review required', 'Weekly Sports Intelligence Reports, Game-Day Readiness Reports, high-impact training adjustment recommendations.', 'Pulse Check team reviews before coach delivery during UMES pilot.'],
+  ['Blocked from full automation', 'Early-warning alerts, high-trust athlete watchlist promotion, sustained overtraining flags, coach-facing risk recommendations.', 'Requires locked thresholds, evaluation criteria, false-positive review, and pilot evidence in the Aggregation + Inference Contract.'],
+  ['Never owned here', 'Clinical-threshold interpretation, clinical return-to-play decisions, clinician-gated disclosures.', 'Routes through AuntEDNA escalation. Sports Intelligence may provide minimum-necessary context after handoff only.'],
 ];
 
 const NON_NEGOTIABLES = [
@@ -110,9 +118,9 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
     <div className="space-y-10">
       <DocHeader
         eyebrow="Pulse Sports Intelligence"
-        title="Sports Intelligence Layer Spec"
-        version="Version 0.1 | April 24, 2026"
-        summary="The Sports Intelligence Layer is the device-agnostic, sport-aware interpretation system that translates raw biometrics, simulation evidence, daily check-ins, training, and nutrition into coach-facing intelligence and athlete-facing context. It sits above the normalized health-context surface and below every consumer surface (coach reports, Macra, Nora, AuntEDNA escalation). This page is the implementation baseline: what the layer is, what it consumes, what it produces, and how it ships."
+        title="Sports Intelligence Layer: Architecture & Product Boundaries"
+        version="Version 0.2 | April 25, 2026"
+        summary="The Sports Intelligence Layer is the device-agnostic, sport-aware interpretation system that translates raw biometrics, simulation evidence, daily check-ins, training, nutrition, and schedule context into coach-facing intelligence and athlete-facing context. It sits above the normalized health-context surface and below every consumer surface (coach reports, Macra, Nora, AuntEDNA escalation). This page is the boundary baseline: what the layer is, what it consumes, what it produces, and which decisions require the companion Aggregation + Inference Contract."
         highlights={[
           {
             title: 'Device-Agnostic Surface',
@@ -131,8 +139,8 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
 
       <RuntimeAlignmentPanel
         role="Interpretation layer between raw signals and consumer surfaces. Owns sport-aware aggregation, athlete-specific baselines, output formatting, and policy enforcement."
-        sourceOfTruth="This page is the implementation baseline for what Sports Intelligence is, the layers it sits between, and how new sports / devices / output surfaces extend it. Use it to reject device-direct reads, generic wellness scoring, or coach-facing outputs that bypass the report pipeline."
-        masterReference="Sport configuration is owned by `company-config/pulsecheck-sports` (admin: `/admin/pulsecheckSportConfiguration`). Biometric input is owned by the Athlete Context Snapshot Spec. Cognitive evidence is owned by the Physiology-Cognition Correlation Engine. This page is the bridge that turns those inputs into outputs."
+        sourceOfTruth="This page is the product and architecture boundary baseline for what Sports Intelligence is, the layers it sits between, and how new sports / devices / output surfaces extend it. The companion Aggregation + Inference Contract is the source of truth for formulas, windows, fallback behavior, thresholds, and payload schemas."
+        masterReference="Sport configuration is owned by `company-config/pulsecheck-sports` (admin: `/admin/pulsecheckSportConfiguration`). Biometric input is owned by the Athlete Context Snapshot Spec. Cognitive evidence is owned by the Physiology-Cognition Correlation Engine. Decisioning rules are owned by the Sports Intelligence Aggregation + Inference Contract."
         relatedDocs={[
           'Athlete Context Snapshot Spec',
           'Health Context Source Record Spec',
@@ -141,6 +149,8 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           'Correlation Data Model Spec',
           'Device & Wearable Integrations',
           'Oura Integration Strategy',
+          'Sports Intelligence Aggregation + Inference Contract',
+          'Mock Report Baselines',
           'Macra',
           'AuntEDNA Integration Strategy',
         ]}
@@ -224,14 +234,18 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           <InfoCard
             title="Nora Coaching Context"
             accent="blue"
-            body="Sport `noraContext` + risk flags + Adaptive Framing Scale calibration injected into every Nora prompt. Nora speaks the sport's language (possession, at-bat, pitch, point, set) without a separate per-sport implementation."
+            body="Sport `noraContext`, risk flags, and current sport framing policy are injected into every Nora prompt. Nora speaks the sport's language (possession, at-bat, pitch, point, set) without a separate per-sport implementation. Persistent per-athlete Adaptive Framing Scale calibration remains a Phase 5 build item."
           />
           <InfoCard
             title="Coach Reports"
             accent="green"
-            body="Coaches do not read dashboards. Weekly + Game-Day reports + Early-Warning Alerts are concise, narrative outputs timed to when coaching decisions get made. Pulse Check team does a 20-minute weekly walk-through with each head coach during pilot."
+            body="Coaches make decisions from reports, not raw dashboards. Weekly and Game-Day outputs are concise, narrative reports timed to when coaching decisions get made. Supporting KPI dashboards can exist for review/admin, but they do not replace the report pipeline. Pulse Check team does a 20-minute weekly walk-through with each head coach during pilot."
           />
         </CardGrid>
+      </SectionBlock>
+
+      <SectionBlock icon={ShieldCheck} title="Automation Trust Gates">
+        <DataTable columns={['Gate', 'Scope', 'Rule']} rows={TRUST_GATES} />
       </SectionBlock>
 
       <SectionBlock icon={Map} title="Phased Build Roadmap">
@@ -256,6 +270,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
                 'Device-agnostic biometric surface contract is explicit: adapters only, no vendor leakage into Sports Intelligence reads.',
                 'Sport configuration registry, athlete sport profile shape, and cross-product mirror fields are documented and the admin surface is live.',
                 'Output surfaces (Weekly, Game-Day, Alerts, Macra context, Nora context, escalation) are defined with audience, cadence, and contents.',
+                'Companion Aggregation + Inference Contract exists with baseline windows, source precedence, missing-data behavior, confidence propagation, output payloads, and automation gates.',
                 'Macra hookup (sport profile capture + cloud-driven daily insight + Nora context) is implemented and pulled into this spec as Phase 1 + 2.',
                 'Phased roadmap is captured with explicit pilot dependency for Phases 4–6.',
                 'Non-negotiables (device-agnostic, sport-and-athlete-specific, reports-not-dashboards, clinical-boundary-is-architectural) are written so future PRs can be measured against them.',

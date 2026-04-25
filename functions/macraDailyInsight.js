@@ -115,11 +115,17 @@ async function generateInsight(userId, timezone, internalToken) {
 async function sendInsightPush(userId, fcmToken, insight) {
   if (!fcmToken || !insight) return { success: false, reason: 'missing_token_or_insight' };
 
+  const headline = (Array.isArray(insight.points) && insight.points[0])
+    || insight.action
+    || insight.response
+    || 'Open Macra to see your daily insight.';
+  const body = String(headline).slice(0, 180);
+
   const message = {
     token: fcmToken,
     notification: {
       title: insight.title || "Today's read from Nora",
-      body: insight.response?.slice(0, 180) || 'Open Macra to see your daily insight.',
+      body,
     },
     data: {
       type: 'MACRA_DAILY_INSIGHT',
@@ -133,7 +139,7 @@ async function sendInsightPush(userId, fcmToken, insight) {
         aps: {
           alert: {
             title: insight.title || "Today's read from Nora",
-            body: insight.response?.slice(0, 180) || '',
+            body,
           },
           sound: 'default',
           'content-available': 1,
