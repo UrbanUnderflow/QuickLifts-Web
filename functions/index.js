@@ -113,6 +113,9 @@ exports.processEmailQueue = require("./mentalCurriculumNotifications").processEm
 exports.scheduledDailyReflection = require("./dailyReflectionNotifications").scheduledDailyReflection;
 exports.sendTestReflectionNotification = require("./dailyReflectionNotifications").sendTestReflectionNotification;
 
+// Macra: scheduled daily insight (rich context, sport-aware, FWP-coupled)
+exports.scheduledMacraDailyInsight = require("./macraDailyInsight").scheduledMacraDailyInsight;
+
 // Export Lead Massaging worker functions
 exports.onLeadMassageJobCreated = onLeadMassageJobCreated;
 exports.onLeadMassageItemJobCreated = onLeadMassageItemJobCreated;

@@ -73,6 +73,7 @@ import PulseCheckHealthContextEngineeringTaskBreakdownTab from "../../components
 import PulseCheckHealthContextFirestoreSchemaIndexSpecTab from "../../components/admin/system-overview/PulseCheckHealthContextFirestoreSchemaIndexSpecTab";
 import PulseCheckPhysiologyCognitionCorrelationEngineTab from "../../components/admin/system-overview/PulseCheckPhysiologyCognitionCorrelationEngineTab";
 import PulseCheckCorrelationEngineContractLockTab from "../../components/admin/system-overview/PulseCheckCorrelationEngineContractLockTab";
+import PulseCheckSportsIntelligenceLayerSpecTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceLayerSpecTab";
 import PulseCheckCorrelationDataModelSpecTab from "../../components/admin/system-overview/PulseCheckCorrelationDataModelSpecTab";
 import PulseCheckCorrelationEngineEngineeringTaskBreakdownTab from "../../components/admin/system-overview/PulseCheckCorrelationEngineEngineeringTaskBreakdownTab";
 import PulseCheckCorrelationEnginePilotDashboardTab from "../../components/admin/system-overview/PulseCheckCorrelationEnginePilotDashboardTab";
@@ -275,6 +276,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-correlation-engine-pilot-research-readout",
       "pulsecheck-oura-integration-strategy",
       "pulsecheck-oura-cognitive-correlation-spec",
+      "pulsecheck-sports-intelligence-layer-spec",
       "pulsecheck-device-integration-strategy",
       "pulsecheck-device-integration-partnership-matrix",
       "pulsecheck-school-wearable-bundle-plan",
@@ -1759,6 +1761,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-correlation-engine-contract-lock":
         return <PulseCheckCorrelationEngineContractLockTab />;
+
+      case "pulsecheck-sports-intelligence-layer-spec":
+        return <PulseCheckSportsIntelligenceLayerSpecTab />;
 
       case "pulsecheck-correlation-data-model-spec":
         return <PulseCheckCorrelationDataModelSpecTab />;
