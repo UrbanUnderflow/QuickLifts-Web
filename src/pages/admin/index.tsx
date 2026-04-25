@@ -76,8 +76,8 @@ const adminCardsData = [
     link: "/admin/pulsecheckProvisioning"
   },
   {
-    title: "PulseCheck Sport Configuration",
-    description: "Manage the shared PulseCheck sport lookup used by onboarding, profile editing, and provisioning.",
+    title: "Sports Intelligence Layer",
+    description: "Sport list and per-sport intelligence — report policy, load model, and output schemas. Sport list and prompting are editable; policy, formulas, and schemas are review-only and edited in code.",
     icon: <Settings2 className="w-5 h-5" />,
     link: "/admin/pulsecheckSportConfiguration"
   },
