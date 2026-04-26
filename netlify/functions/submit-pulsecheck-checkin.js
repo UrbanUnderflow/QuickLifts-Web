@@ -8,6 +8,7 @@ const {
   recomputePilotMetricRollups,
   upsertPilotMentalPerformanceSnapshot,
 } = require('./utils/pulsecheck-pilot-metrics');
+const { syncSelfReportFromCheckin } = require('./utils/self-report-source-record');
 
 const RESPONSE_HEADERS = {
   ...headers,
@@ -3389,6 +3390,31 @@ exports.handler = async (event) => {
         pilotId: dailyAssignment?.pilotId || stateSnapshot?.pilotId,
         explicitDateKeys: [sourceDate],
       });
+    }
+
+    // Self-report side effect: when an athlete has no connected wearable,
+    // their structured check-in answers (energyLevel, stressLevel,
+    // sleepQuality) are also written as canonical Health Context Source
+    // Records under sourceFamily='pulsecheck_self_report'. The snapshot
+    // assembler then treats self-report as a first-class lane for
+    // recovery + behavioral domains. This is non-blocking — a failure
+    // here MUST NOT fail the check-in itself.
+    try {
+      await syncSelfReportFromCheckin(db, {
+        userId,
+        sourceDate,
+        timezone: body.timezone,
+        readinessScore,
+        energyLevel: typeof body.energyLevel === 'number' ? body.energyLevel : undefined,
+        stressLevel: typeof body.stressLevel === 'number' ? body.stressLevel : undefined,
+        sleepQuality: typeof body.sleepQuality === 'number' ? body.sleepQuality : undefined,
+        perceivedRpe: typeof body.perceivedRpe === 'number' ? body.perceivedRpe : undefined,
+      });
+    } catch (selfReportError) {
+      console.warn(
+        '[submit-pulsecheck-checkin] self-report side effect failed (non-blocking):',
+        selfReportError?.message || selfReportError,
+      );
     }
 
     const responseSnapshot = dailyAssignment

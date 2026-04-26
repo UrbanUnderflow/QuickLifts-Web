@@ -24,6 +24,8 @@ const HEADER = `# Pulse Sports Intelligence — Full Spec Bundle
 
 > **Translation rule (load-bearing):** every coach-visible string in this stack — reports, reviewer-screen messages, missing-context nudges, error states, even spec examples — must read in coach voice, not science-speak. "Confidence is emerging" → "this read will get sharper once you add the practice details." "Schedule context missing" → "drop the practice plan and we'll lock in the read." Internal vocabulary ("ACWR", "load_au", "high_confidence") never surfaces to coaches.
 
+> **Slice 1 operating posture:** Pulse team manually curates inference + adherence; reports flow through reviewer screen; no auto-delivery during pilot.
+
 ---
 `;
 
@@ -32,8 +34,10 @@ const SPEC_1_LAYER = `
 
 The device-agnostic, sport-aware interpretation system that translates raw biometrics, simulation evidence, daily check-ins, training, nutrition, and schedule context into coach-facing intelligence and athlete-facing context. Sits above the normalized health-context surface and below every consumer surface (coach reports, Macra, Nora, AuntEDNA escalation).
 
+**Slice 1 operating posture:** Pulse team manually curates inference + adherence; reports flow through reviewer screen; no auto-delivery during pilot. Reviewer screen: \`/admin/sportsIntelligenceReports\`. Code-owned reportPolicy/loadModel changes are backfilled with \`npx tsx scripts/seed-pulsecheck-sports.ts\` in diff mode first, then \`--apply\` after review.
+
 ### Highlights
-- **Device-Agnostic Surface** — Polar is the active early-pilot device, not the contract. Sports Intelligence reads from the normalized health-context surface; Apple Watch, Oura, Whoop, Garmin, and self-reported all flow through the same record shape.
+- **Device-Agnostic Surface** — No single device is the contract. Apple Watch / HealthKit and Oura are the active sources today; Polar, Whoop, and Garmin are planned future devices. Sports Intelligence reads from the normalized health-context surface; every adapter, plus self-report, flows through the same record shape.
 - **Sport- And Athlete-Specific** — Same biometric reading produces different recommendations across sport, position, season phase, and individual baseline. Generic wellness scoring is explicitly out of scope.
 - **Macra Already Hooked In** — Macra athlete onboarding writes the sport profile, the daily-insight cloud function pulls sport context, and Nora chat injects sport prompting policy verbatim. Phase 2 of the roadmap is shipped.
 
@@ -46,11 +50,11 @@ The device-agnostic, sport-aware interpretation system that translates raw biome
 | Output surfaces | Weekly Sports Intelligence Report, Game-Day Readiness Report, Early-Warning Alerts, Macra nutrition context, Nora coaching context, AuntEDNA escalation context. | Each surface has its own audience, latency, and copy posture. Coaches make decisions from reports; the Coach Dashboard is a thin access surface that links into those reports. |
 
 ### Device-Agnostic Biometric Surface
-- Pulse runs multiple device integrations (Polar in current early pilots, plus Apple Watch / HealthKit, Oura, and future Whoop / Garmin). Sports Intelligence cannot couple to any one device.
+- Pulse runs multiple device integrations (Apple Watch / HealthKit and Oura active today; Polar, Whoop, and Garmin planned). Sports Intelligence cannot couple to any one device.
 - All vendor data lands in the Health Context Source Record before any aggregator reads it. Adapters are the only code that touches vendor SDKs.
 - Renaming or specializing field names per vendor is forbidden. HRV is \`rmssdMs\` whether it came from Polar, Oura, or Apple Health.
 
-**Source lanes:** Polar (active in current early pilots), Apple Watch / HealthKit, Oura (direct OAuth preferred, HealthKit fallback), Whoop / Garmin (per-vendor adapters), self-reported / coach-entered.
+**Source lanes:** Apple Watch / HealthKit (active), Oura (active; direct OAuth preferred, HealthKit fallback), Polar / Whoop / Garmin (planned future devices), self-reported via Nora (active when no wearable connected), coach-entered.
 
 **Normalized fields by domain:** sleep (totalSleepMin, deepSleepMin, remSleepMin, sleepEfficiency, sleepConsistencyScore, latency); HRV (rmssdMs, hrvBaselineDeltaPct, hrvTrend7d, restingHr, restingHrTrend7d); recovery (recoveryScore 0-100, readinessScore 0-100, recoveryTrend7d, sourceConfidence); training load (externalLoadAU, internalLoadRpeAU, acwr, microcycleLoadDelta, sessionRpe); workout sessions (sessionId, sport, modality, durationMin, intensity, sessionRpe, completedAt); competition / travel context; cognitive performance; sentiment / mental state.
 
@@ -635,6 +639,11 @@ This bundle is a snapshot of the System Overview Sports Intelligence specs as of
 - \`/admin/systemOverview?section=pulsecheck-nora-context-capture\`
 - \`/admin/systemOverview?section=pulsecheck-session-detection-matching\`
 - \`/admin/systemOverview?section=pulsecheck-sport-load-model\`
+
+Operational admin surfaces:
+- \`/admin/sportsIntelligenceReports\` — reviewer screen for draft seeding, curation, audit, and publish.
+- \`/admin/pulsecheckSportConfiguration\` — sport configuration surface; code-owned reportPolicy/loadModel fields are review-only.
+- \`scripts/seed-pulsecheck-sports.ts\` — idempotent diff/apply backfill for code-owned Sports Intelligence policy defaults.
 
 Public coach-report demo URLs (no auth required):
 - https://fitwithpulse.ai/coach-report-demo/basketball

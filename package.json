@@ -136,6 +136,8 @@
     "pulsecheckdemo:audio": "node scripts/generate-pulsecheckdemo-audio.js",
     "pulsecheckdemo:audio:ab": "node scripts/generate-pulsecheckdemo-audio.js --sample-only --all-profiles",
     "system-overview:validate": "node scripts/validate-system-overview-content.js",
+    "seed:pulsecheck-sports": "tsx scripts/seed-pulsecheck-sports.ts",
+    "seed:pulsecheck-sports:apply": "tsx scripts/seed-pulsecheck-sports.ts --apply",
     "env-check": "node env-check.js",
     "stripe:create-products": "node scripts/create-stripe-products.js",
     "promo:create-samples": "node scripts/create-promo-codes.js sample",

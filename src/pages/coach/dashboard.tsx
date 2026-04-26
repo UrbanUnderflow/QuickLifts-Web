@@ -18,7 +18,9 @@ import {
   UserPlus,
   Copy,
   BellRing,
-  ArrowRight
+  ArrowRight,
+  FileText,
+  ClipboardCheck
 } from 'lucide-react';
 import { db } from '../../api/firebase/config';
 import { doc, getDoc, collection, getDocs, onSnapshot, query, where, updateDoc } from 'firebase/firestore';
@@ -26,6 +28,10 @@ import { EscalationRecordStatus } from '../../api/firebase/escalation/types';
 import { escalationRecordsService } from '../../api/firebase/escalation/service';
 import { EscalationTier } from '../../api/firebase/escalation/types';
 import { convertFirestoreTimestamp } from '../../utils/formatDate';
+import {
+  getLatestSportsIntelligenceReportForCoach,
+  type CoachReportListItem,
+} from '../../api/firebase/pulsecheckCoachReportAccess';
 
 type CoachNotificationDoc = {
   id: string;
@@ -171,6 +177,20 @@ const getEscalationLaneCopy = (tier?: number) => {
   return 'No safety visibility is active.';
 };
 
+const formatReportDate = (date?: Date) => {
+  if (!date) return 'Date pending';
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
+const formatAdherenceChip = (report?: CoachReportListItem | null) => {
+  if (!report?.adherence?.categoriesTotal) return 'Coverage pending';
+  return `Adherence: ${report.adherence.categoriesReady ?? 0} / ${report.adherence.categoriesTotal} categories`;
+};
+
 const CoachDashboard: React.FC = () => {
   const currentUser = useUser();
   const userLoading = useUserLoading();
@@ -183,6 +203,8 @@ const CoachDashboard: React.FC = () => {
   const [_sharedByCoach, setSharedByCoach] = useState<Array<{coachId: string; coachName?: string; athletes: any[]}>>([]);
   const [pendingInvites, setPendingInvites] = useState<{ coachId: string; coachName?: string; permission: 'full'|'limited'; allowedAthletes?: string[] }[]>([]);
   const [coachNotifications, setCoachNotifications] = useState<CoachNotificationDoc[]>([]);
+  const [latestSportsIntelligenceReport, setLatestSportsIntelligenceReport] = useState<CoachReportListItem | null>(null);
+  const [sportsIntelligenceLoading, setSportsIntelligenceLoading] = useState(false);
 
   const handleSignOut = async () => {
     try {
@@ -254,6 +276,33 @@ const CoachDashboard: React.FC = () => {
     .filter((athlete) => typeof athlete.activeEscalationTier === 'number' && athlete.activeEscalationTier >= EscalationTier.MonitorOnly)
     .sort((left, right) => (right.activeEscalationTier || 0) - (left.activeEscalationTier || 0))
     .slice(0, 3);
+
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setLatestSportsIntelligenceReport(null);
+      setSportsIntelligenceLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSportsIntelligenceLoading(true);
+
+    getLatestSportsIntelligenceReportForCoach(currentUser.id)
+      .then((report) => {
+        if (!cancelled) setLatestSportsIntelligenceReport(report);
+      })
+      .catch((reportError) => {
+        console.error('Failed to load latest Sports Intelligence report:', reportError);
+        if (!cancelled) setLatestSportsIntelligenceReport(null);
+      })
+      .finally(() => {
+        if (!cancelled) setSportsIntelligenceLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id]);
 
   useEffect(() => {
     const fetchCoachProfile = async () => {
@@ -712,6 +761,92 @@ const CoachDashboard: React.FC = () => {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.45 }}
+          className="mb-10"
+        >
+          <GlassCard
+            accentColor="#10B981"
+            hoverEffect={Boolean(latestSportsIntelligenceReport)}
+            onClick={latestSportsIntelligenceReport ? () => router.push(latestSportsIntelligenceReport.href) : undefined}
+          >
+            <div className="p-6 lg:p-7">
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#10B981]/40 bg-[#10B981]/15">
+                    <FileText className="h-6 w-6 text-[#6EE7B7]" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6EE7B7]">
+                      Latest Sports Intelligence Report
+                    </p>
+                    <h2 className="mt-2 text-2xl font-semibold text-white">
+                      {sportsIntelligenceLoading
+                        ? 'Checking for your latest reviewed read...'
+                        : latestSportsIntelligenceReport?.title || 'No reviewed report has been sent yet.'}
+                    </h2>
+                    <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-300">
+                      {latestSportsIntelligenceReport
+                        ? `${latestSportsIntelligenceReport.weekLabel} · ${latestSportsIntelligenceReport.sportName} · ${latestSportsIntelligenceReport.teamName}`
+                        : 'When the Pulse team publishes a weekly read, it will land here first with one click into the full coach report.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row lg:items-center">
+                  <div className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-zinc-200">
+                    <ClipboardCheck className="h-4 w-4 text-[#6EE7B7]" />
+                    {sportsIntelligenceLoading ? 'Loading coverage' : formatAdherenceChip(latestSportsIntelligenceReport)}
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-zinc-300">
+                    {latestSportsIntelligenceReport
+                      ? `Sent ${formatReportDate(latestSportsIntelligenceReport.sentAt || latestSportsIntelligenceReport.publishedAt || latestSportsIntelligenceReport.generatedAt)}`
+                      : 'Archive opens once reports are available.'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="button"
+                  disabled={!latestSportsIntelligenceReport}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (latestSportsIntelligenceReport) {
+                      router.push(latestSportsIntelligenceReport.href);
+                    }
+                  }}
+                  className={`inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold transition-all ${
+                    latestSportsIntelligenceReport
+                      ? 'bg-[#E0FE10] text-black shadow-lg shadow-[#E0FE10]/15'
+                      : 'cursor-not-allowed bg-white/5 text-zinc-500'
+                  }`}
+                >
+                  Open Latest Report
+                  <ArrowRight className="h-4 w-4" />
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    router.push('/coach/sports-intelligence-reports');
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-zinc-200 transition-colors hover:bg-white/10"
+                >
+                  View Report Archive
+                  <ArrowRight className="h-4 w-4" />
+                </motion.button>
+              </div>
+            </div>
+          </GlassCard>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
           className="mb-10"
         >
           <GlassCard accentColor={actionNotificationCount > 0 ? '#F59E0B' : '#3B82F6'} hoverEffect={false}>

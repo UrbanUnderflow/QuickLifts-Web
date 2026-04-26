@@ -53,6 +53,7 @@ import type {
 } from '../../../api/firebase/pulsecheckProvisioning/types';
 import { analyzePulseCheckInviteOneLink, buildPulseCheckTeamInviteWebUrl, isPulseCheckInviteOneLink } from '../../../utils/pulsecheckInviteLinks';
 import { useUser } from '../../../hooks/useUser';
+import Tier3RoutingReadinessBanner from '../../../components/clinical-escalation/Tier3RoutingReadinessBanner';
 import { showToast } from '../../../redux/toastSlice';
 import type {
   PilotDashboardDetail,
@@ -2900,6 +2901,15 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                 >
                   Demo mode is on. This pilot dashboard is using safe local mock data, mock athlete enrollments, and
                   mock AI research briefs so you can demo and QA without touching live pilot records.
+                </div>
+              ) : null}
+
+              {detail?.team?.id ? (
+                <div className="mt-5">
+                  <Tier3RoutingReadinessBanner
+                    teamId={detail.team.id}
+                    membershipsHref={`/admin/pulsecheckProvisioning?team=${encodeURIComponent(detail.team.id)}`}
+                  />
                 </div>
               ) : null}
             </div>

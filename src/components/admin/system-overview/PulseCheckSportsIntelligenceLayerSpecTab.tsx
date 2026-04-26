@@ -88,11 +88,12 @@ const ARCHITECTURE_LAYERS = [
 ];
 
 const DEVICE_LAYER_ROWS = [
-  ['Polar (active early-pilot device)', 'Polar OAuth + Accesslink → Polar adapter → Health Context Source Record.', 'Active in current early pilots. Polar is one device, not the contract.'],
-  ['Apple Watch / HealthKit', 'HealthKit bridge → Apple Health adapter → Health Context Source Record.', 'Existing Fit With Pulse path. Reused without re-implementation.'],
-  ['Oura', 'Oura OAuth/API direct lane (preferred) or HealthKit-derived fallback → Oura adapter → Health Context Source Record.', 'Already speced in `Oura Integration Strategy`. Inherits engine confidence tiers.'],
-  ['Whoop / Garmin / future', 'Per-vendor OAuth → vendor adapter → Health Context Source Record.', 'Implementation-only addition; no engine, schema, or messaging changes required.'],
-  ['Self-reported / coach-entered', 'Manual entry → manual adapter → Health Context Source Record with provenance flag.', 'Lowest-confidence lane; explicit provenance carries through to coach-facing copy.'],
+  ['Apple HealthKit / Apple Watch', 'HealthKit bridge → Apple Health adapter → Health Context Source Record.', 'Active source today. Existing Fit With Pulse path; rewiring through HCSR is in flight so Sports Intelligence reads from the canonical surface and not HKHealthStore directly.'],
+  ['Oura', 'Oura OAuth/API direct lane (preferred) or HealthKit-derived fallback → Oura adapter → Health Context Source Record.', 'Active source today. Direct OAuth preferred; HealthKit fallback documented in the Oura Integration Strategy spec.'],
+  ['Polar', 'Polar OAuth + Accesslink → Polar adapter → Health Context Source Record.', 'Planned future device. Adapter not yet implemented; on the HCSR build queue.'],
+  ['Whoop / Garmin / future', 'Per-vendor OAuth → vendor adapter → Health Context Source Record.', 'Planned future devices; implementation-only addition once HCSR adapter scaffolding lands.'],
+  ['Pulse Check self-report', 'Nora check-in → self-report intake → Health Context Source Record with `source: pulsecheck_self_report`.', 'Active when an athlete has no connected wearable. Confidence capped at `emerging` per spec — never drives high-trust coach claims.'],
+  ['Coach-entered', 'Manual entry → manual adapter → Health Context Source Record with provenance flag.', 'Lowest-confidence lane; explicit provenance carries through to coach-facing copy.'],
 ];
 
 const NORMALIZED_FIELDS = [
@@ -146,7 +147,7 @@ const TRUST_GATES = [
   ['Build now', 'Aggregation plumbing, report draft generation, Macra/Nora sport-context enrichment, evidence/provenance display.', 'May run automatically if outputs are clearly marked as context or draft intelligence.'],
   ['Human review required', 'Weekly Sports Intelligence Reports, Game-Day Readiness Reports, high-impact training adjustment recommendations.', 'Pulse Check team reviews before coach delivery during early pilots.'],
   ['Blocked from full automation', 'Early-warning alerts, high-trust athlete watchlist promotion, sustained overtraining flags, coach-facing risk recommendations.', 'Requires locked thresholds, evaluation criteria, false-positive review, and pilot evidence in the Aggregation + Inference Contract.'],
-  ['Never owned here', 'Clinical-threshold interpretation, clinical return-to-play decisions, clinician-gated disclosures.', 'Routes through AuntEDNA escalation. Sports Intelligence may provide minimum-necessary context after handoff only.'],
+  ['Never owned here', 'Clinical-threshold interpretation, clinical return-to-play decisions, clinician-gated disclosures.', 'Until AuntEDNA integration ships, Tier 3 signals route through `pulsecheck-clinical-escalations` to the team\'s designated clinician staff member. The clinician applies judgment; the athlete\'s app gates to a 988 / Crisis Text Line / 911 surface and informs them the clinician has been notified. Pulse never auto-dials emergency services.'],
 ];
 
 const NON_NEGOTIABLES = [
@@ -168,7 +169,7 @@ const NON_NEGOTIABLES = [
   {
     title: 'Clinical Boundary Is Architectural',
     accent: 'amber' as const,
-    body: 'Performance signals stay in the Sports Intelligence Layer. Clinical-threshold signals route through the escalation pipeline to AuntEDNA. Sports Intelligence does not own clinical authority and does not reverse a clinician-gated return.',
+    body: 'Performance signals stay in the Sports Intelligence Layer. Clinical-threshold signals route through the `pulsecheck-clinical-escalations` pipeline to the team\'s designated clinician staff member; AuntEDNA integration becomes the canonical clinical lane when it ships. Sports Intelligence does not own clinical authority, does not reverse a clinician-gated return, and never auto-dials 988 / 911 — the athlete\'s app surfaces the resources and the athlete remains in control of any call.',
   },
 ];
 
@@ -183,7 +184,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
         highlights={[
           {
             title: 'Device-Agnostic Surface',
-            body: 'Polar is the active early-pilot device, not the contract. Sports Intelligence reads from the normalized health-context surface — Apple Watch, Oura, Whoop, Garmin, and self-reported all flow through the same record shape.',
+            body: 'No single device is the contract. Apple Watch / HealthKit and Oura are the active sources today; Polar, Whoop, and Garmin are planned future devices. Sports Intelligence reads from the normalized health-context surface — every adapter, plus self-report, flows through the same record shape.',
           },
           {
             title: 'Sport- And Athlete-Specific',
@@ -199,6 +200,37 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
       <div className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4 sm:p-5">
         <CopyAllSportsIntelligenceDocsButton />
       </div>
+
+      <InfoCard
+        title="Slice 1 Operating Posture"
+        accent="amber"
+        body={
+          <div className="space-y-3">
+            <p>
+              Pulse team manually curates inference + adherence; reports flow through reviewer screen; no auto-delivery during pilot.
+            </p>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <a
+                href="/admin/sportsIntelligenceReports"
+                className="rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 font-medium text-amber-100 transition hover:border-amber-300/60"
+              >
+                Open reviewer screen
+              </a>
+              <a
+                href="/coach-report-demo"
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full border border-purple-400/30 bg-purple-400/10 px-3 py-1 font-medium text-purple-100 transition hover:border-purple-300/60"
+              >
+                View coach mock reports
+              </a>
+            </div>
+            <p className="text-xs text-zinc-400">
+              Code-owned reportPolicy/loadModel changes ship to Firestore through <code className="rounded bg-black/30 px-1 py-0.5 text-zinc-200">npx tsx scripts/seed-pulsecheck-sports.ts</code> in diff mode first, then <code className="rounded bg-black/30 px-1 py-0.5 text-zinc-200">--apply</code> after review.
+            </p>
+          </div>
+        }
+      />
 
       <RuntimeAlignmentPanel
         role="Interpretation layer between raw signals and consumer surfaces. Owns sport-aware aggregation, athlete-specific baselines, output formatting, and policy enforcement."
@@ -230,7 +262,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           body={
             <BulletList
               items={[
-                'Pulse runs multiple device integrations (Polar in current early pilots, plus Apple Watch / HealthKit, Oura, and future Whoop / Garmin). Sports Intelligence cannot couple to any one device.',
+                'Pulse runs multiple device integrations (Apple Watch / HealthKit and Oura active today; Polar, Whoop, and Garmin planned). Sports Intelligence cannot couple to any one device.',
                 'All vendor data lands in the Health Context Source Record before any aggregator reads it. Adapters are the only code that touches vendor SDKs.',
                 'Renaming or specializing field names per vendor is forbidden. HRV is `rmssdMs` whether it came from Polar, Oura, or Apple Health.',
                 'Confidence tiers (`directional`, `emerging`, `stable`, `high_confidence`, `degraded`) are inherited from the Correlation Engine — adapters do not invent their own.',

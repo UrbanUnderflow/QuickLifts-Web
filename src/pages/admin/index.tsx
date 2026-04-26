@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical, Settings2, Wallet } from 'lucide-react';
+import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical, Settings2, Wallet, ClipboardCheck, ShieldAlert } from 'lucide-react';
 import { useDispatch } from 'react-redux';
 import { toggleDevMode } from '../../redux/devModeSlice';
 import { initializeFirebase, isUsingDevFirebase } from '../../api/firebase/config';
@@ -80,6 +80,18 @@ const adminCardsData = [
     description: "Sport list and per-sport intelligence — report policy, load model, and output schemas. Sport list and prompting are editable; policy, formulas, and schemas are review-only and edited in code.",
     icon: <Settings2 className="w-5 h-5" />,
     link: "/admin/pulsecheckSportConfiguration"
+  },
+  {
+    title: "Sports Intelligence Reports",
+    description: "Pulse team manually curates inference + adherence; reports flow through reviewer screen; no auto-delivery during pilot.",
+    icon: <ClipboardCheck className="w-5 h-5" />,
+    link: "/admin/sportsIntelligenceReports"
+  },
+  {
+    title: "Clinical Escalations",
+    description: "Tier 3 escalation queue. Clinicians acknowledge and resolve here; the athlete's app gates to a 988 / 911 / Crisis Text Line surface. Pulse never auto-dials emergency services.",
+    icon: <ShieldAlert className="w-5 h-5" />,
+    link: "/staff/clinical-escalations"
   },
   {
     title: "Legacy Roster Migration",

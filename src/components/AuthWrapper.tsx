@@ -113,7 +113,11 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   ].map(route => route?.toLowerCase());
 
   const publicPathPatterns = [
-    '/round-invitation', '/round', '/round-library', '/profile', '/challenge', '/review', '/programming', '/press', '/100trainers', '/MoveAndFuelATL', '/investor', '/invest', '/connect', '/coach-invite', '/coach-report-demo', '/research', '/onboarding', '/legal-doc', '/pulsecheck', '/group-meet', '/sign'
+    '/round-invitation', '/round', '/round-library', '/profile', '/challenge', '/review', '/programming', '/press', '/100trainers', '/MoveAndFuelATL', '/investor', '/invest', '/connect', '/coach-invite',
+    // Hosted Sports Intelligence report URLs are allowed through the global
+    // wrapper so the report page can own team-membership authorization.
+    '/coach-reports',
+    '/coach-report-demo', '/research', '/onboarding', '/legal-doc', '/pulsecheck', '/group-meet', '/sign'
   ].map(pattern => pattern.toLowerCase());
 
   const isPublicClubPath = (path: string) => {
