@@ -23,14 +23,20 @@
   package = "@netlify/plugin-nextjs"
 
 # eatwithmacra.ai → serve /Macra at the root of the new domain.
-# Host-conditional rewrite (status 200) keeps the address bar on eatwithmacra.ai.
-# Only matches the bare root; /_next/*, /api/*, and static assets pass through untouched.
+# Host-based rewrite syntax: the host goes in `from` (Netlify's `conditions` block does NOT
+# support Host — only Country/Language/Role/Cookie). Status 200 keeps the URL bar on the
+# new domain. Only matches the bare root; /_next/*, /api/*, static assets pass through.
 [[redirects]]
-  from = "/"
+  from = "https://eatwithmacra.ai/"
   to = "/Macra"
   status = 200
   force = true
-  conditions = {Host = ["eatwithmacra.ai", "www.eatwithmacra.ai"]}
+
+[[redirects]]
+  from = "https://www.eatwithmacra.ai/"
+  to = "/Macra"
+  status = 200
+  force = true
 
 # Branded OG images (route through a normal URL so bot user agents aren't blocked by /.netlify/functions)
 # Keeps query params (title/subtitle) intact.
