@@ -1367,15 +1367,28 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                     Sport list, athlete fields, metrics, and prompting are editable here. Report policy, load formulas,
                     and schemas are review-only and edited through code so a UI mistake can never reach a coach report.
                   </p>
-                  <a
-                    href="/coach-report-demo"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[#A78BFA] transition hover:text-[#C4B5FD]"
-                  >
-                    View public demo-report directory
-                    <ArrowUp className="h-3 w-3 rotate-45" />
-                  </a>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <a
+                      href="/coach-report-demo"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-[#A78BFA] transition hover:text-[#C4B5FD]"
+                    >
+                      View public demo-report directory
+                      <ArrowUp className="h-3 w-3 rotate-45" />
+                    </a>
+                    <a
+                      href="/admin/sportsIntelligenceReports"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-[#d7ff00] transition hover:text-[#ecff7a]"
+                    >
+                      Open reviewer screen
+                      <ArrowUp className="h-3 w-3 rotate-45" />
+                    </a>
+                  </div>
+                  <p className="mt-2 max-w-3xl text-xs leading-relaxed text-zinc-500">
+                    Slice 1 posture: Pulse team manually curates inference + adherence; reports flow through reviewer screen; no auto-delivery during pilot.
+                    After deploys that change code-owned policy or load-model defaults, run <code className="rounded bg-black/30 px-1 py-0.5 text-zinc-300">npx tsx scripts/seed-pulsecheck-sports.ts</code> for a diff preview, then add <code className="rounded bg-black/30 px-1 py-0.5 text-zinc-300">--apply</code> when the drift is expected.
+                  </p>
                 </div>
               </div>
             </div>

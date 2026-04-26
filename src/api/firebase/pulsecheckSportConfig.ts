@@ -2805,6 +2805,159 @@ export const getDefaultPulseCheckSports = () => cloneSports(DEFAULT_PULSECHECK_S
 // watchlist / coach-action validity. Every gate degrades to a "thin read" rather than
 // emitting unsubstantiated coach-facing copy.
 
+export type CoachLanguageViolationSource = 'universal' | 'sport';
+
+export interface CoachLanguagePostureViolation {
+  phrase: string;
+  source: CoachLanguageViolationSource;
+  path?: string;
+  matchedText?: string;
+  matchedAt?: number;
+}
+
+export interface CoachLanguagePostureAuditResult {
+  passed: boolean;
+  violations: CoachLanguagePostureViolation[];
+}
+
+export const PULSECHECK_COACH_LANGUAGE_UNIVERSAL_BANLIST = [
+  'ACWR',
+  'acwr',
+  'load_au',
+  'high_confidence',
+  'degraded',
+  'clinical threshold',
+  'directional',
+  'stable confidence',
+  'emerging confidence',
+  'simEvidenceCount',
+  'confidenceTier',
+  'rmssdMs',
+  'externalLoadAU',
+] as const;
+
+const normalizeAuditCandidate = (value: string) =>
+  value
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const expandBannedPhraseVariants = (phrase: string): string[] => {
+  const cleaned = normalizeAuditCandidate(phrase);
+  if (!cleaned) return [];
+
+  const variants = new Set([cleaned]);
+  const quotedSegmentPattern = /["']([^"']{2,})["']/g;
+  let quotedMatch = quotedSegmentPattern.exec(cleaned);
+  while (quotedMatch) {
+    variants.add(quotedMatch[1].trim());
+    quotedMatch = quotedSegmentPattern.exec(cleaned);
+  }
+
+  const genericAdvice = cleaned.replace(/^generic\s+/i, '').replace(/\s+advice$/i, '').trim();
+  if (genericAdvice && genericAdvice !== cleaned) {
+    variants.add(genericAdvice);
+  }
+
+  return Array.from(variants).filter(Boolean);
+};
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const findBannedPhrase = (text: string, phrase: string) => {
+  for (const variant of expandBannedPhraseVariants(phrase)) {
+    const escaped = escapeRegExp(variant).replace(/\s+/g, '\\s+');
+    const startsWithWord = /^[a-z0-9_]/i.test(variant);
+    const endsWithWord = /[a-z0-9_]$/i.test(variant);
+    const pattern = `${startsWithWord ? '(^|[^a-z0-9_])' : ''}(${escaped})${endsWithWord ? '(?![a-z0-9_])' : ''}`;
+    const match = new RegExp(pattern, 'i').exec(text);
+    if (match && typeof match.index === 'number') {
+      const boundaryOffset = startsWithWord && match[1] ? match[1].length : 0;
+      const matchedText = match[2] || match[0];
+      return {
+        matchedText,
+        matchedAt: match.index + boundaryOffset,
+      };
+    }
+  }
+
+  return null;
+};
+
+const collectCoachFacingStrings = (value: unknown, path = '$'): Array<{ path: string; text: string }> => {
+  if (typeof value === 'string') {
+    return value.trim() ? [{ path, text: value }] : [];
+  }
+
+  if (!value || typeof value !== 'object') return [];
+
+  if (Array.isArray(value)) {
+    return value.flatMap((entry, index) => collectCoachFacingStrings(entry, `${path}[${index}]`));
+  }
+
+  const record = value as Record<string, unknown>;
+  const auditRoot =
+    record.coachSurface && typeof record.coachSurface === 'object'
+      ? record.coachSurface
+      : record;
+
+  return Object.entries(auditRoot).flatMap(([key, entry]) => {
+    if (key === 'reviewerOnly') return [];
+    return collectCoachFacingStrings(entry, `${path}.${key}`);
+  });
+};
+
+const resolveReportPolicyForAudit = (
+  sportOrPolicy?: PulseCheckSportConfigurationEntry | PulseCheckSportReportPolicy | null
+): PulseCheckSportReportPolicy | undefined => {
+  if (!sportOrPolicy || typeof sportOrPolicy !== 'object') return undefined;
+  if ('languagePosture' in sportOrPolicy) {
+    return sportOrPolicy as PulseCheckSportReportPolicy;
+  }
+  return (sportOrPolicy as PulseCheckSportConfigurationEntry).reportPolicy;
+};
+
+export const enforceLanguagePosture = (
+  coachFacingContent: unknown,
+  sportOrPolicy?: PulseCheckSportConfigurationEntry | PulseCheckSportReportPolicy | null
+): CoachLanguagePostureAuditResult => {
+  const strings = collectCoachFacingStrings(coachFacingContent);
+  const reportPolicy = resolveReportPolicyForAudit(sportOrPolicy);
+  const phraseEntries: Array<{ phrase: string; source: CoachLanguageViolationSource }> = [
+    ...PULSECHECK_COACH_LANGUAGE_UNIVERSAL_BANLIST.map((phrase) => ({ phrase, source: 'universal' as const })),
+    ...(reportPolicy?.languagePosture.mustAvoid || []).map((phrase) => ({ phrase, source: 'sport' as const })),
+  ];
+
+  const seen = new Set<string>();
+  const violations: CoachLanguagePostureViolation[] = [];
+
+  for (const { phrase, source } of phraseEntries) {
+    const cleanedPhrase = normalizeAuditCandidate(phrase);
+    if (!cleanedPhrase) continue;
+    const phraseKey = `${source}:${cleanedPhrase.toLowerCase()}`;
+    if (seen.has(phraseKey)) continue;
+    seen.add(phraseKey);
+
+    for (const { path, text } of strings) {
+      const match = findBannedPhrase(text, cleanedPhrase);
+      if (!match) continue;
+      violations.push({
+        phrase: cleanedPhrase,
+        source,
+        path,
+        matchedText: match.matchedText,
+        matchedAt: match.matchedAt,
+      });
+    }
+  }
+
+  return {
+    passed: violations.length === 0,
+    violations,
+  };
+};
+
 export interface ReportVocabularyViolation {
   phrase: string;
   matchedText: string;

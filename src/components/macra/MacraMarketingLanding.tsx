@@ -389,9 +389,9 @@ const MacraMarketingLanding: React.FC<Props> = ({
           <span className="mc2-trust-label">From the team that built</span>
           <div className="mc2-trust-list">
             {[
-              { n: 'Fit With Pulse', s: 'Social fitness · clubs', href: '/' },
-              { n: 'PulseCheck', s: 'Mental performance OS', href: '/PulseCheck' },
-              { n: 'Nora AI', s: 'Always-on coach', href: '/Nora' },
+              { n: 'Fit With Pulse', s: 'Social fitness · clubs', href: 'https://fitwithpulse.ai/' },
+              { n: 'PulseCheck', s: 'Mental performance OS', href: 'https://fitwithpulse.ai/PulseCheck' },
+              { n: 'Nora AI', s: 'Always-on coach', href: 'https://fitwithpulse.ai/Nora' },
             ].map((b) => (
               <a key={b.n} href={b.href} className="mc2-trust-brand">
                 <strong>{b.n}</strong>
@@ -938,9 +938,9 @@ const MacraMarketingLanding: React.FC<Props> = ({
           </div>
           <div className="mc2-footer-col">
             <h4>Pulse</h4>
-            <a href="/PulseCheck">PulseCheck</a>
-            <a href="/">Fit With Pulse</a>
-            <a href="/about">About</a>
+            <a href="https://fitwithpulse.ai/PulseCheck">PulseCheck</a>
+            <a href="https://fitwithpulse.ai/">Fit With Pulse</a>
+            <a href="https://fitwithpulse.ai/about">About</a>
           </div>
         </div>
         <div className="mc2-footer-bottom">© 2026 Pulse Intelligence Labs, Inc. All rights reserved.</div>

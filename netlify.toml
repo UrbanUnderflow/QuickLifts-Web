@@ -22,6 +22,16 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+# eatwithmacra.ai → serve /Macra at the root of the new domain.
+# Host-conditional rewrite (status 200) keeps the address bar on eatwithmacra.ai.
+# Only matches the bare root; /_next/*, /api/*, and static assets pass through untouched.
+[[redirects]]
+  from = "/"
+  to = "/Macra"
+  status = 200
+  force = true
+  conditions = {Host = ["eatwithmacra.ai", "www.eatwithmacra.ai"]}
+
 # Branded OG images (route through a normal URL so bot user agents aren't blocked by /.netlify/functions)
 # Keeps query params (title/subtitle) intact.
 [[redirects]]

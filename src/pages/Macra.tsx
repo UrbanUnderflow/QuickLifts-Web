@@ -14,7 +14,7 @@ const MacraPage: NextPage = () => {
             'Macra turns any meal into a complete macro breakdown in seconds. Nora builds your daily meal plan around your exact targets. From Pulse Intelligence Labs.',
           lastUpdated: new Date().toISOString(),
         }}
-        pageOgUrl="https://fitwithpulse.ai/Macra"
+        pageOgUrl="https://eatwithmacra.ai"
       />
       <MacraMarketingLanding />
     </>
