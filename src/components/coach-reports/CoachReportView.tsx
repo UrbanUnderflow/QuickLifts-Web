@@ -130,7 +130,7 @@ const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, genera
 
   return (
     <article
-      className="min-h-full overflow-hidden rounded-3xl border border-zinc-800 bg-[#070912] text-zinc-100 shadow-2xl"
+      className="min-h-full overflow-hidden rounded-b-3xl border border-zinc-800 bg-[#070912] text-zinc-100 shadow-2xl"
       style={{
         background: `
           radial-gradient(ellipse 110% 55% at 50% -20%, ${accent}20 0%, transparent 58%),
