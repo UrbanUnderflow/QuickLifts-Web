@@ -150,6 +150,14 @@ export interface AssembleSnapshotInput {
   identity?: Partial<IdentityContext>;
   /** Whether to write the resulting snapshot to Firestore. Defaults to true. */
   persist?: boolean;
+  /**
+   * If true, the assembler reads the prior 7 days of recovery source records
+   * for this athlete and computes `sleepMidpointShiftMinutes` (the universal
+   * circadian-shift signal). Adds one Firestore read per snapshot; only opt
+   * in when downstream consumers (inference engine, travel-detection logic)
+   * actually need the field. Defaults to false.
+   */
+  computeSleepMidpointShift?: boolean;
 }
 
 export interface AssembleSnapshotResult {
@@ -318,6 +326,59 @@ const buildSummaryBlock = (
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Sleep-midpoint shift — universal circadian-disruption signal.
+//
+// Any HCSR adapter that records a sleep window (Oura, Apple HealthKit, Whoop,
+// Polar, Garmin, self-report) writes `sleepMidpoint` (epoch seconds) into the
+// recovery payload. The shift is computed here against a 7-day baseline of
+// the same athlete's midpoints, on a circular 24h clock so timezone-crossing
+// travel produces a signed minute delta in the [-720, +720] range.
+//
+// Travel signature: |shift| ≥ 60 min crossing one timezone; ≥ 180 min on a
+// long-haul. Inference engine keys on this alongside daytimeAutonomicLoadMinutes
+// + temperatureDeviation.
+// ──────────────────────────────────────────────────────────────────────────────
+
+const SECONDS_PER_DAY_NUM = 86400;
+
+const extractSleepMidpoint = (record: HealthContextSourceRecord): number | null => {
+  const payload = record.payload as Record<string, unknown> | undefined;
+  const value = payload?.sleepMidpoint;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+};
+
+const median = (values: number[]): number | null => {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+};
+
+/**
+ * Signed shift in minutes between `currentMidpoint` and the median of the
+ * `baselineMidpoints`, on a circular 24h clock. Positive = athlete's sleep
+ * shifted later in the day; negative = earlier. Bounded to [-720, +720].
+ */
+export const computeSleepMidpointShiftMinutes = (
+  currentMidpointEpoch: number,
+  baselineMidpoints: number[],
+): number | null => {
+  if (!Number.isFinite(currentMidpointEpoch)) return null;
+  const baselineTimesOfDay = baselineMidpoints
+    .filter((v) => Number.isFinite(v))
+    .map((v) => ((v % SECONDS_PER_DAY_NUM) + SECONDS_PER_DAY_NUM) % SECONDS_PER_DAY_NUM);
+  const medianBaseline = median(baselineTimesOfDay);
+  if (medianBaseline === null) return null;
+  const currentTimeOfDay =
+    ((currentMidpointEpoch % SECONDS_PER_DAY_NUM) + SECONDS_PER_DAY_NUM) % SECONDS_PER_DAY_NUM;
+  let deltaSec = currentTimeOfDay - medianBaseline;
+  // Wrap to shortest signed circular distance.
+  if (deltaSec > SECONDS_PER_DAY_NUM / 2) deltaSec -= SECONDS_PER_DAY_NUM;
+  if (deltaSec < -SECONDS_PER_DAY_NUM / 2) deltaSec += SECONDS_PER_DAY_NUM;
+  return Math.round(deltaSec / 60);
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Public assembler
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -386,6 +447,39 @@ export const assembleAthleteContextSnapshot = async (
   };
 
   const summary = buildSummaryBlock(assemblies, records.length, notes);
+
+  // Optional: compute sleepMidpointShiftMinutes by reading prior 7 days of
+  // recovery records and comparing midpoints on a circular 24h clock.
+  if (input.computeSleepMidpointShift && assemblies.recovery?.block.data) {
+    const recoveryData = assemblies.recovery.block.data as Record<string, unknown>;
+    const currentMidpoint = recoveryData.sleepMidpoint;
+    if (typeof currentMidpoint === 'number' && Number.isFinite(currentMidpoint)) {
+      const baselineEnd = windowStartSec - 1;
+      const baselineStart = baselineEnd - 7 * SECONDS_PER_DAY;
+      try {
+        const baselineRecords = await healthContextSourceRecordService.listForWindow(
+          athleteUserId,
+          baselineStart,
+          baselineEnd,
+          { domain: 'recovery', max: 50 },
+        );
+        const baselineMidpoints = baselineRecords
+          .map(extractSleepMidpoint)
+          .filter((v): v is number => v !== null);
+        const shift = computeSleepMidpointShiftMinutes(currentMidpoint, baselineMidpoints);
+        if (shift !== null) {
+          recoveryData.sleepMidpointShiftMinutes = shift;
+          notes.push(
+            `[recovery] computed sleepMidpointShiftMinutes=${shift} from ${baselineMidpoints.length} baseline night(s).`,
+          );
+        }
+      } catch (err) {
+        notes.push(
+          `[recovery] sleepMidpointShift baseline read failed: ${err instanceof Error ? err.message : 'unknown'}`,
+        );
+      }
+    }
+  }
 
   // Aggregate top-level provenance + freshness.
   const sourcesUsed = Array.from(
