@@ -117,10 +117,36 @@ export interface SportsRecommendation {
   reviewerAction: string;
 }
 
+/**
+ * Circadian / travel disruption inference. Surfaces the athlete's current
+ * circadian state by combining three universal HCSR signals (any wearable
+ * adapter that provides them): sleep-midpoint shift vs 7-day baseline,
+ * daytime autonomic load minutes, and overnight body-temperature deviation.
+ *
+ * This is one of the inputs the inference engine emits to the coach surface
+ * and to Nora's translation service. Athletes never see the raw values —
+ * the Athlete Surface Doctrine translates `disruptionBand` to a protocol
+ * recommendation (hydrate, sunlight at arrival, lighter intensity, etc.).
+ */
+export interface CircadianDisruptionInterpretation {
+  athleteUserId: string;
+  dayKey: string;
+  disruptionBand: 'settled' | 'mild_shift' | 'travel_signature' | 'jetlag_significant';
+  sleepMidpointShiftMinutes?: number;
+  daytimeAutonomicLoadMinutes?: number;
+  temperatureDeviationC?: number;
+  /** Domains that contributed evidence (subset of: ['sleep_timing', 'autonomic_load', 'temperature']). */
+  contributingSignals: Array<'sleep_timing' | 'autonomic_load' | 'temperature'>;
+  confidenceTier: DataConfidence;
+  evidence: InterpretationEvidenceRef[];
+  reviewerNote: string;
+}
+
 export interface InferenceResult {
   readiness: AthleteReadinessInterpretation;
   trainingLoad: TrainingLoadInterpretation;
   cognitiveMovement: CognitiveMovementInterpretation;
+  circadianDisruption: CircadianDisruptionInterpretation;
   recommendations: SportsRecommendation[];
 }
 
@@ -516,6 +542,180 @@ const buildRecommendations = (
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Circadian / travel disruption builder.
+//
+// Worst-of confidence across present signals; absent signals don't
+// degrade confidence (they just reduce evidence count). Bands:
+//
+//   |shift|   |autonomicLoad|   |tempDev|       → band
+//   < 30min   < 90min           < 0.2°C/0.36°F  → settled
+//   30–60     90–180            0.2–0.3         → mild_shift
+//   60–180    180–360           0.3–0.5         → travel_signature
+//   > 180     > 360             > 0.5           → jetlag_significant
+//
+// Worst-of across the contributing signals wins (one strong tell escalates
+// the band; the others can't pull it back down).
+// ──────────────────────────────────────────────────────────────────────────────
+
+const CELSIUS_PER_FAHRENHEIT = 5 / 9;
+
+const classifyShiftBand = (
+  shiftMin: number | undefined,
+): 'settled' | 'mild_shift' | 'travel_signature' | 'jetlag_significant' | undefined => {
+  if (shiftMin === undefined) return undefined;
+  const abs = Math.abs(shiftMin);
+  if (abs < 30) return 'settled';
+  if (abs < 60) return 'mild_shift';
+  if (abs < 180) return 'travel_signature';
+  return 'jetlag_significant';
+};
+
+const classifyAutonomicBand = (
+  loadMin: number | undefined,
+): 'settled' | 'mild_shift' | 'travel_signature' | 'jetlag_significant' | undefined => {
+  if (loadMin === undefined) return undefined;
+  if (loadMin < 90) return 'settled';
+  if (loadMin < 180) return 'mild_shift';
+  if (loadMin < 360) return 'travel_signature';
+  return 'jetlag_significant';
+};
+
+const classifyTemperatureBand = (
+  tempDevC: number | undefined,
+): 'settled' | 'mild_shift' | 'travel_signature' | 'jetlag_significant' | undefined => {
+  if (tempDevC === undefined) return undefined;
+  const abs = Math.abs(tempDevC);
+  if (abs < 0.2) return 'settled';
+  if (abs < 0.3) return 'mild_shift';
+  if (abs < 0.5) return 'travel_signature';
+  return 'jetlag_significant';
+};
+
+const BAND_RANK: Record<'settled' | 'mild_shift' | 'travel_signature' | 'jetlag_significant', number> = {
+  settled: 0,
+  mild_shift: 1,
+  travel_signature: 2,
+  jetlag_significant: 3,
+};
+
+const buildCircadianDisruptionInterpretation = (
+  snapshot: AthleteHealthContextSnapshot,
+  _sport: PulseCheckSportConfigurationEntry,
+): CircadianDisruptionInterpretation => {
+  const recovery = snapshot.domains.recovery?.data as Record<string, unknown> | undefined;
+  const dayKey = snapshot.snapshotDate;
+  const athleteUserId = snapshot.domains.identity.data.athleteUserId;
+
+  const shiftMin =
+    typeof recovery?.sleepMidpointShiftMinutes === 'number' && Number.isFinite(recovery.sleepMidpointShiftMinutes)
+      ? (recovery.sleepMidpointShiftMinutes as number)
+      : undefined;
+  const autonomicLoad =
+    typeof recovery?.daytimeAutonomicLoadMinutes === 'number' && Number.isFinite(recovery.daytimeAutonomicLoadMinutes)
+      ? (recovery.daytimeAutonomicLoadMinutes as number)
+      : undefined;
+  // Oura ships temperatureDeviation in Celsius; iOS HealthKit ships in Celsius.
+  // If a future adapter ships Fahrenheit, normalize at the adapter boundary.
+  const tempDevRaw = recovery?.temperatureDeviation;
+  const tempDevC =
+    typeof tempDevRaw === 'number' && Number.isFinite(tempDevRaw) ? (tempDevRaw as number) : undefined;
+
+  const shiftBand = classifyShiftBand(shiftMin);
+  const autonomicBand = classifyAutonomicBand(autonomicLoad);
+  const tempBand = classifyTemperatureBand(tempDevC);
+
+  const presentBands = [shiftBand, autonomicBand, tempBand].filter(
+    (b): b is 'settled' | 'mild_shift' | 'travel_signature' | 'jetlag_significant' => Boolean(b),
+  );
+
+  const contributingSignals: Array<'sleep_timing' | 'autonomic_load' | 'temperature'> = [];
+  if (shiftBand) contributingSignals.push('sleep_timing');
+  if (autonomicBand) contributingSignals.push('autonomic_load');
+  if (tempBand) contributingSignals.push('temperature');
+
+  // Worst-of band determines the result.
+  let disruptionBand: 'settled' | 'mild_shift' | 'travel_signature' | 'jetlag_significant' = 'settled';
+  for (const band of presentBands) {
+    if (BAND_RANK[band] > BAND_RANK[disruptionBand]) disruptionBand = band;
+  }
+
+  // Confidence: floor + freshness ceiling, only across present signals.
+  const recoveryFreshness = snapshot.domains.recovery?.freshness;
+  const recoveryConfidence = snapshot.domains.recovery?.provenance.dataConfidence;
+  const baseConfidence: DataConfidence =
+    presentBands.length === 0
+      ? 'degraded'
+      : presentBands.length === 1
+        ? 'directional'
+        : presentBands.length === 2
+          ? 'emerging'
+          : recoveryConfidence || 'stable';
+
+  const freshnessCeiling: DataConfidence =
+    recoveryFreshness === 'fresh'
+      ? 'high_confidence'
+      : recoveryFreshness === 'recent'
+        ? 'stable'
+        : recoveryFreshness === 'historical_only'
+          ? 'emerging'
+          : 'directional';
+
+  const confidenceTier: DataConfidence =
+    CONFIDENCE_RANK[baseConfidence] <= CONFIDENCE_RANK[freshnessCeiling] ? baseConfidence : freshnessCeiling;
+
+  const recoverySourceFamily = snapshot.domains.recovery?.provenance.primarySource;
+  const evidence: InterpretationEvidenceRef[] = [];
+  if (shiftMin !== undefined) {
+    evidence.push({
+      domain: 'recovery',
+      label: 'Sleep-midpoint shift vs 7-day baseline',
+      value: `${shiftMin >= 0 ? '+' : ''}${shiftMin} min`,
+      sourceFamily: recoverySourceFamily,
+    });
+  }
+  if (autonomicLoad !== undefined) {
+    evidence.push({
+      domain: 'recovery',
+      label: 'Daytime autonomic-load minutes',
+      value: `${Math.round(autonomicLoad)} min`,
+      sourceFamily: recoverySourceFamily,
+    });
+  }
+  if (tempDevC !== undefined) {
+    evidence.push({
+      domain: 'recovery',
+      label: 'Body temperature deviation (overnight)',
+      value: `${tempDevC >= 0 ? '+' : ''}${tempDevC.toFixed(2)} °C`,
+      sourceFamily: recoverySourceFamily,
+    });
+  }
+
+  const reviewerNote =
+    presentBands.length === 0
+      ? 'No circadian/travel signals available in this snapshot. Inference suppressed; Athlete Surface should not display a circadian protocol.'
+      : disruptionBand === 'settled'
+        ? 'Circadian state is settled. No travel-related load signature detected.'
+        : disruptionBand === 'mild_shift'
+          ? 'Mild circadian shift visible — could be local late-night, mild travel, or normal day-to-day variation.'
+          : disruptionBand === 'travel_signature'
+            ? 'Travel-style load signature visible. Multiple markers suggest sympathetic activation + circadian disruption.'
+            : 'Significant jetlag/travel disruption signature. Worst-case band on at least one input.';
+
+  return {
+    athleteUserId,
+    dayKey,
+    disruptionBand,
+    sleepMidpointShiftMinutes: shiftMin,
+    daytimeAutonomicLoadMinutes: autonomicLoad,
+    temperatureDeviationC: tempDevC,
+    contributingSignals,
+    confidenceTier,
+    evidence,
+    reviewerNote,
+  };
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Public entry
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -528,8 +728,9 @@ export const runSportsIntelligenceInference = (input: InferenceEngineInput): Inf
   const readiness = buildReadinessInterpretation(input.snapshot, input.sport);
   const trainingLoad = buildTrainingLoadInterpretation(input.snapshot, input.sport);
   const cognitiveMovement = buildCognitiveMovementInterpretation(input.snapshot, input.sport);
+  const circadianDisruption = buildCircadianDisruptionInterpretation(input.snapshot, input.sport);
   const recommendations = buildRecommendations(readiness, trainingLoad, cognitiveMovement, input.sport);
-  return { readiness, trainingLoad, cognitiveMovement, recommendations };
+  return { readiness, trainingLoad, cognitiveMovement, circadianDisruption, recommendations };
 };
 
 export const sportsIntelligenceInferenceEngine = {

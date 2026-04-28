@@ -360,7 +360,22 @@ function mergeFreshness(existingFreshness = {}, hasRecovery) {
   return next;
 }
 
+// Universal sleep-midpoint computation: works for any source that records
+// a sleep window (Oura, Apple HealthKit, Whoop, Polar, Garmin, self-report).
+// Returns epoch seconds at the midpoint of the sleep period.
+function computeSleepMidpointEpochSeconds(bedtimeStartIso, bedtimeEndIso) {
+  if (!bedtimeStartIso || !bedtimeEndIso) return null;
+  const startMs = Date.parse(bedtimeStartIso);
+  const endMs = Date.parse(bedtimeEndIso);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
+  return Math.round(((startMs + endMs) / 2) / 1000);
+}
+
 function mapSleepPayload(record) {
+  const bedtimeStart = firstString(record, ['bedtime_start']);
+  const bedtimeEnd = firstString(record, ['bedtime_end']);
+  const sleepMidpoint = computeSleepMidpointEpochSeconds(bedtimeStart, bedtimeEnd);
+
   return compactObject({
     sleepDuration: secondsToHours(firstNumber(record, ['total_sleep_duration'])),
     deepSleepDuration: secondsToHours(firstNumber(record, ['deep_sleep_duration'])),
@@ -370,6 +385,12 @@ function mapSleepPayload(record) {
     heartRateResting: firstNumber(record, ['lowest_heart_rate', 'resting_heart_rate', 'average_heart_rate']),
     heartRateVariability: firstNumber(record, ['average_hrv', 'hrv']),
     respiratoryRate: firstNumber(record, ['average_breath', 'respiratory_rate']),
+    // --- universal cross-device fields (added Phase A) ---
+    bedtimeStart,
+    bedtimeEnd,
+    sleepMidpoint,
+    // sleepMidpointShiftMinutes is computed at snapshot-assembly time
+    // (assembler reads last 7 days of midpoints from HCSR and computes the delta).
   });
 }
 
@@ -379,6 +400,19 @@ function mapReadinessPayload(record) {
     recoveryIndex: firstNumber(record, ['recovery_index_score']),
     temperatureDeviation: firstNumber(record, ['temperature_deviation']),
     readinessState: firstString(record, ['state', 'status']),
+  });
+}
+
+// Oura's daily_stress endpoint surfaces high-stress minutes (sustained sympathetic
+// activation during waking hours). This is the universal "daytime autonomic load"
+// signal — same name across all wearable adapters; each adapter computes it from
+// whatever signals its device exposes (Oura: stress_high; Whoop: strain proxy;
+// Apple Watch: minutes-above-RHR-delta excluding workouts).
+function mapStressPayload(record) {
+  return compactObject({
+    daytimeAutonomicLoadMinutes: firstNumber(record, ['stress_high']),
+    recoveryHighMinutes: firstNumber(record, ['recovery_high']),
+    daySummary: firstString(record, ['day_summary']),
   });
 }
 
@@ -499,7 +533,7 @@ async function fetchOuraData(connectionRef, connection, dateKey) {
   const endDate = shiftDateKey(dateKey, 1);
 
   async function perform(accessToken) {
-    const [sleepRecords, readinessRecords] = await Promise.all([
+    const [sleepRecords, readinessRecords, stressRecords] = await Promise.all([
       fetchOuraCollection(accessToken, 'sleep', {
         start_date: startDate,
         end_date: endDate,
@@ -508,9 +542,18 @@ async function fetchOuraData(connectionRef, connection, dateKey) {
         start_date: startDate,
         end_date: endDate,
       }),
+      // daily_stress is a newer Oura endpoint; tolerate failure (e.g. older
+      // ring firmware or scope mismatch) without breaking the whole sync.
+      fetchOuraCollection(accessToken, 'daily_stress', {
+        start_date: startDate,
+        end_date: endDate,
+      }).catch((err) => {
+        console.warn('[oura-sync] daily_stress fetch failed (non-fatal):', err?.message || err);
+        return [];
+      }),
     ]);
 
-    return { sleepRecords, readinessRecords };
+    return { sleepRecords, readinessRecords, stressRecords };
   }
 
   try {
@@ -545,7 +588,7 @@ function buildSourceStatusDocument({ userId, observedAt, syncAt, lifecycleState,
   };
 }
 
-function buildSourceRecordDocuments({ userId, dateKey, timezone, syncAt, sleepPayload, readinessPayload, rawSleep, rawReadiness }) {
+function buildSourceRecordDocuments({ userId, dateKey, timezone, syncAt, sleepPayload, readinessPayload, stressPayload, rawSleep, rawReadiness, rawStress }) {
   const sourceWindow = buildDayWindow(dateKey, timezone);
   const records = [];
 
@@ -609,6 +652,36 @@ function buildSourceRecordDocuments({ userId, dateKey, timezone, syncAt, sleepPa
     });
   }
 
+  if (stressPayload && Object.keys(stressPayload).length > 0) {
+    const id = `${userId}_oura_autonomic_${dateKey}`;
+    records.push({
+      id,
+      athleteUserId: userId,
+      sourceFamily: 'oura',
+      sourceType: 'pulsecheck_oura_autonomic_load',
+      recordType: 'summary_input',
+      domain: 'recovery',
+      observedAt: sourceWindow.endAt,
+      observedWindowStart: sourceWindow.startAt,
+      observedWindowEnd: sourceWindow.endAt,
+      ingestedAt: syncAt,
+      timezone,
+      status: 'active',
+      dedupeKey: `${userId}|oura|autonomic|${dateKey}`,
+      payloadVersion: CONTRACT_VERSIONS.sourceRecord,
+      payload: stressPayload,
+      sourceMetadata: {
+        syncOrigin: 'pulsecheck_oura_refresh',
+        writer: 'oura-sync.js',
+      },
+      provenance: {
+        mode: 'direct',
+        sourceSystem: 'oura_cloud_api',
+        rawDay: rawStress?.day || dateKey,
+      },
+    });
+  }
+
   return records;
 }
 
@@ -623,6 +696,7 @@ function buildSnapshotArtifacts({
   sourceRecordDocs,
   sleepPayload,
   readinessPayload,
+  stressPayload,
   existingSnapshot,
 }) {
   const snapshotId = `${userId}_daily_${dateKey}`;
@@ -693,6 +767,7 @@ function buildSnapshotArtifacts({
       recovery: compactObject({
         ...(existingDomains.recovery || {}),
         ...sleepPayload,
+        ...(stressPayload || {}),
       }),
       summary: compactObject({
         ...(existingDomains.summary || {}),
@@ -873,15 +948,20 @@ exports.handler = async (event) => {
       throw createError(409, 'Connect Oura before refreshing the recovery lane.');
     }
 
-    const { sleepRecords, readinessRecords } = await fetchOuraData(connectionRef, connection, requestedDateKey);
+    const { sleepRecords, readinessRecords, stressRecords } = await fetchOuraData(connectionRef, connection, requestedDateKey);
     const latestSleep = chooseBestSleepRecord(sleepRecords, requestedDateKey);
     const latestReadiness = chooseLatestRecord(readinessRecords, { timestampKeys: ['timestamp'] });
+    const latestStress = chooseLatestRecord(stressRecords, { timestampKeys: ['timestamp', 'day'] });
     const resolvedLatestDateKey = firstString(latestSleep, ['day']) || firstString(latestReadiness, ['day']) || requestedDateKey;
     const latestDateKey = isValidDateKey(resolvedLatestDateKey) ? resolvedLatestDateKey : requestedDateKey;
     const sleepSelectionDebug = buildSleepSelectionDebug(sleepRecords, latestSleep, requestedDateKey);
     const sleepPayload = mapSleepPayload(latestSleep || {});
     const readinessPayload = mapReadinessPayload(latestReadiness || {});
-    const hasPayload = Object.keys(sleepPayload).length > 0 || Object.keys(readinessPayload).length > 0;
+    const stressPayload = mapStressPayload(latestStress || {});
+    const hasPayload =
+      Object.keys(sleepPayload).length > 0 ||
+      Object.keys(readinessPayload).length > 0 ||
+      Object.keys(stressPayload).length > 0;
 
     console.log('[oura-sync] Sleep selection summary', {
       userId,
@@ -925,8 +1005,10 @@ exports.handler = async (event) => {
       syncAt,
       sleepPayload,
       readinessPayload,
+      stressPayload,
       rawSleep: latestSleep,
       rawReadiness: latestReadiness,
+      rawStress: latestStress,
     });
 
     for (const record of sourceRecordDocs) {
@@ -958,6 +1040,7 @@ exports.handler = async (event) => {
         sourceRecordDocs,
         sleepPayload,
         readinessPayload,
+        stressPayload,
         existingSnapshot: existingSnapshots[index],
       })
     );
@@ -1042,4 +1125,7 @@ exports.__test = {
   compareSleepRecords,
   isUsableSleepRecord,
   sleepRecordTypePriority,
+  computeSleepMidpointEpochSeconds,
+  mapSleepPayload,
+  mapStressPayload,
 };

@@ -362,3 +362,126 @@ test('orchestrator — passes adherenceOverride straight through to the generato
   assert.equal(result.generatedDraft.coachSurface.adherence.confidenceLabel, 'Strong read');
   assert.equal(result.generatedDraft.coachSurface.adherence.wearRate7d, 0.83);
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phase A · Circadian / travel disruption inference + sleep-midpoint shift
+// ────────────────────────────────────────────────────────────────────────────
+
+test('circadian — settled when all signals are baseline-low', async () => {
+  const { inference } = await loadModules();
+  const sport = await fetchSport('basketball');
+  const snapshot = buildSnapshot({
+    recovery: {
+      freshness: 'fresh',
+      data: {
+        sleepMidpointShiftMinutes: 10,
+        daytimeAutonomicLoadMinutes: 30,
+        temperatureDeviation: 0.05,
+      },
+      provenance: { contributingSources: ['oura'], primarySource: 'oura', dataConfidence: 'stable' },
+      sourceStatus: { oura: 'connected_synced' },
+    },
+  });
+  const result = inference.runSportsIntelligenceInference({ snapshot: snapshot as any, sport });
+  assert.equal(result.circadianDisruption.disruptionBand, 'settled');
+  assert.equal(result.circadianDisruption.contributingSignals.length, 3);
+});
+
+test('circadian — travel_signature when temperature dev hits 0.4°C even with mild others', async () => {
+  const { inference } = await loadModules();
+  const sport = await fetchSport('basketball');
+  const snapshot = buildSnapshot({
+    recovery: {
+      freshness: 'fresh',
+      data: {
+        sleepMidpointShiftMinutes: 35, // mild_shift
+        daytimeAutonomicLoadMinutes: 100, // mild_shift
+        temperatureDeviation: 0.4, // travel_signature — worst-of wins
+      },
+      provenance: { contributingSources: ['oura'], primarySource: 'oura', dataConfidence: 'stable' },
+      sourceStatus: { oura: 'connected_synced' },
+    },
+  });
+  const result = inference.runSportsIntelligenceInference({ snapshot: snapshot as any, sport });
+  assert.equal(result.circadianDisruption.disruptionBand, 'travel_signature');
+});
+
+test('circadian — jetlag_significant when shift exceeds 180 min', async () => {
+  const { inference } = await loadModules();
+  const sport = await fetchSport('basketball');
+  const snapshot = buildSnapshot({
+    recovery: {
+      freshness: 'fresh',
+      data: {
+        sleepMidpointShiftMinutes: -240, // shifted 4h earlier (westward travel)
+        temperatureDeviation: 0.6,
+      },
+      provenance: { contributingSources: ['oura'], primarySource: 'oura', dataConfidence: 'stable' },
+      sourceStatus: { oura: 'connected_synced' },
+    },
+  });
+  const result = inference.runSportsIntelligenceInference({ snapshot: snapshot as any, sport });
+  assert.equal(result.circadianDisruption.disruptionBand, 'jetlag_significant');
+  assert.equal(result.circadianDisruption.sleepMidpointShiftMinutes, -240);
+});
+
+test('circadian — degraded confidence when no signals available', async () => {
+  const { inference } = await loadModules();
+  const sport = await fetchSport('basketball');
+  const snapshot = buildSnapshot();
+  const result = inference.runSportsIntelligenceInference({ snapshot: snapshot as any, sport });
+  assert.equal(result.circadianDisruption.disruptionBand, 'settled');
+  assert.equal(result.circadianDisruption.contributingSignals.length, 0);
+  assert.equal(result.circadianDisruption.confidenceTier, 'degraded');
+});
+
+test('circadian — directional confidence with only one signal present', async () => {
+  const { inference } = await loadModules();
+  const sport = await fetchSport('basketball');
+  const snapshot = buildSnapshot({
+    recovery: {
+      freshness: 'fresh',
+      data: { temperatureDeviation: 0.35 },
+      provenance: { contributingSources: ['oura'], primarySource: 'oura', dataConfidence: 'stable' },
+      sourceStatus: { oura: 'connected_synced' },
+    },
+  });
+  const result = inference.runSportsIntelligenceInference({ snapshot: snapshot as any, sport });
+  assert.equal(result.circadianDisruption.contributingSignals.length, 1);
+  assert.equal(result.circadianDisruption.confidenceTier, 'directional');
+});
+
+test('assembler — computeSleepMidpointShiftMinutes handles signed delta within window', async () => {
+  installFirebaseEnv();
+  const mod = await import('../../src/api/firebase/healthContextSnapshotAssembler');
+  // Today at 03:00 UTC, baseline cluster around 04:30 UTC → shifted 90min earlier (negative).
+  const oneDay = 86400;
+  const baseDay = 1777200000; // arbitrary
+  const today = baseDay + 3 * 60 * 60; // 03:00 UTC
+  const baseline = [
+    baseDay + 4.5 * 60 * 60,
+    baseDay + 4.5 * 60 * 60 - oneDay,
+    baseDay + 4.5 * 60 * 60 - 2 * oneDay,
+  ];
+  const shift = mod.computeSleepMidpointShiftMinutes(today, baseline);
+  assert.equal(shift, -90);
+});
+
+test('assembler — computeSleepMidpointShiftMinutes wraps to shortest circular delta', async () => {
+  installFirebaseEnv();
+  const mod = await import('../../src/api/firebase/healthContextSnapshotAssembler');
+  // Baseline at 23:00 UTC (82800s), today at 02:00 UTC (7200s).
+  // Naive delta: 7200 - 82800 = -75600 (-21h). Circular shortest: +180 minutes.
+  const baseDay = 1777200000;
+  const today = baseDay + 2 * 60 * 60; // 02:00
+  const baseline = [baseDay - 60 * 60, baseDay - 60 * 60 - 86400]; // 23:00 prior days
+  const shift = mod.computeSleepMidpointShiftMinutes(today, baseline);
+  assert.equal(shift, 180);
+});
+
+test('assembler — computeSleepMidpointShiftMinutes returns null with empty baseline', async () => {
+  installFirebaseEnv();
+  const mod = await import('../../src/api/firebase/healthContextSnapshotAssembler');
+  const shift = mod.computeSleepMidpointShiftMinutes(1777200000, []);
+  assert.equal(shift, null);
+});
