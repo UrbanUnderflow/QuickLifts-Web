@@ -170,6 +170,138 @@ const stringListFromUnknown = (value: unknown): string[] => {
     .filter((entry): entry is string => Boolean(entry));
 };
 
+// Historical meal context — server-side load of N-day rolling totals and
+// frequent foods so Nora can reason about trends instead of saying "I only
+// see today's log." Mirrors the helpers in generate-macra-daily-insight.ts.
+
+interface HistoricalDayTotal {
+  dayKey: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  mealCount: number;
+}
+
+interface HistoricalMealContext {
+  recentDays: HistoricalDayTotal[];
+  frequentFoods: string[];
+}
+
+const epochMsFromUnknown = (value: unknown): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 1e12 ? value : value * 1000;
+  }
+  if (value && typeof value === 'object' && '_seconds' in (value as Record<string, unknown>)) {
+    const seconds = numberFromUnknown((value as Record<string, unknown>)._seconds);
+    return typeof seconds === 'number' ? seconds * 1000 : 0;
+  }
+  if (value && typeof value === 'object' && 'toMillis' in (value as Record<string, unknown>)) {
+    try {
+      return (value as { toMillis: () => number }).toMillis();
+    } catch {
+      return 0;
+    }
+  }
+  return 0;
+};
+
+const tzDayKey = (date: Date, timezone: string): string => {
+  try {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    return fmt.format(date);
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
+};
+
+const loadDailyTotals = async (
+  uid: string,
+  todayKey: string,
+  days: number,
+  timezone: string,
+): Promise<HistoricalDayTotal[]> => {
+  try {
+    const cutoffSec = (Date.now() - days * 24 * 60 * 60 * 1000) / 1000;
+    const snap = await db
+      .collection('users')
+      .doc(uid)
+      .collection('mealLogs')
+      .where('createdAt', '>=', cutoffSec)
+      .limit(500)
+      .get();
+
+    const byDay = new Map<string, HistoricalDayTotal>();
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const createdAt = epochMsFromUnknown(data.createdAt);
+      if (createdAt <= 0) continue;
+      const key =
+        stringFromUnknown(data.dayKey) || tzDayKey(new Date(createdAt), timezone);
+      const existing =
+        byDay.get(key) ||
+        { dayKey: key, calories: 0, protein: 0, carbs: 0, fat: 0, mealCount: 0 };
+      existing.calories += Math.round(numberFromUnknown(data.calories) ?? 0);
+      existing.protein += Math.round(numberFromUnknown(data.protein) ?? 0);
+      existing.carbs += Math.round(numberFromUnknown(data.carbs) ?? 0);
+      existing.fat += Math.round(numberFromUnknown(data.fat) ?? 0);
+      existing.mealCount += 1;
+      byDay.set(key, existing);
+    }
+    return Array.from(byDay.values())
+      .filter((d) => d.dayKey !== todayKey)
+      .sort((a, b) => b.dayKey.localeCompare(a.dayKey))
+      .slice(0, days);
+  } catch (err) {
+    console.warn('[nora-nutrition-chat] daily totals fetch failed:', err);
+    return [];
+  }
+};
+
+const loadFrequentFoods = async (uid: string, days: number): Promise<string[]> => {
+  try {
+    const cutoffSec = (Date.now() - days * 24 * 60 * 60 * 1000) / 1000;
+    const snap = await db
+      .collection('users')
+      .doc(uid)
+      .collection('mealLogs')
+      .where('createdAt', '>=', cutoffSec)
+      .limit(500)
+      .get();
+    const counts = new Map<string, number>();
+    for (const doc of snap.docs) {
+      const name =
+        stringFromUnknown(doc.data().name) || stringFromUnknown(doc.data().foodName);
+      if (!name) continue;
+      counts.set(name, (counts.get(name) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name]) => name);
+  } catch (err) {
+    console.warn('[nora-nutrition-chat] frequent foods fetch failed:', err);
+    return [];
+  }
+};
+
+const loadHistoricalMealContext = async (
+  uid: string,
+  todayKey: string,
+  timezone: string,
+): Promise<HistoricalMealContext> => {
+  const [recentDays, frequentFoods] = await Promise.all([
+    loadDailyTotals(uid, todayKey, 14, timezone),
+    loadFrequentFoods(uid, 30),
+  ]);
+  return { recentDays, frequentFoods };
+};
+
 type LogDayRelation = 'today' | 'yesterday' | 'past' | 'future' | 'unknown';
 
 interface LogDateContext {
@@ -742,12 +874,46 @@ const buildUserDocBlock = (userDoc: UserDocContext | null): string => {
   return `${header}\nAdditional onboarding/user fields: ${dump}.`;
 };
 
+const buildHistoricalBlock = (history: HistoricalMealContext | null): string => {
+  if (!history || (history.recentDays.length === 0 && history.frequentFoods.length === 0)) {
+    return 'Historical food log: no logged days in the past 14 days available.';
+  }
+  const lines: string[] = [];
+  if (history.recentDays.length > 0) {
+    lines.push(
+      `Historical food log — last ${history.recentDays.length} day${
+        history.recentDays.length === 1 ? '' : 's'
+      } you logged (most recent first; today excluded):`,
+    );
+    for (const day of history.recentDays) {
+      lines.push(
+        `  ${day.dayKey}: ${day.calories} kcal, ${day.protein}P ${day.carbs}C ${day.fat}F across ${day.mealCount} meal${
+          day.mealCount === 1 ? '' : 's'
+        }`,
+      );
+    }
+    lines.push(
+      'When discussing trends, reference specific dayKeys from this list. NEVER invent totals not shown here. If the user asks about a day not in this list, say it was unlogged in the available window.',
+    );
+  }
+  if (history.frequentFoods.length > 0) {
+    lines.push(
+      `Frequent foods (last 30 days, most logged first): ${history.frequentFoods.join(', ')}.`,
+    );
+    lines.push(
+      'Prefer foods from this list when suggesting swaps or additions — they are foods the user actually buys and prepares.',
+    );
+  }
+  return lines.join('\n');
+};
+
 const buildContextBlock = (
   body: RequestBody,
   profile: MacraProfileContext | null,
   pulseCheckContext: PulseCheckAthleteContext | null,
   mealPlan: MealPlanContext | null,
-  userDoc: UserDocContext | null
+  userDoc: UserDocContext | null,
+  history: HistoricalMealContext | null
 ): string => {
   const sumCalories = body.meals.reduce((s, m) => s + (m.calories || 0), 0);
   const sumProtein = body.meals.reduce((s, m) => s + (m.protein || 0), 0);
@@ -847,7 +1013,8 @@ const buildContextBlock = (
     `Selected food log (${logDateContext.logLabel}) totals: ${sumCalories} kcal, ${sumProtein}g P, ${sumCarbs}g C, ${sumFat}g F across ${body.meals.length} meal${body.meals.length === 1 ? '' : 's'}.`,
     `Meals logged for ${logDateContext.logLabel} (with ingredient breakdown when available):\n${mealsList}`,
     attachedMealsBlock,
-    dayBudgetBlock
+    dayBudgetBlock,
+    buildHistoricalBlock(history)
   ].filter(Boolean).join('\n');
 };
 
@@ -980,16 +1147,27 @@ export const handler: Handler = async (event) => {
     "Cap responses at ~220 words.",
     "Numbers are required: every adjustment must include an exact gram/kcal delta AND the resulting macro total. 'Increase carbs' alone is forbidden — say '+25g carbs from cream of rice → 175g carbs total'.",
     "If no change is needed, state that explicitly with the headroom numbers proving it.",
-    "Don't end with generic 'let me know if you have other questions'. Ask ONE focused follow-up only when an answer would materially change."
+    "Don't end with generic 'let me know if you have other questions'. Ask ONE focused follow-up only when an answer would materially change.",
+    "",
+    "=== HISTORICAL CONTEXT ===",
+    "The context block includes a 'Historical food log' section with per-day macro totals for the last 14 logged days, plus a 'Frequent foods' list from the last 30 days.",
+    "When the user asks about trends ('how have I been eating', 'over the last few days', 'this week'), reason from the Historical food log block. Reference specific dayKeys (e.g. '2025-04-26: 1980 kcal, 280P 130C 50F') to ground claims.",
+    "NEVER invent totals not present in the Historical block. If asked about a date not in the list, say it was unlogged in the available window — never guess.",
+    "If the Historical block reports 'no logged days available', acknowledge the gap and frame guidance off today's log + targets only. Do not pretend to see history.",
+    "When suggesting swaps or additions, prefer foods from the 'Frequent foods' list — the user actually buys and prepares them."
   ].join('\n');
 
-  const [profile, pulseCheckContext, mealPlan, userDoc] = await Promise.all([
+  const userTimezone = stringFromUnknown(body.timezone) || 'America/New_York';
+  const todayKey = tzDayKey(new Date(), userTimezone);
+
+  const [profile, pulseCheckContext, mealPlan, userDoc, historical] = await Promise.all([
     loadMacraProfile(uid),
     loadPulseCheckAthleteContext(uid),
     loadActiveMealPlan(uid),
-    loadUserDocument(uid)
+    loadUserDocument(uid),
+    loadHistoricalMealContext(uid, todayKey, userTimezone)
   ]);
-  const contextBlock = buildContextBlock(body, profile, pulseCheckContext, mealPlan, userDoc);
+  const contextBlock = buildContextBlock(body, profile, pulseCheckContext, mealPlan, userDoc, historical);
 
   const messages: ChatMessage[] = [];
   messages.push({ role: 'user', content: `Context:\n${contextBlock}` } as any);
@@ -1027,7 +1205,12 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reply, generatedAt: Date.now() })
+      body: JSON.stringify({
+        reply,
+        generatedAt: Date.now(),
+        providerUsed: 'anthropic',
+        modelUsed: NORA_NUTRITION_CHAT.model,
+      })
     };
   } catch (err: any) {
     console.error('[nora-nutrition-chat] Chat failed:', err);

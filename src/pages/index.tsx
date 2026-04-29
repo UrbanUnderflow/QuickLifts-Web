@@ -14,6 +14,7 @@ import { useUser } from '../hooks/useUser';
 import SignInModal from '../components/SignInModal';
 import { exerciseService } from '../api/firebase/exercise/service';
 import { appLinks } from '../utils/platformDetection';
+import MacraMarketingLanding from '../components/macra/MacraMarketingLanding';
 
 interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
   lastUpdated: string; 
@@ -24,6 +25,7 @@ interface HomePageProps {
 }
 
 const STORAGE_KEY = 'pulse_has_seen_marketing';
+const MACRA_HOSTS = new Set(['eatwithmacra.ai', 'www.eatwithmacra.ai']);
 
 // Separate component for marketing content to avoid hook issues
 const MarketingContent: React.FC<{ 
@@ -931,8 +933,22 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
   const [showMarketing, setShowMarketing] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
+  const [isMacraHost, setIsMacraHost] = useState(() => (
+    typeof window !== 'undefined' && MACRA_HOSTS.has(window.location.hostname.toLowerCase())
+  ));
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsMacraHost(MACRA_HOSTS.has(window.location.hostname.toLowerCase()));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isMacraHost) {
+      setIsLoading(false);
+      return;
+    }
+
     // Check if user has seen marketing content before AND is authenticated
     const hasSeenMarketing = localStorage.getItem(STORAGE_KEY);
     console.log('[HomePage] useEffect check:', { hasSeenMarketing, currentUser: !!currentUser });
@@ -954,7 +970,7 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
     }
     
     setIsLoading(false);
-  }, [currentUser]);
+  }, [currentUser, isMacraHost]);
 
   const handleUseWebApp = () => {
     // Only allow web app access if user is authenticated
@@ -974,6 +990,24 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
     localStorage.removeItem(STORAGE_KEY);
     setShowMarketing(true);
   };
+
+  if (isMacraHost) {
+    return (
+      <>
+        <PageHead
+          metaData={{
+            pageId: 'macra',
+            pageTitle: 'Macra — Scan any food. Get your macros instantly.',
+            metaDescription:
+              'Macra turns any meal into a complete macro breakdown in seconds. Nora builds your daily meal plan around your exact targets. From Pulse Intelligence Labs.',
+            lastUpdated: new Date().toISOString(),
+          }}
+          pageOgUrl="https://eatwithmacra.ai"
+        />
+        <MacraMarketingLanding />
+      </>
+    );
+  }
 
   // Show loading state briefly to prevent flash
   if (isLoading) {
