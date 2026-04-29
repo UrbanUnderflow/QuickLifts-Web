@@ -13,6 +13,12 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # Firebase web API keys are public by design — they ship in every browser
+  # bundle (Firebase auth comes from Firestore Rules + authorized domains, not
+  # API key secrecy). Netlify's pattern-based secret scanner matches the
+  # `AIza...` Google API key format and would flag them as exposed. Opt them
+  # out so the scanner stays useful for real secrets (Stripe, OpenAI, etc.).
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_FIREBASE_API_KEY,NEXT_PUBLIC_FIREBASE_APP_ID,NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,NEXT_PUBLIC_FIREBASE_PROJECT_ID,NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,NEXT_PUBLIC_DEV_FIREBASE_API_KEY,NEXT_PUBLIC_DEV_FIREBASE_APP_ID,NEXT_PUBLIC_DEV_FIREBASE_AUTH_DOMAIN,NEXT_PUBLIC_DEV_FIREBASE_MESSAGING_SENDER_ID,NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID,NEXT_PUBLIC_DEV_FIREBASE_STORAGE_BUCKET"
 
 # Environment variables should be set in Netlify UI, not in the toml file
 [context.production]
