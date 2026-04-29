@@ -1,5 +1,15 @@
 import { Handler } from '@netlify/functions';
 import { admin, headers as corsHeaders } from './config/firebase';
+import { getFeatureRouting } from '../../src/api/anthropic/featureRouting';
+import {
+  buildAdminFallbackLogger,
+  callWithFallback,
+} from '../../src/api/anthropic/callWithFallback';
+import {
+  ANTHROPIC_API_VERSION,
+  translateAnthropicToOpenAI,
+  translateOpenAIToAnthropic,
+} from '../../src/api/anthropic/bridgeTranslation';
 
 // Basic map to enforce reasonable limits per feature.
 const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }> = {
@@ -214,6 +224,80 @@ export const handler: Handler = async (event) => {
         statusCode: 400,
         headers: corsHeaders,
         body: JSON.stringify({ error: 'Bad Request: Invalid JSON payload' })
+      };
+    }
+  }
+
+  // 3a. Dual-path branch (Phase B+ Part 2). For features whose featureRouting
+  // entry sets `fallbackProvider: 'openai'`, try Anthropic first via
+  // callWithFallback. On error, fall through to the OpenAI proxy below. Only
+  // engages on POST chat-completions calls when ANTHROPIC_API_KEY is set.
+  const featureRouting = getFeatureRouting(featureId);
+  const isDualPathChatCompletion =
+    event.httpMethod === 'POST' &&
+    parsedBody &&
+    openApiPath.startsWith('/v1/chat/completions') &&
+    featureRouting?.provider === 'anthropic' &&
+    featureRouting?.fallbackProvider === 'openai' &&
+    Boolean(process.env.ANTHROPIC_API_KEY);
+
+  if (isDualPathChatCompletion && featureRouting) {
+    try {
+      const logger = buildAdminFallbackLogger(admin.firestore());
+      const { result } = await callWithFallback({
+        feature: featureRouting,
+        anthropicCall: async () => {
+          const { request: anthropicRequest, usesForcedTool } = translateOpenAIToAnthropic(
+            parsedBody,
+            featureRouting.model,
+          );
+          const anthropicResp = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': process.env.ANTHROPIC_API_KEY!,
+              'anthropic-version': ANTHROPIC_API_VERSION,
+            },
+            body: JSON.stringify(anthropicRequest),
+          });
+          if (!anthropicResp.ok) {
+            const errText = await anthropicResp.text();
+            throw new Error(`Anthropic upstream ${anthropicResp.status}: ${errText.slice(0, 300)}`);
+          }
+          const anthropicData = await anthropicResp.json();
+          return translateAnthropicToOpenAI(anthropicData, usesForcedTool);
+        },
+        openaiCall: async () => {
+          const upstreamResp = await fetch(openApiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${providerApiKey}`,
+            },
+            body: JSON.stringify(parsedBody),
+          });
+          if (!upstreamResp.ok) {
+            throw new Error(`OpenAI upstream ${upstreamResp.status}`);
+          }
+          return upstreamResp.json();
+        },
+        logger,
+        uid,
+      });
+      return {
+        statusCode: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify(result),
+      };
+    } catch (error: any) {
+      console.error('[openai-bridge] Dual-path both providers failed:', {
+        featureId,
+        message: error?.message?.slice(0, 500),
+      });
+      return {
+        statusCode: 502,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'Both Anthropic and OpenAI providers failed' }),
       };
     }
   }

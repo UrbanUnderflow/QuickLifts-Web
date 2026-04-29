@@ -1,5 +1,7 @@
 import { Handler } from '@netlify/functions';
+import Anthropic from '@anthropic-ai/sdk';
 import { admin, db, headers as corsHeaders } from './config/firebase';
+import { MACRA_MEAL_PLAN } from '../../src/api/anthropic/featureRouting';
 
 interface MealItem {
   name: string;
@@ -57,12 +59,6 @@ const verifyAuth = async (authHeader: string | undefined): Promise<string | null
   }
 };
 
-const resolveBridgeBaseUrl = (event: { headers?: Record<string, string | undefined> }): string => {
-  const host = getHeader(event.headers, 'host') || process.env.URL || 'https://fitwithpulse.ai';
-  if (host.startsWith('http://') || host.startsWith('https://')) return host;
-  return `https://${host}`;
-};
-
 const macrosMatch = (a: { calories: number; protein: number; carbs: number; fat: number },
                      b: { calories: number; protein: number; carbs: number; fat: number }): boolean => {
   const within = (x: number, y: number) => {
@@ -101,38 +97,91 @@ const buildPrompt = (req: RequestBody, mealsCount: number): string => {
   ].filter(Boolean).join(' ');
 };
 
-const callBridge = async (prompt: string, bridgeBase: string, userToken: string): Promise<GeneratedPlan> => {
-  const response = await fetch(`${bridgeBase}/api/openai/v1/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${userToken}`,
-      'openai-organization': 'macraMealPlan'
+// Phase B+ Macra full-cutover: Anthropic Sonnet 4.6 with forced tool-use for JSON output.
+//
+// JSON OUTPUT PATTERN — read this if you're migrating another OpenAI endpoint
+// that used `response_format: { type: 'json_object' }`:
+//
+// Anthropic's Messages API has no JSON-mode flag. The production-grade pattern
+// is to declare a single tool whose `input_schema` IS the JSON shape you want,
+// then force the model to call it with `tool_choice: { type: 'tool', name: ... }`.
+// The model's response will contain a `tool_use` block whose `.input` field is
+// the parsed JSON object. This is more reliable than prefilled-`{` tricks.
+//
+// TODO(prompt-cache): system prompt is ~70 tokens — below Sonnet 4.6's 2048-token
+// minimum cacheable prefix. Add `cache_control: {type: 'ephemeral'}` if/when the
+// system prompt grows past that threshold.
+
+const MEAL_PLAN_TOOL_NAME = 'submit_meal_plan';
+
+const MEAL_PLAN_TOOL_SCHEMA = {
+  type: 'object' as const,
+  properties: {
+    meals: {
+      type: 'array' as const,
+      items: {
+        type: 'object' as const,
+        properties: {
+          title: { type: 'string' as const, description: 'e.g. "Meal 1"' },
+          items: {
+            type: 'array' as const,
+            items: {
+              type: 'object' as const,
+              properties: {
+                name: { type: 'string' as const },
+                quantity: { type: 'string' as const, description: 'e.g. "4 oz", "1 cup"' },
+                calories: { type: 'integer' as const, minimum: 0 },
+                protein: { type: 'integer' as const, minimum: 0 },
+                carbs: { type: 'integer' as const, minimum: 0 },
+                fat: { type: 'integer' as const, minimum: 0 },
+              },
+              required: ['name', 'quantity', 'calories', 'protein', 'carbs', 'fat'],
+            },
+          },
+        },
+        required: ['title', 'items'],
+      },
     },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: 'You are Nora, Macra\'s performance nutrition coach. Build context-aware meal plans, and when physique-prep context exists, prioritize stage-readiness, digestion consistency, and predictable foods. Return valid JSON only, no prose.' },
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 1500,
-      temperature: 0.7
-    })
+    notes: {
+      type: 'string' as const,
+      description: 'Optional short coaching note under 200 chars',
+    },
+  },
+  required: ['meals'],
+};
+
+const callAnthropic = async (prompt: string): Promise<GeneratedPlan> => {
+  const client = new Anthropic();
+
+  const response = await client.messages.create({
+    model: MACRA_MEAL_PLAN.model,
+    max_tokens: MACRA_MEAL_PLAN.maxTokens,
+    system:
+      "You are Nora, Macra's performance nutrition coach. Build context-aware meal plans, and when physique-prep context exists, prioritize stage-readiness, digestion consistency, and predictable foods.",
+    tools: [
+      {
+        name: MEAL_PLAN_TOOL_NAME,
+        description: 'Submit the generated meal plan in the structured schema.',
+        input_schema: MEAL_PLAN_TOOL_SCHEMA,
+      },
+    ],
+    tool_choice: { type: 'tool', name: MEAL_PLAN_TOOL_NAME },
+    messages: [{ role: 'user', content: prompt }],
   });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`AI bridge ${response.status}: ${errText.slice(0, 500)}`);
+  const toolUse = response.content.find(
+    (block): block is Anthropic.ToolUseBlock =>
+      block.type === 'tool_use' && block.name === MEAL_PLAN_TOOL_NAME,
+  );
+  if (!toolUse) {
+    throw new Error('Anthropic response missing forced tool_use block');
   }
 
-  const payload = await response.json() as any;
-  const raw = payload?.choices?.[0]?.message?.content;
-  if (!raw) throw new Error('Bridge returned no content');
-
-  const parsed = JSON.parse(raw);
-  if (!Array.isArray(parsed?.meals)) throw new Error('Model response missing meals array');
-  return parsed as GeneratedPlan;
+  const parsed = toolUse.input as GeneratedPlan;
+  if (!Array.isArray(parsed?.meals)) {
+    throw new Error('Model response missing meals array');
+  }
+  return parsed;
 };
 
 export const handler: Handler = async (event) => {
@@ -186,15 +235,12 @@ export const handler: Handler = async (event) => {
     }
   }
 
-  const bridgeBase = resolveBridgeBaseUrl(event);
-  const userToken = (getHeader(event.headers, 'authorization') || '').split('Bearer ')[1];
-  if (!userToken) {
-    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'Unauthorized' }) };
-  }
-
+  // Phase B+ full cutover: server-side Anthropic SDK call (no bridge round-trip).
+  // Requires ANTHROPIC_API_KEY in Netlify env. The Firebase token was already
+  // verified above via verifyAuth(); we no longer need to relay it.
   try {
     const prompt = buildPrompt(body, mealsCount);
-    const plan = await callBridge(prompt, bridgeBase, userToken);
+    const plan = await callAnthropic(prompt);
 
     const normalized: GeneratedPlan = {
       meals: plan.meals.map((m, i) => ({
