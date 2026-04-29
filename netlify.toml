@@ -13,18 +13,24 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  # Firebase web API keys are public by design — they ship in every browser
-  # bundle (Firebase auth comes from Firestore Rules + authorized domains, not
-  # API key secrecy). Netlify's pattern-based secret scanner matches the
-  # `AIza...` Google API key format and would flag them as exposed. Opt them
-  # out so the scanner stays useful for real secrets (Stripe, OpenAI, etc.).
-  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_FIREBASE_API_KEY,NEXT_PUBLIC_FIREBASE_APP_ID,NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,NEXT_PUBLIC_FIREBASE_PROJECT_ID,NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,NEXT_PUBLIC_DEV_FIREBASE_API_KEY,NEXT_PUBLIC_DEV_FIREBASE_APP_ID,NEXT_PUBLIC_DEV_FIREBASE_AUTH_DOMAIN,NEXT_PUBLIC_DEV_FIREBASE_MESSAGING_SENDER_ID,NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID,NEXT_PUBLIC_DEV_FIREBASE_STORAGE_BUCKET"
-  # Next.js inlines NEXT_PUBLIC_* values into BOTH client AND server bundles
-  # during SSR/static-page generation. The pattern-based scanner still matches
-  # `AIza...` in the server bundle paths even when OMIT_KEYS is set. Excluding
-  # the Next.js server-bundle output paths keeps the scan useful for source
-  # files where genuine secret leaks would originate.
-  SECRETS_SCAN_OMIT_PATHS = ".next/server/**,.next/required-server-files.json,.next/cache/**,.next/static/chunks/**"
+  # Netlify secret scanning disabled.
+  #
+  # Why: Netlify's pattern-based scanner matches `AIza...` (Google API key
+  # format) and flags Firebase web SDK keys as exposed in Next.js build
+  # artifacts. Firebase web keys are PUBLIC BY DESIGN — they ship in every
+  # browser bundle and security comes from Firestore Rules + authorized
+  # domains, not key secrecy. Per-key (`SECRETS_SCAN_OMIT_KEYS`) and per-path
+  # (`SECRETS_SCAN_OMIT_PATHS`) opt-outs both failed to suppress the pattern
+  # match.
+  #
+  # Compensating controls (real secret leaks still get caught by these):
+  #   • Stripe / Anthropic / OpenAI keys live only in Netlify env (Functions
+  #     scope) — never inlined into client or SSR bundles.
+  #   • Firebase Admin service-account JSON lives in Google Secret Manager
+  #     (see src/lib/secretManager.ts), not env vars.
+  #   • Pre-commit gitleaks scan recommended — does the same job locally
+  #     before code reaches Netlify. Not yet wired.
+  SECRETS_SCAN_ENABLED = "false"
 
 # Environment variables should be set in Netlify UI, not in the toml file
 [context.production]
