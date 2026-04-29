@@ -1,5 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
+import admin from '../../../lib/firebase-admin';
+import { PULSECHECK_PROTOCOL_PRACTICE_EVAL } from '../../../api/anthropic/featureRouting';
+import {
+  buildAdminFallbackLogger,
+  callWithFallback,
+} from '../../../api/anthropic/callWithFallback';
 import type {
   PulseCheckProtocolPracticeDimensionScores,
   PulseCheckProtocolPracticeScorecard,
@@ -182,6 +189,140 @@ function buildSessionSchema() {
   } as const;
 }
 
+// ---------------------------------------------------------------------------
+// Shared prompt + payload builders (used by both Anthropic primary + OpenAI fallback)
+// ---------------------------------------------------------------------------
+
+const TURN_SYSTEM_PROMPT =
+  'You are Nora, evaluating one protocol-practice answer. ' +
+  'Score the answer against the provided rubric on a 1-5 scale. ' +
+  'Be specific to the athlete response; never use canned praise. ' +
+  'Your feedback must sound like a coach talking to an athlete, not a scientist. ' +
+  'Keep noraFeedback to 1-2 direct sentences, simple enough for a smart high-schooler. ' +
+  'Strengths and misses should be short card-ready lines. ' +
+  'Only trigger an adaptive follow-up if the answer is genuinely weak and a listed follow-up matches that weakness. ' +
+  'Avoid repetitive openings such as "Good.", "Nice.", "That sounded more usable.", or other generic praise-first patterns. ' +
+  'Lead with the actual coaching point from this answer. ' +
+  'Do not reuse the same sentence structure as the most recent Nora feedback unless the athlete made the exact same mistake again.';
+
+const SESSION_SYSTEM_PROMPT =
+  'You are Nora, evaluating the full protocol-practice conversation. ' +
+  'Return structured scoring plus a final summary that sounds specific to this athlete, not generic. ' +
+  'The summary must be direct, plain-language, and coach-like. ' +
+  'Do not repeat the same phrasing used in common canned evaluations. ' +
+  'Base scores on how usable the athlete language sounds under pressure, not just whether they echoed the prompt. ' +
+  'Avoid generic wrap-up lines like "keep sharpening" or "more competition-ready" unless the transcript clearly earns that phrasing. ' +
+  'Make the final summary sound like a specific read on this rep, not a template reused from earlier feedback.';
+
+function buildTurnUserPayload(
+  spec: ProtocolPracticeSpec,
+  turnSpec: ProtocolPracticeTurnSpec,
+  input: TurnInput,
+  priorTurns: PulseCheckProtocolPracticeTurn[],
+) {
+  const recentFeedback = priorTurns
+    .map((turn) => turn.noraFeedback)
+    .filter(Boolean)
+    .slice(-2);
+  return JSON.stringify(
+    {
+      specTitle: spec.title,
+      rubricLabels: spec.rubricLabels,
+      practiceIntro: spec.practiceIntro,
+      evaluationLead: spec.evaluationLead,
+      currentPrompt: {
+        id: turnSpec.id,
+        label: turnSpec.label,
+        promptText: turnSpec.promptText,
+        targetedDimensions: turnSpec.targetedDimensions,
+        adaptiveFollowUps: (turnSpec.adaptiveFollowUps || []).map((followUp) => ({
+          id: followUp.id,
+          targetDimension: followUp.targetDimension,
+          promptText: followUp.promptText,
+        })),
+      },
+      athleteResponse: input,
+      priorTurns: priorTurns.slice(-3).map((turn) => ({
+        promptLabel: turn.promptLabel,
+        promptText: turn.promptText,
+        responseText: turn.responseText,
+        noraFeedback: turn.noraFeedback,
+        scores: turn.scores,
+      })),
+      recentFeedbackToAvoidRepeating: recentFeedback,
+      scoringNotes: {
+        rubricScale: '1 = weak / generic, 3 = usable but inconsistent, 5 = highly usable under pressure',
+        coachabilityMeans:
+          'did the athlete apply the coaching and make the answer more usable under pressure',
+        followUpRule:
+          'use follow-up only if a targeted dimension is 1-2 and there is a matching follow-up available',
+      },
+    },
+    null,
+    2,
+  );
+}
+
+type TurnEvalResult = {
+  scores: PulseCheckProtocolPracticeDimensionScores;
+  strengths: string[];
+  misses: string[];
+  noraFeedback: string;
+  shouldUseAdaptiveFollowUp: boolean;
+  followUpPromptId: string | null;
+};
+
+type SessionEvalResult = {
+  overallScore: number;
+  dimensionScores: PulseCheckProtocolPracticeDimensionScores;
+  scores?: PulseCheckProtocolPracticeDimensionScores;
+  strengths: string[];
+  improvementAreas: string[];
+  misses?: string[];
+  evaluationSummary: string;
+  nextRepFocus: string;
+  coachabilityTrend: PulseCheckProtocolPracticeScorecard['coachabilityTrend'];
+};
+
+// ---------------------------------------------------------------------------
+// Anthropic primary path (Sonnet 4.6, forced tool-use for structured output)
+// ---------------------------------------------------------------------------
+
+async function evaluateTurnWithAnthropic(
+  spec: ProtocolPracticeSpec,
+  turnSpec: ProtocolPracticeTurnSpec,
+  input: TurnInput,
+  priorTurns: PulseCheckProtocolPracticeTurn[],
+): Promise<TurnEvalResult> {
+  const client = new Anthropic();
+  const response = await client.messages.create({
+    model: PULSECHECK_PROTOCOL_PRACTICE_EVAL.model,
+    max_tokens: PULSECHECK_PROTOCOL_PRACTICE_EVAL.maxTokens,
+    system: TURN_SYSTEM_PROMPT,
+    tools: [
+      {
+        name: 'submit_turn_evaluation',
+        description: 'Submit the structured turn evaluation.',
+        // Schema is shared with OpenAI's strict json_schema (readonly via `as const`);
+        // Anthropic SDK expects mutable JSON Schema. Cast is safe — wire format identical.
+        input_schema: buildTurnSchema() as unknown as Anthropic.Tool.InputSchema,
+      },
+    ],
+    tool_choice: { type: 'tool', name: 'submit_turn_evaluation' },
+    messages: [{ role: 'user', content: buildTurnUserPayload(spec, turnSpec, input, priorTurns) }],
+  });
+  const toolUse = response.content.find(
+    (block): block is Anthropic.ToolUseBlock =>
+      block.type === 'tool_use' && block.name === 'submit_turn_evaluation',
+  );
+  if (!toolUse) throw new Error('Anthropic response missing forced tool_use block (turn)');
+  return toolUse.input as TurnEvalResult;
+}
+
+// ---------------------------------------------------------------------------
+// OpenAI fallback path (kept verbatim — Responses API + json_schema strict)
+// ---------------------------------------------------------------------------
+
 async function evaluateTurnWithAI(
   openai: OpenAI,
   model: string,
@@ -190,10 +331,6 @@ async function evaluateTurnWithAI(
   input: TurnInput,
   priorTurns: PulseCheckProtocolPracticeTurn[]
 ) {
-  const recentFeedback = priorTurns
-    .map((turn) => turn.noraFeedback)
-    .filter(Boolean)
-    .slice(-2);
   const response = await openai.responses.create({
     model,
     temperature: 0.3,
@@ -209,73 +346,83 @@ async function evaluateTurnWithAI(
     input: [
       {
         role: 'system',
-        content: [
-          {
-            type: 'input_text',
-            text:
-              'You are Nora, evaluating one protocol-practice answer. ' +
-              'Score the answer against the provided rubric on a 1-5 scale. ' +
-              'Be specific to the athlete response; never use canned praise. ' +
-              'Your feedback must sound like a coach talking to an athlete, not a scientist. ' +
-              'Keep noraFeedback to 1-2 direct sentences, simple enough for a smart high-schooler. ' +
-              'Strengths and misses should be short card-ready lines. ' +
-              'Only trigger an adaptive follow-up if the answer is genuinely weak and a listed follow-up matches that weakness. ' +
-              'Avoid repetitive openings such as "Good.", "Nice.", "That sounded more usable.", or other generic praise-first patterns. ' +
-              'Lead with the actual coaching point from this answer. ' +
-              'Do not reuse the same sentence structure as the most recent Nora feedback unless the athlete made the exact same mistake again.',
-          },
-        ],
+        content: [{ type: 'input_text', text: TURN_SYSTEM_PROMPT }],
       },
       {
         role: 'user',
         content: [
           {
             type: 'input_text',
-            text: JSON.stringify({
-              specTitle: spec.title,
-              rubricLabels: spec.rubricLabels,
-              practiceIntro: spec.practiceIntro,
-              evaluationLead: spec.evaluationLead,
-              currentPrompt: {
-                id: turnSpec.id,
-                label: turnSpec.label,
-                promptText: turnSpec.promptText,
-                targetedDimensions: turnSpec.targetedDimensions,
-                adaptiveFollowUps: (turnSpec.adaptiveFollowUps || []).map((followUp) => ({
-                  id: followUp.id,
-                  targetDimension: followUp.targetDimension,
-                  promptText: followUp.promptText,
-                })),
-              },
-              athleteResponse: input,
-              priorTurns: priorTurns.slice(-3).map((turn) => ({
-                promptLabel: turn.promptLabel,
-                promptText: turn.promptText,
-                responseText: turn.responseText,
-                noraFeedback: turn.noraFeedback,
-                scores: turn.scores,
-              })),
-              recentFeedbackToAvoidRepeating: recentFeedback,
-              scoringNotes: {
-                rubricScale: '1 = weak / generic, 3 = usable but inconsistent, 5 = highly usable under pressure',
-                coachabilityMeans: 'did the athlete apply the coaching and make the answer more usable under pressure',
-                followUpRule: 'use follow-up only if a targeted dimension is 1-2 and there is a matching follow-up available',
-              },
-            }, null, 2),
+            text: buildTurnUserPayload(spec, turnSpec, input, priorTurns),
           },
         ],
       },
     ],
   });
 
-  return parseJsonSafe<{
-    scores: PulseCheckProtocolPracticeDimensionScores;
-    strengths: string[];
-    misses: string[];
-    noraFeedback: string;
-    shouldUseAdaptiveFollowUp: boolean;
-    followUpPromptId: string | null;
-  }>(response.output_text);
+  return parseJsonSafe<TurnEvalResult>(response.output_text);
+}
+
+function buildSessionUserPayload(
+  spec: ProtocolPracticeSpec,
+  turns: PulseCheckProtocolPracticeTurn[],
+) {
+  const recentTurnFeedback = turns
+    .map((turn) => turn.noraFeedback)
+    .filter(Boolean)
+    .slice(-3);
+  return JSON.stringify(
+    {
+      specTitle: spec.title,
+      evaluationLead: spec.evaluationLead,
+      nextRepFocusDefault: spec.nextRepFocus,
+      rubricLabels: spec.rubricLabels,
+      turns: turns.map((turn) => ({
+        promptLabel: turn.promptLabel,
+        promptText: turn.promptText,
+        responseText: turn.responseText,
+        modality: turn.modality,
+        voiceSignals: turn.voiceSignals,
+        noraFeedback: turn.noraFeedback,
+      })),
+      recentFeedbackToAvoidRepeating: recentTurnFeedback,
+      scoringNotes: {
+        rubricScale: '1 = weak / generic, 3 = usable but inconsistent, 5 = highly usable under pressure',
+        coachabilityTrend:
+          'improving if later answers clearly get more usable; steady if similar; needs_support if they stay generic or drift',
+        outputStyle: 'strengths and improvementAreas should be short card-ready lines',
+      },
+    },
+    null,
+    2,
+  );
+}
+
+async function evaluateSessionWithAnthropic(
+  spec: ProtocolPracticeSpec,
+  turns: PulseCheckProtocolPracticeTurn[],
+): Promise<SessionEvalResult> {
+  const client = new Anthropic();
+  const response = await client.messages.create({
+    model: PULSECHECK_PROTOCOL_PRACTICE_EVAL.model,
+    max_tokens: PULSECHECK_PROTOCOL_PRACTICE_EVAL.maxTokens,
+    system: SESSION_SYSTEM_PROMPT,
+    tools: [
+      {
+        name: 'submit_session_evaluation',
+        description: 'Submit the structured session evaluation.',
+        input_schema: buildSessionSchema() as unknown as Anthropic.Tool.InputSchema,
+      },
+    ],
+    tool_choice: { type: 'tool', name: 'submit_session_evaluation' },
+    messages: [{ role: 'user', content: buildSessionUserPayload(spec, turns) }],
+  });
+  const toolUse = response.content.find(
+    (block): block is Anthropic.ToolUseBlock =>
+      block.type === 'tool_use' && block.name === 'submit_session_evaluation',
+  );
+  if (!toolUse) throw new Error('Anthropic response missing forced tool_use block (session)');
+  return toolUse.input as SessionEvalResult;
 }
 
 async function evaluateSessionWithAI(
@@ -284,10 +431,6 @@ async function evaluateSessionWithAI(
   spec: ProtocolPracticeSpec,
   turns: PulseCheckProtocolPracticeTurn[]
 ) {
-  const recentTurnFeedback = turns
-    .map((turn) => turn.noraFeedback)
-    .filter(Boolean)
-    .slice(-3);
   const response = await openai.responses.create({
     model,
     temperature: 0.35,
@@ -303,62 +446,16 @@ async function evaluateSessionWithAI(
     input: [
       {
         role: 'system',
-        content: [
-          {
-            type: 'input_text',
-            text:
-              'You are Nora, evaluating the full protocol-practice conversation. ' +
-              'Return structured scoring plus a final summary that sounds specific to this athlete, not generic. ' +
-              'The summary must be direct, plain-language, and coach-like. ' +
-              'Do not repeat the same phrasing used in common canned evaluations. ' +
-              'Base scores on how usable the athlete language sounds under pressure, not just whether they echoed the prompt. ' +
-              'Avoid generic wrap-up lines like "keep sharpening" or "more competition-ready" unless the transcript clearly earns that phrasing. ' +
-              'Make the final summary sound like a specific read on this rep, not a template reused from earlier feedback.',
-          },
-        ],
+        content: [{ type: 'input_text', text: SESSION_SYSTEM_PROMPT }],
       },
       {
         role: 'user',
-        content: [
-          {
-            type: 'input_text',
-            text: JSON.stringify({
-              specTitle: spec.title,
-              evaluationLead: spec.evaluationLead,
-              nextRepFocusDefault: spec.nextRepFocus,
-              rubricLabels: spec.rubricLabels,
-              turns: turns.map((turn) => ({
-                promptLabel: turn.promptLabel,
-                promptText: turn.promptText,
-                responseText: turn.responseText,
-                modality: turn.modality,
-                voiceSignals: turn.voiceSignals,
-                noraFeedback: turn.noraFeedback,
-              })),
-              recentFeedbackToAvoidRepeating: recentTurnFeedback,
-              scoringNotes: {
-                rubricScale: '1 = weak / generic, 3 = usable but inconsistent, 5 = highly usable under pressure',
-                coachabilityTrend: 'improving if later answers clearly get more usable; steady if similar; needs_support if they stay generic or drift',
-                outputStyle: 'strengths and improvementAreas should be short card-ready lines',
-              },
-            }, null, 2),
-          },
-        ],
+        content: [{ type: 'input_text', text: buildSessionUserPayload(spec, turns) }],
       },
     ],
   });
 
-  return parseJsonSafe<{
-    overallScore: number;
-    dimensionScores: PulseCheckProtocolPracticeDimensionScores;
-    scores?: PulseCheckProtocolPracticeDimensionScores;
-    strengths: string[];
-    improvementAreas: string[];
-    misses?: string[];
-    evaluationSummary: string;
-    nextRepFocus: string;
-    coachabilityTrend: PulseCheckProtocolPracticeScorecard['coachabilityTrend'];
-  }>(response.output_text);
+  return parseJsonSafe<SessionEvalResult>(response.output_text);
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -366,9 +463,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY || process.env.OPEN_AI_SECRET_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'OpenAI API key not configured' });
+  const openaiApiKey = process.env.OPENAI_API_KEY || process.env.OPEN_AI_SECRET_KEY;
+  if (!process.env.ANTHROPIC_API_KEY && !openaiApiKey) {
+    return res.status(500).json({ error: 'No provider key configured (need ANTHROPIC_API_KEY or OPENAI_API_KEY)' });
   }
 
   const payload = (req.body || {}) as EvaluationRequest;
@@ -377,8 +474,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(404).json({ error: 'Protocol practice spec not found' });
   }
 
-  const model = sanitizeModelName(process.env.PULSECHECK_PROTOCOL_EVALUATION_MODEL);
-  const openai = new OpenAI({ apiKey });
+  const fallbackModel = sanitizeModelName(process.env.PULSECHECK_PROTOCOL_EVALUATION_MODEL);
+  const openai = openaiApiKey ? new OpenAI({ apiKey: openaiApiKey }) : null;
+  const logger = buildAdminFallbackLogger(admin.firestore());
   const startedAt = Date.now();
 
   try {
@@ -388,14 +486,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(404).json({ error: 'Protocol practice turn spec not found' });
       }
 
-      const aiResult = await evaluateTurnWithAI(
-        openai,
-        model,
-        spec,
-        turnSpec,
-        payload.input,
-        Array.isArray(payload.priorTurns) ? payload.priorTurns : []
-      );
+      const priorTurns = Array.isArray(payload.priorTurns) ? payload.priorTurns : [];
+      const fallbackResult = await callWithFallback<TurnEvalResult | null>({
+        feature: PULSECHECK_PROTOCOL_PRACTICE_EVAL,
+        anthropicCall: () => evaluateTurnWithAnthropic(spec, turnSpec, payload.input, priorTurns),
+        openaiCall: async () => {
+          if (!openai) throw new Error('OpenAI fallback unavailable: no API key configured');
+          return evaluateTurnWithAI(openai, fallbackModel, spec, turnSpec, payload.input, priorTurns);
+        },
+        logger,
+      });
+      const aiResult = fallbackResult.result;
+      const evaluationModel = fallbackResult.providerUsed === 'anthropic'
+        ? PULSECHECK_PROTOCOL_PRACTICE_EVAL.model
+        : fallbackModel;
 
       if (!aiResult) {
         return res.status(500).json({ error: 'Invalid AI evaluation response' });
@@ -428,14 +532,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         misses: toStringArray(aiResult.misses, ['Make the next answer more specific to the moment.']),
         noraFeedback: (aiResult.noraFeedback || 'Stay with it and make the next rep more usable under pressure.').trim(),
         evaluationSource: 'ai',
-        evaluationModel: model,
+        evaluationModel,
         evaluationLatencyMs: Date.now() - startedAt,
         submittedAt: Date.now(),
       };
 
       return res.status(200).json({
         success: true,
-        model,
+        model: evaluationModel,
+        providerUsed: fallbackResult.providerUsed,
+        fallbackTriggered: fallbackResult.fallbackTriggered,
         latencyMs: turn.evaluationLatencyMs,
         evaluation: {
           turn,
@@ -450,7 +556,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'At least one submitted turn is required for session evaluation' });
     }
 
-    const aiResult = await evaluateSessionWithAI(openai, model, spec, submittedTurns);
+    const sessionFallbackResult = await callWithFallback<SessionEvalResult | null>({
+      feature: PULSECHECK_PROTOCOL_PRACTICE_EVAL,
+      anthropicCall: () => evaluateSessionWithAnthropic(spec, submittedTurns),
+      openaiCall: async () => {
+        if (!openai) throw new Error('OpenAI fallback unavailable: no API key configured');
+        return evaluateSessionWithAI(openai, fallbackModel, spec, submittedTurns);
+      },
+      logger,
+    });
+    const aiResult = sessionFallbackResult.result;
+    const sessionEvaluationModel = sessionFallbackResult.providerUsed === 'anthropic'
+      ? PULSECHECK_PROTOCOL_PRACTICE_EVAL.model
+      : fallbackModel;
     if (!aiResult) {
       return res.status(500).json({ error: 'Invalid AI session evaluation response' });
     }
@@ -476,13 +594,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       coachabilityTrend: aiResult.coachabilityTrend || 'steady',
       voiceSignalsSummary: summarizeVoiceSignals(submittedTurns),
       evaluationSource: 'ai',
-      evaluationModel: model,
+      evaluationModel: sessionEvaluationModel,
       evaluationLatencyMs: Date.now() - startedAt,
     };
 
     return res.status(200).json({
       success: true,
-      model,
+      model: sessionEvaluationModel,
+      providerUsed: sessionFallbackResult.providerUsed,
+      fallbackTriggered: sessionFallbackResult.fallbackTriggered,
       latencyMs: scorecard.evaluationLatencyMs,
       scorecard,
     });

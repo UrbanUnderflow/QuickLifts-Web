@@ -90,6 +90,15 @@ const PRESENTATION_REGISTRY: PresentationLink[] = [
     description: 'Interactive company presentation covering Pulse, Pulse Check, partners, team, and raise narrative.',
   },
   {
+    id: 'pil-executive-summary',
+    title: 'Pulse Executive Summary',
+    href: '/PILOne',
+    category: 'Presentation Decks',
+    typeLabel: 'Executive summary',
+    accessLabel: 'Live route',
+    description: 'One-pager executive summary for Pulse Intelligence Labs covering founder credibility, team, products, traction, and market timing.',
+  },
+  {
     id: 'advisory-board',
     title: 'Advisory Board Deck',
     href: '/advisory-board',

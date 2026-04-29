@@ -1,5 +1,7 @@
 import { Handler } from '@netlify/functions';
+import Anthropic from '@anthropic-ai/sdk';
 import { admin, db, headers as corsHeaders } from './config/firebase';
+import { MACRA_DAILY_INSIGHT } from '../../src/api/anthropic/featureRouting';
 
 interface MealRecord {
   name: string;
@@ -75,12 +77,6 @@ const verifyAuth = async (authHeader: string | undefined): Promise<string | null
   } catch {
     return null;
   }
-};
-
-const resolveBridgeBaseUrl = (event: { headers?: Record<string, string | undefined> }): string => {
-  const host = getHeader(event.headers, 'host') || process.env.URL || 'https://fitwithpulse.ai';
-  if (host.startsWith('http://') || host.startsWith('https://')) return host;
-  return `https://${host}`;
 };
 
 const tzDayKey = (date: Date, timezone: string): string => {
@@ -629,40 +625,60 @@ export const handler: Handler = async (event) => {
     dayKey, hourLocal, timezone,
   });
 
-  const bridgeBase = resolveBridgeBaseUrl(event);
-  const bridgeAuth = isInternalCaller
-    ? { 'x-pulsecheck-internal-bridge': '1' }
-    : { Authorization: `Bearer ${(getHeader(event.headers, 'authorization') || '').split('Bearer ')[1]}` };
-
+  // Phase B+ full cutover: Anthropic Sonnet 4.6 with forced tool-use for JSON.
+  // See generate-macra-meal-plan.ts for the JSON OUTPUT PATTERN doc block.
+  // TODO(prompt-cache): SYSTEM_PROMPT is ~900 tokens — under Sonnet 4.6's 2048
+  // minimum. Add cache_control here once it crosses the threshold.
   let insightRaw: string;
   try {
-    const response = await fetch(`${bridgeBase}/api/openai/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'openai-organization': 'macraDailyInsight',
-        ...bridgeAuth,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        max_tokens: 1000,
-        temperature: 0.5,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `Context:\n${contextBlock}` },
-        ],
-      }),
+    const client = new Anthropic();
+    const response = await client.messages.create({
+      model: MACRA_DAILY_INSIGHT.model,
+      max_tokens: MACRA_DAILY_INSIGHT.maxTokens,
+      system: SYSTEM_PROMPT,
+      tools: [
+        {
+          name: 'submit_daily_insight',
+          description: 'Submit the daily insight in the structured schema.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              type: {
+                type: 'string',
+                enum: ['predictive', 'pattern', 'distribution', 'outcome', 'training_coupled', 'pantry'],
+              },
+              title: { type: 'string', description: 'Punchy headline ≤42 chars.' },
+              icon: { type: 'string', description: 'SF Symbol name.' },
+              points: {
+                type: 'array',
+                items: { type: 'string', description: 'Observation ≤140 chars.' },
+                minItems: 1,
+                maxItems: 3,
+              },
+              action: { type: 'string', description: 'One concrete next step ≤160 chars.' },
+            },
+            required: ['type', 'title', 'icon', 'points', 'action'],
+          },
+        },
+      ],
+      tool_choice: { type: 'tool', name: 'submit_daily_insight' },
+      messages: [{ role: 'user', content: `Context:\n${contextBlock}` }],
     });
-    if (!response.ok) {
-      const text = await response.text();
-      console.error('[generate-macra-daily-insight] bridge error', response.status, text.slice(0, 300));
-      return { statusCode: 502, headers: corsHeaders, body: JSON.stringify({ error: 'insight_bridge_failed' }) };
+    const toolUse = response.content.find(
+      (block): block is Anthropic.ToolUseBlock =>
+        block.type === 'tool_use' && block.name === 'submit_daily_insight',
+    );
+    if (!toolUse) {
+      console.error('[generate-macra-daily-insight] response missing forced tool_use block');
+      return {
+        statusCode: 502,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'insight_bridge_failed' }),
+      };
     }
-    const data = await response.json();
-    insightRaw = data?.choices?.[0]?.message?.content || '';
+    insightRaw = JSON.stringify(toolUse.input);
   } catch (err) {
-    console.error('[generate-macra-daily-insight] fetch error:', err);
+    console.error('[generate-macra-daily-insight] anthropic error:', err);
     return { statusCode: 502, headers: corsHeaders, body: JSON.stringify({ error: 'insight_bridge_failed' }) };
   }
 

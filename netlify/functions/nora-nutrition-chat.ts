@@ -1,5 +1,7 @@
 import { Handler } from '@netlify/functions';
+import Anthropic from '@anthropic-ai/sdk';
 import { admin, db, headers as corsHeaders } from './config/firebase';
+import { NORA_NUTRITION_CHAT } from '../../src/api/anthropic/featureRouting';
 
 interface IngredientContext {
   name: string;
@@ -146,12 +148,6 @@ const verifyAuth = async (authHeader: string | undefined): Promise<string | null
     console.error('[nora-nutrition-chat] Auth verification failed:', err);
     return null;
   }
-};
-
-const resolveBridgeBaseUrl = (event: { headers?: Record<string, string | undefined> }): string => {
-  const host = getHeader(event.headers, 'host') || process.env.URL || 'https://fitwithpulse.ai';
-  if (host.startsWith('http://') || host.startsWith('https://')) return host;
-  return `https://${host}`;
 };
 
 const numberFromUnknown = (value: unknown): number | undefined => {
@@ -882,12 +878,6 @@ export const handler: Handler = async (event) => {
     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'meals array required' }) };
   }
 
-  const bridgeBase = resolveBridgeBaseUrl(event);
-  const userToken = (getHeader(event.headers, 'authorization') || '').split('Bearer ')[1];
-  if (!userToken) {
-    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'Unauthorized' }) };
-  }
-
   const systemPrompt = [
     "You are Nora, Macra's warm but direct performance nutrition coach.",
     "",
@@ -1013,34 +1003,24 @@ export const handler: Handler = async (event) => {
 
   messages.push({ role: 'user', content: body.query.trim().slice(0, 800) });
 
+  // Phase B+ full cutover: Anthropic Sonnet 4.6 plain-text reply.
+  // TODO(prompt-cache): systemPrompt is per-user-dynamic (built from profile +
+  // PulseCheck context + meal plan + user doc), so it doesn't share across
+  // calls. Caching only helps if we extract the static voice/rules section.
   try {
-    const response = await fetch(`${bridgeBase}/api/openai/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${userToken}`,
-        'openai-organization': 'noraNutritionChat'
-      },
-      body: JSON.stringify({
-        // gpt-4o (full) for nutrition reasoning — mini was making logical
-        // errors like suggesting users "swap" already-logged meals.
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...messages
-        ],
-        max_tokens: 500,
-        temperature: 0.35
-      })
+    const client = new Anthropic();
+    const response = await client.messages.create({
+      model: NORA_NUTRITION_CHAT.model,
+      max_tokens: NORA_NUTRITION_CHAT.maxTokens,
+      system: systemPrompt,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`AI bridge ${response.status}: ${errText.slice(0, 500)}`);
-    }
-
-    const payload = await response.json() as any;
-    const rawReply = payload?.choices?.[0]?.message?.content?.trim();
+    const rawReply = response.content
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .map((block) => block.text)
+      .join('')
+      .trim();
     const reply = rawReply ? directNoraReply(rawReply) : '';
     if (!reply) throw new Error('Nora returned no content');
 
