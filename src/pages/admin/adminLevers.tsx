@@ -10,7 +10,7 @@ import {
   updateDoc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '../../api/firebase/config';
+import { db, auth } from '../../api/firebase/config';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -150,7 +150,198 @@ const backfillClubJoinCodes: Lever = {
   },
 };
 
-const LEVERS: Lever[] = [backfillClubJoinCodes];
+// ---------------------------------------------------------------------
+// Lever 2: Reclassify Legacy Challenge Types
+// ---------------------------------------------------------------------
+
+type ChallengeTypeValue =
+  | 'lift'
+  | 'run'
+  | 'bike'
+  | 'burn'
+  | 'stretch'
+  | 'hybrid'
+  | 'nutrition';
+
+const VALID_CHALLENGE_TYPES: ChallengeTypeValue[] = [
+  'lift',
+  'run',
+  'bike',
+  'burn',
+  'stretch',
+  'hybrid',
+  'nutrition',
+];
+
+// Treat anything outside this set as "needs reclassification". The legacy
+// fallback in iOS (`init(fromLegacy:)`) silently coerces these to .lift on
+// read but never writes the field back, so the source-of-truth doc is wrong.
+const LEGACY_TYPE_VALUES = new Set(['workout', 'steps', 'calories', '']);
+
+interface ClassificationResponse {
+  challengeId: string;
+  inferredType: ChallengeTypeValue;
+  confidence: 'high' | 'medium' | 'low';
+  reasoning: string;
+  model: string;
+}
+
+async function classifyChallengeViaApi(args: {
+  challengeId: string;
+  challengeTitle: string;
+  challengeSubtitle?: string;
+  workoutTitles: string[];
+}): Promise<ClassificationResponse> {
+  const idToken = await auth.currentUser?.getIdToken();
+  if (!idToken) throw new Error('Not signed in');
+
+  const res = await fetch('/.netlify/functions/classify-challenge-type', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify(args),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Classifier ${res.status}: ${text.slice(0, 240)}`);
+  }
+  return (await res.json()) as ClassificationResponse;
+}
+
+const reclassifyLegacyChallengeTypes: Lever = {
+  id: 'reclassify-legacy-challenge-types',
+  title: 'Reclassify Legacy Challenge Types',
+  description:
+    'Finds challenges whose challenge.challengeType is missing or set to a legacy value (workout/steps/calories), then asks Claude Haiku to pick the right canonical enum based on the challenge title and the denormalized workout names. In live mode, writes the inferred value plus an audit trail (challengeTypeInferredAt + challengeTypeInferredFrom).',
+  supportsDryRun: true,
+  async run({ dryRun, handle }) {
+    handle.log(`Scanning sweatlist-collection${dryRun ? ' (dry run)' : ''}…`);
+
+    const allSnap = await getDocs(collection(db, 'sweatlist-collection'));
+    handle.log(`Total docs: ${allSnap.size}`);
+
+    type Candidate = {
+      docId: string;
+      challengeTitle: string;
+      challengeSubtitle: string;
+      workoutTitles: string[];
+      currentType: string | undefined;
+      reason: 'missing' | 'legacy';
+    };
+
+    const candidates: Candidate[] = [];
+    allSnap.forEach((d) => {
+      const data = d.data() as Record<string, unknown>;
+      const challenge = (data.challenge as Record<string, unknown> | undefined) || undefined;
+      if (!challenge) return; // Some sweatlist-collection docs don't carry a challenge at all.
+
+      const rawType = challenge.challengeType;
+      const currentType =
+        typeof rawType === 'string' ? rawType.trim().toLowerCase() : undefined;
+
+      const isMissing = !currentType;
+      const isLegacy = !!currentType && LEGACY_TYPE_VALUES.has(currentType);
+      const isUnknownNonLegacy =
+        !!currentType &&
+        !VALID_CHALLENGE_TYPES.includes(currentType as ChallengeTypeValue) &&
+        !isLegacy;
+      if (!isMissing && !isLegacy && !isUnknownNonLegacy) return;
+
+      const challengeTitle =
+        typeof challenge.title === 'string'
+          ? challenge.title
+          : typeof data.title === 'string'
+          ? (data.title as string)
+          : '';
+      const challengeSubtitle =
+        typeof challenge.subtitle === 'string' ? (challenge.subtitle as string) : '';
+
+      const sweatlistIds = Array.isArray(data.sweatlistIds)
+        ? (data.sweatlistIds as Array<Record<string, unknown>>)
+        : [];
+      const workoutTitles = sweatlistIds
+        .map((s) => (typeof s.sweatlistName === 'string' ? s.sweatlistName : ''))
+        .filter((t) => !!t);
+
+      candidates.push({
+        docId: d.id,
+        challengeTitle,
+        challengeSubtitle,
+        workoutTitles,
+        currentType,
+        reason: isMissing ? 'missing' : 'legacy',
+      });
+    });
+
+    handle.log(`Candidates needing reclassification: ${candidates.length}`);
+    handle.setProgress(0, candidates.length);
+
+    let changed = 0;
+    let skipped = 0;
+    let processed = 0;
+
+    // Helper: produce a one-line "fingerprint" for log readability — leads
+    // with the human-readable challenge title, then a small sample of
+    // workout names so the admin can sanity-check the AI's call against
+    // real data without leaving the lever.
+    const fingerprint = (cand: Candidate): string => {
+      const titleSnippet = cand.challengeTitle ? `"${cand.challengeTitle}"` : '<no title>';
+      const sample = cand.workoutTitles
+        .slice(0, 2)
+        .map((t) => `"${t.length > 40 ? t.slice(0, 37) + '…' : t}"`)
+        .join(', ');
+      const more = cand.workoutTitles.length > 2 ? `, +${cand.workoutTitles.length - 2} more` : '';
+      const sampleText = cand.workoutTitles.length > 0 ? `: ${sample}${more}` : '';
+      return `${titleSnippet} (${cand.workoutTitles.length} wks${sampleText}) [${cand.docId}]`;
+    };
+
+    for (const cand of candidates) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const result = await classifyChallengeViaApi({
+          challengeId: cand.docId,
+          challengeTitle: cand.challengeTitle,
+          challengeSubtitle: cand.challengeSubtitle,
+          workoutTitles: cand.workoutTitles,
+        });
+
+        const fromLabel = cand.currentType ? `"${cand.currentType}"` : 'missing';
+        handle.log(
+          `${fingerprint(cand)} ${fromLabel} → ${result.inferredType} [${result.confidence}] — ${result.reasoning}`
+        );
+
+        if (!dryRun) {
+          // eslint-disable-next-line no-await-in-loop
+          await updateDoc(doc(db, 'sweatlist-collection', cand.docId), {
+            'challenge.challengeType': result.inferredType,
+            'challenge.challengeTypeInferredAt': serverTimestamp(),
+            'challenge.challengeTypeInferredFrom': `${result.model}:v1`,
+            'challenge.challengeTypeInferredConfidence': result.confidence,
+          });
+        }
+        changed += 1;
+      } catch (e: any) {
+        handle.log(`${fingerprint(cand)} FAILED: ${e?.message || String(e)}`, 'err');
+        skipped += 1;
+      }
+      processed += 1;
+      handle.setProgress(processed, candidates.length);
+    }
+
+    return {
+      summary: dryRun
+        ? `Would reclassify ${changed} challenge(s); ${skipped} failed during inference.`
+        : `Reclassified ${changed} challenge(s); ${skipped} failed during inference.`,
+      changed,
+      skipped,
+      total: candidates.length,
+    };
+  },
+};
+
+const LEVERS: Lever[] = [backfillClubJoinCodes, reclassifyLegacyChallengeTypes];
 
 // =====================================================================
 // UI
