@@ -141,9 +141,9 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   const [isMonthlyTableOpen, setIsMonthlyTableOpen] = useState(false);
   const [monthlyTableYear, setMonthlyTableYear] = useState<'2025' | '2024'>('2025');
   const [isPLModalOpen, setIsPLModalOpen] = useState(false);
-  const [activePLYear, _setActivePLYear] = useState<'2025' | '2024'>('2025');
-  const [_isBalanceSheetModalOpen, setIsBalanceSheetModalOpen] = useState(false);
-  const [_activeBalanceSheetYear, _setActiveBalanceSheetYear] = useState<'2025' | '2024'>('2025');
+  const [activePLYear, setActivePLYear] = useState<'2025' | '2024'>('2025');
+  const [isBalanceSheetModalOpen, setIsBalanceSheetModalOpen] = useState(false);
+  const [activeBalanceSheetYear, setActiveBalanceSheetYear] = useState<'2025' | '2024'>('2025');
   const [isExpenseReportModalOpen, setIsExpenseReportModalOpen] = useState(false);
   const [selectedExpenseMonths, setSelectedExpenseMonths] = useState<string[]>([]);
   const [_isExtendedPLModalOpen, _setIsExtendedPLModalOpen] = useState(false);
@@ -251,14 +251,14 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     { revenue: 0, recurring: 0, oneOff: 0, total: 0, net: 0 }
   );
 
-  const _activePLData = activePLYear === '2025' ? pnl2025 : pnl2024;
-  const _activePLTotals = activePLYear === '2025' ? pnlTotals2025 : pnlTotals2024;
+  const activePLData = activePLYear === '2025' ? pnl2025 : pnl2024;
+  const activePLTotals = activePLYear === '2025' ? pnlTotals2025 : pnlTotals2024;
 
-  const _formatCurrency = (value: number) =>
+  const formatCurrency = (value: number) =>
     `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   // Generate P&L PDF
-  const _generatePLPdf = () => {
+  const generatePLPdf = () => {
     const data = activePLYear === '2025' ? pnl2025 : pnl2024;
     const totals = activePLYear === '2025' ? pnlTotals2025 : pnlTotals2024;
     const yearLabel = activePLYear === '2025' ? '2025 (Jan–Nov)' : '2024 (Full Year)';
@@ -602,7 +602,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   };
 
   // Generate Balance Sheet PDF (both years)
-  const _generateBalanceSheetPdf = () => {
+  const generateBalanceSheetPdf = () => {
     const fmt = (value: number) =>
       `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -1395,8 +1395,8 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     totalLiabilitiesAndEquity: { y2024: -1193.60, y2025: 179 },
   };
 
-  const _getBalanceSheetValue = (item: { y2024: number; y2025: number }) =>
-    _activeBalanceSheetYear === '2025' ? item.y2025 : item.y2024;
+  const getBalanceSheetValue = (item: { y2024: number; y2025: number }) =>
+    activeBalanceSheetYear === '2025' ? item.y2025 : item.y2024;
 
   const revenueReports = [
     { id: 'jan', label: 'January', file: '/financial_report_Jan.csv' },
@@ -5900,7 +5900,10 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         {/* Profit & Loss */}
                         <button
                           type="button"
-                          onClick={() => setIsPLModalOpen(true)}
+                          onClick={() => {
+                            setActivePLYear('2025');
+                            setIsPLModalOpen(true);
+                          }}
                           className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group text-left"
                         >
                           <div className="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
@@ -5915,7 +5918,10 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         {/* Balance Sheet */}
                         <button
                           type="button"
-                          onClick={() => setIsBalanceSheetModalOpen(true)}
+                          onClick={() => {
+                            setActiveBalanceSheetYear('2025');
+                            setIsBalanceSheetModalOpen(true);
+                          }}
                           className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group text-left"
                         >
                           <div className="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
@@ -6302,28 +6308,256 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                 High-level P&amp;L for {activePLYear} subscription revenue. All amounts in USD.
                               </p>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => setIsPLModalOpen(false)}
-                              className="text-zinc-400 hover:text-white transition-colors"
-                            >
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center bg-zinc-800 rounded-lg overflow-hidden text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => setActivePLYear('2025')}
+                                  className={`px-3 py-1.5 font-medium transition-colors ${activePLYear === '2025' ? 'bg-[#E0FE10] text-black' : 'text-zinc-400 hover:text-white'
+                                    }`}
+                                >
+                                  2025
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setActivePLYear('2024')}
+                                  className={`px-3 py-1.5 font-medium transition-colors ${activePLYear === '2024' ? 'bg-[#E0FE10] text-black' : 'text-zinc-400 hover:text-white'
+                                    }`}
+                                >
+                                  2024
+                                </button>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setIsPLModalOpen(false)}
+                                className="text-zinc-400 hover:text-white transition-colors"
+                              >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
                           </div>
 
-                          <div className="text-center py-8 text-zinc-500">
-                            P&amp;L data coming soon
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+                              <p className="text-zinc-500 text-xs mb-1">Total Revenue</p>
+                              <p className="text-white text-lg font-semibold">{formatCurrency(activePLTotals.revenue)}</p>
+                            </div>
+                            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+                              <p className="text-zinc-500 text-xs mb-1">Total Expenses</p>
+                              <p className="text-white text-lg font-semibold">{formatCurrency(activePLTotals.total)}</p>
+                            </div>
+                            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+                              <p className="text-zinc-500 text-xs mb-1">Net Income</p>
+                              <p className={`text-lg font-semibold ${activePLTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {formatCurrency(activePLTotals.net)}
+                              </p>
+                            </div>
                           </div>
 
-                          <div className="flex justify-end mt-4">
+                          <div className="max-h-[48vh] overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/60">
+                            <table className="w-full min-w-[720px] text-sm">
+                              <thead className="sticky top-0 bg-zinc-900 border-b border-zinc-800">
+                                <tr>
+                                  <th className="text-left px-4 py-3 text-zinc-400 font-medium">Month</th>
+                                  <th className="text-right px-4 py-3 text-zinc-400 font-medium">Revenue</th>
+                                  <th className="text-right px-4 py-3 text-zinc-400 font-medium">Recurring</th>
+                                  <th className="text-right px-4 py-3 text-zinc-400 font-medium">One-off</th>
+                                  <th className="text-right px-4 py-3 text-zinc-400 font-medium">Total Expenses</th>
+                                  <th className="text-right px-4 py-3 text-zinc-400 font-medium">Net Income</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {activePLData.map(row => (
+                                  <tr key={`${activePLYear}-${row.month}`} className="border-b border-zinc-800/70">
+                                    <td className="px-4 py-3 text-white">{row.month}</td>
+                                    <td className="px-4 py-3 text-right text-zinc-100">{formatCurrency(row.revenue)}</td>
+                                    <td className="px-4 py-3 text-right text-zinc-100">{formatCurrency(row.recurring)}</td>
+                                    <td className="px-4 py-3 text-right text-zinc-100">{formatCurrency(row.oneOff)}</td>
+                                    <td className="px-4 py-3 text-right text-zinc-100">{formatCurrency(row.total)}</td>
+                                    <td className={`px-4 py-3 text-right ${row.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                      {formatCurrency(row.net)}
+                                    </td>
+                                  </tr>
+                                ))}
+                                <tr className="bg-zinc-900/80">
+                                  <td className="px-4 py-3 text-white font-semibold">Total</td>
+                                  <td className="px-4 py-3 text-right text-white font-semibold">{formatCurrency(activePLTotals.revenue)}</td>
+                                  <td className="px-4 py-3 text-right text-white font-semibold">{formatCurrency(activePLTotals.recurring)}</td>
+                                  <td className="px-4 py-3 text-right text-white font-semibold">{formatCurrency(activePLTotals.oneOff)}</td>
+                                  <td className="px-4 py-3 text-right text-white font-semibold">{formatCurrency(activePLTotals.total)}</td>
+                                  <td className={`px-4 py-3 text-right font-semibold ${activePLTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    {formatCurrency(activePLTotals.net)}
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="flex justify-end gap-3 mt-4">
                             <button
                               type="button"
                               onClick={() => setIsPLModalOpen(false)}
                               className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
                             >
                               Close
+                            </button>
+                            <button
+                              type="button"
+                              onClick={generatePLPdf}
+                              className="px-4 py-2 rounded-lg bg-[#E0FE10] text-sm font-semibold text-black hover:bg-[#d8f521] transition-colors flex items-center"
+                            >
+                              <Download className="w-4 h-4 mr-2" />
+                              Download PDF
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Balance Sheet modal */}
+                    {isBalanceSheetModalOpen && (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-3xl w-full p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <div>
+                              <h4 className="text-white text-lg font-semibold">{activeBalanceSheetYear} Balance Sheet</h4>
+                              <p className="text-zinc-400 text-xs mt-1">
+                                Assets, liabilities, and owner's equity for Pulse Intelligence Labs. All amounts in USD.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center bg-zinc-800 rounded-lg overflow-hidden text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveBalanceSheetYear('2025')}
+                                  className={`px-3 py-1.5 font-medium transition-colors ${activeBalanceSheetYear === '2025' ? 'bg-[#E0FE10] text-black' : 'text-zinc-400 hover:text-white'
+                                    }`}
+                                >
+                                  2025
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveBalanceSheetYear('2024')}
+                                  className={`px-3 py-1.5 font-medium transition-colors ${activeBalanceSheetYear === '2024' ? 'bg-[#E0FE10] text-black' : 'text-zinc-400 hover:text-white'
+                                    }`}
+                                >
+                                  2024
+                                </button>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setIsBalanceSheetModalOpen(false)}
+                                className="text-zinc-400 hover:text-white transition-colors"
+                              >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+                              <p className="text-zinc-500 text-xs mb-1">Total Assets</p>
+                              <p className="text-white text-lg font-semibold">{formatCurrency(getBalanceSheetValue(balanceSheetData.assets.totalAssets))}</p>
+                            </div>
+                            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+                              <p className="text-zinc-500 text-xs mb-1">Total Liabilities</p>
+                              <p className="text-white text-lg font-semibold">{formatCurrency(getBalanceSheetValue(balanceSheetData.liabilities.totalLiabilities))}</p>
+                            </div>
+                            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+                              <p className="text-zinc-500 text-xs mb-1">Owner's Equity</p>
+                              <p className={`text-lg font-semibold ${getBalanceSheetValue(balanceSheetData.ownersEquity.totalOwnersEquity) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {formatCurrency(getBalanceSheetValue(balanceSheetData.ownersEquity.totalOwnersEquity))}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="max-h-[48vh] overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/60">
+                            <table className="w-full text-sm">
+                              <thead className="sticky top-0 bg-zinc-900 border-b border-zinc-800">
+                                <tr>
+                                  <th className="text-left px-4 py-3 text-zinc-400 font-medium">Account</th>
+                                  <th className="text-right px-4 py-3 text-zinc-400 font-medium">Amount</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr className="bg-zinc-900/80">
+                                  <td colSpan={2} className="px-4 py-2 text-[#E0FE10] text-xs font-semibold uppercase tracking-wide">Assets</td>
+                                </tr>
+                                {balanceSheetData.assets.currentAssets.map(item => (
+                                  <tr key={`current-asset-${item.account}`} className="border-b border-zinc-800/70">
+                                    <td className="px-4 py-2 text-white">{item.account}</td>
+                                    <td className="px-4 py-2 text-right text-zinc-100">{formatCurrency(getBalanceSheetValue(item))}</td>
+                                  </tr>
+                                ))}
+                                <tr className="border-b border-zinc-800/70 bg-zinc-900/40">
+                                  <td className="px-4 py-2 text-white font-medium">Total Current Assets</td>
+                                  <td className="px-4 py-2 text-right text-white font-medium">{formatCurrency(getBalanceSheetValue(balanceSheetData.assets.totalCurrentAssets))}</td>
+                                </tr>
+                                {[...balanceSheetData.assets.fixedAssets, ...balanceSheetData.assets.otherAssets].map(item => (
+                                  <tr key={`asset-${item.account}`} className="border-b border-zinc-800/70">
+                                    <td className="px-4 py-2 text-white">{item.account}</td>
+                                    <td className="px-4 py-2 text-right text-zinc-100">{formatCurrency(getBalanceSheetValue(item))}</td>
+                                  </tr>
+                                ))}
+                                <tr className="border-b border-zinc-800/70 bg-zinc-900/60">
+                                  <td className="px-4 py-2 text-white font-semibold">Total Assets</td>
+                                  <td className="px-4 py-2 text-right text-white font-semibold">{formatCurrency(getBalanceSheetValue(balanceSheetData.assets.totalAssets))}</td>
+                                </tr>
+
+                                <tr className="bg-zinc-900/80">
+                                  <td colSpan={2} className="px-4 py-2 text-[#E0FE10] text-xs font-semibold uppercase tracking-wide">Liabilities</td>
+                                </tr>
+                                {[...balanceSheetData.liabilities.currentLiabilities, ...balanceSheetData.liabilities.longTermLiabilities].map(item => (
+                                  <tr key={`liability-${item.account}`} className="border-b border-zinc-800/70">
+                                    <td className="px-4 py-2 text-white">{item.account}</td>
+                                    <td className="px-4 py-2 text-right text-zinc-100">{formatCurrency(getBalanceSheetValue(item))}</td>
+                                  </tr>
+                                ))}
+                                <tr className="border-b border-zinc-800/70 bg-zinc-900/60">
+                                  <td className="px-4 py-2 text-white font-semibold">Total Liabilities</td>
+                                  <td className="px-4 py-2 text-right text-white font-semibold">{formatCurrency(getBalanceSheetValue(balanceSheetData.liabilities.totalLiabilities))}</td>
+                                </tr>
+
+                                <tr className="bg-zinc-900/80">
+                                  <td colSpan={2} className="px-4 py-2 text-[#E0FE10] text-xs font-semibold uppercase tracking-wide">Owner's Equity</td>
+                                </tr>
+                                {balanceSheetData.ownersEquity.items.map(item => (
+                                  <tr key={`equity-${item.account}`} className="border-b border-zinc-800/70">
+                                    <td className="px-4 py-2 text-white">{item.account}</td>
+                                    <td className="px-4 py-2 text-right text-zinc-100">{formatCurrency(getBalanceSheetValue(item))}</td>
+                                  </tr>
+                                ))}
+                                <tr className="border-b border-zinc-800/70 bg-zinc-900/60">
+                                  <td className="px-4 py-2 text-white font-semibold">Total Owner's Equity</td>
+                                  <td className="px-4 py-2 text-right text-white font-semibold">{formatCurrency(getBalanceSheetValue(balanceSheetData.ownersEquity.totalOwnersEquity))}</td>
+                                </tr>
+                                <tr className="bg-[#E0FE10]/15">
+                                  <td className="px-4 py-2 text-white font-semibold">Total Liabilities &amp; Equity</td>
+                                  <td className="px-4 py-2 text-right text-white font-semibold">{formatCurrency(getBalanceSheetValue(balanceSheetData.totalLiabilitiesAndEquity))}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="flex justify-end gap-3 mt-4">
+                            <button
+                              type="button"
+                              onClick={() => setIsBalanceSheetModalOpen(false)}
+                              className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
+                            >
+                              Close
+                            </button>
+                            <button
+                              type="button"
+                              onClick={generateBalanceSheetPdf}
+                              className="px-4 py-2 rounded-lg bg-[#E0FE10] text-sm font-semibold text-black hover:bg-[#d8f521] transition-colors flex items-center"
+                            >
+                              <Download className="w-4 h-4 mr-2" />
+                              Download PDF
                             </button>
                           </div>
                         </div>
