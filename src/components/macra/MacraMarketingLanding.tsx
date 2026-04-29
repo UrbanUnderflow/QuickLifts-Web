@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 type Props = {
-  onJoinWaitlist?: () => void;
   onOpenApp?: () => void;
   appLabel?: string;
 };
+
+const MACRA_APP_STORE_URL = 'https://apps.apple.com/us/app/macra-ai-calorie/id6463771067';
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * Math.max(0, Math.min(1, t));
 
@@ -16,7 +17,6 @@ const SCAN_ITEMS = [
 ] as const;
 
 const MacraMarketingLanding: React.FC<Props> = ({
-  onJoinWaitlist,
   onOpenApp,
   appLabel = 'Open App',
 }) => {
@@ -143,8 +143,8 @@ const MacraMarketingLanding: React.FC<Props> = ({
               {appLabel}
             </button>
           )}
-          <a href="#waitlist" className="mc2-nav-cta">
-            Join Waitlist
+          <a href={MACRA_APP_STORE_URL} className="mc2-nav-cta" target="_blank" rel="noreferrer">
+            Download
           </a>
         </div>
       </nav>
@@ -168,11 +168,11 @@ const MacraMarketingLanding: React.FC<Props> = ({
               your daily meal plan around the goals you set. No weighing. No guessing.
             </p>
             <div className="mc2-hero-ctas">
-              <a href="#waitlist" className="mc2-btn-primary">
+              <a href={MACRA_APP_STORE_URL} className="mc2-btn-primary" target="_blank" rel="noreferrer">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
                 </svg>
-                Join the Waitlist
+                Download on the App Store
               </a>
               <a href="#scan" className="mc2-btn-secondary">
                 See How It Works →
@@ -181,7 +181,7 @@ const MacraMarketingLanding: React.FC<Props> = ({
             <div className="mc2-hero-proof">
               <span className="mc2-proof-label">Part of the Pulse Intelligence ecosystem</span>
               <div className="mc2-proof-logos">
-                {['PULSE', 'QUICKLIFTS', 'PULSECHECK', 'NORA AI'].map((l) => (
+                {['FIT WITH PULSE', 'PULSECHECK', 'NORA AI'].map((l) => (
                   <span key={l} className="mc2-proof-logo">
                     {l}
                   </span>
@@ -865,53 +865,33 @@ const MacraMarketingLanding: React.FC<Props> = ({
       </section>
 
       {/* ── CTA ── */}
-      <section className="mc2-cta" id="waitlist">
+      <section className="mc2-cta" id="download">
         <div className="mc2-cta-glow" />
         <div className="mc2-cta-inner">
-          <span className="mc2-cta-eyebrow">iOS · Beta rolling out now</span>
+          <span className="mc2-cta-eyebrow">Available now on iOS</span>
           <h2 className="mc2-cta-h2">
             Stop guessing what's <em>on your plate.</em>
           </h2>
           <p>
-            Drop your email. We'll send you a TestFlight invite the moment your slot opens — no
-            spam, just the build.
+            Download Macra from the App Store and turn meals, labels, and everyday food photos into
+            clear calorie and macro breakdowns.
           </p>
 
-          <form
-            className="mc2-cta-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const data = new FormData(e.currentTarget);
-              const email = String(data.get('email') || '').trim();
-              if (!email) return;
-              if (onJoinWaitlist) {
-                onJoinWaitlist();
-              } else {
-                window.location.href = `mailto:pulsefitnessapp@gmail.com?subject=Macra%20Waitlist&body=Please%20add%20me%20to%20the%20Macra%20waitlist.%20Email%3A%20${encodeURIComponent(
-                  email
-                )}`;
-              }
-            }}
+          <a
+            href={MACRA_APP_STORE_URL}
+            className="mc2-btn-primary mc2-store-cta"
+            target="_blank"
+            rel="noreferrer"
           >
-            <input
-              type="email"
-              name="email"
-              required
-              placeholder="you@domain.com"
-              className="mc2-cta-input"
-              autoComplete="email"
-            />
-            <button type="submit" className="mc2-btn-primary">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-              </svg>
-              Get Early Access
-            </button>
-          </form>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
+            Download on the App Store
+          </a>
 
           <div className="mc2-cta-trust">
-            <span>✓ Free during beta</span>
-            <span>✓ iOS first, Android soon</span>
+            <span>✓ iOS app available now</span>
+            <span>✓ Food photos and labels</span>
             <span>✓ No ads, ever</span>
           </div>
         </div>
@@ -1915,6 +1895,7 @@ const MacraMarketingLanding: React.FC<Props> = ({
         .mc2-cta-h2 { font-size:clamp(32px,4.2vw,58px); font-weight:700; color:#fff; line-height:1.06; letter-spacing:-0.028em; margin-bottom:18px; }
         .mc2-cta-h2 em { font-style:italic; background:linear-gradient(135deg,#BEF264,#2DD4BF); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
         .mc2-cta p { font-size:17px; color:rgba(255,255,255,0.55); margin-bottom:34px; line-height:1.7; max-width: 520px; margin-left: auto; margin-right: auto; }
+        .mc2-store-cta { margin-bottom: 24px; }
         .mc2-cta-form {
           display: flex; gap: 10px;
           max-width: 500px; margin: 0 auto 24px;
