@@ -40,7 +40,7 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# NOTE: eatwithmacra.ai → /Macra rewrite is handled by Next.js middleware (src/middleware.ts).
+# NOTE: eatwithmacra.ai → /Macra redirect is handled by Next.js middleware (src/middleware.ts).
 # Netlify's host-based redirects in netlify.toml are unreliable when combined with
 # @netlify/plugin-nextjs (the plugin's auto-generated redirects for "/" win first).
 
