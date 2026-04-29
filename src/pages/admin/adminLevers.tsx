@@ -178,43 +178,130 @@ const VALID_CHALLENGE_TYPES: ChallengeTypeValue[] = [
 // read but never writes the field back, so the source-of-truth doc is wrong.
 const LEGACY_TYPE_VALUES = new Set(['workout', 'steps', 'calories', '']);
 
-interface ClassificationResponse {
-  challengeId: string;
+const CLASSIFIER_MODEL = 'gpt-4o-mini';
+const CLASSIFIER_FEATURE_ID = 'classifyChallengeType';
+
+const CLASSIFIER_SYSTEM_PROMPT = `You classify a fitness challenge into one of seven canonical types.
+
+The seven valid values are exactly:
+  - "lift"      → Weight training, strength workouts (squats, bench, deadlifts, hypertrophy, powerlifting, push/pull/legs, etc.)
+  - "run"       → Running, cardio runs, 5k/10k/half/marathon training, track work
+  - "bike"      → Cycling, indoor cycling, peloton, road cycling, gravel
+  - "burn"      → HIIT, fat burn, conditioning, metabolic, circuits with high heart-rate intent
+  - "stretch"   → Flexibility, mobility, yoga, recovery, foam rolling, dynamic warmups, prehab/rehab
+  - "hybrid"    → Genuinely mixed strength + cardio (e.g. CrossFit-style WODs combining lifts and cardio)
+  - "nutrition" → Nutrition-focused: hit calorie/macro target, no workouts
+
+Rules:
+1. Pick the SINGLE best match based on the workout names + challenge title/subtitle.
+2. If the workouts are obviously a mobility/flexibility/yoga focus, use "stretch" — that bucket explicitly covers mobility.
+3. Use "hybrid" only when it's clearly a cardio-AND-strength program. A lift program with one cardio finisher is still "lift".
+4. Default to "lift" only if the evidence genuinely points there, NOT as a fallback for ambiguous cases. Use "low" confidence when unsure.
+5. Reply with strict JSON, no surrounding text. Schema:
+   {"inferredType":"<one of: lift|run|bike|burn|stretch|hybrid|nutrition>","confidence":"<high|medium|low>","reasoning":"<one short sentence>"}
+`;
+
+interface ClassificationResult {
   inferredType: ChallengeTypeValue;
   confidence: 'high' | 'medium' | 'low';
   reasoning: string;
   model: string;
 }
 
+const buildClassifierUserPrompt = (args: {
+  challengeTitle: string;
+  challengeSubtitle?: string;
+  workoutTitles: string[];
+}): string => {
+  const lines: string[] = [];
+  lines.push(`Challenge title: ${args.challengeTitle?.trim() || '(blank)'}`);
+  if (args.challengeSubtitle?.trim()) {
+    lines.push(`Subtitle: ${args.challengeSubtitle.trim()}`);
+  }
+  const titles = (args.workoutTitles || [])
+    .map((t) => t?.trim())
+    .filter((t): t is string => !!t);
+  if (titles.length > 0) {
+    lines.push('');
+    lines.push(`Workout names (${titles.length}):`);
+    titles.forEach((t, i) => lines.push(`  ${i + 1}. ${t}`));
+  } else {
+    lines.push('');
+    lines.push('No workout names available — classify from title/subtitle only and use "low" confidence.');
+  }
+  lines.push('');
+  lines.push('Respond with JSON only.');
+  return lines.join('\n');
+};
+
 async function classifyChallengeViaApi(args: {
   challengeId: string;
   challengeTitle: string;
   challengeSubtitle?: string;
   workoutTitles: string[];
-}): Promise<ClassificationResponse> {
+}): Promise<ClassificationResult> {
   const idToken = await auth.currentUser?.getIdToken();
   if (!idToken) throw new Error('Not signed in');
 
-  const res = await fetch('/.netlify/functions/classify-challenge-type', {
+  // Route through the existing openai-bridge so we reuse the OPENAI_API_KEY
+  // already configured in Netlify and inherit its admin token verification +
+  // per-feature rate limits.
+  const res = await fetch('/api/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       authorization: `Bearer ${idToken}`,
+      'openai-organization': CLASSIFIER_FEATURE_ID,
     },
-    body: JSON.stringify(args),
+    body: JSON.stringify({
+      model: CLASSIFIER_MODEL,
+      max_tokens: 256,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: CLASSIFIER_SYSTEM_PROMPT },
+        { role: 'user', content: buildClassifierUserPrompt(args) },
+      ],
+    }),
   });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Classifier ${res.status}: ${text.slice(0, 240)}`);
   }
-  return (await res.json()) as ClassificationResponse;
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const raw = data.choices?.[0]?.message?.content?.trim() || '';
+  if (!raw) throw new Error('Empty model response');
+
+  let parsed: any;
+  try {
+    const cleaned = raw
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/, '')
+      .replace(/```\s*$/, '')
+      .trim();
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new Error(`Failed to parse model JSON: ${raw.slice(0, 200)}`);
+  }
+
+  const inferredType = String(parsed?.inferredType || '').toLowerCase() as ChallengeTypeValue;
+  if (!VALID_CHALLENGE_TYPES.includes(inferredType)) {
+    throw new Error(`Model returned invalid type: ${parsed?.inferredType}`);
+  }
+  const confidence = (['high', 'medium', 'low'] as const).includes(parsed?.confidence)
+    ? parsed.confidence
+    : 'medium';
+  const reasoning = typeof parsed?.reasoning === 'string' ? parsed.reasoning : '';
+
+  return { inferredType, confidence, reasoning, model: CLASSIFIER_MODEL };
 }
 
 const reclassifyLegacyChallengeTypes: Lever = {
   id: 'reclassify-legacy-challenge-types',
   title: 'Reclassify Legacy Challenge Types',
   description:
-    'Finds challenges whose challenge.challengeType is missing or set to a legacy value (workout/steps/calories), then asks Claude Haiku to pick the right canonical enum based on the challenge title and the denormalized workout names. In live mode, writes the inferred value plus an audit trail (challengeTypeInferredAt + challengeTypeInferredFrom).',
+    'Finds challenges whose challenge.challengeType is missing or set to a legacy value (workout/steps/calories), then asks gpt-4o-mini (via the existing openai-bridge) to pick the right canonical enum based on the challenge title and the denormalized workout names. In live mode, writes the inferred value plus an audit trail (challengeTypeInferredAt + challengeTypeInferredFrom + challengeTypeInferredConfidence).',
   supportsDryRun: true,
   async run({ dryRun, handle }) {
     handle.log(`Scanning sweatlist-collection${dryRun ? ' (dry run)' : ''}…`);
