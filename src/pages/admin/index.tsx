@@ -401,6 +401,12 @@ const adminCardsData = [
     link: "/admin/escalationConditions"
   },
   {
+    title: "Admin Levers",
+    description: "Heavy-duty backfills and migrations. Each lever runs as the signed-in admin against the live Firestore project; use dry-run first.",
+    icon: <ShieldAlert className="w-5 h-5" />,
+    link: "/admin/adminLevers"
+  },
+  {
     title: "Variant Registry",
     description: "Canonical control plane for variant specs, runtime configs, publish actions, and sim-module seeding.",
     icon: <Brain className="w-5 h-5" />,
