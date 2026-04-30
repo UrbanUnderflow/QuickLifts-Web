@@ -454,6 +454,7 @@ const AdminLevers: React.FC = () => (
           {LEVERS.map((lever) => (
             <LeverCard key={lever.id} lever={lever} />
           ))}
+          <NoraTranslationPreviewCard />
         </div>
       </div>
     </div>
@@ -610,6 +611,293 @@ const LeverCard: React.FC<{ lever: Lever }> = ({ lever }) => {
                 {line.text}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// =====================================================================
+// Nora Translation Preview (Phase C)
+//
+// One-shot preview surface for the athlete-facing translation runtime.
+// Hits /api/admin/test-nora-translation, which loads the (domain, state)
+// row from pulsecheck-translation-table, asks Sonnet 4.6 for a paraphrase,
+// runs the 5 guardrails, and falls back to the seed phrasing on violations.
+// Defaults to persistLog=false so previews never write to the audit
+// collection unless the operator explicitly opts in.
+// =====================================================================
+
+const TRANSLATION_DOMAIN_OPTIONS = ['sleep', 'travel', 'autonomic', 'load', 'circadian'] as const;
+type TranslationDomainOption = (typeof TRANSLATION_DOMAIN_OPTIONS)[number];
+
+const STATE_PRESETS: Record<TranslationDomainOption, string[]> = {
+  sleep: ['strong', 'adequate', 'debt', 'deficit'],
+  travel: ['pre-departure', 'day-of-arrival', 'day-2-post'],
+  autonomic: ['sympathetic-dominant', 'parasympathetic-restored'],
+  load: ['acwr-climbing', 'acwr-settled'],
+  circadian: ['settled', 'mild_shift', 'travel_signature', 'jetlag_significant'],
+};
+
+interface TranslationPreviewResult {
+  phrasing: string;
+  providerUsed: 'anthropic' | 'fallback-seed';
+  fallbackTriggered: boolean;
+  fallbackReason?: 'guardrail-violation' | 'anthropic-error' | 'row-missing';
+  guardrailViolations: Array<{ field: string; message: string }>;
+  voiceReviewStatus: string;
+  translationRowRevision: string;
+  claudeOutputRaw?: string;
+}
+
+const DEFAULT_SIGNAL_JSON = JSON.stringify(
+  { band: 'travel_signature', sleepMidpointShiftMinutes: 95 },
+  null,
+  2,
+);
+
+const NoraTranslationPreviewCard: React.FC = () => {
+  const [domain, setDomain] = useState<TranslationDomainOption>('circadian');
+  const [state, setState] = useState<string>('travel_signature');
+  const [signalJson, setSignalJson] = useState<string>(DEFAULT_SIGNAL_JSON);
+  const [persistLog, setPersistLog] = useState<boolean>(false);
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<TranslationPreviewResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const onRun = useCallback(async () => {
+    if (running) return;
+    setError(null);
+    setResult(null);
+
+    let parsedSignal: Record<string, unknown> = {};
+    if (signalJson.trim().length > 0) {
+      try {
+        const parsed = JSON.parse(signalJson);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          parsedSignal = parsed;
+        } else {
+          setError('Signal must be a JSON object.');
+          return;
+        }
+      } catch (e) {
+        setError(`Signal JSON is invalid: ${e instanceof Error ? e.message : String(e)}`);
+        return;
+      }
+    }
+
+    if (persistLog) {
+      const ok = window.confirm(
+        'persistLog is ON — this preview will write a row to pulsecheck-nora-translation-log. Proceed?',
+      );
+      if (!ok) return;
+    }
+
+    setRunning(true);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Not signed in');
+
+      const res = await fetch('/api/admin/test-nora-translation', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          domain,
+          state,
+          signal: parsedSignal,
+          persistLog,
+        }),
+      });
+
+      const text = await res.text();
+      let payload: Record<string, unknown> | null = null;
+      try {
+        payload = text ? (JSON.parse(text) as Record<string, unknown>) : null;
+      } catch {
+        // fall through — show raw text
+      }
+      if (!res.ok) {
+        const msg =
+          (payload && typeof payload.error === 'string' && payload.error) ||
+          text.slice(0, 240) ||
+          `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+
+      const r = (payload?.result as TranslationPreviewResult | undefined) ?? null;
+      if (!r) throw new Error('Empty result payload');
+      setResult(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRunning(false);
+    }
+  }, [domain, state, signalJson, persistLog, running]);
+
+  const presetStates = STATE_PRESETS[domain] ?? [];
+
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5">
+      <div className="flex items-start gap-3 mb-2">
+        <Sparkles className="text-purple-300 mt-1" size={18} />
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold">Nora Translation Preview</h2>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold tracking-wider text-purple-300 bg-purple-500/10 border border-purple-400/30 px-2 py-0.5 rounded-full">
+              PHASE C
+            </span>
+          </div>
+          <p className="text-sm text-zinc-400 mt-1 leading-relaxed">
+            Generates an athlete-facing line for a (domain, state) translation row using Sonnet 4.6,
+            then runs the five guardrails. Falls back to the seed phrasing on guardrail violation
+            or Anthropic error. Defaults to dry-run (no audit log write).
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+        <div>
+          <label className="block text-xs uppercase tracking-wider text-zinc-500 mb-1">Domain</label>
+          <select
+            value={domain}
+            onChange={(e) => {
+              const next = e.target.value as TranslationDomainOption;
+              setDomain(next);
+              const presets = STATE_PRESETS[next];
+              if (presets && !presets.includes(state)) setState(presets[0] ?? '');
+            }}
+            disabled={running}
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-zinc-600"
+          >
+            {TRANSLATION_DOMAIN_OPTIONS.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs uppercase tracking-wider text-zinc-500 mb-1">State</label>
+          <input
+            type="text"
+            value={state}
+            onChange={(e) => setState(e.target.value)}
+            disabled={running}
+            list="nora-state-presets"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-zinc-600"
+          />
+          <datalist id="nora-state-presets">
+            {presetStates.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <label className="block text-xs uppercase tracking-wider text-zinc-500 mb-1">
+          Signal (JSON object)
+        </label>
+        <textarea
+          value={signalJson}
+          onChange={(e) => setSignalJson(e.target.value)}
+          disabled={running}
+          rows={4}
+          className="w-full bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 text-xs font-mono text-zinc-100 focus:outline-none focus:border-zinc-600"
+          spellCheck={false}
+        />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 mt-4">
+        <label className="inline-flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            className="accent-purple-300"
+            checked={persistLog}
+            onChange={(e) => setPersistLog(e.target.checked)}
+            disabled={running}
+          />
+          persistLog (write to pulsecheck-nora-translation-log)
+        </label>
+        <button
+          type="button"
+          onClick={onRun}
+          disabled={running}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+            running ? 'bg-zinc-800 text-zinc-400 cursor-wait' : 'bg-purple-300 text-zinc-950 hover:bg-purple-200'
+          }`}
+        >
+          {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+          {running ? 'Translating…' : 'Run preview'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-300 flex items-center gap-2">
+          <AlertTriangle size={14} />
+          {error}
+        </div>
+      )}
+
+      {result && !error && (
+        <div className="mt-4 space-y-3">
+          <div
+            className={`rounded-lg border px-3 py-2 text-sm flex items-center gap-2 ${
+              result.fallbackTriggered
+                ? 'border-yellow-500/30 bg-yellow-500/5 text-yellow-200'
+                : 'border-emerald-500/30 bg-emerald-500/5 text-emerald-300'
+            }`}
+          >
+            {result.fallbackTriggered ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+            <span>
+              {result.fallbackTriggered
+                ? `Fallback to seed (${result.fallbackReason ?? 'unknown reason'})`
+                : `Anthropic output passed all guardrails`}
+            </span>
+          </div>
+
+          <div className="rounded-lg border border-zinc-800 bg-black/60 px-3 py-3">
+            <div className="text-[11px] tracking-wider text-zinc-500 mb-1">FINAL PHRASING (shown to athlete)</div>
+            <div className="text-sm text-zinc-100 whitespace-pre-wrap">{result.phrasing}</div>
+          </div>
+
+          {result.claudeOutputRaw && result.claudeOutputRaw !== result.phrasing && (
+            <div className="rounded-lg border border-zinc-800 bg-black/60 px-3 py-3">
+              <div className="text-[11px] tracking-wider text-zinc-500 mb-1">CLAUDE RAW OUTPUT</div>
+              <div className="text-sm text-zinc-300 whitespace-pre-wrap">{result.claudeOutputRaw}</div>
+            </div>
+          )}
+
+          {result.guardrailViolations.length > 0 && (
+            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-3 py-3">
+              <div className="text-[11px] tracking-wider text-yellow-300 mb-1">
+                GUARDRAIL VIOLATIONS ({result.guardrailViolations.length})
+              </div>
+              <ul className="text-xs text-yellow-200 list-disc list-inside space-y-1">
+                {result.guardrailViolations.map((v, i) => (
+                  <li key={i}>
+                    <span className="text-yellow-400">{v.field}:</span> {v.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2 text-xs text-zinc-400">
+            <div className="rounded border border-zinc-800 px-2 py-1">
+              <div className="text-[10px] uppercase tracking-wider text-zinc-500">provider</div>
+              <div className="text-zinc-200">{result.providerUsed}</div>
+            </div>
+            <div className="rounded border border-zinc-800 px-2 py-1">
+              <div className="text-[10px] uppercase tracking-wider text-zinc-500">voice review</div>
+              <div className="text-zinc-200">{result.voiceReviewStatus}</div>
+            </div>
+            <div className="rounded border border-zinc-800 px-2 py-1 col-span-2">
+              <div className="text-[10px] uppercase tracking-wider text-zinc-500">row revision</div>
+              <div className="text-zinc-200 font-mono">{result.translationRowRevision || '—'}</div>
+            </div>
           </div>
         </div>
       )}
