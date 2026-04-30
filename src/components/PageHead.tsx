@@ -13,6 +13,10 @@ interface PageHeadProps {
   /** Optional page-specific OG/social preview image path (e.g. /wunna-run-og.png). Takes precedence over metaData.ogImage when set. */
   pageOgImage?: string;
   themeColor?: string;
+  /** Optional iOS App Store app id for the Smart App Banner. Defaults to Fit With Pulse. */
+  appleItunesAppId?: string;
+  /** Optional deep-link argument for the Smart App Banner. */
+  appleItunesAppArgument?: string;
 }
 
 const GLOBAL_DEFAULT_TITLE = "Pulse Community Fitness";
@@ -59,6 +63,8 @@ const PageHead: React.FC<PageHeadProps> = ({
   pageOgUrl,
   pageOgImage,
   themeColor,
+  appleItunesAppId = '6451497729',
+  appleItunesAppArgument = 'pulse://home',
 }) => {
   const title = metaData?.pageTitle || GLOBAL_DEFAULT_TITLE;
   const description = metaData?.metaDescription || GLOBAL_DEFAULT_DESCRIPTION;
@@ -71,8 +77,16 @@ const PageHead: React.FC<PageHeadProps> = ({
   // Ensure ogImage is always an absolute URL
   // pageOgImage (prop) takes precedence, then metaData.ogImage, else generate dynamic image
   let ogImage = pageOgImage || metaData?.ogImage;
+  const pageOrigin = (() => {
+    try {
+      return new URL(pageOgUrl).origin;
+    } catch {
+      return 'https://fitwithpulse.ai';
+    }
+  })();
+
   if (ogImage && !ogImage.startsWith('http')) {
-    ogImage = `https://fitwithpulse.ai${ogImage}`;
+    ogImage = `${pageOrigin}${ogImage}`;
   } else if (!ogImage) {
     // Generate dynamic OG image with page title
     ogImage = generateDynamicOgImage(ogTitle, ogDescription !== GLOBAL_DEFAULT_DESCRIPTION ? ogDescription : undefined);
@@ -89,10 +103,13 @@ const PageHead: React.FC<PageHeadProps> = ({
   // Ensure twitterImage is always an absolute URL
   let twitterImage = metaData?.twitterImage || ogImage;
   if (twitterImage && !twitterImage.startsWith('http')) {
-    twitterImage = `https://fitwithpulse.ai${twitterImage}`;
+    twitterImage = `${pageOrigin}${twitterImage}`;
   }
 
   const resolvedThemeColor = themeColor || '#E0FE10';
+  const appleItunesApp = appleItunesAppArgument
+    ? `app-id=${appleItunesAppId}, app-argument=${appleItunesAppArgument}`
+    : `app-id=${appleItunesAppId}`;
 
   return (
     <Head>
@@ -125,7 +142,7 @@ const PageHead: React.FC<PageHeadProps> = ({
       <meta name="theme-color" content={resolvedThemeColor} key="theme-color" />
 
       {/* Apple Smart App Banner - prompts iOS users to open/download the app */}
-      <meta name="apple-itunes-app" content="app-id=6451497729, app-argument=pulse://home" />
+      <meta name="apple-itunes-app" content={appleItunesApp} />
     </Head>
   );
 };

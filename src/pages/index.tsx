@@ -26,6 +26,8 @@ interface HomePageProps {
 
 const STORAGE_KEY = 'pulse_has_seen_marketing';
 const MACRA_HOSTS = new Set(['eatwithmacra.ai', 'www.eatwithmacra.ai']);
+const MACRA_OG_IMAGE = '/macra-og.png';
+const MACRA_APP_STORE_ID = '6463771067';
 
 // Separate component for marketing content to avoid hook issues
 const MarketingContent: React.FC<{ 
@@ -1003,6 +1005,9 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
             lastUpdated: new Date().toISOString(),
           }}
           pageOgUrl="https://eatwithmacra.ai"
+          pageOgImage={MACRA_OG_IMAGE}
+          appleItunesAppId={MACRA_APP_STORE_ID}
+          appleItunesAppArgument=""
         />
         <MacraMarketingLanding />
       </>
