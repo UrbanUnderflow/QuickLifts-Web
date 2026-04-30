@@ -18,6 +18,7 @@ const COMMAND_ROWS = [
   ['Grant dev admin from saved auth', '`npm run test:e2e:grant-admin`', 'Utility for local/dev admin bootstrap when needed.'],
   ['Run read-only smoke coverage', '`npm run test:e2e:smoke`', 'Runs only tests tagged `@smoke`, keeping the default pass on route/render validation without mutation paths.'],
   ['Run full PulseCheck regression', '`npm run test:e2e:pulsecheck:full`', 'Runs the onboarding/workspace suite and athlete-journey suite together for the full PulseCheck regression pass.'],
+  ['Run PulseCheck Nora system coverage', '`npm run test:e2e:pulsecheck:nora-system`', 'Runs Nora Guard, admin smoke-lever, System Overview, and consent v6 regression coverage.'],
   ['Run PulseCheck write-path regression', '`npm run test:e2e:pulsecheck:write`', 'Runs the dev-db write suite with namespaced fixtures and cleanup when `PLAYWRIGHT_ALLOW_WRITE_TESTS=true` is set.'],
   ['List all E2E tests', '`npm run test:e2e -- --list`', 'Confirms suite registration without executing the flows.'],
   ['Run all E2E tests', '`npm run test:e2e`', 'Runs the configured Playwright suite set.'],
@@ -35,6 +36,7 @@ const ENV_ROWS = [
   ['`PLAYWRIGHT_E2E_NAMESPACE`', 'Namespace prefix for seeded fixture ids', 'Keeps dev-db write records identifiable and lets cleanup helpers remove the exact test namespace afterward.'],
   ['`PLAYWRIGHT_PULSECHECK_ORG_ID`', 'PulseCheck organization id under test', 'Required for team-specific PulseCheck onboarding/workspace coverage.'],
   ['`PLAYWRIGHT_PULSECHECK_TEAM_ID`', 'PulseCheck team id under test', 'Required for post-activation and workspace path resolution.'],
+  ['`PLAYWRIGHT_ENABLE_ADMIN_SMOKE_INVOCATION=true`', 'Allows smoke-lever function invocation', 'Use only when the suite points at Netlify dev or a deploy preview where `/.netlify/functions/*` is available.'],
   ['`PLAYWRIGHT_USE_EXISTING_SERVER=true`', 'Reuse an already-running local app', 'Skips Playwright launching its own dev server when preferred.'],
 ];
 
@@ -42,6 +44,7 @@ const SUITE_ROWS = [
   ['Variant Registry', '`tests/e2e/registry-build-publish.spec.ts`', 'Registry sync/build/preview/publish smoke with fixture cloning and cleanup.'],
   ['PulseCheck Onboarding + Workspace', '`tests/e2e/pulsecheck-onboarding-workspace.spec.ts`', 'Provisioning, legacy roster migration, post-activation, workspace load, and opt-in onboarding/invite mutation coverage.'],
   ['PulseCheck Athlete Journey', '`tests/e2e/pulsecheck-athlete-journey.spec.ts`', 'Daily check-in, Nora daily assignment creation, Today/Nora shared-task rendering, mental-training launch handoff, session-summary loop, and coach follow-up surfaces.'],
+  ['PulseCheck Nora System', '`tests/e2e/pulsecheck-nora-system.spec.ts`', 'Admin smoke-lever render, Nora Guard seeded-thread review/revoke, consent v6 re-prompt, and new System Overview tabs.'],
 ];
 
 const PULSECHECK_ROWS = [
@@ -59,6 +62,10 @@ const PULSECHECK_ROWS = [
   ['Session summary loop', 'Completes a Nora daily assignment, verifies the assignment lifecycle advances, and confirms the athlete receives a durable session summary plus next-action copy.', 'Write-path'],
   ['Coach follow-up queue', 'Confirms coach dashboard and notification-center surfaces reflect Nora auto-assignment and post-session follow-up artifacts.', 'Write-path'],
   ['Coach same-day intervention', 'Confirms the coach assignments tab can defer the Nora daily assignment and that the assignment state updates accordingly.', 'Write-path'],
+  ['Nora admin smoke controls', '`/admin/adminLevers` renders Phase D/Phase I smoke targets and can optionally invoke a Netlify function target.', 'Smoke / opt-in invocation'],
+  ['Nora Guard review flow', 'Seeds a conversation, verifies redaction/evidence/fallback/guardrail display, and revokes the conversation through the admin API.', 'Write-path'],
+  ['Consent v6 re-prompt', 'Seeds a team membership with v5 completed consent versions and verifies v6 agreements return to pending on onboarding.', 'Write-path'],
+  ['System Overview new docs', 'Verifies the Daily Curriculum Layer, Nora Conversation Orchestrator, and Nora Guard sections render from their handbook hashes.', 'Smoke'],
   ['Assigned-athlete scope enforcement', 'Creates a scoped coach plus two athletes, assigns only one athlete to that coach, and confirms the coach workspace only shows the granted athlete.', 'Write-path'],
   ['Invite-policy matrix', 'Creates coach and staff recipients, flips the team through each invite-policy mode, and verifies who can create athlete invites in each state.', 'Write-path'],
   ['Revoked invite protection', 'Revokes an athlete invite and confirms the old link resolves to the shared not-found state instead of rendering a redeemable invite.', 'Write-path'],

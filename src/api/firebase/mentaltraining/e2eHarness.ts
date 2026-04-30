@@ -77,6 +77,10 @@ const PULSECHECK_PILOT_METRIC_ROLLUP_SUMMARY_SUBCOLLECTION = 'summary';
 const PULSECHECK_PILOT_METRIC_OPS_COLLECTION = 'pulsecheck-pilot-metric-ops';
 const PULSECHECK_PILOT_OUTCOME_RELEASE_SETTINGS_COLLECTION = 'pulsecheck-pilot-outcome-release-settings';
 const PULSECHECK_LEGACY_MIGRATIONS_COLLECTION = 'pulsecheck-legacy-roster-migrations';
+const PULSECHECK_NORA_CONVERSATIONS_COLLECTION = 'pulsecheck-nora-conversations';
+const PULSECHECK_NORA_TRIGGER_FIRES_COLLECTION = 'pulsecheck-nora-trigger-fires';
+const PULSECHECK_NORA_GUARD_CONFIG_COLLECTION = 'pulsecheck-nora-guard-config';
+const PULSECHECK_CURRICULUM_ASSESSMENTS_COLLECTION = 'pulsecheck-curriculum-assessments';
 const REFERRAL_CODE_LOOKUP_COLLECTION = 'referralCodeLookup';
 const {
   resolveNextDuePlanStep,
@@ -2392,6 +2396,324 @@ async function cleanupPulseCheckAthleteJourneyFixture(
   };
 }
 
+function buildNoraSystemFixtureIds(namespace: string) {
+  const prefix = buildPrefix(namespace);
+  const compact = sanitizeNamespace(namespace);
+  const organizationId = `${prefix}nora-org`;
+  const teamId = `${prefix}nora-team`;
+  const athleteUserId = `${prefix}nora-athlete`;
+  const athleteEmail = `${prefix}athlete@pulsecheck.test`;
+  const conversationId = `${athleteUserId}_${athleteUserId}_coach-context-flag_2026-04-30`;
+  const triggerFireId = `${athleteUserId}_coach-context-flag_2026-04-30`;
+  const dailyAssignmentProtocolId = `${athleteUserId}_2026-04-30_protocol_e2e`;
+  const dailyAssignmentSimId = `${athleteUserId}_2026-04-30_sim_e2e`;
+  const curriculumAssessmentId = `${athleteUserId}_2026-04`;
+  const consentOneId = `${compact}-pilot-participation`;
+  const consentTwoId = `${compact}-privacy-notice`;
+
+  return {
+    namespace: compact,
+    organizationId,
+    teamId,
+    athleteUserId,
+    athleteEmail,
+    conversationId,
+    triggerFireId,
+    dailyAssignmentProtocolId,
+    dailyAssignmentSimId,
+    curriculumAssessmentId,
+    consentOneId,
+    consentTwoId,
+  };
+}
+
+async function seedPulseCheckNoraSystemFixture(
+  db: Firestore,
+  input: {
+    namespace: string;
+    adminUserId: string;
+    adminEmail: string;
+  }
+) {
+  const fixture = buildNoraSystemFixtureIds(input.namespace);
+  const now = Date.now();
+  const requiredConsents = [
+    {
+      id: fixture.consentOneId,
+      title: 'Pilot Participation Agreement',
+      version: 'v6',
+      body: 'This v6 pilot agreement covers PulseCheck participation, messaging, and operational team access.',
+      required: true,
+    },
+    {
+      id: fixture.consentTwoId,
+      title: 'Athlete Privacy Notice',
+      version: 'v6',
+      body: 'This v6 privacy notice explains how PulseCheck protects team context and pilot records.',
+      required: true,
+    },
+  ];
+
+  await cleanupPulseCheckNoraSystemFixture(db, { namespace: input.namespace, adminUserId: input.adminUserId });
+
+  await Promise.all([
+    setDoc(doc(db, USERS_COLLECTION, input.adminUserId), {
+      email: input.adminEmail.trim().toLowerCase(),
+      displayName: 'E2E Admin Athlete',
+      updatedAt: now,
+    }, { merge: true }),
+    setDoc(doc(db, USERS_COLLECTION, fixture.athleteUserId), {
+      email: fixture.athleteEmail,
+      displayName: 'E2E Nora Athlete',
+      role: 'athlete',
+      updatedAt: now,
+    }, { merge: true }),
+    setDoc(doc(db, PULSECHECK_ORGANIZATIONS_COLLECTION, fixture.organizationId), {
+      id: fixture.organizationId,
+      displayName: 'E2E Nora Systems Org',
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: true }),
+    setDoc(doc(db, PULSECHECK_TEAMS_COLLECTION, fixture.teamId), {
+      id: fixture.teamId,
+      organizationId: fixture.organizationId,
+      displayName: 'E2E Nora Systems Team',
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: true }),
+    setDoc(doc(db, PULSECHECK_ORGANIZATION_MEMBERSHIPS_COLLECTION, `${fixture.organizationId}_${input.adminUserId}`), {
+      organizationId: fixture.organizationId,
+      userId: input.adminUserId,
+      email: input.adminEmail.trim().toLowerCase(),
+      role: 'org-admin',
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: true }),
+    setDoc(doc(db, PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION, `${fixture.teamId}_${input.adminUserId}`), {
+      id: `${fixture.teamId}_${input.adminUserId}`,
+      organizationId: fixture.organizationId,
+      teamId: fixture.teamId,
+      userId: input.adminUserId,
+      email: input.adminEmail.trim().toLowerCase(),
+      role: 'athlete',
+      permissionSetId: 'pulsecheck-athlete-v1',
+      rosterVisibilityScope: 'none',
+      allowedAthleteIds: [],
+      onboardingStatus: 'pending-consent',
+      athleteOnboarding: {
+        productConsentAccepted: true,
+        productConsentAcceptedAt: now - 30_000,
+        productConsentVersion: 'pulsecheck-product-consent-v1',
+        requiredConsents,
+        completedConsentIds: requiredConsents.map((consent) => consent.id),
+        completedConsentVersions: {
+          [fixture.consentOneId]: 'v5',
+          [fixture.consentTwoId]: 'v5',
+        },
+        researchConsentStatus: 'not-required',
+        eligibleForResearchDataset: false,
+        enrollmentMode: 'pilot',
+        targetPilotId: '',
+        targetPilotName: '',
+        targetCohortId: '',
+        targetCohortName: '',
+        entryOnboardingName: 'E2E Admin Athlete',
+        entryOnboardingStep: 'consent',
+        baselinePathStatus: 'complete',
+        baselinePathwayId: 'pulsecheck-core-baseline-v1',
+      },
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: true }),
+    setDoc(doc(db, PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION, `${fixture.teamId}_${fixture.athleteUserId}`), {
+      id: `${fixture.teamId}_${fixture.athleteUserId}`,
+      organizationId: fixture.organizationId,
+      teamId: fixture.teamId,
+      userId: fixture.athleteUserId,
+      email: fixture.athleteEmail,
+      role: 'athlete',
+      permissionSetId: 'pulsecheck-athlete-v1',
+      rosterVisibilityScope: 'none',
+      allowedAthleteIds: [],
+      onboardingStatus: 'complete',
+      athleteOnboarding: {
+        productConsentAccepted: true,
+        productConsentAcceptedAt: now,
+        productConsentVersion: 'pulsecheck-product-consent-v1',
+        requiredConsents,
+        completedConsentIds: requiredConsents.map((consent) => consent.id),
+        completedConsentVersions: Object.fromEntries(requiredConsents.map((consent) => [consent.id, consent.version])),
+        researchConsentStatus: 'not-required',
+        eligibleForResearchDataset: false,
+        enrollmentMode: 'pilot',
+        baselinePathStatus: 'complete',
+        baselinePathwayId: 'pulsecheck-core-baseline-v1',
+      },
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: true }),
+    setDoc(doc(db, PULSECHECK_NORA_GUARD_CONFIG_COLLECTION, 'current'), {
+      id: 'current',
+      loggingEnabled: true,
+      updatedAt: now,
+      source: 'playwright-e2e-harness',
+    }, { merge: true }),
+    setDoc(doc(db, PULSECHECK_NORA_TRIGGER_FIRES_COLLECTION, fixture.triggerFireId), {
+      id: fixture.triggerFireId,
+      athleteUserId: fixture.athleteUserId,
+      trigger: 'coach-context-flag',
+      dayKey: '2026-04-30',
+      conversationId: fixture.conversationId,
+      evidence: {
+        summary: 'E2E smoke test trigger',
+        coachContextFlagId: `${fixture.namespace}-coach-flag`,
+      },
+      firedAt: now - 12_000,
+    }, { merge: true }),
+    setDoc(doc(db, PULSECHECK_NORA_CONVERSATIONS_COLLECTION, fixture.conversationId), {
+      id: fixture.conversationId,
+      athleteUserId: fixture.athleteUserId,
+      teamId: fixture.teamId,
+      trigger: 'coach-context-flag',
+      branchId: 'coach-context-flag',
+      actionDomain: 'load',
+      actionState: 'climbing',
+      state: 'awaiting-reply',
+      openedAt: now - 10_000,
+      turns: [
+        {
+          turnId: `${fixture.conversationId}_t0`,
+          index: 0,
+          role: 'nora-opener',
+          text: `Hey ${fixture.athleteEmail}, your coach flagged a load check-in. What feels most useful right now?`,
+          rawModelOutput: `Hey ${fixture.athleteEmail}, your coach flagged a load check-in.`,
+          createdAt: now - 10_000,
+        },
+        {
+          turnId: `${fixture.conversationId}_t1`,
+          index: 1,
+          role: 'athlete-reply',
+          text: `I'm ${fixture.athleteEmail} and my legs feel heavy after practice.`,
+          createdAt: now - 8_000,
+        },
+        {
+          turnId: `${fixture.conversationId}_t2`,
+          index: 2,
+          role: 'nora-probe',
+          text: 'Name one controllable adjustment for the next session.',
+          rawModelOutput: 'Name one controllable adjustment for the next session.',
+          fallbackTriggered: true,
+          fallbackReason: 'E2E fallback proof',
+          guardrailViolations: [{ field: 'athletePhrasing', message: 'E2E guardrail proof' }],
+          createdAt: now - 6_000,
+        },
+      ],
+      triggerEvidence: {
+        summary: 'E2E smoke test trigger',
+        coachContextFlagId: `${fixture.namespace}-coach-flag`,
+      },
+      scaleRevisionAtOpen: 'e2e-scale-revision',
+      treeRevisionAtOpen: 'e2e-tree-revision',
+      createdAt: now - 10_000,
+      updatedAt: now - 6_000,
+    }, { merge: true }),
+    setDoc(doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, fixture.dailyAssignmentProtocolId), {
+      id: fixture.dailyAssignmentProtocolId,
+      lineageId: fixture.dailyAssignmentProtocolId,
+      revision: 1,
+      athleteId: fixture.athleteUserId,
+      teamId: fixture.teamId,
+      teamMembershipId: `${fixture.teamId}_${fixture.athleteUserId}`,
+      sourceCheckInId: '',
+      sourceDate: '2026-04-30',
+      assignedBy: 'curriculum-engine',
+      materializedAt: now,
+      isPrimaryForDate: true,
+      status: 'assigned',
+      actionType: 'protocol',
+      chosenCandidateId: `${fixture.namespace}-box-breathing`,
+      chosenCandidateType: 'protocol',
+      protocolId: `${fixture.namespace}-box-breathing`,
+      protocolLabel: 'E2E Box Breathing',
+      rationale: 'E2E curriculum assignment generated by fixture.',
+      durationSeconds: 180,
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: true }),
+    setDoc(doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, fixture.dailyAssignmentSimId), {
+      id: fixture.dailyAssignmentSimId,
+      lineageId: fixture.dailyAssignmentSimId,
+      revision: 1,
+      athleteId: fixture.athleteUserId,
+      teamId: fixture.teamId,
+      teamMembershipId: `${fixture.teamId}_${fixture.athleteUserId}`,
+      sourceCheckInId: '',
+      sourceDate: '2026-04-30',
+      assignedBy: 'curriculum-engine',
+      materializedAt: now,
+      isPrimaryForDate: false,
+      status: 'assigned',
+      actionType: 'simulation',
+      chosenCandidateId: `${fixture.namespace}-pressure-rep`,
+      chosenCandidateType: 'simulation',
+      simSpecId: `${fixture.namespace}-pressure-rep`,
+      rationale: 'E2E curriculum sim assignment generated by fixture.',
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: true }),
+    setDoc(doc(db, PULSECHECK_CURRICULUM_ASSESSMENTS_COLLECTION, fixture.curriculumAssessmentId), {
+      id: fixture.curriculumAssessmentId,
+      athleteUserId: fixture.athleteUserId,
+      yearMonth: '2026-04',
+      windowStart: '2026-04-01',
+      windowEnd: '2026-04-30',
+      repsByPillar: { composure: 3, focus: 2, decision: 1 },
+      targetByPillar: { composure: 4, focus: 4, decision: 4 },
+      gapByPillar: { composure: 1, focus: 2, decision: 3 },
+      worstGapPillar: 'decision',
+      protocolRepCounts: [],
+      simRepCounts: [],
+      totalAssignmentsAssigned: 6,
+      totalAssignmentsCompleted: 4,
+      adherenceRate: 0.67,
+      longestStreakDays: 3,
+      reviewerNote: 'E2E monthly curriculum assessment.',
+      generatedAt: now,
+      generatorRevision: 'e2e',
+    }, { merge: true }),
+  ]);
+
+  return fixture;
+}
+
+async function cleanupPulseCheckNoraSystemFixture(
+  db: Firestore,
+  input: {
+    namespace: string;
+    adminUserId: string;
+  }
+) {
+  const fixture = buildNoraSystemFixtureIds(input.namespace);
+  await Promise.all([
+    deleteDoc(doc(db, PULSECHECK_NORA_CONVERSATIONS_COLLECTION, fixture.conversationId)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_NORA_TRIGGER_FIRES_COLLECTION, fixture.triggerFireId)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, fixture.dailyAssignmentProtocolId)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, fixture.dailyAssignmentSimId)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_CURRICULUM_ASSESSMENTS_COLLECTION, fixture.curriculumAssessmentId)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION, `${fixture.teamId}_${input.adminUserId}`)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION, `${fixture.teamId}_${fixture.athleteUserId}`)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_ORGANIZATION_MEMBERSHIPS_COLLECTION, `${fixture.organizationId}_${input.adminUserId}`)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_TEAMS_COLLECTION, fixture.teamId)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_ORGANIZATIONS_COLLECTION, fixture.organizationId)).catch(() => undefined),
+    deleteDoc(doc(db, USERS_COLLECTION, fixture.athleteUserId)).catch(() => undefined),
+  ]);
+
+  return fixture;
+}
+
 async function inspectPulseCheckAthleteJourneyState(
   db: Firestore,
   input: {
@@ -3610,6 +3932,41 @@ export interface PulseE2EHarness {
     athleteUserId: string;
     coachUserId: string;
   }>;
+  seedPulseCheckNoraSystemFixture: (input: {
+    namespace: string;
+    adminUserId: string;
+    adminEmail: string;
+  }) => Promise<{
+    namespace: string;
+    organizationId: string;
+    teamId: string;
+    athleteUserId: string;
+    athleteEmail: string;
+    conversationId: string;
+    triggerFireId: string;
+    dailyAssignmentProtocolId: string;
+    dailyAssignmentSimId: string;
+    curriculumAssessmentId: string;
+    consentOneId: string;
+    consentTwoId: string;
+  }>;
+  cleanupPulseCheckNoraSystemFixture: (input: {
+    namespace: string;
+    adminUserId: string;
+  }) => Promise<{
+    namespace: string;
+    organizationId: string;
+    teamId: string;
+    athleteUserId: string;
+    athleteEmail: string;
+    conversationId: string;
+    triggerFireId: string;
+    dailyAssignmentProtocolId: string;
+    dailyAssignmentSimId: string;
+    curriculumAssessmentId: string;
+    consentOneId: string;
+    consentTwoId: string;
+  }>;
   inspectPulseCheckAthleteJourneyState: (input: {
     athleteUserId: string;
     coachUserId: string;
@@ -3736,6 +4093,8 @@ export function installPulseE2EHarness(db: Firestore) {
     cleanupLegacyCoachRosterFixtures: (namespace: string) => cleanupLegacyCoachRosterFixtures(db, namespace),
     seedPulseCheckAthleteJourneyFixture: (input) => seedPulseCheckAthleteJourneyFixture(db, input),
     cleanupPulseCheckAthleteJourneyFixture: (input) => cleanupPulseCheckAthleteJourneyFixture(db, input),
+    seedPulseCheckNoraSystemFixture: (input) => seedPulseCheckNoraSystemFixture(db, input),
+    cleanupPulseCheckNoraSystemFixture: (input) => cleanupPulseCheckNoraSystemFixture(db, input),
     inspectPulseCheckAthleteJourneyState: (input) => inspectPulseCheckAthleteJourneyState(db, input),
     submitPulseCheckCheckIn: (input) => submitPulseCheckCheckInViaHarness(db, input),
     recordPulseCheckAssignmentEvent: (input) => recordPulseCheckAssignmentEventViaHarness(db, input),

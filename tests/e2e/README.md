@@ -19,6 +19,9 @@ It also now includes a PulseCheck onboarding/workspace smoke suite for:
 - optional write-path target-email mismatch coverage
 - optional write-path admin-activation regeneration invalidation coverage
 - optional write-path no-roster-visibility coverage for non-admin adults
+- Nora/Phase I admin smoke lever render coverage
+- optional write-path Nora Guard seeded-thread, redaction, evidence, and revoke coverage
+- optional write-path consent v6 re-prompt coverage for athletes who only accepted v5
 
 ## Safety defaults
 
@@ -36,6 +39,7 @@ npm run test:e2e:install
 npm run test:e2e:auth
 npm run test:e2e:smoke
 npm run test:e2e:pulsecheck:full
+npm run test:e2e:pulsecheck:nora-system
 npm run test:e2e:pulsecheck:write
 npm run test:e2e -- --list
 ```
@@ -204,7 +208,17 @@ PLAYWRIGHT_ALLOW_WRITE_TESTS=true \
 npm run test:e2e:pulsecheck:full
 ```
 
-This command runs the PulseCheck onboarding/workspace suite and the athlete-journey suite together against the dev Firebase project.
+This command runs the PulseCheck onboarding/workspace suite, athlete-journey suite, protocol-practice suite, and Nora system suite together against the dev Firebase project.
+
+Nora system run:
+
+```bash
+PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json \
+PLAYWRIGHT_E2E_NAMESPACE=e2e-pulsecheck \
+npm run test:e2e:pulsecheck:nora-system
+```
+
+The Nora system suite always covers route/render checks for `/admin/adminLevers`, `/admin/noraGuard`, `/admin/curriculumLayer`, and the new System Overview sections. With `PLAYWRIGHT_ALLOW_WRITE_TESTS=true`, it also seeds a namespaced Nora conversation to verify Nora Guard redaction/evidence/revoke behavior and seeds a v5 consent completion state to verify v6 re-prompt behavior. With `PLAYWRIGHT_ENABLE_ADMIN_SMOKE_INVOCATION=true`, it can invoke a smoke target, but that should only be used against Netlify dev or a deploy preview where `/.netlify/functions/*` exists.
 
 Explicit PulseCheck write-path run with namespaced cleanup:
 

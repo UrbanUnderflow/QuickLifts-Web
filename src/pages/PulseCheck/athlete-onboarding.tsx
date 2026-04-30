@@ -14,6 +14,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import { requiresReConsentForVersion } from '../../api/firebase/pulsecheckProvisioning/accessState';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import type {
   PulseCheckOrganization,
@@ -237,6 +238,7 @@ export default function PulseCheckAthleteOnboardingPage() {
   const [displayName, setDisplayName] = useState('');
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [completedConsentIds, setCompletedConsentIds] = useState<string[]>([]);
+  const [completedConsentVersions, setCompletedConsentVersions] = useState<Record<string, string>>({});
   const [researchConsentStatus, setResearchConsentStatus] = useState<PulseCheckResearchConsentStatus>('not-required');
   const [activeConsent, setActiveConsent] = useState<PulseCheckRequiredConsentDocument | null>(null);
   const [downloadingConsentId, setDownloadingConsentId] = useState<string | null>(null);
@@ -284,10 +286,24 @@ export default function PulseCheckAthleteOnboardingPage() {
             || ''
         );
         setConsentAccepted(Boolean(nextMembership?.athleteOnboarding?.productConsentAccepted));
-        const requiredConsentIds = new Set((nextMembership?.athleteOnboarding?.requiredConsents || []).map((consent) => consent.id));
-        setCompletedConsentIds(
-          (nextMembership?.athleteOnboarding?.completedConsentIds || []).filter((consentId) => requiredConsentIds.has(consentId))
-        );
+        const requiredConsents = nextMembership?.athleteOnboarding?.requiredConsents || [];
+        const storedVersions = nextMembership?.athleteOnboarding?.completedConsentVersions || {};
+        const legacyCompletedIds = new Set(nextMembership?.athleteOnboarding?.completedConsentIds || []);
+        const hydratedVersions = requiredConsents.reduce<Record<string, string>>((acc, consent) => {
+          const acceptedVersion = storedVersions[consent.id];
+          if (acceptedVersion && !requiresReConsentForVersion(acceptedVersion, consent.version)) {
+            acc[consent.id] = acceptedVersion;
+            return acc;
+          }
+
+          if (!Object.keys(storedVersions).length && legacyCompletedIds.has(consent.id)) {
+            acc[consent.id] = consent.version;
+          }
+
+          return acc;
+        }, {});
+        setCompletedConsentVersions(hydratedVersions);
+        setCompletedConsentIds(Object.keys(hydratedVersions));
         setResearchConsentStatus(
           (nextMembership?.athleteOnboarding?.researchConsentStatus as PulseCheckResearchConsentStatus | undefined)
             || (nextPilot?.studyMode === 'research' ? 'pending' : 'not-required')
@@ -328,6 +344,7 @@ export default function PulseCheckAthleteOnboardingPage() {
         entryOnboardingName: trimmedName,
         productConsentAccepted: consentAccepted,
         completedConsentIds,
+        completedConsentVersions,
         researchConsentStatus: requiresResearchConsent ? researchConsentStatus : undefined,
       }).catch((error) => {
         console.error('[PulseCheck athlete onboarding] Failed to sync onboarding progress:', error);
@@ -337,6 +354,7 @@ export default function PulseCheckAthleteOnboardingPage() {
     return () => window.clearTimeout(timeout);
   }, [
     completedConsentIds,
+    completedConsentVersions,
     consentAccepted,
     displayName,
     membership,
@@ -347,12 +365,22 @@ export default function PulseCheckAthleteOnboardingPage() {
     saving,
   ]);
 
-  const toggleCompletedConsent = (consentId: string) => {
+  const toggleCompletedConsent = (consent: PulseCheckRequiredConsentDocument) => {
+    const consentId = consent.id;
     setCompletedConsentIds((currentIds) =>
       currentIds.includes(consentId)
         ? currentIds.filter((id) => id !== consentId)
         : [...currentIds, consentId]
     );
+    setCompletedConsentVersions((currentVersions) => {
+      const nextVersions = { ...currentVersions };
+      if (nextVersions[consentId]) {
+        delete nextVersions[consentId];
+      } else {
+        nextVersions[consentId] = consent.version;
+      }
+      return nextVersions;
+    });
   };
 
   const handleDownloadConsentPdf = async (consent: PulseCheckRequiredConsentDocument) => {
@@ -412,6 +440,7 @@ export default function PulseCheckAthleteOnboardingPage() {
         consentVersion: CONSENT_VERSION,
         baselinePathwayId: BASELINE_PATHWAY_ID,
         completedConsentIds,
+        completedConsentVersions,
         researchConsentStatus: requiresResearchConsent ? researchConsentStatus : 'not-required',
         researchConsentVersion:
           requiresResearchConsent && (researchConsentStatus === 'accepted' || researchConsentStatus === 'declined')
@@ -709,7 +738,7 @@ export default function PulseCheckAthleteOnboardingPage() {
 
                             <GlowCheckbox
                               checked={isAccepted}
-                              onChange={() => toggleCompletedConsent(consent.id)}
+                              onChange={() => toggleCompletedConsent(consent)}
                               label="I have read this and I agree."
                             />
                           </div>
