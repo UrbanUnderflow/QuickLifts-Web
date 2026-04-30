@@ -18,6 +18,25 @@ const normalizeConsentIds = (value: unknown) =>
         .filter((entry, index, values) => entry && values.indexOf(entry) === index)
     : [];
 
+const parseConsentVersionNumber = (version?: unknown): number => {
+  const normalized = normalizeString(version).toLowerCase();
+  const match = normalized.match(/(\d+)/);
+  return match ? Number(match[1]) || 0 : 0;
+};
+
+const normalizeConsentVersions = (value: unknown): Record<string, string> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, string>>((acc, [rawId, rawVersion]) => {
+    const id = normalizeString(rawId);
+    const version = normalizeString(rawVersion);
+    if (id && version) {
+      acc[id] = version;
+    }
+    return acc;
+  }, {});
+};
+
 const normalizeRequiredConsents = (value: unknown): PulseCheckRequiredConsentDocument[] =>
   Array.isArray(value)
     ? value.filter((entry): entry is PulseCheckRequiredConsentDocument => {
@@ -30,6 +49,16 @@ const normalizeRequiredConsents = (value: unknown): PulseCheckRequiredConsentDoc
 export const hasCompletedEntryOnboarding = (athleteOnboarding?: AthleteOnboardingLike): boolean =>
   normalizeString(athleteOnboarding?.entryOnboardingStep) === 'complete';
 
+export const requiresReConsentForVersion = (currentAccepted: unknown, latest: unknown): boolean => {
+  const latestVersion = normalizeString(latest);
+  if (!latestVersion) return false;
+
+  const acceptedVersion = normalizeString(currentAccepted);
+  if (!acceptedVersion) return true;
+
+  return parseConsentVersionNumber(acceptedVersion) < parseConsentVersionNumber(latestVersion);
+};
+
 export const hasCompletedRequiredConsents = (athleteOnboarding?: AthleteOnboardingLike): boolean => {
   const requiredConsents = normalizeRequiredConsents(athleteOnboarding?.requiredConsents);
   if (requiredConsents.length === 0) {
@@ -37,7 +66,19 @@ export const hasCompletedRequiredConsents = (athleteOnboarding?: AthleteOnboardi
   }
 
   const completedConsentIds = new Set(normalizeConsentIds(athleteOnboarding?.completedConsentIds));
-  return requiredConsents.every((consent) => completedConsentIds.has(consent.id));
+  const completedConsentVersions = normalizeConsentVersions(athleteOnboarding?.completedConsentVersions);
+  const hasVersionedCompletions = Object.keys(completedConsentVersions).length > 0;
+  return requiredConsents.every((consent) => {
+    if (!completedConsentIds.has(consent.id)) return false;
+    if (!hasVersionedCompletions) return true;
+
+    const acceptedVersion = completedConsentVersions[consent.id];
+    if (acceptedVersion) {
+      return !requiresReConsentForVersion(acceptedVersion, consent.version);
+    }
+
+    return false;
+  });
 };
 
 export const hasResolvedResearchConsent = (

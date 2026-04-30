@@ -262,6 +262,7 @@ export interface PulseCheckAthleteOnboardingState {
   targetCohortName?: string;
   requiredConsents?: PulseCheckRequiredConsentDocument[];
   completedConsentIds?: string[];
+  completedConsentVersions?: Record<string, string>;
   baselinePathStatus?: 'pending' | 'ready' | 'started' | 'complete';
   baselinePathwayId?: string;
 }
@@ -460,6 +461,7 @@ export interface PulseCheckPilotEnrollment {
   researchConsentRespondedAt?: Timestamp | null;
   requiredConsentIds?: string[];
   completedConsentIds?: string[];
+  completedConsentVersions?: Record<string, string>;
   eligibleForResearchDataset: boolean;
   grantedByInviteToken?: string;
   createdAt?: Timestamp | null;
@@ -720,6 +722,7 @@ export interface CompletePulseCheckAthleteOnboardingInput {
   consentVersion: string;
   baselinePathwayId: string;
   completedConsentIds?: string[];
+  completedConsentVersions?: Record<string, string>;
   researchConsentStatus?: PulseCheckResearchConsentStatus;
   researchConsentVersion?: string;
 }
@@ -730,6 +733,7 @@ export interface SavePulseCheckAthleteOnboardingProgressInput {
   entryOnboardingName?: string;
   productConsentAccepted?: boolean;
   completedConsentIds?: string[];
+  completedConsentVersions?: Record<string, string>;
   researchConsentStatus?: PulseCheckResearchConsentStatus;
 }
 

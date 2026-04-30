@@ -3175,6 +3175,7 @@ export const applyCoachLanguageTranslations = (
 };
 
 export interface NamedAthleteWatchEntry {
+  athleteUserId?: string;
   athleteName: string;
   role?: string;
   whyMatters: string;

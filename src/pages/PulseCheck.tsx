@@ -1,4 +1,4 @@
-import type { NextPage } from 'next';
+import type { GetStaticProps, NextPage } from 'next';
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { FaCheckCircle, FaChartLine, FaBrain, FaHeart, FaRocket, FaShieldAlt, FaBed, FaMoon, FaSun, FaLightbulb, FaUtensils, FaCamera, FaFire, FaWeight, FaExclamationTriangle, FaWrench, FaEye, FaBullseye, FaLungs, FaPlay, FaDumbbell, FaTrophy, FaCalendarAlt, FaArrowUp, FaUserTie, FaClock, FaThumbsUp, FaThumbsDown, FaComments, FaClipboardList } from 'react-icons/fa';
@@ -18,6 +18,12 @@ import PulseCheckTodayView from '../components/pulsecheck/PulseCheckTodayView';
 
 const STORAGE_KEY_PC = 'pulsecheck_has_seen_marketing';
 const STORAGE_KEY_NORA_ONBOARDING = 'pulsecheck_has_seen_nora_onboarding';
+const PULSECHECK_TITLE = 'PulseCheck — The Mental Performance OS for Elite Programs';
+const PULSECHECK_DESCRIPTION =
+    'PulseCheck gives coaches real-time readiness signals, intervention tools, and clinical safety nets before it shows on the scoreboard.';
+const PULSECHECK_URL = 'https://pulsecheckmind.ai';
+const PULSECHECK_OG_IMAGE = '/pulsecheck-og.png';
+const PULSECHECK_OG_IMAGE_URL = `${PULSECHECK_URL}${PULSECHECK_OG_IMAGE}`;
 
 const PulseCheckPage: NextPage = () => {
     const router = useRouter();
@@ -1782,11 +1788,12 @@ const PulseCheckPage: NextPage = () => {
                 <PageHead
                     metaData={{
                         pageId: "pulse-check",
-                        pageTitle: "PulseCheck — The Mental Performance OS for Elite Programs",
-                        metaDescription: "PulseCheck gives coaches real-time readiness signals, intervention tools, and clinical safety nets before it shows on the scoreboard.",
+                        pageTitle: PULSECHECK_TITLE,
+                        metaDescription: PULSECHECK_DESCRIPTION,
                         lastUpdated: new Date().toISOString()
                     }}
-                    pageOgUrl="https://fitwithpulse.ai/pulse-check"
+                    pageOgUrl={PULSECHECK_URL}
+                    pageOgImage={PULSECHECK_OG_IMAGE}
                 />
                 <PulseCheckMarketingLanding
                     onJoinWaitlist={() => {
@@ -2964,3 +2971,16 @@ const PulseCheckPage: NextPage = () => {
 };
 
 export default PulseCheckPage;
+
+export const getStaticProps: GetStaticProps = async () => ({
+    props: {
+        ogMeta: {
+            title: PULSECHECK_TITLE,
+            description: PULSECHECK_DESCRIPTION,
+            image: PULSECHECK_OG_IMAGE_URL,
+            url: PULSECHECK_URL,
+            type: 'website',
+            siteName: 'PulseCheck',
+        },
+    },
+});

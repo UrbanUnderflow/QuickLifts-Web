@@ -12,6 +12,7 @@ import type { AthleteMentalProgress } from '../mentaltraining/types';
 import { resolvePulseCheckFunctionUrl } from '../mentaltraining/pulseCheckFunctionsUrl';
 import { getCompletedBaselineEvidence } from './athleteTaskState';
 import {
+  requiresReConsentForVersion,
   resolvePilotEnrollmentStatus,
   resolveTeamMembershipOnboardingStatus,
 } from './accessState';
@@ -242,6 +243,7 @@ const defaultAthleteOnboardingState = () => ({
   targetCohortName: '',
   requiredConsents: [] as PulseCheckRequiredConsentDocument[],
   completedConsentIds: [] as string[],
+  completedConsentVersions: {} as Record<string, string>,
   baselinePathStatus: 'pending' as const,
   baselinePathwayId: '',
 });
@@ -280,6 +282,64 @@ const normalizeCompletedConsentIds = (
     .map((entry) => normalizeString(typeof entry === 'string' ? entry : ''))
     .filter((entry, index, entries) => entry && allowedIds.has(entry) && entries.indexOf(entry) === index);
 };
+const normalizeCompletedConsentVersionRecord = (value: unknown): Record<string, string> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, string>>((acc, [rawId, rawVersion]) => {
+    const id = normalizeString(rawId);
+    const version = normalizeString(typeof rawVersion === 'string' ? rawVersion : '');
+    if (id && version) {
+      acc[id] = version;
+    }
+    return acc;
+  }, {});
+};
+const buildCompletedConsentVersions = (input: {
+  completedConsentIds: unknown;
+  completedConsentVersions?: unknown;
+  requiredConsents: PulseCheckRequiredConsentDocument[];
+  previouslyRequiredConsents?: unknown;
+  defaultToLatest?: boolean;
+}): Record<string, string> => {
+  const candidateIds = normalizeCompletedConsentIds(input.completedConsentIds, input.requiredConsents);
+  if (candidateIds.length === 0) return {};
+
+  const storedVersions = normalizeCompletedConsentVersionRecord(input.completedConsentVersions);
+  const previousVersions = Array.isArray(input.previouslyRequiredConsents)
+    ? input.previouslyRequiredConsents.reduce<Record<string, string>>((acc, entry) => {
+        if (!entry || typeof entry !== 'object') return acc;
+        const candidate = entry as Record<string, unknown>;
+        const id = normalizeString(typeof candidate.id === 'string' ? candidate.id : '');
+        const version = normalizeString(typeof candidate.version === 'string' ? candidate.version : '');
+        if (id && version) {
+          acc[id] = version;
+        }
+        return acc;
+      }, {})
+    : {};
+  const requiredById = new Map(input.requiredConsents.map((consent) => [consent.id, consent]));
+
+  return candidateIds.reduce<Record<string, string>>((acc, id) => {
+    const requiredConsent = requiredById.get(id);
+    if (!requiredConsent) return acc;
+
+    const acceptedVersion =
+      storedVersions[id] ||
+      previousVersions[id] ||
+      (input.defaultToLatest ? requiredConsent.version : '');
+    if (acceptedVersion && !requiresReConsentForVersion(acceptedVersion, requiredConsent.version)) {
+      acc[id] = acceptedVersion;
+    }
+    return acc;
+  }, {});
+};
+const completedConsentIdsFromVersions = (
+  completedConsentVersions: Record<string, string>,
+  requiredConsents: PulseCheckRequiredConsentDocument[]
+): string[] =>
+  requiredConsents
+    .filter((consent) => completedConsentVersions[consent.id])
+    .map((consent) => consent.id);
 const buildPilotEnrollmentId = (pilotId: string, userId: string) => `${normalizeString(pilotId)}_${normalizeString(userId)}`;
 const triggerPilotAthleteOutcomeBackfill = async (input: {
   pilotId: string;
@@ -347,7 +407,13 @@ const buildAthleteOnboardingFromInvite = (
   const researchConsentStatus = resolveResearchConsentStatusForStudyMode(pilotStudyMode, currentState?.researchConsentStatus);
   const isResearchMode = pilotStudyMode === 'research';
   const requiredConsents = pilotRequiredConsents;
-  const completedConsentIds = normalizeCompletedConsentIds(currentState?.completedConsentIds, requiredConsents);
+  const completedConsentVersions = buildCompletedConsentVersions({
+    completedConsentIds: currentState?.completedConsentIds,
+    completedConsentVersions: currentState?.completedConsentVersions,
+    requiredConsents,
+    previouslyRequiredConsents: currentState?.requiredConsents,
+  });
+  const completedConsentIds = completedConsentIdsFromVersions(completedConsentVersions, requiredConsents);
 
   return {
     ...defaultAthleteOnboardingState(),
@@ -380,6 +446,7 @@ const buildAthleteOnboardingFromInvite = (
     targetCohortName: normalizeString(invite.cohortName) || normalizeString(currentState?.targetCohortName),
     requiredConsents,
     completedConsentIds,
+    completedConsentVersions,
     baselinePathStatus: currentState?.baselinePathStatus || 'pending',
     baselinePathwayId: normalizeString(currentState?.baselinePathwayId),
   };
@@ -624,6 +691,7 @@ const toPilotEnrollment = (id: string, data: Record<string, any>): PulseCheckPil
   researchConsentRespondedAt: data.researchConsentRespondedAt || null,
   requiredConsentIds: Array.isArray(data.requiredConsentIds) ? data.requiredConsentIds : [],
   completedConsentIds: Array.isArray(data.completedConsentIds) ? data.completedConsentIds : [],
+  completedConsentVersions: normalizeCompletedConsentVersionRecord(data.completedConsentVersions),
   eligibleForResearchDataset: Boolean(data.eligibleForResearchDataset),
   grantedByInviteToken: data.grantedByInviteToken || '',
   createdAt: data.createdAt || null,
@@ -861,6 +929,122 @@ const toLegacyRosterMigrationResult = (
   unresolvedLegacyConnectionCount: Number(data.unresolvedLegacyConnectionCount || 0),
 });
 
+const applyLatestConsentStateToMembership = (
+  membership: PulseCheckTeamMembership,
+  pilot: PulseCheckPilot | null
+): PulseCheckTeamMembership => {
+  if (membership.role !== 'athlete' || !membership.athleteOnboarding || !pilot) {
+    return membership;
+  }
+
+  const requiredConsents = normalizeRequiredConsentDocuments(pilot.requiredConsents || [], pilot.studyMode || 'operational');
+  const completedConsentVersions = buildCompletedConsentVersions({
+    completedConsentIds: membership.athleteOnboarding.completedConsentIds,
+    completedConsentVersions: membership.athleteOnboarding.completedConsentVersions,
+    requiredConsents,
+    previouslyRequiredConsents: membership.athleteOnboarding.requiredConsents,
+  });
+  const athleteOnboarding = {
+    ...membership.athleteOnboarding,
+    requiredConsents,
+    completedConsentIds: completedConsentIdsFromVersions(completedConsentVersions, requiredConsents),
+    completedConsentVersions,
+  };
+
+  return {
+    ...membership,
+    athleteOnboarding,
+    onboardingStatus: resolveTeamMembershipOnboardingStatus({
+      role: membership.role,
+      athleteOnboarding,
+      studyMode: pilot.studyMode || null,
+    }) as PulseCheckTeamMembership['onboardingStatus'],
+  };
+};
+
+const applyLatestConsentStateToEnrollment = (
+  enrollment: PulseCheckPilotEnrollment,
+  pilot: PulseCheckPilot | null
+): PulseCheckPilotEnrollment => {
+  if (!pilot) {
+    return enrollment;
+  }
+
+  const requiredConsents = normalizeRequiredConsentDocuments(pilot.requiredConsents || [], pilot.studyMode || 'operational');
+  const completedConsentVersions = buildCompletedConsentVersions({
+    completedConsentIds: enrollment.completedConsentIds,
+    completedConsentVersions: enrollment.completedConsentVersions,
+    requiredConsents,
+  });
+  const completedConsentIds = completedConsentIdsFromVersions(completedConsentVersions, requiredConsents);
+  const athleteOnboarding = {
+    productConsentAccepted: enrollment.productConsentAccepted,
+    entryOnboardingStep: 'complete' as const,
+    researchConsentStatus: enrollment.researchConsentStatus,
+    requiredConsents,
+    completedConsentIds,
+    completedConsentVersions,
+  };
+
+  return {
+    ...enrollment,
+    studyMode: pilot.studyMode || enrollment.studyMode,
+    requiredConsentIds: requiredConsents.map((consent) => consent.id),
+    completedConsentIds,
+    completedConsentVersions,
+    status: enrollment.status === 'withdrawn'
+      ? 'withdrawn'
+      : resolvePilotEnrollmentStatus({
+          athleteOnboarding,
+          studyMode: pilot.studyMode || null,
+        }),
+  };
+};
+
+const getPilotById = async (pilotId: string): Promise<PulseCheckPilot | null> => {
+  const normalizedPilotId = normalizeString(pilotId);
+  if (!normalizedPilotId) return null;
+  const snapshot = await getDoc(doc(db, PILOTS_COLLECTION, normalizedPilotId));
+  return snapshot.exists() ? toPilot(snapshot.id, snapshot.data() as Record<string, any>) : null;
+};
+
+const hydrateMembershipConsentStates = async (
+  memberships: PulseCheckTeamMembership[]
+): Promise<PulseCheckTeamMembership[]> => {
+  const pilotIds = Array.from(
+    new Set(
+      memberships
+        .map((membership) => normalizeString(membership.athleteOnboarding?.targetPilotId))
+        .filter(Boolean)
+    )
+  );
+  if (pilotIds.length === 0) return memberships;
+
+  const pilots = await Promise.all(pilotIds.map((pilotId) => getPilotById(pilotId)));
+  const pilotsById = new Map(pilots.filter(Boolean).map((pilot) => [pilot!.id, pilot!]));
+
+  return memberships.map((membership) =>
+    applyLatestConsentStateToMembership(
+      membership,
+      pilotsById.get(normalizeString(membership.athleteOnboarding?.targetPilotId)) || null
+    )
+  );
+};
+
+const hydrateEnrollmentConsentStates = async (
+  enrollments: PulseCheckPilotEnrollment[]
+): Promise<PulseCheckPilotEnrollment[]> => {
+  const pilotIds = Array.from(new Set(enrollments.map((enrollment) => normalizeString(enrollment.pilotId)).filter(Boolean)));
+  if (pilotIds.length === 0) return enrollments;
+
+  const pilots = await Promise.all(pilotIds.map((pilotId) => getPilotById(pilotId)));
+  const pilotsById = new Map(pilots.filter(Boolean).map((pilot) => [pilot!.id, pilot!]));
+
+  return enrollments.map((enrollment) =>
+    applyLatestConsentStateToEnrollment(enrollment, pilotsById.get(normalizeString(enrollment.pilotId)) || null)
+  );
+};
+
 const withLocalRedeemFallback = async <T>(
   serverAction: () => Promise<T>,
   fallbackAction: () => Promise<T>
@@ -913,8 +1097,10 @@ export const pulseCheckProvisioningService = {
 
   async listPilotEnrollments(): Promise<PulseCheckPilotEnrollment[]> {
     const snapshot = await getDocs(collection(db, PILOT_ENROLLMENTS_COLLECTION));
-    return snapshot.docs
-      .map((docSnap) => toPilotEnrollment(docSnap.id, docSnap.data() as Record<string, any>))
+    const enrollments = await hydrateEnrollmentConsentStates(
+      snapshot.docs.map((docSnap) => toPilotEnrollment(docSnap.id, docSnap.data() as Record<string, any>))
+    );
+    return enrollments
       .sort((left, right) => {
         const leftTime = toJsDate(left.createdAt)?.getTime() || 0;
         const rightTime = toJsDate(right.createdAt)?.getTime() || 0;
@@ -926,8 +1112,9 @@ export const pulseCheckProvisioningService = {
     const snapshot = await getDocs(
       query(collection(db, PILOT_ENROLLMENTS_COLLECTION), where('pilotId', '==', normalizeString(pilotId)))
     );
+    const pilot = await getPilotById(pilotId);
     return snapshot.docs
-      .map((docSnap) => toPilotEnrollment(docSnap.id, docSnap.data() as Record<string, any>))
+      .map((docSnap) => applyLatestConsentStateToEnrollment(toPilotEnrollment(docSnap.id, docSnap.data() as Record<string, any>), pilot))
       .sort((left, right) => {
         const leftTime = toJsDate(left.createdAt)?.getTime() || 0;
         const rightTime = toJsDate(right.createdAt)?.getTime() || 0;
@@ -991,7 +1178,7 @@ export const pulseCheckProvisioningService = {
 
   async listUserTeamMemberships(userId: string): Promise<PulseCheckTeamMembership[]> {
     const snapshot = await getDocs(query(collection(db, TEAM_MEMBERSHIPS_COLLECTION), where('userId', '==', normalizeString(userId))));
-    return snapshot.docs.map((docSnap) => toTeamMembership(docSnap.id, docSnap.data() as Record<string, any>));
+    return hydrateMembershipConsentStates(snapshot.docs.map((docSnap) => toTeamMembership(docSnap.id, docSnap.data() as Record<string, any>)));
   },
 
   async listUserOrganizationMemberships(userId: string): Promise<PulseCheckOrganizationMembership[]> {
@@ -1003,8 +1190,10 @@ export const pulseCheckProvisioningService = {
 
   async listTeamMemberships(teamId: string): Promise<PulseCheckTeamMembership[]> {
     const snapshot = await getDocs(query(collection(db, TEAM_MEMBERSHIPS_COLLECTION), where('teamId', '==', normalizeString(teamId))));
-    return snapshot.docs
-      .map((docSnap) => toTeamMembership(docSnap.id, docSnap.data() as Record<string, any>))
+    const memberships = await hydrateMembershipConsentStates(
+      snapshot.docs.map((docSnap) => toTeamMembership(docSnap.id, docSnap.data() as Record<string, any>))
+    );
+    return memberships
       .sort((left, right) => {
         if (left.role === 'team-admin' && right.role !== 'team-admin') return -1;
         if (left.role !== 'team-admin' && right.role === 'team-admin') return 1;
@@ -1025,15 +1214,13 @@ export const pulseCheckProvisioningService = {
   },
 
   async getPilot(pilotId: string): Promise<PulseCheckPilot | null> {
-    const snapshot = await getDoc(doc(db, PILOTS_COLLECTION, normalizeString(pilotId)));
-    if (!snapshot.exists()) return null;
-    return toPilot(snapshot.id, snapshot.data() as Record<string, any>);
+    return getPilotById(pilotId);
   },
 
   async getPilotEnrollment(pilotId: string, userId: string): Promise<PulseCheckPilotEnrollment | null> {
     const snapshot = await getDoc(doc(db, PILOT_ENROLLMENTS_COLLECTION, buildPilotEnrollmentId(pilotId, userId)));
     if (!snapshot.exists()) return null;
-    return toPilotEnrollment(snapshot.id, snapshot.data() as Record<string, any>);
+    return applyLatestConsentStateToEnrollment(toPilotEnrollment(snapshot.id, snapshot.data() as Record<string, any>), await getPilotById(pilotId));
   },
 
   async backfillPilotAthleteOutcomeHistory(input: {
@@ -1097,6 +1284,7 @@ export const pulseCheckProvisioningService = {
               targetCohortName: '',
               requiredConsents: [] as PulseCheckRequiredConsentDocument[],
               completedConsentIds: [] as string[],
+              completedConsentVersions: {} as Record<string, string>,
               researchConsentStatus: 'not-required' as const,
               researchConsentVersion: '',
               researchConsentRespondedAt: null,
@@ -1368,6 +1556,7 @@ export const pulseCheckProvisioningService = {
             targetCohortName: '',
             requiredConsents: [] as PulseCheckRequiredConsentDocument[],
             completedConsentIds: [] as string[],
+            completedConsentVersions: {} as Record<string, string>,
             researchConsentStatus: 'not-required' as const,
             researchConsentVersion: '',
             researchConsentRespondedAt: null,
@@ -1510,6 +1699,7 @@ export const pulseCheckProvisioningService = {
             completedConsentIds: Array.isArray(nextAthleteOnboarding.completedConsentIds)
               ? nextAthleteOnboarding.completedConsentIds
               : [],
+            completedConsentVersions: normalizeCompletedConsentVersionRecord(nextAthleteOnboarding.completedConsentVersions),
             eligibleForResearchDataset: Boolean(nextAthleteOnboarding.eligibleForResearchDataset),
             grantedByInviteToken:
               normalizeString(destinationEnrollmentData.grantedByInviteToken) ||
@@ -2570,10 +2760,14 @@ export const pulseCheckProvisioningService = {
       pilotSnap?.data()?.requiredConsents ?? currentAthleteOnboarding.requiredConsents ?? [],
       pilotStudyMode || 'operational'
     );
-    const completedConsentIds = normalizeCompletedConsentIds(
-      input.completedConsentIds ?? currentAthleteOnboarding.completedConsentIds,
-      requiredConsents
-    );
+    const completedConsentVersions = buildCompletedConsentVersions({
+      completedConsentIds: input.completedConsentIds ?? currentAthleteOnboarding.completedConsentIds,
+      completedConsentVersions: input.completedConsentVersions ?? currentAthleteOnboarding.completedConsentVersions,
+      requiredConsents,
+      previouslyRequiredConsents: currentAthleteOnboarding.requiredConsents,
+      defaultToLatest: Array.isArray(input.completedConsentIds),
+    });
+    const completedConsentIds = completedConsentIdsFromVersions(completedConsentVersions, requiredConsents);
     const pilotEnrollmentRef = pilotId && userId
       ? doc(db, PILOT_ENROLLMENTS_COLLECTION, buildPilotEnrollmentId(pilotId, userId))
       : null;
@@ -2613,6 +2807,7 @@ export const pulseCheckProvisioningService = {
             : currentAthleteOnboarding.enrollmentMode || 'product-only',
       requiredConsents,
       completedConsentIds,
+      completedConsentVersions,
       entryOnboardingStep: 'complete',
       baselinePathStatus: baselineState.baselinePathStatus,
       baselinePathwayId: baselineState.baselinePathwayId,
@@ -2660,6 +2855,7 @@ export const pulseCheckProvisioningService = {
               : existingPilotEnrollment.researchConsentRespondedAt || null,
           requiredConsentIds: requiredConsents.map((consent) => consent.id),
           completedConsentIds,
+          completedConsentVersions,
           eligibleForResearchDataset: nextEligibleForDataset,
           grantedByInviteToken: normalizeString(existingPilotEnrollment.grantedByInviteToken || currentData.grantedByInviteToken),
           createdAt: existingPilotEnrollment.createdAt || serverTimestamp(),
@@ -2700,10 +2896,14 @@ export const pulseCheckProvisioningService = {
       pilotSnap?.data()?.requiredConsents ?? currentAthleteOnboarding.requiredConsents ?? [],
       pilotStudyMode || 'operational'
     );
-    const completedConsentIds = normalizeCompletedConsentIds(
-      input.completedConsentIds ?? currentAthleteOnboarding.completedConsentIds,
-      requiredConsents
-    );
+    const completedConsentVersions = buildCompletedConsentVersions({
+      completedConsentIds: input.completedConsentIds ?? currentAthleteOnboarding.completedConsentIds,
+      completedConsentVersions: input.completedConsentVersions ?? currentAthleteOnboarding.completedConsentVersions,
+      requiredConsents,
+      previouslyRequiredConsents: currentAthleteOnboarding.requiredConsents,
+      defaultToLatest: Array.isArray(input.completedConsentIds),
+    });
+    const completedConsentIds = completedConsentIdsFromVersions(completedConsentVersions, requiredConsents);
     const pilotEnrollmentRef = pilotId && userId
       ? doc(db, PILOT_ENROLLMENTS_COLLECTION, buildPilotEnrollmentId(pilotId, userId))
       : null;
@@ -2750,6 +2950,7 @@ export const pulseCheckProvisioningService = {
         : {}),
       requiredConsents,
       completedConsentIds,
+      completedConsentVersions,
       baselinePathStatus: baselineState.baselinePathStatus,
       baselinePathwayId: baselineState.baselinePathwayId,
     };
@@ -2805,6 +3006,7 @@ export const pulseCheckProvisioningService = {
           productConsentVersion: normalizeString(existingPilotEnrollment.productConsentVersion),
           requiredConsentIds: requiredConsents.map((consent) => consent.id),
           completedConsentIds,
+          completedConsentVersions,
           grantedByInviteToken: normalizeString(existingPilotEnrollment.grantedByInviteToken || currentData.grantedByInviteToken),
           createdAt: existingPilotEnrollment.createdAt || serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -3315,6 +3517,7 @@ export const pulseCheckProvisioningService = {
                 researchConsentRespondedAt: existingPilotEnrollment.researchConsentRespondedAt || null,
                 requiredConsentIds: (nextAthleteOnboarding.requiredConsents || []).map((consent) => consent.id),
                 completedConsentIds: Array.isArray(nextAthleteOnboarding.completedConsentIds) ? nextAthleteOnboarding.completedConsentIds : [],
+                completedConsentVersions: normalizeCompletedConsentVersionRecord(nextAthleteOnboarding.completedConsentVersions),
                 eligibleForResearchDataset:
                   nextAthleteOnboarding.researchConsentStatus === 'accepted'
                     ? true

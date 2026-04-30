@@ -1,5 +1,6 @@
 import type { AthleteMentalProgress } from '../mentaltraining/types';
 import type { PulseCheckAthleteOnboardingState } from './types';
+import { requiresReConsentForVersion } from './accessState';
 
 export type PulseCheckBaselineTaskStatus = 'pending' | 'ready' | 'started' | 'complete';
 
@@ -72,7 +73,14 @@ export function resolvePulseCheckAthleteTaskState(input: {
 }): PulseCheckAthleteTaskState {
   const requiredConsents = input.athleteOnboarding?.requiredConsents || [];
   const completedConsentIds = new Set(input.athleteOnboarding?.completedConsentIds || []);
-  const requiredConsentsComplete = requiredConsents.every((consent) => completedConsentIds.has(consent.id));
+  const completedConsentVersions = input.athleteOnboarding?.completedConsentVersions || {};
+  const hasVersionedCompletions = Object.keys(completedConsentVersions).length > 0;
+  const requiredConsentsComplete = requiredConsents.every((consent) => {
+    if (!completedConsentIds.has(consent.id)) return false;
+    if (!hasVersionedCompletions) return true;
+    const acceptedVersion = completedConsentVersions[consent.id];
+    return Boolean(acceptedVersion) && !requiresReConsentForVersion(acceptedVersion, consent.version);
+  });
   const consentComplete = Boolean(input.athleteOnboarding?.productConsentAccepted) && requiredConsentsComplete;
   const baselineEvidence = getCompletedBaselineEvidence(input.progress);
   const membershipBaselineStatus = input.athleteOnboarding?.baselinePathStatus || 'pending';

@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
+import { runCurriculumAssessmentAdmin } from './utils/dailyCurriculumAdmin';
 
 /**
  * Scheduled Curriculum Assessment (monthly)
@@ -12,18 +13,11 @@ import { getFirestore, initAdmin } from './utils/getServiceAccount';
  * never see the raw doc — only translated summaries via Phase C voice.
  *
  * Selection of cadence: this is a daily-firing function so we have a
- * cheap retry surface if the 1st-of-month run fails. We also use this
- * function for backfill via a `?backfillMonths=N&athleteId=X` query
- * param (admin-only path; Slice 1B will surface a button for it).
+ * cheap retry surface if the 1st-of-month run fails. We also allow a
+ * forced dev/admin smoke run with `?force=1`.
  *
- * NOTE — Phase I Part 1 stub:
- *   Same admin-SDK adapter limitation as the daily generator: the
- *   `runCurriculumAssessment` function in
- *   `src/api/firebase/dailyCurriculum/curriculumAssessment.ts` uses
- *   client-SDK and can't run inside Netlify functions as-is. For now this
- *   scheduler enumerates candidates and logs; the actual rollup writes
- *   happen via the admin debug endpoint until the runtime adapter lands
- *   (see TODO(curriculum-admin-sdk) in the daily generator scheduler).
+ * The rollup logic mirrors the client-SDK service, but this scheduler uses
+ * the admin-SDK adapter for Firestore reads and writes.
  */
 
 const BATCH_LIMIT = 500;
@@ -37,7 +31,7 @@ const lastMonthYearMonthUtc = (now: Date): string => {
 
 export const handler: Handler = async (event) => {
   await initAdmin();
-  const db = getFirestore();
+  const db = await getFirestore();
   const nowUtc = new Date();
   const dayOfMonth = nowUtc.getUTCDate();
 
@@ -60,7 +54,8 @@ export const handler: Handler = async (event) => {
 
   const summary = {
     candidates: 0,
-    wouldAssess: 0,
+    assessed: 0,
+    errors: 0,
     yearMonth,
   };
 
@@ -68,12 +63,19 @@ export const handler: Handler = async (event) => {
     const m = mem.data();
     if (!m.userId) continue;
     summary.candidates += 1;
-    summary.wouldAssess += 1;
-    console.log(
-      `[scheduled-curriculum-assessment] athlete=${m.userId} yearMonth=${yearMonth} (admin-SDK adapter pending)`,
-    );
-    // TODO(curriculum-admin-sdk): call runCurriculumAssessment via admin
-    // SDK runtime adapter. Phase I Part 1B wires this.
+    try {
+      const assessment = await runCurriculumAssessmentAdmin(db, {
+        athleteUserId: m.userId,
+        yearMonth,
+      });
+      if (assessment) {
+        summary.assessed += 1;
+        console.log(`[scheduled-curriculum-assessment] athlete=${m.userId} yearMonth=${yearMonth} assessed`);
+      }
+    } catch (error) {
+      summary.errors += 1;
+      console.error(`[scheduled-curriculum-assessment] athlete=${m.userId} yearMonth=${yearMonth} failed`, error);
+    }
   }
 
   return {

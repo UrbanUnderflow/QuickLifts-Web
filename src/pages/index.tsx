@@ -15,6 +15,8 @@ import SignInModal from '../components/SignInModal';
 import { exerciseService } from '../api/firebase/exercise/service';
 import { appLinks } from '../utils/platformDetection';
 import MacraMarketingLanding from '../components/macra/MacraMarketingLanding';
+import PulseCheckMarketingLanding from '../components/pulsecheck/PulseCheckMarketingLanding';
+import { PulseCheckWaitlistForm } from '../components/PulseCheckWaitlistForm';
 
 interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
   lastUpdated: string; 
@@ -26,8 +28,10 @@ interface HomePageProps {
 
 const STORAGE_KEY = 'pulse_has_seen_marketing';
 const MACRA_HOSTS = new Set(['eatwithmacra.ai', 'www.eatwithmacra.ai']);
+const PULSECHECK_HOSTS = new Set(['pulsecheckmind.ai', 'www.pulsecheckmind.ai']);
 const MACRA_OG_IMAGE = '/macra-og.png';
 const MACRA_APP_STORE_ID = '6463771067';
+const PULSECHECK_OG_IMAGE = '/pulsecheck-og.png';
 
 // Separate component for marketing content to avoid hook issues
 const MarketingContent: React.FC<{ 
@@ -938,15 +942,21 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
   const [isMacraHost, setIsMacraHost] = useState(() => (
     typeof window !== 'undefined' && MACRA_HOSTS.has(window.location.hostname.toLowerCase())
   ));
+  const [isPulseCheckHost, setIsPulseCheckHost] = useState(() => (
+    typeof window !== 'undefined' && PULSECHECK_HOSTS.has(window.location.hostname.toLowerCase())
+  ));
+  const [isPulseCheckWaitlistOpen, setIsPulseCheckWaitlistOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setIsMacraHost(MACRA_HOSTS.has(window.location.hostname.toLowerCase()));
+      const hostname = window.location.hostname.toLowerCase();
+      setIsMacraHost(MACRA_HOSTS.has(hostname));
+      setIsPulseCheckHost(PULSECHECK_HOSTS.has(hostname));
     }
   }, []);
 
   useEffect(() => {
-    if (isMacraHost) {
+    if (isMacraHost || isPulseCheckHost) {
       setIsLoading(false);
       return;
     }
@@ -972,7 +982,7 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
     }
     
     setIsLoading(false);
-  }, [currentUser, isMacraHost]);
+  }, [currentUser, isMacraHost, isPulseCheckHost]);
 
   const handleUseWebApp = () => {
     // Only allow web app access if user is authenticated
@@ -1010,6 +1020,34 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
           appleItunesAppArgument=""
         />
         <MacraMarketingLanding />
+      </>
+    );
+  }
+
+  if (isPulseCheckHost) {
+    return (
+      <>
+        <PageHead
+          metaData={{
+            pageId: 'pulse-check',
+            pageTitle: 'PulseCheck — The Mental Performance OS for Elite Programs',
+            metaDescription:
+              'PulseCheck gives coaches real-time readiness signals, intervention tools, and clinical safety nets before it shows on the scoreboard.',
+            lastUpdated: new Date().toISOString(),
+          }}
+          pageOgUrl="https://pulsecheckmind.ai"
+          pageOgImage={PULSECHECK_OG_IMAGE}
+        />
+        <PulseCheckMarketingLanding
+          onJoinWaitlist={() => setIsPulseCheckWaitlistOpen(true)}
+          onOpenWebApp={handleUseWebApp}
+          webAppLabel={currentUser ? 'Open App' : 'Log In'}
+        />
+        <PulseCheckWaitlistForm
+          isOpen={isPulseCheckWaitlistOpen}
+          onClose={() => setIsPulseCheckWaitlistOpen(false)}
+          userType="athlete"
+        />
       </>
     );
   }

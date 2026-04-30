@@ -51,16 +51,19 @@ import {
 import { TaxonomyPillar } from '../mentaltraining/taxonomy';
 import {
   CurriculumGenerationResult,
-  CurriculumOverride,
-  DEFAULT_FREQUENCY_PER_30_DAYS,
-  PillarWeights,
-  ProgressionLevel,
-  normalizePillarWeights,
-  resolveFrequency,
   yearMonthOf,
 } from './types';
 import { getOrInitCurriculumConfig, resolvePillarWeightsForSport } from './curriculumConfig';
 import { listOverridesForAthlete, markOverrideConsumed } from './coachOverride';
+import {
+  CompletionsSnapshot,
+  assetPillar,
+  assetPrerequisites,
+  assetProgression,
+  countRepsByPillar,
+  pickAsset,
+  pickWorstGapPillar,
+} from './selection';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Collection helpers (existing collections we read from / write to)
@@ -318,51 +321,6 @@ export const generateDailyAssignment = async (
   return result;
 };
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Selection internals
-// ──────────────────────────────────────────────────────────────────────────────
-
-interface AssetCandidate {
-  asset: PulseCheckProtocolDefinition | MentalExercise;
-  cognitivePillar: TaxonomyPillar;
-  progressionLevel: ProgressionLevel;
-  recommendedFrequency: number;
-  actualReps: number;
-  ratio: number; // actualReps / recommendedFrequency
-  rationale: string;
-  coachOverrideId?: string;
-}
-
-const assetPillar = (asset: PulseCheckProtocolDefinition | MentalExercise): TaxonomyPillar | undefined => {
-  if ('cognitivePillar' in asset && asset.cognitivePillar) return asset.cognitivePillar;
-  // Sims store pillar at taxonomy.primaryPillar.
-  const tax = (asset as MentalExercise).taxonomy;
-  if (tax && tax.primaryPillar) return tax.primaryPillar;
-  return undefined;
-};
-
-const assetProgression = (asset: PulseCheckProtocolDefinition | MentalExercise): ProgressionLevel => {
-  if ('progressionLevel' in asset && asset.progressionLevel) {
-    return asset.progressionLevel as ProgressionLevel;
-  }
-  return 'foundational';
-};
-
-const assetPrerequisites = (
-  asset: PulseCheckProtocolDefinition | MentalExercise,
-): Partial<Record<TaxonomyPillar, number>> => {
-  return ('prerequisitePillarReps' in asset && asset.prerequisitePillarReps) || {};
-};
-
-interface CompletionsSnapshot {
-  /** Map of asset id → number of completions in last 30 days. */
-  byAssetId: Map<string, number>;
-  /** Pillar rep totals from completions. */
-  byPillar: Record<TaxonomyPillar, number>;
-  /** Asset ids assigned in the last N days, used for variety filter. */
-  recentlyAssignedIds: (lookbackDays: number) => Set<string>;
-}
-
 const fetchLast30DaysCompletions = async (
   athleteUserId: string,
   sourceDate: string,
@@ -475,136 +433,6 @@ const fetchEligibleSims = async (): Promise<MentalExercise[]> => {
   } catch {
     return [];
   }
-};
-
-const countRepsByPillar = (
-  snap: CompletionsSnapshot,
-  _protocols: PulseCheckProtocolDefinition[],
-  _sims: MentalExercise[],
-): Record<TaxonomyPillar, number> => {
-  // For Phase I Part 1, byPillar from event payload is the authoritative
-  // count. Future: enrich by joining event.chosenCandidateId → asset doc
-  // → pillar when event payload is missing pillar metadata.
-  return { ...snap.byPillar };
-};
-
-const pickWorstGapPillar = (
-  reps: Record<TaxonomyPillar, number>,
-  weights: PillarWeights,
-  frequencyDefaults: Record<ProgressionLevel, number>,
-  _protocols: PulseCheckProtocolDefinition[],
-): TaxonomyPillar => {
-  // Target reps per pillar = pillar weight × foundational target × 3
-  // (1 protocol + 1 sim × ~12 days/month per pillar).  Approximate but
-  // sufficient for ranking. Fine-tunable later from admin config.
-  const normalized = normalizePillarWeights(weights);
-  const baseTarget = frequencyDefaults.foundational * 1.0; // 12 reps as anchor
-  const targets: Record<TaxonomyPillar, number> = {
-    [TaxonomyPillar.Composure]: normalized.composure * baseTarget * 3,
-    [TaxonomyPillar.Focus]: normalized.focus * baseTarget * 3,
-    [TaxonomyPillar.Decision]: normalized.decision * baseTarget * 3,
-  };
-  const gaps: Record<TaxonomyPillar, number> = {
-    [TaxonomyPillar.Composure]: targets[TaxonomyPillar.Composure] - reps[TaxonomyPillar.Composure],
-    [TaxonomyPillar.Focus]: targets[TaxonomyPillar.Focus] - reps[TaxonomyPillar.Focus],
-    [TaxonomyPillar.Decision]: targets[TaxonomyPillar.Decision] - reps[TaxonomyPillar.Decision],
-  };
-  // Worst gap = highest positive gap (most under target).
-  const ranked = (Object.entries(gaps) as Array<[TaxonomyPillar, number]>).sort((a, b) => b[1] - a[1]);
-  return ranked[0][0];
-};
-
-interface PickContext {
-  pool: Array<PulseCheckProtocolDefinition | MentalExercise>;
-  drivingPillar: TaxonomyPillar;
-  completions: CompletionsSnapshot;
-  overrides: CurriculumOverride[];
-  recentlyAssigned: Set<string>;
-  kind: 'protocol' | 'sim';
-  frequencyDefaults: Record<ProgressionLevel, number>;
-}
-
-const pickAsset = (ctx: PickContext): AssetCandidate | null => {
-  const overrideTypePin = ctx.kind === 'protocol' ? 'pin-protocol' : 'pin-simulation';
-  const overrideTypeExcl = ctx.kind === 'protocol' ? 'exclude-protocol' : 'exclude-simulation';
-
-  const excludedIds = new Set(
-    ctx.overrides.filter((o) => o.overrideType === overrideTypeExcl).map((o) => o.targetId),
-  );
-  const pinned = ctx.overrides.filter((o) => o.overrideType === overrideTypePin);
-
-  // Build candidate list with full metadata.
-  const candidates: AssetCandidate[] = [];
-  for (const asset of ctx.pool) {
-    if (excludedIds.has(asset.id)) continue;
-    const pillar = assetPillar(asset);
-    if (!pillar) continue;
-    const progression = assetProgression(asset);
-    // Prerequisite gate: intermediate + advanced require pillar reps met.
-    if (progression !== 'foundational') {
-      const prereqs = assetPrerequisites(asset);
-      let prereqMet = true;
-      for (const [pillarKey, requiredReps] of Object.entries(prereqs) as Array<[TaxonomyPillar, number]>) {
-        const have = ctx.completions.byPillar[pillarKey] || 0;
-        if (have < requiredReps) {
-          prereqMet = false;
-          break;
-        }
-      }
-      if (!prereqMet) continue;
-    }
-    if (ctx.recentlyAssigned.has(asset.id)) continue;
-
-    const recommendedFrequency = resolveFrequency(
-      {
-        recommendedFrequencyPer30Days:
-          'recommendedFrequencyPer30Days' in asset ? asset.recommendedFrequencyPer30Days : undefined,
-        progressionLevel: progression,
-      },
-      ctx.frequencyDefaults,
-    );
-    const actualReps = ctx.completions.byAssetId.get(asset.id) || 0;
-    const ratio = recommendedFrequency > 0 ? actualReps / recommendedFrequency : 0;
-    candidates.push({
-      asset,
-      cognitivePillar: pillar,
-      progressionLevel: progression,
-      recommendedFrequency,
-      actualReps,
-      ratio,
-      rationale: '',
-    });
-  }
-
-  // First pass: filter to drivingPillar.
-  let pool = candidates.filter((c) => c.cognitivePillar === ctx.drivingPillar);
-  // If the pool is empty (no items in the driving pillar after gates),
-  // fall back to all candidates so the day still gets an assignment.
-  if (pool.length === 0) pool = candidates;
-  if (pool.length === 0) return null;
-
-  // Pinned items take priority — if any pinned item is in pool, use the
-  // first one; mark coach override.
-  const pinnedInPool = pool.find((c) => pinned.some((p) => p.targetId === c.asset.id));
-  if (pinnedInPool) {
-    const ovr = pinned.find((p) => p.targetId === pinnedInPool.asset.id);
-    pinnedInPool.coachOverrideId = ovr?.id;
-    pinnedInPool.rationale = `Coach pinned for ${yearMonthOf(new Date())}; reinforces ${pinnedInPool.cognitivePillar} pillar.`;
-    return pinnedInPool;
-  }
-
-  // Pick the under-done item (lowest ratio); foundational > intermediate >
-  // advanced as tiebreaker so we don't skip the basics.
-  pool.sort((a, b) => {
-    if (a.ratio !== b.ratio) return a.ratio - b.ratio;
-    const order = { foundational: 0, intermediate: 1, advanced: 2 };
-    return order[a.progressionLevel] - order[b.progressionLevel];
-  });
-  const chosen = pool[0];
-  chosen.rationale = `Today's ${chosen.cognitivePillar} pillar is most-underrepped; selected ${
-    chosen.progressionLevel
-  } ${ctx.kind} (${chosen.actualReps}/${chosen.recommendedFrequency} target reps in 30d).`;
-  return chosen;
 };
 
 // ──────────────────────────────────────────────────────────────────────────────

@@ -10,7 +10,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Fit With Pulse consumer fitness, Pulse Check elite athlete service technology, Macra nutrition, shared data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-04-25',
+  lastUpdated: '2026-04-30',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -86,6 +86,10 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-sports-intelligence-layer-spec', label: 'Sports Intelligence Layer', description: 'Architecture and product-boundary spec for the device-agnostic, sport-aware interpretation layer that turns biometrics, sims, check-ins, training, nutrition, and schedule context into coach-facing reports and athlete-facing context.' },
     { id: 'pulsecheck-sports-intelligence-aggregation-inference-contract', label: 'Aggregation + Inference Contract', description: 'Decisioning contract for Sports Intelligence baseline windows, missing-data behavior, source precedence, confidence propagation, alert thresholds, output schemas, and copy policy.', parentSectionId: 'pulsecheck-sports-intelligence-layer-spec' },
     { id: 'pulsecheck-sports-intelligence-mock-report-baselines', label: 'Report Outlines + Coach Mocks', description: 'Collapsed report outlines and coach-facing mock report demos for every configured sport, defining weekly/game-day report lenses, adherence coverage, sport-native KPIs, watch signals, coach actions, core-dimension mapping, language posture, and avoid rules.', parentSectionId: 'pulsecheck-sports-intelligence-layer-spec' },
+    { id: 'pulsecheck-adaptive-framing-layer-spec', label: 'Adaptation Framing Layer', description: 'Athlete-safe Nora translation layer, Anthropic bridge boundary, guardrail enforcement, audit logging, and remaining kill-switch/server-enforcement gaps.' },
+    { id: 'pulsecheck-curriculum-layer-spec', label: 'Daily Curriculum Layer', description: 'Proactive daily practice layer for curriculum-engine assignments, reminders, rollups, coach overrides, iOS read surfaces, and current scheduler adapter gaps.' },
+    { id: 'pulsecheck-nora-conversation-orchestrator-spec', label: 'Nora Conversation Orchestrator', description: 'Reactive trigger sweep, conversation state machine, athlete reply endpoint, timeout sweep, and Phase C action-delivery integration.' },
+    { id: 'pulsecheck-nora-guard-spec', label: 'Nora Guard', description: 'Pilot message-review inbox for Nora conversations, redaction, revoke controls, technical evidence, consent disclosure, and current logging-control limitations.' },
     { id: 'pulsecheck-nora-context-capture', label: 'Nora Context Capture', description: 'Coach-facing input layer — schedule upload, practice-plan upload, voice memo. Defines the structured records (team_schedule_event, prescribed_session, coach_observation), parser pipeline, intake channels, privacy boundaries, and coach-voice rules for missing-context nudges.', parentSectionId: 'pulsecheck-sports-intelligence-layer-spec' },
     { id: 'pulsecheck-session-detection-matching', label: 'Session Detection + Matching', description: 'Bridge between device data and coach intent. Detects training/competition sessions from continuous biometric signals, classifies them, matches to schedule + prescribed-plan records, compares execution against prescribed structure, and emits the session_record consumed by the load model and report generator.', parentSectionId: 'pulsecheck-sports-intelligence-layer-spec' },
     { id: 'pulsecheck-sport-load-model', label: 'Sport Load Model', description: 'Per-sport load model that turns device-derived primitives + prescribed-comparison deltas + context modifiers into a sport-relevant load score with sport-tolerable thresholds. Lives on PulseCheckSportReportPolicy.loadModel — same data shape across every sport, sport-specific blend.', parentSectionId: 'pulsecheck-sports-intelligence-layer-spec' },
@@ -124,6 +128,9 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Audited the newly built PulseCheck Nora stack and added the missing Adaptation Framing Layer artifact, covering Anthropic bridge routing, `translateForAthlete`, athlete phrasing guardrails, translation audit logs, and the remaining Nora Guard kill-switch enforcement gap.',
+      'Refreshed the Nora Conversation Orchestrator, Nora Guard, and Daily Curriculum Layer docs to distinguish current runtime behavior from gaps: action delivery uses Phase C translation, opener/probe copy still comes from the conversation tree, curriculum schedulers are registered but generation/assessment cron writes still wait on the admin-SDK adapter, and iOS now has read/reply surfaces for Nora conversations and curriculum assignments.',
+      'Updated the Pulse Check handbook inventory for Consent v6, iOS athlete task gating, Nora inbox/reply surfaces, DailyCurriculumReader, Coach Nora transparency, and the web-side Anthropic/translation services that power the new pilot canary workflow.',
       'Reframed the System Overview around the current product split: Fit With Pulse for consumer fitness and clubs, Pulse Check for elite athlete service technology, and Macra for nutrition.',
       'Locked the PulseCheck Athlete 3D Avatar artifact into the Profile System as a Profile-only optional feature: front/left/back/right guided capture, local validation, backend generation, `.usdz` output, RealityKit showroom rendering, and explicit non-onboarding/privacy guardrails.',
       'Added Macra as a first-class System Overview tab with native iOS architecture, nutrition data ownership, Nora bridge behavior, subscription access, and locked 6.5-inch App Store screenshot assets.',
@@ -448,6 +455,71 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       sourceRefs: [
         { label: 'Netlify Functions Structure', path: 'docs/netlify-functions-structure.md' },
         { label: 'Functions Directory', path: 'netlify/functions' },
+      ],
+    },
+    {
+      id: 'svc-anthropic-bridge-routing',
+      name: 'Anthropic Bridge and Feature Routing',
+      purpose:
+        'Authenticated Anthropic proxy and server-side feature routing layer with model allow-listing, max-token caps, local relay support, and explicit OpenAI fallback only for dual-path features.',
+      owner: 'AI Systems + Web Platform',
+      status: 'active',
+      environments: ['Development', 'Production Netlify'],
+      keyDependencies: ['Firebase Auth', 'ANTHROPIC_API_KEY', 'ANTHROPIC_FEATURE_LIMITS', 'netlify.toml redirects'],
+      sourceRefs: [
+        { label: 'Anthropic Bridge Function', path: 'netlify/functions/anthropic-bridge.ts' },
+        { label: 'Feature Routing', path: 'src/api/anthropic/featureRouting.ts' },
+        { label: 'Fallback Helper', path: 'src/api/anthropic/callWithFallback.ts' },
+        { label: 'OpenAI Shape Translator', path: 'src/api/anthropic/bridgeTranslation.ts' },
+      ],
+    },
+    {
+      id: 'svc-pulsecheck-adaptive-framing',
+      name: 'PulseCheck Adaptation Framing Translation Service',
+      purpose:
+        'Turns structured athlete state signals into Nora-voice action guidance with Anthropic primary generation, seed fallback, guardrail enforcement, and translation audit logging.',
+      owner: 'PulseCheck AI Systems + Safety Ops',
+      status: 'active',
+      environments: ['Development', 'Production Netlify'],
+      keyDependencies: ['pulsecheck-translation-table', 'pulsecheck-translation-off-limits', 'Anthropic feature routing', 'Nora Guard review'],
+      sourceRefs: [
+        { label: 'Translation Service', path: 'src/api/firebase/adaptiveFramingLayer/translationService.ts' },
+        { label: 'Guardrails', path: 'src/api/firebase/adaptiveFramingLayer/guardrails.ts' },
+        { label: 'Translation Log', path: 'src/api/firebase/adaptiveFramingLayer/translationLog.ts' },
+      ],
+    },
+    {
+      id: 'svc-pulsecheck-nora-conversation-orchestrator',
+      name: 'PulseCheck Nora Conversation Orchestrator',
+      purpose:
+        'Reactive trigger sweep and conversation state machine for coach context, HCSR deltas, calendar sport events, behavioral drift, athlete replies, action delivery, timeouts, and staff revoke.',
+      owner: 'PulseCheck Platform + Safety Ops',
+      status: 'active',
+      environments: ['Development', 'Production Netlify'],
+      keyDependencies: ['pulsecheck-nora-conversations', 'pulsecheck-conversation-tree', 'translateForAthlete', 'FCM tokens', 'Nora Guard'],
+      sourceRefs: [
+        { label: 'Orchestrator', path: 'src/api/firebase/noraConversation/orchestrator.ts' },
+        { label: 'Trigger Detector', path: 'src/api/firebase/noraConversation/triggerDetector.ts' },
+        { label: 'Scheduled Sweep', path: 'netlify/functions/scheduled-nora-conversation.ts' },
+        { label: 'Athlete Reply', path: 'netlify/functions/nora-athlete-reply.ts' },
+        { label: 'Timeout Sweep', path: 'netlify/functions/scheduled-nora-conversation-timeout-sweep.ts' },
+      ],
+    },
+    {
+      id: 'svc-pulsecheck-daily-curriculum-layer',
+      name: 'PulseCheck Daily Curriculum Layer',
+      purpose:
+        'Configurable proactive practice engine for one protocol and one simulation per athlete per day, with pillar balancing, coach overrides, reminders, and monthly assessment rollups.',
+      owner: 'PulseCheck Platform + Mental Performance',
+      status: 'beta',
+      environments: ['Development', 'Production Netlify'],
+      keyDependencies: ['pulsecheck-daily-assignments', 'protocol registry', 'sim library', 'curriculum config', 'admin-SDK scheduler adapter'],
+      sourceRefs: [
+        { label: 'Curriculum Admin', path: 'src/pages/admin/curriculumLayer.tsx' },
+        { label: 'Daily Generator', path: 'src/api/firebase/dailyCurriculum/dailyAssignmentGenerator.ts' },
+        { label: 'Assignment Scheduler', path: 'netlify/functions/scheduled-daily-curriculum-assignment.ts' },
+        { label: 'Reminder Scheduler', path: 'netlify/functions/scheduled-curriculum-reminder.ts' },
+        { label: 'Assessment Scheduler', path: 'netlify/functions/scheduled-curriculum-assessment.ts' },
       ],
     },
     {
@@ -821,6 +893,64 @@ export const systemOverviewManifest: SystemOverviewManifest = {
         { label: 'Mental Notes UI', path: '../PulseCheck/PulseCheck/Views/Chat/MentalNotesBar.swift' },
       ],
     },
+    {
+      id: 'coll-pulsecheck-nora-conversations',
+      name: 'pulsecheck-nora-conversations + pulsecheck-nora-trigger-fires',
+      purpose:
+        'Reactive Nora conversation threads and per-athlete/day trigger-fire dedupe records for coach-context, HCSR-delta, calendar sport event, and behavioral-drift openings.',
+      writtenBy: 'scheduled-nora-conversation, nora-athlete-reply, timeout sweep, Nora Guard revoke API',
+      readBy: 'PulseCheck iOS Nora inbox, Nora Guard, Coach Nora transparency panel, and pilot review tooling',
+      criticalFields: ['athleteUserId', 'teamId', 'trigger', 'branchId', 'actionDomain', 'actionState', 'state', 'turns[]', 'triggerEvidence', 'scaleRevisionAtOpen', 'treeRevisionAtOpen'],
+      sourceRefs: [
+        { label: 'Nora Conversation Types', path: 'src/api/firebase/noraConversation/types.ts' },
+        { label: 'Nora Orchestrator', path: 'src/api/firebase/noraConversation/orchestrator.ts' },
+        { label: 'Nora iOS Service', path: '../PulseCheck/PulseCheck/Services/NoraConversationService.swift' },
+        { label: 'Nora Guard', path: 'src/pages/admin/noraGuard.tsx' },
+      ],
+    },
+    {
+      id: 'coll-pulsecheck-translation-log',
+      name: 'pulsecheck-translation-table + pulsecheck-translation-off-limits + pulsecheck-nora-translation-log',
+      purpose:
+        'Adaptation Framing source rows, forbidden language/numeric guardrail config, and per-call audit logs for final Nora athlete phrasing.',
+      writtenBy: 'translation seed/admin tooling and translateForAthlete production calls',
+      readBy: 'translateForAthlete, Nora Guard, translation preview admin levers, and safety review',
+      criticalFields: ['domain', 'state', 'athletePhrasing', 'requiredActionVerbs', 'forbiddenTokens', 'voiceReviewStatus', 'revisionId', 'providerUsed', 'fallbackReason', 'guardrailViolations', 'claudeOutputRaw', 'seedPhrasing'],
+      sourceRefs: [
+        { label: 'Translation Service', path: 'src/api/firebase/adaptiveFramingLayer/translationService.ts' },
+        { label: 'Guardrails', path: 'src/api/firebase/adaptiveFramingLayer/guardrails.ts' },
+        { label: 'Translation Log', path: 'src/api/firebase/adaptiveFramingLayer/translationLog.ts' },
+      ],
+    },
+    {
+      id: 'coll-pulsecheck-curriculum-layer',
+      name: 'pulsecheck-curriculum-config + assessments + overrides + generation-traces',
+      purpose:
+        'Daily Curriculum Layer configuration, coach pin/exclude overrides, monthly adherence/pillar rollups, and generator audit traces.',
+      writtenBy: 'curriculumLayer admin surface, daily curriculum generator, reminder/assessment schedulers once adapter wiring lands',
+      readBy: 'curriculum admin, coach surfaces, scheduled reminders, DailyCurriculumReader, and daily-task read models',
+      criticalFields: ['engineEnabled', 'pillarWeights', 'frequencyTargetsByLevel', 'sportOverrides', 'overrideType', 'yearMonth', 'protocolRepCounts', 'simRepCounts', 'generatorNotes'],
+      sourceRefs: [
+        { label: 'Curriculum Types', path: 'src/api/firebase/dailyCurriculum/types.ts' },
+        { label: 'Curriculum Config', path: 'src/api/firebase/dailyCurriculum/curriculumConfig.ts' },
+        { label: 'Daily Curriculum Reader', path: '../PulseCheck/PulseCheck/Services/DailyCurriculumReader.swift' },
+      ],
+    },
+    {
+      id: 'coll-pulsecheck-consent-v6',
+      name: 'pulsecheck team membership athleteOnboarding + pilot enrollment consent fields',
+      purpose:
+        'Versioned PulseCheck product, pilot, and research consent state. Consent v6 requires re-prompting athletes whose completed default pilot documents are older than v6.',
+      writtenBy: 'team invite redemption, athlete onboarding, provisioning service, and pilot consent admin tools',
+      readBy: 'accessState, athleteTaskState, team workspace, athlete onboarding, pilot dashboard, and invite redemption APIs',
+      criticalFields: ['productConsentAccepted', 'productConsentVersion', 'requiredConsents[]', 'completedConsentIds[]', 'completedConsentVersions', 'researchConsentStatus', 'baselinePathStatus'],
+      sourceRefs: [
+        { label: 'Consent Types', path: 'src/api/firebase/pulsecheckProvisioning/types.ts' },
+        { label: 'Access State', path: 'src/api/firebase/pulsecheckProvisioning/accessState.ts' },
+        { label: 'Team Invite Redeem API', path: 'src/pages/api/pulsecheck/team-invite/redeem.ts' },
+        { label: 'Consent v6 Tests', path: 'tests/unit/pulsecheck-consent-access-state.test.ts' },
+      ],
+    },
   ],
   integrations: [
     {
@@ -897,7 +1027,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     {
       id: 'int-openai',
       name: 'OpenAI',
-      purpose: 'Generation and analysis across round building, prospect extraction, and agent workflows.',
+      purpose: 'Generation, fallback, TTS, and analysis across round building, prospect extraction, agent workflows, and dual-path PulseCheck features that have not fully cut over.',
       owner: 'AI Systems',
       credentialSource: 'Server-side env vars and runner environment',
       products: ['Fit With Pulse iOS', 'Fit With Pulse Web + Admin', 'Pulse Check iOS', 'Macra iOS', 'Agent Runner'],
@@ -907,6 +1037,22 @@ export const systemOverviewManifest: SystemOverviewManifest = {
         { label: 'Agent Runner', path: 'scripts/agentRunner.js' },
         { label: 'Macra OpenAI Bridge', path: 'netlify/functions/openai-bridge.ts' },
         { label: 'Macra GPT Service', path: '../Macra/Macra/Services/GPTService.swift' },
+      ],
+    },
+    {
+      id: 'int-anthropic',
+      name: 'Anthropic',
+      purpose:
+        'Primary model provider for Macra full-cutover AI, PulseCheck dual-path migration features, protocol-practice evaluation, Sports Intelligence, and Nora athlete translation.',
+      owner: 'AI Systems + Web Platform',
+      credentialSource: 'Server-side `ANTHROPIC_API_KEY` in Netlify functions environment; local development can relay bridge calls to the deployed origin when configured.',
+      products: ['Fit With Pulse Web + Admin', 'Pulse Check iOS', 'Macra iOS'],
+      status: 'active',
+      sourceRefs: [
+        { label: 'Anthropic Bridge Function', path: 'netlify/functions/anthropic-bridge.ts' },
+        { label: 'Feature Routing', path: 'src/api/anthropic/featureRouting.ts' },
+        { label: 'Protocol Practice Evaluation', path: 'src/pages/api/mentaltraining/evaluate-protocol-practice.ts' },
+        { label: 'Nora Translation Service', path: 'src/api/firebase/adaptiveFramingLayer/translationService.ts' },
       ],
     },
     {
@@ -1018,6 +1164,36 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       owner: 'AI Systems + Web Platform',
     },
     {
+      id: 'risk-nora-guard-kill-switch-not-enforced',
+      title: 'Nora Guard logging kill switch is not yet server-enforced',
+      severity: 'high',
+      impact:
+        'Admins can turn off the Nora Guard logging UI state, but translation logs can still persist full message bodies while translateForAthlete ignores the config.',
+      mitigation:
+        'Wire pulsecheck-nora-guard-config/current into the translation logging decision and verify that disabled pilot review stores only minimal metadata.',
+      owner: 'PulseCheck Platform + Safety Ops',
+    },
+    {
+      id: 'risk-curriculum-scheduler-adapter-gap',
+      title: 'Daily Curriculum scheduler adapter gap',
+      severity: 'medium',
+      impact:
+        'Operators may assume scheduled curriculum generation and monthly assessment writes are live when the current cron shells still log intended work until the admin-SDK adapter lands.',
+      mitigation:
+        'Keep admin copy and system overview explicit, wire the adapter before launch reliance, and add a scheduler smoke test that confirms generated assignment and assessment writes.',
+      owner: 'PulseCheck Platform + Mental Performance',
+    },
+    {
+      id: 'risk-consent-test-doc-drift',
+      title: 'Consent v6 documentation and test drift',
+      severity: 'medium',
+      impact:
+        'Some legacy unit test names/assertions still reference consent v5, which can confuse reviewers even though accessState has v6 re-prompt coverage.',
+      mitigation:
+        'Retire or update stale v5 assertions once the consent v6 rollout branch stabilizes.',
+      owner: 'PulseCheck Legal Ops + Platform',
+    },
+    {
       id: 'risk-agent-observability',
       title: 'Agent runtime observability fragmentation',
       severity: 'medium',
@@ -1096,6 +1272,22 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     {
       term: 'Pinned Scan',
       definition: 'Macra quick-add summary for repeat label scans or food snaps, stored separately from the original scan or meal record.',
+    },
+    {
+      term: 'Adaptation Framing Layer',
+      definition: 'PulseCheck service that converts structured athlete state into Nora-voice guidance using Anthropic, seed fallback, and post-generation guardrails.',
+    },
+    {
+      term: 'Nora Guard',
+      definition: 'Pilot canary admin inbox for reviewing Nora conversations, translation evidence, guardrail outcomes, redacted/raw message views, and revoke controls.',
+    },
+    {
+      term: 'Daily Curriculum Layer',
+      definition: 'PulseCheck proactive practice engine that balances protocol and simulation reps across composure, focus, and decisioning pillars.',
+    },
+    {
+      term: 'Consent v6',
+      definition: 'Current PulseCheck pilot participation and privacy consent version that discloses crisis handoff and pilot message review, and requires re-consent when stored accepted versions are older.',
     },
   ],
 };

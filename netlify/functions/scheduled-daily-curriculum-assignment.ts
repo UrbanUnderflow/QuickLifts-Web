@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
+import { generateDailyAssignmentAdmin } from './utils/dailyCurriculumAdmin';
 
 /**
  * Scheduled Daily Curriculum Assignment
@@ -15,18 +16,9 @@ import { getFirestore, initAdmin } from './utils/getServiceAccount';
  * the firestore-admin SDK directly to call into the generator's
  * Firestore writes — the generator's runtime is server-side only.
  *
- * NOTE — Phase I Part 1 stub:
- *   This scheduler is wired to the existing `pulsecheck-team-memberships`
- *   collection to enumerate athletes. The selection algorithm runs via a
- *   simplified admin-SDK adapter (the `db` import in the client-SDK
- *   generator can't run from a Netlify function as-is). For Part 1 we
- *   stub this with a rate-limited "generate-on-trigger" admin endpoint
- *   that the scheduler calls per-athlete. Wiring the full generator to
- *   admin-SDK is a Part 1B task.
- *
- *   The behavior below is correct for the daily-cadence scheduler
- *   contract; the actual per-athlete generate call is a TODO marker
- *   until the admin-SDK adapter lands (see TODO(curriculum-admin-sdk)).
+ * The generator selection helpers are shared with the client-SDK admin
+ * preview surface, while this scheduler uses the admin-SDK adapter for
+ * Firestore reads and writes.
  */
 
 const BATCH_LIMIT = 500;
@@ -56,7 +48,7 @@ const localNowFor = (nowUtc: Date, timeZone: string): Date => {
 
 export const handler: Handler = async () => {
   await initAdmin();
-  const db = getFirestore();
+  const db = await getFirestore();
   const nowUtc = new Date();
 
   // Read curriculum config to know whether the engine is enabled + the
@@ -79,6 +71,7 @@ export const handler: Handler = async () => {
     candidates: 0,
     assigned: 0,
     skippedAlreadyAssigned: 0,
+    skippedNoSelection: 0,
     skippedOutsideWindow: 0,
     errors: 0,
   };
@@ -110,17 +103,34 @@ export const handler: Handler = async () => {
       continue;
     }
 
-    // TODO(curriculum-admin-sdk): wire the generator's selection logic to
-    // run via admin SDK from this function. Today, the generator uses the
-    // client-SDK; Phase I Part 1B will refactor it behind a runtime-agnostic
-    // adapter so this scheduler can call it directly. Until then, this
-    // scheduler logs candidates that NEED generation but does not actually
-    // write. The /admin/curriculumLayer "Generate today's assignment"
-    // button (Slice 1B) provides a manual trigger path for development.
-    summary.assigned += 1; // counted as "would-be-assigned"
-    console.log(
-      `[scheduled-daily-curriculum-assignment] athlete=${m.userId} would generate for sourceDate=${todayKey}`,
-    );
+    try {
+      const result = await generateDailyAssignmentAdmin(db, {
+        athleteUserId: m.userId,
+        teamId: (m.teamId as string | undefined) || '',
+        teamMembershipId: (m.id as string | undefined) || mem.id,
+        sportId: (m.sportId as string | undefined) ||
+          ((m.athleteOnboarding as { sportId?: string } | undefined)?.sportId),
+        sourceDate: todayKey,
+        timezone: tz,
+      });
+      if (result) {
+        summary.assigned += 1;
+        console.log(
+          `[scheduled-daily-curriculum-assignment] athlete=${m.userId} generated sourceDate=${todayKey}`,
+        );
+      } else {
+        summary.skippedNoSelection += 1;
+        console.log(
+          `[scheduled-daily-curriculum-assignment] athlete=${m.userId} skipped sourceDate=${todayKey} reason=no-selection`,
+        );
+      }
+    } catch (error) {
+      summary.errors += 1;
+      console.error(
+        `[scheduled-daily-curriculum-assignment] athlete=${m.userId} failed sourceDate=${todayKey}`,
+        error,
+      );
+    }
   }
 
   return {

@@ -170,7 +170,7 @@ const PulseCheckCurriculumLayerSpecTab: React.FC = () => {
           </li>
         </ul>
         <p className="mt-2 text-xs text-zinc-400">
-          Phase I Part 1 ships static templates. Phase C swaps these for{' '}
+          Current reminder scheduler ships static templates. A future pass should swap these for{' '}
           <code className="rounded bg-black/40 px-1">translateForAthlete()</code> via the Adaptation Framing Layer voice service —
           the static text becomes the seed-fallback.
         </p>
@@ -226,22 +226,23 @@ const PulseCheckCurriculumLayerSpecTab: React.FC = () => {
 
       <SectionHeader sub="Cadence + dependencies for Phase I rollout.">Implementation status</SectionHeader>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Card title="Phase I Part 1A — Server foundation (this slice)">
+        <Card title="Server foundation — live">
           <ul className="list-disc space-y-1 pl-5 text-xs">
             <li>Schema migration on protocols + sims</li>
-            <li>Daily Assignment Generator (client-SDK; Part 1B will add admin-SDK adapter for cron)</li>
+            <li>Daily Assignment Generator client-SDK path</li>
             <li>30-day assessment service</li>
             <li>Coach override service</li>
             <li>Curriculum config singleton + revision log</li>
+            <li>Admin surface at <code className="rounded bg-black/40 px-1">/admin/curriculumLayer</code></li>
           </ul>
         </Card>
-        <Card title="Phase I Part 1B/1C — Schedulers, surfaces, voice">
+        <Card title="Schedulers, surfaces, voice — partial">
           <ul className="list-disc space-y-1 pl-5 text-xs">
-            <li>Admin surface — /admin/curriculumLayer (4 tabs)</li>
-            <li>Scheduled functions registered (cron schedules live)</li>
-            <li>Static notification templates with TODO(phase-c-voice) markers</li>
-            <li>Admin-SDK adapter for cron-time generation (gap)</li>
-            <li>iOS today-card display (depends on Phase H)</li>
+            <li>Scheduled functions are registered for assignment, reminder, and monthly assessment sweeps.</li>
+            <li>Assignment and assessment schedulers currently enumerate eligible athletes and log intended work while the admin-SDK adapter is pending.</li>
+            <li>Reminder scheduler can send static midday / evening templates for existing curriculum-engine assignments.</li>
+            <li>iOS has <code className="rounded bg-black/40 px-1">DailyCurriculumReader</code>, a read-only listener for today's curriculum-engine protocol and sim assignments.</li>
+            <li>Phase C voice integration for curriculum reminders remains a TODO.</li>
           </ul>
         </Card>
       </div>

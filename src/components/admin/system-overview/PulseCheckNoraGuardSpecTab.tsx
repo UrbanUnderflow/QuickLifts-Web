@@ -39,7 +39,7 @@ const PulseCheckNoraGuardSpecTab: React.FC = () => (
         between you and Nora to validate quality and safety." No silent surveillance.</p>
       </Card>
       <Card tone="warn" title="PII redaction is a guardrail, not a feature">
-        <p>The right rail's "raw model output" defaults to redacted view (emails / phone numbers / first-name patterns
+        <p>The inbox defaults to redacted view (emails / phone numbers / first-name patterns
         masked). One click reveals literal text — but only for staff who need it for a specific investigation.
         Localstorage flag, not a server-side toggle.</p>
       </Card>
@@ -50,13 +50,13 @@ const PulseCheckNoraGuardSpecTab: React.FC = () => (
         <Card title="Data sources">
           <ul className="list-disc pl-5">
             <li><code className="rounded bg-black/40 px-1">pulsecheck-nora-conversations</code> — full thread per athlete</li>
-            <li><code className="rounded bg-black/40 px-1">pulsecheck-nora-translation-log</code> — per-message technical evidence</li>
-            <li><code className="rounded bg-black/40 px-1">pulsecheck-nora-guard-config</code> — singleton kill switch + sampling rate</li>
+            <li><code className="rounded bg-black/40 px-1">pulsecheck-nora-translation-log</code> — translation audit evidence written by Phase C</li>
+            <li><code className="rounded bg-black/40 px-1">pulsecheck-nora-guard-config</code> — singleton UI kill-switch state</li>
           </ul>
         </Card>
         <Card title="Surface controls">
           <ul className="list-disc pl-5">
-            <li>Logging kill switch (admin can flip; banner shows when off)</li>
+            <li>Logging kill switch UI (admin can flip; banner shows when off)</li>
             <li>PII redaction toggle (localstorage; per-staff)</li>
             <li>Per-conversation revoke (closes mid-flight conversations)</li>
           </ul>
@@ -66,19 +66,25 @@ const PulseCheckNoraGuardSpecTab: React.FC = () => (
 
     <Section title="Layout">
       <Card title="3-column inbox">
-        <p><strong>Left rail</strong> — athlete list ordered by most-recently-active. Displays guardrail-rejection count over last 7d.</p>
+        <p><strong>Left rail</strong> — conversation list ordered by most-recently-active with athlete id, trigger, state, and search.</p>
         <p><strong>Center pane</strong> — full thread for the selected athlete. Every Nora message + every athlete reply.
         Long messages render in full (no preview truncation).</p>
-        <p><strong>Right rail</strong> — per-turn technical evidence: trigger that fired, classified state bucket, raw
-        Claude output, guardrail outcome, scale/tree revision IDs, fallback used.</p>
+        <p><strong>Right rail</strong> — selected conversation evidence: trigger branch, action domain, classified state
+        bucket, last Nora turn's raw Claude output and guardrail outcome, scale/tree revision IDs, fallback used.</p>
       </Card>
     </Section>
 
     <Section title="Kill-switch behavior">
-      <Card title="loggingEnabled = false">
-        <p>Translations still happen and athletes still receive messages. Only minimal metadata is logged (timestamp,
-        guardrail outcome). Full message bodies are NOT persisted to <code className="rounded bg-black/40 px-1">pulsecheck-nora-translation-log</code> when this flag is off.</p>
-        <p>Conversation thread bodies remain in <code className="rounded bg-black/40 px-1">pulsecheck-nora-conversations</code> regardless — the conversation doc IS the storage of record. The kill switch only gates the translation log's body persistence.</p>
+      <Card tone="warn" title="loggingEnabled = false is currently UI-only">
+        <p>The admin toggle writes <code className="rounded bg-black/40 px-1">pulsecheck-nora-guard-config/current</code>
+        and shows a warning banner, but the server translation path does not yet read this config before logging.</p>
+        <p>Current runtime truth: <code className="rounded bg-black/40 px-1">translateForAthlete()</code> still writes full
+        <code className="mx-1 rounded bg-black/40 px-1">pulsecheck-nora-translation-log</code> entries whenever
+        <code className="mx-1 rounded bg-black/40 px-1">persistLog</code> is true, and
+        <code className="mx-1 rounded bg-black/40 px-1">pulsecheck-nora-conversations</code> remains the full thread
+        storage of record.</p>
+        <p>Remaining implementation gap: wire Nora Guard config into the server logging decision, then keep only minimal
+        metadata when pilot full-message review is disabled.</p>
       </Card>
     </Section>
   </div>

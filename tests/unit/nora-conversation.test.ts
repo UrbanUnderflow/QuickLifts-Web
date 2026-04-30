@@ -19,7 +19,10 @@ const loadModules = async () => {
   installFirebaseEnv();
   const orchestrator = await import('../../src/api/firebase/noraConversation/orchestrator');
   const types = await import('../../src/api/firebase/noraConversation/types');
-  return { orchestrator, types };
+  const adaptiveTypes = await import('../../src/api/firebase/adaptiveFramingLayer/types');
+  const seed = await import('../../src/api/firebase/adaptiveFramingLayer/seed');
+  const scheduledNoraConversation = await import('../../netlify/functions/scheduled-nora-conversation');
+  return { orchestrator, types, adaptiveTypes, seed, scheduledNoraConversation };
 };
 
 test('id builders — buildConversationId concatenates athleteUserId + triggerFireId', async () => {
@@ -106,4 +109,104 @@ test('types — behavioral drift fires at 5 days', async () => {
 test('types — calendar event window is 36 hours', async () => {
   const { types } = await loadModules();
   assert.equal(types.CALENDAR_EVENT_WINDOW_HOURS, 36);
+});
+
+const loadTimeoutSweep = async () => {
+  installFirebaseEnv();
+  return import('../../netlify/functions/scheduled-nora-conversation-timeout-sweep');
+};
+
+const buildFakeFirestore = (docs: Array<{ id: string; data: Record<string, unknown> }>) => {
+  const docSnaps = docs.map((doc) => ({
+    id: doc.id,
+    data: () => doc.data,
+  }));
+
+  return {
+    collection: (name: string) => {
+      assert.equal(name, 'pulsecheck-nora-conversations');
+      const filters: Array<{ field: string; op: string; value: unknown }> = [];
+      let limitValue = docSnaps.length;
+      let startAfterId: string | undefined;
+
+      const query = {
+        where(field: string, op: string, value: unknown) {
+          filters.push({ field, op, value });
+          return query;
+        },
+        orderBy(field: string, direction: string) {
+          assert.equal(field, 'updatedAt');
+          assert.equal(direction, 'asc');
+          return query;
+        },
+        limit(value: number) {
+          limitValue = value;
+          return query;
+        },
+        startAfter(doc: { id: string }) {
+          startAfterId = doc.id;
+          return query;
+        },
+        async get() {
+          let rows = [...docSnaps];
+          for (const filter of filters) {
+            if (filter.op === '==') {
+              rows = rows.filter((doc) => doc.data()[filter.field] === filter.value);
+            } else if (filter.op === '<') {
+              rows = rows.filter((doc) => Number(doc.data()[filter.field]) < Number(filter.value));
+            } else {
+              throw new Error(`unsupported filter ${filter.op}`);
+            }
+          }
+          rows.sort((a, b) => Number(a.data().updatedAt) - Number(b.data().updatedAt));
+          if (startAfterId) {
+            const startIndex = rows.findIndex((doc) => doc.id === startAfterId);
+            rows = startIndex >= 0 ? rows.slice(startIndex + 1) : rows;
+          }
+          return { docs: rows.slice(0, limitValue) };
+        },
+      };
+
+      return query;
+    },
+  };
+};
+
+test('timeout sweep — closes stale opened/awaiting-reply conversations only', async () => {
+  const { sweepNoraConversationTimeouts } = await loadTimeoutSweep();
+  const now = new Date('2026-04-30T04:00:00Z');
+  const stale = now.getTime() - 49 * 60 * 60 * 1000;
+  const fresh = now.getTime() - 6 * 60 * 60 * 1000;
+  const db = buildFakeFirestore([
+    { id: 'stale-opened', data: { state: 'opened', updatedAt: stale } },
+    { id: 'stale-awaiting', data: { state: 'awaiting-reply', updatedAt: stale + 1 } },
+    { id: 'fresh-opened', data: { state: 'opened', updatedAt: fresh } },
+    { id: 'stale-action', data: { state: 'action-delivered', updatedAt: stale } },
+  ]);
+  const closed: string[] = [];
+
+  const summary = await sweepNoraConversationTimeouts({
+    firestore: db,
+    now,
+    closeConversationFn: async (input) => {
+      assert.equal(input.reason, 'no-reply');
+      closed.push(input.conversationId);
+    },
+  });
+
+  assert.deepEqual(closed.sort(), ['stale-awaiting', 'stale-opened']);
+  assert.equal(summary.closed, 2);
+  assert.equal(summary.byState.opened, 1);
+  assert.equal(summary.byState['awaiting-reply'], 1);
+});
+
+test('scheduled sweep — detector triggers resolve to seeded Phase B branch ids', async () => {
+  const { adaptiveTypes, seed, scheduledNoraConversation } = await loadModules();
+  const seededBranchIds = new Set(seed.SEED_CONVERSATION_BRANCHES.map((branch) => branch.id));
+
+  for (const trigger of adaptiveTypes.CONVERSATION_TRIGGERS) {
+    const branchId = scheduledNoraConversation.__internal.triggerToBranchId(trigger);
+    assert.equal(branchId, trigger);
+    assert.ok(seededBranchIds.has(branchId), `${trigger} should resolve to a seeded branch id`);
+  }
 });

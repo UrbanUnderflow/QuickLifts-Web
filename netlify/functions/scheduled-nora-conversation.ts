@@ -61,11 +61,7 @@ const sendPush = async (
   }
 };
 
-const triggerToBranchId = (trigger: string, domain: string): string => {
-  // Branches are typically named after their trigger and domain in Phase B
-  // seed (e.g. `coach-context-flag-load`). Fall back to trigger-only match.
-  return `${trigger}-${domain}`;
-};
+const triggerToBranchId = (trigger: string): string => trigger;
 
 export const handler: Handler = async () => {
   await initAdmin();
@@ -122,7 +118,7 @@ export const handler: Handler = async () => {
     summary.triggersFired += candidates.length;
 
     for (const candidate of candidates) {
-      const branchId = triggerToBranchId(candidate.trigger, candidate.actionDomain);
+      const branchId = triggerToBranchId(candidate.trigger);
       let branch = await getConversationBranch(branchId).catch(() => null);
       if (!branch) {
         // Fallback: try a trigger-only branch id.
@@ -180,4 +176,8 @@ export const handler: Handler = async () => {
   }
 
   return { statusCode: 200, body: JSON.stringify({ ok: true, summary }) };
+};
+
+export const __internal = {
+  triggerToBranchId,
 };

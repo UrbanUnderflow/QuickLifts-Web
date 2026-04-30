@@ -61,7 +61,7 @@ const PHASES: Phase[] = [
         status: 'partial',
         description: 'Pulse Check explains itself in plain language and confirms why this athlete is here.',
         detail:
-            'Current v1 covers name capture, product consent, and research consent when a pilot requires it. Nora-as-guide language is still directionally right, but Nora is not yet the true onboarding orchestrator, and clinical consent remains future safety-lane work.',
+            'Current v1 covers name capture, product consent, versioned required pilot documents, and research consent when a pilot requires it. Consent v6 re-prompts older pilot acceptances. Nora-as-guide language is still directionally right, but Nora is not yet the true onboarding orchestrator, and clinical consent remains future safety-lane work.',
     },
     {
         id: 'baseline',
@@ -192,6 +192,7 @@ const ENTRY_CONTEXTS = [
 
 const CONSENT_BRANCHES = [
     { lane: 'Product consent', meaning: 'Required for Pulse Check use and should happen in every athlete path.' },
+    { lane: 'Required pilot documents', meaning: 'Versioned required consents such as the v6 pilot participation and privacy notices. Older accepted versions re-open the consent gate.' },
     { lane: 'Research consent', meaning: 'Shown only when the pilot or cohort requires it. Decline should not necessarily block product use.' },
     { lane: 'Escalation / clinical consent', meaning: 'Still future safety-lane work. Keep separate from onboarding, but do not treat it as live athlete flow until the clinical stack exists.' },
 ];
@@ -206,9 +207,10 @@ const DAY_ONE_RULES = [
 const CURRENT_V1_FLOW = [
     'Athlete redeems a team invite or pilot-linked team invite.',
     'Athlete completes onboarding: name, product consent, and research choice when required.',
-    'System marks the athlete baseline-ready and routes them into the shared team workspace.',
-    'Athlete completes the in-app baseline to unlock training.',
-    'After baseline, the athlete can move between Today, Nora, Profile, and the team workspace, but the full daily training rhythm is still partial.',
+    'System checks required consent document versions and marks the athlete baseline-ready only after current versions are accepted.',
+    'Athlete completes the in-app baseline to unlock training; either web baselineAssessment or native baselineProbe can satisfy completion truth.',
+    'After baseline, the athlete can move between Today, Nora, Profile, and the team workspace. Today/Nora can now read the shared daily assignment, NoraInboxView can show reactive conversations, and DailyCurriculumReader can display curriculum-engine assignments that already exist.',
+    'The remaining gap is not surface wiring alone; it is making scheduled curriculum generation and all coach/athlete follow-up paths feel fully automatic.',
 ];
 
 const BUILD_CHECKLIST: JourneyChecklistItem[] = [

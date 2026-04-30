@@ -46,13 +46,12 @@ import {
   setDoc,
   where,
 } from 'firebase/firestore';
-import { db } from '../../api/firebase/config';
+import { auth, db } from '../../api/firebase/config';
 import type {
   ConversationState,
   ConversationTurn,
   NoraConversation,
 } from '../../api/firebase/noraConversation/types';
-import { closeConversation } from '../../api/firebase/noraConversation/orchestrator';
 
 const STATE_TONE: Record<ConversationState, string> = {
   'opened': 'border-amber-700/50 bg-amber-950/30 text-amber-200',
@@ -146,11 +145,23 @@ const NoraGuardPage: React.FC = () => {
     if (!selected) return;
     if (!window.confirm('Revoke this conversation? It will be marked closed-revoked.')) return;
     try {
-      await closeConversation({
-        conversationId: selected.id,
-        reason: 'revoked',
-        revokedReason: 'Revoked from Nora Guard admin.',
-      } as any);
+      const idToken = await auth.currentUser?.getIdToken();
+      const response = await fetch('/api/admin/nora-guard/revoke', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+          ...(auth.currentUser?.email ? { 'x-admin-email': auth.currentUser.email } : {}),
+        },
+        body: JSON.stringify({
+          conversationId: selected.id,
+          revokedReason: 'Revoked from Nora Guard admin.',
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || 'Failed to revoke conversation.');
+      }
     } catch {
       /* tolerate */
     }

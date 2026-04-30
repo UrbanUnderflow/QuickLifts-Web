@@ -16,8 +16,10 @@ import { db, auth } from '../../api/firebase/config';
 import {
   AlertTriangle,
   CheckCircle2,
+  ExternalLink,
   Loader2,
   Play,
+  RefreshCw,
   ShieldAlert,
   Sparkles,
   Terminal,
@@ -61,6 +63,31 @@ type Lever = {
   destructive?: boolean;
   supportsDryRun: boolean;
   run: (args: { dryRun: boolean; handle: LeverHandle }) => Promise<LeverResult>;
+};
+
+type SmokeTargetId =
+  | 'scheduled-nora-conversation'
+  | 'nora-timeout-sweep'
+  | 'daily-curriculum-assignment'
+  | 'curriculum-reminder'
+  | 'curriculum-assessment';
+
+type SmokeTarget = {
+  id: SmokeTargetId;
+  label: string;
+  description: string;
+  endpoint: string;
+};
+
+type SmokeRunResult = {
+  ok: boolean;
+  targetId: SmokeTargetId;
+  label: string;
+  endpoint: string;
+  upstreamStatus?: number;
+  durationMs?: number;
+  payload?: unknown;
+  error?: string;
 };
 
 // =====================================================================
@@ -466,6 +493,7 @@ const AdminLevers: React.FC = () => (
         </p>
 
         <div className="space-y-6">
+          <PulseCheckSmokeLeversCard />
           {LEVERS.map((lever) => (
             <LeverCard key={lever.id} lever={lever} />
           ))}
@@ -475,6 +503,182 @@ const AdminLevers: React.FC = () => (
     </div>
   </AdminRouteGuard>
 );
+
+const PulseCheckSmokeLeversCard: React.FC = () => {
+  const [targets, setTargets] = useState<SmokeTarget[]>([]);
+  const [loadingTargets, setLoadingTargets] = useState(false);
+  const [runningTarget, setRunningTarget] = useState<SmokeTargetId | null>(null);
+  const [results, setResults] = useState<Record<string, SmokeRunResult>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const buildAdminHeaders = useCallback(async (): Promise<Record<string, string>> => {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) throw new Error('Not signed in');
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${idToken}`,
+    };
+    if (auth.currentUser?.email) headers['x-admin-email'] = auth.currentUser.email;
+    return headers;
+  }, []);
+
+  const refreshTargets = useCallback(async () => {
+    setLoadingTargets(true);
+    setError(null);
+    try {
+      const headers = await buildAdminHeaders();
+      const res = await fetch('/api/admin/pulsecheck/smoke-levers', { headers });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Smoke target load failed (${res.status})`);
+      setTargets(Array.isArray(data.targets) ? data.targets : []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoadingTargets(false);
+    }
+  }, [buildAdminHeaders]);
+
+  React.useEffect(() => {
+    refreshTargets();
+  }, [refreshTargets]);
+
+  const runTarget = useCallback(
+    async (targetId: SmokeTargetId) => {
+      if (runningTarget) return;
+      setRunningTarget(targetId);
+      setError(null);
+      try {
+        const headers = await buildAdminHeaders();
+        const res = await fetch('/api/admin/pulsecheck/smoke-levers', {
+          method: 'POST',
+          headers: {
+            ...headers,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ targetId }),
+        });
+        const data = await res.json();
+        setResults((prev) => ({ ...prev, [targetId]: data }));
+        if (!res.ok) throw new Error(data?.error || `Smoke run failed (${res.status})`);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setRunningTarget(null);
+      }
+    },
+    [buildAdminHeaders, runningTarget],
+  );
+
+  return (
+    <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-5">
+      <div className="flex items-start gap-3 mb-2">
+        <Terminal className="text-cyan-300 mt-1" size={18} />
+        <div className="flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-semibold">PulseCheck Nora / Phase I Smoke</h2>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold tracking-wider text-cyan-200 bg-cyan-400/10 border border-cyan-300/30 px-2 py-0.5 rounded-full">
+              DEV SMOKE
+            </span>
+          </div>
+          <p className="text-sm text-zinc-400 mt-1 leading-relaxed">
+            Admin-authenticated controls for scheduled Nora conversations, timeout cleanup, daily curriculum
+            assignment, reminders, and assessment checks. Function calls route through a server API; no
+            firebase-admin code is imported into this page.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={refreshTargets}
+          disabled={loadingTargets}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800 disabled:cursor-wait disabled:text-zinc-600"
+          aria-label="Refresh smoke endpoints"
+          title="Refresh smoke endpoints"
+        >
+          <RefreshCw size={15} className={loadingTargets ? 'animate-spin' : ''} />
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3">
+        {targets.map((target) => {
+          const result = results[target.id];
+          const running = runningTarget === target.id;
+          return (
+            <div key={target.id} className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-zinc-100">{target.label}</div>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-400">{target.description}</p>
+                  <a
+                    href={target.endpoint}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex max-w-full items-center gap-1 text-xs text-cyan-200 hover:text-cyan-100"
+                  >
+                    <span className="truncate font-mono">{target.endpoint}</span>
+                    <ExternalLink size={12} className="flex-shrink-0" />
+                  </a>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => runTarget(target.id)}
+                  disabled={Boolean(runningTarget)}
+                  className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+                    running
+                      ? 'bg-zinc-800 text-zinc-400 cursor-wait'
+                      : 'bg-cyan-300 text-zinc-950 hover:bg-cyan-200 disabled:bg-zinc-800 disabled:text-zinc-500'
+                  }`}
+                >
+                  {running ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
+                  {running ? 'Running...' : 'Run smoke'}
+                </button>
+              </div>
+
+              {result && (
+                <div
+                  className={`mt-3 rounded-lg border px-3 py-2 text-xs ${
+                    result.ok
+                      ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-200'
+                      : 'border-red-500/30 bg-red-500/5 text-red-200'
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    {result.ok ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
+                    <span className="font-semibold">
+                      {result.ok ? 'Completed' : 'Failed'}
+                      {typeof result.upstreamStatus === 'number' ? ` · upstream ${result.upstreamStatus}` : ''}
+                      {typeof result.durationMs === 'number' ? ` · ${result.durationMs}ms` : ''}
+                    </span>
+                  </div>
+                  <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap break-words rounded bg-black/60 p-2 font-mono text-[11px] text-zinc-300">
+                    {JSON.stringify(result.payload ?? { error: result.error }, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <a href="#nora-translation-preview" className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800">
+          Translation Preview
+        </a>
+        <a href="/admin/noraGuard" className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800">
+          Nora Guard
+        </a>
+        <a href="/admin/curriculumLayer" className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800">
+          Curriculum Layer
+        </a>
+      </div>
+
+      {error && (
+        <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-300 flex items-center gap-2">
+          <AlertTriangle size={14} />
+          {error}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const LeverCard: React.FC<{ lever: Lever }> = ({ lever }) => {
   const [running, setRunning] = useState(false);
@@ -910,7 +1114,7 @@ const NoraTranslationPreviewCard: React.FC = () => {
   const presetStates = STATE_PRESETS[domain] ?? [];
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5">
+    <div id="nora-translation-preview" className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5">
       <div className="flex items-start gap-3 mb-2">
         <Sparkles className="text-purple-300 mt-1" size={18} />
         <div className="flex-1">

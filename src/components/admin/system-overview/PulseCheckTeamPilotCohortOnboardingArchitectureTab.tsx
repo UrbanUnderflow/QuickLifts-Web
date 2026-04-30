@@ -38,8 +38,10 @@ const STUDY_MODE_ROWS = [
 
 const ENROLLMENT_ROWS = [
   ['productConsentAccepted + timestamp', 'Required for product use.'],
+  ['productConsentVersion', 'Version identifier for product consent acceptance.'],
   ['researchConsentStatus', 'not-required, pending, accepted, or declined.'],
   ['researchConsentVersion + timestamp', 'Versioned informed-consent record for IRB studies.'],
+  ['requiredConsents + completedConsentVersions', 'Versioned pilot/research consent documents. Consent v6 re-prompts athletes whose accepted default pilot versions are older than v6.'],
   ['eligibleForResearchDataset', 'Determines whether the person’s data is included in study exports.'],
   ['enrollmentMode', 'product-only, pilot, or research.'],
 ];
@@ -154,7 +156,7 @@ const PulseCheckTeamPilotCohortOnboardingArchitectureTab: React.FC = () => {
           },
           {
             title: 'Consent Lanes Stay Separate',
-            body: 'Product consent, research consent, and escalation / clinical consent are different truths and should never be merged into one onboarding event.',
+            body: 'Product consent, required pilot documents, research consent, and escalation / clinical consent are different truths and should never be merged into one onboarding event.',
           },
         ]}
       />
@@ -257,6 +259,11 @@ const PulseCheckTeamPilotCohortOnboardingArchitectureTab: React.FC = () => {
           <InfoCard
             title="Enrollment Stores Consent Truth"
             body={<DataTable columns={['Enrollment Field', 'Meaning']} rows={ENROLLMENT_ROWS} />}
+          />
+          <InfoCard
+            title="Consent v6 Runtime Rule"
+            accent="amber"
+            body="Default pilot consent documents are currently v6. Access state checks completedConsentVersions against each required document version, so athletes who accepted v5 documents return to pending-consent until the v6 documents are accepted."
           />
           <InfoCard
             title="Consent Separation Rule"

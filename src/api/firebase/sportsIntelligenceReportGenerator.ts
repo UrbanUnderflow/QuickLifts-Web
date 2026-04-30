@@ -289,6 +289,7 @@ const buildWatchlistFromInference = (
           : usedTiers.reduce((acc, next) => minTier(acc, next), usedTiers[0]);
 
       return {
+        athleteUserId: entry.inference.readiness.athleteUserId,
         athleteName: entry.athleteName,
         role: entry.role,
         whyMatters: whyMattersParts.join(' Plus, ') || 'Watch this athlete this week.',
@@ -304,6 +305,7 @@ const buildWatchlistFromInference = (
   const gate = enforceNamedAthleteWatchlist(candidates);
   return {
     rendered: gate.rendered.map((candidate) => ({
+      athleteUserId: candidate.athleteUserId,
       athleteName: candidate.athleteName,
       role: candidate.role,
       whyMatters: candidate.whyMatters,

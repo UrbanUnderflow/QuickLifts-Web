@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
+import CoachNoraTransparencyPanel from '../../components/admin/CoachNoraTransparencyPanel';
 import CoachReportView from '../../components/coach-reports/CoachReportView';
 import {
   CoachReportAdherenceBlock,
@@ -73,6 +74,15 @@ const toPercent = (value: number | undefined) => {
   return Math.round(Math.max(0, Math.min(100, numeric <= 1 ? numeric * 100 : numeric)));
 };
 const fromPercent = (value: string) => Math.max(0, Math.min(1, (Number(value) || 0) / 100));
+
+const watchlistAthleteUserId = (entry: CoachReportWatchlistEntry) => {
+  const extended = entry as CoachReportWatchlistEntry & {
+    athleteId?: string;
+    userId?: string;
+    uid?: string;
+  };
+  return extended.athleteUserId || extended.athleteId || extended.userId || extended.uid || '';
+};
 
 const todayWeekLabel = () => {
   const now = new Date();
@@ -358,6 +368,10 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
     }
     return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [reports]);
+  const transparencyAthleteIds = useMemo(
+    () => Array.from(new Set((draft?.coachSurface.watchlist || []).map(watchlistAthleteUserId).filter(Boolean))),
+    [draft?.coachSurface.watchlist]
+  );
 
   const selectReport = (report: StoredCoachReport) => {
     setSelectedId(report.id);
@@ -821,6 +835,20 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
                     </section>
 
                     <aside className="space-y-5">
+                      {transparencyAthleteIds.length > 0 ? (
+                        <section className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-5">
+                          <h3 className="text-sm font-semibold text-white">Nora transparency</h3>
+                          <div className="mt-4 space-y-4">
+                            {transparencyAthleteIds.map((athleteUserId) => (
+                              <CoachNoraTransparencyPanel
+                                key={athleteUserId}
+                                athleteUserId={athleteUserId}
+                              />
+                            ))}
+                          </div>
+                        </section>
+                      ) : null}
+
                       <section className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-5">
                         <div className="mb-5 flex items-center justify-between gap-4">
                           <div>

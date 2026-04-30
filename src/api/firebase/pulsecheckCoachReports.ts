@@ -81,6 +81,7 @@ export interface CoachReportTopLine {
 }
 
 export interface CoachReportWatchlistEntry {
+  athleteUserId?: string;
   athleteName: string;
   role?: string;
   whyMatters: string;

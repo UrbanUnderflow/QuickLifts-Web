@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Activity, AlertTriangle, ArrowLeft, Brain, Database, FileText, MonitorPlay, RefreshCcw, ShieldAlert, Users2 } from 'lucide-react';
 import AdminRouteGuard from '../../../../../components/auth/AdminRouteGuard';
+import CoachNoraTransparencyPanel from '../../../../../components/admin/CoachNoraTransparencyPanel';
 import NoraMetricHelpButton from '../../../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
 import { pulseCheckPilotDashboardService } from '../../../../../api/firebase/pulsecheckPilotDashboard/service';
 import type {
@@ -436,6 +437,10 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                   <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Bio</div>
                   <div className="mt-2 text-sm text-zinc-300">{detail.profile.bio || 'No profile bio has been added yet.'}</div>
                 </div>
+              </div>
+
+              <div className="mt-6">
+                <CoachNoraTransparencyPanel athleteUserId={athleteId} />
               </div>
 
               <div className="mt-6 rounded-3xl border border-white/10 bg-[#11151f] p-5">

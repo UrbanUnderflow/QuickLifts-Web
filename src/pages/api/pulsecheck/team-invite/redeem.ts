@@ -7,6 +7,7 @@ import {
   mergePulseCheckRequiredConsents,
 } from '../../../../api/firebase/pulsecheckProvisioning/types';
 import {
+  requiresReConsentForVersion,
   resolvePilotEnrollmentStatus,
   resolveTeamMembershipOnboardingStatus,
 } from '../../../../api/firebase/pulsecheckProvisioning/accessState';
@@ -148,6 +149,59 @@ const normalizeCompletedConsentIds = (
     .map((entry) => normalizeString(entry))
     .filter((entry, index, entries) => entry && allowedIds.has(entry) && entries.indexOf(entry) === index);
 };
+const normalizeCompletedConsentVersionRecord = (value: unknown): Record<string, string> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, string>>((acc, [rawId, rawVersion]) => {
+    const id = normalizeString(rawId);
+    const version = normalizeString(rawVersion);
+    if (id && version) {
+      acc[id] = version;
+    }
+    return acc;
+  }, {});
+};
+const buildCompletedConsentVersions = (input: {
+  completedConsentIds: unknown;
+  completedConsentVersions?: unknown;
+  requiredConsents: PulseCheckRequiredConsentDocument[];
+  previouslyRequiredConsents?: unknown;
+}): Record<string, string> => {
+  const candidateIds = normalizeCompletedConsentIds(input.completedConsentIds, input.requiredConsents);
+  if (candidateIds.length === 0) return {};
+
+  const storedVersions = normalizeCompletedConsentVersionRecord(input.completedConsentVersions);
+  const previousVersions = Array.isArray(input.previouslyRequiredConsents)
+    ? input.previouslyRequiredConsents.reduce<Record<string, string>>((acc, entry) => {
+        if (!entry || typeof entry !== 'object') return acc;
+        const candidate = entry as Record<string, unknown>;
+        const id = normalizeString(candidate.id);
+        const version = normalizeString(candidate.version);
+        if (id && version) {
+          acc[id] = version;
+        }
+        return acc;
+      }, {})
+    : {};
+  const requiredById = new Map(input.requiredConsents.map((consent) => [consent.id, consent]));
+
+  return candidateIds.reduce<Record<string, string>>((acc, id) => {
+    const requiredConsent = requiredById.get(id);
+    if (!requiredConsent) return acc;
+    const acceptedVersion = storedVersions[id] || previousVersions[id];
+    if (acceptedVersion && !requiresReConsentForVersion(acceptedVersion, requiredConsent.version)) {
+      acc[id] = acceptedVersion;
+    }
+    return acc;
+  }, {});
+};
+const completedConsentIdsFromVersions = (
+  completedConsentVersions: Record<string, string>,
+  requiredConsents: PulseCheckRequiredConsentDocument[]
+): string[] =>
+  requiredConsents
+    .filter((consent) => completedConsentVersions[consent.id])
+    .map((consent) => consent.id);
 const resolveResearchConsentStatusForStudyMode = (
   studyMode: PulseCheckPilotStudyMode | null,
   currentStatus?: unknown
@@ -170,7 +224,13 @@ const buildAthleteOnboardingFromInvite = (
   const researchConsentStatus = resolveResearchConsentStatusForStudyMode(pilotStudyMode, currentState?.researchConsentStatus);
   const isResearchMode = pilotStudyMode === 'research';
   const requiredConsents = pilotRequiredConsents;
-  const completedConsentIds = normalizeCompletedConsentIds(currentState?.completedConsentIds, requiredConsents);
+  const completedConsentVersions = buildCompletedConsentVersions({
+    completedConsentIds: currentState?.completedConsentIds,
+    completedConsentVersions: currentState?.completedConsentVersions,
+    requiredConsents,
+    previouslyRequiredConsents: currentState?.requiredConsents,
+  });
+  const completedConsentIds = completedConsentIdsFromVersions(completedConsentVersions, requiredConsents);
 
   return {
     productConsentAccepted: Boolean(currentState?.productConsentAccepted),
@@ -201,6 +261,7 @@ const buildAthleteOnboardingFromInvite = (
     targetCohortName: normalizeString(invite.cohortName) || normalizeString(currentState?.targetCohortName),
     requiredConsents,
     completedConsentIds,
+    completedConsentVersions,
     baselinePathStatus: currentState?.baselinePathStatus || 'pending',
     baselinePathwayId: normalizeString(currentState?.baselinePathwayId),
   };
@@ -456,6 +517,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             researchConsentRespondedAt: existingPilotEnrollment.researchConsentRespondedAt || null,
             requiredConsentIds: pilotRequiredConsents.map((consent) => consent.id),
             completedConsentIds: Array.isArray(nextAthleteOnboarding.completedConsentIds) ? nextAthleteOnboarding.completedConsentIds : [],
+            completedConsentVersions: normalizeCompletedConsentVersionRecord(nextAthleteOnboarding.completedConsentVersions),
             eligibleForResearchDataset:
               nextAthleteOnboarding.researchConsentStatus === 'accepted'
                 ? true
