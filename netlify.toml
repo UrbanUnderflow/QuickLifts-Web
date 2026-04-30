@@ -85,10 +85,16 @@
   status = 200
   force = true
 
-# Unified AI Proxy Bridge 
+# Unified AI Proxy Bridge
 [[redirects]]
   from = "/api/openai/*"
   to = "/.netlify/functions/openai-bridge"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/anthropic/*"
+  to = "/.netlify/functions/anthropic-bridge"
   status = 200
   force = true
 
@@ -496,6 +502,23 @@
 [functions.scheduled-pulsecheck-protocol-monitoring]
   # Runs every 6 hours and sends a Brevo alert when protocol monitoring thresholds trip.
   schedule = "0 */6 * * *"
+
+# Daily Curriculum Layer (Phase I) — proactive 1 protocol + 1 sim per day.
+[functions.scheduled-daily-curriculum-assignment]
+  # Runs every 30 minutes; per-athlete it fires only when local time is in
+  # the configured morning window AND no curriculum-engine assignment
+  # exists yet for the athlete's local today.
+  schedule = "*/30 * * * *"
+
+[functions.scheduled-curriculum-reminder]
+  # Runs every 30 minutes; sends midday + evening pushes when the athlete
+  # has an open curriculum assignment.
+  schedule = "*/30 * * * *"
+
+[functions.scheduled-curriculum-assessment]
+  # Runs daily at 03:00 UTC; on the 1st of each month it computes the
+  # 30-day rollup per athlete and writes pulsecheck-curriculum-assessments.
+  schedule = "0 3 * * *"
 
 [functions.scheduled-group-meet-flex-prompts]
   # Runs every 30 minutes, but only sends the Group Meet flex round at 8 AM America/New_York on the deadline date.

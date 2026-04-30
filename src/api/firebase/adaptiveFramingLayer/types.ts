@@ -8,6 +8,7 @@ export const ADAPTIVE_FRAMING_SCALE_COLLECTION = 'pulsecheck-adaptive-framing-sc
 export const TRANSLATION_TABLE_COLLECTION = 'pulsecheck-translation-table';
 export const CONVERSATION_TREE_COLLECTION = 'pulsecheck-conversation-tree';
 export const OFF_LIMITS_CONFIG_COLLECTION = 'pulsecheck-off-limits-config';
+export const TRANSLATION_LOG_COLLECTION = 'pulsecheck-nora-translation-log';
 
 export const OFF_LIMITS_CONFIG_DOCUMENT_ID = 'current';
 export const ADAPTIVE_FRAMING_SCALE_DOCUMENT_ID = 'current';

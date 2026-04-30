@@ -147,6 +147,19 @@ export interface MentalExercise {
   isActive: boolean;
   sortOrder: number;
   simSpecId?: string;
+
+  // ── Phase I · Daily Curriculum Layer additive fields ─────────────────────
+  // Sims already carry `taxonomy.primaryPillar`; these are about
+  // assignment cadence, not pillar mapping.
+  /** Recommended reps in a 30-day window. Falls back to per-progression
+   *  default. */
+  recommendedFrequencyPer30Days?: number;
+  /** Progression level — gates assignment. */
+  progressionLevel?: 'foundational' | 'intermediate' | 'advanced';
+  /** Per-pillar prerequisite rep counts before this sim becomes
+   *  assignable. */
+  prerequisitePillarReps?: Partial<Record<TaxonomyPillar, number>>;
+
   taxonomy?: {
     primaryPillar: TaxonomyPillar;
     secondaryPillar?: TaxonomyPillar;
@@ -955,6 +968,23 @@ export interface PulseCheckProtocolDefinition {
   archivedAt?: number;
   createdAt: number;
   updatedAt: number;
+
+  // ── Phase I · Daily Curriculum Layer additive fields ─────────────────────
+  // Optional today; the daily-assignment generator falls back to safe
+  // defaults when absent, so existing protocol docs continue to work.
+  // Admin UI (/admin/curriculumLayer) lets operators fill these in.
+  /** Cognitive pillar this protocol trains. Drives pillar-balance
+   *  selection in the daily generator. */
+  cognitivePillar?: TaxonomyPillar;
+  /** Recommended reps in a 30-day window. Falls back to a per-progression
+   *  default (see DEFAULT_FREQUENCY_PER_30_DAYS in dailyCurriculum/types.ts). */
+  recommendedFrequencyPer30Days?: number;
+  /** Progression level — gates assignment. Foundational protocols are
+   *  free to assign; intermediate/advanced require prerequisitePillarReps. */
+  progressionLevel?: 'foundational' | 'intermediate' | 'advanced';
+  /** Per-pillar prerequisite rep counts before this protocol becomes
+   *  assignable. Only meaningful for intermediate + advanced. */
+  prerequisitePillarReps?: Partial<Record<TaxonomyPillar, number>>;
 }
 
 export interface PulseCheckProtocolHistoryEntry {
@@ -1375,7 +1405,7 @@ export interface PulseCheckDailyAssignment {
   sourceDate: string; // YYYY-MM-DD
   timezone?: string;
   sourceDateMode?: PulseCheckDailyTaskSourceDateMode;
-  assignedBy: 'nora';
+  assignedBy: 'nora' | 'curriculum-engine' | 'coach-override';
   materializedAt?: number;
   materializedBy?: PulseCheckDailyTaskMaterializedBy;
   isPrimaryForDate?: boolean;

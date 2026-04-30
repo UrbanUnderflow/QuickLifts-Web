@@ -74,6 +74,7 @@ import PulseCheckHealthContextFirestoreSchemaIndexSpecTab from "../../components
 import PulseCheckPhysiologyCognitionCorrelationEngineTab from "../../components/admin/system-overview/PulseCheckPhysiologyCognitionCorrelationEngineTab";
 import PulseCheckCorrelationEngineContractLockTab from "../../components/admin/system-overview/PulseCheckCorrelationEngineContractLockTab";
 import PulseCheckSportsIntelligenceLayerSpecTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceLayerSpecTab";
+import PulseCheckCurriculumLayerSpecTab from "../../components/admin/system-overview/PulseCheckCurriculumLayerSpecTab";
 import PulseCheckSportsIntelligenceAggregationInferenceContractTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceAggregationInferenceContractTab";
 import PulseCheckSportsIntelligenceMockReportBaselinesTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceMockReportBaselinesTab";
 import PulseCheckNoraContextCaptureSpecTab from "../../components/admin/system-overview/PulseCheckNoraContextCaptureSpecTab";
@@ -284,6 +285,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-sports-intelligence-layer-spec",
       "pulsecheck-sports-intelligence-aggregation-inference-contract",
       "pulsecheck-sports-intelligence-mock-report-baselines",
+      "pulsecheck-curriculum-layer-spec",
       "pulsecheck-nora-context-capture",
       "pulsecheck-session-detection-matching",
       "pulsecheck-sport-load-model",
@@ -1810,6 +1812,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-sports-intelligence-layer-spec":
         return <PulseCheckSportsIntelligenceLayerSpecTab />;
+
+      case "pulsecheck-curriculum-layer-spec":
+        return <PulseCheckCurriculumLayerSpecTab />;
 
       case "pulsecheck-sports-intelligence-aggregation-inference-contract":
         return <PulseCheckSportsIntelligenceAggregationInferenceContractTab />;

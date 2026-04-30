@@ -10,9 +10,10 @@
 import type { app as adminApp } from 'firebase-admin';
 import * as admin from 'firebase-admin';
 import type { TranslationDomain, ValidationIssue, VoiceReviewStatus } from './types';
-import { stripUndefinedDeep } from './types';
+import { stripUndefinedDeep, TRANSLATION_LOG_COLLECTION } from './types';
 
-export const TRANSLATION_LOG_COLLECTION = 'pulsecheck-nora-translation-log';
+// Re-export so existing server-side callers continue to import from here.
+export { TRANSLATION_LOG_COLLECTION };
 
 export type TranslationFallbackReason =
   | 'guardrail-violation'

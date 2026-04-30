@@ -4,6 +4,8 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import {
   collection,
   getDocs,
+  getDoc,
+  addDoc,
   query,
   where,
   doc,
@@ -20,6 +22,19 @@ import {
   Sparkles,
   Terminal,
 } from 'lucide-react';
+import {
+  runAthletePhrasingGuardrails,
+} from '../../api/firebase/adaptiveFramingLayer/guardrails';
+import {
+  TRANSLATION_TABLE_COLLECTION,
+  OFF_LIMITS_CONFIG_COLLECTION,
+  OFF_LIMITS_CONFIG_DOCUMENT_ID,
+  TRANSLATION_LOG_COLLECTION,
+  type TranslationRow,
+  type OffLimitsConfig,
+  type ValidationIssue,
+} from '../../api/firebase/adaptiveFramingLayer/types';
+import { NORA_ATHLETE_TRANSLATION } from '../../api/anthropic/featureRouting';
 
 // =====================================================================
 // Lever framework
@@ -621,12 +636,20 @@ const LeverCard: React.FC<{ lever: Lever }> = ({ lever }) => {
 // =====================================================================
 // Nora Translation Preview (Phase C)
 //
-// One-shot preview surface for the athlete-facing translation runtime.
-// Hits /api/admin/test-nora-translation, which loads the (domain, state)
-// row from pulsecheck-translation-table, asks Sonnet 4.6 for a paraphrase,
-// runs the 5 guardrails, and falls back to the seed phrasing on violations.
-// Defaults to persistLog=false so previews never write to the audit
-// collection unless the operator explicitly opts in.
+// Mirrors the client-side pattern of the other levers on this page:
+//   1. Read translation row + off-limits config from Firestore via the
+//      client SDK (already authenticated as the signed-in admin user;
+//      Firestore rules govern access).
+//   2. Build the prompt and POST to /api/anthropic/v1/messages — the
+//      shared Anthropic bridge handles ANTHROPIC_API_KEY, model gating,
+//      and per-feature token caps via the `anthropic-organization` header.
+//   3. Run the five guardrails locally (pure functions in guardrails.ts).
+//   4. Fall back to the seed phrasing on guardrail violation or bridge error.
+//   5. If persistLog is on, write one document to pulsecheck-nora-translation-log
+//      directly via the client SDK (admin user has write permission).
+//
+// This avoids the cross-project credential mismatch that bites server-side
+// admin endpoints in local dev (dev service-account vs. prod Firestore).
 // =====================================================================
 
 const TRANSLATION_DOMAIN_OPTIONS = ['sleep', 'travel', 'autonomic', 'load', 'circadian'] as const;
@@ -696,41 +719,183 @@ const NoraTranslationPreviewCard: React.FC = () => {
 
     setRunning(true);
     try {
+      // 1) Load translation row + off-limits config via client SDK.
+      const rowId = `${domain}-${state}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+      const [rowSnap, offLimitsSnap] = await Promise.all([
+        getDoc(doc(db, TRANSLATION_TABLE_COLLECTION, rowId)),
+        getDoc(doc(db, OFF_LIMITS_CONFIG_COLLECTION, OFF_LIMITS_CONFIG_DOCUMENT_ID)),
+      ]);
+
+      if (!rowSnap.exists()) {
+        throw new Error(`No translation row for (${domain}, ${state}). Expected doc id "${rowId}".`);
+      }
+      const rowData = rowSnap.data() as Partial<TranslationRow>;
+      const row: TranslationRow = {
+        id: rowSnap.id,
+        domain: (rowData.domain ?? domain) as TranslationRow['domain'],
+        state: String(rowData.state ?? state),
+        athletePhrasing: String(rowData.athletePhrasing ?? ''),
+        requiredActionVerbs: Array.isArray(rowData.requiredActionVerbs)
+          ? rowData.requiredActionVerbs.map(String)
+          : [],
+        forbiddenTokens: Array.isArray(rowData.forbiddenTokens) ? rowData.forbiddenTokens.map(String) : [],
+        voiceReviewStatus: (rowData.voiceReviewStatus ?? 'seed-pending-review') as TranslationRow['voiceReviewStatus'],
+        revisionId: String(rowData.revisionId ?? ''),
+        createdBy: String(rowData.createdBy ?? ''),
+      };
+
+      const offLimitsRaw = offLimitsSnap.exists() ? (offLimitsSnap.data() as Partial<OffLimitsConfig>) : null;
+      const offLimits = {
+        numericValueRules: Array.isArray(offLimitsRaw?.numericValueRules)
+          ? offLimitsRaw!.numericValueRules!
+          : [],
+        forbiddenPhrasePatterns: Array.isArray(offLimitsRaw?.forbiddenPhrasePatterns)
+          ? offLimitsRaw!.forbiddenPhrasePatterns!.map(String)
+          : [],
+      };
+
+      // 2) Build prompt and call Anthropic bridge.
       const idToken = await auth.currentUser?.getIdToken();
       if (!idToken) throw new Error('Not signed in');
 
-      const res = await fetch('/api/admin/test-nora-translation', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
+      const systemPrompt = [
+        "You are Nora, a warm but direct performance coach speaking 1:1 with an athlete.",
+        '',
+        '=== VOICE ===',
+        'First-person to the athlete. Action-led, calm, present-tense. Coach-adjacent: warm but not saccharine, never pathologizing.',
+        '',
+        '=== ABSOLUTE CONSTRAINTS ===',
+        '1. Output 1\u20133 sentences. No more, no less.',
+        '2. NEVER include numeric values paired with units like ms, bpm, \u00b0F, \u00b0C, or %.',
+        '3. NEVER mention these markers by name: hrv, sleepScore, readiness, recovery, rhr, tempDev, daytimeStress, acwr, compositeScores.',
+        "4. NEVER use negative-priming language: 'your X is low/poor/bad', 'your numbers look...', 'you've been...'. Athletes do not see scores; they receive guidance.",
+        '5. Lead with an action verb. Required verbs to surface (use at least one): ' +
+          (row.requiredActionVerbs.length > 0 ? row.requiredActionVerbs.join(', ') : '(none specified)') +
+          '.',
+        '6. No emoji. No markdown. No headers. Plain prose only.',
+        '',
+        '=== REFERENCE VOICE (the seed phrasing for this state \u2014 match its tone) ===',
+        `"${row.athletePhrasing}"`,
+        '',
+        'Generate a fresh paraphrase appropriate to the supplied signal context. Your response is exactly the athlete-facing line \u2014 nothing else, no preamble, no quotation marks.',
+      ].join('\n');
+
+      const userMessage = [
+        `Domain: ${domain}`,
+        `State: ${state}`,
+        `Signal context (structured, do not echo numbers verbatim \u2014 translate the band into guidance):`,
+        JSON.stringify(parsedSignal),
+        'Write the athlete-facing line now.',
+      ].join('\n');
+
+      let claudeOutputRaw: string | undefined;
+      let bridgeError: string | undefined;
+      try {
+        const bridgeRes = await fetch('/api/anthropic/v1/messages', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${idToken}`,
+            'anthropic-organization': NORA_ATHLETE_TRANSLATION.featureId,
+          },
+          body: JSON.stringify({
+            model: NORA_ATHLETE_TRANSLATION.model,
+            max_tokens: NORA_ATHLETE_TRANSLATION.maxTokens,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userMessage }],
+          }),
+        });
+
+        const bridgeText = await bridgeRes.text();
+        if (!bridgeRes.ok) {
+          throw new Error(`Bridge ${bridgeRes.status}: ${bridgeText.slice(0, 240)}`);
+        }
+        const bridgePayload = JSON.parse(bridgeText) as {
+          content?: Array<{ type: string; text?: string }>;
+        };
+        const text = (bridgePayload.content || [])
+          .filter((b) => b.type === 'text' && typeof b.text === 'string')
+          .map((b) => b.text as string)
+          .join('')
+          .trim();
+        if (!text) throw new Error('Anthropic returned no text content');
+        claudeOutputRaw = text;
+      } catch (e) {
+        bridgeError = e instanceof Error ? e.message : String(e);
+      }
+
+      // 3) Decide outcome.
+      let finalResult: TranslationPreviewResult;
+
+      if (bridgeError || !claudeOutputRaw) {
+        finalResult = {
+          phrasing: row.athletePhrasing,
+          providerUsed: 'fallback-seed',
+          fallbackTriggered: true,
+          fallbackReason: 'anthropic-error',
+          guardrailViolations: [],
+          voiceReviewStatus: row.voiceReviewStatus,
+          translationRowRevision: row.revisionId,
+          claudeOutputRaw,
+        };
+      } else {
+        const guardrails = runAthletePhrasingGuardrails(claudeOutputRaw, row, offLimits);
+        if (guardrails.ok) {
+          finalResult = {
+            phrasing: claudeOutputRaw,
+            providerUsed: 'anthropic',
+            fallbackTriggered: false,
+            guardrailViolations: [],
+            voiceReviewStatus: row.voiceReviewStatus,
+            translationRowRevision: row.revisionId,
+            claudeOutputRaw,
+          };
+        } else {
+          finalResult = {
+            phrasing: row.athletePhrasing,
+            providerUsed: 'fallback-seed',
+            fallbackTriggered: true,
+            fallbackReason: 'guardrail-violation',
+            guardrailViolations: guardrails.violations as ValidationIssue[],
+            voiceReviewStatus: row.voiceReviewStatus,
+            translationRowRevision: row.revisionId,
+            claudeOutputRaw,
+          };
+        }
+      }
+
+      // 4) Optional audit log write (client SDK; admin user has write).
+      // Firestore rejects undefined field values — strip them before writing
+      // so optional fields (claudeOutputRaw, fallbackReason, errorMessage)
+      // simply omit when not set instead of failing the write.
+      if (persistLog) {
+        const logEntry: Record<string, unknown> = {
+          athleteUserId: `admin-preview:${auth.currentUser?.email ?? 'unknown'}`,
+          signal: parsedSignal,
           domain,
           state,
-          signal: parsedSignal,
-          persistLog,
-        }),
-      });
+          providerUsed: finalResult.providerUsed,
+          fallbackTriggered: finalResult.fallbackTriggered,
+          guardrailViolations: finalResult.guardrailViolations,
+          finalPhrasing: finalResult.phrasing,
+          seedPhrasing: row.athletePhrasing,
+          voiceReviewStatus: row.voiceReviewStatus,
+          translationRowRevision: row.revisionId,
+          modelUsed: NORA_ATHLETE_TRANSLATION.model,
+          timestamp: serverTimestamp(),
+        };
+        if (finalResult.fallbackReason !== undefined) logEntry.fallbackReason = finalResult.fallbackReason;
+        if (claudeOutputRaw !== undefined) logEntry.claudeOutputRaw = claudeOutputRaw;
+        if (bridgeError !== undefined) logEntry.errorMessage = bridgeError;
 
-      const text = await res.text();
-      let payload: Record<string, unknown> | null = null;
-      try {
-        payload = text ? (JSON.parse(text) as Record<string, unknown>) : null;
-      } catch {
-        // fall through — show raw text
-      }
-      if (!res.ok) {
-        const msg =
-          (payload && typeof payload.error === 'string' && payload.error) ||
-          text.slice(0, 240) ||
-          `HTTP ${res.status}`;
-        throw new Error(msg);
+        try {
+          await addDoc(collection(db, TRANSLATION_LOG_COLLECTION), logEntry);
+        } catch (logErr) {
+          console.warn('[nora-translation-preview] Failed to write audit log:', logErr);
+        }
       }
 
-      const r = (payload?.result as TranslationPreviewResult | undefined) ?? null;
-      if (!r) throw new Error('Empty result payload');
-      setResult(r);
+      setResult(finalResult);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
