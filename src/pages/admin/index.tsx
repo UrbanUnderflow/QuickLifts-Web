@@ -88,6 +88,12 @@ const adminCardsData = [
     link: "/admin/sportsIntelligenceReports"
   },
   {
+    title: "Curriculum Layer",
+    description: "Daily Curriculum Layer — proactive 1 protocol + 1 sim per day per athlete, balanced across composure / focus / decisioning. Engine config, pillar weights, 30-day adherence rollups.",
+    icon: <Brain className="w-5 h-5" />,
+    link: "/admin/curriculumLayer"
+  },
+  {
     title: "Clinical Escalations",
     description: "Tier 3 escalation queue. Clinicians acknowledge and resolve here; the athlete's app gates to a 988 / 911 / Crisis Text Line surface. Pulse never auto-dials emergency services.",
     icon: <ShieldAlert className="w-5 h-5" />,
