@@ -39,6 +39,7 @@ const DEFAULT_DESCRIPTION = 'Real workouts, Real people, move together.';
 const PAGE_TITLE_MAP: Record<string, string> = {
   '/': DEFAULT_TITLE,
   '/about': 'About — Pulse',
+  '/Macra': 'Macra — Scan any food. Get your macros instantly.',
   '/pricing': 'Pricing — Pulse',
   '/coach': 'Coach — Pulse',
   '/investor': 'Investor — Pulse',
@@ -177,7 +178,7 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
   // Pages that need custom OG tags pass `ogMeta` via getServerSideProps:
   //   { title, description, image, url, lastUpdated }
   const ogMeta = (pageProps as any)?.ogMeta as
-    | { title: string; description: string; image: string; url: string }
+    | { title: string; description: string; image: string; url: string; type?: string; siteName?: string }
     | undefined;
 
   const derivedTitle = ogMeta?.title
@@ -188,6 +189,8 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
   const ogDescription = ogMeta?.description || DEFAULT_DESCRIPTION;
   const ogImage = ogMeta?.image || DEFAULT_OG_IMAGE;
   const ogUrl = ogMeta?.url || '';
+  const ogType = ogMeta?.type || (ogMeta ? 'article' : 'website');
+  const ogSiteName = ogMeta?.siteName || 'Pulse Fitness';
 
   return (
     <>
@@ -196,8 +199,8 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
           come from ogMeta in pageProps (set by getServerSideProps). */}
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" key="viewport" />
-        <meta property="og:site_name" content="Pulse Fitness" />
-        <meta property="og:type" content={ogMeta ? 'article' : 'website'} />
+        <meta property="og:site_name" content={ogSiteName} />
+        <meta property="og:type" content={ogType} />
         <meta property="og:title" content={ogTitle} key="og:title" />
         <meta property="og:description" content={ogDescription} key="og:description" />
         <meta property="og:image" content={ogImage} key="og:image" />
