@@ -404,6 +404,11 @@ const ROUTE_ENTRIES: RouteEntry[] = [
       import("../../src/pages/api/admin/pulsecheck/pilot-research-readout/generate.ts"),
   },
   {
+    pattern: "/api/admin/nora-guard/revoke",
+    loadHandler: () =>
+      import("../../src/pages/api/admin/nora-guard/revoke.ts"),
+  },
+  {
     pattern: "/api/admin/pulsecheck/pilot-research-readout/review",
     loadHandler: () =>
       import("../../src/pages/api/admin/pulsecheck/pilot-research-readout/review.ts"),

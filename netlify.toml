@@ -123,6 +123,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/admin/nora-guard/revoke"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/admin/nora-guard/revoke"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/admin/pulsecheck/pilot-research-readout/*"
   to = "/.netlify/functions/firebase-next-api?originalPath=/api/admin/pulsecheck/pilot-research-readout/:splat"
   status = 200
