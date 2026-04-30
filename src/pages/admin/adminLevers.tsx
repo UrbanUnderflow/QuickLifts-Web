@@ -791,7 +791,11 @@ const NoraTranslationPreviewCard: React.FC = () => {
       let claudeOutputRaw: string | undefined;
       let bridgeError: string | undefined;
       try {
-        const bridgeRes = await fetch('/api/anthropic/v1/messages', {
+        // Hit the Netlify function URL directly. The /api/anthropic/* redirect
+        // exists in netlify.toml but @netlify/plugin-nextjs intercepts /api/*
+        // paths in dev before the redirect fires. The bridge defaults to
+        // /v1/messages when no v1 subpath is present (see anthropic-bridge.ts).
+        const bridgeRes = await fetch('/.netlify/functions/anthropic-bridge', {
           method: 'POST',
           headers: {
             'content-type': 'application/json',

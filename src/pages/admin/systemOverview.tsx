@@ -75,6 +75,8 @@ import PulseCheckPhysiologyCognitionCorrelationEngineTab from "../../components/
 import PulseCheckCorrelationEngineContractLockTab from "../../components/admin/system-overview/PulseCheckCorrelationEngineContractLockTab";
 import PulseCheckSportsIntelligenceLayerSpecTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceLayerSpecTab";
 import PulseCheckCurriculumLayerSpecTab from "../../components/admin/system-overview/PulseCheckCurriculumLayerSpecTab";
+import PulseCheckNoraConversationOrchestratorSpecTab from "../../components/admin/system-overview/PulseCheckNoraConversationOrchestratorSpecTab";
+import PulseCheckNoraGuardSpecTab from "../../components/admin/system-overview/PulseCheckNoraGuardSpecTab";
 import PulseCheckSportsIntelligenceAggregationInferenceContractTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceAggregationInferenceContractTab";
 import PulseCheckSportsIntelligenceMockReportBaselinesTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceMockReportBaselinesTab";
 import PulseCheckNoraContextCaptureSpecTab from "../../components/admin/system-overview/PulseCheckNoraContextCaptureSpecTab";
@@ -286,6 +288,8 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-sports-intelligence-aggregation-inference-contract",
       "pulsecheck-sports-intelligence-mock-report-baselines",
       "pulsecheck-curriculum-layer-spec",
+      "pulsecheck-nora-conversation-orchestrator-spec",
+      "pulsecheck-nora-guard-spec",
       "pulsecheck-nora-context-capture",
       "pulsecheck-session-detection-matching",
       "pulsecheck-sport-load-model",
@@ -1815,6 +1819,12 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-curriculum-layer-spec":
         return <PulseCheckCurriculumLayerSpecTab />;
+
+      case "pulsecheck-nora-conversation-orchestrator-spec":
+        return <PulseCheckNoraConversationOrchestratorSpecTab />;
+
+      case "pulsecheck-nora-guard-spec":
+        return <PulseCheckNoraGuardSpecTab />;
 
       case "pulsecheck-sports-intelligence-aggregation-inference-contract":
         return <PulseCheckSportsIntelligenceAggregationInferenceContractTab />;

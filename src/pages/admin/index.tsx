@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical, Settings2, Wallet, ClipboardCheck, ShieldAlert } from 'lucide-react';
+import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical, Settings2, Wallet, ClipboardCheck, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useDispatch } from 'react-redux';
 import { toggleDevMode } from '../../redux/devModeSlice';
 import { initializeFirebase, isUsingDevFirebase } from '../../api/firebase/config';
@@ -92,6 +92,18 @@ const adminCardsData = [
     description: "Daily Curriculum Layer — proactive 1 protocol + 1 sim per day per athlete, balanced across composure / focus / decisioning. Engine config, pillar weights, 30-day adherence rollups.",
     icon: <Brain className="w-5 h-5" />,
     link: "/admin/curriculumLayer"
+  },
+  {
+    title: "Adaptation Framing Layer",
+    description: "Reactive translation rules + conversation tree + off-limits guardrails for the Athlete Surface Doctrine. Translation log + 'What would Nora say?' preview.",
+    icon: <Layers className="w-5 h-5" />,
+    link: "/admin/adaptationFramingLayer"
+  },
+  {
+    title: "Nora Guard",
+    description: "Full message-validation inbox for athlete-Nora conversations during the pilot. Read every message, see Claude raw output + guardrail outcomes, kill switch + PII redaction toggle.",
+    icon: <ShieldCheck className="w-5 h-5" />,
+    link: "/admin/noraGuard"
   },
   {
     title: "Clinical Escalations",

@@ -503,6 +503,13 @@
   # Runs every 6 hours and sends a Brevo alert when protocol monitoring thresholds trip.
   schedule = "0 */6 * * *"
 
+# Nora Conversation Orchestrator (Phase D) — reactive trigger sweep + opener push.
+[functions.scheduled-nora-conversation]
+  # Runs every 30 minutes; per-athlete it evaluates the 4 trigger detectors
+  # and opens conversations + sends openers when any fires. Dedupes via
+  # pulsecheck-nora-trigger-fires (1-fire-per-trigger-per-day).
+  schedule = "*/30 * * * *"
+
 # Daily Curriculum Layer (Phase I) — proactive 1 protocol + 1 sim per day.
 [functions.scheduled-daily-curriculum-assignment]
   # Runs every 30 minutes; per-athlete it fires only when local time is in
