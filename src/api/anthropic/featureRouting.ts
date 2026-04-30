@@ -19,7 +19,8 @@ export type Provider = 'anthropic' | 'openai';
 // filter by which migration cohort the entry came from.
 export type MigrationModeId =
   | 'macra-full-cutover-v1'
-  | 'pulsecheck-dual-path-v1';
+  | 'pulsecheck-dual-path-v1'
+  | 'pulsecheck-translation-v1';
 
 export interface FeatureRoutingConfig {
   // Stable feature id — lowercased, kebab-case. Matches the `anthropic-organization`
@@ -92,6 +93,18 @@ export const GENERATE_CAPTION: FeatureRoutingConfig = {
   migrationModeId: 'pulsecheck-dual-path-v1',
 };
 
+// Phase C — Adaptive Framing Layer translation runtime. Anthropic-only by
+// doctrine (athlete-facing language). Fallback path is the static seed string
+// from pulsecheck-translation-table when Claude errors or guardrails reject —
+// NOT OpenAI. Do not wire this through callWithFallback.
+export const NORA_ATHLETE_TRANSLATION: FeatureRoutingConfig = {
+  featureId: 'noraAthleteTranslation',
+  provider: 'anthropic',
+  model: ANTHROPIC_MODEL_SONNET_4_6,
+  maxTokens: 400,
+  migrationModeId: 'pulsecheck-translation-v1',
+};
+
 export const FEATURE_ROUTING_CONFIGS: FeatureRoutingConfig[] = [
   NORA_NUTRITION_CHAT,
   MACRA_MEAL_PLAN,
@@ -99,6 +112,7 @@ export const FEATURE_ROUTING_CONFIGS: FeatureRoutingConfig[] = [
   PULSECHECK_PROTOCOL_PRACTICE_EVAL,
   PULSECHECK_SPORT_INTELLIGENCE,
   GENERATE_CAPTION,
+  NORA_ATHLETE_TRANSLATION,
 ];
 
 const FEATURE_ROUTING_BY_ID = new Map(
@@ -124,5 +138,9 @@ export const ANTHROPIC_FEATURE_LIMITS: Record<string, { maxTokens: number; model
     modelPattern: ANTHROPIC_MODEL_PATTERN,
   },
   generateCaption: { maxTokens: GENERATE_CAPTION.maxTokens, modelPattern: ANTHROPIC_MODEL_PATTERN },
+  noraAthleteTranslation: {
+    maxTokens: NORA_ATHLETE_TRANSLATION.maxTokens,
+    modelPattern: ANTHROPIC_MODEL_PATTERN,
+  },
   default: { maxTokens: 1000, modelPattern: ANTHROPIC_MODEL_PATTERN },
 };
