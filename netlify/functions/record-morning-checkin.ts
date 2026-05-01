@@ -1,0 +1,258 @@
+import type { Handler } from '@netlify/functions';
+import * as admin from 'firebase-admin';
+import { getFirestore, initAdmin } from './utils/getServiceAccount';
+import { openConversationFromTrigger } from '../../src/api/firebase/noraConversation/orchestrator';
+import type { ConversationBranch, TranslationDomain } from '../../src/api/firebase/adaptiveFramingLayer/types';
+
+/**
+ * POST /.netlify/functions/record-morning-checkin
+ *
+ * Athlete tapped a readiness emoji on the home screen. Two things happen
+ * server-side as a single transaction:
+ *
+ *   1. Persist the readiness pick to `pulsecheck-morning-checkins/{userId}_{dayKey}`
+ *      so the rest of the system (curriculum, coach reports, framing
+ *      layer) can read the tone signal.
+ *
+ *   2. Open a Nora conversation via the Phase D orchestrator with
+ *      trigger='morning-checkin-tone' and the level-specific opener
+ *      pulled from the matched branch (synthesized in-memory until
+ *      Phase B seed promotes them to Firestore).
+ *
+ * Returns the conversation id so iOS can deep-link the athlete into
+ * NoraInboxView. The opener turn is already populated; athlete sees
+ * Nora's level-specific message + can reply naturally.
+ *
+ * Doctrine alignment: instead of static in-place noraResponse text, the
+ * check-in becomes a real conversation that flows through Phase D's
+ * state machine + Phase C's voice + guardrails on the action delivery.
+ *
+ * Body:
+ *   { level: 'drained' | 'low' | 'okay' | 'solid' | 'locked',
+ *     levelLabel?: string,        // optional display label override
+ *     timezone?: string }
+ */
+
+const RESPONSE_HEADERS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+type CheckinLevel = 'drained' | 'low' | 'okay' | 'solid' | 'locked';
+const VALID_LEVELS: ReadonlyArray<CheckinLevel> = ['drained', 'low', 'okay', 'solid', 'locked'];
+
+// In-memory branch synthesis. Mirrors the iOS `noraResponse` strings
+// 1:1 so the athlete sees the same opener text regardless of where they
+// land (in-place quick response OR full chat). Single source of truth
+// can move to Firestore via a Phase B seed update; deferred for v1 so
+// the morning check-in path doesn't depend on a new seeder run.
+//
+// Voice review status is 'reviewed' rather than 'seed-pending-review'
+// because these strings already exist and have been used in production
+// via the iOS in-place display.
+const synthesizeBranch = (level: CheckinLevel): ConversationBranch => {
+  const opener = OPENER_TEXT[level];
+  const probe = PROBE_TEXT[level];
+  const action = ACTION_DELIVERY_TEXT[level];
+  const branchId = `morning-checkin-tone-${level}`;
+  return {
+    id: branchId,
+    trigger: 'morning-checkin-tone',
+    description: `Morning check-in (${level}) — opens after athlete taps the readiness emoji on the home screen.`,
+    opener: { nodeId: `${branchId}-opener`, text: opener, voiceReviewStatus: 'reviewed' },
+    probe: { nodeId: `${branchId}-probe`, text: probe, voiceReviewStatus: 'reviewed' },
+    actionDelivery: { nodeId: `${branchId}-action`, text: action, voiceReviewStatus: 'reviewed' },
+    revisionId: 'morning-checkin-synthetic-v1',
+    createdBy: 'system:morning-checkin',
+  };
+};
+
+// Mirrors NoraDailyView.ReadinessLevel.noraResponse on iOS.  Keep these
+// in sync with PulseCheck/Views/Chat/NoraDailyView.swift line 34-42.
+const OPENER_TEXT: Record<CheckinLevel, string> = {
+  drained: "You're coming in heavy today. We'll keep the first win simple and get you settled.",
+  low:     "You've got less in the tank today. We'll keep the work clean and meet the day where it is.",
+  okay:    "You're in a workable spot today. We'll keep the rep steady and build from there.",
+  solid:   "You've got good energy today. We'll use it, but we'll still keep the work clean.",
+  locked:  "You're in a strong spot today. Let's use that without getting sloppy.",
+};
+
+const PROBE_TEXT: Record<CheckinLevel, string> = {
+  drained: "What's hitting hardest — body, mind, or schedule?",
+  low:     "Anything specific dragging on you, or just one of those days?",
+  okay:    "Anything on your mind worth flagging before we get going?",
+  solid:   "What's working today? I'll lean into it.",
+  locked:  "Where's that energy coming from? I'll match the rep to it.",
+};
+
+const ACTION_DELIVERY_TEXT: Record<CheckinLevel, string> = {
+  drained: "Got it. Today's plan is on the home screen — start with the protocol; sim is optional. Hydrate.",
+  low:     "Heard. Today's plan is on the home screen — protocol first, sim when you're ready.",
+  okay:    "Got it. Today's plan is on the home screen — knock out both when you can.",
+  solid:   "Nice. Today's plan is on the home screen — both protocol and sim are queued up.",
+  locked:  "Let's go. Today's plan is on the home screen — protocol's the warm-up, sim's the work.",
+};
+
+// Domain mapping for Phase C translation lookups during the action-delivery
+// turn (when athlete replies to the probe and the orchestrator generates
+// final guidance via translateForAthlete).  Drained/low map to autonomic
+// because the priority is regulation; okay/solid/locked map to load
+// because the priority is matching today's session.
+const ACTION_DOMAIN: Record<CheckinLevel, TranslationDomain> = {
+  drained: 'autonomic',
+  low:     'autonomic',
+  okay:    'load',
+  solid:   'load',
+  locked:  'load',
+};
+
+const verifyAuth = async (
+  authHeader?: string,
+): Promise<{ uid: string; email?: string } | null> => {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.slice('Bearer '.length).trim();
+  if (!token) return null;
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    return { uid: decoded.uid, email: decoded.email };
+  } catch {
+    return null;
+  }
+};
+
+const formatYmdInTz = (nowUtc: Date, timeZone: string): string => {
+  const local = new Date(nowUtc.toLocaleString('en-US', { timeZone }));
+  const y = local.getFullYear();
+  const m = String(local.getMonth() + 1).padStart(2, '0');
+  const day = String(local.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+export const handler: Handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers: RESPONSE_HEADERS, body: '' };
+  }
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, headers: RESPONSE_HEADERS, body: JSON.stringify({ error: 'method_not_allowed' }) };
+  }
+
+  await initAdmin();
+  const db = await getFirestore();
+
+  const authHeader = event.headers?.authorization || event.headers?.Authorization;
+  const auth = await verifyAuth(authHeader);
+  if (!auth) {
+    return { statusCode: 401, headers: RESPONSE_HEADERS, body: JSON.stringify({ error: 'unauthenticated' }) };
+  }
+
+  let body: { level?: string; levelLabel?: string; timezone?: string };
+  try {
+    body = typeof event.body === 'string' ? JSON.parse(event.body) : (event.body as any) || {};
+  } catch {
+    return { statusCode: 400, headers: RESPONSE_HEADERS, body: JSON.stringify({ error: 'invalid_json' }) };
+  }
+
+  const level = (body.level || '').trim().toLowerCase() as CheckinLevel;
+  if (!VALID_LEVELS.includes(level)) {
+    return {
+      statusCode: 400,
+      headers: RESPONSE_HEADERS,
+      body: JSON.stringify({ error: 'invalid_level', valid: VALID_LEVELS }),
+    };
+  }
+
+  // Resolve teamId for orchestrator.  Tolerate missing membership doc
+  // (very-fresh athletes might not have one) by falling back to ''.
+  let teamId = '';
+  let timezone = body.timezone || 'America/New_York';
+  try {
+    const memSnap = await db
+      .collection('pulsecheck-team-memberships')
+      .where('userId', '==', auth.uid)
+      .where('role', '==', 'athlete')
+      .limit(1)
+      .get();
+    if (!memSnap.empty) {
+      const data = memSnap.docs[0].data();
+      teamId = (data.teamId as string | undefined) || '';
+      if (!body.timezone && data.timezone) timezone = String(data.timezone);
+    }
+  } catch {
+    /* tolerate */
+  }
+
+  const dayKey = formatYmdInTz(new Date(), timezone);
+  const checkinDocId = `${auth.uid}_${dayKey}`;
+  const now = Date.now();
+
+  // Persist check-in.  This is the first source of truth for "athlete
+  // started their day with tone X" — read by curriculum, coach reports,
+  // and the framing layer.
+  try {
+    await db.collection('pulsecheck-morning-checkins').doc(checkinDocId).set(
+      {
+        id: checkinDocId,
+        athleteUserId: auth.uid,
+        teamId,
+        dayKey,
+        level,
+        levelLabel: body.levelLabel || level,
+        timezone,
+        createdAt: now,
+      },
+      { merge: true },
+    );
+  } catch (err: any) {
+    return {
+      statusCode: 500,
+      headers: RESPONSE_HEADERS,
+      body: JSON.stringify({ error: 'persist_failed', detail: err?.message || String(err) }),
+    };
+  }
+
+  // Open the Nora conversation.  Synthesized branch contains the iOS
+  // noraResponse text as the opener so the athlete experiences a
+  // continuous narrative whether they stay on the home screen or
+  // navigate into the chat thread.
+  const branch = synthesizeBranch(level);
+  let conversation;
+  try {
+    conversation = await openConversationFromTrigger(
+      {
+        athleteUserId: auth.uid,
+        teamId,
+        trigger: 'morning-checkin-tone',
+        branch,
+        actionDomain: ACTION_DOMAIN[level],
+        evidence: {
+          summary: `Morning check-in tone: ${level}.`,
+        },
+        dayKey,
+      },
+      { firestore: db },
+    );
+  } catch (err: any) {
+    return {
+      statusCode: 500,
+      headers: RESPONSE_HEADERS,
+      body: JSON.stringify({
+        ok: false,
+        error: 'open_conversation_failed',
+        detail: err?.message || String(err),
+      }),
+    };
+  }
+
+  return {
+    statusCode: 200,
+    headers: RESPONSE_HEADERS,
+    body: JSON.stringify({
+      ok: true,
+      conversationId: conversation.id,
+      checkinDocId,
+      noraResponse: OPENER_TEXT[level],
+    }),
+  };
+};

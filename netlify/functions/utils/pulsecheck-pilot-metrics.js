@@ -1872,6 +1872,12 @@ async function savePilotSurveyResponse({
     throw new Error('Resolved pilot survey context is incomplete.');
   }
 
+  // Firestore admin SDK rejects `undefined` field values, so a missing
+  // comment must be persisted as `null` rather than left as `undefined`.
+  // The athlete survey leaves the textfield blank by default, so this
+  // path is the common case — not a corner case.
+  const sanitizedComment = sanitizeSurveyComment(comment);
+
   const payload = {
     id: surveyRef.id,
     pilotId: resolvedPilotId,
@@ -1884,7 +1890,7 @@ async function savePilotSurveyResponse({
     athleteId: normalizedRole === 'athlete' ? resolvedAthleteId : null,
     surveyKind: normalizedSurveyKind,
     score: roundMetric(normalizedScore),
-    comment: sanitizeSurveyComment(comment),
+    comment: sanitizedComment === undefined ? null : sanitizedComment,
     metricPayload: normalizedMetricPayload,
     source: normalizeString(source) || 'web-admin',
     submittedAt: timestampFromMillis(submittedAtMs),

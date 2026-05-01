@@ -45,7 +45,7 @@ const PulseCheckNoraConversationOrchestratorSpecTab: React.FC = () => (
       </Card>
     </Section>
 
-    <Section title="The 4 triggers">
+    <Section title="The 5 triggers">
       <div className="grid gap-3 sm:grid-cols-2">
         <Card title="coach-context-flag">
           <p>Coach sets a flag (e.g. competition weekend) that hasn't been consumed. Lookback: 36 hours. Source: <code className="rounded bg-black/40 px-1">pulsecheck-coach-context-flags</code>.</p>
@@ -58,6 +58,9 @@ const PulseCheckNoraConversationOrchestratorSpecTab: React.FC = () => (
         </Card>
         <Card title="behavioral-drift">
           <p>No engagement (completion event, chat reply) in last 5 days. Source: <code className="rounded bg-black/40 px-1">pulsecheck-assignment-events</code>.</p>
+        </Card>
+        <Card title="morning-checkin-tone">
+          <p>Athlete tapped a readiness emoji on the home screen (drained / low / okay / solid / locked). Endpoint: <code className="rounded bg-black/40 px-1">record-morning-checkin</code>. Branch is synthesized in-memory using the iOS-side noraResponse strings (single source of truth) — promote to Firestore via Phase B seed when copy iteration becomes routine.</p>
         </Card>
       </div>
     </Section>

@@ -193,11 +193,21 @@ test('translation table — validator catches numeric+marker violation', async (
 // Conversation Tree
 // ---------------------------------------------------------------------------
 
-test('conversation tree — seed has exactly four branches, one per trigger', async () => {
+test('conversation tree — seed has one branch per Phase B-eligible trigger', async () => {
   const { seed, types } = await loadModules();
-  assert.equal(seed.SEED_CONVERSATION_BRANCHES.length, 4);
+
+  // Some triggers intentionally synthesize their conversation branch
+  // in-memory (e.g. morning-checkin-tone — record-morning-checkin.ts
+  // builds the branch from the iOS noraResponse strings as the single
+  // source of truth). Those triggers don't appear in the seed.
+  const SYNTHETIC_BRANCH_TRIGGERS = new Set(['morning-checkin-tone']);
+  const expectedSeededTriggers = (types.CONVERSATION_TRIGGERS as readonly string[])
+    .filter((t) => !SYNTHETIC_BRANCH_TRIGGERS.has(t))
+    .sort();
+
+  assert.equal(seed.SEED_CONVERSATION_BRANCHES.length, expectedSeededTriggers.length);
   const triggers = seed.SEED_CONVERSATION_BRANCHES.map((b) => b.trigger).sort();
-  assert.deepEqual(triggers, [...types.CONVERSATION_TRIGGERS].sort());
+  assert.deepEqual(triggers, expectedSeededTriggers);
 });
 
 test('conversation tree — every branch passes validator (depth-1 v1)', async () => {

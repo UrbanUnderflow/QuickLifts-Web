@@ -37,6 +37,7 @@ export const CONVERSATION_TRIGGERS = [
   'hcsr-delta-detected',
   'calendar-sport-event',
   'behavioral-drift',
+  'morning-checkin-tone',
 ] as const;
 export type ConversationTrigger = (typeof CONVERSATION_TRIGGERS)[number];
 

@@ -204,9 +204,23 @@ test('scheduled sweep — detector triggers resolve to seeded Phase B branch ids
   const { adaptiveTypes, seed, scheduledNoraConversation } = await loadModules();
   const seededBranchIds = new Set(seed.SEED_CONVERSATION_BRANCHES.map((branch) => branch.id));
 
+  // Some triggers intentionally use synthesized-in-memory branches
+  // (no Phase B seed). The morning-checkin-tone trigger synthesizes
+  // its branch in record-morning-checkin.ts so the iOS-side
+  // noraResponse strings remain the single source of truth.
+  const SYNTHETIC_BRANCH_TRIGGERS = new Set(['morning-checkin-tone']);
+
   for (const trigger of adaptiveTypes.CONVERSATION_TRIGGERS) {
     const branchId = scheduledNoraConversation.__internal.triggerToBranchId(trigger);
     assert.equal(branchId, trigger);
+    if (SYNTHETIC_BRANCH_TRIGGERS.has(trigger)) {
+      // Synthesized branches are not in the Phase B seed by design.
+      assert.ok(
+        !seededBranchIds.has(branchId),
+        `${trigger} should be synthesized (not seeded) — if you've added a Phase B seed, remove it from SYNTHETIC_BRANCH_TRIGGERS.`,
+      );
+      continue;
+    }
     assert.ok(seededBranchIds.has(branchId), `${trigger} should resolve to a seeded branch id`);
   }
 });
