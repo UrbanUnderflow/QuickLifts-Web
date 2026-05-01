@@ -1,7 +1,14 @@
+const crypto = require('crypto');
 const { db, admin } = require('./config/firebase');
 
 const NOTIFICATION_LOGS_COLLECTION = 'notification-logs';
+const NOTIFICATION_DEDUPE_COLLECTION = 'notification-dedupe';
+const FALLBACK_DEDUPE_WINDOW_SECONDS = 10 * 60;
 const LIVE_USER_TOKEN_NOTIFICATION_TYPES = new Set([
+  'run_round_session_started',
+  'run_round_session_completed',
+]);
+const DEDUPED_NOTIFICATION_TYPES = new Set([
   'run_round_session_started',
   'run_round_session_completed',
 ]);
@@ -31,6 +38,85 @@ function normalizeRecipients(recipients = [], fcmToken) {
   }
 
   return fcmToken ? [{ tokenPreview: truncateToken(fcmToken), deliveryChannel: 'push' }] : [];
+}
+
+function firstNonEmptyString(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+    if (value !== null && value !== undefined && typeof value !== 'object') {
+      const normalized = String(value).trim();
+      if (normalized) return normalized;
+    }
+  }
+  return '';
+}
+
+function dedupeDocId(key) {
+  return crypto.createHash('sha256').update(key).digest('hex');
+}
+
+function buildNotificationDedupeKey(customData = {}, recipients = [], title = '', body = '') {
+  const notificationType = firstNonEmptyString(customData?.type);
+  if (!DEDUPED_NOTIFICATION_TYPES.has(notificationType)) return '';
+
+  const explicitKey = firstNonEmptyString(customData?.dedupeKey);
+  if (explicitKey) return explicitKey;
+
+  const recipient = Array.isArray(recipients) && recipients.length > 0 ? recipients[0] : {};
+  const recipientUserId = firstNonEmptyString(customData?.userId, recipient?.userId, recipient?.uid, recipient?.id);
+  const roundId = firstNonEmptyString(customData?.roundId, customData?.challengeId);
+  const senderId = firstNonEmptyString(customData?.fromUserId, customData?.fromUsername);
+  const eventId = firstNonEmptyString(customData?.eventId, customData?.sourceWorkoutId, customData?.workoutId, customData?.runId, customData?.summaryId);
+
+  if (!recipientUserId || !roundId || !senderId) return '';
+  if (eventId) {
+    return `${notificationType}:${roundId}:${senderId}:${recipientUserId}:${eventId}`;
+  }
+
+  // Older app versions did not send eventId. Use a short time bucket so rapid retry storms
+  // collapse without permanently blocking future same-distance runs.
+  const fallbackBucket = Math.floor(Date.now() / 1000 / FALLBACK_DEDUPE_WINDOW_SECONDS);
+  const fallbackFingerprint = dedupeDocId([
+    firstNonEmptyString(title),
+    firstNonEmptyString(body),
+    firstNonEmptyString(customData?.distanceMiles),
+  ].join('|')).substring(0, 16);
+
+  return `${notificationType}:${roundId}:${senderId}:${recipientUserId}:fallback:${fallbackBucket}:${fallbackFingerprint}`;
+}
+
+async function reserveNotificationDedupe(customData = {}, recipients = [], title = '', body = '') {
+  const key = buildNotificationDedupeKey(customData, recipients, title, body);
+  if (!key) {
+    return { reserved: true, key: '', docId: '' };
+  }
+
+  const docId = dedupeDocId(key);
+  try {
+    await db.collection(NOTIFICATION_DEDUPE_COLLECTION).doc(docId).create({
+      key,
+      notificationType: firstNonEmptyString(customData?.type) || 'UNKNOWN',
+      recipientUserId: firstNonEmptyString(customData?.userId, recipients?.[0]?.userId, recipients?.[0]?.uid, recipients?.[0]?.id),
+      roundId: firstNonEmptyString(customData?.roundId, customData?.challengeId),
+      fromUserId: firstNonEmptyString(customData?.fromUserId),
+      fromUsername: firstNonEmptyString(customData?.fromUsername),
+      eventId: firstNonEmptyString(customData?.eventId, customData?.sourceWorkoutId, customData?.workoutId, customData?.runId, customData?.summaryId),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      timestampEpoch: Math.floor(Date.now() / 1000),
+    });
+    return { reserved: true, key, docId };
+  } catch (error) {
+    const code = firstNonEmptyString(error?.code);
+    const message = firstNonEmptyString(error?.message);
+    if (code === '6' || code === 'already-exists' || message.includes('ALREADY_EXISTS') || message.includes('already exists')) {
+      return { reserved: false, key, docId };
+    }
+
+    console.warn('[send-notification] Dedupe reservation failed open:', error);
+    return { reserved: true, key, docId };
+  }
 }
 
 async function resolveLiveRecipientTarget(fcmToken, customData = {}, recipients = []) {
@@ -123,6 +209,8 @@ async function logNotification({
   success = false,
   messageId = null,
   error = null,
+  skipped = false,
+  dedupeKey = null,
   functionName = 'netlify/send-notification',
   recipients = []
 }) {
@@ -148,7 +236,9 @@ async function logNotification({
 
       // Status
       success,
+      skipped,
       messageId,
+      dedupeKey,
       error: error
         ? {
             code: error.code || 'UNKNOWN',
@@ -176,6 +266,42 @@ async function logNotification({
 async function sendNotification(fcmToken, title, body, customData = {}, recipients = []) {
   const resolvedTarget = await resolveLiveRecipientTarget(fcmToken, customData, recipients);
   const messaging = admin.messaging();
+  const dedupe = await reserveNotificationDedupe(customData, resolvedTarget.recipients, title, body);
+
+  if (!dedupe.reserved) {
+    const notificationType = customData?.type || 'SINGLE_NOTIFICATION';
+    const logId = await logNotification({
+      fcmToken: resolvedTarget.fcmToken,
+      title,
+      body,
+      dataPayload: {
+        ...customData,
+        dedupeSkipped: 'true',
+      },
+      notificationType,
+      success: true,
+      skipped: true,
+      messageId: 'deduped',
+      dedupeKey: dedupe.key,
+      functionName: 'netlify/send-notification',
+      recipients: resolvedTarget.recipients
+    });
+
+    console.log('[send-notification] Duplicate notification skipped:', {
+      notificationType,
+      dedupeKey: dedupe.key,
+      dedupeDocId: dedupe.docId,
+    });
+
+    return {
+      success: true,
+      skipped: true,
+      deduped: true,
+      message: 'Duplicate notification skipped.',
+      dedupeKey: dedupe.key,
+      logId,
+    };
+  }
 
   const message = {
     token: resolvedTarget.fcmToken,
@@ -196,6 +322,11 @@ async function sendNotification(fcmToken, title, body, customData = {}, recipien
       },
     },
   };
+  if (dedupe.key) {
+    message.apns.headers = {
+      'apns-collapse-id': dedupe.docId.substring(0, 64),
+    };
+  }
 
   try {
     const response = await messaging.send(message);
@@ -211,6 +342,7 @@ async function sendNotification(fcmToken, title, body, customData = {}, recipien
       notificationType,
       success: true,
       messageId: response,
+      dedupeKey: dedupe.key || null,
       functionName: 'netlify/send-notification',
       recipients: resolvedTarget.recipients
     });
@@ -218,6 +350,13 @@ async function sendNotification(fcmToken, title, body, customData = {}, recipien
     return { success: true, message: 'Notification sent successfully.', messageId: response, logId };
   } catch (error) {
     console.error('Error sending notification:', error);
+    if (dedupe.key && dedupe.docId) {
+      try {
+        await db.collection(NOTIFICATION_DEDUPE_COLLECTION).doc(dedupe.docId).delete();
+      } catch (releaseError) {
+        console.warn('[send-notification] Failed to release dedupe reservation after send error:', releaseError);
+      }
+    }
 
     // Log failure to Firestore for the Notification Logs dashboard
     const notificationType = customData?.type || 'SINGLE_NOTIFICATION';
@@ -229,6 +368,7 @@ async function sendNotification(fcmToken, title, body, customData = {}, recipien
       notificationType,
       success: false,
       error,
+      dedupeKey: dedupe.key || null,
       functionName: 'netlify/send-notification',
       recipients: resolvedTarget.recipients
     });
