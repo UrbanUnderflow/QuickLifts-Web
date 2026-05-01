@@ -6,7 +6,7 @@ const PRINCIPLE_CARDS = [
   {
     title: 'Adapters Emit Records, Not Stories',
     accent: 'red' as const,
-    body: 'HealthKit, Oura, Fit With Pulse, Macra, and Pulse Check self-report adapters should emit normalized source records only. They should not create Nora-facing summaries or consumer-specific payloads.',
+    body: 'HealthKit, Polar, Oura, Fit With Pulse, Macra, and Pulse Check self-report adapters should emit normalized source records only. They should not create Nora-facing summaries or consumer-specific payloads.',
   },
   {
     title: 'Append-Oriented And Rebuildable',
@@ -23,7 +23,7 @@ const PRINCIPLE_CARDS = [
 const RECORD_ROWS = [
   ['recordId', 'Deterministic id for the source record.', 'Required.'],
   ['athleteUserId', 'Canonical athlete uid the record belongs to.', 'Required.'],
-  ['sourceFamily', 'One of `quicklifts` for legacy Fit With Pulse lineage, `macra`, `healthkit`, `apple_watch`, `oura`, `pulsecheck_self_report`, or future approved families.', 'Required.'],
+  ['sourceFamily', 'One of `quicklifts` for legacy Fit With Pulse lineage, `macra`, `healthkit`, `apple_watch`, `polar`, `oura`, `pulsecheck_self_report`, or future approved families.', 'Required.'],
   ['sourceType', 'The concrete adapter or feed name, such as `healthkit_sleep`, `oura_readiness`, `fit_with_pulse_workout_summary`, or `macra_meal_log`.', 'Required.'],
   ['recordType', 'One of `measurement`, `session`, `journal_entry`, `checkin`, `summary_input`, or `derived_signal`.', 'Required.'],
   ['domain', 'Primary domain such as `training`, `recovery`, `activity`, `nutrition`, `biometrics`, or `behavioral`.', 'Required.'],
@@ -62,6 +62,7 @@ const SOURCE_ROWS = [
   ['Macra nutrition adapter', 'Emit meal logs, label scans, macro plans, supplement context, and nutrition summary-input records from the dedicated nutrition surface.', 'Macra owns forward nutrition semantics.'],
   ['HealthKit adapter', 'Emit normalized measurements and sessions from Apple Health-authorized data.', 'Should not skip normalization just because upstream Apple types differ.'],
   ['Apple Watch origin metadata', 'Attach watch-origin detail inside `sourceMetadata` when HealthKit data originated from watch capture.', 'Useful for confidence and device-aware explanation, but not a separate consumer schema.'],
+  ['Polar adapter', 'Emit Polar AccessLink training/activity/recovery records and Polar BLE live heart-rate records normalized to the same contract.', 'Direct Polar evidence can outrank biometric fallback, but it still writes source records instead of bypassing assembly.'],
   ['Oura adapter', 'Emit recovery and readiness records normalized to the same contract.', 'Must not create a separate Oura-only snapshot shape.'],
   ['Pulse Check self-report adapter', 'Emit check-in and behavioral records from Pulse Check service flows.', 'Subjective context belongs in the same record system, not a side channel.'],
 ];
@@ -77,7 +78,7 @@ const STORAGE_ROWS = [
 const HANDOFF_STEPS = [
   {
     title: 'Adapter Fetches Upstream Item',
-    body: 'The adapter reads a HealthKit sample, Oura payload, Fit With Pulse workout, Macra nutrition record, or Pulse Check check-in event.',
+    body: 'The adapter reads a HealthKit sample, Polar payload, Oura payload, Fit With Pulse workout, Macra nutrition record, or Pulse Check check-in event.',
     owner: 'Source adapter',
   },
   {
@@ -103,7 +104,7 @@ const HANDOFF_STEPS = [
 ];
 
 const GUARDRAIL_ROWS = [
-  ['No direct consumer coupling', 'UI, chat, and coach tools should not query vendor-specific HealthKit or Oura records directly for business logic.', 'All product meaning should flow through assembled snapshots.'],
+  ['No direct consumer coupling', 'UI, chat, and coach tools should not query vendor-specific HealthKit, Polar, or Oura records directly for business logic.', 'All product meaning should flow through assembled snapshots.'],
   ['No source-specific schema branches', 'Adding Oura should not introduce an alternate recovery object that only Oura-aware consumers understand.', 'New sources extend records, not runtime contracts.'],
   ['No adapter-owned merge logic', 'Adapters must not decide cross-source winner logic such as “Oura beats HealthKit.”', 'Merge precedence belongs in the snapshot assembler.'],
   ['No hidden unit conversions downstream', 'Assemblers and consumers should assume source records are already unit-normalized.', 'Prevents silent metric drift.'],
@@ -114,8 +115,9 @@ const BUILD_ORDER_ROWS = [
   ['1. Finalize source-record contract', 'Lock record shape, enums, unit rules, and adapter responsibilities.', 'Needed before adapter implementation.'],
   ['2. Implement HealthKit adapter', 'Map HealthKit-origin measurements and sessions into source records.', 'Targets the contract rather than inventing storage.'],
   ['3. Implement Pulse Check self-report adapter', 'Write check-ins and behavioral context into the same source-record system.', 'Makes subjective context a first-class input.'],
-  ['4. Implement Oura adapter', 'Map Oura recovery and readiness inputs into source records.', 'Drops into the same assembler path cleanly.'],
-  ['5. Build operator tooling', 'Add inspection tools for raw source records and snapshot assembly traces.', 'Makes ingestion debuggable without leaking raw complexity into product surfaces.'],
+  ['4. Implement Polar adapter', 'Map Polar AccessLink and Polar BLE inputs into source records.', 'Gives run detection and health-context assembly a direct device lane before Oura fallback.'],
+  ['5. Implement Oura adapter', 'Map Oura recovery and readiness inputs into source records.', 'Drops into the same assembler path cleanly.'],
+  ['6. Build operator tooling', 'Add inspection tools for raw source records and snapshot assembly traces.', 'Makes ingestion debuggable without leaking raw complexity into product surfaces.'],
 ];
 
 const EXAMPLE_ROWS = [

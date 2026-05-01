@@ -52,6 +52,21 @@ function numberValue(value) {
   return null;
 }
 
+function durationSecondsValue(value) {
+  const numeric = numberValue(value);
+  if (numeric !== null) return numeric;
+  const raw = String(value || '').trim().toUpperCase();
+  const match = raw.match(/^P(?:(\d+(?:\.\d+)?)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?)?$/);
+  if (!match) return null;
+  const [, days = '0', hours = '0', minutes = '0', seconds = '0'] = match;
+  const total =
+    Number(days) * 86400 +
+    Number(hours) * 3600 +
+    Number(minutes) * 60 +
+    Number(seconds);
+  return Number.isFinite(total) && total > 0 ? total : null;
+}
+
 function isValidDateKey(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '').trim());
 }
@@ -228,7 +243,7 @@ function mapActivityPayload({ activitySamples, cardioLoads }) {
 
 function mapTrainingPayload({ exercises }) {
   const recentExercises = (exercises || []).slice(0, 12);
-  const durations = recentExercises.map((exercise) => numberValue(exercise?.duration || exercise?.duration_seconds)).filter((value) => value !== null);
+  const durations = recentExercises.map((exercise) => durationSecondsValue(exercise?.duration || exercise?.duration_seconds)).filter((value) => value !== null);
   return compactObject({
     workoutCount: recentExercises.length || null,
     totalWorkoutDurationMinutes: durations.length ? Math.round(durations.reduce((sum, value) => sum + value, 0) / 60) : null,
@@ -236,7 +251,9 @@ function mapTrainingPayload({ exercises }) {
       id: exercise?.id || exercise?.['upload-time'] || exercise?.start_time,
       sport: exercise?.sport || exercise?.sport_name,
       startedAt: exercise?.start_time || exercise?.['start-time'],
-      durationSeconds: numberValue(exercise?.duration || exercise?.duration_seconds),
+      endedAt: exercise?.end_time || exercise?.['end-time'],
+      durationSeconds: durationSecondsValue(exercise?.duration || exercise?.duration_seconds),
+      distanceMeters: numberValue(exercise?.distance || exercise?.distance_meters || exercise?.['distance-meters']),
       calories: numberValue(exercise?.calories),
       heartRateAvg: numberValue(exercise?.heart_rate?.average || exercise?.['heart-rate']?.average),
       heartRateMax: numberValue(exercise?.heart_rate?.maximum || exercise?.['heart-rate']?.maximum),

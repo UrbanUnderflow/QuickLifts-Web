@@ -9,6 +9,7 @@ import PulseCheckSchoolWearableBundlePlanTab from './PulseCheckSchoolWearableBun
 
 const CURRENT_BASELINE_ROWS = [
   ['Apple Watch / HealthKit', 'Platform bridge and permission layer for iOS-first athletes.', 'Current baseline lane for wearable health context.'],
+  ['Polar', 'Direct AccessLink API plus BLE live heart-rate support for connected Polar devices.', 'Current direct-device lane for Polar training and exertion evidence.'],
   ['Oura', 'Direct Oura API plus Apple Health fallback when direct consent is unavailable.', 'Current premium recovery lane with dual-path support.'],
 ];
 
@@ -118,17 +119,18 @@ const DEVICE_LANES = [
 
 const RUN_SOURCE_HIERARCHY_ROWS = [
   ['1', 'Apple Watch live workout lane', 'Primary live source for heart rate, calories, pace, distance, and workout-state truth when a watch workout is active or mirrored into the run session.', 'This is the preferred wearable runtime whenever the athlete has an Apple Watch available.'],
-  ['2', 'Oura ring wearable lane', 'Secondary source for biometrics, workout-window validation, calorie and exertion reconciliation, and post-run enrichment when Apple Watch is not active.', 'Oura can strengthen heart-rate and workout-context confidence, but it should not own GPS pace or route distance.'],
-  ['3', 'Phone-led RunTrackingService lane', 'Fallback source for session timer, GPS route, outdoor pace, outdoor distance, treadmill estimation, and algorithm calories when no stronger wearable signal is active.', 'This is the honest fallback when the athlete does not have a live wearable source in play.'],
+  ['2', 'Polar direct device lane', 'Direct Polar AccessLink training records and BLE live heart-rate signals can validate workout windows and exertion when Apple Watch is absent.', 'Polar outranks biometric fallback when the evidence is direct, but it should only own distance or duration when the Polar record actually provides it.'],
+  ['3', 'Oura ring wearable lane', 'Fallback source for biometrics, workout-window validation, calorie and exertion reconciliation, and post-run enrichment when stronger workout evidence is not active.', 'Oura can strengthen heart-rate and workout-context confidence, but it should not own GPS pace or route distance.'],
+  ['4', 'Phone-led RunTrackingService lane', 'Fallback source for session timer, GPS route, outdoor pace, outdoor distance, treadmill estimation, and algorithm calories when no stronger wearable signal is active.', 'This is the honest fallback when the athlete does not have a live wearable source in play.'],
 ];
 
 const RUN_METRIC_OWNERSHIP_ROWS = [
   ['Workout state', 'App session plus Apple Watch when active', 'The app still owns the user-facing run state, but Apple Watch becomes the strongest proof that the workout is truly live.'],
   ['Outdoor route / GPS distance', 'Apple Watch first, phone GPS fallback', 'Oura does not replace GPS ownership for route or live pace.'],
   ['Treadmill distance', 'Apple Watch first, phone motion fallback, then manual confirmation', 'If the phone is not on-body, the runtime should not fabricate precise treadmill distance from weak motion.'],
-  ['Calories burned', 'Apple Watch first, Oura-assisted reconciliation second, algorithm fallback third', 'Use Oura to refine confidence and fill biometrics gaps when watch data is unavailable, but keep manual estimation as the floor.'],
-  ['Heart rate / exertion', 'Apple Watch first, Oura second, none if unavailable', 'Oura is valuable for exertion and workout-window enrichment when the athlete is ring-only.'],
-  ['Recovery context after the run', 'Oura / HealthKit / PulseCheck health-context pipeline', 'This should continue flowing into the broader readiness and recovery system after session closeout.'],
+  ['Calories burned', 'Apple Watch first, Polar direct training second, Oura-assisted reconciliation third, algorithm fallback fourth', 'Use Polar or Oura to refine confidence and fill biometrics gaps when watch data is unavailable, but keep manual estimation as the floor.'],
+  ['Heart rate / exertion', 'Apple Watch first, Polar live/direct second, Oura fallback third, none if unavailable', 'Polar is the preferred non-watch exertion signal when connected or synced; Oura remains valuable for fallback validation and recovery context.'],
+  ['Recovery context after the run', 'Oura / Polar / HealthKit / PulseCheck health-context pipeline', 'This should continue flowing into the broader readiness and recovery system after session closeout with honest source labels.'],
 ];
 
 const RUN_GUARDRAIL_ROWS = [
@@ -139,16 +141,17 @@ const RUN_GUARDRAIL_ROWS = [
 
 const RUN_SYSTEM_COMPONENT_ROWS = [
   ['Run session controller', 'Owns start, pause, resume, end, and the user-visible state of the run.', 'The app experience should always have one authoritative session state even if multiple sensors contribute data.'],
-  ['Source arbitration layer', 'Chooses which live or post-run source has authority for each metric domain.', 'This layer applies the Apple Watch > Oura enrichment > phone fallback hierarchy.'],
+  ['Source arbitration layer', 'Chooses which live or post-run source has authority for each metric domain.', 'This layer applies the Apple Watch / HealthKit workout > Polar direct > Oura enrichment > phone fallback hierarchy.'],
   ['Live metric collectors', 'Read GPS, motion, workout, and biometric signals from the currently active source set.', 'These collectors should remain source-aware so the runtime can explain provenance.'],
-  ['Reconciliation and enrichment layer', 'Merges Oura and other late-arriving signals into the finished run window.', 'This is where calorie confidence, exertion confidence, and workout-window validation should improve after the run.'],
+  ['Reconciliation and enrichment layer', 'Merges Polar, Oura, and other late-arriving signals into the finished run window.', 'This is where calorie confidence, exertion confidence, and workout-window validation should improve after the run.'],
   ['Guardrail and attention layer', 'Detects low-confidence tracking conditions and prompts the athlete when the session needs intervention.', 'Examples include phone-not-on-body detection and stale active-run reminders.'],
   ['Canonical run record writer', 'Persists the final run with metric provenance, confidence, and source annotations.', 'Downstream analytics and coaching layers should consume one normalized run record, not raw device payloads.'],
 ];
 
 const RUN_DECISION_INPUT_ROWS = [
   ['Is an Apple Watch workout available for this session?', 'If yes, Apple Watch becomes the strongest live metrics source.'],
-  ['Is the athlete wearing an Oura ring with available sync data?', 'If yes and Apple Watch is absent, Oura can enrich biometrics and validate the run window.'],
+  ['Is Polar connected or synced for this athlete?', 'If yes and Apple Watch is absent, Polar direct training or live heart-rate data should be evaluated before biometric fallback.'],
+  ['Is the athlete wearing an Oura ring with available sync data?', 'If yes and stronger direct workout evidence is absent, Oura can enrich biometrics and validate the run window.'],
   ['Is the phone producing trustworthy on-body GPS or motion?', 'If yes, the phone runtime can own the fallback lane for pace, distance, and timer continuity.'],
   ['Is the run indoor or outdoor?', 'This determines whether GPS, motion, or manual confirmation should dominate the distance model.'],
   ['Has movement confidence degraded during the session?', 'If yes, the app should warn the athlete and lower confidence instead of silently overclaiming precision.'],
@@ -157,17 +160,18 @@ const RUN_DECISION_INPUT_ROWS = [
 const RUN_CANONICAL_OUTPUT_ROWS = [
   ['Session lifecycle', 'Start time, pause segments, resume segments, end time, total elapsed duration', 'App session controller'],
   ['Distance and pace', 'Outdoor route distance, live pace, splits, treadmill confidence or manual confirmation', 'Apple Watch first, phone fallback'],
-  ['Energy and biometrics', 'Calories, heart rate, exertion confidence, workout-window validation', 'Apple Watch first, Oura second, algorithm fallback'],
+  ['Energy and biometrics', 'Calories, heart rate, exertion confidence, workout-window validation', 'Apple Watch first, Polar second, Oura third, algorithm fallback'],
   ['Source provenance', 'Primary source, secondary enrichment source, fallback reason, freshness markers', 'Source arbitration layer'],
   ['Confidence flags', 'Low-motion warning, phone-off-body suspicion, stale-run intervention, mirrored-data state', 'Guardrail layer'],
-  ['Health-context handoff', 'Recovery and readiness inputs that flow into PulseCheck after session closeout', 'Oura / HealthKit / canonical health-context pipeline'],
+  ['Health-context handoff', 'Recovery and readiness inputs that flow into PulseCheck after session closeout', 'Polar / Oura / HealthKit / canonical health-context pipeline'],
 ];
 
 const RUN_E2E_CHECKLIST_ROWS = [
-  ['Foundation', 'Define a formal run-source enum and provenance model for Apple Watch, Oura, and phone fallback.', 'Every saved run can declare primary source, secondary source, fallback reason, and confidence state.'],
-  ['Foundation', 'Create the source arbitration layer that decides who owns each metric domain.', 'The runtime can choose Apple Watch, Oura enrichment, or phone fallback without scattering precedence logic.'],
+  ['Foundation', 'Define a formal run-source enum and provenance model for Apple Watch, Polar, Oura, and phone fallback.', 'Every saved run can declare primary source, secondary source, fallback reason, and confidence state.'],
+  ['Foundation', 'Create the source arbitration layer that decides who owns each metric domain.', 'The runtime can choose Apple Watch, Polar direct, Oura enrichment, or phone fallback without scattering precedence logic.'],
   ['Session Runtime', 'Refactor the run start flow so one canonical session controller opens every run.', 'App-started runs no longer bypass wearable arbitration or create source-specific session paths.'],
   ['Session Runtime', 'Promote Apple Watch to the live metrics source when a watch workout path is available.', 'App-started runs can use watch heart rate, calories, pace, and distance without requiring a separate watch-first user action.'],
+  ['Session Runtime', 'Evaluate Polar direct records and BLE heart-rate after Apple Watch and before Oura fallback.', 'Polar-connected athletes can trigger or validate run prompts without forcing Oura to be the source of truth.'],
   ['Session Runtime', 'Keep RunTrackingService as the explicit fallback lane for no-watch scenarios.', 'Phone-led runs still work reliably when no wearable source is available.'],
   ['Oura Layer', 'Implement Oura run-window reconciliation for ring-only sessions.', 'Completed runs can pull Oura biometrics, workout-window evidence, and calorie or exertion refinement without pretending Oura owns GPS.'],
   ['Oura Layer', 'Define Oura freshness and delay handling rules.', 'The runtime knows when Oura enrichment is ready, stale, partial, or unavailable.'],
@@ -176,14 +180,15 @@ const RUN_E2E_CHECKLIST_ROWS = [
   ['Voice + Notifications', 'Bundle branded spoken reminder sounds generated from the admin voice console into the iOS app.', 'Run alerts use the customer-facing voice assets instead of the temporary generic alert sound.'],
   ['Persistence', 'Expand the canonical run record with provenance, confidence, reconciliation, and intervention fields.', 'Downstream analytics, coaching, and recap surfaces can explain where each metric came from.'],
   ['Health Context', 'Write post-run recovery and readiness handoff logic into the health-context pipeline.', 'Run completion can influence PulseCheck context with honest source labeling.'],
-  ['UX', 'Update active run, summary, and device settings surfaces to explain source ownership and confidence clearly.', 'Athletes can tell whether a run used Apple Watch, Oura enrichment, or phone fallback.'],
+  ['UX', 'Update active run, summary, and device settings surfaces to explain source ownership and confidence clearly.', 'Athletes can tell whether a run used Apple Watch, Polar direct, Oura enrichment, or phone fallback.'],
   ['Ops', 'Add operator visibility for source health, stale wearable links, reconciliation failures, and low-confidence sessions.', 'The team can support failures without digging through raw logs.'],
-  ['QA', 'Create end-to-end test scenarios for outdoor, treadmill, Apple Watch, Oura-only, dual-device, and no-device runs.', 'The full hierarchy is validated under realistic session conditions before release.'],
+  ['QA', 'Create end-to-end test scenarios for outdoor, treadmill, Apple Watch, Polar, Oura-only, multi-device, and no-device runs.', 'The full hierarchy is validated under realistic session conditions before release.'],
   ['Launch', 'Define release gating, rollout sequence, analytics success criteria, and post-launch monitoring.', 'The system ships with measurable quality thresholds instead of a blind rollout.'],
 ];
 
 const RUN_RELEASE_GATES = [
   'Apple Watch app-started runs correctly promote the watch to the strongest live source whenever the watch path is available.',
+  'Polar-connected runs can use Polar direct training records or BLE live heart rate before falling back to Oura or phone inference.',
   'Oura-only runs preserve phone-led route and pace while successfully enriching calories, exertion, or workout-window confidence after closeout.',
   'Phone-off-body and stale-run reminders trigger at the intended thresholds and never silently trap the user in a bad session.',
   'Saved runs expose enough provenance for summary UI, support workflows, and downstream analytics to explain the source of truth.',
@@ -198,7 +203,7 @@ const RUN_SESSION_LIFECYCLE = [
   },
   {
     title: 'Live Tracking',
-    body: 'During the run, Apple Watch should own live workout metrics when present. If the watch is not active, the phone runtime owns pace and distance while Oura remains a secondary biometric and validation lane.',
+    body: 'During the run, Apple Watch should own live workout metrics when present. If the watch is not active, Polar direct or BLE heart-rate evidence is evaluated before Oura fallback, while the phone runtime still owns pace and distance when no stronger distance source is present.',
     owner: 'Source arbitration layer',
   },
   {
@@ -213,7 +218,7 @@ const RUN_SESSION_LIFECYCLE = [
   },
   {
     title: 'Post-Run Reconciliation',
-    body: 'After closeout, Oura and other delayed signals can enrich the completed run window to improve calorie confidence, exertion understanding, and recovery-context handoff without rewriting source provenance dishonestly.',
+    body: 'After closeout, Polar, Oura, and other delayed signals can enrich the completed run window to improve calorie confidence, exertion understanding, and recovery-context handoff without rewriting source provenance dishonestly.',
     owner: 'Reconciliation layer',
   },
 ];
