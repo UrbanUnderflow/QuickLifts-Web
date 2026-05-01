@@ -1473,6 +1473,71 @@ const SystemOverviewPage: React.FC = () => {
                 </article>
               ))}
             </div>
+            <article className="bg-[#0d1424] border border-lime-400/30 rounded-2xl p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    Polar AccessLink deployment requirement
+                  </h3>
+                  <p className="text-sm text-zinc-300 mt-2">
+                    Polar cloud sync depends on the Netlify functions
+                    polar-auth-start, polar-callback, polar-status,
+                    polar-disconnect, polar-sync, and polar-webhook. Every
+                    staging and production deploy must set{" "}
+                    <code className="text-lime-300">POLAR_CLIENT_ID</code> and{" "}
+                    <code className="text-lime-300">
+                      POLAR_CLIENT_SECRET
+                    </code>{" "}
+                    in the server environment before OAuth or health-context
+                    refresh can work.
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full border border-lime-400/40 bg-lime-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-lime-300">
+                  Required
+                </span>
+              </div>
+              <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3 text-xs">
+                <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                  <p className="uppercase tracking-wide text-zinc-500">
+                    Required env
+                  </p>
+                  <p className="mt-1 text-zinc-300">
+                    <code>POLAR_CLIENT_ID</code>,{" "}
+                    <code>POLAR_CLIENT_SECRET</code>
+                  </p>
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                  <p className="uppercase tracking-wide text-zinc-500">
+                    Optional env
+                  </p>
+                  <p className="mt-1 text-zinc-300">
+                    <code>POLAR_REDIRECT_URI</code>,{" "}
+                    <code>POLAR_SCOPES</code>,{" "}
+                    <code>POLAR_WEBHOOK_SECRET</code>
+                  </p>
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+                  <p className="uppercase tracking-wide text-zinc-500">
+                    Callback / webhook
+                  </p>
+                  <p className="mt-1 text-zinc-300 break-words">
+                    <code>/.netlify/functions/polar-callback</code>,{" "}
+                    <code>/.netlify/functions/polar-webhook</code>
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-zinc-500 mt-3">
+                Keep these credentials server-only in Netlify or equivalent
+                backend hosting; they should never ship in iOS, PulseCheck, or
+                browser bundles. Configure the Polar app to redirect to the
+                callback URL and send AccessLink change notifications to the
+                webhook URL. Save Polar&apos;s returned{" "}
+                <code>signature_secret_key</code> as{" "}
+                <code>POLAR_WEBHOOK_SECRET</code>; after the initial Polar PING,
+                the webhook verifies the HMAC-SHA256 signature over the raw
+                request body.
+              </p>
+            </article>
           </div>
         );
 

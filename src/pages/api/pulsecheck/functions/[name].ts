@@ -20,6 +20,12 @@ const SUPPORTED_FUNCTIONS = new Set([
   'oura-status',
   'oura-disconnect',
   'oura-sync',
+  'polar-auth-start',
+  'polar-callback',
+  'polar-status',
+  'polar-disconnect',
+  'polar-sync',
+  'polar-webhook',
   'create-pulsecheck-oura-share',
 ]);
 

@@ -69,6 +69,50 @@ const synthesizeBranch = (level: CheckinLevel): ConversationBranch => {
   };
 };
 
+const stripUndefinedDeep = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(stripUndefinedDeep).filter((v) => v !== undefined);
+  if (value && typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).reduce<Record<string, unknown>>((acc, [key, item]) => {
+      if (item === undefined) return acc;
+      acc[key] = stripUndefinedDeep(item);
+      return acc;
+    }, {});
+  }
+  return value;
+};
+
+const primeMorningCheckinProbe = async (
+  db: admin.firestore.Firestore,
+  conversation: any,
+  branch: ConversationBranch,
+): Promise<any> => {
+  if (!conversation?.id || !Array.isArray(conversation.turns)) return conversation;
+  const alreadyHasProbe = conversation.turns.some((turn: any) => turn?.role === 'nora-probe');
+  if (alreadyHasProbe) return conversation;
+
+  const now = Date.now();
+  const probeTurn = {
+    turnId: `${conversation.id}_t${conversation.turns.length}`,
+    index: conversation.turns.length,
+    role: 'nora-probe',
+    text: branch.probe.text,
+    voiceReviewStatus: branch.probe.voiceReviewStatus,
+    createdAt: now + 1,
+  };
+  const updatedConversation = {
+    ...conversation,
+    state: 'awaiting-reply',
+    turns: [...conversation.turns, probeTurn],
+    updatedAt: now + 1,
+  };
+
+  await db
+    .collection('pulsecheck-nora-conversations')
+    .doc(conversation.id)
+    .set(stripUndefinedDeep(updatedConversation) as Record<string, unknown>, { merge: false });
+  return updatedConversation;
+};
+
 // Mirrors NoraDailyView.ReadinessLevel.noraResponse on iOS.  Keep these
 // in sync with PulseCheck/Views/Chat/NoraDailyView.swift line 34-42.
 const OPENER_TEXT: Record<CheckinLevel, string> = {
@@ -233,6 +277,7 @@ export const handler: Handler = async (event) => {
       },
       { firestore: db },
     );
+    conversation = await primeMorningCheckinProbe(db, conversation, branch);
   } catch (err: any) {
     return {
       statusCode: 500,

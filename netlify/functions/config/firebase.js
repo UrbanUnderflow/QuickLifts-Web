@@ -100,7 +100,7 @@ const convertTimestamp = (timestamp) => {
 
 const headers = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, OpenAI-Organization, X-PulseCheck-Firebase-Mode, X-Force-Dev-Firebase, X-PulseCheck-Dev-Firebase',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, OpenAI-Organization, X-PulseCheck-Firebase-Mode, X-Force-Dev-Firebase, X-PulseCheck-Dev-Firebase, X-Polar-Webhook-Secret, Polar-Webhook-Secret, X-Polar-Webhook-Signature, Polar-Webhook-Signature, X-Polar-Signature, Polar-Signature, X-Webhook-Signature',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
 };
 
