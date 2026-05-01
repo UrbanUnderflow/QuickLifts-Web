@@ -1,4 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk';
+import {
+  buildAdminAuditLogger,
+  callAnthropic as callAnthropicCore,
+} from '../../src/api/anthropic/serverBridge';
 import OpenAI from 'openai';
 import { admin } from './config/firebase';
 import { GENERATE_CAPTION } from '../../src/api/anthropic/featureRouting';
@@ -33,21 +36,26 @@ const buildPrompt = ({ exerciseName, category, tags }: GenerateCaptionRequest) =
       - Do not add phrases like "let's go", "let's unlock", etc.
     `;
 
+// Routed through serverBridge Core: same gate + audit log as the HTTP
+// bridge for client callers, no round-trip. callWithFallback below wraps
+// this for Phase B+ dual-path semantics (try Anthropic first, fall back
+// to OpenAI on error).
 const callAnthropic = async (request: GenerateCaptionRequest): Promise<string> => {
-  const client = new Anthropic();
-  const response = await client.messages.create({
-    model: GENERATE_CAPTION.model,
-    max_tokens: GENERATE_CAPTION.maxTokens,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: buildPrompt(request) }],
-  });
-  const text = response.content
-    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-    .map((block) => block.text)
-    .join('')
-    .trim();
-  if (!text) throw new Error('Anthropic response missing text content');
-  return text;
+  const result = await callAnthropicCore(
+    {
+      featureId: GENERATE_CAPTION.featureId,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: buildPrompt(request) }],
+      callerContext: {
+        transport: 'server-direct',
+        caller: 'pulsecheck.generate-caption',
+        exerciseName: request.exerciseName,
+      },
+    },
+    { auditLogger: buildAdminAuditLogger(admin.firestore()) },
+  );
+  if (!result.text) throw new Error('Anthropic response missing text content');
+  return result.text;
 };
 
 const callOpenAI = async (request: GenerateCaptionRequest, apiKey: string): Promise<string> => {

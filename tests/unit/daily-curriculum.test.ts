@@ -409,6 +409,22 @@ test('assetPillar — falls back to taxonomy.primaryPillar on sims', async () =>
   assert.equal(p, taxonomy.TaxonomyPillar.Decision);
 });
 
+test('assetPillar — derives pillar from legacy production category metadata', async () => {
+  const { generator, taxonomy } = await loadModules();
+  assert.equal(
+    generator.__internal.assetPillar({ id: 'legacy-breathing', category: 'breathing' } as any),
+    taxonomy.TaxonomyPillar.Composure,
+  );
+  assert.equal(
+    generator.__internal.assetPillar({ id: 'legacy-focus', category: 'focus' } as any),
+    taxonomy.TaxonomyPillar.Focus,
+  );
+  assert.equal(
+    generator.__internal.assetPillar({ id: 'legacy-mindset', category: 'mindset' } as any),
+    taxonomy.TaxonomyPillar.Decision,
+  );
+});
+
 test('assetProgression — defaults to foundational when unset', async () => {
   const { generator } = await loadModules();
   const p = generator.__internal.assetProgression({ id: 'p1' } as any);

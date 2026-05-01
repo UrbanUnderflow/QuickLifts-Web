@@ -239,6 +239,7 @@ export const generateDailyAssignment = async (
     chosenCandidateId: simPick.asset.id,
     chosenCandidateType: 'simulation' as PulseCheckDailyAssignment['chosenCandidateType'],
     simSpecId: (simPick.asset as MentalExercise).simSpecId || simPick.asset.id,
+    simName: (simPick.asset as MentalExercise).name,
     rationale: simPick.rationale,
     createdAt: generatedAt,
     updatedAt: generatedAt,
@@ -415,7 +416,7 @@ const fetchEligibleProtocols = async (): Promise<PulseCheckProtocolDefinition[]>
         where('isActive', '==', true),
       ),
     );
-    return snap.docs.map((d) => d.data() as PulseCheckProtocolDefinition);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as PulseCheckProtocolDefinition);
   } catch {
     return [];
   }
@@ -429,7 +430,7 @@ const fetchEligibleSims = async (): Promise<MentalExercise[]> => {
         where('isActive', '==', true),
       ),
     );
-    return snap.docs.map((d) => d.data() as MentalExercise);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MentalExercise);
   } catch {
     return [];
   }

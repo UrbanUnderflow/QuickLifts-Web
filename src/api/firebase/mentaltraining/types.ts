@@ -1415,6 +1415,7 @@ export interface PulseCheckDailyAssignment {
   chosenCandidateId?: string;
   chosenCandidateType?: PulseCheckAssignmentCandidateType;
   simSpecId?: string;
+  simName?: string;
   legacyExerciseId?: string;
   simFamilyLabel?: string;
   simVariantLabel?: string;

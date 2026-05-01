@@ -46,6 +46,10 @@ export const assetPillar = (asset: PulseCheckProtocolDefinition | MentalExercise
   if ('cognitivePillar' in asset && asset.cognitivePillar) return asset.cognitivePillar;
   const tax = (asset as MentalExercise).taxonomy;
   if (tax && tax.primaryPillar) return tax.primaryPillar;
+  const category = (asset as { category?: string }).category?.toLowerCase();
+  if (category === 'breathing' || category === 'confidence') return TaxonomyPillar.Composure;
+  if (category === 'focus' || category === 'visualization') return TaxonomyPillar.Focus;
+  if (category === 'mindset') return TaxonomyPillar.Decision;
   return undefined;
 };
 

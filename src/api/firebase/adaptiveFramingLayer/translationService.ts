@@ -5,9 +5,13 @@
 // Anthropic-only with seed fallback. Every production call writes one audit
 // row to pulsecheck-nora-translation-log for Phase G.
 
-import Anthropic from '@anthropic-ai/sdk';
 import * as admin from 'firebase-admin';
 import { NORA_ATHLETE_TRANSLATION } from '../../anthropic/featureRouting';
+import {
+  buildAdminAuditLogger,
+  callAnthropic as callAnthropicCore,
+  type AnthropicLike as ServerBridgeAnthropicLike,
+} from '../../anthropic/serverBridge';
 import { runAthletePhrasingGuardrails } from './guardrails';
 import {
   logTranslation,
@@ -189,35 +193,47 @@ const buildUserMessage = (
 };
 
 // ---------------------------------------------------------------------------
-// Anthropic
+// Anthropic — calls flow through serverBridge Core (single chokepoint for
+// all server-side Anthropic traffic). The Core enforces feature gating +
+// max-tokens cap + audit log; this module just shapes the prompt + parses
+// the text response.
 // ---------------------------------------------------------------------------
 
-const resolveAnthropicClient = (deps?: TranslateForAthleteDeps): AnthropicLike => {
-  if (deps?.anthropicClient) return deps.anthropicClient;
-  // Real SDK reads ANTHROPIC_API_KEY from env.
-  return new Anthropic() as unknown as AnthropicLike;
-};
-
+/**
+ * Calls the Anthropic model via the server-side `serverBridge` Core so
+ * every translation passes through the same model gate + token cap +
+ * audit log the HTTP bridge enforces. Caller provides a Firestore admin
+ * client for the audit logger; tests can pass a stub via `deps.anthropicClient`
+ * to bypass the SDK entirely.
+ */
 const callClaude = async (
-  client: AnthropicLike,
   systemPrompt: string,
   userMessage: string,
+  deps: TranslateForAthleteDeps,
+  callerContext: Record<string, unknown>,
 ): Promise<string> => {
-  const response = await client.messages.create({
-    model: NORA_ATHLETE_TRANSLATION.model,
-    max_tokens: NORA_ATHLETE_TRANSLATION.maxTokens,
-    system: systemPrompt,
-    messages: [{ role: 'user', content: userMessage }],
-  });
+  const auditLogger = deps.firestore ? buildAdminAuditLogger(deps.firestore) : null;
+  // Phase C's `AnthropicLike` is narrower than the Core's (it predates
+  // tool-use support). Cast at the boundary; runtime shape is compatible
+  // because callClaude here only sends plain text messages.
+  const stubClient = deps.anthropicClient
+    ? (deps.anthropicClient as unknown as ServerBridgeAnthropicLike)
+    : undefined;
+  const result = await callAnthropicCore(
+    {
+      featureId: NORA_ATHLETE_TRANSLATION.featureId,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+      callerContext,
+    },
+    {
+      client: stubClient,
+      auditLogger,
+    },
+  );
 
-  const text = (response.content || [])
-    .filter((block) => block.type === 'text' && typeof block.text === 'string')
-    .map((block) => block.text as string)
-    .join('')
-    .trim();
-
-  if (!text) throw new Error('Anthropic returned no text content');
-  return text;
+  if (!result.text) throw new Error('Anthropic returned no text content');
+  return result.text;
 };
 
 // ---------------------------------------------------------------------------
@@ -303,7 +319,6 @@ export const translateForAthlete = async (
   const seedPhrasing = row.athletePhrasing;
 
   // 1) Try Claude.
-  const client = resolveAnthropicClient(deps);
   const systemPrompt = buildSystemPrompt(row);
   const userMessage = buildUserMessage(input.domain, input.state, input.signal, input.additionalContext);
 
@@ -311,7 +326,13 @@ export const translateForAthlete = async (
   let anthropicError: Error | undefined;
 
   try {
-    claudeOutputRaw = await callClaude(client, systemPrompt, userMessage);
+    claudeOutputRaw = await callClaude(systemPrompt, userMessage, deps ?? {}, {
+      transport: 'server-direct',
+      caller: 'phase-c.translateForAthlete',
+      athleteUserId: input.athleteUserId,
+      domain: input.domain,
+      state: input.state,
+    });
   } catch (err) {
     anthropicError = err instanceof Error ? err : new Error(String(err));
   }

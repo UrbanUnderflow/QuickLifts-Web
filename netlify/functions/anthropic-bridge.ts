@@ -1,13 +1,35 @@
 import { Handler } from '@netlify/functions';
 import { admin, headers as corsHeaders } from './config/firebase';
-import { ANTHROPIC_FEATURE_LIMITS } from '../../src/api/anthropic/featureRouting';
+import {
+  callAnthropic,
+  buildAdminAuditLogger,
+  ServerBridgeFeatureNotRegisteredError,
+  ServerBridgeForbiddenModelError,
+  ServerBridgeProviderMismatchError,
+} from '../../src/api/anthropic/serverBridge';
 
-// Anthropic Messages API endpoint and required headers.
-// https://docs.anthropic.com/en/api/messages
-const ANTHROPIC_API_BASE = 'https://api.anthropic.com';
-const ANTHROPIC_API_VERSION = '2023-06-01';
+// =============================================================================
+// anthropic-bridge — HTTP transport for Anthropic traffic from clients that
+// can't safely hold the API key (browser, iOS).
+//
+// This file used to do everything: auth, validation, max-tokens cap, model
+// pattern check, and the upstream Anthropic call. After the Core refactor
+// (`src/api/anthropic/serverBridge.ts`), this is a thin layer over the Core:
+//
+//   1. Parse Firebase auth (clients are not pre-trusted)
+//   2. Parse JSON body
+//   3. Delegate to Core `callAnthropic` — which handles validation, cap,
+//      model gate, SDK call, and audit log
+//   4. Translate the Core result + Core errors into HTTP responses
+//
+// Server-side callers (Macra, Phase C, Phase D) skip this transport entirely
+// and call Core directly — same gate, no HTTP round-trip.
+//
+// Local-dev relay: kept intact. When this function runs locally without
+// `ANTHROPIC_API_KEY`, it forwards to the deployed bridge so engineers can
+// test without copying secrets.
+// =============================================================================
 
-// Header callers set to identify the feature (mirrors `openai-organization`).
 const FEATURE_HEADER = 'anthropic-organization';
 
 const getHeader = (
@@ -124,11 +146,11 @@ export const handler: Handler = async (event) => {
 
   const pathMatch = event.path.match(/(\/v1\/.*)/);
   const apiPath = pathMatch ? pathMatch[1] : '/v1/messages';
-  const upstreamUrl = `${ANTHROPIC_API_BASE}${apiPath}`;
-
   const featureId = getHeader(event.headers, FEATURE_HEADER) || 'default';
   const providerApiKey = resolveAnthropicApiKey();
 
+  // Local-dev relay path is preserved. When dev shell has no key, forward
+  // to deployed bridge.
   if (!providerApiKey) {
     if (shouldRelayToRemoteBridge(event, providerApiKey)) {
       try {
@@ -152,85 +174,91 @@ export const handler: Handler = async (event) => {
     };
   }
 
+  // Only `/v1/messages` is supported via Core for now (this is what every
+  // existing client caller hits). Other API paths can be added later if a
+  // client needs them — Core would grow a dispatch map.
+  if (event.httpMethod !== 'POST' || !apiPath.startsWith('/v1/messages')) {
+    return {
+      statusCode: 404,
+      headers: corsHeaders,
+      body: JSON.stringify({
+        error: `Unsupported path '${apiPath}'. Bridge currently supports POST /v1/messages only.`,
+      }),
+    };
+  }
+
   let parsedBody: any;
-  if (event.httpMethod === 'POST') {
-    try {
-      parsedBody = JSON.parse(event.body || '{}');
+  try {
+    parsedBody = JSON.parse(event.body || '{}');
+  } catch (_error) {
+    return {
+      statusCode: 400,
+      headers: corsHeaders,
+      body: JSON.stringify({ error: 'Bad Request: Invalid JSON payload' }),
+    };
+  }
 
-      const featureConfig =
-        ANTHROPIC_FEATURE_LIMITS[featureId] || ANTHROPIC_FEATURE_LIMITS['default'];
+  // Translate the raw HTTP body (Anthropic Messages API shape) into the
+  // Core's typed request envelope. Validation + max-tokens cap + model
+  // gate happen inside `callAnthropic`. We pass `null` audit logger here
+  // because the HTTP path doesn't have a Firestore admin client wired
+  // by default in this transport — the audit log can be opted in once
+  // we standardize firestore admin init across functions. Server-side
+  // callers (Macra, Phase C, Phase D) DO pass an audit logger.
+  try {
+    const result = await callAnthropic(
+      {
+        featureId,
+        system: typeof parsedBody.system === 'string' ? parsedBody.system : '',
+        messages: Array.isArray(parsedBody.messages) ? parsedBody.messages : [],
+        maxTokens: typeof parsedBody.max_tokens === 'number' ? parsedBody.max_tokens : undefined,
+        model: typeof parsedBody.model === 'string' ? parsedBody.model : undefined,
+        tools: parsedBody.tools,
+        toolChoice: parsedBody.tool_choice,
+        callerContext: { transport: 'http', uid },
+      },
+      { auditLogger: null },
+    );
 
-      if (parsedBody.model && !featureConfig.modelPattern.test(parsedBody.model)) {
-        console.warn(
-          `[anthropic-bridge] UID ${uid} attempted to use forbidden model: ${parsedBody.model} for feature: ${featureId}`,
-        );
-        return {
-          statusCode: 403,
-          headers: corsHeaders,
-          body: JSON.stringify({ error: 'Forbidden model' }),
-        };
-      }
-
-      // Cap output tokens. Messages API uses `max_tokens` (required field) —
-      // there is no `max_completion_tokens` / `max_output_tokens` in this API.
-      const envCap = process.env.ANTHROPIC_MAX_TOKENS
-        ? parseInt(process.env.ANTHROPIC_MAX_TOKENS)
-        : 16000;
-      const effectiveCap = Math.min(
-        featureConfig.maxTokens,
-        Number.isFinite(envCap) ? envCap : 16000,
-      );
-      if (typeof parsedBody.max_tokens !== 'number' || parsedBody.max_tokens > effectiveCap) {
-        parsedBody.max_tokens = effectiveCap;
-      }
-    } catch (_error) {
+    return {
+      statusCode: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(result.raw),
+    };
+  } catch (error: any) {
+    if (error instanceof ServerBridgeFeatureNotRegisteredError) {
+      console.warn(`[anthropic-bridge] uid=${uid} unknown featureId=${featureId}`);
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ error: 'Bad Request: Invalid JSON payload' }),
+        body: JSON.stringify({ error: `Unknown feature: ${featureId}` }),
       };
     }
-  }
-
-  try {
-    const fetchOptions: RequestInit = {
-      method: event.httpMethod,
-      headers: {
-        'Content-Type': getHeader(event.headers, 'content-type') || 'application/json',
-        'x-api-key': providerApiKey,
-        'anthropic-version': ANTHROPIC_API_VERSION,
-      },
-    };
-    if (event.httpMethod === 'POST') {
-      fetchOptions.body = JSON.stringify(parsedBody);
+    if (error instanceof ServerBridgeProviderMismatchError) {
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: error.message }),
+      };
     }
-
-    const response = await fetch(upstreamUrl, fetchOptions);
-    const data = await response.text();
-
-    if (!response.ok) {
-      console.error('[anthropic-bridge] Anthropic upstream error:', {
-        status: response.status,
-        path: apiPath,
-        featureId,
-        body: data.slice(0, 1000),
-      });
+    if (error instanceof ServerBridgeForbiddenModelError) {
+      console.warn(
+        `[anthropic-bridge] uid=${uid} attempted forbidden model: ${error.attemptedModel} for feature: ${featureId}`,
+      );
+      return {
+        statusCode: 403,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'Forbidden model' }),
+      };
     }
-
-    return {
-      statusCode: response.status,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': response.headers.get('content-type') || 'application/json',
-      },
-      body: data,
-    };
-  } catch (error: any) {
     console.error('[anthropic-bridge] Failed to proxy request to Anthropic:', error);
     return {
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Internal Gateway Error contacting Anthropic' }),
+      body: JSON.stringify({
+        error: 'Internal Gateway Error contacting Anthropic',
+        detail: error?.message || String(error),
+      }),
     };
   }
 };

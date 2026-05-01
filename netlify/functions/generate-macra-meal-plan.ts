@@ -1,7 +1,10 @@
 import { Handler } from '@netlify/functions';
-import Anthropic from '@anthropic-ai/sdk';
 import { admin, db, headers as corsHeaders } from './config/firebase';
 import { MACRA_MEAL_PLAN } from '../../src/api/anthropic/featureRouting';
+import {
+  buildAdminAuditLogger,
+  callAnthropic as callAnthropicCore,
+} from '../../src/api/anthropic/serverBridge';
 
 interface MealItem {
   name: string;
@@ -150,34 +153,38 @@ const MEAL_PLAN_TOOL_SCHEMA = {
   required: ['meals'],
 };
 
-const callAnthropic = async (prompt: string): Promise<GeneratedPlan> => {
-  const client = new Anthropic();
-
-  const response = await client.messages.create({
-    model: MACRA_MEAL_PLAN.model,
-    max_tokens: MACRA_MEAL_PLAN.maxTokens,
-    system:
-      "You are Nora, Macra's performance nutrition coach. Build context-aware meal plans, and when physique-prep context exists, prioritize stage-readiness, digestion consistency, and predictable foods.",
-    tools: [
-      {
-        name: MEAL_PLAN_TOOL_NAME,
-        description: 'Submit the generated meal plan in the structured schema.',
-        input_schema: MEAL_PLAN_TOOL_SCHEMA,
+const callAnthropic = async (prompt: string, athleteUid?: string): Promise<GeneratedPlan> => {
+  // Route through serverBridge Core — single chokepoint for all
+  // server-side Anthropic traffic (same gate + audit log as the HTTP
+  // bridge enforces for client callers).
+  const result = await callAnthropicCore(
+    {
+      featureId: MACRA_MEAL_PLAN.featureId,
+      system:
+        "You are Nora, Macra's performance nutrition coach. Build context-aware meal plans, and when physique-prep context exists, prioritize stage-readiness, digestion consistency, and predictable foods.",
+      messages: [{ role: 'user', content: prompt }],
+      tools: [
+        {
+          name: MEAL_PLAN_TOOL_NAME,
+          description: 'Submit the generated meal plan in the structured schema.',
+          input_schema: MEAL_PLAN_TOOL_SCHEMA,
+        },
+      ],
+      toolChoice: { type: 'tool', name: MEAL_PLAN_TOOL_NAME },
+      callerContext: {
+        transport: 'server-direct',
+        caller: 'macra.generate-meal-plan',
+        ...(athleteUid ? { athleteUid } : {}),
       },
-    ],
-    tool_choice: { type: 'tool', name: MEAL_PLAN_TOOL_NAME },
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  const toolUse = response.content.find(
-    (block): block is Anthropic.ToolUseBlock =>
-      block.type === 'tool_use' && block.name === MEAL_PLAN_TOOL_NAME,
+    },
+    { auditLogger: buildAdminAuditLogger(db) },
   );
-  if (!toolUse) {
+
+  if (!result.toolUseInput) {
     throw new Error('Anthropic response missing forced tool_use block');
   }
 
-  const parsed = toolUse.input as GeneratedPlan;
+  const parsed = result.toolUseInput as GeneratedPlan;
   if (!Array.isArray(parsed?.meals)) {
     throw new Error('Model response missing meals array');
   }
@@ -235,12 +242,14 @@ export const handler: Handler = async (event) => {
     }
   }
 
-  // Phase B+ full cutover: server-side Anthropic SDK call (no bridge round-trip).
-  // Requires ANTHROPIC_API_KEY in Netlify env. The Firebase token was already
-  // verified above via verifyAuth(); we no longer need to relay it.
+  // Phase B+ full cutover: server-side call routed through serverBridge
+  // Core (no HTTP round-trip — same gate + audit log as the HTTP bridge
+  // enforces for client callers). Requires ANTHROPIC_API_KEY in Netlify
+  // env (read by Core). The Firebase token was already verified above
+  // via verifyAuth().
   try {
     const prompt = buildPrompt(body, mealsCount);
-    const plan = await callAnthropic(prompt);
+    const plan = await callAnthropic(prompt, uid);
 
     const normalized: GeneratedPlan = {
       meals: plan.meals.map((m, i) => ({

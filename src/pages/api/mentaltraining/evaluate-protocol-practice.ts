@@ -1,5 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
+import {
+  buildAdminAuditLogger,
+  callAnthropic as callAnthropicCore,
+} from '../../../api/anthropic/serverBridge';
 import OpenAI from 'openai';
 import admin from '../../../lib/firebase-admin';
 import { PULSECHECK_PROTOCOL_PRACTICE_EVAL } from '../../../api/anthropic/featureRouting';
@@ -294,29 +298,34 @@ async function evaluateTurnWithAnthropic(
   input: TurnInput,
   priorTurns: PulseCheckProtocolPracticeTurn[],
 ): Promise<TurnEvalResult> {
-  const client = new Anthropic();
-  const response = await client.messages.create({
-    model: PULSECHECK_PROTOCOL_PRACTICE_EVAL.model,
-    max_tokens: PULSECHECK_PROTOCOL_PRACTICE_EVAL.maxTokens,
-    system: TURN_SYSTEM_PROMPT,
-    tools: [
-      {
-        name: 'submit_turn_evaluation',
-        description: 'Submit the structured turn evaluation.',
-        // Schema is shared with OpenAI's strict json_schema (readonly via `as const`);
-        // Anthropic SDK expects mutable JSON Schema. Cast is safe — wire format identical.
-        input_schema: buildTurnSchema() as unknown as Anthropic.Tool.InputSchema,
+  // Routed through serverBridge Core: same gate + audit log as the HTTP
+  // bridge for client callers, no round-trip. callWithFallback wraps
+  // this for dual-path Anthropic-primary / OpenAI-fallback semantics.
+  const result = await callAnthropicCore(
+    {
+      featureId: PULSECHECK_PROTOCOL_PRACTICE_EVAL.featureId,
+      system: TURN_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: buildTurnUserPayload(spec, turnSpec, input, priorTurns) }],
+      tools: [
+        {
+          name: 'submit_turn_evaluation',
+          description: 'Submit the structured turn evaluation.',
+          // Schema is shared with OpenAI's strict json_schema (readonly via `as const`);
+          // Anthropic SDK expects mutable JSON Schema. Cast is safe — wire format identical.
+          input_schema: buildTurnSchema() as unknown as Anthropic.Tool.InputSchema,
+        },
+      ],
+      toolChoice: { type: 'tool', name: 'submit_turn_evaluation' },
+      callerContext: {
+        transport: 'server-direct',
+        caller: 'pulsecheck.evaluate-protocol-practice.turn',
+        protocolSpecId: spec.id,
       },
-    ],
-    tool_choice: { type: 'tool', name: 'submit_turn_evaluation' },
-    messages: [{ role: 'user', content: buildTurnUserPayload(spec, turnSpec, input, priorTurns) }],
-  });
-  const toolUse = response.content.find(
-    (block): block is Anthropic.ToolUseBlock =>
-      block.type === 'tool_use' && block.name === 'submit_turn_evaluation',
+    },
+    { auditLogger: buildAdminAuditLogger(admin.firestore()) },
   );
-  if (!toolUse) throw new Error('Anthropic response missing forced tool_use block (turn)');
-  return toolUse.input as TurnEvalResult;
+  if (!result.toolUseInput) throw new Error('Anthropic response missing forced tool_use block (turn)');
+  return result.toolUseInput as TurnEvalResult;
 }
 
 // ---------------------------------------------------------------------------
@@ -402,27 +411,31 @@ async function evaluateSessionWithAnthropic(
   spec: ProtocolPracticeSpec,
   turns: PulseCheckProtocolPracticeTurn[],
 ): Promise<SessionEvalResult> {
-  const client = new Anthropic();
-  const response = await client.messages.create({
-    model: PULSECHECK_PROTOCOL_PRACTICE_EVAL.model,
-    max_tokens: PULSECHECK_PROTOCOL_PRACTICE_EVAL.maxTokens,
-    system: SESSION_SYSTEM_PROMPT,
-    tools: [
-      {
-        name: 'submit_session_evaluation',
-        description: 'Submit the structured session evaluation.',
-        input_schema: buildSessionSchema() as unknown as Anthropic.Tool.InputSchema,
+  // Routed through serverBridge Core (same as turn evaluation above).
+  const result = await callAnthropicCore(
+    {
+      featureId: PULSECHECK_PROTOCOL_PRACTICE_EVAL.featureId,
+      system: SESSION_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: buildSessionUserPayload(spec, turns) }],
+      tools: [
+        {
+          name: 'submit_session_evaluation',
+          description: 'Submit the structured session evaluation.',
+          input_schema: buildSessionSchema() as unknown as Anthropic.Tool.InputSchema,
+        },
+      ],
+      toolChoice: { type: 'tool', name: 'submit_session_evaluation' },
+      callerContext: {
+        transport: 'server-direct',
+        caller: 'pulsecheck.evaluate-protocol-practice.session',
+        protocolSpecId: spec.id,
+        turnCount: turns.length,
       },
-    ],
-    tool_choice: { type: 'tool', name: 'submit_session_evaluation' },
-    messages: [{ role: 'user', content: buildSessionUserPayload(spec, turns) }],
-  });
-  const toolUse = response.content.find(
-    (block): block is Anthropic.ToolUseBlock =>
-      block.type === 'tool_use' && block.name === 'submit_session_evaluation',
+    },
+    { auditLogger: buildAdminAuditLogger(admin.firestore()) },
   );
-  if (!toolUse) throw new Error('Anthropic response missing forced tool_use block (session)');
-  return toolUse.input as SessionEvalResult;
+  if (!result.toolUseInput) throw new Error('Anthropic response missing forced tool_use block (session)');
+  return result.toolUseInput as SessionEvalResult;
 }
 
 async function evaluateSessionWithAI(

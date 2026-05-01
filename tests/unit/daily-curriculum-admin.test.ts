@@ -136,6 +136,46 @@ test('admin daily curriculum generator writes protocol, sim, and generation trac
   assert.ok(assignments.find((a) => a.actionType === 'simulation'));
 });
 
+test('admin daily curriculum generator can assign legacy category-only production assets', async () => {
+  const { db, collections } = createFakeFirestore({
+    'pulsecheck-protocols': {
+      'protocol-box-breathing': {
+        label: 'Box Breathing',
+        publishStatus: 'published',
+        isActive: true,
+        category: 'breathing',
+        durationSeconds: 120,
+      },
+    },
+    'sim-modules': {
+      'sim-focus': {
+        name: 'Focus Sim',
+        isActive: true,
+        category: 'focus',
+      },
+    },
+  });
+
+  const result = await generateDailyAssignmentAdmin(db as any, {
+    athleteUserId: 'athlete-legacy',
+    teamId: 'team-1',
+    teamMembershipId: 'membership-1',
+    sourceDate: '2026-05-01',
+    timezone: 'America/New_York',
+  });
+
+  assert.ok(result);
+  assert.equal(result.protocolSelection.protocolId, 'protocol-box-breathing');
+  assert.equal(result.protocolSelection.cognitivePillar, TaxonomyPillar.Composure);
+  assert.equal(result.simSelection.simId, 'sim-focus');
+  assert.equal(result.simSelection.cognitivePillar, TaxonomyPillar.Focus);
+  assert.equal(collections.get('pulsecheck-daily-assignments')?.size, 2);
+  const simAssignment = [...collections.get('pulsecheck-daily-assignments')!.values()]
+    .find((assignment) => assignment.actionType === 'simulation');
+  assert.equal(simAssignment?.simName, 'Focus Sim');
+  assert.equal(simAssignment?.simSpecId, 'sim-focus');
+});
+
 test('admin curriculum assessment writes monthly rollup doc', async () => {
   const eventAt = Date.UTC(2026, 3, 15, 12, 0, 0) / 1000;
   const { db, collections } = createFakeFirestore({

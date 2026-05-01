@@ -1,6 +1,9 @@
 import { Handler } from '@netlify/functions';
-import Anthropic from '@anthropic-ai/sdk';
 import { admin, db, headers as corsHeaders } from './config/firebase';
+import {
+  buildAdminAuditLogger,
+  callAnthropic as callAnthropicCore,
+} from '../../src/api/anthropic/serverBridge';
 import { NORA_NUTRITION_CHAT } from '../../src/api/anthropic/featureRouting';
 
 interface IngredientContext {
@@ -1181,24 +1184,28 @@ export const handler: Handler = async (event) => {
 
   messages.push({ role: 'user', content: body.query.trim().slice(0, 800) });
 
-  // Phase B+ full cutover: Anthropic Sonnet 4.6 plain-text reply.
+  // Phase B+ full cutover routed through serverBridge Core: same gate +
+  // audit log as the HTTP bridge for client callers, no round-trip.
+  // Plain-text reply (no tool-use needed for chat).
   // TODO(prompt-cache): systemPrompt is per-user-dynamic (built from profile +
   // PulseCheck context + meal plan + user doc), so it doesn't share across
   // calls. Caching only helps if we extract the static voice/rules section.
   try {
-    const client = new Anthropic();
-    const response = await client.messages.create({
-      model: NORA_NUTRITION_CHAT.model,
-      max_tokens: NORA_NUTRITION_CHAT.maxTokens,
-      system: systemPrompt,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
-    });
+    const result = await callAnthropicCore(
+      {
+        featureId: NORA_NUTRITION_CHAT.featureId,
+        system: systemPrompt,
+        messages: messages.map((m) => ({ role: m.role, content: m.content })),
+        callerContext: {
+          transport: 'server-direct',
+          caller: 'macra.nora-nutrition-chat',
+          uid,
+        },
+      },
+      { auditLogger: buildAdminAuditLogger(db) },
+    );
 
-    const rawReply = response.content
-      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-      .map((block) => block.text)
-      .join('')
-      .trim();
+    const rawReply = result.text;
     const reply = rawReply ? directNoraReply(rawReply) : '';
     if (!reply) throw new Error('Nora returned no content');
 

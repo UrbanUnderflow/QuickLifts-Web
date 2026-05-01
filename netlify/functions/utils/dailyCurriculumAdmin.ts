@@ -213,6 +213,7 @@ export const generateDailyAssignmentAdmin = async (
     chosenCandidateId: simPick.asset.id,
     chosenCandidateType: 'simulation' as PulseCheckDailyAssignment['chosenCandidateType'],
     simSpecId: (simPick.asset as MentalExercise).simSpecId || simPick.asset.id,
+    simName: (simPick.asset as MentalExercise).name,
     rationale: simPick.rationale,
     createdAt: generatedAt,
     updatedAt: generatedAt,
@@ -367,7 +368,7 @@ const fetchEligibleProtocolsAdmin = async (
       .where('publishStatus', '==', 'published')
       .where('isActive', '==', true)
       .get();
-    return snap.docs.map((d) => d.data() as PulseCheckProtocolDefinition);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as PulseCheckProtocolDefinition);
   } catch {
     return [];
   }
@@ -378,7 +379,7 @@ const fetchEligibleSimsAdmin = async (
 ): Promise<MentalExercise[]> => {
   try {
     const snap = await db.collection(SIM_MODULES_COLLECTION).where('isActive', '==', true).get();
-    return snap.docs.map((d) => d.data() as MentalExercise);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MentalExercise);
   } catch {
     return [];
   }
