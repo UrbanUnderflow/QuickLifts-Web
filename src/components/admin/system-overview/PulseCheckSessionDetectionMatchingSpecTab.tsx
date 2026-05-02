@@ -170,6 +170,7 @@ const PulseCheckSessionDetectionMatchingSpecTab: React.FC = () => {
         relatedDocs={[
           'Sports Intelligence Layer',
           'Aggregation + Inference Contract',
+          'Contextual Detection Engine',
           'Nora Context Capture',
           'Sport Load Model',
           'Health Context Source Record Spec',

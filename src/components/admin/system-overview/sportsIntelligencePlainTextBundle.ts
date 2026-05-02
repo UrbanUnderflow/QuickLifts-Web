@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────────────────────────────────────
 // Pulse Sports Intelligence — Full Spec Bundle (plain markdown)
 //
-// One concatenated markdown bundle of the six Sports Intelligence spec tabs,
+// One concatenated markdown bundle of the seven Sports Intelligence spec tabs,
 // produced for hand-off into a separate reviewer agent (or stakeholder review)
 // without forcing the reader to navigate between System Overview tabs.
 //
@@ -9,9 +9,10 @@
 //   1. Sports Intelligence Layer (Architecture & Product Boundaries)
 //   2. Aggregation + Inference Contract
 //   3. Report Outlines + Coach Mocks
-//   4. Nora Context Capture
-//   5. Session Detection + Matching
-//   6. Sport Load Model
+//   4. Contextual Detection Engine
+//   5. Nora Context Capture
+//   6. Session Detection + Matching
+//   7. Sport Load Model
 //
 // IMPORTANT: this bundle is hand-curated to match the spec tabs. When a spec
 // changes materially, update here too. Drift is acceptable for occasional
@@ -20,7 +21,7 @@
 
 const HEADER = `# Pulse Sports Intelligence — Full Spec Bundle
 
-> Hand-off bundle of the six Sports Intelligence specs from the Pulse System Overview, concatenated as one document for reviewer or stakeholder consumption. Source of truth remains the System Overview admin tabs; this is a snapshot.
+> Hand-off bundle of the seven Sports Intelligence specs from the Pulse System Overview, concatenated as one document for reviewer or stakeholder consumption. Source of truth remains the System Overview admin tabs; this is a snapshot.
 
 > **Translation rule (load-bearing):** every coach-visible string in this stack — reports, reviewer-screen messages, missing-context nudges, error states, even spec examples — must read in coach voice, not science-speak. "Confidence is emerging" → "this read will get sharper once you add the practice details." "Schedule context missing" → "drop the practice plan and we'll lock in the read." Internal vocabulary ("ACWR", "load_au", "high_confidence") never surfaces to coaches.
 
@@ -320,6 +321,106 @@ Lives at \`/coach-report-demo/{sportId}\` — public route, whitelisted in AuthW
 
 ### Boundary Reminder
 Mock report baselines define expected report shape and language. They do not override the automation gates in the Aggregation + Inference Contract. Weekly and game-day reports remain human-reviewed during pilot; early-warning alerts remain internal candidates only.
+
+---
+`;
+
+const SPEC_4_CONTEXTUAL_DETECTION = `
+## 4. Contextual Detection Engine
+
+The differentiating Sports Intelligence loop: sensor evidence starts the read, but athlete profile, coach context, Nora clarification, and historical corrections turn ambiguous activity into sport-specific meaning. Pulse Check does not depend solely on the wearable. It uses the wearable as evidence, then intelligently closes gaps with the athlete and coach.
+
+### Core Rule
+When confidence is low, do not guess harder. Ask better. Nora is the missing-signal engine: she asks for the one answer that can change the classification, confidence tier, load contribution, or recommendation.
+
+### Five Context Layers
+| Layer | What It Contains | Why It Matters |
+|---|---|---|
+| Sensor Evidence | HR, HR zones, movement density, acceleration bursts, step/distance, sleep, HRV, recovery, device coverage, signal quality. | Answers "what did the body and device show?" It does not own final sport meaning by itself. |
+| Athlete Context | Sport, position, level, season phase, training age, injury history, normal baseline, goals, team membership, prior confirmed sessions. | Turns the same evidence into athlete-specific meaning. |
+| Coach Context | Practice schedule, game schedule, prescribed plan, coach voice notes, roster tags, venue, training focus, intended intensity, modified workload. | Tells the system what was supposed to happen and what the staff already knows. |
+| Nora Clarification | Targeted athlete or coach questions when evidence is incomplete: session type, RPE, soreness, whether this was practice/lift/conditioning/recovery. | Closes gaps without forcing manual logging. Nora asks only when the answer materially improves the read. |
+| Structured Interpretation | Confirmed session record with evidence, context, direct answers, confidence tier, load contribution, recommendation posture, and learning signals. | This is what downstream load, readiness, reports, and Nora coaching consume. |
+
+### Pipeline
+Detect -> Contextualize -> Ask -> Confirm -> Interpret -> Learn.
+
+- **Detect:** continuous signals create candidate sessions from HR, movement density, acceleration bursts, device coverage, and time windows. Output is evidence, not a hard claim.
+- **Contextualize:** enrich with athlete sport/position, team schedule, prescribed sessions, venue context, coach notes, and historical pattern memory.
+- **Ask:** if confidence is incomplete and the missing answer matters, Nora asks a small, specific question in athlete or coach voice.
+- **Confirm:** answers, dismissals, corrections, and text/voice context become first-class confirmation events with provenance.
+- **Interpret:** emit a session_record and load/readiness context that combine observed data, sport policy, athlete baseline, coach intent, and Nora-confirmed context.
+- **Learn:** repeated confirmations calibrate future reads: same team practice window, same athlete lift pattern, same coach schedule rhythm, same sport-specific session signature.
+
+### Phase 0 Schema Contract
+The implementation contract is locked in \`src/api/firebase/phaseJSessionContracts.ts\` with contract version \`phase-j-session-v0.1\`.
+
+| Collection | Runtime Role |
+|---|---|
+| \`phase-j-session-candidates\` | Working records emitted by detection before final interpretation. |
+| \`phase-j-context-confirmation-events\` | Durable athlete, coach, vendor, operator, and system confirmation/correction evidence. |
+| \`phase-j-clarification-prompts\` | Nora prompt lifecycle records with target, question type, reason, status, expiry, and answer linkage. |
+| \`phase-j-session-records\` | Canonical downstream session truth consumed by Sport Load, reports, Nora, and readiness context. |
+| \`phase-j-athlete-session-patterns\` | Learned per-athlete session signatures used to reduce future questions. |
+
+Confidence tiers are \`strong_contextual\`, \`confirmed\`, \`usable\`, \`directional\`, and \`hold_back\`. Actor precedence is \`operator > coach > athlete > vendor > system\`. Any record that can affect interpretation must carry provenance: source family, source type, source record ids, observed/ingested timestamps, confidence hints, and quality flags.
+
+### Friction Guardrails
+| Guardrail | Rule | Why |
+|---|---|---|
+| Max prompts per athlete per day | Default cap: 2 clarification prompts/day unless the athlete initiated the session or a safety/escalation lane is involved. | Prevents Nora from becoming session-detection homework. |
+| Session-type cooldown | Do not ask the same athlete the same session-type question more than once in a rolling 72h window unless new evidence conflicts with the prior answer. | Stops repeated "was this a lift?" prompts after pattern evidence exists. |
+| Coach-preferred routing | If coach context can resolve ambiguity without athlete burden, ask coach or wait for schedule/plan sync before asking the athlete. | Keeps athlete friction low and respects coach intent. |
+| Pattern-confidence decay | As athlete_session_pattern.confidence rises, clarification probability decays. Ask only on drift, conflict, unusually high load, or missing critical context. | Confirmed routines should get cheaper over time. |
+| Materiality gate | No clarification prompt is allowed unless the answer can change classification, confidence tier, load contribution, recommendation, or reviewer delivery posture. | Turns "ask better" into an enforceable rule. |
+| Ask suppression | If the likely output is still directional after the answer, hold back or route to reviewer instead of interrupting the athlete. | Avoids low-value questions. |
+
+### Hard Confirmation Rules
+| Rule | Definition | Why |
+|---|---|---|
+| Direct actor identity | Confirmation requires a known athlete, coach, or operator actor id and role. Parsed text with no actor identity is supplementary evidence only. | Prevents "confirmed" from meaning "we parsed a sentence." |
+| Recent enough | Default confirmation freshness: answer within 24h of session end. Older answers annotate but do not upgrade to confirmed read without reviewer approval. | Keeps stale memory from becoming session truth. |
+| Unambiguous answer | The answer must resolve the specific classification/context question. Free-form summaries are parsed into evidence, then marked confirmed only if the key field is clear. | Vague notes are useful, but not automatically confirmation. |
+| Conflict handling | If athlete answer, coach context, vendor sport, and schedule disagree, the record stays usable/directional until reviewer or follow-up resolves the conflict. | Triangulation should not hide disagreement. |
+| Actor precedence | Coach owns intent/schedule context; athlete owns exertion, RPE, soreness, and what they personally did. Operator/reviewer can adjudicate conflicts. | Different actors are authoritative for different facts. |
+
+### Cold-Start + Device-Absent Rules
+- Athlete onboarding should pre-seed sport, position, level, season phase, normal weekly rhythm, known lift days, practice days, and preferred clarification mode.
+- Coach onboarding should capture recurring practice windows, lift windows, venues, and minimum viable plan format.
+- The first 14 days use lighter claims, reviewer visibility, and sparse questions while athlete_session_pattern is immature.
+- If a scheduled event exists but wearable evidence is missing, create a low-confidence session_candidate with deviceCoverage=missing and ask for confirmation instead of dropping load entirely.
+- If enough teammates confirm a scheduled practice, ask the missing athlete for one-tap confirmation; do not assume attendance.
+
+### Audience Policy Boundary
+Same bridge, different audience contract. Athlete-facing and coach-facing language may use the same ServerBridge/translation infrastructure, but must use separate audience policy profiles.
+
+- **Athlete policy:** athlete-safe Nora framing: encouraging, private, non-punitive, focused on action and self-awareness.
+- **Coach policy:** coach-operational language: concise, role-appropriate, team-context aware, no raw private disclosures, no clinical authority.
+- **Forbidden shortcut:** do not route coach-facing language through translateForAthlete unless the service is explicitly role-aware and invoked with coach policy.
+
+### Phase I Curriculum Boundary
+Physical session records feed load/readiness and can influence Nora planning context, but they are not automatically mental-curriculum completions. A confirmed practice can trigger or modify a follow-up protocol/sim recommendation; completion still requires the athlete to execute the assigned mental task.
+
+### Technical Implementation
+| Workstream | Implementation |
+|---|---|
+| iOS primitive extractor | Generalize lift/Polar work into SessionPrimitiveAccumulator for HR zones, movement density, accel bursts, rest gaps, step/distance, and device coverage. |
+| Sport detection profiles | Load sport/position policy from pulsecheck sport configuration: relevant primitives, thresholds, confidence gates, clarification questions, load-model inputs. |
+| Candidate emitter | Emit session_candidate from device evidence without overclaiming. Include missingContext and "what would tighten this read" fields. |
+| Nora clarification router | Given a candidate and missing context, choose whether to ask athlete, ask coach, wait for schedule sync, or hold back. Enforce daily caps, cooldowns, coach-preferred routing, and pattern-confidence decay. |
+| Athlete response capture | Support quick taps, text summary, and voice summary. Parse lift/practice/conditioning summaries into structured context using the Claude bridge/GPT fallback path. |
+| Coach context capture | Reuse Nora Context Capture: schedule upload, prescribed plan, voice memo, roster matching, venue/time windows, and parsed coach_observation. |
+| Session record writer | Merge candidate evidence + confirmations + schedule/plan context into canonical session_record with provenance and confidence tier. |
+| Pattern learning | Update athlete_session_pattern after confirmations/corrections. Use repeated confirmed patterns to reduce future questions and improve confidence. |
+| Reviewer/debug surface | Show candidate -> context -> question -> answer -> final session_record -> load contribution so operators can audit why Nora believed something. Build the skeleton before automation is trusted. |
+
+### Product Rules
+- The device layer provides evidence; Nora plus athlete/coach context provides meaning.
+- Nora should ask only the smallest useful question, and only when the answer can change classification, confidence, load, or recommendation.
+- Athlete and coach answers are data with provenance. They must be saved as structured confirmation events, not buried in chat transcripts.
+- Repeated confirmations should reduce future friction. The system should learn team rhythm, athlete-specific patterns, and sport-specific signatures.
+- Coach-facing language stays practical: "drop the practice plan and we will tighten the read" instead of "confidence is emerging."
+- Athlete-facing and coach-facing language share infrastructure only when the bridge is role-aware; each audience must use its own policy profile.
 
 ---
 `;
@@ -636,6 +737,7 @@ This bundle is a snapshot of the System Overview Sports Intelligence specs as of
 - \`/admin/systemOverview?section=pulsecheck-sports-intelligence-layer-spec\`
 - \`/admin/systemOverview?section=pulsecheck-sports-intelligence-aggregation-inference-contract\`
 - \`/admin/systemOverview?section=pulsecheck-sports-intelligence-mock-report-baselines\`
+- \`/admin/systemOverview?section=pulsecheck-contextual-sports-detection-engine\`
 - \`/admin/systemOverview?section=pulsecheck-nora-context-capture\`
 - \`/admin/systemOverview?section=pulsecheck-session-detection-matching\`
 - \`/admin/systemOverview?section=pulsecheck-sport-load-model\`
@@ -657,6 +759,7 @@ export const SPORTS_INTELLIGENCE_DOCS_BUNDLE: string = [
   SPEC_1_LAYER,
   SPEC_2_AGGREGATION,
   SPEC_3_REPORTS,
+  SPEC_4_CONTEXTUAL_DETECTION,
   SPEC_4_NORA_CONTEXT,
   SPEC_5_SESSION_DETECTION,
   SPEC_6_LOAD_MODEL,

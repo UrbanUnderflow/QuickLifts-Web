@@ -81,6 +81,9 @@ import PulseCheckNoraGuardSpecTab from "../../components/admin/system-overview/P
 import PulseCheckSportsIntelligenceAggregationInferenceContractTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceAggregationInferenceContractTab";
 import PulseCheckSportsIntelligenceMockReportBaselinesTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceMockReportBaselinesTab";
 import PulseCheckNoraContextCaptureSpecTab from "../../components/admin/system-overview/PulseCheckNoraContextCaptureSpecTab";
+import PulseCheckContextualSportsDetectionEngineSpecTab from "../../components/admin/system-overview/PulseCheckContextualSportsDetectionEngineSpecTab";
+import PulseCheckPhaseJSessionSchemaContractTab from "../../components/admin/system-overview/PulseCheckPhaseJSessionSchemaContractTab";
+import PulseCheckPhaseJReviewerDebugSurfaceTab from "../../components/admin/system-overview/PulseCheckPhaseJReviewerDebugSurfaceTab";
 import PulseCheckSessionDetectionMatchingSpecTab from "../../components/admin/system-overview/PulseCheckSessionDetectionMatchingSpecTab";
 import PulseCheckSportLoadModelSpecTab from "../../components/admin/system-overview/PulseCheckSportLoadModelSpecTab";
 import PulseCheckCorrelationDataModelSpecTab from "../../components/admin/system-overview/PulseCheckCorrelationDataModelSpecTab";
@@ -93,6 +96,7 @@ import PulseCheckPilotOutcomeMetricsContractTab from "../../components/admin/sys
 import PulseCheckOuraIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckOuraIntegrationStrategyTab";
 import PulseCheckOuraCognitiveCorrelationSpecTab from "../../components/admin/system-overview/PulseCheckOuraCognitiveCorrelationSpecTab";
 import PulseCheckDeviceIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckDeviceIntegrationStrategyTab";
+import PulseCheckDeviceRegistrySpecTab from "../../components/admin/system-overview/PulseCheckDeviceRegistrySpecTab";
 import PulseCheckDeviceIntegrationPartnershipMatrixTab from "../../components/admin/system-overview/PulseCheckDeviceIntegrationPartnershipMatrixTab";
 import PulseCheckSchoolWearableBundlePlanTab from "../../components/admin/system-overview/PulseCheckSchoolWearableBundlePlanTab";
 import PulseCheckPatentEligibilityAuditTab from "../../components/admin/system-overview/PulseCheckPatentEligibilityAuditTab";
@@ -293,9 +297,13 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-nora-conversation-orchestrator-spec",
       "pulsecheck-nora-guard-spec",
       "pulsecheck-nora-context-capture",
+      "pulsecheck-contextual-sports-detection-engine",
+      "pulsecheck-phase-j-session-schema-contract",
+      "pulsecheck-phase-j-reviewer-debug-surface",
       "pulsecheck-session-detection-matching",
       "pulsecheck-sport-load-model",
       "pulsecheck-device-integration-strategy",
+      "pulsecheck-device-registry-spec",
       "pulsecheck-device-integration-partnership-matrix",
       "pulsecheck-school-wearable-bundle-plan",
       "pulsecheck-patent-eligibility-audit",
@@ -1905,6 +1913,15 @@ const SystemOverviewPage: React.FC = () => {
       case "pulsecheck-nora-context-capture":
         return <PulseCheckNoraContextCaptureSpecTab />;
 
+      case "pulsecheck-contextual-sports-detection-engine":
+        return <PulseCheckContextualSportsDetectionEngineSpecTab />;
+
+      case "pulsecheck-phase-j-session-schema-contract":
+        return <PulseCheckPhaseJSessionSchemaContractTab />;
+
+      case "pulsecheck-phase-j-reviewer-debug-surface":
+        return <PulseCheckPhaseJReviewerDebugSurfaceTab />;
+
       case "pulsecheck-session-detection-matching":
         return <PulseCheckSessionDetectionMatchingSpecTab />;
 
@@ -1940,6 +1957,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-device-integration-strategy":
         return <PulseCheckDeviceIntegrationStrategyTab />;
+
+      case "pulsecheck-device-registry-spec":
+        return <PulseCheckDeviceRegistrySpecTab />;
 
       case "pulsecheck-device-integration-partnership-matrix":
         return <PulseCheckDeviceIntegrationPartnershipMatrixTab />;

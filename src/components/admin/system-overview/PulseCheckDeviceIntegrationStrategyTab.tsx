@@ -1,7 +1,8 @@
 import React from 'react';
-import { Activity, Building2, Database, Link2, ShieldCheck, Smartphone, Workflow, FileText, Handshake, Moon } from 'lucide-react';
+import { Activity, Building2, ClipboardList, Database, Link2, ShieldCheck, Smartphone, Workflow, FileText, Handshake, Moon } from 'lucide-react';
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
 import ArtifactPageLibrary, { ArtifactPageEntry } from './ArtifactPageLibrary';
+import PulseCheckDeviceRegistrySpecTab from './PulseCheckDeviceRegistrySpecTab';
 import PulseCheckDeviceIntegrationPartnershipMatrixTab from './PulseCheckDeviceIntegrationPartnershipMatrixTab';
 import PulseCheckOuraCognitiveCorrelationSpecTab from './PulseCheckOuraCognitiveCorrelationSpecTab';
 import PulseCheckOuraIntegrationStrategyTab from './PulseCheckOuraIntegrationStrategyTab';
@@ -252,6 +253,7 @@ const DeviceIntegrationStrategyOverviewDoc: React.FC = () => {
         sourceOfTruth="This page is the reference for wearable, platform, and team-system integrations. It explains the integration taxonomy, wishlist tiers, routing rules, and why the same canonical contract must absorb every source."
         masterReference="Use this page when scoping new device work, deciding whether a vendor belongs on the roadmap, or checking how a vendor should map into source records and snapshots."
         relatedDocs={[
+          'Device Registry',
           'Health Context Architecture',
           'Athlete Context Snapshot Spec',
           'Health Context Source Record Spec',
@@ -453,6 +455,14 @@ const DEVICE_INTEGRATION_PAGES: ArtifactPageEntry[] = [
     icon: FileText,
     accent: '#c084fc',
     render: () => <DeviceIntegrationStrategyOverviewDoc />,
+  },
+  {
+    id: 'device-registry-spec',
+    label: 'Device Registry',
+    subtitle: 'Per-device adapters, shared HCSR writers, runtime capability registry, and Phase J handoff.',
+    icon: ClipboardList,
+    accent: '#d9f99d',
+    render: () => <PulseCheckDeviceRegistrySpecTab />,
   },
   {
     id: 'device-partnership-matrix',

@@ -31,7 +31,7 @@ import {
 // Compact toolbar button for copying the full Sports Intelligence spec bundle
 // to the clipboard. Lives at the top of the Sports Intelligence Layer tab so a
 // reviewer can grab everything (this spec + Aggregation + Inference Contract +
-// Report Outlines + Nora Context Capture + Session Detection + Sport Load Model)
+// Report Outlines + Contextual Detection + Nora Context Capture + Session Detection + Sport Load Model)
 // in one click and paste it into another agent for review without tabbing
 // across the System Overview.
 const CopyAllSportsIntelligenceDocsButton: React.FC = () => {
@@ -56,7 +56,7 @@ const CopyAllSportsIntelligenceDocsButton: React.FC = () => {
       <div className="space-y-0.5">
         <p className="text-sm font-semibold text-white">Copy all Sports Intelligence specs</p>
         <p className="text-xs text-zinc-500">
-          Bundles this page plus Aggregation + Inference Contract, Report Outlines, Nora Context Capture, Session Detection + Matching, and Sport Load Model into one markdown document — for hand-off to a reviewer agent.
+          Bundles this page plus Aggregation + Inference Contract, Report Outlines, Contextual Detection Engine, Nora Context Capture, Session Detection + Matching, and Sport Load Model into one markdown document — for hand-off to a reviewer agent.
         </p>
       </div>
       <button
@@ -247,6 +247,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           'Oura Integration Strategy',
           'Sports Intelligence Aggregation + Inference Contract',
           'Report Outlines + Coach Mock Reports',
+          'Contextual Detection Engine',
           'Macra',
           'AuntEDNA Integration Strategy',
         ]}

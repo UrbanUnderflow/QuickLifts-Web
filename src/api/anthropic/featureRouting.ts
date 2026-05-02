@@ -80,6 +80,14 @@ export const PULSECHECK_SPORT_INTELLIGENCE: FeatureRoutingConfig = {
   migrationModeId: 'pulsecheck-dual-path-v1',
 };
 
+export const PULSECHECK_PHASE_J_LIFT_SUMMARY_PARSE: FeatureRoutingConfig = {
+  featureId: 'pulsecheckPhaseJLiftSummaryParse',
+  provider: 'anthropic',
+  model: ANTHROPIC_MODEL_HAIKU_4_5,
+  maxTokens: 1200,
+  migrationModeId: 'pulsecheck-dual-path-v1',
+};
+
 // Note: ttsMentalStep is not migratable. tts-mental-step.ts performs
 // audio synthesis (openai.audio.speech.create → MP3 bytes) and Anthropic has no
 // TTS API. Removed from this routing config. The endpoint stays on OpenAI/ElevenLabs.
@@ -111,6 +119,7 @@ export const FEATURE_ROUTING_CONFIGS: FeatureRoutingConfig[] = [
   MACRA_DAILY_INSIGHT,
   PULSECHECK_PROTOCOL_PRACTICE_EVAL,
   PULSECHECK_SPORT_INTELLIGENCE,
+  PULSECHECK_PHASE_J_LIFT_SUMMARY_PARSE,
   GENERATE_CAPTION,
   NORA_ATHLETE_TRANSLATION,
 ];
@@ -135,6 +144,10 @@ export const ANTHROPIC_FEATURE_LIMITS: Record<string, { maxTokens: number; model
   },
   pulsecheckSportIntelligence: {
     maxTokens: PULSECHECK_SPORT_INTELLIGENCE.maxTokens,
+    modelPattern: ANTHROPIC_MODEL_PATTERN,
+  },
+  pulsecheckPhaseJLiftSummaryParse: {
+    maxTokens: PULSECHECK_PHASE_J_LIFT_SUMMARY_PARSE.maxTokens,
     modelPattern: ANTHROPIC_MODEL_PATTERN,
   },
   generateCaption: { maxTokens: GENERATE_CAPTION.maxTokens, modelPattern: ANTHROPIC_MODEL_PATTERN },

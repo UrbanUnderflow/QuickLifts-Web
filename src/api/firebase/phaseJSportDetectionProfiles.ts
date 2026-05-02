@@ -1,0 +1,789 @@
+// =============================================================================
+// Phase J Sport Detection Profiles
+//
+// Pure profile definitions for mapping sport configuration/load-model concepts
+// into the contextual detection primitives emitted by Phase J.
+// =============================================================================
+
+import type {
+  PhaseJConfidenceTier,
+  PhaseJPrimitiveSnapshot,
+  PhaseJPromptTarget,
+  PhaseJQuestionType,
+  PhaseJSessionType,
+} from './phaseJSessionContracts';
+
+export type PhaseJSportDetectionProfileSportId =
+  | 'lift'
+  | 'basketball'
+  | 'football'
+  | 'soccer'
+  | 'track-field'
+  | 'volleyball'
+  | 'bowling'
+  | 'golf'
+  | 'generic-practice'
+  | 'generic-conditioning'
+  | 'generic-game';
+
+export type PhaseJPrimitiveProfileMatchMode = 'presence' | 'minimum' | 'maximum' | 'range';
+
+export type PhaseJPrimitiveProfileKey =
+  | keyof PhaseJPrimitiveSnapshot
+  | 'durationMin'
+  | 'totalHrZoneMinutes'
+  | 'activeHrZoneMinutes'
+  | 'highIntensityMinutes'
+  | 'internalLoadHr'
+  | `hrZoneMinutes.${string}`
+  | string;
+
+export interface PhaseJPrimitiveProfileWeight {
+  key: PhaseJPrimitiveProfileKey;
+  weight: number;
+  matchMode?: PhaseJPrimitiveProfileMatchMode;
+  sourceField?: PhaseJPrimitiveProfileKey;
+  min?: number;
+  max?: number;
+  candidateKinds?: PhaseJSessionType[];
+  description?: string;
+}
+
+export interface PhaseJSportDetectionClarificationQuestion {
+  id: string;
+  candidateKind: PhaseJSessionType;
+  target: PhaseJPromptTarget;
+  questionType: PhaseJQuestionType;
+  promptText: string;
+  answerOptions?: string[];
+  reason: string;
+  missingContextResolved: string[];
+}
+
+export interface PhaseJSportDetectionConfidenceGates {
+  strongContextualScore: number;
+  usableScore: number;
+  directionalScore: number;
+  holdBackBelowScore: number;
+  minDurationSec?: number;
+  minDeviceCoveragePct?: number;
+  maxMissingPrimitiveCount?: number;
+  defaultTier: PhaseJConfidenceTier;
+}
+
+export interface PhaseJSportDetectionLoadInput {
+  key: string;
+  weight: number;
+  source: string;
+  primitiveKey?: PhaseJPrimitiveProfileKey;
+  filter?: string;
+  required?: boolean;
+  candidateKinds?: PhaseJSessionType[];
+}
+
+export interface PhaseJCandidateKindHint {
+  candidateKind: PhaseJSessionType;
+  positiveHints: string[];
+  ambiguousWith?: PhaseJSessionType[];
+  defaultConfidenceTier: PhaseJConfidenceTier;
+}
+
+export interface PhaseJSportDetectionProfile {
+  sportId: PhaseJSportDetectionProfileSportId;
+  sportConfigId?: string;
+  sportName: string;
+  sessionTypes: PhaseJSessionType[];
+  primitiveWeights: PhaseJPrimitiveProfileWeight[];
+  clarificationQuestions: PhaseJSportDetectionClarificationQuestion[];
+  confidenceGates: PhaseJSportDetectionConfidenceGates;
+  loadInputs: PhaseJSportDetectionLoadInput[];
+  candidateKindHints: PhaseJCandidateKindHint[];
+}
+
+export interface PhaseJSportDetectionSportConfig {
+  id: string;
+  name: string;
+  reportPolicy?: {
+    loadModel?: {
+      primitives?: PhaseJSportDetectionLoadInputSeed[];
+    };
+  };
+}
+
+export interface PhaseJSportDetectionLoadInputSeed {
+  key: string;
+  weight: number;
+  source: string;
+  filter?: string;
+}
+
+export type PhaseJSportDetectionProfileSeed = Omit<
+  PhaseJSportDetectionProfile,
+  'clarificationQuestions' | 'confidenceGates'
+> & {
+  clarificationQuestions?: PhaseJSportDetectionClarificationQuestion[];
+  confidenceGates?: Partial<PhaseJSportDetectionConfidenceGates>;
+};
+
+export interface PhaseJSportDetectionProfileFromConfigInput {
+  sportConfig: PhaseJSportDetectionSportConfig;
+  sessionTypes: PhaseJSessionType[];
+  primitiveWeights?: PhaseJPrimitiveProfileWeight[];
+  clarificationQuestions?: PhaseJSportDetectionClarificationQuestion[];
+  confidenceGates?: Partial<PhaseJSportDetectionConfidenceGates>;
+  candidateKindHints?: PhaseJCandidateKindHint[];
+}
+
+const DEFAULT_CONFIDENCE_GATES: PhaseJSportDetectionConfidenceGates = {
+  strongContextualScore: 0.82,
+  usableScore: 0.62,
+  directionalScore: 0.42,
+  holdBackBelowScore: 0.25,
+  minDurationSec: 10 * 60,
+  minDeviceCoveragePct: 35,
+  maxMissingPrimitiveCount: 3,
+  defaultTier: 'directional',
+};
+
+const candidateHint = (
+  candidateKind: PhaseJSessionType,
+  positiveHints: string[],
+  ambiguousWith: PhaseJSessionType[] = [],
+  defaultConfidenceTier: PhaseJConfidenceTier = 'directional',
+): PhaseJCandidateKindHint => ({
+  candidateKind,
+  positiveHints,
+  ambiguousWith,
+  defaultConfidenceTier,
+});
+
+const question = (
+  id: string,
+  candidateKind: PhaseJSessionType,
+  promptText: string,
+  answerOptions: string[],
+  reason: string,
+  missingContextResolved: string[],
+  questionType: PhaseJQuestionType = 'session_type',
+  target: PhaseJPromptTarget = 'athlete',
+): PhaseJSportDetectionClarificationQuestion => ({
+  id,
+  candidateKind,
+  target,
+  questionType,
+  promptText,
+  answerOptions,
+  reason,
+  missingContextResolved,
+});
+
+const loadInput = (
+  key: string,
+  weight: number,
+  source: string,
+  primitiveKey?: PhaseJPrimitiveProfileKey,
+  config: Partial<Omit<PhaseJSportDetectionLoadInput, 'key' | 'weight' | 'source' | 'primitiveKey'>> = {},
+): PhaseJSportDetectionLoadInput => ({
+  key,
+  weight,
+  source,
+  primitiveKey,
+  ...config,
+});
+
+const primitiveWeight = (
+  key: PhaseJPrimitiveProfileKey,
+  weight: number,
+  config: Partial<Omit<PhaseJPrimitiveProfileWeight, 'key' | 'weight'>> = {},
+): PhaseJPrimitiveProfileWeight => ({
+  key,
+  weight,
+  matchMode: config.matchMode || 'minimum',
+  ...config,
+});
+
+const commonPracticeQuestions = (sportId: string): PhaseJSportDetectionClarificationQuestion[] => [
+  question(
+    `${sportId}-practice-session-type`,
+    'practice',
+    'Was this a practice, conditioning block, lift, or game?',
+    ['Practice', 'Conditioning', 'Lift', 'Game', 'Other'],
+    'Practice-like movement often overlaps with conditioning and team warmups.',
+    ['sessionType'],
+  ),
+  question(
+    `${sportId}-game-session-type`,
+    'game',
+    'Was this a game/competition or a practice?',
+    ['Game / Competition', 'Practice', 'Conditioning', 'Other'],
+    'Competition context changes the load model and coach-facing interpretation.',
+    ['sessionType', 'competitionContext'],
+  ),
+];
+
+const sharedTeamSportLoadInputs = [
+  loadInput('internalLoadHr', 1.0, 'TRIMP-style HR-zone integration over detected sessions.', 'internalLoadHr', { required: true }),
+  loadInput('activeEnergyKcal', 0.4, 'Active energy from the normalized primitive snapshot.', 'activeEnergyKcal'),
+  loadInput('sessionRpe', 0.5, 'Athlete-reported session RPE when available after clarification.', 'sessionRpe'),
+];
+
+const seededProfile = (seed: PhaseJSportDetectionProfileSeed): PhaseJSportDetectionProfile => ({
+  ...seed,
+  clarificationQuestions: seed.clarificationQuestions || commonPracticeQuestions(seed.sportId),
+  confidenceGates: {
+    ...DEFAULT_CONFIDENCE_GATES,
+    ...(seed.confidenceGates || {}),
+  },
+});
+
+const loadInputsFromSportConfig = (
+  sportConfig: Pick<PhaseJSportDetectionSportConfig, 'reportPolicy'>,
+): PhaseJSportDetectionLoadInput[] =>
+  (sportConfig.reportPolicy?.loadModel?.primitives || []).map((primitive) =>
+    loadInput(primitive.key, primitive.weight, primitive.source, primitive.key, { filter: primitive.filter }),
+  );
+
+export const mapPulseCheckSportConfigToPhaseJDetectionProfile = (
+  input: PhaseJSportDetectionProfileFromConfigInput,
+): PhaseJSportDetectionProfile => {
+  const sportId = normalizeSportId(input.sportConfig.id) as PhaseJSportDetectionProfileSportId;
+  return seededProfile({
+    sportId,
+    sportConfigId: input.sportConfig.id,
+    sportName: input.sportConfig.name,
+    sessionTypes: input.sessionTypes,
+    primitiveWeights: input.primitiveWeights || [],
+    clarificationQuestions: input.clarificationQuestions,
+    confidenceGates: input.confidenceGates,
+    loadInputs: loadInputsFromSportConfig(input.sportConfig),
+    candidateKindHints: input.candidateKindHints || [],
+  });
+};
+
+const PHASE_J_SPORT_DETECTION_PROFILE_SEEDS: PhaseJSportDetectionProfileSeed[] = [
+  {
+    sportId: 'lift',
+    sportName: 'Lift',
+    sessionTypes: ['lift'],
+    primitiveWeights: [
+      primitiveWeight('durationMin', 0.8, { min: 15, description: 'Strength sessions should clear a meaningful duration floor.' }),
+      primitiveWeight('restGapCount', 0.8, { min: 3, description: 'Set-based lifting usually includes repeated rest gaps.' }),
+      primitiveWeight('longestRestGapSec', 0.6, { min: 90, description: 'Lifting often has longer rests than field conditioning.' }),
+      primitiveWeight('movementDensity', 0.4, { matchMode: 'range', min: 0.12, max: 0.7 }),
+      primitiveWeight('activeEnergyKcal', 0.3, { min: 75 }),
+    ],
+    clarificationQuestions: [
+      question(
+        'lift-summary',
+        'lift',
+        'Was this a lift? If yes, what were the main exercises?',
+        ['Lift', 'Conditioning', 'Practice', 'Other'],
+        'Lift confirmation unlocks parsed exercise summaries and strength-load accounting.',
+        ['sessionType', 'liftSummary'],
+        'lift_summary',
+      ),
+    ],
+    confidenceGates: { minDurationSec: 12 * 60, defaultTier: 'usable' },
+    loadInputs: [
+      loadInput('strengthVolume', 1.0, 'Exercise sets, reps, and load from the parsed lift summary.', 'parsedLiftSummary', { required: true }),
+      loadInput('internalLoadHr', 0.5, 'HR-zone integration when wearable coverage exists.', 'internalLoadHr'),
+      loadInput('activeEnergyKcal', 0.4, 'Active energy from the normalized primitive snapshot.', 'activeEnergyKcal'),
+      loadInput('sessionRpe', 0.6, 'Athlete-reported session RPE after lift clarification.', 'sessionRpe'),
+    ],
+    candidateKindHints: [
+      candidateHint('lift', ['long rest gaps', 'set-like movement bursts', 'moderate movement density'], ['conditioning', 'practice'], 'usable'),
+    ],
+  },
+  {
+    sportId: 'basketball',
+    sportName: 'Basketball',
+    sessionTypes: ['practice', 'conditioning', 'game'],
+    primitiveWeights: [
+      primitiveWeight('internalLoadHr', 1.0, { min: 20 }),
+      primitiveWeight('accelerationBurstCount', 0.9, { min: 18, description: 'Proxy for jumps, closeouts, cuts, and repeat sprint actions.' }),
+      primitiveWeight('movementDensity', 0.7, { min: 0.45 }),
+      primitiveWeight('highIntensityMinutes', 0.6, { min: 6 }),
+      primitiveWeight('restGapCount', 0.3, { min: 4 }),
+    ],
+    clarificationQuestions: commonPracticeQuestions('basketball'),
+    loadInputs: [
+      ...sharedTeamSportLoadInputs,
+      loadInput('jumpCount', 0.9, 'Vertical accelerometer spike count above basketball jump threshold.', 'accelerationBurstCount'),
+      loadInput('lateralAccelCount', 0.7, 'X/Y deflection count above defensive cut threshold.', 'accelerationBurstCount'),
+      loadInput('sprintReps', 0.7, 'Short high-speed efforts during open-court play.', 'accelerationBurstCount'),
+      loadInput('impactCollisionLoad', 0.4, 'Accelerometer impact-magnitude integration when exposed by device.', 'accelerationBurstCount'),
+    ],
+    candidateKindHints: [
+      candidateHint('practice', ['repeat sprint pattern', 'jump/cut burst density', 'stop-start rest gaps'], ['conditioning', 'game'], 'directional'),
+      candidateHint('game', ['competition schedule match', 'sustained high HR', 'repeat sprint and jump density'], ['practice'], 'usable'),
+      candidateHint('conditioning', ['high HR with less rest structure', 'repeat sprint density'], ['practice'], 'directional'),
+    ],
+  },
+  {
+    sportId: 'football',
+    sportName: 'Football',
+    sessionTypes: ['practice', 'conditioning', 'game'],
+    primitiveWeights: [
+      primitiveWeight('accelerationBurstCount', 1.0, { min: 14, description: 'Proxy for snaps, starts, collisions, and special-teams reps.' }),
+      primitiveWeight('restGapCount', 0.8, { min: 8, description: 'Football often alternates short explosive reps and huddle/rest windows.' }),
+      primitiveWeight('longestRestGapSec', 0.5, { min: 60 }),
+      primitiveWeight('highIntensityMinutes', 0.5, { min: 4 }),
+      primitiveWeight('internalLoadHr', 0.5, { min: 15 }),
+    ],
+    clarificationQuestions: [
+      ...commonPracticeQuestions('football'),
+      question(
+        'football-contact-context',
+        'practice',
+        'Was this contact, shells, walk-through, or conditioning?',
+        ['Full contact', 'Shells / thud', 'Walk-through', 'Conditioning', 'Other'],
+        'Contact level changes the load contribution for football.',
+        ['contactContext', 'sessionType'],
+        'session_intent',
+        'coach',
+      ),
+    ],
+    loadInputs: [
+      ...sharedTeamSportLoadInputs,
+      loadInput('snapCountProxy', 0.8, 'Position-specific accelerometer cadence and intensity per detected football session.', 'accelerationBurstCount'),
+      loadInput('collisionLoad', 0.8, 'Impact magnitude where supported by the device.', 'accelerationBurstCount'),
+      loadInput('highIntensityEfforts', 0.6, 'Explosive start and sprint bursts.', 'accelerationBurstCount'),
+    ],
+    candidateKindHints: [
+      candidateHint('practice', ['bursty reps', 'frequent rest gaps', 'contact-context ambiguity'], ['conditioning', 'game'], 'directional'),
+      candidateHint('game', ['schedule match', 'snap-like burst/rest cadence'], ['practice'], 'usable'),
+      candidateHint('conditioning', ['sprint bursts with fewer huddle gaps'], ['practice'], 'directional'),
+    ],
+  },
+  {
+    sportId: 'soccer',
+    sportName: 'Soccer',
+    sessionTypes: ['practice', 'conditioning', 'game', 'run'],
+    primitiveWeights: [
+      primitiveWeight('distanceMeters', 1.0, { min: 1800 }),
+      primitiveWeight('movementDensity', 0.9, { min: 0.5 }),
+      primitiveWeight('internalLoadHr', 0.9, { min: 25 }),
+      primitiveWeight('highIntensityMinutes', 0.7, { min: 8 }),
+      primitiveWeight('accelerationBurstCount', 0.5, { min: 12 }),
+    ],
+    clarificationQuestions: [
+      ...commonPracticeQuestions('soccer'),
+      question(
+        'soccer-run-vs-session',
+        'run',
+        'Was this a soccer session or a standalone run?',
+        ['Soccer practice', 'Soccer game', 'Standalone run', 'Conditioning', 'Other'],
+        'GPS-heavy soccer and standalone running can look similar without context.',
+        ['sessionType', 'sportContext'],
+      ),
+    ],
+    loadInputs: [
+      ...sharedTeamSportLoadInputs,
+      loadInput('totalDistance', 0.5, 'GPS total distance per session.', 'distanceMeters'),
+      loadInput('highSpeedRuns', 0.9, 'Sustained high-speed efforts from GPS or accelerometer primitives.', 'highIntensityMinutes'),
+      loadInput('sprintDistance', 0.7, 'Distance accumulated above sprint threshold.', 'distanceMeters'),
+      loadInput('accelerations', 0.5, 'Acceleration burst count during field play.', 'accelerationBurstCount'),
+    ],
+    candidateKindHints: [
+      candidateHint('practice', ['field-play distance', 'high movement density', 'repeat accelerations'], ['run', 'conditioning', 'game'], 'directional'),
+      candidateHint('game', ['longer duration', 'high total distance', 'competition schedule match'], ['practice'], 'usable'),
+      candidateHint('run', ['steady distance with fewer acceleration bursts'], ['practice', 'conditioning'], 'directional'),
+    ],
+  },
+  {
+    sportId: 'track-field',
+    sportConfigId: 'track-field',
+    sportName: 'Track & Field',
+    sessionTypes: ['practice', 'conditioning', 'game', 'run'],
+    primitiveWeights: [
+      primitiveWeight('distanceMeters', 0.9, { min: 800 }),
+      primitiveWeight('highIntensityMinutes', 0.8, { min: 3 }),
+      primitiveWeight('accelerationBurstCount', 0.7, { min: 6 }),
+      primitiveWeight('restGapCount', 0.5, { min: 3 }),
+      primitiveWeight('internalLoadHr', 0.5, { min: 12 }),
+    ],
+    clarificationQuestions: [
+      question(
+        'track-event-group',
+        'practice',
+        'What kind of track session was this?',
+        ['Sprints / hurdles', 'Distance', 'Jumps', 'Throws', 'Meet / competition', 'Other'],
+        'Event group determines whether distance, sprint bursts, or technical reps should dominate load.',
+        ['eventGroup', 'sessionType'],
+        'session_intent',
+      ),
+      question(
+        'track-run-vs-conditioning',
+        'run',
+        'Was this track practice, conditioning, or a standalone run?',
+        ['Track practice', 'Conditioning', 'Standalone run', 'Meet / competition', 'Other'],
+        'Track running can be sport practice or general conditioning depending on intent.',
+        ['sessionType', 'sportContext'],
+      ),
+    ],
+    loadInputs: [
+      ...sharedTeamSportLoadInputs,
+      loadInput('sprintReps', 0.8, 'Acceleration and max-velocity rep count.', 'accelerationBurstCount'),
+      loadInput('tempoThresholdTime', 0.5, 'Time in tempo and threshold pace zones.', 'highIntensityMinutes'),
+      loadInput('jumpThrowTechnicalReps', 0.5, 'Technical event reps inferred from burst/rest structure or coach context.', 'accelerationBurstCount'),
+    ],
+    candidateKindHints: [
+      candidateHint('practice', ['rep/rest structure', 'event-group ambiguity', 'track venue or schedule context'], ['conditioning', 'run'], 'directional'),
+      candidateHint('run', ['distance signal', 'steady aerobic load'], ['practice', 'conditioning'], 'directional'),
+      candidateHint('game', ['meet schedule match', 'event-group confirmation'], ['practice'], 'usable'),
+    ],
+  },
+  {
+    sportId: 'volleyball',
+    sportName: 'Volleyball',
+    sessionTypes: ['practice', 'conditioning', 'game'],
+    primitiveWeights: [
+      primitiveWeight('accelerationBurstCount', 1.0, { min: 20, description: 'Proxy for jumps, approaches, blocks, and defensive reactions.' }),
+      primitiveWeight('movementDensity', 0.7, { min: 0.35 }),
+      primitiveWeight('restGapCount', 0.6, { min: 8 }),
+      primitiveWeight('internalLoadHr', 0.5, { min: 12 }),
+      primitiveWeight('distanceMeters', 0.3, { matchMode: 'maximum', max: 2500 }),
+    ],
+    clarificationQuestions: commonPracticeQuestions('volleyball'),
+    loadInputs: [
+      ...sharedTeamSportLoadInputs,
+      loadInput('jumpCount', 1.0, 'Approach and block jump proxy from vertical acceleration bursts.', 'accelerationBurstCount'),
+      loadInput('landingLoad', 0.7, 'Repeated landing load inferred from burst density.', 'accelerationBurstCount'),
+      loadInput('shoulderVolume', 0.5, 'Serve/attack shoulder volume from sport context when available.', 'sessionRpe'),
+    ],
+    candidateKindHints: [
+      candidateHint('practice', ['jump burst density', 'point-like rest cadence', 'low total distance'], ['conditioning', 'game'], 'directional'),
+      candidateHint('game', ['match schedule context', 'high jump/rest cadence'], ['practice'], 'usable'),
+      candidateHint('conditioning', ['high HR with less point cadence'], ['practice'], 'directional'),
+    ],
+  },
+  {
+    sportId: 'bowling',
+    sportName: 'Bowling',
+    sessionTypes: ['practice', 'game'],
+    primitiveWeights: [
+      primitiveWeight('durationMin', 1.0, { min: 35 }),
+      primitiveWeight('movementDensity', 0.7, { matchMode: 'range', min: 0.04, max: 0.35 }),
+      primitiveWeight('stepCount', 0.5, { min: 400 }),
+      primitiveWeight('highIntensityMinutes', 0.4, { matchMode: 'maximum', max: 8 }),
+      primitiveWeight('activeEnergyKcal', 0.3, { min: 60 }),
+    ],
+    clarificationQuestions: [
+      question(
+        'bowling-practice-or-match',
+        'practice',
+        'Was this bowling practice, a match, or a tournament block?',
+        ['Practice', 'Match', 'Tournament block', 'Other'],
+        'Bowling load depends on block length and competition context more than HR intensity.',
+        ['sessionType', 'competitionContext'],
+      ),
+      question(
+        'bowling-game-context',
+        'game',
+        'Was this a bowling match or tournament block?',
+        ['Match', 'Tournament block', 'Practice', 'Other'],
+        'Competition context changes stamina and coach report framing.',
+        ['sessionType', 'competitionContext'],
+      ),
+    ],
+    loadInputs: [
+      loadInput('blockRoundDuration', 1.0, 'Detected bowling-block duration and density.', 'durationMin', { required: true }),
+      loadInput('frameVolume', 0.8, 'Frame or game count from scoring context when available.', 'sessionRpe'),
+      loadInput('activeEnergyKcal', 0.3, 'Active energy from the normalized primitive snapshot.', 'activeEnergyKcal'),
+      loadInput('sessionRpe', 0.4, 'Athlete-reported session RPE, especially for tournament blocks.', 'sessionRpe'),
+    ],
+    candidateKindHints: [
+      candidateHint('practice', ['long low-intensity block', 'low movement density', 'repeated approach steps'], ['game'], 'directional'),
+      candidateHint('game', ['competition schedule match', 'long low-intensity block'], ['practice'], 'usable'),
+    ],
+  },
+  {
+    sportId: 'golf',
+    sportName: 'Golf',
+    sessionTypes: ['practice', 'game', 'walk'],
+    primitiveWeights: [
+      primitiveWeight('durationMin', 1.0, { min: 45 }),
+      primitiveWeight('stepCount', 0.8, { min: 1200 }),
+      primitiveWeight('distanceMeters', 0.7, { min: 800 }),
+      primitiveWeight('movementDensity', 0.5, { matchMode: 'range', min: 0.08, max: 0.45 }),
+      primitiveWeight('highIntensityMinutes', 0.4, { matchMode: 'maximum', max: 10 }),
+    ],
+    clarificationQuestions: [
+      question(
+        'golf-round-or-practice',
+        'practice',
+        'Was this a round, range session, short-game practice, or a walk?',
+        ['Round', 'Range session', 'Short-game practice', 'Walk only', 'Other'],
+        'Golf detection needs playing context to separate sport load from a normal walk.',
+        ['sessionType', 'sportContext'],
+      ),
+      question(
+        'golf-game-context',
+        'game',
+        'Was this a tournament/qualifying round or a practice round?',
+        ['Tournament / qualifying', 'Practice round', 'Recreational round', 'Range only', 'Other'],
+        'Competition context changes coach report interpretation.',
+        ['sessionType', 'competitionContext'],
+      ),
+    ],
+    loadInputs: [
+      loadInput('walkingLoad', 1.0, 'Walking duration, step count, and course distance.', 'stepCount', { required: true }),
+      loadInput('roundDuration', 0.8, 'Total detected round or practice duration.', 'durationMin'),
+      loadInput('heatExposure', 0.3, 'Environmental context when available.', 'sessionRpe'),
+      loadInput('sessionRpe', 0.4, 'Athlete-reported effort after long rounds or range blocks.', 'sessionRpe'),
+    ],
+    candidateKindHints: [
+      candidateHint('practice', ['long low-intensity movement', 'range or short-game context needed'], ['walk', 'game'], 'directional'),
+      candidateHint('game', ['round-length duration', 'competition schedule match', 'walking load'], ['practice', 'walk'], 'usable'),
+      candidateHint('walk', ['steps and distance without sport context'], ['practice', 'game'], 'directional'),
+    ],
+  },
+  {
+    sportId: 'generic-practice',
+    sportName: 'Generic Practice',
+    sessionTypes: ['practice'],
+    primitiveWeights: [
+      primitiveWeight('durationMin', 0.8, { min: 25 }),
+      primitiveWeight('movementDensity', 0.8, { min: 0.25 }),
+      primitiveWeight('internalLoadHr', 0.6, { min: 12 }),
+      primitiveWeight('accelerationBurstCount', 0.4, { min: 6 }),
+    ],
+    clarificationQuestions: commonPracticeQuestions('generic-practice'),
+    loadInputs: sharedTeamSportLoadInputs,
+    candidateKindHints: [
+      candidateHint('practice', ['team schedule overlap', 'moderate to high movement density', 'mixed work/rest pattern'], ['conditioning', 'game'], 'directional'),
+    ],
+  },
+  {
+    sportId: 'generic-conditioning',
+    sportName: 'Generic Conditioning',
+    sessionTypes: ['conditioning'],
+    primitiveWeights: [
+      primitiveWeight('internalLoadHr', 1.0, { min: 18 }),
+      primitiveWeight('movementDensity', 0.8, { min: 0.45 }),
+      primitiveWeight('highIntensityMinutes', 0.6, { min: 5 }),
+      primitiveWeight('durationMin', 0.5, { min: 15 }),
+    ],
+    clarificationQuestions: [
+      question(
+        'generic-conditioning-intent',
+        'conditioning',
+        'Was this conditioning, practice, a lift, or a game?',
+        ['Conditioning', 'Practice', 'Lift', 'Game', 'Other'],
+        'Conditioning can mimic sport practice when only primitive signals are available.',
+        ['sessionType', 'sessionIntent'],
+        'session_intent',
+      ),
+    ],
+    loadInputs: sharedTeamSportLoadInputs,
+    candidateKindHints: [
+      candidateHint('conditioning', ['high HR load', 'sustained movement density', 'limited sport-specific context'], ['practice', 'run', 'lift'], 'directional'),
+    ],
+  },
+  {
+    sportId: 'generic-game',
+    sportName: 'Generic Game',
+    sessionTypes: ['game'],
+    primitiveWeights: [
+      primitiveWeight('durationMin', 0.8, { min: 30 }),
+      primitiveWeight('internalLoadHr', 0.8, { min: 18 }),
+      primitiveWeight('movementDensity', 0.6, { min: 0.3 }),
+      primitiveWeight('accelerationBurstCount', 0.5, { min: 6 }),
+    ],
+    clarificationQuestions: [
+      question(
+        'generic-game-context',
+        'game',
+        'Was this a game/competition? If yes, what sport or event was it?',
+        ['Game / Competition', 'Practice', 'Conditioning', 'Other'],
+        'Competition context should be confirmed before canonical game records are written.',
+        ['sessionType', 'sportContext', 'competitionContext'],
+      ),
+    ],
+    confidenceGates: { minDurationSec: 20 * 60 },
+    loadInputs: sharedTeamSportLoadInputs,
+    candidateKindHints: [
+      candidateHint('game', ['competition schedule match', 'sustained load', 'sport context still missing'], ['practice'], 'directional'),
+    ],
+  },
+];
+
+export const PHASE_J_SPORT_DETECTION_PROFILES: PhaseJSportDetectionProfile[] =
+  PHASE_J_SPORT_DETECTION_PROFILE_SEEDS.map(seededProfile);
+
+const SPORT_ID_ALIASES: Record<string, PhaseJSportDetectionProfileSportId> = {
+  track: 'track-field',
+  'track-and-field': 'track-field',
+  track_field: 'track-field',
+  trackfield: 'track-field',
+  generic: 'generic-practice',
+  practice: 'generic-practice',
+  conditioning: 'generic-conditioning',
+  game: 'generic-game',
+};
+
+const normalizeSportId = (sportId: string): string => {
+  const normalized = sportId.trim().toLowerCase();
+  return SPORT_ID_ALIASES[normalized] || normalized;
+};
+
+const cloneProfile = (profile: PhaseJSportDetectionProfile): PhaseJSportDetectionProfile => ({
+  ...profile,
+  sessionTypes: [...profile.sessionTypes],
+  primitiveWeights: profile.primitiveWeights.map((weight) => ({ ...weight, candidateKinds: weight.candidateKinds ? [...weight.candidateKinds] : undefined })),
+  clarificationQuestions: profile.clarificationQuestions.map((questionEntry) => ({
+    ...questionEntry,
+    answerOptions: questionEntry.answerOptions ? [...questionEntry.answerOptions] : undefined,
+    missingContextResolved: [...questionEntry.missingContextResolved],
+  })),
+  confidenceGates: { ...profile.confidenceGates },
+  loadInputs: profile.loadInputs.map((input) => ({ ...input, candidateKinds: input.candidateKinds ? [...input.candidateKinds] : undefined })),
+  candidateKindHints: profile.candidateKindHints.map((hint) => ({
+    ...hint,
+    positiveHints: [...hint.positiveHints],
+    ambiguousWith: hint.ambiguousWith ? [...hint.ambiguousWith] : undefined,
+  })),
+});
+
+export const listPhaseJSportDetectionProfiles = (): PhaseJSportDetectionProfile[] =>
+  PHASE_J_SPORT_DETECTION_PROFILES.map(cloneProfile);
+
+export const getPhaseJSportDetectionProfile = (
+  sportId: string,
+): PhaseJSportDetectionProfile | undefined => {
+  const normalizedSportId = normalizeSportId(sportId);
+  const profile = PHASE_J_SPORT_DETECTION_PROFILES.find(
+    (candidate) => candidate.sportId === normalizedSportId || candidate.sportConfigId === normalizedSportId,
+  );
+  return profile ? cloneProfile(profile) : undefined;
+};
+
+export const getClarificationQuestionsForCandidateKind = (
+  candidateKind: PhaseJSessionType,
+  sportId?: string,
+): PhaseJSportDetectionClarificationQuestion[] => {
+  const profiles = sportId
+    ? [getPhaseJSportDetectionProfile(sportId)].filter((profile): profile is PhaseJSportDetectionProfile => Boolean(profile))
+    : PHASE_J_SPORT_DETECTION_PROFILES;
+
+  const seen = new Set<string>();
+  return profiles
+    .flatMap((profile) => profile.clarificationQuestions)
+    .filter((questionEntry) => questionEntry.candidateKind === candidateKind)
+    .filter((questionEntry) => {
+      if (seen.has(questionEntry.id)) return false;
+      seen.add(questionEntry.id);
+      return true;
+    })
+    .map((questionEntry) => ({
+      ...questionEntry,
+      answerOptions: questionEntry.answerOptions ? [...questionEntry.answerOptions] : undefined,
+      missingContextResolved: [...questionEntry.missingContextResolved],
+    }));
+};
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+const clamp = (value: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, value));
+
+const roundTo = (value: number, decimals = 3): number => {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+};
+
+const sumHrZoneMinutes = (
+  snapshot: PhaseJPrimitiveSnapshot,
+  predicate: (zoneId: string) => boolean,
+): number | undefined => {
+  const entries = Object.entries(snapshot.hrZoneMinutes || {}).filter(([zoneId]) => predicate(zoneId));
+  if (entries.length === 0) return undefined;
+  return entries.reduce((sum, [, minutes]) => sum + (isFiniteNumber(minutes) ? minutes : 0), 0);
+};
+
+const primitiveValue = (
+  snapshot: PhaseJPrimitiveSnapshot,
+  key: PhaseJPrimitiveProfileKey,
+): number | undefined => {
+  if (key === 'durationMin') return snapshot.durationSec / 60;
+  if (key === 'totalHrZoneMinutes') return sumHrZoneMinutes(snapshot, () => true);
+  if (key === 'activeHrZoneMinutes') return sumHrZoneMinutes(snapshot, (zoneId) => zoneId !== 'rest');
+  if (key === 'highIntensityMinutes') {
+    return sumHrZoneMinutes(snapshot, (zoneId) => ['zone4', 'zone5', 'high', 'max'].includes(zoneId));
+  }
+  if (key === 'internalLoadHr') {
+    const zoneWeights: Record<string, number> = {
+      rest: 0,
+      zone1: 1,
+      zone2: 2,
+      zone3: 3,
+      zone4: 4,
+      zone5: 5,
+      high: 4,
+      max: 5,
+    };
+    const entries = Object.entries(snapshot.hrZoneMinutes || {});
+    if (entries.length === 0) return undefined;
+    return entries.reduce((sum, [zoneId, minutes]) => {
+      const weight = zoneWeights[zoneId] ?? 1;
+      return sum + (isFiniteNumber(minutes) ? minutes * weight : 0);
+    }, 0);
+  }
+  if (key.startsWith('hrZoneMinutes.')) {
+    const zoneId = key.replace('hrZoneMinutes.', '');
+    return snapshot.hrZoneMinutes?.[zoneId];
+  }
+
+  const value = snapshot[key as keyof PhaseJPrimitiveSnapshot];
+  return isFiniteNumber(value) ? value : undefined;
+};
+
+const scorePrimitiveWeight = (
+  snapshot: PhaseJPrimitiveSnapshot,
+  primitive: PhaseJPrimitiveProfileWeight,
+): number => {
+  const value = primitiveValue(snapshot, primitive.sourceField || primitive.key);
+  if (!isFiniteNumber(value)) return 0;
+
+  const matchMode = primitive.matchMode || 'minimum';
+  if (matchMode === 'presence') return value > 0 ? 1 : 0;
+
+  if (matchMode === 'maximum') {
+    if (!isFiniteNumber(primitive.max)) return value > 0 ? 1 : 0;
+    if (value <= primitive.max) return 1;
+    return primitive.max <= 0 ? 0 : clamp(primitive.max / value, 0, 1);
+  }
+
+  if (matchMode === 'range') {
+    const min = primitive.min;
+    const max = primitive.max;
+    if (isFiniteNumber(min) && value < min) return min <= 0 ? 0 : clamp(value / min, 0, 1);
+    if (isFiniteNumber(max) && value > max) return max <= 0 ? 0 : clamp(max / value, 0, 1);
+    return 1;
+  }
+
+  if (!isFiniteNumber(primitive.min)) return value > 0 ? 1 : 0;
+  if (value >= primitive.min) return 1;
+  return primitive.min <= 0 ? 0 : clamp(value / primitive.min, 0, 1);
+};
+
+export const scorePrimitiveProfileMatch = (
+  profile: PhaseJSportDetectionProfile,
+  primitiveSnapshot: PhaseJPrimitiveSnapshot,
+  candidateKind?: PhaseJSessionType,
+): number => {
+  const weights = profile.primitiveWeights.filter(
+    (weight) => !candidateKind || !weight.candidateKinds || weight.candidateKinds.includes(candidateKind),
+  );
+
+  const totalWeight = weights.reduce((sum, weight) => sum + Math.max(0, weight.weight), 0);
+  if (totalWeight <= 0) return 0;
+
+  const weightedScore = weights.reduce((sum, weight) => {
+    const primitiveScore = scorePrimitiveWeight(primitiveSnapshot, weight);
+    return sum + primitiveScore * Math.max(0, weight.weight);
+  }, 0);
+
+  return roundTo(clamp(weightedScore / totalWeight, 0, 1));
+};
