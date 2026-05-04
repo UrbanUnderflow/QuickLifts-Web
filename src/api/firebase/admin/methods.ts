@@ -1,5 +1,5 @@
 import { setDoc, doc, getDoc, deleteDoc, Timestamp, collection, query, orderBy, limit as firestoreLimit, getDocs, addDoc, where, serverTimestamp } from 'firebase/firestore';
-import { db } from '../config';
+import { db, auth } from '../config';
 import { AdminService, PageMetaData, DailyPrompt, ProgrammingAccess, BetaApplication } from './types';
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 import {
@@ -510,6 +510,43 @@ export const adminMethods: AdminService = {
     } catch (error) {
       console.error('Error creating beta application:', error);
       return false;
+    }
+  },
+
+  async grantBetaPlanToUser(user, grantedBy: string): Promise<boolean> {
+    try {
+      const normalizedEmail = user.email?.trim().toLowerCase();
+      if (!user.id || !normalizedEmail) {
+        return false;
+      }
+
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Missing admin auth token');
+      }
+
+      const response = await fetch('/api/admin/grant-beta-plan', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          'X-Admin-Email': grantedBy,
+        },
+        body: JSON.stringify(user),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        const errorText = errorBody?.error || await response.text().catch(() => '');
+        console.error('Grant beta plan API failed:', response.status, errorText);
+        throw new Error(errorText || `Grant beta plan failed with ${response.status}`);
+      }
+
+      console.log('Granted beta plan to user:', normalizedEmail);
+      return true;
+    } catch (error) {
+      console.error('Error granting beta plan:', error);
+      throw error;
     }
   }
 }; 

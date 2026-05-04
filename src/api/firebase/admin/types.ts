@@ -90,6 +90,14 @@ export interface BetaApplication {
   updatedAt?: Date;
 }
 
+export interface AdminBetaPlanGrantTarget {
+  id: string;
+  email: string;
+  displayName?: string;
+  username?: string;
+  subscriptionType?: string;
+}
+
 export interface AdminService {
   addVersion: (
     product: AppVersionProduct,
@@ -117,4 +125,5 @@ export interface AdminService {
   updateBetaApplicationStatus: (id: string, status: 'approved' | 'rejected', approvedBy?: string) => Promise<boolean>;
   deleteBetaApplication: (id: string) => Promise<boolean>;
   createBetaApplication: (email: string, displayName: string, username: string, approvedBy: string) => Promise<boolean>;
+  grantBetaPlanToUser: (user: AdminBetaPlanGrantTarget, grantedBy: string) => Promise<boolean>;
 } 

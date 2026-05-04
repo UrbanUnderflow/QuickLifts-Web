@@ -105,6 +105,11 @@ Path: `/admin/subscriptions`
   - Refresh
   - Backfill User Fields (denormalize `username`/`userEmail` for all docs)
 
+### User Management Beta Grants
+Path: `/admin/users`
+- Row action: Grant Beta writes `beta/{email}` with `isApproved: true`, updates `users/{userId}.subscriptionType` to `beta` for current Macra compatibility, and appends a 3-year `beta_grant_pc_1y` plan to `subscriptions/{userId}`.
+- This keeps legacy beta roster checks, shared root-user gates, and append-only subscription-plan access in sync.
+
 ### Netlify Functions Index
 - `/.netlify/functions/sync-revenuecat-subscription`
 - `/.netlify/functions/sync-stripe-subscription`
@@ -242,6 +247,3 @@ flowchart LR
 
 Legend:
 - All writers merge into `subscriptions/{userId}` and append to `plans` (append-only).
-
-
-

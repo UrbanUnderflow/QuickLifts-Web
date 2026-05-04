@@ -4,12 +4,13 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, doc, getDoc, setDoc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../api/firebase/config';
 import debounce from 'lodash.debounce';
-import { Trash2 as TrashIcon, Trash2, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, ArrowRight, ChevronRight, Code, Users, Shield, LogIn, Search } from 'lucide-react';
+import { Trash2 as TrashIcon, Trash2, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, ArrowRight, ChevronRight, Code, Users, Shield, LogIn, Search, Sparkles } from 'lucide-react';
 import { workoutService } from '../../api/firebase/workout/service';
 import { Workout, WorkoutStatus, WorkoutSummary, RepsAndWeightLog } from '../../api/firebase/workout/types';
 import { ExerciseLog } from '../../api/firebase/exercise/types';
 import { adminMethods } from '../../api/firebase/admin/methods';
 import { BetaApplication } from '../../api/firebase/admin/types';
+import { SubscriptionType } from '../../api/firebase/user/types';
 
 
 type User = {
@@ -18,11 +19,17 @@ type User = {
   displayName: string;
   username: string;
   isAdmin?: boolean;
+  subscriptionType?: SubscriptionType | string;
   registrationComplete?: boolean;
   createdAt?: any;
   adminVerified?: boolean; // Flag to track actual admin status from admin collection
   // Approximate number of videos the user has uploaded to the platform (if tracked)
   videoCount?: number;
+};
+
+const isBetaSubscription = (value?: string) => {
+  const normalized = (value || '').trim().toLowerCase();
+  return normalized === 'beta' || normalized === SubscriptionType.beta.toLowerCase();
 };
 
 // Define a type for workout session display data
@@ -96,6 +103,7 @@ const UsersManagement: React.FC = () => {
 
   // State for adding users to 100trainers program
   const [processingAdd100Trainers, setProcessingAdd100Trainers] = useState<string | null>(null);
+  const [processingBetaGrant, setProcessingBetaGrant] = useState<string | null>(null);
 
   // State for remote login functionality
   const [processingRemoteLogin, setProcessingRemoteLogin] = useState<string | null>(null);
@@ -1564,6 +1572,26 @@ const UsersManagement: React.FC = () => {
             )}
           </button>
           <button
+            onClick={() => handleGrantBetaPlan(user)}
+            disabled={processingBetaGrant === user.id || !user.email || isBetaSubscription(user.subscriptionType)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium border flex items-center bg-lime-900/30 text-lime-300 border-lime-900 hover:bg-lime-800/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {processingBetaGrant === user.id ? (
+              <>
+                <svg className="animate-spin h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Granting...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4 mr-1" />
+                {isBetaSubscription(user.subscriptionType) ? 'Beta Active' : 'Grant Beta'}
+              </>
+            )}
+          </button>
+          <button
             onClick={() => handleDeleteUser(user)}
             disabled={processingDelete === user.id}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium border flex items-center bg-red-900/30 text-red-400 border-red-900 hover:bg-red-800/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
@@ -2027,6 +2055,49 @@ const UsersManagement: React.FC = () => {
       });
     } finally {
       setProcessingAdd100Trainers(null);
+    }
+  };
+
+  const handleGrantBetaPlan = async (user: User) => {
+    if (!user.email) {
+      setToastMessage({
+        type: 'error',
+        text: 'User must have an email to receive beta access'
+      });
+      return;
+    }
+
+    if (isBetaSubscription(user.subscriptionType)) {
+      setToastMessage({
+        type: 'info',
+        text: `${user.username || user.email} already has the beta plan`
+      });
+      return;
+    }
+
+    if (!window.confirm(`Grant beta plan to ${user.username || user.email}?\n\nThis will approve them in the beta roster, set their root subscription to beta, and create a 3-year beta grant plan for Fit With Pulse, PulseCheck, and Macra access.`)) {
+      return;
+    }
+
+    try {
+      setProcessingBetaGrant(user.id);
+      const currentUser = auth.currentUser;
+      const grantedBy = currentUser?.email || 'Unknown Admin';
+      await adminMethods.grantBetaPlanToUser(user, grantedBy);
+
+      setToastMessage({
+        type: 'success',
+        text: `Success: beta plan granted to ${user.username || user.email}`
+      });
+      await loadAllUsers();
+    } catch (error) {
+      console.error('Error granting beta plan:', error);
+      setToastMessage({
+        type: 'error',
+        text: `Failed to grant beta plan: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+    } finally {
+      setProcessingBetaGrant(null);
     }
   };
 
@@ -3045,11 +3116,12 @@ const UsersManagement: React.FC = () => {
                       )}
                       <th className="py-3 px-4 text-left text-gray-300 font-medium">ID</th>
                       <th className="py-3 px-4 text-left text-gray-300 font-medium">Email</th>
-                      <th className="py-3 px-4 text-left text-gray-300 font-medium">Username</th>
-                      <th className="py-3 px-4 text-left text-gray-300 font-medium">Registration</th>
-                      <th className="py-3 px-4 text-left text-gray-300 font-medium">Admin</th>
-                      <th className="py-3 px-4 text-center text-gray-300 font-medium">Admin Actions</th>
-                      <th className="py-3 px-4 text-center text-gray-300 font-medium">View</th>
+                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Username</th>
+                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Registration</th>
+                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Admin</th>
+                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Plan</th>
+                        <th className="py-3 px-4 text-center text-gray-300 font-medium">Admin Actions</th>
+                        <th className="py-3 px-4 text-center text-gray-300 font-medium">View</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -3085,14 +3157,23 @@ const UsersManagement: React.FC = () => {
                               <span className="px-2 py-1 bg-orange-900/30 text-orange-400 rounded-full text-xs font-medium border border-orange-900">Incomplete</span>
                             }
                           </td>
-                          <td className="py-3 px-4 border-b border-gray-700">
-                            {user.adminVerified ? 
-                              <span className="px-2 py-1 bg-blue-900/30 text-blue-400 rounded-full text-xs font-medium border border-blue-900">Yes</span> : 
-                              <span className="px-2 py-1 bg-gray-900/30 text-gray-400 rounded-full text-xs font-medium border border-gray-700">No</span>
-                            }
-                          </td>
-                          <td className="py-3 px-4 border-b border-gray-700 text-center">
-                            <div className="flex gap-1 justify-center">
+                            <td className="py-3 px-4 border-b border-gray-700">
+                              {user.adminVerified ? 
+                                <span className="px-2 py-1 bg-blue-900/30 text-blue-400 rounded-full text-xs font-medium border border-blue-900">Yes</span> : 
+                                <span className="px-2 py-1 bg-gray-900/30 text-gray-400 rounded-full text-xs font-medium border border-gray-700">No</span>
+                              }
+                            </td>
+                            <td className="py-3 px-4 border-b border-gray-700">
+                              {isBetaSubscription(user.subscriptionType) ? (
+                                <span className="px-2 py-1 bg-lime-900/30 text-lime-300 rounded-full text-xs font-medium border border-lime-900">Beta</span>
+                              ) : (
+                                <span className="px-2 py-1 bg-gray-900/30 text-gray-400 rounded-full text-xs font-medium border border-gray-700">
+                                  {user.subscriptionType || 'Unsubscribed'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 border-b border-gray-700 text-center">
+                              <div className="flex gap-1 justify-center">
                               <button
                                 onClick={() => toggleAdminStatus(user)}
                                 disabled={!user.email || processingAdmin === user.email}
@@ -3113,11 +3194,11 @@ const UsersManagement: React.FC = () => {
                                   'Make Admin'
                                 )}
                               </button>
-                              <button
-                                onClick={() => handleAddTo100Trainers(user)}
-                                disabled={processingAdd100Trainers === user.id || !user.email}
-                                className="px-2 py-1 rounded-md text-xs font-medium transition-colors bg-green-900/30 text-green-400 hover:bg-green-900/50 border border-green-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                                title={`Add ${user.username || user.email} to 100trainers program`}
+                                <button
+                                  onClick={() => handleAddTo100Trainers(user)}
+                                  disabled={processingAdd100Trainers === user.id || !user.email}
+                                  className="px-2 py-1 rounded-md text-xs font-medium transition-colors bg-green-900/30 text-green-400 hover:bg-green-900/50 border border-green-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title={`Add ${user.username || user.email} to 100trainers program`}
                               >
                                 {processingAdd100Trainers === user.id ? (
                                   <svg className="animate-spin h-3 w-3 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -3125,11 +3206,26 @@ const UsersManagement: React.FC = () => {
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                   </svg>
                                 ) : (
-                                  <Users className="h-3 w-3" />
-                                )}
-                              </button>
-                              <button
-                                onClick={() => handleRemoteLogin(user)}
+                                    <Users className="h-3 w-3" />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => handleGrantBetaPlan(user)}
+                                  disabled={processingBetaGrant === user.id || !user.email || isBetaSubscription(user.subscriptionType)}
+                                  className="px-2 py-1 rounded-md text-xs font-medium transition-colors bg-lime-900/30 text-lime-300 hover:bg-lime-900/50 border border-lime-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title={`${isBetaSubscription(user.subscriptionType) ? 'Beta plan already active for' : 'Grant beta plan to'} ${user.username || user.email}`}
+                                >
+                                  {processingBetaGrant === user.id ? (
+                                    <svg className="animate-spin h-3 w-3 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                  ) : (
+                                    <Sparkles className="h-3 w-3" />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => handleRemoteLogin(user)}
                                 disabled={processingRemoteLogin === user.id || !user.email}
                                 className="px-2 py-1 rounded-md text-xs font-medium transition-colors bg-purple-900/30 text-purple-400 hover:bg-purple-900/50 border border-purple-900 disabled:opacity-50 disabled:cursor-not-allowed"
                                 title={`Remote login as ${user.username || user.email}`}
@@ -3165,7 +3261,7 @@ const UsersManagement: React.FC = () => {
                                 </tr>
                         {selectedUser?.id === user.id && (
                                   <tr>
-                            <td colSpan={isSelectingForDelete ? 8 : 7} className="p-0 border-b border-gray-700">
+                              <td colSpan={isSelectingForDelete ? 9 : 8} className="p-0 border-b border-gray-700">
                               {renderUserDetails(user)}
                                     </td>
                                   </tr>

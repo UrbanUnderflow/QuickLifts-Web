@@ -28,6 +28,7 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   macraLabelScan: { maxTokens: 2200, modelPattern: /gpt-4o|gpt-4/i },
   macraLabelSupplements: { maxTokens: 2500, modelPattern: /gpt-4o|gpt-4/i },
   macraMealPlan: { maxTokens: 2000, modelPattern: /gpt-4o|gpt-4/i }, // Macra: Nora-generated meal plans
+  macraMealEdit: { maxTokens: 1500, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4/i }, // Macra: per-meal "edit with Nora" regenerator on the Plan tab
   macraMealNote: { maxTokens: 1500, modelPattern: /gpt-4o|gpt-4/i },
   noraNutritionChat: { maxTokens: 700, modelPattern: /gpt-4o|gpt-4/i }, // Macra: Nora coach Q&A
   pulsecheckSportIntelligence: { maxTokens: 8000, modelPattern: /gpt-4o|gpt-4/i },
