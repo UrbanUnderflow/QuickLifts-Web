@@ -18,7 +18,8 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   analyzeWorkoutMachineScreen: { maxTokens: 1500, modelPattern: /gpt-4o|gpt-4/i },
   gradeNutritionLabel: { maxTokens: 1000, modelPattern: /gpt-4o|gpt-4/i },
   parseMacrosFromLabelImage: { maxTokens: 1000, modelPattern: /gpt-4o|gpt-4/i },
-  generateResponse: { maxTokens: 2000, modelPattern: /gpt-4o|gpt-4/i }, // Nora Chat
+  generateResponse: { maxTokens: 2000, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4/i }, // Nora Chat
+  noraRoutineGeneration: { maxTokens: 16000, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4/i }, // 1:1 Routine JSON generation
   generateWorkout: { maxTokens: 4000, modelPattern: /gpt-4o|gpt-4/i }, // Workout Generation
   groundedFoodLookup: { maxTokens: 3000, modelPattern: /gpt-5|gpt-4|gpt-4o|o[1-4]/i },
   macraAssessMacros: { maxTokens: 2500, modelPattern: /gpt-4o|gpt-4/i },
@@ -33,7 +34,7 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   // Admin-only: classify legacy challenges into ChallengeType enum (admin lever).
   classifyChallengeType: { maxTokens: 300, modelPattern: /gpt-4o-mini|gpt-4o/i },
   // Default bounds for generic actions
-  default: { maxTokens: 1000, modelPattern: /gpt-4o|gpt-4|gpt-3.5/i }
+  default: { maxTokens: 1000, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4|gpt-3.5/i }
 };
 
 const getHeader = (headers: Record<string, string | undefined> | undefined, headerName: string): string | undefined => {
@@ -208,8 +209,7 @@ export const handler: Handler = async (event) => {
       }
 
       // Automatically cap maximum output tokens to prevent runaway quota abuse
-      const maxTokensBound = process.env.OPENAI_MAX_TOKENS ? parseInt(process.env.OPENAI_MAX_TOKENS) : 4000;
-      const effectiveTokenCap = Math.min(featureConfig.maxTokens, Number.isFinite(maxTokensBound) ? maxTokensBound : 4000);
+      const effectiveTokenCap = featureConfig.maxTokens;
 
       if (typeof parsedBody.max_output_tokens === 'number') {
         parsedBody.max_output_tokens = Math.min(parsedBody.max_output_tokens, effectiveTokenCap);

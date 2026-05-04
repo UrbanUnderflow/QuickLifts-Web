@@ -369,10 +369,10 @@ ${userContext}${currentConfig}${conversationContext}`;
     console.log('Sending to OpenAI...');
     
     const response = await openai.chat.completions.create({
-      model: 'gpt-4.1-mini',
+      model: 'gpt-5-mini',
       messages: messages,
-      max_tokens: 1000,
-      temperature: 0.7,
+      max_completion_tokens: 1000,
+      reasoning_effort: 'low',
     });
 
     const aiResponse = response.choices[0].message.content;

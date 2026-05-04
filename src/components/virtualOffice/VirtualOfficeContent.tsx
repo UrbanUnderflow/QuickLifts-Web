@@ -475,16 +475,6 @@ const MODEL_PRICE_RULES: Array<{
       },
     },
     {
-      match: /^gpt-4\.1-mini(?:[\.-]|$)/,
-      pricing: {
-        model: 'gpt-4.1-mini',
-        label: 'GPT-4.1 Mini',
-        inputPerMillion: 0.40,
-        outputPerMillion: 1.60,
-        source: 'https://platform.openai.com/docs/pricing',
-      },
-    },
-    {
       match: /^gpt-4\.1(?:[\.-]|$)/,
       pricing: {
         model: 'gpt-4.1',

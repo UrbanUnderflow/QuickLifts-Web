@@ -223,7 +223,6 @@ const MODEL_UPGRADE_OPTIONS: ModelUpgradeOption[] = [
     { value: 'openai/gpt-5-chat-latest', label: 'OpenAI: gpt-5-chat-latest' },
     { value: 'openai/codex-mini-latest', label: 'OpenAI: codex-mini-latest' },
     { value: 'openai/gpt-4.1-nano', label: 'OpenAI: gpt-4.1-nano' },
-    { value: 'openai/gpt-4.1-mini', label: 'OpenAI: gpt-4.1-mini' },
     { value: 'openai/gpt-4.1', label: 'OpenAI: gpt-4.1' },
     { value: 'openai/gpt-4o-2024-05-13', label: 'OpenAI: gpt-4o-2024-05-13' },
     { value: 'openai/gpt-4o-mini', label: 'OpenAI: gpt-4o-mini' },

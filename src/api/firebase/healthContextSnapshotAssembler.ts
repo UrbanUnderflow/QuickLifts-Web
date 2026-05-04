@@ -78,15 +78,22 @@ const familyToSnapshotSource = (family: HealthContextSourceFamily): SnapshotSour
 // produced a record for the window wins for that domain.
 // ──────────────────────────────────────────────────────────────────────────────
 
+// Polar slots into recovery / activity / biometrics / summary per the
+// device-strategy spec: Apple Watch (via `apple_health`) is the platform-of-
+// record for active workout windows; Oura is the strongest recovery lane;
+// Polar's BLE + AccessLink data outranks generic HealthKit for recovery/sleep
+// (Polar 360 produces richer overnight stages + nightly recharge than the
+// Apple Health mirror) and outranks generic Oura/HealthKit for biometrics
+// and live-stream activity windows.
 const DOMAIN_PRECEDENCE: Record<HealthContextDomain, HealthContextSourceFamily[]> = {
   identity: ['fit_with_pulse', 'macra', 'coach_entered'],
-  training: ['fit_with_pulse', 'apple_health', 'oura'],
-  recovery: ['oura', 'apple_health', 'pulsecheck_self_report'],
-  activity: ['apple_health', 'oura', 'pulsecheck_self_report'],
+  training: ['fit_with_pulse', 'apple_health', 'polar', 'oura'],
+  recovery: ['oura', 'polar', 'apple_health', 'pulsecheck_self_report'],
+  activity: ['apple_health', 'polar', 'oura', 'pulsecheck_self_report'],
   nutrition: ['macra', 'pulsecheck_self_report', 'fit_with_pulse'],
-  biometrics: ['apple_health', 'oura', 'coach_entered'],
+  biometrics: ['apple_health', 'polar', 'oura', 'coach_entered'],
   behavioral: ['pulsecheck_self_report', 'macra', 'coach_entered'],
-  summary: ['oura', 'apple_health', 'fit_with_pulse', 'macra'],
+  summary: ['oura', 'polar', 'apple_health', 'fit_with_pulse', 'macra'],
 };
 
 // ──────────────────────────────────────────────────────────────────────────────

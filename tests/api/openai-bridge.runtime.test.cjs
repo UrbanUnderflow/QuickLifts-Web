@@ -92,7 +92,7 @@ function createFirebaseMock(uid = 'user-1') {
 }
 
 async function withPatchedEnvironment(patch, run) {
-  const keys = ['OPENAI_API_KEY', 'OPEN_AI_SECRET_KEY', 'OPENAI_MAX_TOKENS', 'OPENAI_BRIDGE_FALLBACK_ORIGIN', 'NEXT_PUBLIC_SITE_URL'];
+  const keys = ['OPENAI_API_KEY', 'OPEN_AI_SECRET_KEY', 'OPENAI_BRIDGE_FALLBACK_ORIGIN', 'NEXT_PUBLIC_SITE_URL'];
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 
   for (const key of keys) {
@@ -129,7 +129,6 @@ test('openai-bridge returns a clear 500 when no server-side provider key is conf
   await withPatchedEnvironment({
     OPENAI_API_KEY: null,
     OPEN_AI_SECRET_KEY: null,
-    OPENAI_MAX_TOKENS: null,
   }, async () => {
     let fetchCalled = false;
     global.fetch = async () => {
@@ -163,7 +162,6 @@ test('openai-bridge relays local dev calls to the deployed bridge when no local 
   await withPatchedEnvironment({
     OPENAI_API_KEY: null,
     OPEN_AI_SECRET_KEY: null,
-    OPENAI_MAX_TOKENS: null,
     OPENAI_BRIDGE_FALLBACK_ORIGIN: 'https://fitwithpulse.ai',
   }, async () => {
     const fetchCalls = [];
@@ -213,7 +211,6 @@ test('openai-bridge falls back to OPEN_AI_SECRET_KEY and caps tokens by feature 
   await withPatchedEnvironment({
     OPENAI_API_KEY: '',
     OPEN_AI_SECRET_KEY: 'server-secret-key',
-    OPENAI_MAX_TOKENS: '1800',
   }, async () => {
     const fetchCalls = [];
     global.fetch = async (url, options) => {
@@ -257,5 +254,52 @@ test('openai-bridge falls back to OPEN_AI_SECRET_KEY and caps tokens by feature 
     const forwardedBody = JSON.parse(fetchCalls[0].options.body);
     assert.equal(forwardedBody.max_tokens, 1500);
     assert.equal(forwardedBody.model, 'gpt-4o');
+  });
+});
+
+test('openai-bridge allows high-token gpt-5-mini routine generation', async () => {
+  await withPatchedEnvironment({
+    OPENAI_API_KEY: 'server-openai-key',
+    OPEN_AI_SECRET_KEY: null,
+  }, async () => {
+    const fetchCalls = [];
+    global.fetch = async (url, options) => {
+      fetchCalls.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({ ok: true });
+        },
+        headers: {
+          get(name) {
+            return name.toLowerCase() === 'content-type' ? 'application/json' : null;
+          },
+        },
+      };
+    };
+
+    const { handler } = loadOpenAIBridgeRuntime(createFirebaseMock('coach-1'));
+    const response = await handler({
+      httpMethod: 'POST',
+      path: '/api/openai/v1/chat/completions',
+      headers: {
+        authorization: 'Bearer firebase-id-token',
+        'OpenAI-Organization': 'noraRoutineGeneration',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-5-mini',
+        messages: [{ role: 'user', content: 'generate a full routine' }],
+        max_completion_tokens: 20000,
+      }),
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(fetchCalls.length, 1);
+
+    const forwardedBody = JSON.parse(fetchCalls[0].options.body);
+    assert.equal(forwardedBody.model, 'gpt-5-mini');
+    assert.equal(forwardedBody.max_completion_tokens, 16000);
   });
 });
