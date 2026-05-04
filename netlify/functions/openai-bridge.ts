@@ -22,7 +22,7 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   noraRoutineGeneration: { maxTokens: 8000, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4/i }, // 1:1 Routine JSON generation
   generateWorkout: { maxTokens: 4000, modelPattern: /gpt-4o|gpt-4/i }, // Workout Generation
   groundedFoodLookup: { maxTokens: 3000, modelPattern: /gpt-5|gpt-4|gpt-4o|o[1-4]/i },
-  macraAssessMacros: { maxTokens: 2500, modelPattern: /gpt-4o|gpt-4/i },
+  macraAssessMacros: { maxTokens: 2500, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4/i },
   macraDailyInsight: { maxTokens: 1000, modelPattern: /gpt-4o|gpt-4/i },
   macraFoodJournalFeedback: { maxTokens: 1500, modelPattern: /gpt-4o|gpt-4/i },
   macraLabelScan: { maxTokens: 2200, modelPattern: /gpt-4o|gpt-4/i },
@@ -206,6 +206,23 @@ export const handler: Handler = async (event) => {
           headers: corsHeaders,
           body: JSON.stringify({ error: 'Forbidden model' })
         };
+      }
+
+      // gpt-5 family rejects legacy `max_tokens` and non-default
+      // `temperature`. Translate the canonical OpenAI shape clients send
+      // (`max_tokens` + `temperature`) into the gpt-5-compatible shape so
+      // callers can flip model strings without rewriting their payloads.
+      const isGpt5Family = typeof parsedBody.model === 'string' && /^gpt-5/i.test(parsedBody.model);
+      if (isGpt5Family) {
+        if (typeof parsedBody.max_tokens === 'number' && typeof parsedBody.max_completion_tokens !== 'number') {
+          parsedBody.max_completion_tokens = parsedBody.max_tokens;
+          delete parsedBody.max_tokens;
+        }
+        // gpt-5 only accepts temperature === 1 (the default); strip any
+        // other value rather than 400-erroring upstream.
+        if (typeof parsedBody.temperature === 'number' && parsedBody.temperature !== 1) {
+          delete parsedBody.temperature;
+        }
       }
 
       // Automatically cap maximum output tokens to prevent runaway quota abuse
