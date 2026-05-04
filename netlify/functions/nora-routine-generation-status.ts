@@ -24,6 +24,17 @@ const verifyAuth = async (authHeader: string | undefined): Promise<string | null
   }
 };
 
+const normalizeChatResultForSwift = (result: any): any => {
+  if (!result || typeof result !== 'object') return result;
+  return {
+    ...result,
+    // Existing completed jobs may have been stored with OpenAI's
+    // `system_fingerprint: null`. The iOS SDK type currently trips on
+    // that, so normalize on read as well as on write.
+    system_fingerprint: result.system_fingerprint ?? ''
+  };
+};
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders, body: '' };
@@ -82,7 +93,7 @@ export const handler: Handler = async (event) => {
     body: JSON.stringify({
       jobId,
       status: job.status || 'queued',
-      result: job.status === 'succeeded' ? job.result : null,
+      result: job.status === 'succeeded' ? normalizeChatResultForSwift(job.result) : null,
       errorMessage: job.status === 'failed' ? job.errorMessage || 'Routine generation failed.' : null
     })
   };

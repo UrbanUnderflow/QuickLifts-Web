@@ -12,6 +12,18 @@ const previewText = (value: string, limit = 1200): string => {
   return value.length <= limit ? value : `${value.slice(0, limit)}...`;
 };
 
+const normalizeChatResultForSwift = (result: any): any => {
+  if (!result || typeof result !== 'object') return result;
+  return {
+    ...result,
+    // MacPaw OpenAI 0.4.x decodes `system_fingerprint` with its string
+    // helper even though the public property is optional. OpenAI can
+    // return null here, so normalize it before storing/returning async
+    // job results to iOS.
+    system_fingerprint: result.system_fingerprint ?? ''
+  };
+};
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
@@ -75,7 +87,7 @@ export const handler: Handler = async (event) => {
       throw new Error(`OpenAI upstream returned non-JSON (${contentType}): ${previewText(responseText)}`);
     }
 
-    const result = JSON.parse(responseText);
+    const result = normalizeChatResultForSwift(JSON.parse(responseText));
     await jobRef.update({
       status: 'succeeded',
       result,
