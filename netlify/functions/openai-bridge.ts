@@ -19,7 +19,7 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   gradeNutritionLabel: { maxTokens: 1000, modelPattern: /gpt-4o|gpt-4/i },
   parseMacrosFromLabelImage: { maxTokens: 1000, modelPattern: /gpt-4o|gpt-4/i },
   generateResponse: { maxTokens: 2000, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4/i }, // Nora Chat
-  noraRoutineGeneration: { maxTokens: 16000, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4/i }, // 1:1 Routine JSON generation
+  noraRoutineGeneration: { maxTokens: 8000, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4/i }, // 1:1 Routine JSON generation
   generateWorkout: { maxTokens: 4000, modelPattern: /gpt-4o|gpt-4/i }, // Workout Generation
   groundedFoodLookup: { maxTokens: 3000, modelPattern: /gpt-5|gpt-4|gpt-4o|o[1-4]/i },
   macraAssessMacros: { maxTokens: 2500, modelPattern: /gpt-4o|gpt-4/i },

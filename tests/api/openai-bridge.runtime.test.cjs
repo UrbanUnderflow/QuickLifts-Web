@@ -257,7 +257,7 @@ test('openai-bridge falls back to OPEN_AI_SECRET_KEY and caps tokens by feature 
   });
 });
 
-test('openai-bridge allows high-token gpt-5-mini routine generation', async () => {
+test('openai-bridge allows timeout-aware gpt-5-mini routine generation', async () => {
   await withPatchedEnvironment({
     OPENAI_API_KEY: 'server-openai-key',
     OPEN_AI_SECRET_KEY: null,
@@ -300,7 +300,7 @@ test('openai-bridge allows high-token gpt-5-mini routine generation', async () =
 
     const forwardedBody = JSON.parse(fetchCalls[0].options.body);
     assert.equal(forwardedBody.model, 'gpt-5-mini');
-    assert.equal(forwardedBody.max_completion_tokens, 16000);
+    assert.equal(forwardedBody.max_completion_tokens, 8000);
   });
 });
 
