@@ -318,6 +318,7 @@ export const handler: Handler = async (event) => {
 
     const response = await fetch(openApiUrl, fetchOptions);
     const data = await response.text();
+    const responseContentType = response.headers.get('content-type') || '';
 
     if (!response.ok) {
       console.error('[openai-bridge] OpenAI upstream error:', {
@@ -328,11 +329,35 @@ export const handler: Handler = async (event) => {
       });
     }
 
+    if (!responseContentType.toLowerCase().includes('application/json')) {
+      const bodyPreview = data.slice(0, 1000);
+      console.error('[openai-bridge] OpenAI upstream returned non-JSON response:', {
+        status: response.status,
+        path: openApiPath,
+        featureId,
+        contentType: responseContentType,
+        body: bodyPreview
+      });
+      return {
+        statusCode: response.ok ? 502 : response.status,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          error: 'OpenAI upstream returned a non-JSON response',
+          upstreamStatus: response.status,
+          upstreamContentType: responseContentType,
+          upstreamBodyPreview: bodyPreview
+        })
+      };
+    }
+
     return {
       statusCode: response.status,
       headers: {
         ...corsHeaders,
-        'Content-Type': response.headers.get('content-type') || 'application/json'
+        'Content-Type': responseContentType || 'application/json'
       },
       body: data
     };

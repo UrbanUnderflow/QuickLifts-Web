@@ -303,3 +303,48 @@ test('openai-bridge allows high-token gpt-5-mini routine generation', async () =
     assert.equal(forwardedBody.max_completion_tokens, 16000);
   });
 });
+
+test('openai-bridge wraps non-json upstream responses for SDK clients', async () => {
+  await withPatchedEnvironment({
+    OPENAI_API_KEY: 'server-openai-key',
+    OPEN_AI_SECRET_KEY: null,
+  }, async () => {
+    global.fetch = async () => ({
+      ok: false,
+      status: 504,
+      async text() {
+        return '<html><body>Gateway timeout</body></html>';
+      },
+      headers: {
+        get(name) {
+          return name.toLowerCase() === 'content-type' ? 'text/html; charset=utf-8' : null;
+        },
+      },
+    });
+
+    const { handler } = loadOpenAIBridgeRuntime(createFirebaseMock('coach-1'));
+    const response = await handler({
+      httpMethod: 'POST',
+      path: '/api/openai/v1/chat/completions',
+      headers: {
+        authorization: 'Bearer firebase-id-token',
+        'OpenAI-Organization': 'noraRoutineGeneration',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-5-mini',
+        messages: [{ role: 'user', content: 'generate a full routine' }],
+        max_completion_tokens: 12000,
+      }),
+    });
+
+    assert.equal(response.statusCode, 504);
+    assert.equal(response.headers['Content-Type'], 'application/json');
+
+    const body = JSON.parse(response.body);
+    assert.match(body.error, /non-json response/i);
+    assert.equal(body.upstreamStatus, 504);
+    assert.equal(body.upstreamContentType, 'text/html; charset=utf-8');
+    assert.match(body.upstreamBodyPreview, /Gateway timeout/);
+  });
+});

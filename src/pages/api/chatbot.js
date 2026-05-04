@@ -372,7 +372,7 @@ ${userContext}${currentConfig}${conversationContext}`;
       model: 'gpt-5-mini',
       messages: messages,
       max_completion_tokens: 1000,
-      reasoning_effort: 'low',
+      reasoning_effort: 'minimal',
     });
 
     const aiResponse = response.choices[0].message.content;
