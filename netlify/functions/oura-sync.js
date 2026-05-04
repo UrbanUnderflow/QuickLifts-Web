@@ -333,6 +333,16 @@ function buildSleepSelectionDebug(records, selectedRecord, preferredDateKey) {
   });
 }
 
+function buildSnapshotDateKeysForOuraProjection(requestedDateKey, observedDateKey) {
+  const requested = isValidDateKey(requestedDateKey) ? requestedDateKey : null;
+  const observed = isValidDateKey(observedDateKey) ? observedDateKey : requested;
+
+  if (!observed) return requested ? [requested] : [];
+  if (!requested || observed === requested) return [observed];
+
+  return [observed];
+}
+
 function buildDefaultSourceStatus(existingMap = {}) {
   return {
     quicklifts: existingMap.quicklifts || { sourceFamily: 'quicklifts', lifecycleState: 'not_connected' },
@@ -720,10 +730,24 @@ function buildSnapshotArtifacts({
     ...existingSourcesUsed,
     'oura',
   ]);
+  const existingRecoveryWinner = String(existingProvenance?.domainWinners?.recovery || '').toLowerCase();
+  const polarOwnsRecovery = existingRecoveryWinner.includes('polar');
+  const hasOuraRecoveryPayload = Object.keys(sleepPayload).length > 0 || Object.keys(stressPayload || {}).length > 0;
+  const shouldWriteOuraRecovery = hasOuraRecoveryPayload && !polarOwnsRecovery;
+
+  if (polarOwnsRecovery && hasOuraRecoveryPayload) {
+    console.log('[oura-sync] Preserving Polar-owned recovery domain; Oura will not override sleep/recovery', {
+      userId,
+      dateKey,
+      requestedDateKey,
+      observedDateKey,
+      existingRecoveryWinner,
+    });
+  }
 
   const nextDomainWinners = {
     ...(existingProvenance.domainWinners || {}),
-    recovery: Object.keys(sleepPayload).length > 0 ? 'pulsecheck_oura' : existingProvenance?.domainWinners?.recovery || 'none',
+    recovery: shouldWriteOuraRecovery ? 'oura' : existingProvenance?.domainWinners?.recovery || 'none',
     summary: 'pulsecheck_oura',
   };
 
@@ -747,7 +771,7 @@ function buildSnapshotArtifacts({
       ...existingSourceStatus,
       oura: sourceStatusDoc,
     },
-    freshness: mergeFreshness(existingSnapshot?.freshness, Object.keys(sleepPayload).length > 0),
+    freshness: mergeFreshness(existingSnapshot?.freshness, shouldWriteOuraRecovery),
     provenance: {
       ...existingProvenance,
       summaryMode: existingSnapshot ? 'merged' : 'direct',
@@ -764,11 +788,13 @@ function buildSnapshotArtifacts({
         timezone,
         snapshotDate: dateKey,
       },
-      recovery: compactObject({
-        ...(existingDomains.recovery || {}),
-        ...sleepPayload,
-        ...(stressPayload || {}),
-      }),
+      recovery: shouldWriteOuraRecovery
+        ? compactObject({
+            ...(existingDomains.recovery || {}),
+            ...sleepPayload,
+            ...(stressPayload || {}),
+          })
+        : existingDomains.recovery || {},
       summary: compactObject({
         ...(existingDomains.summary || {}),
         dataSourcesUsed: nextSourcesUsed,
@@ -1019,7 +1045,17 @@ exports.handler = async (event) => {
       );
     }
 
-    const snapshotDateKeys = uniqueStrings([requestedDateKey, latestDateKey]);
+    const snapshotDateKeys = uniqueStrings(buildSnapshotDateKeysForOuraProjection(requestedDateKey, latestDateKey));
+    const skippedRequestedSnapshotProjection = !snapshotDateKeys.includes(requestedDateKey);
+    if (skippedRequestedSnapshotProjection) {
+      console.log('[oura-sync] Skipping requested snapshot projection because latest Oura sleep is stale', {
+        userId,
+        requestedDateKey,
+        observedDateKey: latestDateKey,
+        snapshotDateKeys,
+        selectedSleepMinutes: sleepSelectionDebug?.selectedRecord?.totalSleepMinutes,
+      });
+    }
     const existingSnapshots = await Promise.all(
       snapshotDateKeys.map(async (snapshotDateKey) => {
         const snapshotId = `${userId}_daily_${snapshotDateKey}`;
@@ -1085,7 +1121,8 @@ exports.handler = async (event) => {
     }
 
     const requestedSnapshot = snapshotArtifacts.find((artifacts) => artifacts.snapshot.snapshotDateKey === requestedDateKey)
-      || snapshotArtifacts[0];
+      || null;
+    const responseSnapshot = requestedSnapshot || snapshotArtifacts[0];
 
     return {
       statusCode: 200,
@@ -1093,18 +1130,24 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         ok: true,
         status: 'synced',
-        snapshotId: requestedSnapshot?.snapshot.id,
+        snapshotId: responseSnapshot?.snapshot.id,
         snapshotDateKey: requestedDateKey,
         observedDateKey: latestDateKey,
+        projectedRequestedSnapshot: Boolean(requestedSnapshot),
+        skippedRequestedSnapshotProjection,
         updatedSnapshotDateKeys: snapshotArtifacts.map((artifacts) => artifacts.snapshot.snapshotDateKey),
         sourceRecordIds: sourceRecordDocs.map((record) => record.id),
-        sourcesUsed: requestedSnapshot?.snapshot.provenance.sourcesUsed || ['oura'],
+        sourcesUsed: responseSnapshot?.snapshot.provenance.sourcesUsed || ['oura'],
         biometricBriefNotification,
-        detail: 'PulseCheck imported the latest Oura recovery context.',
+        detail: skippedRequestedSnapshotProjection
+          ? `PulseCheck imported Oura recovery from ${latestDateKey}; today's snapshot was left unchanged because Oura did not return sleep for ${requestedDateKey}.`
+          : 'PulseCheck imported the latest Oura recovery context.',
         ...(includeDebug ? {
           debug: {
             requestedDateKey,
             observedDateKey: latestDateKey,
+            projectedSnapshotDateKeys: snapshotDateKeys,
+            skippedRequestedSnapshotProjection,
             sleepSelection: sleepSelectionDebug,
           },
         } : {}),
@@ -1122,6 +1165,8 @@ exports.handler = async (event) => {
 exports.__test = {
   chooseLatestRecord,
   chooseBestSleepRecord,
+  buildSnapshotDateKeysForOuraProjection,
+  buildSnapshotArtifacts,
   compareSleepRecords,
   isUsableSleepRecord,
   sleepRecordTypePriority,

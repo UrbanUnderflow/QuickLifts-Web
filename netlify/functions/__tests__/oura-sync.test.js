@@ -31,6 +31,8 @@ require.cache[ouraUtilsPath] = {
 const {
   chooseBestSleepRecord,
   chooseLatestRecord,
+  buildSnapshotDateKeysForOuraProjection,
+  buildSnapshotArtifacts,
   isUsableSleepRecord,
   sleepRecordTypePriority,
 } = require('../oura-sync').__test;
@@ -90,6 +92,55 @@ test('chooseBestSleepRecord falls back to the latest valid sleep when the prefer
   );
 
   assert.equal(selected?.id, 'sleep_recent');
+});
+
+test('buildSnapshotDateKeysForOuraProjection does not project stale sleep onto the requested day', () => {
+  assert.deepEqual(
+    buildSnapshotDateKeysForOuraProjection('2026-05-04', '2026-05-02'),
+    ['2026-05-02']
+  );
+  assert.deepEqual(
+    buildSnapshotDateKeysForOuraProjection('2026-05-04', '2026-05-04'),
+    ['2026-05-04']
+  );
+});
+
+test('buildSnapshotArtifacts preserves Polar-owned recovery when Oura sync runs later', () => {
+  const artifacts = buildSnapshotArtifacts({
+    userId: 'user_test',
+    dateKey: '2026-05-04',
+    timezone: 'America/New_York',
+    syncAt: 1_777_870_800,
+    requestedDateKey: '2026-05-04',
+    observedDateKey: '2026-05-04',
+    sourceStatusDoc: {
+      id: 'user_test_oura',
+      sourceFamily: 'oura',
+      lifecycleState: 'connected_synced',
+    },
+    sourceRecordDocs: [{ id: 'user_test_oura_recovery_2026-05-04' }],
+    sleepPayload: { sleepDuration: 4, sleepEfficiency: 0.86 },
+    readinessPayload: { readinessScore: 82 },
+    stressPayload: { recoveryHighMinutes: 12 },
+    existingSnapshot: {
+      provenance: {
+        sourcesUsed: ['polar'],
+        sourceRecordIds: ['user_test_polar_recovery_2026-05-04'],
+        domainWinners: { recovery: 'polar' },
+      },
+      domains: {
+        recovery: { sleepDuration: 7.53, sleepEfficiency: 0.93 },
+        summary: { dataSourcesUsed: ['polar'] },
+      },
+      freshness: { recovery: 'fresh', overall: 'fresh' },
+    },
+  });
+
+  assert.equal(artifacts.snapshot.provenance.domainWinners.recovery, 'polar');
+  assert.equal(artifacts.snapshot.domains.recovery.sleepDuration, 7.53);
+  assert.equal(artifacts.snapshot.domains.recovery.sleepEfficiency, 0.93);
+  assert.equal(artifacts.snapshot.domains.summary.readinessScore, 82);
+  assert.deepEqual(artifacts.snapshot.provenance.sourcesUsed.sort(), ['oura', 'polar']);
 });
 
 test('chooseLatestRecord breaks same-day ties with timestamp instead of array order', () => {

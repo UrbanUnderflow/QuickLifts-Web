@@ -117,6 +117,20 @@
       ]
     },
     {
+      "collectionGroup": "pulsecheck-mental-training-task-results",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "athleteUserId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "completedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "coachAthletes",
       "queryScope": "COLLECTION",
       "fields": [

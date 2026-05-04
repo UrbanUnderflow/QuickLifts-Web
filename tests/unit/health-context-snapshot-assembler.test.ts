@@ -96,6 +96,33 @@ test('assembler — Oura + self-report on same domain → Oura wins per preceden
   assert.equal(result.snapshot.domains.recovery!.data.sleepEfficiency, 0.92);
 });
 
+test('assembler — Polar + Oura on recovery domain → Polar wins sleep/recovery precedence', async () => {
+  const mod = await loadAssembler();
+  const ouraRecord = buildRecord({
+    id: 'rec-oura-recovery',
+    payload: { sleepDuration: 4, sleepEfficiency: 0.86 },
+  });
+  const polarRecord = buildRecord({
+    id: 'rec-polar-recovery',
+    sourceFamily: 'polar',
+    sourceType: 'polar_ble_recovery',
+    payload: { sleepDuration: 7.53, sleepEfficiency: 0.93 },
+    sourceMetadata: { syncOrigin: 'pulsecheck_polar_ble_sleep', writer: 'PolarBleService.swift' },
+    provenance: { mode: 'direct', sourceSystem: 'polar_ble', confidenceLabel: 'stable' },
+    dedupeKey: 'athlete-1|polar|recovery|2026-04-25',
+  });
+
+  const result = await mod.assembleAthleteContextSnapshot({
+    ...baseInput,
+    records: [ouraRecord, polarRecord],
+  });
+
+  assert.equal(result.snapshot.domains.recovery!.provenance.primarySource, 'polar');
+  assert.equal(result.snapshot.provenance.domainWinners.recovery, 'polar');
+  assert.equal(result.snapshot.domains.recovery!.data.sleepDuration, 7.53);
+  assert.equal(result.snapshot.domains.recovery!.data.sleepEfficiency, 0.93);
+});
+
 test('assembler — self-report-only on recovery domain caps confidence at emerging', async () => {
   const mod = await loadAssembler();
   const selfReportRecord = buildRecord({
