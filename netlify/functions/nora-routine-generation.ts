@@ -31,13 +31,27 @@ const resolveOpenAIApiKey = (): string | null => {
   return configuredKey || null;
 };
 
-const resolveFunctionOrigin = (event: Parameters<Handler>[0]): string => {
-  const configuredOrigin = process.env.URL || process.env.DEPLOY_PRIME_URL;
-  if (configuredOrigin) return configuredOrigin.replace(/\/+$/, '');
+const previewText = (value: string, limit = 1200): string => {
+  return value.length <= limit ? value : `${value.slice(0, limit)}...`;
+};
 
+const normalizeChatResultForSwift = (result: any): any => {
+  if (!result || typeof result !== 'object') return result;
+  return {
+    ...result,
+    system_fingerprint: result.system_fingerprint ?? ''
+  };
+};
+
+const resolveFunctionOrigins = (event: Parameters<Handler>[0]): string[] => {
   const host = getHeader(event.headers, 'host') || 'fitwithpulse.ai';
   const protocol = getHeader(event.headers, 'x-forwarded-proto') || 'https';
-  return `${protocol}://${host}`.replace(/\/+$/, '');
+  const requestOrigin = `${protocol}://${host}`.replace(/\/+$/, '');
+  const configuredOrigins = [process.env.URL, process.env.DEPLOY_PRIME_URL]
+    .map((origin) => origin?.trim().replace(/\/+$/, ''))
+    .filter((origin): origin is string => Boolean(origin));
+
+  return Array.from(new Set([requestOrigin, ...configuredOrigins]));
 };
 
 const clampRoutineRequest = (body: any): any => {
@@ -58,6 +72,72 @@ const clampRoutineRequest = (body: any): any => {
   }
 
   return JSON.parse(JSON.stringify(request));
+};
+
+const runRoutineGenerationJobInline = async (jobId: string, workerToken: string): Promise<void> => {
+  const providerApiKey = resolveOpenAIApiKey();
+  const jobRef = admin.firestore().collection(JOB_COLLECTION).doc(jobId);
+
+  try {
+    if (!providerApiKey) {
+      throw new Error('Missing OpenAI provider key');
+    }
+
+    const jobDoc = await jobRef.get();
+    if (!jobDoc.exists) {
+      throw new Error('Job not found');
+    }
+
+    const job = jobDoc.data() || {};
+    if (job.workerToken !== workerToken) {
+      throw new Error('Forbidden worker token');
+    }
+    if (job.status === 'succeeded') {
+      return;
+    }
+
+    await jobRef.update({
+      status: 'running',
+      startedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${providerApiKey}`
+      },
+      body: JSON.stringify(job.request)
+    });
+
+    const responseText = await response.text();
+    const contentType = response.headers.get('content-type') || '';
+
+    if (!response.ok) {
+      throw new Error(`OpenAI upstream ${response.status}: ${previewText(responseText)}`);
+    }
+
+    if (!contentType.toLowerCase().includes('application/json')) {
+      throw new Error(`OpenAI upstream returned non-JSON (${contentType}): ${previewText(responseText)}`);
+    }
+
+    const result = normalizeChatResultForSwift(JSON.parse(responseText));
+    await jobRef.update({
+      status: 'succeeded',
+      result,
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+  } catch (error: any) {
+    await jobRef.update({
+      status: 'failed',
+      errorMessage: previewText(error?.message || 'Routine generation failed.'),
+      failedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }).catch(() => {});
+    throw error;
+  }
 };
 
 export const handler: Handler = async (event) => {
@@ -117,31 +197,61 @@ export const handler: Handler = async (event) => {
     model: requestBody.model || null
   });
 
-  const workerUrl = `${resolveFunctionOrigin(event)}/.netlify/functions/nora-routine-generation-background`;
-  try {
-    await fetch(workerUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-pulsecheck-internal-worker': workerToken,
-        ...(getHeader(event.headers, 'x-pulsecheck-firebase-mode')
-          ? { 'x-pulsecheck-firebase-mode': getHeader(event.headers, 'x-pulsecheck-firebase-mode')! }
-          : {})
-      },
-      body: JSON.stringify({ jobId })
+  const workerHeaders = {
+    'Content-Type': 'application/json',
+    'x-pulsecheck-internal-worker': workerToken,
+    ...(getHeader(event.headers, 'x-pulsecheck-firebase-mode')
+      ? { 'x-pulsecheck-firebase-mode': getHeader(event.headers, 'x-pulsecheck-firebase-mode')! }
+      : {})
+  };
+  const workerBody = JSON.stringify({ jobId });
+  let workerStarted = false;
+  let lastWorkerError: Error | null = null;
+
+  for (const origin of resolveFunctionOrigins(event)) {
+    const workerUrl = `${origin}/.netlify/functions/nora-routine-generation-background`;
+    try {
+      const workerResponse = await fetch(workerUrl, {
+        method: 'POST',
+        headers: workerHeaders,
+        body: workerBody
+      });
+
+      if (workerResponse.ok || workerResponse.status === 202) {
+        workerStarted = true;
+        break;
+      }
+
+      const responseText = await workerResponse.text().catch(() => '');
+      lastWorkerError = new Error(`HTTP ${workerResponse.status} from ${workerUrl}: ${previewText(responseText)}`);
+      console.error('[nora-routine-generation] Background worker start returned an error:', {
+        jobId,
+        workerUrl,
+        message: lastWorkerError.message
+      });
+    } catch (error: any) {
+      lastWorkerError = error instanceof Error ? error : new Error(String(error));
+      console.error('[nora-routine-generation] Background worker start threw:', {
+        jobId,
+        workerUrl,
+        message: lastWorkerError.message
+      });
+    }
+  }
+
+  if (!workerStarted) {
+    console.error('[nora-routine-generation] Falling back to inline routine generation:', {
+      jobId,
+      message: lastWorkerError?.message || 'No worker start attempts succeeded.'
     });
-  } catch (error: any) {
-    console.error('[nora-routine-generation] Failed to start background worker:', error);
-    await jobRef.update({
-      status: 'failed',
-      errorMessage: 'Routine generation worker failed to start.',
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-    return {
-      statusCode: 502,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'Routine generation worker failed to start' })
-    };
+    try {
+      await runRoutineGenerationJobInline(jobId, workerToken);
+    } catch (error: any) {
+      console.error('[nora-routine-generation] Inline routine generation failed:', {
+        jobId,
+        message: error?.message
+      });
+    }
   }
 
   return {
@@ -150,6 +260,6 @@ export const handler: Handler = async (event) => {
       ...corsHeaders,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ jobId, status: 'queued' })
+    body: JSON.stringify({ jobId, status: workerStarted ? 'queued' : 'running' })
   };
 };

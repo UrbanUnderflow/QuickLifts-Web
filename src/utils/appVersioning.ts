@@ -59,27 +59,65 @@ export interface AppVersionDocument {
 
 type FirestoreLikeData = Record<string, any>;
 
-const getNumericParts = (version: string): number[] =>
-  version.split('.').map((part) => {
-    const match = part.match(/\d+/);
-    return match ? parseInt(match[0], 10) : 0;
-  });
+type VersionPart = {
+  rawText: string;
+  comparableDigits: string;
+  leadingZeroCount: number;
+};
+
+const normalizeVersionPart = (rawText: string): VersionPart => {
+  const extractedDigits = rawText.replace(/\D/g, '');
+  const digits = extractedDigits.length > 0 ? extractedDigits : '0';
+  const trimmedDigits = digits.replace(/^0+/, '');
+  const comparableDigits = trimmedDigits.length > 0 ? trimmedDigits : '0';
+
+  return {
+    rawText,
+    comparableDigits,
+    leadingZeroCount: digits.length - comparableDigits.length,
+  };
+};
+
+const getVersionParts = (version: string): VersionPart[] =>
+  version.split('.').map((part) => normalizeVersionPart(part));
+
+const compareVersionParts = (lhs: VersionPart, rhs: VersionPart): number => {
+  if (lhs.comparableDigits.length !== rhs.comparableDigits.length) {
+    return lhs.comparableDigits.length - rhs.comparableDigits.length;
+  }
+
+  if (lhs.comparableDigits !== rhs.comparableDigits) {
+    return lhs.comparableDigits < rhs.comparableDigits ? -1 : 1;
+  }
+
+  if (lhs.leadingZeroCount !== rhs.leadingZeroCount) {
+    return rhs.leadingZeroCount - lhs.leadingZeroCount;
+  }
+
+  if (lhs.rawText === rhs.rawText) {
+    return 0;
+  }
+
+  return lhs.rawText.localeCompare(rhs.rawText, undefined, { sensitivity: 'base' });
+};
 
 export const compareSemanticVersions = (lhs: string, rhs: string): number => {
-  const lhsParts = getNumericParts(lhs);
-  const rhsParts = getNumericParts(rhs);
+  const lhsParts = getVersionParts(lhs);
+  const rhsParts = getVersionParts(rhs);
   const maxLength = Math.max(lhsParts.length, rhsParts.length);
+  const zeroPart = normalizeVersionPart('0');
 
   for (let index = 0; index < maxLength; index += 1) {
-    const left = lhsParts[index] ?? 0;
-    const right = rhsParts[index] ?? 0;
+    const left = lhsParts[index] ?? zeroPart;
+    const right = rhsParts[index] ?? zeroPart;
+    const comparison = compareVersionParts(left, right);
 
-    if (left !== right) {
-      return left - right;
+    if (comparison !== 0) {
+      return comparison;
     }
   }
 
-  return lhs.localeCompare(rhs, undefined, { numeric: true, sensitivity: 'base' });
+  return 0;
 };
 
 export const compareBuildNumbers = (lhs?: string | null, rhs?: string | null): number => {
