@@ -118,19 +118,19 @@ const primeMorningCheckinProbe = async (
 // `noraResponse` cases — both must pass the Nora voice rubric (7
 // questions) documented at the top of that file.
 const OPENER_TEXT: Record<CheckinLevel, string> = {
-  drained: "You came in drained today — low fuel. We'll start with one short rep and build from there.",
-  low:     "You came in low today — less fuel than usual. We'll keep today's rep clean and cut the heavy stuff.",
-  okay:    "You came in steady today — not flat, not flying. We'll run today's rep clean.",
-  solid:   "You came in with good energy today. We'll use it without rushing today's rep.",
-  locked:  "You came in locked today — high energy. Let's spend it clean, no sloppy reps.",
+  drained: "You came in drained today — low fuel. We'll start small and build from there.",
+  low:     "You came in low today — less fuel than usual. We'll keep today light and skip the high-effort moves.",
+  okay:    "You came in steady today — not flat, not flying. We'll keep today clean and clear.",
+  solid:   "You came in with good energy today. We'll use it cleanly, without rushing.",
+  locked:  "You came in locked today — high energy. Let's spend it clean.",
 };
 
 const PROBE_TEXT: Record<CheckinLevel, string> = {
-  drained: "Where's the drag worst — body, head, or schedule? I'll cut what won't help in today's rep.",
-  low:     "What's pulling you down most — sleep, stress, or workload? I'll keep today's rep light and skip the rest.",
-  okay:    "Anything weighing on you — sleep, life, or focus? I'll work around it in today's rep.",
-  solid:   "What's clicking — sleep, headspace, or motivation? I'll lean today's rep into it.",
-  locked:  "What lit you up — sleep, mindset, or a target? I'll match today's rep to it.",
+  drained: "Where's the drag worst — body, head, or schedule? I'll cut what won't help today.",
+  low:     "What's pulling you down most — sleep, stress, or workload? I'll line up something light to match.",
+  okay:    "Anything weighing on you — sleep, life, or focus? I'll work around it today.",
+  solid:   "What's clicking — sleep, headspace, or motivation? I'll build today around it.",
+  locked:  "What lit you up — sleep, mindset, or a target? I'll match today's session to it.",
 };
 
 const ACTION_DELIVERY_TEXT: Record<CheckinLevel, string> = {
