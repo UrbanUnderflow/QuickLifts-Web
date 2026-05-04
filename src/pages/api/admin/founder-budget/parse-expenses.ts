@@ -12,6 +12,8 @@ const PAYMENT_METHOD_OPTIONS = [
   'Other',
 ] as const;
 
+const EXPENSE_IMPORT_MAX_OUTPUT_TOKENS = 3500;
+
 interface ExistingExpenseInput {
   date?: string;
   label?: string;
@@ -212,7 +214,7 @@ Return JSON only in this exact shape:
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       temperature: 0.1,
-      max_tokens: 2500,
+      max_tokens: EXPENSE_IMPORT_MAX_OUTPUT_TOKENS,
       response_format: { type: 'json_object' },
       messages: [
         {
@@ -227,7 +229,12 @@ Return JSON only in this exact shape:
       ],
     });
 
-    const rawContent = completion.choices?.[0]?.message?.content?.trim();
+    const completionChoice = completion.choices?.[0];
+    if (completionChoice?.finish_reason === 'length') {
+      throw new Error('The screenshot parser ran out of output room before it could finish JSON. Try importing fewer or smaller screenshots.');
+    }
+
+    const rawContent = completionChoice?.message?.content?.trim();
     if (!rawContent) {
       throw new Error('OpenAI did not return any screenshot extraction content.');
     }

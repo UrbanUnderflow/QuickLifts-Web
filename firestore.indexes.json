@@ -1,6 +1,20 @@
 {
   "indexes": [
     {
+      "collectionGroup": "oneOnOneTrainings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "participantIds",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "agent-commands",
       "queryScope": "COLLECTION",
       "fields": [

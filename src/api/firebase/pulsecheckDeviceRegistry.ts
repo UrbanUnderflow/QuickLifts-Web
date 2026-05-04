@@ -76,6 +76,50 @@ export type PulseCheckDeviceIntegrationStatus =
   | 'planned'
   | 'not-supported';
 
+/**
+ * Canonical lifecycle states written to `health-context-source-status/{userId}_{deviceFamily}`.
+ *
+ * Doctrine for BLE-transport devices:
+ *   - 'connected_synced'           → bond is live, data is flowing
+ *   - 'connected_waiting_data'     → bond is live, no payload yet (e.g., no session started)
+ *   - 'connected_error'            → transient SDK or upstream error
+ *   - 'not_connected'              → never paired (cold state)
+ *   - 'pairing_lost'               → was paired before, OS bond was wiped (athlete used iOS
+ *                                    Settings → Forget This Device, or a phone restart broke the
+ *                                    bond). Triggers the BLE reconnect modal on next foreground.
+ *   - 'pairing_lost_dismissed'     → athlete saw the modal and tapped "Skip for now". Don't
+ *                                    re-prompt until the next pairing attempt or session start.
+ *
+ * For OAuth-transport devices, only `connected_synced`, `connected_waiting_data`,
+ * `connected_error`, and `not_connected` apply — there's no BLE bond to lose.
+ */
+export type PulseCheckDeviceLifecycleState =
+  | 'connected_synced'
+  | 'connected_waiting_data'
+  | 'connected_error'
+  | 'not_connected'
+  | 'pairing_lost'
+  | 'pairing_lost_dismissed';
+
+export const PULSECHECK_DEVICE_LIFECYCLE_STATES: PulseCheckDeviceLifecycleState[] = [
+  'connected_synced',
+  'connected_waiting_data',
+  'connected_error',
+  'not_connected',
+  'pairing_lost',
+  'pairing_lost_dismissed',
+];
+
+/**
+ * The lifecycle states that should trigger the BLE reconnect modal on the
+ * next iOS app foreground. `pairing_lost_dismissed` is intentionally
+ * excluded — it signals the athlete acknowledged the modal and chose to
+ * defer reconnection.
+ */
+export const PULSECHECK_DEVICE_RECONNECT_PROMPT_STATES: PulseCheckDeviceLifecycleState[] = [
+  'pairing_lost',
+];
+
 export interface PulseCheckDeviceRegistryEntry {
   deviceFamily: PulseCheckDeviceFamily;
   displayName: string;
@@ -284,6 +328,29 @@ export const getPulseCheckDeviceRegistryEntriesByDataType = (
   dataType: PulseCheckDeviceRegistryDataType,
 ): PulseCheckDeviceRegistryEntry[] =>
   PULSECHECK_DEVICE_REGISTRY_SEED_ENTRIES.filter((entry) => entry.dataTypesProvided.includes(dataType));
+
+/**
+ * Returns every device family in the registry that uses a BLE-class
+ * transport (currently `'ble'`; in the future could include `'ant-plus'`
+ * if we ship sensor support that needs the same disconnect-recovery UX).
+ *
+ * The BLE disconnect monitor on iOS uses this to know which source-status
+ * docs to watch and which modal copy to render.
+ */
+export const getPulseCheckDeviceRegistryBleEntries = (): PulseCheckDeviceRegistryEntry[] =>
+  PULSECHECK_DEVICE_REGISTRY_SEED_ENTRIES.filter((entry) => entry.transport === 'ble');
+
+export const isPulseCheckDeviceLifecycleState = (
+  value: unknown,
+): value is PulseCheckDeviceLifecycleState =>
+  typeof value === 'string' &&
+  PULSECHECK_DEVICE_LIFECYCLE_STATES.includes(value as PulseCheckDeviceLifecycleState);
+
+export const isPulseCheckDeviceReconnectPromptState = (
+  value: unknown,
+): value is PulseCheckDeviceLifecycleState =>
+  typeof value === 'string' &&
+  PULSECHECK_DEVICE_RECONNECT_PROMPT_STATES.includes(value as PulseCheckDeviceLifecycleState);
 
 export const isPulseCheckDeviceFamily = (value: unknown): value is PulseCheckDeviceFamily =>
   typeof value === 'string' && PULSECHECK_DEVICE_REGISTRY_DEVICE_FAMILIES.includes(value as PulseCheckDeviceFamily);

@@ -94,6 +94,7 @@ interface ParseExpenseImportResponse {
 const EXPENSE_IMPORT_FUNCTION_ENDPOINT = '/.netlify/functions/founder-budget-parse-expenses';
 const EXPENSE_IMPORT_OPENAI_BRIDGE_ENDPOINT = '/api/openai/v1/chat/completions';
 const EXPENSE_IMPORT_API_ENDPOINT = '/api/admin/founder-budget/parse-expenses';
+const EXPENSE_IMPORT_IMAGES_PER_REQUEST = 1;
 
 const CURRENT_DATE = new Date();
 const DEFAULT_MONTH = CURRENT_DATE.getMonth() + 1;
@@ -922,17 +923,29 @@ const FounderBudgetAdminPage: React.FC = () => {
     return getDownloadURL(screenshotRef);
   };
 
-  const buildExpenseImportRequestPayload = (imageUrls: string[]) => ({
+  const buildExpenseImportRequestPayload = (
+    imageUrls: string[],
+    additionalExistingExpenses: ParsedExpenseImport[] = []
+  ) => ({
     imageUrls,
     targetMonth: selectedMonth,
     targetYear: selectedYear,
-    existingExpenses: draft.miscExpenses.map((expense) => ({
-      date: expense.date,
-      label: expense.label,
-      amount: moneyStringToNumber(expense.amount),
-      paymentMethod: expense.paymentMethod,
-      notes: expense.notes,
-    })),
+    existingExpenses: [
+      ...draft.miscExpenses.map((expense) => ({
+        date: expense.date,
+        label: expense.label,
+        amount: moneyStringToNumber(expense.amount),
+        paymentMethod: expense.paymentMethod,
+        notes: expense.notes,
+      })),
+      ...additionalExistingExpenses.map((expense) => ({
+        date: expense.date,
+        label: expense.label,
+        amount: expense.amount,
+        paymentMethod: expense.paymentMethod,
+        notes: expense.notes,
+      })),
+    ],
   });
 
   const readExpenseImportError = (payload: unknown, fallbackMessage: string) => {
@@ -1007,7 +1020,7 @@ const FounderBudgetAdminPage: React.FC = () => {
       body: JSON.stringify({
         model: 'gpt-4o',
         temperature: 0.1,
-        max_tokens: 900,
+        max_tokens: 2500,
         response_format: { type: 'json_object' },
         messages: [
           {
@@ -1050,15 +1063,56 @@ const FounderBudgetAdminPage: React.FC = () => {
       throw new Error(readExpenseImportError(payload, 'Unable to parse screenshot expenses.'));
     }
 
-    const rawContent = extractOpenAIMessageText(
-      (payload as { choices?: Array<{ message?: { content?: unknown } }> } | null)?.choices?.[0]?.message?.content
-    );
+    const bridgeChoice =
+      (payload as { choices?: Array<{ finish_reason?: string; message?: { content?: unknown } }> } | null)?.choices?.[0];
+    if (bridgeChoice?.finish_reason === 'length') {
+      throw new Error('The screenshot parser ran out of output room before it could finish JSON. Try importing fewer or smaller screenshots.');
+    }
+
+    const rawContent = extractOpenAIMessageText(bridgeChoice?.message?.content);
 
     if (!rawContent) {
       throw new Error('OpenAI did not return any screenshot extraction content.');
     }
 
     return normalizeExpenseImportResult(parseExpenseImportModelResponse(rawContent));
+  };
+
+  const requestExpenseImport = async (
+    requestPayload: ReturnType<typeof buildExpenseImportRequestPayload>
+  ) => {
+    let result: ParseExpenseImportResponse | null = null;
+    let lastError: Error | null = null;
+
+    const importStrategies = [
+      () =>
+        requestExpenseImportFromJsonEndpoint(EXPENSE_IMPORT_FUNCTION_ENDPOINT, requestPayload, {
+          allowMissing: true,
+        }),
+      () => requestExpenseImportFromOpenAIBridge(requestPayload),
+      () => requestExpenseImportFromJsonEndpoint(EXPENSE_IMPORT_API_ENDPOINT, requestPayload),
+    ];
+
+    for (const strategy of importStrategies) {
+      try {
+        const candidate = await strategy();
+        if (!candidate) {
+          continue;
+        }
+
+        result = candidate;
+        break;
+      } catch (error) {
+        lastError =
+          error instanceof Error ? error : new Error('Unable to parse screenshot expenses.');
+      }
+    }
+
+    if (!result?.success) {
+      throw lastError || new Error('Unable to parse screenshot expenses.');
+    }
+
+    return result;
   };
 
   const importExpenseScreenshots = async (filesToImport: File[]) => {
@@ -1075,40 +1129,19 @@ const FounderBudgetAdminPage: React.FC = () => {
 
     try {
       const imageUrls = await Promise.all(filesToImport.map((file) => uploadExpenseImportImageToStorage(file)));
-      const requestPayload = buildExpenseImportRequestPayload(imageUrls);
+      const parsedExpenses: ParsedExpenseImport[] = [];
+      let apiDuplicateCount = 0;
 
-      let result: ParseExpenseImportResponse | null = null;
-      let lastError: Error | null = null;
+      for (let index = 0; index < imageUrls.length; index += EXPENSE_IMPORT_IMAGES_PER_REQUEST) {
+        const imageUrlBatch = imageUrls.slice(index, index + EXPENSE_IMPORT_IMAGES_PER_REQUEST);
+        const requestPayload = buildExpenseImportRequestPayload(imageUrlBatch, parsedExpenses);
+        const result = await requestExpenseImport(requestPayload);
+        const resultExpenses = Array.isArray(result.expenses) ? result.expenses : [];
 
-      const importStrategies = [
-        () =>
-          requestExpenseImportFromJsonEndpoint(EXPENSE_IMPORT_FUNCTION_ENDPOINT, requestPayload, {
-            allowMissing: true,
-          }),
-        () => requestExpenseImportFromOpenAIBridge(requestPayload),
-        () => requestExpenseImportFromJsonEndpoint(EXPENSE_IMPORT_API_ENDPOINT, requestPayload),
-      ];
-
-      for (const strategy of importStrategies) {
-        try {
-          const candidate = await strategy();
-          if (!candidate) {
-            continue;
-          }
-
-          result = candidate;
-          break;
-        } catch (error) {
-          lastError =
-            error instanceof Error ? error : new Error('Unable to parse screenshot expenses.');
-        }
+        parsedExpenses.push(...resultExpenses);
+        apiDuplicateCount += result.summary?.duplicateCount || 0;
       }
 
-      if (!result?.success) {
-        throw lastError || new Error('Unable to parse screenshot expenses.');
-      }
-
-      const parsedExpenses = Array.isArray(result.expenses) ? result.expenses : [];
       let mergeResult = { addedExpenses: [] as MiscExpenseDraft[], duplicateCount: 0 };
 
       setDraft((currentDraft) => {
@@ -1124,7 +1157,6 @@ const FounderBudgetAdminPage: React.FC = () => {
         };
       });
 
-      const apiDuplicateCount = result.summary?.duplicateCount || 0;
       const totalDuplicateCount = Math.max(apiDuplicateCount, mergeResult.duplicateCount);
 
       if (mergeResult.addedExpenses.length > 0) {

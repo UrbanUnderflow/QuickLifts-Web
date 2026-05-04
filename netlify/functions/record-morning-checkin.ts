@@ -113,19 +113,21 @@ const primeMorningCheckinProbe = async (
   return updatedConversation;
 };
 
-// Mirrors NoraDailyView.ReadinessLevel.noraResponse on iOS.  Keep these
-// in sync with PulseCheck/Views/Chat/NoraDailyView.swift line 34-42.
+// Mirrors NoraDailyView.ReadinessLevel.noraResponse on iOS. Keep these
+// byte-identical with PulseCheck/Views/Chat/NoraDailyView.swift around
+// line 34-42 — both must pass the Nora voice rubric documented at the
+// top of that file.
 const OPENER_TEXT: Record<CheckinLevel, string> = {
-  drained: "You're coming in heavy today. We'll keep the first win simple and get you settled.",
-  low:     "You've got less in the tank today. We'll keep the work clean and meet the day where it is.",
-  okay:    "You're in a workable spot today. We'll keep the rep steady and build from there.",
-  solid:   "You've got good energy today. We'll use it, but we'll still keep the work clean.",
-  locked:  "You're in a strong spot today. Let's use that without getting sloppy.",
+  drained: "You're carrying a lot today. We'll start with one easy win and build from there.",
+  low:     "Less in the tank today. We'll keep the rep clean and skip what doesn't help.",
+  okay:    "Steady today — not flat, not flying. We'll keep the rep clean and build.",
+  solid:   "Good energy today. We'll use it without rushing the rep.",
+  locked:  "Locked in today. Let's spend that energy clean — no sloppy reps.",
 };
 
 const PROBE_TEXT: Record<CheckinLevel, string> = {
   drained: "What's hitting hardest — body, mind, or schedule?",
-  low:     "Anything specific dragging on you, or just one of those days?",
+  low:     "What's dragging on you most right now?",
   okay:    "Anything on your mind worth flagging before we get going?",
   solid:   "What's working today? I'll lean into it.",
   locked:  "Where's that energy coming from? I'll match the rep to it.",
