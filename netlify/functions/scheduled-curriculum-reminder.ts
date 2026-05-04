@@ -32,18 +32,28 @@ import {
 const BATCH_LIMIT = 500;
 const WINDOW_MINUTES = 30;
 
-// TODO(phase-c-voice): replace these static strings with calls into
+// TODO(phase-c-voice): replace these helpers with calls into
 // `translateForAthlete({ domain: 'curriculum', state: '...' })` once
-// Phase C lands. The seed strings here become the row-level fallback.
-const NORA_TEMPLATES = {
-  midday: {
-    sim: 'Quick rep — sharpen your edge for 5 minutes.',
-  },
-  evening: {
-    protocol: "End of day — knock out today's protocol before bed?",
-    sim: "Got 5 minutes? Today's sim is still waiting.",
-  },
-} as const;
+// Phase C lands. The functions here become the row-level fallback.
+//
+// Copy must pass the Nora voice rubric (see PulseCheck/Views/Admin/
+// NoraRubricAdmin.swift). Every notification names the actual session
+// (protocolLabel / simName) when available, with a generic fallback
+// that still passes Q3 + Q7.
+const middaySimMessage = (simName?: string): { title: string; body: string } => ({
+  title: 'Quick sim — 5 min',
+  body: `${simName ?? "Today's sim"} is queued. Open Pulse and knock it out before the day fills up.`,
+});
+
+const eveningProtocolMessage = (protocolLabel?: string): { title: string; body: string } => ({
+  title: "Today's protocol",
+  body: `${protocolLabel ?? "Today's protocol"} is still waiting. 5 minutes before bed clears it.`,
+});
+
+const eveningSimMessage = (simName?: string): { title: string; body: string } => ({
+  title: "Today's sim",
+  body: `${simName ?? "Today's sim"} is still queued. 5 minutes before bed clears it.`,
+});
 
 const formatYmd = (d: Date): string => {
   const y = d.getFullYear();
@@ -177,11 +187,12 @@ export const handler: Handler = async () => {
     if (isMiddayWindow) {
       const simAssignment = openAssignments.find((a) => a.actionType === 'simulation');
       if (simAssignment) {
+        const { title, body } = middaySimMessage(simAssignment.simName as string | undefined);
         const result = await sendNotification(
           messaging,
           target.fcmToken,
-          'Pulse',
-          NORA_TEMPLATES.midday.sim,
+          title,
+          body,
           {
             type: 'curriculum_reminder',
             cadence: 'midday',
@@ -198,11 +209,14 @@ export const handler: Handler = async () => {
       const target1 = protocolAssignment || simAssignment;
       if (target1) {
         const isProtocol = target1.actionType === 'protocol';
+        const { title, body } = isProtocol
+          ? eveningProtocolMessage(target1.protocolLabel as string | undefined)
+          : eveningSimMessage(target1.simName as string | undefined);
         const result = await sendNotification(
           messaging,
           target.fcmToken,
-          'Pulse',
-          isProtocol ? NORA_TEMPLATES.evening.protocol : NORA_TEMPLATES.evening.sim,
+          title,
+          body,
           {
             type: 'curriculum_reminder',
             cadence: 'evening',

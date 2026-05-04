@@ -218,8 +218,19 @@ export const handler: Handler = async () => {
       continue;
     }
 
-    const title = '🧠 Mental training reminder';
-    const body = `You still have an assigned exercise to complete today.`;
+    // Pull the first uncompleted assignment's name so we can name the
+    // sim back to the athlete (Q3 of the Nora voice rubric). Fallback
+    // to a generic-but-coach-voice line when no name is present.
+    const firstUncompletedAssignment = assignmentsSnap.docs
+      .find((d: any) => !completedAssignmentIds.has(d.id))
+      ?.data() as Record<string, unknown> | undefined;
+    const simName = (firstUncompletedAssignment?.simName as string | undefined)
+      || (firstUncompletedAssignment?.simFamilyLabel as string | undefined);
+
+    const title = "Today's sim is still queued";
+    const body = simName
+      ? `${simName} is waiting. 5 minutes — open Pulse and knock it out before bed.`
+      : `5 minutes — open Pulse and knock out today's sim before bed.`;
     const data = {
       type: 'MENTAL_ASSIGNMENT_REMINDER',
       timestamp: String(Date.now()),

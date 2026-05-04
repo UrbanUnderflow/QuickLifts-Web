@@ -70,13 +70,13 @@ function isWithinTimeWindow(current: string, target: string, windowMinutes: numb
 function getCheckInMessage(type: 'morning' | 'evening'): { title: string; body: string } {
   if (type === 'morning') {
     return {
-      title: '☀️ Good Morning',
-      body: 'Quick mental pulse check — how\'s your readiness today? (1-5)',
+      title: 'Morning check-in',
+      body: "Rate your readiness 1-5. Nora uses your score to pick today's rep.",
     };
   }
   return {
-    title: '🌙 Evening Wind-Down',
-    body: 'Before you rest, take a moment to reflect. How did today go mentally?',
+    title: 'Evening check-in',
+    body: "How did today go — body, head, or focus? Nora factors it into tomorrow's rep.",
   };
 }
 
