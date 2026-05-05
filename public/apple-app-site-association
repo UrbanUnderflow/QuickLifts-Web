@@ -5,7 +5,12 @@
       {
         "appID": "ZG887P86D5.Tremaine.QuickLifts",
         "paths": ["/workout/*"]
+      },
+      {
+        "appID": "ZG887P86D5.Tremaine.Macra",
+        "paths": ["/macra/buddy/*"]
       }
     ]
   }
 }
+

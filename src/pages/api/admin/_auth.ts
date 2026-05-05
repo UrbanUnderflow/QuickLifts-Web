@@ -29,7 +29,16 @@ export async function requireAdminRequest(req: NextApiRequest): Promise<{ email:
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) return null;
 
+  const firebaseMode = Array.isArray(req.headers['x-pulsecheck-firebase-mode'])
+    ? req.headers['x-pulsecheck-firebase-mode'][0]
+    : req.headers['x-pulsecheck-firebase-mode'];
+  const pulsecheckDevFirebase = Array.isArray(req.headers['x-pulsecheck-dev-firebase'])
+    ? req.headers['x-pulsecheck-dev-firebase'][0]
+    : req.headers['x-pulsecheck-dev-firebase'];
   const forceDevFirebase =
+    firebaseMode === 'dev' ||
+    pulsecheckDevFirebase === 'true' ||
+    pulsecheckDevFirebase === '1' ||
     req.headers['x-force-dev-firebase'] === 'true' ||
     req.headers['x-force-dev-firebase'] === '1';
   const candidateApps = forceDevFirebase

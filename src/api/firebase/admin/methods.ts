@@ -1,5 +1,5 @@
-import { setDoc, doc, getDoc, deleteDoc, Timestamp, collection, query, orderBy, limit as firestoreLimit, getDocs, addDoc, where, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../config';
+import { setDoc, doc, getDoc, deleteDoc, Timestamp, collection, query, orderBy, limit as firestoreLimit, getDocs, addDoc, where, serverTimestamp, writeBatch, arrayUnion } from 'firebase/firestore';
+import { db } from '../config';
 import { AdminService, PageMetaData, DailyPrompt, ProgrammingAccess, BetaApplication } from './types';
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 import {
@@ -520,27 +520,89 @@ export const adminMethods: AdminService = {
         return false;
       }
 
-      const idToken = await auth.currentUser?.getIdToken();
-      if (!idToken) {
-        throw new Error('Missing admin auth token');
-      }
+      const now = new Date();
+      const nowSeconds = Math.floor(now.getTime() / 1000);
+      const expiresAt = new Date(now);
+      expiresAt.setFullYear(expiresAt.getFullYear() + 3);
+      const expirationSeconds = Math.floor(expiresAt.getTime() / 1000);
+      const username = user.username?.trim() || '';
+      const displayName = user.displayName?.trim() || '';
+      const name = displayName || username || normalizedEmail;
+      const userRef = doc(db, 'users', user.id);
+      const userSnap = await getDoc(userRef);
+      const previousSubscriptionType = userSnap.exists()
+        ? String(userSnap.data()?.subscriptionType || '')
+        : String(user.subscriptionType || '');
+      const betaGrant = {
+        grantedBy,
+        grantedAt: nowSeconds,
+        expiresAt: expirationSeconds,
+        source: 'admin-users',
+        previousSubscriptionType: previousSubscriptionType || null,
+      };
+      const batch = writeBatch(db);
 
-      const response = await fetch('/api/admin/grant-beta-plan', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-          'X-Admin-Email': grantedBy,
+      batch.set(doc(db, 'beta', normalizedEmail), {
+        email: normalizedEmail,
+        name,
+        username,
+        userId: user.id,
+        isApproved: true,
+        applyForFoundingCoaches: false,
+        role: {
+          trainer: false,
+          enthusiast: true,
+          coach: false,
+          fitnessInstructor: false,
         },
-        body: JSON.stringify(user),
-      });
+        useCases: {
+          oneOnOneCoaching: false,
+          communityRounds: true,
+          personalPrograms: true,
+        },
+        primaryUse: 'Admin beta plan grant',
+        longTermGoal: 'Granted direct beta access by admin',
+        clientCount: 'Not specified',
+        yearsExperience: 'Not specified',
+        isCertified: false,
+        betaPlanGrant: betaGrant,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
 
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        const errorText = errorBody?.error || await response.text().catch(() => '');
-        console.error('Grant beta plan API failed:', response.status, errorText);
-        throw new Error(errorText || `Grant beta plan failed with ${response.status}`);
-      }
+      batch.set(userRef, {
+        subscriptionType: 'beta',
+        subscriptionPlatform: 'web',
+        isTrialing: false,
+        betaPlanGrantedAt: nowSeconds,
+        betaPlanGrantedBy: grantedBy,
+        betaPlanPreviousSubscriptionType: previousSubscriptionType || null,
+        updatedAt: nowSeconds,
+      }, { merge: true });
+
+      batch.set(doc(db, 'subscriptions', user.id), {
+        userId: user.id,
+        userEmail: normalizedEmail,
+        username,
+        platform: 'web',
+        subscriptionType: 'beta',
+        status: 'active',
+        updatedAt: nowSeconds,
+        createdAt: nowSeconds,
+        betaPlanGrant: betaGrant,
+        plans: arrayUnion({
+          type: 'pulsecheck-annual',
+          expiration: expirationSeconds,
+          createdAt: nowSeconds,
+          updatedAt: nowSeconds,
+          platform: 'web',
+          productId: 'beta_grant_pc_1y',
+          source: 'admin-users',
+          grantedBy,
+        }),
+      }, { merge: true });
+
+      await batch.commit();
 
       console.log('Granted beta plan to user:', normalizedEmail);
       return true;

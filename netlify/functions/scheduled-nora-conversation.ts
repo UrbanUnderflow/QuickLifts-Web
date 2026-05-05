@@ -97,7 +97,7 @@ export const handler: Handler = async () => {
     // Suppression check.
     let suppression: { suppressed: boolean } = { suppressed: false };
     try {
-      suppression = (await loadPulseCheckNudgeSuppressionState(db, m.userId)) || { suppressed: false };
+      suppression = (await loadPulseCheckNudgeSuppressionState({ db, athleteId: m.userId })) || { suppressed: false };
     } catch {
       /* tolerate */
     }
@@ -163,9 +163,9 @@ export const handler: Handler = async () => {
       const userData = userSnap.data() as Record<string, unknown> | undefined;
       if (!userData) continue;
       const target = resolvePulseCheckPushTarget(userData);
-      if (!target?.fcmToken) continue;
+      if (!target?.token) continue;
       const opener = conversation.turns[0];
-      const result = await sendPush(messaging, target.fcmToken, 'Pulse', opener.text, {
+      const result = await sendPush(messaging, target.token, 'Nora', opener.text, {
         type: 'nora_conversation',
         conversationId: conversation.id,
         trigger: candidate.trigger,

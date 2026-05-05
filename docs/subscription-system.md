@@ -108,6 +108,7 @@ Path: `/admin/subscriptions`
 ### User Management Beta Grants
 Path: `/admin/users`
 - Row action: Grant Beta writes `beta/{email}` with `isApproved: true`, updates `users/{userId}.subscriptionType` to `beta` for current Macra compatibility, and appends a 3-year `beta_grant_pc_1y` plan to `subscriptions/{userId}`.
+- The grant uses the authenticated browser Firebase client, matching admin test lever behavior. The active dev/prod switcher determines the target Firestore project, and Firestore rules/admin identity govern the write.
 - This keeps legacy beta roster checks, shared root-user gates, and append-only subscription-plan access in sync.
 
 ### Netlify Functions Index

@@ -69,6 +69,7 @@ type NotificationRow = {
     opensInto?: string;
     tokenField?: string;
     notes?: string;
+    domainGuardrails?: string[];
 };
 
 type TestTargetUser = {
@@ -94,13 +95,106 @@ const NOTIFICATIONS: NotificationRow[] = [
     {
         id: 'daily-activity-reminder',
         name: 'Daily Activity Reminder',
-        trigger: 'Locally scheduled at the time the user set (default daily)',
-        title: 'Your Workout Awaits',
-        body: "Hey Pulse Fam! Are you ready to crush your workout today?",
+        trigger: 'Locally scheduled daily at 9 AM when Pulse daily activity reminders are enabled',
+        title: 'Time to train',
+        body: "Open Pulse to start today's session — pick a lift, run, ride, fat burn, or stretch.",
         category: 'engagement',
+        productScope: 'pulse',
         deliveryMethod: 'local',
         source: 'iOS — NotificationService.scheduleDailyNotification()',
-        notes: 'Uses UNCalendarNotificationTrigger. User can toggle in settings.',
+        dataKeys: ['identifier: dailyActivityReminder'],
+        opensInto: 'Pulse home / training start surfaces',
+        notes: 'Audited 2026-05-05: removed the old “or sim” copy. Sims are Pulse Check only.',
+        domainGuardrails: [
+            'Pulse daily activity copy may mention lift, run, ride, fat burn, or stretch.',
+            'Do not mention sim, protocol, Nora curriculum, or Pulse Check-only actions.',
+        ],
+    },
+    {
+        id: 'pulse-run-phone-placement-local',
+        name: 'Run Phone Placement Reminder',
+        trigger: 'Local immediate reminder when run guardrails detect the phone may not be on-body',
+        title: 'Keep Your Phone On You',
+        body: 'Pulse needs your phone on your body to keep run distance and pace accurate. Pick it up and keep it with you.',
+        category: 'run-round',
+        productScope: 'pulse',
+        deliveryMethod: 'local',
+        source: 'iOS — NotificationService.sendRunPhonePlacementReminder()',
+        dataKeys: ['type: run_phone_on_body', 'timestamp'],
+        opensInto: 'Active run session',
+        notes: 'Guarded by RemoteConfigService.isWearableRunAttentionGuardrailsEnabled().',
+        domainGuardrails: ['Pulse run telemetry only. Must not mention Pulse Check, Nora, sims, or protocols.'],
+    },
+    {
+        id: 'pulse-run-still-active-local',
+        name: 'Run Still Active Reminder',
+        trigger: 'Local immediate reminder when a run appears stale but still active',
+        title: 'Your Run Is Still Active',
+        body: 'If you finished your run, head back into Pulse and end it now so your summary stays accurate.',
+        category: 'run-round',
+        productScope: 'pulse',
+        deliveryMethod: 'local',
+        source: 'iOS — NotificationService.sendRunStillActiveReminder()',
+        dataKeys: ['type: run_still_active', 'timestamp'],
+        opensInto: 'Active run session',
+        notes: 'Guarded by RemoteConfigService.isWearableRunAttentionGuardrailsEnabled().',
+        domainGuardrails: ['Pulse run telemetry only. Must not mention Pulse Check, Nora, sims, or protocols.'],
+    },
+    {
+        id: 'pulse-bike-phone-placement-local',
+        name: 'Bike Phone Placement Reminder',
+        trigger: 'Local immediate reminder when indoor bike metrics need the phone on-body',
+        title: 'Keep Your Phone On You',
+        body: 'Pulse needs your phone on your body to keep indoor bike cadence, distance, and speed as accurate as possible.',
+        category: 'fat-burn-round',
+        productScope: 'pulse',
+        deliveryMethod: 'local',
+        source: 'iOS — NotificationService.sendBikePhonePlacementReminder()',
+        dataKeys: ['type: bike_phone_on_body', 'timestamp'],
+        opensInto: 'Active bike session',
+        domainGuardrails: ['Pulse cardio telemetry only. Must not mention Pulse Check, Nora, sims, or protocols.'],
+    },
+    {
+        id: 'pulse-bike-still-active-local',
+        name: 'Bike Still Active Reminder',
+        trigger: 'Local immediate reminder when a ride appears stale but still active',
+        title: 'Your Ride Is Still Active',
+        body: 'If you finished your ride, head back into Pulse and end it now so your bike summary stays accurate.',
+        category: 'fat-burn-round',
+        productScope: 'pulse',
+        deliveryMethod: 'local',
+        source: 'iOS — NotificationService.sendBikeStillActiveReminder()',
+        dataKeys: ['type: bike_still_active', 'timestamp'],
+        opensInto: 'Active bike session',
+        domainGuardrails: ['Pulse cardio telemetry only. Must not mention Pulse Check, Nora, sims, or protocols.'],
+    },
+    {
+        id: 'pulse-fatburn-phone-placement-local',
+        name: 'Fat Burn Phone Placement Reminder',
+        trigger: 'Local immediate reminder when a fat-burn session needs phone-on-body telemetry',
+        title: 'Keep Your Phone On You',
+        body: 'Keep your phone on your body during {{equipment}} so Pulse can keep your active session metrics accurate.',
+        category: 'fat-burn-round',
+        productScope: 'pulse',
+        deliveryMethod: 'local',
+        source: 'iOS — NotificationService.sendFatBurnPhonePlacementReminder(equipmentName:)',
+        dataKeys: ['type: fatburn_phone_on_body', 'timestamp'],
+        opensInto: 'Active fat-burn session',
+        domainGuardrails: ['Pulse cardio telemetry only. Must not mention Pulse Check, Nora, sims, or protocols.'],
+    },
+    {
+        id: 'pulse-fatburn-still-active-local',
+        name: 'Fat Burn Still Active Reminder',
+        trigger: 'Local immediate reminder when a fat-burn session appears stale but still active',
+        title: 'Your Session Is Still Active',
+        body: 'If you finished your {{equipment}} session, head back into Pulse and end it now so your summary stays accurate.',
+        category: 'fat-burn-round',
+        productScope: 'pulse',
+        deliveryMethod: 'local',
+        source: 'iOS — NotificationService.sendFatBurnStillActiveReminder(equipmentName:)',
+        dataKeys: ['type: fatburn_still_active', 'timestamp'],
+        opensInto: 'Active fat-burn session',
+        domainGuardrails: ['Pulse cardio telemetry only. Must not mention Pulse Check, Nora, sims, or protocols.'],
     },
     {
         id: 'weekly-checkin-reminder',
@@ -160,6 +254,53 @@ const NOTIFICATIONS: NotificationRow[] = [
         source: 'iOS — NotificationService.sendReferralJoinNotification()',
         dataKeys: ['type: referral_join_bonus', 'challengeId', 'userId'],
     },
+    {
+        id: 'share-bonus',
+        name: 'Share Bonus',
+        trigger: 'When a share bonus is awarded from the server-side bonus endpoint',
+        title: '+{{points}} Pulse Points',
+        body: 'Nice share. You earned {{points}} Pulse Points.',
+        category: 'social',
+        productScope: 'pulse',
+        deliveryMethod: 'fcm-remote',
+        source: 'Netlify — netlify/functions/send-share-bonus-notification.js',
+        dataKeys: ['type: SHARE_BONUS', 'points', 'source'],
+        opensInto: 'Pulse rewards/profile context',
+        tokenField: 'users.fcmToken',
+        domainGuardrails: ['Pulse points/reward copy only. Do not mention Pulse Check assignments, sims, or Nora protocols.'],
+    },
+    {
+        id: 'one-on-one-training-updated',
+        name: '1-on-1 Training Plan Updated',
+        trigger: 'When a coach/host saves updates in a 1-on-1 training room',
+        title: 'Your training plan was updated',
+        body: '{{fromUsername}} made updates to your plan. Tap to open.',
+        category: 'club',
+        productScope: 'pulse',
+        deliveryMethod: 'fcm-remote',
+        source: 'iOS — NotificationService.sendOneOnOneTrainingUpdatedNotification()',
+        dataKeys: ['type: oneOnOneTrainingUpdated', 'trainingId', 'fromUsername'],
+        opensInto: 'Pulse 1-on-1 training room',
+        tokenField: 'users.fcmToken',
+        notes: 'Queued/coalesced so multi-step coach edits do not send repeated pushes.',
+        domainGuardrails: ['Pulse coach/training-room copy only. Do not mention Pulse Check sims, protocols, or Nora curriculum.'],
+    },
+    {
+        id: 'one-on-one-client-activity',
+        name: '1-on-1 Client Activity',
+        trigger: 'When a 1-on-1 member starts a run, ride, fat-burn session, lift, or logs food via Macra',
+        title: '{{clientUsername}} is training',
+        body: '{{clientUsername}} {{activityPhrase}}. Tap to open the room.',
+        category: 'club',
+        productScope: 'pulse',
+        deliveryMethod: 'fcm-remote',
+        source: 'iOS — NotificationService.sendOneOnOneClientActivityNotification() and Netlify — notify-meal-logged.js',
+        dataKeys: ['type: oneOnOneClientActivity', 'trainingId', 'clientUsername', 'activity'],
+        opensInto: 'Pulse 1-on-1 training room',
+        tokenField: 'users.fcmToken',
+        notes: 'Activity values: run, bike, fatBurn, lift, food. Food can originate from Macra but opens the Pulse training room for the coach.',
+        domainGuardrails: ['Pulse/Macra coaching handoff only. Do not mention Pulse Check sims or mental-training protocols.'],
+    },
 
     // ── Round Activity ─────────────────────────────────
     {
@@ -172,6 +313,126 @@ const NOTIFICATIONS: NotificationRow[] = [
         deliveryMethod: 'fcm-remote',
         source: 'iOS — MyWorkoutView / CustomWorkoutsListView (via CloudFunctionsService)',
         dataKeys: ['type: workout_completed', 'challengeId'],
+    },
+    {
+        id: 'new-participant',
+        name: 'New Participant Joined Round',
+        trigger: 'Firestore challenge participant trigger when a new participant joins a Round',
+        title: 'New participant joined',
+        body: '{{username}} joined {{challengeTitle}}.',
+        category: 'round-activity',
+        productScope: 'pulse',
+        deliveryMethod: 'fcm-remote',
+        source: 'Firebase Functions — functions/challengeNotifications.js sendNewUserJoinedChallengeNotification',
+        dataKeys: ['type: NEW_PARTICIPANT', 'challengeId', 'newUserId', 'newUsername'],
+        opensInto: 'Pulse Round detail',
+        tokenField: 'users.fcmToken / challenge participant fcmToken',
+        domainGuardrails: ['Pulse Round membership only. Do not mention Pulse Check sims or protocols.'],
+    },
+    {
+        id: 'challenge-released-from-waiting-room',
+        name: 'Released From Waiting Room',
+        trigger: 'When a waiting-room Round opens to participants',
+        title: '🎉 Released from the Waiting Room!',
+        body: 'It is happening! The waiting room doors for "{{challengeTitle}}" are now open. Get ready — the challenge begins soon!',
+        category: 'round-activity',
+        productScope: 'pulse',
+        deliveryMethod: 'fcm-remote',
+        source: 'Firebase Functions — functions/challengeNotifications.js waiting-room release branches',
+        dataKeys: ['type: WAITING_ROOM_RELEASED', 'challengeId', 'challengeTitle'],
+        opensInto: 'Pulse Round detail',
+        tokenField: 'users.fcmToken / challenge participant fcmToken',
+        domainGuardrails: ['Pulse Round lifecycle only. Do not mention Pulse Check sims or protocols.'],
+    },
+    {
+        id: 'challenge-started',
+        name: 'Challenge Started',
+        trigger: 'When a Round/challenge transitions into started state',
+        title: '🏃‍♂️ Challenge Started!',
+        body: 'The challenge "{{challengeTitle}}" has begun! Get ready to compete!',
+        category: 'round-activity',
+        productScope: 'pulse',
+        deliveryMethod: 'fcm-remote',
+        source: 'Firebase Functions — functions/challengeNotifications.js challenge-start branches',
+        dataKeys: ['type: CHALLENGE_STARTED', 'challengeId', 'challengeTitle'],
+        opensInto: 'Pulse Round detail',
+        tokenField: 'users.fcmToken / challenge participant fcmToken',
+        domainGuardrails: ['Pulse Round lifecycle only. Do not mention Pulse Check sims or protocols.'],
+    },
+    {
+        id: 'workout-started',
+        name: 'Workout Started In Round',
+        trigger: 'When a participant starts a workout that should notify other Round members',
+        title: '🔥 Challenge Activity!',
+        body: '{{startingUsername}} just started "{{workoutTitle}}"! 💪',
+        category: 'round-activity',
+        productScope: 'pulse',
+        deliveryMethod: 'fcm-remote',
+        source: 'Firebase Functions — functions/challengeNotifications.js sendWorkoutStartNotification',
+        dataKeys: ['type: WORKOUT_STARTED', 'challengeId', 'workoutId', 'startingUserId', 'startingUsername'],
+        opensInto: 'Pulse Round detail / workout activity',
+        tokenField: 'users.fcmToken / challenge participant fcmToken',
+        domainGuardrails: ['Pulse workout/Round activity only. Do not mention Pulse Check sims or protocols.'],
+    },
+    {
+        id: 'callout-answered',
+        name: 'Callout Answered',
+        trigger: 'When a challenged participant answers a callout',
+        title: 'Callout answered',
+        body: '{{username}} answered your callout in {{challengeTitle}}.',
+        category: 'round-activity',
+        productScope: 'pulse',
+        deliveryMethod: 'fcm-remote',
+        source: 'Firebase Functions — functions/challengeNotifications.js sendCheckinCalloutNotification',
+        dataKeys: ['type: CALLOUT_ANSWERED', 'challengeId', 'calloutId', 'userId'],
+        opensInto: 'Pulse Round callout context',
+        tokenField: 'users.fcmToken',
+        domainGuardrails: ['Pulse Round callout only. Do not mention Pulse Check sims or protocols.'],
+    },
+    {
+        id: 'checkin-chain',
+        name: 'Check-in Chain',
+        trigger: 'When a check-in callout/chain reaction asks the next participant to respond',
+        title: 'Check-in chain',
+        body: '{{username}} tagged you into {{challengeTitle}}.',
+        category: 'round-activity',
+        productScope: 'pulse',
+        deliveryMethod: 'fcm-remote',
+        source: 'Firebase Functions — functions/challengeNotifications.js CHECKIN_CHAIN branch',
+        dataKeys: ['type: CHECKIN_CHAIN', 'challengeId', 'calloutId', 'fromUserId', 'userId'],
+        opensInto: 'Pulse Round check-in context',
+        tokenField: 'users.fcmToken',
+        domainGuardrails: ['Pulse Round check-in only. Do not mention Pulse Check sims or protocols.'],
+    },
+    {
+        id: 'chain-reaction',
+        name: 'Chain Reaction',
+        trigger: 'When a Round chain-reaction event is created',
+        title: 'Chain reaction',
+        body: '{{username}} sparked a chain reaction in {{challengeTitle}}.',
+        category: 'round-activity',
+        productScope: 'pulse',
+        deliveryMethod: 'fcm-remote',
+        source: 'Firebase Functions — functions/challengeNotifications.js sendChainReactionNotification',
+        dataKeys: ['type: CHAIN_REACTION', 'challengeId', 'fromUserId', 'userId'],
+        opensInto: 'Pulse Round detail',
+        tokenField: 'users.fcmToken',
+        domainGuardrails: ['Pulse Round engagement only. Do not mention Pulse Check sims or protocols.'],
+    },
+    {
+        id: 'round-win-badge',
+        name: 'Round Win Badge',
+        trigger: 'When award-round-badges grants a Round winner badge to a participant',
+        title: 'Round win unlocked',
+        body: 'You earned a winner badge for {{roundName}}.',
+        category: 'round-activity',
+        productScope: 'pulse',
+        deliveryMethod: 'scheduled-function',
+        source: 'Netlify — netlify/functions/award-round-badges.ts',
+        dataKeys: ['type: ROUND_WIN_BADGE', 'challengeId', 'roundName', 'badgeId'],
+        opensInto: 'Pulse profile / Round achievement',
+        tokenField: 'users.fcmToken',
+        domainGuardrails: ['Pulse achievement copy only. Do not mention Pulse Check-only sims or protocols.'],
     },
 
     // ── Run Round ──────────────────────────────────────
@@ -333,6 +594,69 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: round_chat_message', 'challengeId', 'roundId', 'roundName', 'messageId', 'fromUsername', 'fromUserId'],
         notes: 'Excludes the sender from recipients. Works for ALL challenge/round types.',
     },
+    {
+        id: 'direct-message',
+        name: 'Direct Message',
+        trigger: 'Firestore onCreate for chats/{chatId}/messages/{messageId}',
+        title: '{{senderUsername}}',
+        body: '{{messageContent}}',
+        category: 'chat',
+        productScope: 'pulse',
+        deliveryMethod: 'fcm-remote',
+        source: 'Firebase Functions — functions/chatNotifications.js sendDirectMessageNotification',
+        dataKeys: ['type: DIRECT_MESSAGE', 'chatId', 'messageId', 'senderId'],
+        opensInto: 'Pulse direct message thread',
+        tokenField: 'users.fcmToken',
+        notes: 'Skips empty-content special messages to avoid duplicating challenge-specific notification systems.',
+        domainGuardrails: ['Pulse social messaging only unless the source thread is a Pulse Check coach-athlete message.'],
+    },
+    {
+        id: 'round-table-message',
+        name: 'Round Table Message',
+        trigger: 'Firestore onCreate for sweatlist-collection/{challengeId}/messages/{messageId}',
+        title: '{{senderUsername}} in {{roundName}}',
+        body: '{{messageContent}}',
+        category: 'chat',
+        productScope: 'pulse',
+        deliveryMethod: 'fcm-remote',
+        source: 'Firebase Functions — functions/chatNotifications.js sendRoundTableNotification',
+        dataKeys: ['type: ROUND_TABLE_MESSAGE', 'challengeId', 'messageId', 'senderId'],
+        opensInto: 'Pulse Round table chat',
+        tokenField: 'users.fcmToken',
+        notes: 'Skips non-visible and empty messages.',
+        domainGuardrails: ['Pulse Round messaging only. Do not mention Pulse Check sims or Nora protocols.'],
+    },
+    {
+        id: 'club-chat-message',
+        name: 'Club Chat Message',
+        trigger: 'Firestore onCreate for round-chat/{clubId}/messages/{messageId}',
+        title: '{{senderUsername}} in {{clubName}}',
+        body: '{{messageContent}}',
+        category: 'chat',
+        productScope: 'pulse',
+        deliveryMethod: 'fcm-remote',
+        source: 'Firebase Functions — functions/chatNotifications.js sendClubChatNotification',
+        dataKeys: ['type: CLUB_CHAT_MESSAGE', 'clubId', 'messageId', 'senderId'],
+        opensInto: 'Pulse club chat',
+        tokenField: 'users.fcmToken',
+        domainGuardrails: ['Pulse Club messaging only. Do not mention Pulse Check sims or Nora protocols.'],
+    },
+    {
+        id: 'coach-athlete-message',
+        name: 'Coach-Athlete Message',
+        trigger: 'Firestore onCreate for coach-athlete-messages',
+        title: '{{senderUsername}}',
+        body: '{{messageContent}}',
+        category: 'chat',
+        productScope: 'pulse',
+        deliveryMethod: 'fcm-remote',
+        source: 'Firebase Functions — functions/coachAthleteMessageNotifications.js',
+        dataKeys: ['type: coach_athlete_message', 'conversationId', 'senderId', 'recipientId'],
+        opensInto: 'Pulse coach-athlete messaging',
+        tokenField: 'users.fcmToken',
+        notes: 'Legacy Pulse coach-athlete message trigger. Pulse Check pilot/team messaging should use the Pulse Check scoped token and app surfaces instead.',
+        domainGuardrails: ['Pulse coach messaging only. Do not reuse for Pulse Check pilot/team messaging without pulseCheckFcmToken scoping.'],
+    },
 
     // ── Apple Watch ────────────────────────────────────
     {
@@ -432,6 +756,127 @@ const NOTIFICATIONS: NotificationRow[] = [
         opensInto: 'PulseCheck web Today task',
         tokenField: 'users.pulseCheckFcmToken',
         notes: 'Requires dailyReflectionPreferences.enabled=true and a valid users.pulseCheckFcmToken. This is the only Pulse Check sequence here that intentionally opens the web task.',
+        domainGuardrails: [
+            'Pulse Check only. Must resolve users.pulseCheckFcmToken with pushTokenSourceApp=pulsecheck.',
+            'Can mention web daily task, readiness, Nora, protocols, or sims when the target is Pulse Check.',
+        ],
+    },
+    {
+        id: 'pulsecheck-streak-reminder-local',
+        name: 'PulseCheck — Streak Warning',
+        trigger: 'Locally scheduled one-shot reminder when a mental-training streak is at risk',
+        title: '🔥 Keep Your Streak Alive!',
+        body: "You're on a {{currentStreak}}-day mental training streak. Don't break it now!",
+        category: 'mental-training',
+        productScope: 'pulsecheck',
+        deliveryMethod: 'local',
+        source: 'iOS — NotificationService.scheduleStreakReminder(currentStreak:atHour:)',
+        dataKeys: ['type: STREAK_WARNING', 'currentStreak'],
+        opensInto: 'Pulse Check mental training',
+        tokenField: 'local-only',
+        notes: 'Suppressed when Pulse Check operational hold/nudge suppression is active.',
+        domainGuardrails: ['Pulse Check mental-training copy only. Do not send from Pulse fitness app reminders.'],
+    },
+    {
+        id: 'pulsecheck-curriculum-midday-sim',
+        name: 'PulseCheck — Curriculum Midday Sim Reminder',
+        trigger: 'Netlify scheduled function runs every 30 minutes and nudges an uncompleted curriculum-engine sim in the athlete local midday window',
+        title: 'Quick sim — 5 min',
+        body: "{{simName}} is queued. Open Pulse Check and knock it out before the day fills up.",
+        category: 'mental-training',
+        productScope: 'pulsecheck',
+        deliveryMethod: 'scheduled-function',
+        source: 'Netlify — netlify/functions/scheduled-curriculum-reminder.ts',
+        dataKeys: ['type: curriculum_reminder', 'cadence: midday', 'assignmentId'],
+        opensInto: 'Pulse Check daily curriculum sim',
+        tokenField: 'users.pulseCheckFcmToken',
+        notes: 'Audited 2026-05-05: fixed token read from target.fcmToken to target.token.',
+        domainGuardrails: [
+            'Pulse Check only. Sim wording is allowed here and forbidden in Pulse daily training reminders.',
+            'Must resolve users.pulseCheckFcmToken with pushTokenSourceApp=pulsecheck.',
+        ],
+    },
+    {
+        id: 'pulsecheck-curriculum-evening',
+        name: 'PulseCheck — Curriculum Evening Reminder',
+        trigger: 'Netlify scheduled function nudges the uncompleted protocol first, otherwise the uncompleted sim, in the athlete local evening window',
+        title: "Today's {{assignmentKind}}",
+        body: "{{assignmentTitle}} is still waiting. 5 minutes before bed clears it.",
+        category: 'mental-training',
+        productScope: 'pulsecheck',
+        deliveryMethod: 'scheduled-function',
+        source: 'Netlify — netlify/functions/scheduled-curriculum-reminder.ts',
+        dataKeys: ['type: curriculum_reminder', 'cadence: evening', 'assignmentId'],
+        opensInto: 'Pulse Check daily curriculum protocol or sim',
+        tokenField: 'users.pulseCheckFcmToken',
+        notes: 'Suppressed by Pulse Check operational restrictions and manual holds.',
+        domainGuardrails: [
+            'Pulse Check only. Protocol/sim wording is allowed here and forbidden in Pulse daily training reminders.',
+            'Must resolve users.pulseCheckFcmToken with pushTokenSourceApp=pulsecheck.',
+        ],
+    },
+    {
+        id: 'pulsecheck-nora-conversation',
+        name: 'PulseCheck — Nora Conversation Opener',
+        trigger: 'Scheduled trigger sweep detects an athlete state candidate, opens a deduped Nora conversation, then pushes the opener',
+        title: 'Nora',
+        body: '{{messageContent}}',
+        category: 'mental-training',
+        productScope: 'pulsecheck',
+        deliveryMethod: 'scheduled-function',
+        source: 'Netlify — netlify/functions/scheduled-nora-conversation.ts',
+        dataKeys: ['type: nora_conversation', 'conversationId', 'trigger'],
+        opensInto: 'Pulse Check Nora conversation thread',
+        tokenField: 'users.pulseCheckFcmToken',
+        notes: 'Audited 2026-05-05: fixed token read from target.fcmToken to target.token and changed push title from Pulse to Nora.',
+        domainGuardrails: ['Pulse Check Nora only. Must not present as a generic Pulse fitness notification.'],
+    },
+    {
+        id: 'pulsecheck-pilot-ready',
+        name: 'PulseCheck — Pilot Activation Ready',
+        trigger: 'Admin sends pilot activation push after a Pulse Check athlete has been provisioned',
+        title: '{{teamName}} Pilot',
+        body: 'Your PulseCheck app is ready! Open the app, complete consent, and you should be good to go.',
+        category: 'onboarding',
+        productScope: 'pulsecheck',
+        deliveryMethod: 'fcm-remote',
+        source: 'Netlify — netlify/functions/send-pulsecheck-pilot-activation-push.js',
+        dataKeys: ['type: PULSECHECK_PILOT_READY', 'route: app_home', 'deepLinkUrl', 'pilotId', 'athleteId', 'outreachDocId'],
+        opensInto: 'Pulse Check app home / consent continuation',
+        tokenField: 'users.pulseCheckFcmToken',
+        domainGuardrails: ['Pulse Check activation only. Must not target users.fcmToken.'],
+    },
+    {
+        id: 'pulsecheck-vision-pro-trial-ready',
+        name: 'PulseCheck — Vision Pro Trial Ready',
+        trigger: 'When a coach/admin queues an immersive sim trial for an athlete',
+        title: 'Vision Pro trial ready',
+        body: '{{coachDisplayName}} queued {{simName}}. Open Pulse Check to pair the headset.',
+        category: 'mental-training',
+        productScope: 'pulsecheck',
+        deliveryMethod: 'fcm-remote',
+        source: 'Netlify — netlify/functions/vision-pro-trials-utils.js sendVisionProQueuedNotification()',
+        dataKeys: ['type: VISION_PRO_TRIAL_READY', 'sessionId', 'assignmentId', 'assignmentCollection', 'athleteUserId', 'simId', 'simName', 'coachDisplayName', 'queuedAt'],
+        opensInto: 'Pulse Check Vision Pro pairing / sim runtime',
+        tokenField: 'users.pulseCheckFcmToken',
+        notes: 'Audited 2026-05-05: changed dispatch to resolvePulseCheckPushTarget() instead of users.fcmToken.',
+        domainGuardrails: ['Pulse Check immersive sim only. Must never be sent with the Pulse fitness token.'],
+    },
+    {
+        id: 'pulsecheck-crisis-wall',
+        name: 'PulseCheck — Crisis Wall',
+        trigger: 'Server-side Tier 3 crisis-wall dispatch when escalation workflow requires the in-app wall',
+        title: 'Nora',
+        body: 'Open Pulse Check for support.',
+        category: 'mental-training',
+        productScope: 'pulsecheck',
+        deliveryMethod: 'fcm-remote',
+        source: 'iOS receiver — NotificationService.NoraNotificationType.crisisWall; server dispatch pending/owned by escalation pipeline',
+        dataKeys: ['type: crisisWall', 'escalationId'],
+        opensInto: 'Pulse Check crisis wall',
+        tokenField: 'users.pulseCheckFcmToken',
+        notes: 'Receiver is implemented; server-side dispatch remains future/pipeline-owned. Keep listed so the admin surface documents the payload contract.',
+        domainGuardrails: ['Pulse Check safety surface only. Do not route through generic Pulse notification helpers.'],
     },
 
     // ── Mental Training (Scheduled) ────────────────────
@@ -530,6 +975,22 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: macra_end_of_day_checkin'],
         notes: 'Opt-in via the Macra onboarding notification step. Respects endOfDayCheckin pref on users.macraNotificationPreferences.',
     },
+    {
+        id: 'macra-daily-insight',
+        name: 'Macra — Daily Insight',
+        trigger: 'Scheduled Firebase function generates/persists a daily nutrition insight and sends a push when available',
+        title: "Today's read from Nora",
+        body: '{{insightHeadline}}',
+        category: 'macra-nutrition',
+        productScope: 'macra',
+        deliveryMethod: 'scheduled-function',
+        source: 'Firebase Functions — functions/macraDailyInsight.js',
+        dataKeys: ['type: MACRA_DAILY_INSIGHT', 'insightType', 'dayKey', 'timestamp', 'screen: macra_journal'],
+        opensInto: 'Macra journal',
+        tokenField: 'users.macraFcmToken || users.fcmToken',
+        notes: 'Macra currently resolves a Macra token first, then a legacy/default token fallback.',
+        domainGuardrails: ['Macra nutrition only. May mention food, macros, meal logging, and Nora nutrition; must not mention Pulse Check sims/protocols.'],
+    },
 ];
 
 /* ─────────────────────────── Helpers ─────────────────────────── */
@@ -567,8 +1028,36 @@ const PRODUCT_META: Record<ProductScope, { label: string; accent: string }> = {
     macra: { label: 'Macra', accent: 'text-green-400' },
 };
 
+const PRODUCT_BADGE_CLASS: Record<ProductScope, string> = {
+    pulse: 'bg-[#d7ff00]/10 text-[#d7ff00] border-[#d7ff00]/30',
+    pulsecheck: 'bg-cyan-900/30 text-cyan-300 border-cyan-800',
+    macra: 'bg-green-900/30 text-green-300 border-green-800',
+};
+
+const DOMAIN_AUDIT_ITEMS = [
+    {
+        label: 'Pulse daily training',
+        status: 'Fixed',
+        detail: 'Removed sim from the Pulse daily activity reminder. Pulse can offer lift, run, ride, fat burn, or stretch.',
+    },
+    {
+        label: 'Pulse Check token routing',
+        status: 'Fixed',
+        detail: 'Curriculum reminders, Nora conversation pushes, and Vision Pro trial pushes resolve the Pulse Check token surface.',
+    },
+    {
+        label: 'Admin inventory',
+        status: 'Updated',
+        detail: 'Rows now include product scope, token field, payload keys, open target, and domain guardrails for audited triggers.',
+    },
+];
+
 const DEFAULT_TEMPLATE_VALUES: Record<string, string> = {
     dayOfWeek: 'Friday',
+    activityPhrase: 'started a lift',
+    assignmentKind: 'protocol',
+    assignmentTitle: "Today's protocol",
+    calloutId: 'test-callout',
     challengeId: 'test-challenge',
     challengeTitle: 'Test Challenge',
     roundId: 'test-round',
@@ -591,6 +1080,9 @@ const DEFAULT_TEMPLATE_VALUES: Record<string, string> = {
     duration: '30 min',
     durationSeconds: '1800',
     calories: '320',
+    clientUsername: 'demo_client',
+    coachDisplayName: 'Coach Demo',
+    currentStreak: '4',
     distanceMiles: '3.25',
     milestone: '10000',
     steps: '10000',
@@ -601,6 +1093,7 @@ const DEFAULT_TEMPLATE_VALUES: Record<string, string> = {
     ordinal: 'nd',
     metricLabel: 'pts',
     endedBy: 'admin-test',
+    insightHeadline: 'Protein is trending low for the day. Log Meal 2 and close the gap.',
     totalParticipants: '12',
     daysLeft: '4',
     isRunRound: 'false',
@@ -614,6 +1107,13 @@ const DEFAULT_TEMPLATE_VALUES: Record<string, string> = {
     todayTopRunner: JSON.stringify({ username: 'runner_one', distanceMiles: '4.10' }),
     snapshotDateKey: '2026-03-28',
     observedDateKey: '2026-03-28',
+    points: '25',
+    simName: 'Reset Trial',
+    startingUserId: 'test-starter',
+    startingUsername: 'demo_starter',
+    teamName: 'Demo Team',
+    workoutId: 'test-workout',
+    workoutTitle: 'Upper Body Lift',
 };
 
 const getNormalizedNotificationType = (notificationId: string) =>
@@ -647,18 +1147,21 @@ const getPreviewAppChrome = (notification: NotificationRow) => {
     if (scope === 'pulsecheck') {
         return {
             label: 'Pulse Check',
+            initial: 'PC',
             badgeClassName: 'bg-cyan-400 text-slate-950',
         };
     }
     if (scope === 'macra') {
         return {
             label: 'Macra',
+            initial: 'M',
             badgeClassName: 'bg-green-400 text-slate-950',
         };
     }
 
     return {
         label: 'Pulse',
+        initial: 'P',
         badgeClassName: 'bg-[#d7ff00] text-black',
     };
 };
@@ -956,6 +1459,20 @@ const NotificationSequencesAdmin: React.FC = () => {
                         </div>
                     </div>
 
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+                        {DOMAIN_AUDIT_ITEMS.map((item) => (
+                            <div key={item.label} className="rounded-xl border border-zinc-800 bg-[#1a1e24] p-4">
+                                <div className="flex items-center justify-between gap-3">
+                                    <p className="text-sm font-semibold text-white">{item.label}</p>
+                                    <span className="text-[10px] uppercase tracking-wider rounded-full border border-emerald-800 bg-emerald-900/30 px-2 py-1 text-emerald-300">
+                                        {item.status}
+                                    </span>
+                                </div>
+                                <p className="mt-2 text-xs leading-relaxed text-zinc-400">{item.detail}</p>
+                            </div>
+                        ))}
+                    </div>
+
                     <div className="flex flex-wrap gap-2 mb-4">
                         <button
                             onClick={() => setProductFilter('all')}
@@ -1042,6 +1559,8 @@ const NotificationSequencesAdmin: React.FC = () => {
                         {filtered.map((n) => {
                             const catMeta = CATEGORY_META[n.category];
                             const delMeta = DELIVERY_META[n.deliveryMethod];
+                            const productScope = getNotificationProductScope(n);
+                            const productMeta = PRODUCT_META[productScope];
                             const isExpanded = expandedId === n.id;
                             const previewChrome = getPreviewAppChrome(n);
 
@@ -1067,6 +1586,9 @@ const NotificationSequencesAdmin: React.FC = () => {
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="font-semibold text-white text-sm">{n.name}</span>
+                                                <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${PRODUCT_BADGE_CLASS[productScope]}`}>
+                                                    {productMeta.label}
+                                                </span>
                                                 <span
                                                     className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${delMeta.color}`}
                                                 >
@@ -1109,7 +1631,7 @@ const NotificationSequencesAdmin: React.FC = () => {
                                                 <div className="bg-zinc-950 rounded-lg p-3 border border-zinc-800">
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <div className={`w-5 h-5 rounded flex items-center justify-center ${previewChrome.badgeClassName}`}>
-                                                            <span className="text-[8px] font-bold text-black">P</span>
+                                                            <span className="text-[8px] font-bold text-black">{previewChrome.initial}</span>
                                                         </div>
                                                         <span className="text-xs text-zinc-500 font-medium">{previewChrome.label}</span>
                                                         <span className="text-xs text-zinc-600 ml-auto">now</span>
@@ -1165,6 +1687,21 @@ const NotificationSequencesAdmin: React.FC = () => {
                                             {n.notes && (
                                                 <div className="text-xs text-zinc-500 bg-zinc-900/40 rounded-lg p-3 border border-zinc-800">
                                                     💡 {n.notes}
+                                                </div>
+                                            )}
+
+                                            {n.domainGuardrails && n.domainGuardrails.length > 0 && (
+                                                <div className="rounded-lg border border-cyan-900/60 bg-cyan-950/20 p-3">
+                                                    <span className="text-xs text-cyan-300 font-medium uppercase tracking-wider block mb-2">
+                                                        Domain Guardrails
+                                                    </span>
+                                                    <div className="space-y-1">
+                                                        {n.domainGuardrails.map((guardrail) => (
+                                                            <p key={guardrail} className="text-xs leading-relaxed text-cyan-100/80">
+                                                                {guardrail}
+                                                            </p>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             )}
 
@@ -1400,7 +1937,7 @@ const NotificationSequencesAdmin: React.FC = () => {
                                     <div className="bg-zinc-950 rounded-lg p-3 border border-zinc-800">
                                         <div className="flex items-center gap-2 mb-1">
                                             <div className={`w-5 h-5 rounded flex items-center justify-center ${testPreviewChrome?.badgeClassName ?? 'bg-[#d7ff00] text-black'}`}>
-                                                <span className="text-[8px] font-bold text-black">P</span>
+                                                <span className="text-[8px] font-bold text-black">{testPreviewChrome?.initial ?? 'P'}</span>
                                             </div>
                                             <span className="text-xs text-zinc-500 font-medium">{testPreviewChrome?.label ?? 'Pulse'}</span>
                                             <span className="text-xs text-zinc-600 ml-auto">test</span>

@@ -42,7 +42,7 @@ const WINDOW_MINUTES = 30;
 // that still passes Q3 + Q7.
 const middaySimMessage = (simName?: string): { title: string; body: string } => ({
   title: 'Quick sim — 5 min',
-  body: `${simName ?? "Today's sim"} is queued. Open Pulse and knock it out before the day fills up.`,
+  body: `${simName ?? "Today's sim"} is queued. Open Pulse Check and knock it out before the day fills up.`,
 });
 
 const eveningProtocolMessage = (protocolLabel?: string): { title: string; body: string } => ({
@@ -147,7 +147,7 @@ export const handler: Handler = async () => {
     // Suppression check.
     let suppression: { suppressed: boolean } = { suppressed: false };
     try {
-      suppression = (await loadPulseCheckNudgeSuppressionState(db, m.userId)) || { suppressed: false };
+      suppression = (await loadPulseCheckNudgeSuppressionState({ db, athleteId: m.userId })) || { suppressed: false };
     } catch {
       /* tolerate */
     }
@@ -182,7 +182,7 @@ export const handler: Handler = async () => {
     const userData = userSnap.data() as Record<string, unknown> | undefined;
     if (!userData) continue;
     const target = resolvePulseCheckPushTarget(userData);
-    if (!target?.fcmToken) continue;
+    if (!target?.token) continue;
 
     if (isMiddayWindow) {
       const simAssignment = openAssignments.find((a) => a.actionType === 'simulation');
@@ -190,7 +190,7 @@ export const handler: Handler = async () => {
         const { title, body } = middaySimMessage(simAssignment.simName as string | undefined);
         const result = await sendNotification(
           messaging,
-          target.fcmToken,
+          target.token,
           title,
           body,
           {
@@ -214,7 +214,7 @@ export const handler: Handler = async () => {
           : eveningSimMessage(target1.simName as string | undefined);
         const result = await sendNotification(
           messaging,
-          target.fcmToken,
+          target.token,
           title,
           body,
           {

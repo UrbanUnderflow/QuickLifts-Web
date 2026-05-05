@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { initializeFirebaseAdmin } = require('./config/firebase');
+const { resolvePulseCheckPushTarget } = require('./pulsecheck-notification-utils');
 const profileSnapshotRuntime = require('../../src/api/firebase/mentaltraining/profileSnapshotRuntime.js');
 
 const COLLECTION = 'vision-pro-trial-sessions';
@@ -1266,8 +1267,8 @@ async function sendVisionProQueuedNotification(admin, db, {
   }
 
   const userData = userSnap.data() || {};
-  const fcmToken = userData.fcmToken;
-  if (!fcmToken) {
+  const pushTarget = resolvePulseCheckPushTarget(userData);
+  if (!pushTarget.eligible || !pushTarget.token) {
     return;
   }
 
@@ -1275,7 +1276,7 @@ async function sendVisionProQueuedNotification(admin, db, {
   const body = `${coachDisplayName || 'Your coach'} queued ${simName}. Open Pulse Check to pair the headset.`;
 
   await admin.messaging().send({
-    token: fcmToken,
+    token: pushTarget.token,
     notification: { title, body },
     data: {
       type: 'VISION_PRO_TRIAL_READY',
