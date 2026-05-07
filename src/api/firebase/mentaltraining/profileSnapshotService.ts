@@ -8,6 +8,7 @@ import {
 import { db } from '../config';
 import type { AssessmentContextFlag } from './correlationEngineTypes';
 import { correlationAssessmentContextService } from './correlationAssessmentContextService';
+import { sanitizeFirestoreValue } from './types';
 import {
   ATHLETE_MENTAL_PROGRESS_COLLECTION,
   PROFILE_SNAPSHOTS_SUBCOLLECTION,
@@ -259,15 +260,15 @@ export const profileSnapshotService = {
 
       if (existingData) {
         const revisionRef = doc(collection(snapshotRef, 'revisions'), `r${String(existingData.revision).padStart(4, '0')}`);
-        transaction.set(revisionRef, {
+        transaction.set(revisionRef, sanitizeFirestoreValue({
           ...existingData,
           supersededAt: now,
           supersededByRevision: nextRevision,
           archivedAt: now,
-        } as ProfileSnapshotRevision);
+        } as ProfileSnapshotRevision));
       }
 
-      transaction.set(snapshotRef, nextSnapshot);
+      transaction.set(snapshotRef, sanitizeFirestoreValue(nextSnapshot));
       transaction.set(
         progressRef,
         {

@@ -605,6 +605,21 @@ const SystemOverviewPage: React.FC = () => {
               "NutritionContextSnapshot",
             );
             break;
+          case "pulsecheck-curriculum-layer-spec":
+            searchTerms.push(
+              "curriculum intent",
+              "curriculumIntent",
+              "same by design",
+              "why this today",
+              "how you move on",
+              "repeated simulations",
+              "repeated protocols",
+              "assignment transparency",
+              "athlete transparency",
+              "rep progress",
+              "progression criteria",
+            );
+            break;
           case "ownership-release-matrix":
             searchTerms.push(
               ...systemOverviewManifest.ownershipMatrix.map(

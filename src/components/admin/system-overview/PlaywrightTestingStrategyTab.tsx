@@ -58,7 +58,7 @@ const PULSECHECK_ROWS = [
   ['Adult invite redemption', 'Creates a coach/staff invite, redeems it in a clean browser context, completes member setup, and confirms the member appears in the team workspace.', 'Write-path'],
   ['Athlete onboarding completion', 'Creates an athlete invite, redeems it in a clean browser context, completes consent/baseline onboarding, and confirms roster readiness in the team workspace.', 'Write-path'],
   ['Athlete daily check-in -> Nora task', 'Redeems a real athlete account, seeds post-baseline runtime state, saves a Today-view readiness check-in, and verifies a Nora daily assignment materializes from the real orchestration path.', 'Write-path'],
-  ['Shared assignment surfaces', 'Confirms the same daily assignment renders in Today and Nora chat and launches the same task into Mental Training.', 'Write-path'],
+  ['Shared assignment surfaces', 'Confirms the same daily assignment renders in Today and Nora chat and launches the same task into Training Room.', 'Write-path'],
   ['Session summary loop', 'Completes a Nora daily assignment, verifies the assignment lifecycle advances, and confirms the athlete receives a durable session summary plus next-action copy.', 'Write-path'],
   ['Coach follow-up queue', 'Confirms coach dashboard and notification-center surfaces reflect Nora auto-assignment and post-session follow-up artifacts.', 'Write-path'],
   ['Coach same-day intervention', 'Confirms the coach assignments tab can defer the Nora daily assignment and that the assignment state updates accordingly.', 'Write-path'],

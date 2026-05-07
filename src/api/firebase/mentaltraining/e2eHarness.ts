@@ -3346,6 +3346,48 @@ async function recordPulseCheckAssignmentEventViaHarness(
   };
 }
 
+async function attachPulseCheckCurriculumIntent(
+  db: Firestore,
+  input: {
+    assignmentId: string;
+    intent?: Record<string, any>;
+  }
+) {
+  const now = Date.now();
+  const intent = input.intent || {
+    version: 'v1',
+    source: 'curriculum-engine',
+    artifactKind: 'simulation',
+    focusName: 'Decision control foundational plan',
+    badgeLabel: 'Same by design',
+    repetitionIntentional: true,
+    whyThisToday: 'Fakeout Brake Point is queued because decision control has the biggest practice gap in your recent work. You have seen it before because repetition is the point, not a random repeat.',
+    sequenceLabel: 'Rep 4 of 7',
+    progressLabel: 'Rep 4 of 7 in this 30-day window',
+    currentRep: 4,
+    targetReps: 7,
+    windowDays: 30,
+    progressionCriteria: 'Move forward after 7 planned reps in this window or 3 steady completions in a row.',
+    reassessmentLabel: 'Nora reassesses this simulation after each completion and at the end of the 30-day window.',
+    nextLikelyStep: 'Nora will either progress the pressure or move you to the next decision control sim.',
+    drivingPillar: 'decision',
+    cognitivePillar: 'decision',
+    pairedAssignmentLabel: '4-7-8 Relaxation Breathing',
+  };
+
+  await setDoc(
+    doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, input.assignmentId),
+    {
+      curriculumIntent: intent,
+      updatedAt: now,
+    },
+    { merge: true }
+  );
+
+  const snap = await getDoc(doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, input.assignmentId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
 async function seedPulseCheckProtocolResponsivenessProfile(
   db: Firestore,
   input: {
@@ -3991,6 +4033,10 @@ export interface PulseE2EHarness {
     reason?: string;
     metadata?: Record<string, unknown>;
   }) => Promise<Record<string, any>>;
+  attachPulseCheckCurriculumIntent: (input: {
+    assignmentId: string;
+    intent?: Record<string, any>;
+  }) => Promise<Record<string, any> | null>;
   recordPulseCheckJourneyCompletion: (input: {
     athleteUserId: string;
     dailyAssignmentId: string;
@@ -4098,6 +4144,7 @@ export function installPulseE2EHarness(db: Firestore) {
     inspectPulseCheckAthleteJourneyState: (input) => inspectPulseCheckAthleteJourneyState(db, input),
     submitPulseCheckCheckIn: (input) => submitPulseCheckCheckInViaHarness(db, input),
     recordPulseCheckAssignmentEvent: (input) => recordPulseCheckAssignmentEventViaHarness(db, input),
+    attachPulseCheckCurriculumIntent: (input) => attachPulseCheckCurriculumIntent(db, input),
     recordPulseCheckJourneyCompletion: (input) => recordPulseCheckJourneyCompletion(db, input),
     savePulseCheckProtocolPracticeSession: (input) => savePulseCheckProtocolPracticeSession(db, input),
     upsertPulseCheckCoachNotifications: (input) => upsertCoachNotificationDocs(db, input),

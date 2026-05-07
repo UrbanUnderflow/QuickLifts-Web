@@ -6,6 +6,7 @@
 //   2. Protocol Curriculum Mapping — every protocol's pillar / frequency / progression
 //   3. Engine Configuration — daily cadence, notification windows, kill switch
 //   4. 30-Day Assessment Rollups — view athlete-by-athlete pillar balance + gaps
+//   5. Athlete Transparency — assignment intent contract for repeated sims/protocols
 //
 // Companion to:
 //   - /admin/adaptationFramingLayer (Phase E) — the reactive layer
@@ -19,9 +20,12 @@ import {
   Brain,
   CheckCircle2,
   ChevronRight,
+  Info,
   Loader2,
   Power,
+  Route,
   Settings2,
+  Target,
   TrendingUp,
 } from 'lucide-react';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
@@ -59,13 +63,14 @@ import {
 import { TaxonomyPillar } from '../../api/firebase/mentaltraining/taxonomy';
 import type { PulseCheckProtocolDefinition, MentalExercise } from '../../api/firebase/mentaltraining/types';
 
-type TabKey = 'pillar' | 'mapping' | 'engine' | 'rollups';
+type TabKey = 'pillar' | 'mapping' | 'engine' | 'rollups' | 'transparency';
 
 const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: 'pillar', label: 'Pillar Configuration', icon: <Brain className="h-4 w-4" /> },
   { key: 'mapping', label: 'Protocol Curriculum Mapping', icon: <Settings2 className="h-4 w-4" /> },
   { key: 'engine', label: 'Engine Configuration', icon: <Power className="h-4 w-4" /> },
   { key: 'rollups', label: '30-Day Assessment Rollups', icon: <TrendingUp className="h-4 w-4" /> },
+  { key: 'transparency', label: 'Athlete Transparency', icon: <Info className="h-4 w-4" /> },
 ];
 
 const CurriculumLayerPage: React.FC = () => {
@@ -147,6 +152,7 @@ const CurriculumLayerPage: React.FC = () => {
               {activeTab === 'mapping' && <MappingTab config={config} />}
               {activeTab === 'engine' && <EngineTab config={config} setConfig={setConfig} />}
               {activeTab === 'rollups' && <RollupsTab />}
+              {activeTab === 'transparency' && <TransparencyTab />}
             </>
           )}
         </div>
@@ -154,6 +160,96 @@ const CurriculumLayerPage: React.FC = () => {
     </AdminRouteGuard>
   );
 };
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Tab 5 — Athlete Transparency
+// ──────────────────────────────────────────────────────────────────────────────
+
+const TransparencyTab: React.FC = () => (
+  <section className="space-y-6">
+    <div className="rounded-2xl border border-violet-700/40 bg-violet-950/20 p-6">
+      <div className="flex items-start gap-3">
+        <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 p-2 text-violet-100">
+          <Info className="h-5 w-5" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold">Assignment Intent Contract</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-300">
+            Repeated sims and protocols must feel like coaching, not a stuck queue. Curriculum-engine assignments now
+            persist a <code className="rounded bg-black/40 px-1">curriculumIntent</code> object so athlete surfaces can
+            explain why the same work is appearing, how much work is planned, and what moves the athlete forward.
+            Home and the Training Room should show that explanation before launch, even when the app falls back to
+            today&apos;s DailyTask rationale because older assignment records do not carry the full intent object yet.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div className="grid gap-4 lg:grid-cols-3">
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-5">
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-zinc-500">
+          <Info className="h-4 w-4 text-[#E0FE10]" />
+          Why This Today
+        </div>
+        <p className="mt-3 text-sm leading-6 text-zinc-300">
+          The UI should name the actual protocol or sim and the driving pillar gap. If the athlete has seen it before,
+          the badge says <span className="font-semibold text-[#E0FE10]">Same by design</span>.
+        </p>
+      </div>
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-5">
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-zinc-500">
+          <Target className="h-4 w-4 text-blue-300" />
+          How Long
+        </div>
+        <p className="mt-3 text-sm leading-6 text-zinc-300">
+          The assignment shows rep progress, target reps, and the review window. The first implementation uses the
+          asset&apos;s <code className="rounded bg-black/40 px-1">recommendedFrequencyPer30Days</code> as the planned dose.
+        </p>
+      </div>
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-5">
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-zinc-500">
+          <Route className="h-4 w-4 text-purple-300" />
+          How They Move On
+        </div>
+        <p className="mt-3 text-sm leading-6 text-zinc-300">
+          The UI names the progression criteria and the next likely move so repetition has an endpoint instead of
+          feeling random.
+        </p>
+      </div>
+    </div>
+
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-6">
+      <h3 className="text-base font-semibold">Athlete-facing copy shape</h3>
+      <div className="mt-4 space-y-4 text-sm text-zinc-300">
+        <div className="border-l border-[#E0FE10]/30 pl-4">
+          <p className="text-[10px] uppercase tracking-wide text-zinc-500">Badge</p>
+          <p className="mt-1 font-semibold text-[#E0FE10]">Same by design · Rep 4 of 7</p>
+        </div>
+        <div className="border-l border-white/10 pl-4">
+          <p className="text-[10px] uppercase tracking-wide text-zinc-500">Why this today</p>
+          <p className="mt-1">
+            Fakeout Brake Point is queued because decision control has the biggest practice gap in your recent work.
+            You have seen it before because repetition is the point, not a random repeat.
+          </p>
+        </div>
+        <div className="border-l border-white/10 pl-4">
+          <p className="text-[10px] uppercase tracking-wide text-zinc-500">How you move on</p>
+          <p className="mt-1">Move forward after the planned reps in this window or 3 steady completions in a row.</p>
+        </div>
+      </div>
+    </div>
+
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-6">
+      <h3 className="text-base font-semibold">Debug posture</h3>
+      <p className="mt-2 text-sm leading-6 text-zinc-300">
+        If an athlete gets the same work repeatedly, operators should be able to tell whether it came from intentional
+        frequency dosing, a coach pin, thin eligible inventory, missing completion events, or a generator fallback. The
+        generation trace remains the operator audit trail; <code className="rounded bg-black/40 px-1">curriculumIntent</code>{' '}
+        is the athlete-safe version.
+      </p>
+    </div>
+  </section>
+);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Tab 1 — Pillar Configuration

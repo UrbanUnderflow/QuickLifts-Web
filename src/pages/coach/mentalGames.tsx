@@ -197,12 +197,16 @@ function getDailyAssignmentActionLabel(assignment: PulseCheckDailyAssignment): s
     return 'Defer';
   }
 
-  if (assignment.simSpecId) {
-    return humanizeRuntimeLabel(assignment.simSpecId);
-  }
-
   if (assignment.protocolLabel) {
     return assignment.protocolLabel;
+  }
+
+  if (assignment.simName) {
+    return assignment.simName;
+  }
+
+  if (assignment.simSpecId) {
+    return humanizeRuntimeLabel(assignment.simSpecId);
   }
 
   if (assignment.legacyExerciseId) {

@@ -92,6 +92,37 @@ export interface CurriculumMetadata {
   prerequisitePillarReps?: Partial<Record<TaxonomyPillar, number>>;
 }
 
+export type CurriculumAssignmentArtifactKind = 'protocol' | 'simulation';
+
+/**
+ * Athlete-facing intent persisted onto `pulsecheck-daily-assignments`.
+ *
+ * The normal `rationale` field explains why the generator picked an item
+ * today. This object explains the longer curriculum contract: whether repeat
+ * exposure is intentional, how much work is planned, what moves the athlete
+ * forward, and what Nora is likely to do next.
+ */
+export interface CurriculumAssignmentIntent {
+  version: 'v1';
+  source: 'curriculum-engine';
+  artifactKind: CurriculumAssignmentArtifactKind;
+  focusName: string;
+  badgeLabel: string;
+  repetitionIntentional: boolean;
+  whyThisToday: string;
+  sequenceLabel: string;
+  progressLabel: string;
+  currentRep: number;
+  targetReps: number;
+  windowDays: number;
+  progressionCriteria: string;
+  reassessmentLabel: string;
+  nextLikelyStep: string;
+  drivingPillar: TaxonomyPillar;
+  cognitivePillar: TaxonomyPillar;
+  pairedAssignmentLabel?: string;
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Pillar weights (per-sport optional override)
 // ──────────────────────────────────────────────────────────────────────────────
@@ -261,6 +292,7 @@ export interface CurriculumGenerationResult {
     /** Pillar that drove the selection (most-underrepped). */
     drivingPillar: TaxonomyPillar;
     rationale: string;
+    curriculumIntent: CurriculumAssignmentIntent;
     coachOverrideApplied?: string; // override id if any
   };
   /** The sim the engine selected. */
@@ -271,6 +303,7 @@ export interface CurriculumGenerationResult {
     progressionLevel: ProgressionLevel;
     drivingPillar: TaxonomyPillar;
     rationale: string;
+    curriculumIntent: CurriculumAssignmentIntent;
     coachOverrideApplied?: string;
   };
 

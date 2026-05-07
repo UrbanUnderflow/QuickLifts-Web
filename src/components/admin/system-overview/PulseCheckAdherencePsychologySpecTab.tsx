@@ -34,7 +34,7 @@ const PRINCIPLE_ROWS = [
   [
     'One obvious next action',
     'Every athlete session should answer in under three seconds: am I done today, or what one action closes today?',
-    'Today, Nora launch routing, Mental Training, notification taps.',
+    'Today, Nora launch routing, Training Room, notification taps.',
   ],
   [
     'Adaptive rescue without shame',
@@ -213,7 +213,7 @@ const IMPLEMENTATION_STEPS = [
   },
   {
     title: 'Route every entry point to the next incomplete step',
-    body: 'Notification taps, app launches, Today, Nora, and Mental Training should all resolve to the current next action rather than competing surfaces.',
+    body: 'Notification taps, app launches, Today, Nora, and Training Room should all resolve to the current next action rather than competing surfaces.',
     owner: 'iOS + web surfaces',
   },
   {

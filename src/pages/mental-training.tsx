@@ -1,5 +1,5 @@
 /**
- * Mental Training Page (Athlete View)
+ * Training Room Page (Athlete View)
  *
  * Shared runtime surface for athlete mental training:
  * Today -> Active Plans -> Recent Results
@@ -42,6 +42,7 @@ import {
 } from '../api/firebase/mentaltraining';
 import type { AthleteWorkReadModel } from '../api/firebase/mentaltraining/dailyTaskTrainingPlanReadModelService';
 import { ExerciseCard, ExercisePlayer, MentalProgressCard, exerciseRequiresWriting } from '../components/mentaltraining';
+import CurriculumIntentPanel from '../components/pulsecheck/CurriculumIntentPanel';
 import type { ProfileSnapshotMilestone } from '../api/firebase/mentaltraining/taxonomy';
 
 type SharedPlanEntry = AthleteWorkReadModel['activePlans'][number];
@@ -166,7 +167,7 @@ function getPlanProgressLabel(plan: SharedPlanEntry['plan']): string {
 
 function getTaskTitle(task: AthleteWorkReadModel['todayTask']): string {
   if (!task) return 'Nora task';
-  return humanizeLabel(task.protocolLabel || task.simSpecId || task.legacyExerciseId || task.actionType);
+  return humanizeLabel(task.protocolLabel || task.simName || task.simSpecId || task.legacyExerciseId || task.actionType);
 }
 
 function isLaunchableTask(status?: PulseCheckDailyAssignmentStatus): boolean {
@@ -353,9 +354,9 @@ const MentalTrainingPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#0d0d0f]">
         <SideNav />
-        <Head><title>Mental Training | Nora</title></Head>
+        <Head><title>Training Room | Nora</title></Head>
         <div className="lg:pl-64 min-h-screen flex items-center justify-center">
-          <div className="text-zinc-400">Loading your mental training...</div>
+          <div className="text-zinc-400">Loading your Training Room...</div>
         </div>
       </div>
     );
@@ -364,17 +365,17 @@ const MentalTrainingPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#0d0d0f]">
       <SideNav />
-      <Head><title>Mental Training | Nora</title></Head>
+      <Head><title>Training Room | Nora</title></Head>
 
       <main className="lg:pl-64 min-h-screen">
         <div className="max-w-5xl mx-auto px-4 py-8">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-white flex items-center gap-3 mb-2">
               <Brain className="w-8 h-8 text-[#E0FE10]" />
-              Mental Training
+              Training Room
             </h1>
             <p className="text-zinc-400">
-              Today, active plans, and recent results
+              Today&apos;s assigned work, active plans, and practice history
             </p>
           </div>
 
@@ -428,7 +429,7 @@ const MentalTrainingPage: React.FC = () => {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Today</p>
-                <h2 className="mt-1 text-2xl font-semibold text-white">Your current Nora task</h2>
+                <h2 className="mt-1 text-2xl font-semibold text-white">Today&apos;s intentional assignment</h2>
               </div>
               <div className="hidden sm:flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-300">
                 <Clock3 className="h-3.5 w-3.5 text-[#E0FE10]" />
@@ -462,6 +463,15 @@ const MentalTrainingPage: React.FC = () => {
                     <p className="mt-2 text-sm leading-6 text-zinc-300">
                       {todaysTask.rationale}
                     </p>
+
+                    <CurriculumIntentPanel
+                      assignment={todaysTask}
+                      compact
+                      variant="summary"
+                      showFallback
+                      className="mt-5 border-t border-white/10 pt-5"
+                      surfaceLabel={todaysTask.curriculumIntent ? 'Assigned by curriculum' : undefined}
+                    />
 
                     <div className="mt-4 flex flex-wrap gap-2 text-xs text-zinc-300">
                       {todaysTask.trainingPlanId ? (

@@ -6,7 +6,7 @@ const DESIGN_GOAL_ROWS = [
   ['One explicit athlete signal', 'A readiness tap is not just decorative UI. It is a structured self-report event with source time, athlete id, and source surface.'],
   ['AI-enriched state, not just normalized state', 'The signal layer should preserve raw evidence, then let AI verify contradictions, enrich the snapshot, and explain likely drivers before assignment planning.'],
   ['One authoritative snapshot family', 'Nora, escalation, coach tools, and athlete surfaces all consume the same current-state snapshot and provenance instead of inventing separate interpretations.'],
-  ['One daily execution artifact', 'After check-in, the orchestrator writes one Nora daily assignment that Today, Nora chat, and Mental Training all reference by id.'],
+  ['One daily execution artifact', 'After check-in, the orchestrator writes one Nora daily assignment that Today, Nora chat, and Training Room all reference by id.'],
   ['Bounded assignment choice', 'Nora should decide from the system’s registered simulations and protocols, not invent freeform tasks at runtime.'],
   ['Bidirectional state updates', 'Chat, rep starts, completions, and coach overrides can all refresh the state snapshot rather than living as disconnected events.'],
   ['Short-horizon posture memory', 'Recent assignment outcomes, especially a fresh Tier 0 defer, should bias today’s routing so Nora does not repeat low-information defers by default.'],
@@ -205,7 +205,7 @@ const IMPLEMENTATION_STATUS_ROWS = [
 const PHASE_ROWS = [
   ['Phase 1', 'Replace iOS raw readiness write with orchestrated check-in submission and assignment-aware response copy.', 'No more canned one-line Nora reaction as the source of truth.'],
   ['Phase 2', 'Make Nora chat launch from `assignmentId` + `stateSnapshotId` and allow chat-derived correction signals.', 'Shipped. Chat is now state-aware without forcing users into chat.'],
-  ['Phase 3', 'Ship the shared assignment-event contract across Today, Nora chat, Mental Training, coach tools, and iOS execution surfaces.', 'This keeps execution truth unified before the AI planner is introduced.'],
+  ['Phase 3', 'Ship the shared assignment-event contract across Today, Nora chat, Training Room, coach tools, and iOS execution surfaces.', 'This keeps execution truth unified before the AI planner is introduced.'],
   ['Phase 4', 'Add the AI signal interpreter so raw snapshots become enriched snapshots with traceable rationale, contradiction handling, and confidence-aware interpretation.', 'Shipped in the shared check-in path with deterministic fallback when AI is unavailable.'],
   ['Phase 5', 'Build the bounded candidate-set assembler and the AI assignment planner, then run the planner output through deterministic policy validation.', 'Shipped in the shared check-in path. Nora now plans from the bounded inventory instead of only following hard-coded routing.'],
   ['Phase 6', 'Expand the protocol object model and registry beyond the initial breathing set so protocol planning becomes broader than breathing-only state work.', 'Shipped as an initial sibling protocol registry with a broader published inventory. Continued authoring and governance depth are still needed, but the planner is no longer sourcing protocols from a hard-coded breathing-only list.'],
@@ -444,7 +444,7 @@ const PulseCheckCheckInSignalLayerIntegrationSpecTab: React.FC = () => {
         <InfoCard
           title="Pilot Acceptance Rule"
           accent="red"
-          body="The system is not ready if iOS, web Today, Nora chat, and Mental Training can show different ideas of the athlete’s current task on the same date. Shared ids and shared refresh rules are the pass/fail line."
+          body="The system is not ready if iOS, web Today, Nora chat, and Training Room can show different ideas of the athlete’s current task on the same date. Shared ids and shared refresh rules are the pass/fail line."
         />
         <DataTable columns={['Scenario', 'Expected Outcome']} rows={VALIDATION_ROWS} />
       </SectionBlock>

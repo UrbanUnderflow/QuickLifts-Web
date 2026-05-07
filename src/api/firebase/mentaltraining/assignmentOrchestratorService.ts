@@ -282,8 +282,27 @@ export const assignmentOrchestratorService = {
     return pulseCheckDailyAssignmentFromFirestore(snapshot.id, snapshot.data() as Record<string, any>);
   },
 
+  async listForAthleteOnDate(athleteId: string, sourceDate: string): Promise<PulseCheckDailyAssignment[]> {
+    const snapshot = await getDocs(
+      query(
+        collection(db, DAILY_ASSIGNMENTS_COLLECTION),
+        where('athleteId', '==', athleteId),
+        where('sourceDate', '==', sourceDate)
+      )
+    );
+
+    return snapshot.docs
+      .map((docSnap) => pulseCheckDailyAssignmentFromFirestore(docSnap.id, docSnap.data() as Record<string, any>))
+      .filter((assignment) => assignment.status !== PulseCheckDailyAssignmentStatus.Superseded)
+      .sort(sortByFreshness);
+  },
+
   async getForAthleteOnDate(athleteId: string, sourceDate: string): Promise<PulseCheckDailyAssignment | null> {
-    return this.getById(buildDailyAssignmentId(athleteId, sourceDate));
+    const direct = await this.getById(buildDailyAssignmentId(athleteId, sourceDate));
+    if (direct && direct.status !== PulseCheckDailyAssignmentStatus.Superseded) return direct;
+
+    const assignments = await this.listForAthleteOnDate(athleteId, sourceDate);
+    return assignments.find((assignment) => assignment.isPrimaryForDate !== false) || assignments[0] || null;
   },
 
   async getLatestForAthlete(athleteId: string): Promise<PulseCheckDailyAssignment | null> {

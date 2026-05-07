@@ -15,6 +15,7 @@ import {
 import type { ExerciseCompletion, PulseCheckDailyAssignment, PulseCheckStateSnapshot } from '../../api/firebase/mentaltraining/types';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import PulseCheckAccessHub, { teamDestinationForMembership } from './PulseCheckAccessHub';
+import CurriculumIntentPanel from './CurriculumIntentPanel';
 
 type ReadinessLevel = 'drained' | 'low' | 'okay' | 'solid' | 'locked';
 
@@ -146,8 +147,9 @@ const assignmentStatusLabel = (status: PulseCheckDailyAssignmentStatus) => {
 const assignmentActionLabel = (assignment: PulseCheckDailyAssignment | null) => {
   if (!assignment) return 'No Nora task yet';
   if (assignment.actionType === 'defer') return 'Pause for today';
-  if (assignment.simSpecId) return humanizeAssignmentLabel(assignment.simSpecId);
   if (assignment.protocolLabel) return assignment.protocolLabel;
+  if (assignment.simName) return assignment.simName;
+  if (assignment.simSpecId) return humanizeAssignmentLabel(assignment.simSpecId);
   if (assignment.legacyExerciseId) return humanizeAssignmentLabel(assignment.legacyExerciseId);
   if (assignment.sessionType) return humanizeAssignmentLabel(assignment.sessionType);
   if (assignment.actionType === 'lighter_sim') return 'Lighter sim';
@@ -314,13 +316,16 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
   const [checkInSaving, setCheckInSaving] = useState(false);
   const [todaysCheckInAt, setTodaysCheckInAt] = useState<number | null>(null);
   const [currentDailyAssignment, setCurrentDailyAssignment] = useState<PulseCheckDailyAssignment | null>(null);
+  const [currentDailyAssignments, setCurrentDailyAssignments] = useState<PulseCheckDailyAssignment[]>([]);
   const [currentStateSnapshot, setCurrentStateSnapshot] = useState<PulseCheckStateSnapshot | null>(null);
   const [assignmentLoading, setAssignmentLoading] = useState(true);
   const [latestCompletion, setLatestCompletion] = useState<ExerciseCompletion | null>(null);
   const [recentSessionHistory, setRecentSessionHistory] = useState<ExerciseCompletion[]>([]);
 
   const refreshTodayAssignment = async (userId: string) => {
-    const assignment = await assignmentOrchestratorService.getForAthleteOnDate(userId, todayDateKey());
+    const assignments = await assignmentOrchestratorService.listForAthleteOnDate(userId, todayDateKey());
+    const assignment = assignments.find((entry) => entry.isPrimaryForDate !== false) || assignments[0] || null;
+    setCurrentDailyAssignments(assignments);
     setCurrentDailyAssignment(assignment);
     return assignment;
   };
@@ -370,6 +375,7 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
     if (currentUserLoading) return;
     if (!currentUser?.id) {
       setCurrentDailyAssignment(null);
+      setCurrentDailyAssignments([]);
       setCurrentStateSnapshot(null);
       setAssignmentLoading(false);
       return;
@@ -379,11 +385,13 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
     setAssignmentLoading(true);
 
     Promise.all([
-      assignmentOrchestratorService.getForAthleteOnDate(currentUser.id, todayDateKey()),
+      assignmentOrchestratorService.listForAthleteOnDate(currentUser.id, todayDateKey()),
       stateSnapshotService.getForAthleteOnDate(currentUser.id, todayDateKey()),
     ])
-      .then(([assignment, snapshot]) => {
+      .then(([assignments, snapshot]) => {
         if (active) {
+          const assignment = assignments.find((entry) => entry.isPrimaryForDate !== false) || assignments[0] || null;
+          setCurrentDailyAssignments(assignments);
           setCurrentDailyAssignment(assignment);
           setCurrentStateSnapshot(snapshot);
         }
@@ -392,6 +400,7 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
         console.error('[PulseCheck today] Failed to load daily runtime context:', error);
         if (active) {
           setCurrentDailyAssignment(null);
+          setCurrentDailyAssignments([]);
           setCurrentStateSnapshot(null);
         }
       })
@@ -542,12 +551,14 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
         setTodaysCheckInAt(result.checkIn.createdAt || Date.now());
         setCurrentStateSnapshot(result.stateSnapshot);
         setCurrentDailyAssignment(result.dailyAssignment);
+        setCurrentDailyAssignments(result.dailyAssignment ? [result.dailyAssignment] : []);
       })
       .catch((error) => {
         console.error('[PulseCheck today] Failed to save daily check-in:', error);
         setSelectedReadiness(null);
         setTodaysCheckInAt(null);
         setCurrentDailyAssignment(null);
+        setCurrentDailyAssignments([]);
         setCurrentStateSnapshot(null);
       })
       .finally(() => {
@@ -706,6 +717,20 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_380px]">
           <div className="space-y-6">
+            {currentDailyAssignment ? (
+              <GlassCard accentColor="#E0FE10" delay={0.18} hoverLift={false}>
+                <div className="p-6 lg:p-7">
+                  <CurriculumIntentPanel
+                    assignment={currentDailyAssignment}
+                    pairedAssignments={currentDailyAssignments}
+                    variant="summary"
+                    showFallback
+                    surfaceLabel={currentDailyAssignment.curriculumIntent ? 'Assigned by curriculum' : undefined}
+                  />
+                </div>
+              </GlassCard>
+            ) : null}
+
             {/* ── READINESS CHECK-IN ── */}
             <GlassCard accentColor="#8B5CF6" delay={0.2} hoverLift={false}>
               <div className="p-6 lg:p-7">
@@ -973,6 +998,11 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
                       ) : null}
                     </div>
                   ) : null}
+
+                  <CurriculumIntentPanel
+                    assignment={currentDailyAssignment}
+                    pairedAssignments={currentDailyAssignments}
+                  />
 
                   <motion.button
                     type="button"

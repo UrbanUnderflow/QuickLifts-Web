@@ -7,6 +7,7 @@ const INPUT_ROWS = [
   ['AI-enriched interpretation', 'The system’s best explanation of what is most likely driving the athlete’s current state and what evidence supports it.', 'Yes'],
   ['Current escalation status', 'Tier 0 to Tier 3, safety mode, or support visibility state.', 'Yes'],
   ['Program intent', 'Whether today is a probe, training rep, pressure exposure, reassessment, or competition-day support moment.', 'Yes'],
+  ['Curriculum intent', 'When the task comes from curriculum-engine, the athlete-facing why, repetition status, progress target, and move-on criteria.', 'When present'],
   ['Athlete profile', 'Longer-term strengths, weaknesses, modifier sensitivities, fatigability, and protocol responsiveness.', 'Yes'],
   ['Current active program and daily assignment state', 'Whether today already has an unstarted, started, completed, or coach-overridden Nora task.', 'Yes'],
   ['Recent session history', 'Recent exposures plus recent assignment outcomes, including whether Nora has already deferred the last day and should avoid getting stuck there again.', 'Yes'],
@@ -51,7 +52,7 @@ const SUPPORT_AND_STALE_ROWS = [
   ['Snapshot stale at assignment time', 'Request a short check-in before assigning a non-trivial Protocol, Sim, or Trial.'],
   ['Repeat same-day check-in with unstarted task', 'Assignment Orchestrator may refresh the same daily task in place instead of creating duplicates.'],
   ['Repeat same-day check-in after start or coach override', 'Do not overwrite the existing daily task automatically.'],
-  ['Athlete launch handoff', 'Today view, Nora chat, and Mental Training should all reference the same daily assignment id so launch, start, and completion state stay aligned.'],
+  ['Athlete launch handoff', 'Today view, Nora chat, and Training Room should all reference the same daily assignment id so launch, start, and completion state stay aligned.'],
   ['Coach manually defers or overrides today\'s task', 'Treat the coach action as execution truth for that date unless safety policy suppresses all training.'],
   ['Low confidence with no fresh self-report', 'Prefer reversible, lower-cost actions rather than aggressive performance routing.'],
   ['Coach lock plus safety conflict', 'Safety wins. The coach lock becomes advisory until the safety override clears.'],
@@ -88,11 +89,15 @@ const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
           },
           {
             title: 'Launch Surfaces Stay In Sync',
-            body: 'Today view, Nora chat, and Mental Training should all advance the same Nora task through viewed, started, and completed states.',
+            body: 'Today view, Nora chat, and Training Room should all advance the same Nora task through viewed, started, and completed states.',
           },
           {
             title: 'Completion Should Explain The Update',
             body: 'Finishing a rep should write an athlete-readable session summary and a coach-readable next-program update rather than silently changing the active program underneath them.',
+          },
+          {
+            title: 'Curriculum Repetition Needs A Why',
+            body: 'When an assignment carries curriculumIntent, Nora should use it to explain same-by-design repetition, the active rep target, and how the athlete moves forward. Home and Training Room should show this before launch.',
           },
           {
             title: 'Meaningful Shifts Deserve Follow-Up',

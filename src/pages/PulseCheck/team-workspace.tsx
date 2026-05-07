@@ -107,8 +107,9 @@ const todayDateKey = () => new Date().toISOString().split('T')[0];
 const humanizeDailyTaskLabel = (assignment: PulseCheckDailyAssignment | null) => {
   if (!assignment) return null;
   if (assignment.actionType === 'defer') return 'Coach review in progress';
-  if (assignment.simSpecId) return assignment.simSpecId.split('_').join(' ');
   if (assignment.protocolLabel) return assignment.protocolLabel;
+  if (assignment.simName) return assignment.simName;
+  if (assignment.simSpecId) return assignment.simSpecId.split('_').join(' ');
   if (assignment.legacyExerciseId) return assignment.legacyExerciseId.split('_').join(' ');
   if (assignment.sessionType) return assignment.sessionType.split('_').join(' ');
   if (assignment.actionType === 'lighter_sim') return 'lighter sim';

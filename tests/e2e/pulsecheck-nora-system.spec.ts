@@ -190,9 +190,14 @@ test.describe.serial('PulseCheck Nora system coverage', () => {
     await page.goto('/admin/curriculumLayer', { waitUntil: 'domcontentloaded' });
     await waitForStableAppFrame(page);
     await expect(page.getByRole('heading', { name: 'Curriculum Layer' })).toBeVisible();
+    await page.getByRole('button', { name: /Athlete Transparency/i }).click();
+    await expect(page.getByRole('heading', { name: /Assignment Intent Contract/i })).toBeVisible();
+    await expect(page.getByText(/Same by design/i).first()).toBeVisible();
 
     await openSystemOverviewSection(page, 'pulsecheck-curriculum-layer-spec');
     await expect(page.getByRole('heading', { name: /Daily Curriculum Layer/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Assignment intent contract/i })).toBeVisible();
+    await expect(page.getByText(/curriculumIntent/i).first()).toBeVisible();
 
     await openSystemOverviewSection(page, 'pulsecheck-nora-conversation-orchestrator-spec');
     await expect(page.getByRole('heading', { name: /Nora Conversation Orchestrator/i })).toBeVisible();

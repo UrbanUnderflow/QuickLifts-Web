@@ -17,6 +17,7 @@ import {
 import { assignmentOrchestratorService, completionService, protocolAudioAssetService, stateSnapshotService } from '../../api/firebase/mentaltraining';
 import { resolvePulseCheckFunctionUrl } from '../../api/firebase/mentaltraining/pulseCheckFunctionsUrl';
 import { ExerciseInstructionCard } from '../mentaltraining';
+import CurriculumIntentPanel from './CurriculumIntentPanel';
 
 const STORAGE_KEY_NORA_INTRO = 'pulsecheck_has_seen_nora_intro_card';
 const STORAGE_KEY_ACTIVE_EXERCISE = 'pulsecheck_active_exercise';
@@ -50,8 +51,9 @@ const assignmentStatusLabel = (status: PulseCheckDailyAssignmentStatus) => {
 
 const assignmentActionLabel = (assignment: PulseCheckDailyAssignment) => {
   if (assignment.actionType === 'defer') return 'Pause for today';
-  if (assignment.simSpecId) return humanizeAssignmentLabel(assignment.simSpecId);
   if (assignment.protocolLabel) return assignment.protocolLabel;
+  if (assignment.simName) return assignment.simName;
+  if (assignment.simSpecId) return humanizeAssignmentLabel(assignment.simSpecId);
   if (assignment.legacyExerciseId) return humanizeAssignmentLabel(assignment.legacyExerciseId);
   if (assignment.sessionType) return humanizeAssignmentLabel(assignment.sessionType);
   if (assignment.actionType === 'lighter_sim') return 'Lighter sim';
@@ -1033,6 +1035,8 @@ const Chat: React.FC = () => {
                           </span>
                         ) : null}
                       </div>
+
+                      <CurriculumIntentPanel assignment={todaysDailyAssignment} compact />
                     </div>
 
                     <div className="flex flex-col items-stretch gap-2 md:w-[220px]">
@@ -1053,7 +1057,7 @@ const Chat: React.FC = () => {
                         </div>
                       )}
                       <p className="text-xs leading-5 text-zinc-500">
-                        Nora uses the same assignment record here, in Today, and in Mental Training.
+                        Nora uses the same assignment record here, in Today, and in the Training Room.
                       </p>
                     </div>
                   </div>

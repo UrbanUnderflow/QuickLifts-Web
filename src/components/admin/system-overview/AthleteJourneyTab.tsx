@@ -94,7 +94,7 @@ const PHASES: Phase[] = [
         status: 'partial',
         description: 'The athlete settles into a repeatable loop.',
         detail:
-            'This loop now exists in partial form. Today view persists the daily check-in, Nora materializes one shared task, Mental Training can launch that task directly, and completion now writes a session summary plus next-program update. Athlete history, coach push updates, and Nora follow-up now exist in lightweight form. The remaining gap is making that rhythm feel fully end-to-end across every athlete and coach surface.',
+            'This loop now exists in partial form. Today view persists the daily check-in, Nora materializes one shared task, Training Room can launch that task directly, and completion now writes a session summary plus next-program update. Athlete history, coach push updates, and Nora follow-up now exist in lightweight form. The remaining gap is making that rhythm feel fully end-to-end across every athlete and coach surface.',
     },
     {
         id: 'contextualization',

@@ -17,12 +17,13 @@ const installFirebaseEnv = () => {
 
 const loadModules = async () => {
   installFirebaseEnv();
-  const [types, generator, taxonomy] = await Promise.all([
+  const [types, generator, taxonomy, assignmentIntent] = await Promise.all([
     import('../../src/api/firebase/dailyCurriculum/types'),
     import('../../src/api/firebase/dailyCurriculum/dailyAssignmentGenerator'),
     import('../../src/api/firebase/mentaltraining/taxonomy'),
+    import('../../src/api/firebase/dailyCurriculum/assignmentIntent'),
   ]);
-  return { types, generator, taxonomy };
+  return { types, generator, taxonomy, assignmentIntent };
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -119,6 +120,30 @@ test('resolveFrequency — rejects negative explicit and falls back', async () =
     { foundational: 12, intermediate: 8, advanced: 4 },
   );
   assert.equal(v, 4);
+});
+
+test('buildCurriculumAssignmentIntent — explains intentional repetition and progression', async () => {
+  const { assignmentIntent, taxonomy } = await loadModules();
+  const intent = assignmentIntent.buildCurriculumAssignmentIntent({
+    kind: 'simulation',
+    assetLabel: 'Fakeout Brake Point',
+    drivingPillar: taxonomy.TaxonomyPillar.Decision,
+    cognitivePillar: taxonomy.TaxonomyPillar.Decision,
+    progressionLevel: 'foundational',
+    actualReps: 3,
+    recommendedFrequency: 7,
+    pairedAssignmentLabel: '4-7-8 Relaxation Breathing',
+    windowDays: 30,
+  });
+
+  assert.equal(intent.source, 'curriculum-engine');
+  assert.equal(intent.badgeLabel, 'Same by design');
+  assert.equal(intent.repetitionIntentional, true);
+  assert.equal(intent.sequenceLabel, 'Rep 4 of 7');
+  assert.match(intent.whyThisToday, /Fakeout Brake Point/);
+  assert.match(intent.whyThisToday, /not a random repeat/);
+  assert.match(intent.progressionCriteria, /7 planned reps/);
+  assert.match(intent.nextLikelyStep, /next decision control sim/i);
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

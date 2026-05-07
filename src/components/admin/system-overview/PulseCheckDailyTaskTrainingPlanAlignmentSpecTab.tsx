@@ -65,7 +65,7 @@ const EMPTY_AND_OVERRIDE_ROWS = [
 
 const SURFACE_ROWS = [
   ['Home', 'DailyTask surface', 'Active DailyTask.id', 'Shows the one current rep, why it was assigned, whether it is done, and what the athlete should do next.'],
-  ['Mental Training', 'TrainingPlan surface with Today mirror', 'Active DailyTask.id + active TrainingPlan context', 'Uses the three-section model: Today -> Active Plans -> Recent Results.'],
+  ['Training Room', 'TrainingPlan surface with Today mirror', 'Active DailyTask.id + active TrainingPlan context', 'Uses the three-section model: Today -> Active Plans -> Recent Results.'],
   ['Nora chat', 'Conversation surface', 'Active DailyTask.id + TrainingPlan.id + latest state snapshot', 'Must launch and speak from the same assignment truth rather than inventing a second task narrative.'],
 ];
 
@@ -91,8 +91,8 @@ const EVENT_ROWS = [
 ];
 
 const MIGRATION_ROWS = [
-  ['Phase 1', 'Create the unified read model joining pulsecheck-daily-assignments, active program data, and mapped legacy assignments.', 'Home and Mental Training can read from the shared DailyTask + TrainingPlan view model.'],
-  ['Phase 2', 'Render Home and Mental Training from the shared DailyTask + TrainingPlan model.', 'Both surfaces show the same task for the same date.'],
+  ['Phase 1', 'Create the unified read model joining pulsecheck-daily-assignments, active program data, and mapped legacy assignments.', 'Home and Training Room can read from the shared DailyTask + TrainingPlan view model.'],
+  ['Phase 2', 'Render Home and Training Room from the shared DailyTask + TrainingPlan model.', 'Both surfaces show the same task for the same date.'],
   ['Phase 3', 'De-prioritize legacy mental-exercise-assignments and mental-curriculum-assignments from the primary athlete surface.', 'Legacy content no longer drives the main card when Nora-assigned work exists.'],
   ['Phase 4', 'Retire legacy primary-card fallbacks and keep only adapters or admin-only visibility where needed.', 'All live programming flows through the new model.'],
 ];
@@ -106,11 +106,12 @@ const SOURCE_OF_TRUTH_ROWS = [
 ];
 
 const ACCEPTANCE_ITEMS = [
-  'Home, Nora chat, and Mental Training all reference the same DailyTask.id for the same date.',
+  'Home, Nora chat, and Training Room all reference the same DailyTask.id for the same date.',
   'The athlete never sees two different answers to what today’s rep is.',
   'Completing a rep changes Home from launch-ready to completed state.',
-  'Mental Training mirrors today’s status correctly.',
+  'Training Room mirrors today’s status correctly.',
   'Plan-backed tasks show progress in athlete-facing terms.',
+  'Home and Training Room show a top-level assignment-intent summary: why it was assigned, how long the repeat lasts, and what moves the athlete on.',
   'Overrides are visible and explained instead of silent.',
   'Empty states use live baseline or progress context instead of stale legacy fallbacks.',
   'Superseded tasks are preserved with reason but are no longer shown as primary.',
@@ -130,7 +131,7 @@ const PulseCheckDailyTaskTrainingPlanAlignmentSpecTab: React.FC = () => {
         eyebrow="Pulse Check Runtime"
         title="Daily Task + Training Plan Alignment Spec"
         version="Version 1.0 | March 2026"
-        summary="Runtime surface-coherence contract for athlete work in PulseCheck. This artifact defines the canonical DailyTask, TrainingPlan, and PlanStep model; materialization rules; lifecycle state machine; date-boundary rules; event contract; and migration path so Home, Mental Training, and Nora chat always speak from one assignment truth."
+        summary="Runtime surface-coherence contract for athlete work in PulseCheck. This artifact defines the canonical DailyTask, TrainingPlan, and PlanStep model; materialization rules; lifecycle state machine; date-boundary rules; event contract; and migration path so Home, Training Room, and Nora chat always speak from one assignment truth."
         highlights={[
           {
             title: 'DailyTask Is Execution Truth',
@@ -148,7 +149,7 @@ const PulseCheckDailyTaskTrainingPlanAlignmentSpecTab: React.FC = () => {
       />
 
       <RuntimeAlignmentPanel
-        role="Runtime surface-coherence spec for how Nora-assigned athlete work should be materialized, persisted, rendered, and updated across Home, Mental Training, and Nora chat."
+        role="Runtime surface-coherence spec for how Nora-assigned athlete work should be materialized, persisted, rendered, and updated across Home, Training Room, and Nora chat."
         sourceOfTruth="This document is authoritative for DailyTask and TrainingPlan object definitions, lifecycle rules, date-boundary logic, surface ownership, empty states, override behavior, and the event contract. It is not authoritative for how Nora chooses the task in the first place."
         masterReference="Use Nora Assignment Rules for bounded selection logic, State Signal Layer for state and freshness logic, Runtime Architecture for source-of-truth ordering, and this page for what athlete-facing execution truth should look like once a task exists."
         relatedDocs={[
@@ -206,9 +207,9 @@ const PulseCheckDailyTaskTrainingPlanAlignmentSpecTab: React.FC = () => {
             body="Home is the DailyTask surface. It answers what today’s rep is, why it was assigned, whether it is done, and what the next action should be."
           />
           <InfoCard
-            title="Mental Training"
+            title="Training Room"
             accent="blue"
-            body="Mental Training is the TrainingPlan surface with a mirrored Today section at the top. The intended information architecture is Today -> Active Plans -> Recent Results."
+            body="Training Room is the TrainingPlan surface with a mirrored Today section at the top. The intended information architecture is Today -> Active Plans -> Recent Results, with assignment intent visible before launch."
           />
           <InfoCard
             title="Nora Chat"

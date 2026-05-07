@@ -156,6 +156,51 @@ const PulseCheckCurriculumLayerSpecTab: React.FC = () => {
         </p>
       </Card>
 
+      <SectionHeader sub="Athlete-facing transparency for repeated sims and protocols.">
+        Assignment intent contract
+      </SectionHeader>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card tone="doctrine" title="Same by design, never mystery repetition">
+          <p>
+            Curriculum-engine daily assignments must persist a{' '}
+            <code className="rounded bg-black/40 px-1">curriculumIntent</code> object onto the daily assignment. The
+            object is the athlete-safe explanation layer: why this today, whether repetition is intentional, rep progress,
+            progression criteria, reassessment timing, and next likely step.
+          </p>
+          <p>
+            The Today screen, Nora chat, Training Room, and iOS Today card should render this object when present rather
+            than inventing local explanation copy. If an older assignment does not have this object yet, athlete surfaces
+            should still show the fallback intent summary from the DailyTask rationale, active plan, and recent-history
+            context so the assignment never feels random.
+          </p>
+        </Card>
+        <Card title="Minimum visible fields">
+          <ul className="list-disc space-y-1 pl-5">
+            <li><strong>Badge</strong>: <code className="rounded bg-black/40 px-1">Same by design</code> or planned rep.</li>
+            <li><strong>Sequence</strong>: rep X of Y in the active curriculum window.</li>
+            <li><strong>Why this today</strong>: actual sim/protocol name + driving pillar gap.</li>
+            <li><strong>How you move on</strong>: planned reps or steady-completion threshold.</li>
+            <li><strong>What is next</strong>: likely progression or repeat decision.</li>
+          </ul>
+          <p>
+            Home and Training Room must show this summary high on the page: "why this is assigned", "how long", and
+            "when you move on" should be visible before the athlete launches the rep.
+          </p>
+        </Card>
+      </div>
+      <Card title="Stored contract shape">
+        <pre className="overflow-x-auto rounded-xl bg-black/40 p-4 text-xs text-zinc-300">{`curriculumIntent: {
+  version: 'v1',
+  source: 'curriculum-engine',
+  badgeLabel: 'Same by design',
+  focusName: 'Decision control foundational plan',
+  whyThisToday: 'Fakeout Brake Point is queued because decision control has the biggest practice gap...',
+  sequenceLabel: 'Rep 4 of 7',
+  progressionCriteria: 'Move forward after 7 planned reps or 3 steady completions in a row.',
+  nextLikelyStep: 'Nora will either progress the pressure or move you to the next decision-control sim.'
+}`}</pre>
+      </Card>
+
       <SectionHeader sub="Notification cadence — three pushes per athlete per day.">Notification model</SectionHeader>
       <Card title="Three pushes per day, athlete-local">
         <ul className="list-disc space-y-1 pl-5">

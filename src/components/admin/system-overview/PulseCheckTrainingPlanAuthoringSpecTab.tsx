@@ -97,7 +97,7 @@ const PulseCheckTrainingPlanAuthoringSpecTab: React.FC = () => {
         eyebrow="Pulse Check Runtime"
         title="Training Plan Authoring Spec"
         version="Version 1.0 | March 2026"
-        summary="Runtime contract for how Nora authors longer-horizon mental training blocks. This spec defines the relationship between ProgramPrescription, TrainingPlan, and DailyTask; the trigger model for creating a new plan; the bounded archetype library; the stored provenance fields; and the daily materialization contract so Mental Training can show a real programming surface instead of a hollow daily-recommendation wrapper."
+        summary="Runtime contract for how Nora authors longer-horizon mental training blocks. This spec defines the relationship between ProgramPrescription, TrainingPlan, and DailyTask; the trigger model for creating a new plan; the bounded archetype library; the stored provenance fields; and the daily materialization contract so Training Room can show a real programming surface instead of a hollow daily-recommendation wrapper."
         highlights={[
           {
             title: 'TrainingPlan Is Programming Truth',

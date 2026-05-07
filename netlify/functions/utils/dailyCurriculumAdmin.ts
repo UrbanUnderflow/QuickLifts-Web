@@ -27,6 +27,7 @@ import {
   pickAsset,
   pickWorstGapPillar,
 } from '../../../src/api/firebase/dailyCurriculum/selection';
+import { buildCurriculumAssignmentIntent } from '../../../src/api/firebase/dailyCurriculum/assignmentIntent';
 
 const PROTOCOLS_COLLECTION = 'pulsecheck-protocols';
 const SIM_MODULES_COLLECTION = 'sim-modules';
@@ -154,6 +155,29 @@ export const generateDailyAssignmentAdmin = async (
 
   if (!protocolPick || !simPick) return null;
 
+  const protocolLabel = (protocolPick.asset as PulseCheckProtocolDefinition).label;
+  const simLabel = (simPick.asset as MentalExercise).name;
+  const protocolIntent = buildCurriculumAssignmentIntent({
+    kind: 'protocol',
+    assetLabel: protocolLabel,
+    drivingPillar,
+    cognitivePillar: protocolPick.cognitivePillar,
+    progressionLevel: protocolPick.progressionLevel,
+    actualReps: protocolPick.actualReps,
+    recommendedFrequency: protocolPick.recommendedFrequency,
+    pairedAssignmentLabel: simLabel,
+  });
+  const simIntent = buildCurriculumAssignmentIntent({
+    kind: 'simulation',
+    assetLabel: simLabel,
+    drivingPillar,
+    cognitivePillar: simPick.cognitivePillar,
+    progressionLevel: simPick.progressionLevel,
+    actualReps: simPick.actualReps,
+    recommendedFrequency: simPick.recommendedFrequency,
+    pairedAssignmentLabel: protocolLabel,
+  });
+
   const generatorNotes: string[] = [];
   generatorNotes.push(
     `Driving pillar: ${drivingPillar} (worst-gap from baseline of ${
@@ -189,8 +213,9 @@ export const generateDailyAssignmentAdmin = async (
     chosenCandidateType: 'protocol' as PulseCheckDailyAssignment['chosenCandidateType'],
     legacyExerciseId: (protocolPick.asset as PulseCheckProtocolDefinition).legacyExerciseId,
     protocolId: protocolPick.asset.id,
-    protocolLabel: (protocolPick.asset as PulseCheckProtocolDefinition).label,
+    protocolLabel,
     rationale: protocolPick.rationale,
+    curriculumIntent: protocolIntent,
     durationSeconds: (protocolPick.asset as PulseCheckProtocolDefinition).durationSeconds,
     createdAt: generatedAt,
     updatedAt: generatedAt,
@@ -214,8 +239,9 @@ export const generateDailyAssignmentAdmin = async (
     chosenCandidateId: simPick.asset.id,
     chosenCandidateType: 'simulation' as PulseCheckDailyAssignment['chosenCandidateType'],
     simSpecId: (simPick.asset as MentalExercise).simSpecId || simPick.asset.id,
-    simName: (simPick.asset as MentalExercise).name,
+    simName: simLabel,
     rationale: simPick.rationale,
+    curriculumIntent: simIntent,
     createdAt: generatedAt,
     updatedAt: generatedAt,
   };
@@ -226,20 +252,22 @@ export const generateDailyAssignmentAdmin = async (
     generatedAt,
     protocolSelection: {
       protocolId: protocolPick.asset.id,
-      protocolLabel: (protocolPick.asset as PulseCheckProtocolDefinition).label,
+      protocolLabel,
       cognitivePillar: protocolPick.cognitivePillar,
       progressionLevel: protocolPick.progressionLevel,
       drivingPillar,
       rationale: protocolPick.rationale,
+      curriculumIntent: protocolIntent,
       coachOverrideApplied: protocolPick.coachOverrideId,
     },
     simSelection: {
       simId: simPick.asset.id,
-      simName: (simPick.asset as MentalExercise).name,
+      simName: simLabel,
       cognitivePillar: simPick.cognitivePillar,
       progressionLevel: simPick.progressionLevel,
       drivingPillar,
       rationale: simPick.rationale,
+      curriculumIntent: simIntent,
       coachOverrideApplied: simPick.coachOverrideId,
     },
     pillarBalanceAtGeneration: pillarRepCounts,

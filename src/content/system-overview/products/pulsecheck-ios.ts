@@ -150,7 +150,7 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       persona: 'Athletes with curriculum-engine assignments',
       outcome:
         'Listen for today’s curriculum-engine protocol and simulation assignments without exposing engine internals to the athlete.',
-      entryPoints: ['Today view', 'Nora Daily', 'Mental Training handoff'],
+      entryPoints: ['Today view', 'Nora Daily', 'Training Room handoff'],
       dependentServices: ['DailyCurriculumReader', 'pulsecheck-daily-assignments listener'],
       firestoreCollections: ['pulsecheck-daily-assignments'],
       integrations: ['Cloud Firestore'],

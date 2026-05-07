@@ -25,9 +25,9 @@ const appIconDataUri = `data:image/png;base64,${fs.readFileSync(appIconPath).toS
 const svg = `<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="macraBg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#E9FF2D"/>
-      <stop offset="58%" stop-color="#E0FE10"/>
-      <stop offset="100%" stop-color="#C9F70D"/>
+      <stop offset="0%" stop-color="#C5F13D"/>
+      <stop offset="48%" stop-color="#ACE73E"/>
+      <stop offset="100%" stop-color="#61CB42"/>
     </linearGradient>
     <filter id="softShadow" x="-50%" y="-50%" width="200%" height="200%">
       <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#789000" flood-opacity="0.26"/>

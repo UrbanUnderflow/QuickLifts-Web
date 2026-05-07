@@ -132,8 +132,14 @@ test('admin daily curriculum generator writes protocol, sim, and generation trac
 
   const assignments = [...collections.get('pulsecheck-daily-assignments')!.values()];
   assert.equal(assignments.filter((a) => a.assignedBy === 'curriculum-engine').length, 2);
-  assert.ok(assignments.find((a) => a.actionType === 'protocol'));
-  assert.ok(assignments.find((a) => a.actionType === 'simulation'));
+  const protocolAssignment = assignments.find((a) => a.actionType === 'protocol');
+  const simAssignment = assignments.find((a) => a.actionType === 'simulation');
+  assert.ok(protocolAssignment);
+  assert.ok(simAssignment);
+  assert.equal((protocolAssignment!.curriculumIntent as any)?.source, 'curriculum-engine');
+  assert.equal((protocolAssignment!.curriculumIntent as any)?.pairedAssignmentLabel, 'Composure Sim');
+  assert.match(String((simAssignment!.curriculumIntent as any)?.whyThisToday), /Composure Sim/);
+  assert.match(String((simAssignment!.curriculumIntent as any)?.progressionCriteria), /planned reps/);
 });
 
 test('admin daily curriculum generator can assign legacy category-only production assets', async () => {

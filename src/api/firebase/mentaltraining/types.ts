@@ -17,6 +17,7 @@ import type {
   TaxonomyProfile,
   TaxonomySkill,
 } from './taxonomy';
+import type { CurriculumAssignmentIntent } from '../dailyCurriculum/types';
 
 // ============================================================================
 // EXERCISE TYPES
@@ -720,7 +721,7 @@ export enum PulseCheckDailyAssignmentStatus {
   Expired = 'expired',
 }
 
-export type PulseCheckDailyAssignmentActionType = 'sim' | 'lighter_sim' | 'protocol' | 'defer';
+export type PulseCheckDailyAssignmentActionType = 'sim' | 'simulation' | 'lighter_sim' | 'protocol' | 'defer';
 export type PulseCheckAssignmentEventType =
   | 'daily_task_materialized'
   | 'daily_task_superseded'
@@ -1435,6 +1436,7 @@ export interface PulseCheckDailyAssignment {
   durationMode?: DurationMode;
   durationSeconds?: number;
   rationale: string;
+  curriculumIntent?: CurriculumAssignmentIntent;
   plannerSummary?: string;
   plannerAudit?: PulseCheckPlannerAudit;
   plannerConfidence?: PulseCheckStateConfidence;
@@ -2196,6 +2198,7 @@ export function pulseCheckDailyAssignmentToFirestore(
   if (typeof assignment.previousRevision === 'number') data.previousRevision = assignment.previousRevision;
   if (assignment.sourceStateSnapshotId) data.sourceStateSnapshotId = assignment.sourceStateSnapshotId;
   if (assignment.simSpecId) data.simSpecId = assignment.simSpecId;
+  if (assignment.simName) data.simName = assignment.simName;
   if (assignment.legacyExerciseId) data.legacyExerciseId = assignment.legacyExerciseId;
   if (assignment.timezone) data.timezone = assignment.timezone;
   if (assignment.sourceDateMode) data.sourceDateMode = assignment.sourceDateMode;
@@ -2220,6 +2223,7 @@ export function pulseCheckDailyAssignmentToFirestore(
   if (assignment.sessionType) data.sessionType = assignment.sessionType;
   if (assignment.durationMode) data.durationMode = assignment.durationMode;
   if (typeof assignment.durationSeconds === 'number') data.durationSeconds = assignment.durationSeconds;
+  if (assignment.curriculumIntent) data.curriculumIntent = sanitizeFirestoreValue(assignment.curriculumIntent);
   if (assignment.sourceCandidateSetId) data.sourceCandidateSetId = assignment.sourceCandidateSetId;
   if (assignment.chosenCandidateId) data.chosenCandidateId = assignment.chosenCandidateId;
   if (assignment.chosenCandidateType) data.chosenCandidateType = assignment.chosenCandidateType;
@@ -2278,7 +2282,7 @@ export function pulseCheckDailyAssignmentFromFirestore(
     sourceDate: data.sourceDate || '',
     timezone: data.timezone,
     sourceDateMode: data.sourceDateMode || 'athlete_local_day',
-    assignedBy: 'nora',
+    assignedBy: data.assignedBy || 'nora',
     materializedAt: data.materializedAt || data.createdAt || Date.now(),
     materializedBy: data.materializedBy || 'nora_runtime',
     isPrimaryForDate: data.isPrimaryForDate ?? true,
@@ -2288,6 +2292,7 @@ export function pulseCheckDailyAssignmentFromFirestore(
     chosenCandidateId: data.chosenCandidateId,
     chosenCandidateType: data.chosenCandidateType,
     simSpecId: data.simSpecId,
+    simName: data.simName,
     legacyExerciseId: data.legacyExerciseId,
     simFamilyLabel: data.simFamilyLabel,
     simVariantLabel: data.simVariantLabel,
@@ -2307,6 +2312,7 @@ export function pulseCheckDailyAssignmentFromFirestore(
     durationMode: data.durationMode,
     durationSeconds: data.durationSeconds,
     rationale: data.rationale || '',
+    curriculumIntent: data.curriculumIntent,
     plannerSummary: data.plannerSummary,
     plannerAudit: data.plannerAudit,
     plannerConfidence: data.plannerConfidence,

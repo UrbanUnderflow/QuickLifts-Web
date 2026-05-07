@@ -247,7 +247,16 @@ async function extractInviteUrl(inviteCard: ReturnType<Page['locator']>) {
   if (!match) {
     throw new Error('Could not find activation URL in invite card.');
   }
-  const resolved = new URL(match[0]);
+  const source = new URL(match[0]);
+  const inviteToken = source.searchParams.get('inviteToken');
+  const resolved = inviteToken
+    ? new URL(`/PulseCheck/team-invite/${encodeURIComponent(inviteToken)}`, appOrigin)
+    : source;
+
+  if (inviteToken || source.searchParams.get('devFirebase') === '1' || source.searchParams.get('af_r')?.includes('devFirebase=1')) {
+    resolved.searchParams.set('devFirebase', '1');
+  }
+
   resolved.protocol = new URL(appOrigin).protocol;
   resolved.host = new URL(appOrigin).host;
   return resolved.toString();
@@ -442,11 +451,13 @@ async function redeemAthleteInvite(
       acceptInviteButton.waitFor({ state: 'visible', timeout: 20_000 }),
       continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
       page.waitForURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 }).catch(() => null),
+      page.waitForURL(/\/PulseCheck\/pilot-invite-next-steps/i, { timeout: 20_000 }).catch(() => null),
       page.waitForURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 }).catch(() => null),
     ]).catch(() => null);
 
     await Promise.race([
       page.waitForURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 }),
+      page.waitForURL(/\/PulseCheck\/pilot-invite-next-steps/i, { timeout: 20_000 }),
       continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
       accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
     ]).catch(() => null);
@@ -461,6 +472,7 @@ async function redeemAthleteInvite(
       await acceptInviteButton.click();
       await Promise.race([
         page.waitForURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 }),
+        page.waitForURL(/\/PulseCheck\/pilot-invite-next-steps/i, { timeout: 20_000 }),
         page.waitForURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 }),
         continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
         accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
@@ -494,15 +506,26 @@ async function redeemAthleteInvite(
     await waitForStableAppFrame(page);
     if (debugNamespace) writeDebugStep(debugNamespace, `athlete-redeem:continued:${page.url()}`);
 
+    if (/\/PulseCheck\/pilot-invite-next-steps/i.test(page.url())) {
+      await page.getByRole('link', { name: /Open Web Onboarding/i }).click({ timeout: 20_000 });
+      await waitForStableAppFrame(page);
+      if (debugNamespace) writeDebugStep(debugNamespace, `athlete-redeem:web-onboarding:${page.url()}`);
+    }
+
     if (/\/PulseCheck\/team-workspace/i.test(page.url())) {
       return { context, page };
     }
 
     await expect(page).toHaveURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 });
     if (debugNamespace) writeDebugStep(debugNamespace, 'athlete-redeem:onboarding-open');
-    await page.getByLabel('Your Name').fill(name);
+    await page.getByPlaceholder('Your name').fill(name);
     await page.locator('label').filter({ hasText: /I agree to get started with PulseCheck for my team\./i }).click();
-    await page.getByRole('button', { name: /Complete Athlete Onboarding/i }).click();
+    const requiredAgreementLabels = page.locator('label').filter({ hasText: /I have read this and I agree\./i });
+    const requiredAgreementCount = await requiredAgreementLabels.count().catch(() => 0);
+    for (let index = 0; index < requiredAgreementCount; index += 1) {
+      await requiredAgreementLabels.nth(index).click();
+    }
+    await page.getByRole('button', { name: /^Continue$/i }).click();
     if (debugNamespace) writeDebugStep(debugNamespace, 'athlete-redeem:onboarding-submitted');
 
     await Promise.race([
@@ -569,6 +592,13 @@ async function recordJourneyCompletion(adminPage: Page, athleteUserId: string, d
   return adminPage.evaluate(async ({ athleteUserId: athleteId, dailyAssignmentId: assignmentId }) => {
     return window.__pulseE2E?.recordPulseCheckJourneyCompletion({ athleteUserId: athleteId, dailyAssignmentId: assignmentId });
   }, { athleteUserId, dailyAssignmentId });
+}
+
+async function attachCurriculumIntent(adminPage: Page, dailyAssignmentId: string) {
+  await waitForPulseE2EHarness(adminPage);
+  return adminPage.evaluate(async ({ dailyAssignmentId: assignmentId }) => {
+    return window.__pulseE2E?.attachPulseCheckCurriculumIntent({ assignmentId });
+  }, { dailyAssignmentId });
 }
 
 async function saveProtocolPracticeSession(
@@ -693,6 +723,18 @@ async function preparePulseCheckApp(page: Page, section: 'today' | 'nora') {
     window.localStorage.setItem('pulsecheck_has_seen_nora_onboarding', 'true');
     window.localStorage.setItem('pulse_has_seen_marketing', 'true');
   });
+
+  const legalHeading = page.getByRole('heading', { name: /Review our legal terms/i });
+  const legalVisible = await legalHeading.waitFor({ state: 'visible', timeout: 3_000 }).then(() => true).catch(() => false);
+  if (legalVisible) {
+    const legalForm = page.locator('form').filter({ has: legalHeading }).first();
+    await legalForm.getByRole('checkbox').check({ force: true });
+    const agreeButton = legalForm.getByRole('button', { name: /Agree & Continue/i });
+    await expect(agreeButton).toBeEnabled({ timeout: 5_000 });
+    await agreeButton.click();
+    await legalHeading.waitFor({ state: 'hidden', timeout: 20_000 }).catch(() => null);
+    await waitForStableAppFrame(page);
+  }
 }
 
 async function submitReadinessCheckIn(page: Page, readinessLabel: RegExp) {
@@ -939,16 +981,29 @@ test.describe('PulseCheck athlete journey', () => {
         throw new Error('Expected a Nora daily assignment id after the athlete check-in.');
       }
       expect(assignmentState?.latestAssignment?.plannerAudit?.rankedCandidates?.length || 0).toBeGreaterThan(0);
+      await attachCurriculumIntent(page, latestAssignmentId);
       const assignmentLabel = humanizeAssignmentLabel(
         assignmentState?.latestAssignment?.simSpecId ||
           assignmentState?.latestAssignment?.legacyExerciseId ||
           assignmentState?.latestAssignment?.sessionType
       );
+      const assignmentTitlePattern = new RegExp(`^${escapeRegExp(assignmentLabel)}$`, 'i');
+
+      await actors.athletePage.reload({ waitUntil: 'domcontentloaded' });
+      await waitForStableAppFrame(actors.athletePage);
+      await expect(actors.athletePage.getByText(/Assigned by curriculum, not random/i).first()).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByText(/Same by design/i).first()).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByText(/Why this today/i).first()).toBeVisible();
+      await expect(actors.athletePage.getByText(/How long/i).first()).toBeVisible();
+      await expect(actors.athletePage.getByText(/When you move on/i).first()).toBeVisible();
+      await expect(actors.athletePage.getByText(/Rep 4 of 7/i).first()).toBeVisible();
+      await expect(actors.athletePage.getByText(/Move forward after 7 planned reps/i).first()).toBeVisible();
 
       await preparePulseCheckApp(actors.athletePage, 'nora');
       writeDebugStep(actors.namespace, 'test1:nora-open');
       await expect(actors.athletePage.getByText(/Today's Nora Task/i)).toBeVisible({ timeout: 20_000 });
-      await expect(actors.athletePage.getByRole('heading', { name: new RegExp(assignmentLabel, 'i') })).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByRole('heading', { name: assignmentTitlePattern })).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByText(/Same by design/i).first()).toBeVisible({ timeout: 20_000 });
 
       const launchMentalTrainingLink = actors.athletePage.getByRole('link', { name: /Start today'?s task/i });
       const openNoraTaskButton = actors.athletePage.getByRole('button', { name: /Open today'?s task/i });
@@ -960,7 +1015,10 @@ test.describe('PulseCheck athlete journey', () => {
       writeDebugStep(actors.namespace, 'test1:launch-clicked');
       await expect(actors.athletePage).toHaveURL(/\/mental-training/i, { timeout: 20_000 });
       writeDebugStep(actors.namespace, 'test1:mental-training-open');
-      await expect(actors.athletePage.getByText(new RegExp(assignmentLabel, 'i'))).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByRole('heading', { name: /^Training Room$/i })).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByRole('heading', { name: /Today's intentional assignment/i })).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByText(/Assigned by curriculum, not random/i).first()).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByRole('heading', { name: assignmentTitlePattern })).toBeVisible({ timeout: 20_000 });
 
       await expect.poll(async () => {
         const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
@@ -976,20 +1034,25 @@ test.describe('PulseCheck athlete journey', () => {
       expect(completedState?.latestAssignment?.status).toBe('completed');
       expect(completedState?.latestCompletion?.sessionSummary?.athleteHeadline).toBeTruthy();
       expect(completedState?.latestCompletion?.sessionSummary?.nextActionLabel).toBeTruthy();
+      const athleteHeadlinePattern = new RegExp(
+        `^${escapeRegExp(completedState.latestCompletion.sessionSummary.athleteHeadline)}$`,
+        'i'
+      );
 
       await actors.athletePage.reload({ waitUntil: 'domcontentloaded' });
       await waitForStableAppFrame(actors.athletePage);
-      await expect(actors.athletePage.getByText(new RegExp(completedState.latestCompletion.sessionSummary.athleteHeadline, 'i'))).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByRole('heading', { name: athleteHeadlinePattern })).toBeVisible({ timeout: 20_000 });
 
       await actors.athletePage.goto('/mental-training', { waitUntil: 'domcontentloaded' });
       writeDebugStep(actors.namespace, 'test1:mental-training-reopened');
       await waitForStableAppFrame(actors.athletePage);
-      await expect(actors.athletePage.getByText(new RegExp(assignmentLabel, 'i'))).toBeVisible({ timeout: 20_000 });
-      await expect(actors.athletePage.getByText(new RegExp(completedState.latestCompletion.sessionSummary.athleteHeadline, 'i'))).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByRole('heading', { name: /^Training Room$/i })).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByRole('heading', { name: assignmentTitlePattern })).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByRole('heading', { name: athleteHeadlinePattern })).toBeVisible({ timeout: 20_000 });
 
       await preparePulseCheckApp(actors.athletePage, 'today');
       writeDebugStep(actors.namespace, 'test1:today-reopened');
-      await expect(actors.athletePage.getByText(new RegExp(completedState.latestCompletion.sessionSummary.athleteHeadline, 'i'))).toBeVisible({ timeout: 20_000 });
+      await expect(actors.athletePage.getByRole('heading', { name: athleteHeadlinePattern })).toBeVisible({ timeout: 20_000 });
     } finally {
       await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
       await actors.coachContext.close().catch(() => null);
