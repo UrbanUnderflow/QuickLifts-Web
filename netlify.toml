@@ -44,6 +44,13 @@
 # Netlify's host-based redirects in netlify.toml are unreliable when combined with
 # @netlify/plugin-nextjs (the plugin's auto-generated redirects for "/" win first).
 
+# Universal-link association files must bypass Next dynamic routes.
+[[redirects]]
+  from = "/.well-known/apple-app-site-association"
+  to = "/apple-app-site-association"
+  status = 200
+  force = true
+
 # Branded OG images (route through a normal URL so bot user agents aren't blocked by /.netlify/functions)
 # Keeps query params (title/subtitle) intact.
 [[redirects]]
