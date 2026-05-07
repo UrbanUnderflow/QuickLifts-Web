@@ -87,6 +87,7 @@ export class User {
   checkinsPrivacy: CheckinsPrivacy;
   checkinsAccessList: string[];
   legalAcceptance?: LegalAcceptanceRecord | null;
+  protocolCueWords: Record<string, string>;
   createdAt: Date;
   updatedAt: Date;
 
@@ -152,6 +153,14 @@ export class User {
             : null,
         }
       : null;
+    this.protocolCueWords = data.protocolCueWords && typeof data.protocolCueWords === 'object'
+      ? Object.entries(data.protocolCueWords).reduce<Record<string, string>>((acc, [key, value]) => {
+          if (typeof value === 'string' && key.trim() && value.trim()) {
+            acc[key.trim()] = value.trim();
+          }
+          return acc;
+        }, {})
+      : {};
 
     this.createdAt = convertFirestoreTimestamp(data.createdAt) || null;
 
@@ -231,6 +240,7 @@ export class User {
               : null,
           }
         : null,
+      protocolCueWords: this.protocolCueWords,
       createdAt: dateToUnixTimestamp(this.createdAt),
       updatedAt: dateToUnixTimestamp(this.updatedAt),
     };

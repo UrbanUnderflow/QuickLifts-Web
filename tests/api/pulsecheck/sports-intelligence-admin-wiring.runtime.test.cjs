@@ -26,6 +26,7 @@ test('hosted coach reports pass through AuthWrapper while keeping page-level mem
 test('admin entry points expose the reviewer screen and Slice 1 doctrine', () => {
   const adminIndex = read('src/pages/admin/index.tsx');
   const sportConfig = read('src/pages/admin/pulsecheckSportConfiguration.tsx');
+  const reportsAdmin = read('src/pages/admin/sportsIntelligenceReports.tsx');
 
   assert.match(adminIndex, /Sports Intelligence Reports/);
   assert.match(adminIndex, /\/admin\/sportsIntelligenceReports/);
@@ -34,6 +35,11 @@ test('admin entry points expose the reviewer screen and Slice 1 doctrine', () =>
   assert.match(sportConfig, /\/admin\/sportsIntelligenceReports/);
   assert.match(sportConfig, /scripts\/seed-pulsecheck-sports\.ts/);
   assert.match(sportConfig, new RegExp(doctrine.replace(/[+]/g, '\\+')));
+
+  assert.match(reportsAdmin, /Sports Intelligence Layer QA/);
+  assert.match(reportsAdmin, /SportsFactLedger/);
+  assert.match(reportsAdmin, /SportsCandidateRead/);
+  assert.match(reportsAdmin, /Executable Nora rubric/);
 });
 
 test('system overview carries reviewer links, seed guidance, and doctrine memory', () => {
@@ -44,5 +50,9 @@ test('system overview carries reviewer links, seed guidance, and doctrine memory
     assert.match(source, /\/admin\/sportsIntelligenceReports/);
     assert.match(source, /scripts\/seed-pulsecheck-sports\.ts/);
     assert.match(source, new RegExp(doctrine.replace(/[+]/g, '\\+')));
+    assert.match(source, /Sports Fact Ledger/);
+    assert.match(source, /Candidate Read Engine/);
+    assert.match(source, /Validated Intelligence Payload/);
+    assert.match(source, /executable Nora rubric/i);
   }
 });

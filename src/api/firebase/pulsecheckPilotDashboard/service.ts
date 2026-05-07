@@ -30,6 +30,12 @@ import {
 import { resolvePulseCheckFunctionUrl } from '../mentaltraining/pulseCheckFunctionsUrl';
 import { pulseCheckProvisioningService } from '../pulsecheckProvisioning/service';
 import { pilotDashboardDemoMode } from './demoMode';
+import {
+  buildPilotAdherenceOrchestratorByCohort,
+  buildPilotAdherenceOrchestratorSummary,
+  isRescuedAdherenceCompletion,
+  resolveAthleteDayAdherenceState,
+} from './adherenceOrchestrator';
 import type {
   PulseCheckPilot,
   PulseCheckPilotCohort,
@@ -949,6 +955,17 @@ const buildAthleteAdherenceDetail = ({
     return accumulator;
   }, new Map());
 
+  const assignmentStartByDate = assignmentEvents.reduce<Map<string, Record<string, any>>>((accumulator, event) => {
+    if (normalizeString(event.eventType) !== 'started') return accumulator;
+    const sourceDate = normalizeString(event.sourceDate);
+    if (!sourceDate) return accumulator;
+    const existing = accumulator.get(sourceDate);
+    if (!existing || toTimeMs(event.createdAt) >= toTimeMs(existing.createdAt)) {
+      accumulator.set(sourceDate, event);
+    }
+    return accumulator;
+  }, new Map());
+
   const checkInsByDate = checkIns.reduce<Map<string, Array<Record<string, any>>>>((accumulator, checkIn) => {
     const sourceDate = normalizeString(checkIn.date) || toTimezoneDateKey(toTimeMs(checkIn.createdAt), timezone);
     if (!sourceDate) return accumulator;
@@ -1005,9 +1022,11 @@ const buildAthleteAdherenceDetail = ({
   const days = listDateKeysBetween(startDateKey, endDateKey).map((dateKey) => {
     const assignment = assignmentByDate.get(dateKey) || null;
     const completionEvent = assignmentCompletionByDate.get(dateKey) || null;
+    const startEvent = assignmentStartByDate.get(dateKey) || null;
     const checkInsForDate = checkInsByDate.get(dateKey) || [];
     const hasCheckIn = checkInsForDate.length > 0;
     const hasAssignmentCompletion = Boolean(completionEvent) || normalizeString(assignment?.status) === 'completed';
+    const hasAssignmentStarted = Boolean(startEvent) || normalizeString(assignment?.status) === 'started';
     const hasSameDayActivity = hasCheckIn || hasAssignmentCompletion;
 
     let exclusionReason: PilotDashboardAthleteAdherenceDay['exclusionReason'] = null;
@@ -1041,12 +1060,31 @@ const buildAthleteAdherenceDetail = ({
     }
 
     const expected = !exclusionReason;
+    const todayDateKey = toTimezoneDateKey(Date.now(), timezone);
+    const rescued = expected && hasCheckIn && hasAssignmentCompletion
+      ? isRescuedAdherenceCompletion({ assignment, completionEvent })
+      : false;
+    const adherenceState = resolveAthleteDayAdherenceState({
+      expected,
+      checkInCompleted: hasCheckIn,
+      assignmentCompleted: hasAssignmentCompletion,
+      assignmentStarted: hasAssignmentStarted,
+      rescued,
+      dateKey,
+      todayDateKey,
+    });
     return {
       dateKey,
       timezone,
       expected,
-      status: !expected ? 'excluded' : hasCheckIn && hasAssignmentCompletion ? 'green' : 'red',
+      status: adherenceState === 'excused'
+        ? 'excluded'
+        : adherenceState === 'closed' || adherenceState === 'rescued'
+          ? 'green'
+          : 'red',
+      adherenceState,
       checkInCompleted: hasCheckIn,
+      assignmentStarted: hasAssignmentStarted,
       assignmentCompleted: hasAssignmentCompletion,
       checkInCount: checkInsForDate.length,
       assignmentId: normalizeString(assignment?.id) || null,
@@ -1062,6 +1100,11 @@ const buildAthleteAdherenceDetail = ({
   const completedCheckInDays = days.filter((entry) => entry.expected && entry.checkInCompleted).length;
   const completedAssignmentDays = days.filter((entry) => entry.expected && entry.assignmentCompleted).length;
   const adheredDays = days.filter((entry) => entry.expected && entry.status === 'green').length;
+  const rescuedDays = days.filter((entry) => entry.expected && entry.adherenceState === 'rescued').length;
+  const missedDays = days.filter((entry) => entry.expected && entry.adherenceState === 'missed').length;
+  const excusedDays = days.filter((entry) => !entry.expected).length;
+  const checkInOnlyDays = days.filter((entry) => entry.expected && entry.checkInCompleted && !entry.assignmentCompleted).length;
+  const taskOnlyDays = days.filter((entry) => entry.expected && !entry.checkInCompleted && entry.assignmentCompleted).length;
 
   return {
     adherenceSummary: {
@@ -1069,6 +1112,11 @@ const buildAthleteAdherenceDetail = ({
       completedCheckInDays,
       completedAssignmentDays,
       adheredDays,
+      rescuedDays,
+      missedDays,
+      excusedDays,
+      checkInOnlyDays,
+      taskOnlyDays,
       adherenceRate: expectedAthleteDays ? roundMetric((adheredDays / expectedAthleteDays) * 100) : 0,
       dailyCheckInRate: expectedAthleteDays ? roundMetric((completedCheckInDays / expectedAthleteDays) * 100) : 0,
       assignmentCompletionRate: expectedAthleteDays ? roundMetric((completedAssignmentDays / expectedAthleteDays) * 100) : 0,
@@ -2457,6 +2505,12 @@ export const pulseCheckPilotDashboardService = {
       outcomeDiagnostics: (outcomeRollup?.diagnostics?.surveys as PilotDashboardOutcomeSurveyDiagnostics) || undefined,
       outcomeDiagnosticsByCohort:
         (outcomeRollup?.diagnostics?.surveysByCohort as Record<string, PilotDashboardOutcomeSurveyDiagnostics>) || undefined,
+      adherenceOrchestrator: buildPilotAdherenceOrchestratorSummary(
+        (outcomeRollup?.diagnostics?.adherence as Record<string, any>) || null
+      ),
+      adherenceOrchestratorByCohort: buildPilotAdherenceOrchestratorByCohort(
+        (outcomeRollup?.diagnostics?.adherenceByCohort as Record<string, any>) || null
+      ),
       outcomeOperationalDiagnostics: mergedOutcomeOperationalDiagnostics,
       outcomeRecommendationTypeSlices: (outcomeRollup?.diagnostics?.recommendationTypeSlices as Record<string, any>) || undefined,
       outcomeRecommendationTypeSlicesByCohort:

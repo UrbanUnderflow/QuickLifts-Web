@@ -80,6 +80,7 @@ type TestTargetUser = {
     hasFcmToken: boolean;
     hasPulseFcmToken: boolean;
     hasPulseCheckFcmToken: boolean;
+    hasMacraFcmToken: boolean;
     profileImageUrl?: string;
 };
 
@@ -987,9 +988,12 @@ const NOTIFICATIONS: NotificationRow[] = [
         source: 'Firebase Functions — functions/macraDailyInsight.js',
         dataKeys: ['type: MACRA_DAILY_INSIGHT', 'insightType', 'dayKey', 'timestamp', 'screen: macra_journal'],
         opensInto: 'Macra journal',
-        tokenField: 'users.macraFcmToken || users.fcmToken',
-        notes: 'Macra currently resolves a Macra token first, then a legacy/default token fallback.',
-        domainGuardrails: ['Macra nutrition only. May mention food, macros, meal logging, and Nora nutrition; must not mention Pulse Check sims/protocols.'],
+        tokenField: 'users.macraFcmToken || users.pushTokens.macra',
+        notes: 'Audited 2026-05-06: removed the users.fcmToken fallback so Macra nutrition pushes cannot appear under Pulse.',
+        domainGuardrails: [
+            'Macra nutrition only. May mention food, macros, meal logging, and Nora nutrition; must not mention Pulse Check sims/protocols.',
+            'Must use a Macra-owned push token only. Do not target users.fcmToken.',
+        ],
     },
 ];
 
@@ -1122,12 +1126,21 @@ const getNormalizedNotificationType = (notificationId: string) =>
 const getNotificationProductScope = (notification: NotificationRow): ProductScope =>
     notification.productScope ?? 'pulse';
 
-const getNotificationTokenField = (notification: NotificationRow) =>
-    notification.tokenField ?? (getNotificationProductScope(notification) === 'pulsecheck' ? 'users.pulseCheckFcmToken' : 'users.fcmToken');
+const getNotificationTokenField = (notification: NotificationRow) => {
+    if (notification.tokenField) return notification.tokenField;
+
+    const scope = getNotificationProductScope(notification);
+    if (scope === 'pulsecheck') return 'users.pulseCheckFcmToken';
+    if (scope === 'macra') return 'users.macraFcmToken || users.pushTokens.macra';
+    return 'users.fcmToken';
+};
 
 const hasScopedPushToken = (user: TestTargetUser | null, notification: NotificationRow | null) => {
     if (!user || !notification) return false;
-    return getNotificationProductScope(notification) === 'pulsecheck' ? user.hasPulseCheckFcmToken : user.hasPulseFcmToken;
+    const scope = getNotificationProductScope(notification);
+    if (scope === 'pulsecheck') return user.hasPulseCheckFcmToken;
+    if (scope === 'macra') return user.hasMacraFcmToken;
+    return user.hasPulseFcmToken;
 };
 
 const getScopedPushTokenLabel = (user: TestTargetUser | null, notification: NotificationRow | null) => {
@@ -1137,6 +1150,9 @@ const getScopedPushTokenLabel = (user: TestTargetUser | null, notification: Noti
 
     if (scope === 'pulsecheck') {
         return available ? 'Pulse Check push token available' : 'No Pulse Check push token on file';
+    }
+    if (scope === 'macra') {
+        return available ? 'Macra push token available' : 'No Macra push token on file';
     }
 
     return available ? 'Pulse push token available' : 'No Pulse push token on file';

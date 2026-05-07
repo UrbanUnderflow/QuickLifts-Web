@@ -39,7 +39,7 @@ const WINDOW_MINUTES = 30;
 // Copy must pass the Nora voice rubric (see PulseCheck/Views/Admin/
 // NoraRubricAdmin.swift). Every notification names the actual session
 // (protocolLabel / simName) when available, with a generic fallback
-// that still passes Q3 + Q7.
+// that still names the assignment type and next action.
 const middaySimMessage = (simName?: string): { title: string; body: string } => ({
   title: 'Quick sim — 5 min',
   body: `${simName ?? "Today's sim"} is queued. Open Pulse Check and knock it out before the day fills up.`,

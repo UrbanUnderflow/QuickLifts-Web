@@ -3428,6 +3428,201 @@ function groupDailyEvents(events = []) {
   };
 }
 
+const ADHERENCE_CANONICAL_STATES = [
+  'closed',
+  'rescued',
+  'missed',
+  'excused',
+  'checked_in',
+  'task_only',
+  'task_started',
+];
+
+const ADHERENCE_PRIVACY_BOUNDARY = {
+  coachVisible: [
+    'daily adherence state',
+    'check-in completion presence',
+    'assignment completion presence',
+    'excused-day status',
+    'rescue completion status',
+    'at-risk counts',
+  ],
+  coachWillNotReceive: [
+    'raw reflections',
+    'mental health disclosures',
+    'chat transcripts',
+    'private sleep details',
+    'Nora private message content',
+  ],
+  statement:
+    'Nora does not show coaches raw reflections, mental health disclosures, chat transcripts, or private sleep details. Coach will not receive private Nora content because an athlete completes, misses, or rescues a day. Coach-facing adherence diagnostics expose completion state only.',
+};
+
+function emptyAdherenceStateCounts() {
+  return ADHERENCE_CANONICAL_STATES.reduce((accumulator, state) => {
+    accumulator[state] = 0;
+    return accumulator;
+  }, {});
+}
+
+function createAdherenceAthleteState() {
+  return {
+    expectedDays: 0,
+    closedDays: 0,
+    rescuedDays: 0,
+    missedDays: 0,
+    excusedDays: 0,
+    checkInOnlyDays: 0,
+    taskOnlyDays: 0,
+    taskStartedOnlyDays: 0,
+    openDays: 0,
+    stateCounts: emptyAdherenceStateCounts(),
+  };
+}
+
+function createAdherenceOrchestratorAccumulator() {
+  return {
+    expectedDays: 0,
+    closedDays: 0,
+    rescuedDays: 0,
+    missedDays: 0,
+    excusedDays: 0,
+    checkInOnlyDays: 0,
+    taskOnlyDays: 0,
+    taskStartedOnlyDays: 0,
+    openDays: 0,
+    stateCounts: emptyAdherenceStateCounts(),
+    byAthlete: {},
+  };
+}
+
+function hasAdherenceRescueSignal({ assignment = null, completionEvent = null } = {}) {
+  const candidates = [
+    assignment,
+    assignment?.metadata,
+    assignment?.completionSummary,
+    assignment?.executionLock,
+    completionEvent,
+    completionEvent?.metricPayload,
+    completionEvent?.metadata,
+    completionEvent?.completionSummary,
+  ].filter(Boolean);
+
+  return candidates.some((entry) => {
+    if (normalizeBoolean(entry.adherenceRescue) || normalizeBoolean(entry.rescueMode) || normalizeBoolean(entry.shortVersionRescue)) {
+      return true;
+    }
+    const mode = normalizeString(entry.durationMode || entry.completionMode || entry.adherenceMode || entry.nudgeMode || entry.completionSource || entry.source).toLowerCase();
+    const reason = normalizeString(entry.reason || entry.rescueReason || entry.nudgeReason || entry.adherenceSource).toLowerCase();
+    return ['short', 'short_version', 'late_rescue', 'rescue', 'rescued'].includes(mode)
+      || reason.includes('rescue')
+      || reason.includes('short version')
+      || reason.includes('late')
+      || mode.includes('rescue')
+      || mode.includes('short')
+      || mode.includes('late')
+      || mode.includes('nudge');
+  });
+}
+
+function classifyAthleteDayAdherenceState({
+  expected,
+  checkInCompleted,
+  assignmentCompleted,
+  assignment = null,
+  completionEvent = null,
+}) {
+  if (!expected) return 'excused';
+  if (checkInCompleted && assignmentCompleted) {
+    return hasAdherenceRescueSignal({ assignment, completionEvent }) ? 'rescued' : 'closed';
+  }
+  if (checkInCompleted) return 'checked_in';
+  if (assignmentCompleted) return 'task_only';
+
+  const assignmentStatus = normalizeString(assignment?.status).toLowerCase();
+  if (['viewed', 'started', 'paused', 'resumed'].includes(assignmentStatus)) {
+    return 'task_started';
+  }
+
+  return 'missed';
+}
+
+function recordAdherenceOrchestratorDay(orchestrator, athleteId, state) {
+  if (!orchestrator || !athleteId || !ADHERENCE_CANONICAL_STATES.includes(state)) return;
+  const athlete = orchestrator.byAthlete[athleteId] || createAdherenceAthleteState();
+  orchestrator.byAthlete[athleteId] = athlete;
+  orchestrator.stateCounts[state] = (orchestrator.stateCounts[state] || 0) + 1;
+  athlete.stateCounts[state] = (athlete.stateCounts[state] || 0) + 1;
+
+  if (state === 'excused') {
+    orchestrator.excusedDays += 1;
+    athlete.excusedDays += 1;
+    return;
+  }
+
+  orchestrator.expectedDays += 1;
+  athlete.expectedDays += 1;
+
+  if (state === 'closed' || state === 'rescued') {
+    orchestrator.closedDays += 1;
+    athlete.closedDays += 1;
+  }
+  if (state === 'rescued') {
+    orchestrator.rescuedDays += 1;
+    athlete.rescuedDays += 1;
+  }
+  if (state === 'missed') {
+    orchestrator.missedDays += 1;
+    athlete.missedDays += 1;
+  }
+  if (state === 'checked_in') {
+    orchestrator.checkInOnlyDays += 1;
+    athlete.checkInOnlyDays += 1;
+  }
+  if (state === 'task_only') {
+    orchestrator.taskOnlyDays += 1;
+    athlete.taskOnlyDays += 1;
+  }
+  if (state === 'task_started') {
+    orchestrator.taskStartedOnlyDays += 1;
+    athlete.taskStartedOnlyDays += 1;
+  }
+  if (state === 'missed' || state === 'checked_in' || state === 'task_only' || state === 'task_started') {
+    orchestrator.openDays += 1;
+    athlete.openDays += 1;
+  }
+}
+
+function finalizeAdherenceOrchestrator(orchestrator) {
+  const byAthlete = Object.entries(orchestrator.byAthlete).reduce((accumulator, [athleteId, state]) => {
+    accumulator[athleteId] = {
+      ...state,
+      closedRate: state.expectedDays ? roundMetric((state.closedDays / state.expectedDays) * 100) : 0,
+      atRisk: state.openDays > 0,
+    };
+    return accumulator;
+  }, {});
+
+  return {
+    version: 'adherence_orchestrator_v1',
+    expectedDays: orchestrator.expectedDays,
+    closedDays: orchestrator.closedDays,
+    rescuedDays: orchestrator.rescuedDays,
+    missedDays: orchestrator.missedDays,
+    excusedDays: orchestrator.excusedDays,
+    checkInOnlyDays: orchestrator.checkInOnlyDays,
+    taskOnlyDays: orchestrator.taskOnlyDays,
+    taskStartedOnlyDays: orchestrator.taskStartedOnlyDays,
+    openDays: orchestrator.openDays,
+    atRiskAthleteCount: Object.values(byAthlete).filter((entry) => entry.atRisk).length,
+    closedRate: orchestrator.expectedDays ? roundMetric((orchestrator.closedDays / orchestrator.expectedDays) * 100) : 0,
+    stateCounts: orchestrator.stateCounts,
+    byAthlete,
+    privacyBoundary: ADHERENCE_PRIVACY_BOUNDARY,
+    privateContentExposed: false,
+  };
+}
+
 function resolvePilotCurrentWindowStart(pilot, enrollments = [], events = []) {
   const candidateValues = [
     coerceMillis(pilot?.startAt),
@@ -3771,13 +3966,16 @@ function resolveWindowBounds(window, pilot, currentWindowStartDate, explicitDate
     };
   }
 
-  const endDateKey = toUtcDateKey(coerceMillis(pilot?.endAt) || Date.now()) || todayDateKey;
+  const pilotEndMs = coerceMillis(pilot?.endAt);
+  const pilotHasEnded = Boolean(pilotEndMs && pilotEndMs < Date.now());
+  const usePilotEndDate = normalizeString(pilot?.status) === 'completed' || pilotHasEnded;
+  const endDateKey = toUtcDateKey(usePilotEndDate ? pilotEndMs : Date.now()) || todayDateKey;
   return {
     dateKey: null,
     startDateKey: currentWindowStartDate,
-    endDateKey: normalizeString(pilot?.status) === 'completed' ? endDateKey : todayDateKey,
+    endDateKey,
     startMs: startOfUtcDayMs(currentWindowStartDate),
-    endMs: endOfUtcDayMs(normalizeString(pilot?.status) === 'completed' ? endDateKey : todayDateKey),
+    endMs: endOfUtcDayMs(endDateKey),
   };
 }
 
@@ -3966,6 +4164,7 @@ function computeAdherenceSummary({
   let adheredDays = 0;
   let activeAthleteCount = 0;
   const byAthlete = {};
+  const adherenceOrchestrator = createAdherenceOrchestratorAccumulator();
 
   enrollments.forEach((enrollment) => {
     const athleteId = normalizeString(enrollment.userId);
@@ -3989,27 +4188,54 @@ function computeAdherenceSummary({
       if (!intervalStart || !intervalEndBase || intervalStart > intervalEndBase) return;
 
       listDateKeysBetween(intervalStart, intervalEndBase).forEach((dateKey) => {
-        if (isManualPauseDay({ teamMembership, pilotEnrollment: enrollment, dateKey })) return;
+        const assignment = dailyAssignmentState.get(`${athleteId}::${dateKey}`);
+        const completionEvent = assignmentCompletions.get(`${athleteId}::${dateKey}`) || null;
+        const hasCheckIn = checkIns.has(`${athleteId}::${dateKey}`);
+        const hasAssignmentCompletion =
+          Boolean(completionEvent)
+          || normalizeString(assignment?.status) === 'completed';
+        const recordExcusedDay = () => {
+          recordAdherenceOrchestratorDay(adherenceOrchestrator, athleteId, 'excused');
+        };
+
+        if (isManualPauseDay({ teamMembership, pilotEnrollment: enrollment, dateKey })) {
+          recordExcusedDay();
+          return;
+        }
         if (isEnrollmentPausedDay({
           pilotEnrollment: enrollment,
           dateKey,
           timezone,
           checkIns,
           assignmentCompletions,
-        })) return;
+        })) {
+          recordExcusedDay();
+          return;
+        }
         if (isOperationalRestrictedDay({
           operationalState: operationalRestriction,
           dateKey,
           timezone,
           checkIns,
           assignmentCompletions,
-        })) return;
-
-        const assignment = dailyAssignmentState.get(`${athleteId}::${dateKey}`);
-        if (isNoTaskRestDay(assignment)) {
+        })) {
+          recordExcusedDay();
           return;
         }
 
+        if (isNoTaskRestDay(assignment)) {
+          recordExcusedDay();
+          return;
+        }
+
+        const canonicalState = classifyAthleteDayAdherenceState({
+          expected: true,
+          checkInCompleted: hasCheckIn,
+          assignmentCompleted: hasAssignmentCompletion,
+          assignment,
+          completionEvent,
+        });
+        recordAdherenceOrchestratorDay(adherenceOrchestrator, athleteId, canonicalState);
         expectedAthleteDays += 1;
         athleteExpectedDays += 1;
         if (!byAthlete[athleteId]) {
@@ -4021,11 +4247,6 @@ function computeAdherenceSummary({
           };
         }
         byAthlete[athleteId].expectedAthleteDays += 1;
-
-        const hasCheckIn = checkIns.has(`${athleteId}::${dateKey}`);
-        const hasAssignmentCompletion =
-          assignmentCompletions.has(`${athleteId}::${dateKey}`)
-          || normalizeString(assignment?.status) === 'completed';
 
         if (hasCheckIn) {
           completedCheckInDays += 1;
@@ -4056,6 +4277,7 @@ function computeAdherenceSummary({
     adherenceRate: expectedAthleteDays ? roundMetric((adheredDays / expectedAthleteDays) * 100) : 0,
     dailyCheckInRate: expectedAthleteDays ? roundMetric((completedCheckInDays / expectedAthleteDays) * 100) : 0,
     assignmentCompletionRate: expectedAthleteDays ? roundMetric((completedAssignmentDays / expectedAthleteDays) * 100) : 0,
+    orchestrator: finalizeAdherenceOrchestrator(adherenceOrchestrator),
     byAthlete,
   };
 }
@@ -4451,6 +4673,7 @@ async function computePilotOutcomeRollup({
   });
   const outcomeByCohort = {};
   const surveyDiagnosticsByCohort = {};
+  const adherenceByCohort = {};
   const hypothesisEvaluationByCohort = {};
   const recommendationTypeSlicesByCohort = {};
 
@@ -4479,6 +4702,14 @@ async function computePilotOutcomeRollup({
       windowStartDate: bounds.startDateKey,
       windowEndDate: bounds.endDateKey,
     });
+    adherenceByCohort[cohortId] = {
+      expectedAthleteDays: cohortAdherenceSummary.expectedAthleteDays,
+      completedCheckInDays: cohortAdherenceSummary.completedCheckInDays,
+      completedAssignmentDays: cohortAdherenceSummary.completedAssignmentDays,
+      adheredDays: cohortAdherenceSummary.adheredDays,
+      activeAthleteCount: cohortAdherenceSummary.activeAthleteCount,
+      orchestrator: cohortAdherenceSummary.orchestrator,
+    };
     const cohortMentalPerformanceSummary = computeMentalPerformanceSummary(
       cohortSnapshots,
       bounds.startMs,
@@ -4543,7 +4774,18 @@ async function computePilotOutcomeRollup({
         completedAssignmentDays: adherenceSummary.completedAssignmentDays,
         adheredDays: adherenceSummary.adheredDays,
         activeAthleteCount: adherenceSummary.activeAthleteCount,
+        rescuedDays: adherenceSummary.orchestrator?.rescuedDays || 0,
+        missedDays: adherenceSummary.orchestrator?.missedDays || 0,
+        excusedDays: adherenceSummary.orchestrator?.excusedDays || 0,
+        checkInOnlyDays: adherenceSummary.orchestrator?.checkInOnlyDays || 0,
+        taskOnlyDays: adherenceSummary.orchestrator?.taskOnlyDays || 0,
+        taskStartedOnlyDays: adherenceSummary.orchestrator?.taskStartedOnlyDays || 0,
+        openDays: adherenceSummary.orchestrator?.openDays || 0,
+        atRiskAthleteCount: adherenceSummary.orchestrator?.atRiskAthleteCount || 0,
+        byAthlete: adherenceSummary.orchestrator?.byAthlete || adherenceSummary.byAthlete,
+        orchestrator: adherenceSummary.orchestrator,
       },
+      adherenceByCohort,
       operational: buildOperationalStateSummary(resolvedOperationalStates),
       mentalPerformance: mentalPerformanceSummary,
       escalations: escalationSummary,
@@ -5019,6 +5261,11 @@ module.exports = {
   buildPilotEscalationReclassificationReport,
   buildOutcomeHypothesisEvaluation,
   buildCoachWorkflowContinuityReport,
+  classifyAthleteDayAdherenceState,
+  hasAdherenceRescueSignal,
+  finalizeAdherenceOrchestrator,
+  createAdherenceOrchestratorAccumulator,
+  computeAdherenceSummary,
   computeEscalationSummary,
   computePilotOutcomeRollup,
   emitPilotMetricEvent,

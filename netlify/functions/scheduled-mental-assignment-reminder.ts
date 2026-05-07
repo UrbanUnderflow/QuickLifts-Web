@@ -219,8 +219,9 @@ export const handler: Handler = async () => {
     }
 
     // Pull the first uncompleted assignment's name so we can name the
-    // sim back to the athlete (Q3 of the Nora voice rubric). Fallback
-    // to a generic-but-coach-voice line when no name is present.
+    // sim and next action back to the athlete (Q3 + Q8 of the Nora
+    // voice rubric). Fallback to a generic-but-concrete line when no
+    // name is present.
     const firstUncompletedAssignment = assignmentsSnap.docs
       .find((d: any) => !completedAssignmentIds.has(d.id))
       ?.data() as Record<string, unknown> | undefined;

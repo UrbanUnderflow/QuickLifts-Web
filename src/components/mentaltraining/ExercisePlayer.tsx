@@ -11,6 +11,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { doc, updateDoc } from 'firebase/firestore';
 import {
   X,
   Play,
@@ -18,15 +19,23 @@ import {
   SkipForward,
   CheckCircle,
   Wind,
+  Zap,
   Eye,
   Target,
   Brain,
   Star,
+  Quote,
   Sparkles,
   ChevronRight,
   Mic,
   Volume2,
   VolumeX,
+  Moon,
+  MoonStar,
+  SquareDashed,
+  BookOpen,
+  PersonStanding,
+  ListChecks,
 } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import mixpanel from 'mixpanel-browser';
@@ -47,6 +56,7 @@ import {
   type ProtocolPracticeTurnSpec,
 } from '../../api/firebase/mentaltraining/protocolPracticeConversationService';
 import type { ProfileSnapshotMilestone } from '../../api/firebase/mentaltraining/taxonomy';
+import { db } from '../../api/firebase/config';
 import { RootState } from '../../redux/store';
 import { ResetGame } from './ResetGame';
 import { SimRuntimePlayer } from './SimRuntimePlayer';
@@ -54,6 +64,188 @@ import { SimRuntimePlayer } from './SimRuntimePlayer';
 // ============================================================================
 // TYPES
 // ============================================================================
+
+type ProtocolIconComponent = React.ComponentType<React.SVGProps<SVGSVGElement> & { strokeWidth?: string | number }>;
+
+type ProtocolVisualConfig = {
+  label: string;
+  Icon: ProtocolIconComponent;
+  accentHex: string;
+  gradientClass: string;
+};
+
+const BodyScanProtocolIcon: ProtocolIconComponent = ({ className, ...props }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+    <circle cx="12" cy="5" r="1.7" fill="currentColor" />
+    <path d="M12 7.8v7.1" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+    <path d="M7.5 9.2 10.2 12 12 10.4 13.8 12l2.7-2.8" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M7.2 16.2c2.1-.2 3.7-.8 4.8-1.8 1.1 1 2.7 1.6 4.8 1.8" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+    <path d="M8.7 19c1.7.7 4.9.7 6.6 0" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+  </svg>
+);
+
+const LungsProtocolIcon: ProtocolIconComponent = ({ className, ...props }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+    <path d="M12 4v7.7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    <path d="M10.3 9.2C7.3 10.1 5 13.7 5 17.3c0 1.9 1.1 3 2.8 3 2.3 0 3.5-1.8 3.5-4.4v-5.2" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M13.7 9.2c3 .9 5.3 4.5 5.3 8.1 0 1.9-1.1 3-2.8 3-2.3 0-3.5-1.8-3.5-4.4v-5.2" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M12 11.7c-1.1-.8-2.1-1.6-3.1-2.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    <path d="M12 11.7c1.1-.8 2.1-1.6 3.1-2.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+  </svg>
+);
+
+const PROTOCOL_VISUALS_BY_EXERCISE_ID: Record<string, ProtocolVisualConfig> = {
+  'breathing-478': {
+    label: '4-7-8 Relaxation Breathing',
+    Icon: MoonStar,
+    accentHex: '#A78BFA',
+    gradientClass: 'from-violet-400 to-violet-600',
+  },
+  'breathing-activation': {
+    label: 'Activation Breathing',
+    Icon: Zap,
+    accentHex: '#F59E0B',
+    gradientClass: 'from-amber-500 to-orange-600',
+  },
+  'focus-body-scan': {
+    label: 'Body Scan Awareness',
+    Icon: BodyScanProtocolIcon,
+    accentHex: '#3B82F6',
+    gradientClass: 'from-blue-500 to-blue-600',
+  },
+  'breathing-box': {
+    label: 'Box Breathing',
+    Icon: SquareDashed,
+    accentHex: '#10B981',
+    gradientClass: 'from-emerald-500 to-teal-600',
+  },
+  'focus-cue-word': {
+    label: 'Cue Word Anchoring',
+    Icon: Quote,
+    accentHex: '#FACC15',
+    gradientClass: 'from-yellow-400 to-yellow-500',
+  },
+  'confidence-evidence-journal': {
+    label: 'Evidence Journal',
+    Icon: BookOpen,
+    accentHex: '#D97706',
+    gradientClass: 'from-amber-600 to-orange-700',
+  },
+  'confidence-evidence': {
+    label: 'Evidence Journal',
+    Icon: BookOpen,
+    accentHex: '#D97706',
+    gradientClass: 'from-amber-600 to-orange-700',
+  },
+  'mindset-nerves-excitement': {
+    label: 'Nerves to Excitement Reframe',
+    Icon: Sparkles,
+    accentHex: '#EC4899',
+    gradientClass: 'from-pink-500 to-fuchsia-700',
+  },
+  'viz-perfect-execution': {
+    label: 'Perfect Execution Replay',
+    Icon: Eye,
+    accentHex: '#A21CAF',
+    gradientClass: 'from-fuchsia-700 to-purple-800',
+  },
+  'breathing-physiological-sigh': {
+    label: 'Physiological Sigh',
+    Icon: LungsProtocolIcon,
+    accentHex: '#06B6D4',
+    gradientClass: 'from-cyan-400 to-cyan-600',
+  },
+  'confidence-power-pose': {
+    label: 'Power Posing',
+    Icon: PersonStanding,
+    accentHex: '#EAB308',
+    gradientClass: 'from-yellow-500 to-yellow-700',
+  },
+  'mindset-process-focus': {
+    label: 'Process Over Outcome',
+    Icon: ListChecks,
+    accentHex: '#2563EB',
+    gradientClass: 'from-blue-600 to-blue-700',
+  },
+  'breathing-recovery': {
+    label: 'Recovery Breathing',
+    Icon: Moon,
+    accentHex: '#22C55E',
+    gradientClass: 'from-green-500 to-emerald-700',
+  },
+};
+
+const PROTOCOL_EXERCISE_ID_BY_PROTOCOL_ID: Record<string, string> = {
+  'protocol-478-breathing': 'breathing-478',
+  'protocol-activation-breathing': 'breathing-activation',
+  'protocol-body-scan-reset': 'focus-body-scan',
+  'protocol-box-breathing': 'breathing-box',
+  'protocol-cue-word-anchoring': 'focus-cue-word',
+  'protocol-evidence-journal': 'confidence-evidence-journal',
+  'protocol-nerves-to-excitement': 'mindset-nerves-excitement',
+  'protocol-perfect-execution-replay': 'viz-perfect-execution',
+  'protocol-physiological-sigh': 'breathing-physiological-sigh',
+  'protocol-power-pose': 'confidence-power-pose',
+  'protocol-process-over-outcome': 'mindset-process-focus',
+  'protocol-recovery-breathing': 'breathing-recovery',
+};
+
+function resolveProtocolVisualConfig(exerciseId?: string | null, protocolId?: string | null): ProtocolVisualConfig | undefined {
+  const normalizedExerciseId = exerciseId?.trim().toLowerCase();
+  if (normalizedExerciseId && PROTOCOL_VISUALS_BY_EXERCISE_ID[normalizedExerciseId]) {
+    return PROTOCOL_VISUALS_BY_EXERCISE_ID[normalizedExerciseId];
+  }
+
+  const normalizedProtocolId = protocolId?.trim().toLowerCase();
+  const mappedExerciseId = normalizedProtocolId ? PROTOCOL_EXERCISE_ID_BY_PROTOCOL_ID[normalizedProtocolId] : undefined;
+  return mappedExerciseId ? PROTOCOL_VISUALS_BY_EXERCISE_ID[mappedExerciseId] : undefined;
+}
+
+function normalizeProtocolCueWord(value?: string | null): string {
+  return (value || '').trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
+function sanitizeProtocolCueWords(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, string>>((acc, [key, rawWord]) => {
+    if (typeof rawWord !== 'string') return acc;
+    const normalizedKey = key.trim();
+    const normalizedWord = normalizeProtocolCueWord(rawWord);
+    if (normalizedKey && normalizedWord) {
+      acc[normalizedKey] = normalizedWord;
+    }
+    return acc;
+  }, {});
+}
+
+function protocolCueWordKeys(exerciseId?: string | null, protocolId?: string | null): string[] {
+  const keys: string[] = [];
+  const append = (key?: string | null) => {
+    const normalized = key?.trim();
+    if (normalized && !keys.includes(normalized)) {
+      keys.push(normalized);
+    }
+  };
+
+  append(exerciseId);
+  append(protocolId);
+
+  if (exerciseId === 'focus-cue-word' || protocolId === 'protocol-cue-word-anchoring') {
+    append('focus-cue-word');
+    append('protocol-cue-word-anchoring');
+  }
+
+  return keys;
+}
+
+function resolveRememberedCueWord(cueWords: Record<string, string>, exerciseId?: string | null, protocolId?: string | null): string {
+  for (const key of protocolCueWordKeys(exerciseId, protocolId)) {
+    const cueWord = normalizeProtocolCueWord(cueWords[key]);
+    if (cueWord) return cueWord;
+  }
+  return '';
+}
 
 /**
  * Determines if an exercise requires user writing/journaling
@@ -147,6 +339,9 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
     protocolPublishedRevisionId?: string | null;
   } | null>(protocolAudioContext);
   const [protocolCueUrl, setProtocolCueUrl] = useState<string | null>(null);
+  const currentUser = useSelector((state: RootState) => state.user.currentUser);
+  const currentUserProtocolCueWords = (currentUser as { protocolCueWords?: unknown } | null)?.protocolCueWords;
+  const [savedProtocolCueWords, setSavedProtocolCueWords] = useState<Record<string, string>>({});
 
   const startTimeRef = useRef<number>(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -326,6 +521,68 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
       && resolvedProtocolAudioContext?.protocolId?.trim()
       && protocolCueUrl
   );
+  const protocolVisual = resolveProtocolVisualConfig(exercise.id, resolvedProtocolAudioContext?.protocolId);
+  const rememberedCueWord = resolveRememberedCueWord(
+    savedProtocolCueWords,
+    exercise.id,
+    resolvedProtocolAudioContext?.protocolId
+  );
+  const isSimCompletion = Boolean(exercise.buildArtifact || exercise.simSpecId);
+  const completionSessionName = exercise.buildArtifact?.variantName || resolvedProtocolAudioContext?.protocolLabel || exercise.name;
+  const completionNarrationText = isSimCompletion
+    ? `And that's the end of the ${completionSessionName} simulation game. Great job. How do you feel?`
+    : `And that's the end of the ${completionSessionName} protocol. Great job. How do you feel?`;
+
+  useEffect(() => {
+    setSavedProtocolCueWords(sanitizeProtocolCueWords(currentUserProtocolCueWords));
+  }, [currentUser?.id, currentUserProtocolCueWords]);
+
+  const handleCueWordConfirmed = (cueWord: string) => {
+    const normalizedCueWord = normalizeProtocolCueWord(cueWord);
+    if (!normalizedCueWord) return;
+
+    const keys = protocolCueWordKeys(exercise.id, resolvedProtocolAudioContext?.protocolId);
+    if (!keys.length) return;
+
+    setSavedProtocolCueWords((current) => {
+      const next = { ...current };
+      keys.forEach((key) => {
+        next[key] = normalizedCueWord;
+      });
+      return next;
+    });
+
+    if (previewMode || !currentUser?.id) return;
+
+    const updates: Record<string, unknown> = {
+      updatedAt: Date.now() / 1000,
+    };
+    keys.forEach((key) => {
+      updates[`protocolCueWords.${key}`] = normalizedCueWord;
+    });
+
+    updateDoc(doc(db, 'users', currentUser.id), updates).catch((error) => {
+      console.warn('[ExercisePlayer] Failed to save protocol cue word preference', error);
+    });
+  };
+
+  useEffect(() => {
+    if (state !== 'post-mood') return;
+    if (!soundEnabled) {
+      stopNarration();
+      return;
+    }
+
+    void speakStep(completionNarrationText, {
+      onError: (error) => {
+        console.warn('[ExercisePlayer] Completion narration failed', error);
+      },
+    });
+
+    return () => {
+      stopNarration();
+    };
+  }, [completionNarrationText, soundEnabled, state]);
 
   const enterActiveFlow = () => {
     setState(shouldRunProtocolIntro ? 'protocol-intro' : 'active');
@@ -381,6 +638,11 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   };
 
   const getCategoryIcon = () => {
+    if (protocolVisual) {
+      const ProtocolIcon = protocolVisual.Icon;
+      return <ProtocolIcon className="w-8 h-8" strokeWidth={2.4} />;
+    }
+
     switch (exercise.category) {
       case ExerciseCategory.Breathing:
         return <Wind className="w-8 h-8" />;
@@ -398,6 +660,10 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   };
 
   const getCategoryColor = () => {
+    if (protocolVisual) {
+      return protocolVisual.gradientClass;
+    }
+
     switch (exercise.category) {
       case ExerciseCategory.Breathing:
         return 'from-cyan-500 to-blue-600';
@@ -467,6 +733,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
               exercise={exercise}
               categoryIcon={getCategoryIcon()}
               categoryColor={getCategoryColor()}
+              protocolVisual={protocolVisual}
               onStart={handleStart}
             />
           )}
@@ -498,6 +765,8 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
               previewMode={previewMode}
               dailyAssignmentId={dailyAssignmentId}
               protocolExecutionContext={resolvedProtocolAudioContext}
+              rememberedCueWord={rememberedCueWord}
+              onCueWordConfirmed={handleCueWordConfirmed}
             />
           )}
 
@@ -506,6 +775,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
               key="protocol-intro"
               protocolLabel={resolvedProtocolAudioContext?.protocolLabel || exercise.name}
               categoryColor={getCategoryColor()}
+              protocolVisual={protocolVisual}
             />
           )}
 
@@ -543,6 +813,7 @@ interface IntroScreenProps {
   exercise: SimModule;
   categoryIcon: React.ReactNode;
   categoryColor: string;
+  protocolVisual?: ProtocolVisualConfig;
   onStart: () => void;
 }
 
@@ -550,103 +821,141 @@ const IntroScreen: React.FC<IntroScreenProps> = ({
   exercise,
   categoryIcon,
   categoryColor,
+  protocolVisual,
   onStart,
-}) => (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    exit={{ opacity: 0, y: -20 }}
-    className="text-center"
-  >
-    {/* Icon */}
+}) => {
+  const ProtocolIcon = protocolVisual?.Icon;
+
+  return (
     <motion.div
-      initial={{ scale: 0.8 }}
-      animate={{ scale: 1 }}
-      transition={{ type: 'spring', delay: 0.1 }}
-      className={`mx-auto w-24 h-24 rounded-3xl bg-gradient-to-br ${categoryColor} flex items-center justify-center mb-8`}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="text-center"
     >
-      <div className="text-white">{categoryIcon}</div>
+      {/* Icon */}
+      <motion.div
+        initial={{ scale: 0.8 }}
+        animate={{ scale: 1 }}
+        transition={{ type: 'spring', delay: 0.1 }}
+        className={`mx-auto w-24 h-24 rounded-3xl flex items-center justify-center mb-8 ${
+          protocolVisual ? 'border' : `bg-gradient-to-br ${categoryColor}`
+        }`}
+        style={
+          protocolVisual
+            ? {
+                backgroundColor: `${protocolVisual.accentHex}29`,
+                borderColor: `${protocolVisual.accentHex}26`,
+              }
+            : undefined
+        }
+      >
+        {ProtocolIcon ? (
+          <ProtocolIcon className="w-10 h-10" strokeWidth={2.5} style={{ color: protocolVisual.accentHex }} />
+        ) : (
+          <div className="text-white">{categoryIcon}</div>
+        )}
+      </motion.div>
+
+      {/* Title */}
+      <h1 className="text-3xl font-bold text-white mb-4">{exercise.name}</h1>
+
+      {/* Description */}
+      <p className="text-lg text-white/70 mb-8 max-w-md mx-auto">
+        {exercise.description}
+      </p>
+
+      {/* Duration */}
+      <div className="flex items-center justify-center gap-6 mb-10 text-white/60">
+        <span>{exercise.durationMinutes} min</span>
+        <span>•</span>
+        <span className="capitalize">{exercise.difficulty}</span>
+      </div>
+
+      {/* Benefits */}
+      <div className="flex flex-wrap justify-center gap-2 mb-10">
+        {exercise.benefits.slice(0, 3).map((benefit, i) => (
+          <span
+            key={i}
+            className="px-3 py-1 rounded-full bg-white/10 text-white/80 text-sm"
+          >
+            {benefit}
+          </span>
+        ))}
+      </div>
+
+      {/* Start button */}
+      <motion.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={onStart}
+        className={`px-10 py-4 rounded-2xl bg-gradient-to-r ${categoryColor} text-white font-semibold text-lg shadow-lg`}
+      >
+        Begin Exercise
+      </motion.button>
     </motion.div>
-
-    {/* Title */}
-    <h1 className="text-3xl font-bold text-white mb-4">{exercise.name}</h1>
-
-    {/* Description */}
-    <p className="text-lg text-white/70 mb-8 max-w-md mx-auto">
-      {exercise.description}
-    </p>
-
-    {/* Duration */}
-    <div className="flex items-center justify-center gap-6 mb-10 text-white/60">
-      <span>{exercise.durationMinutes} min</span>
-      <span>•</span>
-      <span className="capitalize">{exercise.difficulty}</span>
-    </div>
-
-    {/* Benefits */}
-    <div className="flex flex-wrap justify-center gap-2 mb-10">
-      {exercise.benefits.slice(0, 3).map((benefit, i) => (
-        <span
-          key={i}
-          className="px-3 py-1 rounded-full bg-white/10 text-white/80 text-sm"
-        >
-          {benefit}
-        </span>
-      ))}
-    </div>
-
-    {/* Start button */}
-    <motion.button
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
-      onClick={onStart}
-      className={`px-10 py-4 rounded-2xl bg-gradient-to-r ${categoryColor} text-white font-semibold text-lg shadow-lg`}
-    >
-      Begin Exercise
-    </motion.button>
-  </motion.div>
-);
+  );
+};
 
 interface ProtocolIntroScreenProps {
   protocolLabel: string;
   categoryColor: string;
+  protocolVisual?: ProtocolVisualConfig;
 }
 
 const ProtocolIntroScreen: React.FC<ProtocolIntroScreenProps> = ({
   protocolLabel,
   categoryColor,
-}) => (
-  <motion.div
-    initial={{ opacity: 0, scale: 0.96 }}
-    animate={{ opacity: 1, scale: 1 }}
-    exit={{ opacity: 0, scale: 1.02 }}
-    className="text-center"
-  >
-    <div className="relative mx-auto mb-10 h-44 w-44">
-      <motion.div
-        animate={{ scale: [1, 1.08, 1], opacity: [0.18, 0.3, 0.18] }}
-        transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut' }}
-        className={`absolute inset-0 rounded-full bg-gradient-to-br ${categoryColor} blur-3xl`}
-      />
-      <motion.div
-        animate={{ scale: [0.92, 1.02, 0.92], rotate: [0, 6, 0, -6, 0] }}
-        transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-        className={`absolute inset-6 rounded-full bg-gradient-to-br ${categoryColor} opacity-30`}
-      />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="flex h-24 w-24 items-center justify-center rounded-full border border-white/10 bg-white/10 backdrop-blur-xl">
-          <Sparkles className="h-10 w-10 text-white" />
+  protocolVisual,
+}) => {
+  const ProtocolIcon = protocolVisual?.Icon ?? Sparkles;
+  const iconColor = protocolVisual?.accentHex ?? '#ffffff';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 1.02 }}
+      className="text-center"
+    >
+      <div className="relative mx-auto mb-10 h-44 w-44">
+        <motion.div
+          animate={{ scale: [1, 1.08, 1], opacity: [0.18, 0.3, 0.18] }}
+          transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut' }}
+          className={`absolute inset-0 rounded-full bg-gradient-to-br ${categoryColor} blur-3xl`}
+        />
+        <motion.div
+          animate={{ scale: [0.92, 1.02, 0.92], rotate: [0, 6, 0, -6, 0] }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+          className={`absolute inset-6 rounded-full bg-gradient-to-br ${categoryColor} opacity-30`}
+        />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div
+            className={`flex h-24 w-24 items-center justify-center rounded-3xl border backdrop-blur-xl ${
+              protocolVisual ? '' : 'border-white/10 bg-white/10'
+            }`}
+            style={
+              protocolVisual
+                ? {
+                    backgroundColor: `${protocolVisual.accentHex}29`,
+                    borderColor: `${protocolVisual.accentHex}26`,
+                  }
+                : undefined
+            }
+          >
+            <ProtocolIcon className="h-10 w-10" strokeWidth={2.5} style={{ color: iconColor }} />
+          </div>
         </div>
       </div>
-    </div>
 
-    <div className="mb-3 text-xs uppercase tracking-[0.22em] text-white/50">Protocol Cue</div>
-    <h2 className="mx-auto max-w-xl text-3xl font-semibold text-white">{protocolLabel}</h2>
-    <p className="mx-auto mt-4 max-w-lg text-base leading-7 text-white/65">
-      Entering the protocol now. Nora will begin guidance as soon as the cue finishes.
-    </p>
-  </motion.div>
-);
+      <div className="mb-3 text-xs uppercase tracking-[0.22em] text-white/50">Protocol Cue</div>
+      <h2 className="mx-auto max-w-xl text-3xl font-semibold text-white">{protocolLabel}</h2>
+      <p className="mx-auto mt-4 max-w-lg text-base leading-7 text-white/65">
+        Entering the protocol now. Nora will begin guidance as soon as the cue finishes.
+      </p>
+    </motion.div>
+  );
+};
 
 // ============================================================================
 // MOOD SELECTOR
@@ -728,6 +1037,8 @@ interface ActiveExerciseProps {
     protocolVariantId?: string | null;
     protocolPublishedRevisionId?: string | null;
   } | null;
+  rememberedCueWord?: string;
+  onCueWordConfirmed?: (cueWord: string) => void;
 }
 
 const ActiveExercise: React.FC<ActiveExerciseProps> = ({
@@ -746,6 +1057,8 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
   previewMode,
   dailyAssignmentId,
   protocolExecutionContext,
+  rememberedCueWord,
+  onCueWordConfirmed,
 }) => {
   if (exercise.buildArtifact?.engineKey) {
     return (
@@ -789,6 +1102,19 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
         />
       );
     }
+    if ((exercise.exerciseConfig.config as any)?.type === 'body_scan') {
+      return (
+        <BodyScanExercise
+          config={exercise.exerciseConfig.config}
+          isPaused={isPaused}
+          categoryColor={categoryColor}
+          onPause={onPause}
+          onResume={onResume}
+          onComplete={onComplete}
+          soundEnabled={soundEnabled}
+        />
+      );
+    }
     return (
       <FocusExercise
         config={exercise.exerciseConfig.config}
@@ -797,6 +1123,8 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
         onPause={onPause}
         onResume={onResume}
         onComplete={onComplete}
+        rememberedCueWord={rememberedCueWord}
+        onCueWordConfirmed={onCueWordConfirmed}
       />
     );
   }
@@ -822,6 +1150,325 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
 };
 
 // ============================================================================
+// BODY SCAN EXERCISE (hands-free guided protocol)
+// ============================================================================
+
+type BodyScanScriptStep = {
+  label: string;
+  text: string;
+  holdWeight: number;
+};
+
+const BODY_SCAN_SETTLE_TEXT =
+  'Settle onto your back if you can, or sit fully supported. Put the phone down now. Close your eyes and take two easy breaths. You will hear the next cue automatically; no tapping until we finish.';
+
+const DEFAULT_BODY_SCAN_SCRIPT: BodyScanScriptStep[] = [
+  {
+    label: 'Settle',
+    text: BODY_SCAN_SETTLE_TEXT,
+    holdWeight: 0.25,
+  },
+  {
+    label: 'Breath',
+    text: 'Close your eyes. Let your breathing find an easy pace. Do not force a deep breath. Just notice the body being held by the floor, chair, or bed.',
+    holdWeight: 1,
+  },
+  {
+    label: 'Head',
+    text: 'Bring attention to the top of your head, your forehead, your eyes, and your jaw. If you find gripping there, soften it by one percent.',
+    holdWeight: 1,
+  },
+  {
+    label: 'Neck and Shoulders',
+    text: 'Scan through your neck and shoulders. Let the shoulders drop away from the ears. Let your face stay quiet.',
+    holdWeight: 1.15,
+  },
+  {
+    label: 'Arms',
+    text: 'Move down both arms, through elbows, forearms, wrists, hands, and fingers. Notice whether the hands are holding effort you do not need.',
+    holdWeight: 1,
+  },
+  {
+    label: 'Torso',
+    text: 'Now scan the chest, ribs, stomach, and low back. Let the breath move through this area without trying to control it.',
+    holdWeight: 1.2,
+  },
+  {
+    label: 'Hips and Legs',
+    text: 'Bring attention to the hips, thighs, knees, calves, ankles, and feet. Let the legs get heavy. Let the feet be still.',
+    holdWeight: 1.2,
+  },
+  {
+    label: 'Release',
+    text: 'Now sense the whole body at once. If one area is still tight, breathe toward it gently, then let the next exhale take a little of that effort with it.',
+    holdWeight: 1.1,
+  },
+  {
+    label: 'Return',
+    text: 'Stay with this quieter body for a few more breaths. When the session ends, open your eyes slowly and bring this easier tension level into your next rep.',
+    holdWeight: 0.9,
+  },
+];
+
+function estimateNarrationSeconds(text: string): number {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(4, Math.ceil(words / 2.35));
+}
+
+function buildCaptionChunks(text: string): string[] {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  const chunks: string[] = [];
+  let current: string[] = [];
+
+  words.forEach((word) => {
+    current.push(word);
+    const closesPhrase = /[.!?;,]$/.test(word);
+    if (current.length >= 4 || (current.length >= 2 && closesPhrase)) {
+      chunks.push(current.join(' '));
+      current = [];
+    }
+  });
+
+  if (current.length > 0) {
+    chunks.push(current.join(' '));
+  }
+
+  return chunks;
+}
+
+function buildBodyScanScript(rawInstructions: unknown, durationSeconds: number): Array<BodyScanScriptStep & { holdSeconds: number; estimatedSeconds: number }> {
+  const authoredInstructions = Array.isArray(rawInstructions)
+    ? rawInstructions.map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+  const shouldUseAuthoredScript =
+    authoredInstructions.length >= 4
+    && authoredInstructions.reduce((total, item) => total + item.length, 0) / authoredInstructions.length >= 72;
+  const baseScript = shouldUseAuthoredScript
+    ? authoredInstructions.map((text, index) => ({
+        label: DEFAULT_BODY_SCAN_SCRIPT[index]?.label || (index === 0 ? 'Settle' : index === authoredInstructions.length - 1 ? 'Return' : `Scan ${index}`),
+        text: index === 0 ? BODY_SCAN_SETTLE_TEXT : text,
+        holdWeight: index === 0 ? 0.25 : 1,
+      }))
+    : DEFAULT_BODY_SCAN_SCRIPT;
+
+  const estimatedSpeechSeconds = baseScript.reduce((total, step) => total + estimateNarrationSeconds(step.text), 0);
+  const totalHoldWeight = baseScript.reduce((total, step) => total + step.holdWeight, 0) || 1;
+  const availableHoldSeconds = Math.max(baseScript.length * 4, durationSeconds - estimatedSpeechSeconds);
+
+  return baseScript.map((step) => ({
+    ...step,
+    estimatedSeconds: estimateNarrationSeconds(step.text),
+    holdSeconds: Math.max(3, Math.round((availableHoldSeconds * step.holdWeight) / totalHoldWeight)),
+  }));
+}
+
+interface BodyScanExerciseProps {
+  config: any;
+  isPaused: boolean;
+  categoryColor: string;
+  onPause: () => void;
+  onResume: () => void;
+  onComplete: () => void;
+  soundEnabled?: boolean;
+}
+
+const BodyScanExercise: React.FC<BodyScanExerciseProps> = ({
+  config,
+  isPaused,
+  categoryColor,
+  onPause,
+  onResume,
+  onComplete,
+  soundEnabled = true,
+}) => {
+  const durationSeconds = typeof config?.duration === 'number' && config.duration > 0 ? config.duration : 300;
+  const script = buildBodyScanScript(config?.instructions, durationSeconds);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [captionText, setCaptionText] = useState('');
+  const [waitingForNextStep, setWaitingForNextStep] = useState(false);
+  const [scriptComplete, setScriptComplete] = useState(false);
+  const narrationRunIdRef = useRef(0);
+  const completedRef = useRef(false);
+  const currentStep = script[Math.min(currentStepIndex, script.length - 1)];
+  const progress = Math.min(100, (elapsedSeconds / durationSeconds) * 100);
+  const visibleCaptionText = captionText || buildCaptionChunks(currentStep.text)[0] || currentStep.label;
+
+  const completeOnce = () => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    stopNarration();
+    onComplete();
+  };
+
+  useEffect(() => {
+    if (isPaused || completedRef.current) return;
+    const timer = setInterval(() => {
+      setElapsedSeconds((previous) => previous + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isPaused]);
+
+  useEffect(() => {
+    if (!scriptComplete || isPaused || completedRef.current) return;
+    if (elapsedSeconds >= durationSeconds) {
+      completeOnce();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [durationSeconds, elapsedSeconds, isPaused, scriptComplete]);
+
+  useEffect(() => {
+    if (!waitingForNextStep || isPaused || completedRef.current) return;
+    const timer = setTimeout(() => {
+      setWaitingForNextStep(false);
+      setCurrentStepIndex((previous) => Math.min(previous + 1, script.length - 1));
+    }, currentStep.holdSeconds * 1000);
+    return () => clearTimeout(timer);
+  }, [currentStep.holdSeconds, isPaused, script.length, waitingForNextStep]);
+
+  useEffect(() => {
+    if (soundEnabled || isPaused || waitingForNextStep || scriptComplete || completedRef.current) return;
+    const timer = setTimeout(() => {
+      if (currentStepIndex >= script.length - 1) {
+        setScriptComplete(true);
+        return;
+      }
+      setCurrentStepIndex((previous) => Math.min(previous + 1, script.length - 1));
+    }, (currentStep.estimatedSeconds + currentStep.holdSeconds) * 1000);
+    return () => clearTimeout(timer);
+  }, [
+    currentStep.estimatedSeconds,
+    currentStep.holdSeconds,
+    currentStepIndex,
+    isPaused,
+    script.length,
+    scriptComplete,
+    soundEnabled,
+    waitingForNextStep,
+  ]);
+
+  useEffect(() => {
+    if (completedRef.current) return;
+    if (waitingForNextStep) {
+      setCaptionText(currentStepIndex >= script.length - 1 ? 'Take two easy breaths.' : 'Stay with this.');
+      return;
+    }
+
+    const chunks = buildCaptionChunks(currentStep.text);
+    setCaptionText(chunks[0] || currentStep.label);
+    if (isPaused || scriptComplete || chunks.length <= 1) return;
+
+    let chunkIndex = 1;
+    const delayMs = Math.max(800, (currentStep.estimatedSeconds * 1000) / Math.max(1, chunks.length));
+    const timer = window.setInterval(() => {
+      setCaptionText(chunks[chunkIndex] || chunks[chunks.length - 1] || currentStep.label);
+      chunkIndex += 1;
+      if (chunkIndex >= chunks.length) {
+        window.clearInterval(timer);
+      }
+    }, delayMs);
+
+    return () => window.clearInterval(timer);
+  }, [
+    currentStep.estimatedSeconds,
+    currentStep.label,
+    currentStep.text,
+    currentStepIndex,
+    isPaused,
+    script.length,
+    scriptComplete,
+    waitingForNextStep,
+  ]);
+
+  const handleNarrationDone = () => {
+    if (currentStepIndex >= script.length - 1) {
+      setScriptComplete(true);
+      return;
+    }
+    setWaitingForNextStep(true);
+  };
+
+  const remainingSeconds = Math.max(0, durationSeconds - elapsedSeconds);
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="text-center"
+    >
+      <div className="mb-6 flex items-center justify-between text-sm text-white/60">
+        <span>Guided body scan</span>
+        <span className="font-mono">{formatTime(remainingSeconds)}</span>
+      </div>
+
+      <div className="mb-10 h-1 overflow-hidden rounded-full bg-white/10">
+        <motion.div
+          animate={{ width: `${progress}%` }}
+          transition={{ duration: 0.4, ease: 'linear' }}
+          className={`h-full bg-gradient-to-r ${categoryColor}`}
+        />
+      </div>
+
+      <div className="relative mx-auto mb-10 flex h-[320px] w-full max-w-xl items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-white/5">
+        <motion.div
+          animate={!isPaused ? { scale: [1, 1.14, 1], opacity: [0.18, 0.28, 0.18] } : { scale: 1, opacity: 0.18 }}
+          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+          className={`absolute h-64 w-64 rounded-full bg-gradient-to-br ${categoryColor} blur-[88px]`}
+        />
+        <motion.div
+          animate={!isPaused ? { scale: [0.96, 1.04, 0.96] } : { scale: 1 }}
+          transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut' }}
+          className={`relative flex h-36 w-36 items-center justify-center rounded-full border border-white/10 bg-gradient-to-br ${categoryColor} bg-opacity-20`}
+        >
+          <div className="h-4 w-4 rounded-full bg-white shadow-[0_0_0_12px_rgba(255,255,255,0.08)]" />
+        </motion.div>
+      </div>
+
+      <div className="mx-auto min-h-[150px] max-w-xl">
+        <div className="mb-3 text-xs uppercase tracking-[0.18em] text-white/45">{currentStep.label}</div>
+        <p
+          className="mx-auto flex min-h-[80px] max-w-md items-center justify-center text-3xl font-semibold leading-tight text-white"
+          aria-label={currentStep.text}
+        >
+          {visibleCaptionText}
+        </p>
+        {waitingForNextStep ? (
+          <p className="mt-4 text-sm text-white/45">Stay here for a few breaths.</p>
+        ) : null}
+      </div>
+
+      <AutoNarrator
+        enabled={soundEnabled && !isPaused && !waitingForNextStep && !scriptComplete}
+        text={currentStep.text}
+        debugLabel={`BodyScan:${currentStep.label}:${currentStepIndex + 1}`}
+        advanceOnError
+        onDone={handleNarrationDone}
+        runIdRef={narrationRunIdRef}
+        voiceChoice={null}
+      />
+
+      <div className="mt-10 flex justify-center">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={isPaused ? onResume : onPause}
+          aria-label={isPaused ? 'Resume body scan' : 'Pause body scan'}
+          className="p-4 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+        >
+          {isPaused ? <Play className="w-6 h-6 text-white" /> : <Pause className="w-6 h-6 text-white" />}
+        </motion.button>
+      </div>
+    </motion.div>
+  );
+};
+
+// ============================================================================
 // FOCUS EXERCISE (game-like module)
 // ============================================================================
 
@@ -837,6 +1484,8 @@ interface FocusExerciseProps {
   onPause: () => void;
   onResume: () => void;
   onComplete: () => void;
+  rememberedCueWord?: string;
+  onCueWordConfirmed?: (cueWord: string) => void;
 }
 
 const FocusExercise: React.FC<FocusExerciseProps> = ({
@@ -846,6 +1495,8 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
   onPause,
   onResume,
   onComplete,
+  rememberedCueWord,
+  onCueWordConfirmed,
 }) => {
   const DEBUG_FOCUS = false; // Set to true to enable debug logging
   const debugIdRef = useRef(`focus-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 8)}`);
@@ -855,7 +1506,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
 
   const [phase, setPhase] = useState<FocusPhase>('instructions');
   const [step, setStep] = useState(0);
-  const [cueWord, setCueWord] = useState('');
+  const [cueWord, setCueWord] = useState(() => normalizeProtocolCueWord(rememberedCueWord));
   const [getReadyCountdown, setGetReadyCountdown] = useState(3);
   const [practiceElapsed, setPracticeElapsed] = useState(0);
   const [currentRep, setCurrentRep] = useState(1);
@@ -876,6 +1527,12 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
 
   // Determine if this exercise type uses cue word anchoring
   const usesCueWord = CUE_WORD_EXERCISE_TYPES.includes(mode);
+
+  useEffect(() => {
+    const normalizedRememberedWord = normalizeProtocolCueWord(rememberedCueWord);
+    if (!usesCueWord || !normalizedRememberedWord || normalizeProtocolCueWord(cueWord)) return;
+    setCueWord(normalizedRememberedWord);
+  }, [cueWord, rememberedCueWord, usesCueWord]);
 
   // Rep-based practice: each rep is ~15 seconds of focus
   const repDuration = 15;
@@ -1133,7 +1790,10 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
   };
 
   const handleCueWordSubmit = () => {
-    if (cueWord.trim()) {
+    const normalizedCueWord = normalizeProtocolCueWord(cueWord);
+    if (normalizedCueWord) {
+      setCueWord(normalizedCueWord);
+      onCueWordConfirmed?.(normalizedCueWord);
       setPhase('getReady');
     }
   };
@@ -1345,8 +2005,8 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
         exit={{ opacity: 0, scale: 0.95 }}
         className="text-center max-w-md mx-auto"
       >
-        <div className={`w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br ${categoryColor} flex items-center justify-center mb-6`}>
-          <Target className="w-10 h-10 text-white" />
+        <div className="w-20 h-20 mx-auto rounded-2xl border border-yellow-400/15 bg-yellow-400/15 flex items-center justify-center mb-6">
+          <Quote className="w-10 h-10 text-yellow-400" strokeWidth={2.6} />
         </div>
 
         <h2 className="text-2xl font-bold text-white mb-3">Choose Your Anchor Word</h2>

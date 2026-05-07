@@ -115,22 +115,22 @@ const primeMorningCheckinProbe = async (
 
 // Mirrors NoraDailyView.ReadinessLevel.noraResponse on iOS. Keep these
 // byte-identical with PulseCheck/Views/Chat/NoraDailyView.swift's
-// `noraResponse` cases — both must pass the Nora voice rubric (7
+// `noraResponse` cases — both must pass the Nora voice rubric (10
 // questions) documented at the top of that file.
 const OPENER_TEXT: Record<CheckinLevel, string> = {
-  drained: "You came in drained today — low fuel. We'll start small and build from there.",
-  low:     "You came in low today — less fuel than usual. We'll keep today light and skip the high-effort moves.",
-  okay:    "You came in steady today — not flat, not flying. We'll keep today clean and clear.",
-  solid:   "You came in with good energy today. We'll use it cleanly, without rushing.",
-  locked:  "You came in locked today — high energy. Let's spend it clean.",
+  drained: "You came in drained today — low fuel. We'll lower the pace and cut the sim if it won't help.",
+  low:     "You came in low today — less fuel than usual. We'll start with the protocol and keep the sim optional.",
+  okay:    "You came in steady today — not flat, not flying. We'll keep today's protocol and sim at the normal pace.",
+  solid:   "You came in with good energy today. We'll start controlled, then raise pressure in the sim.",
+  locked:  "You came in locked today — high energy. We'll put that into today's sim, not extra volume.",
 };
 
 const PROBE_TEXT: Record<CheckinLevel, string> = {
-  drained: "Where's the drag worst — body, head, or schedule? I'll cut what won't help today.",
-  low:     "What's pulling you down most — sleep, stress, or workload? I'll line up something light to match.",
-  okay:    "Anything weighing on you — sleep, life, or focus? I'll work around it today.",
-  solid:   "What's clicking — sleep, headspace, or motivation? I'll build today around it.",
-  locked:  "What lit you up — sleep, mindset, or a target? I'll match today's session to it.",
+  drained: "Where's the drag worst — body, head, or schedule? I'll cut the sim or lower the pace.",
+  low:     "What's pulling you down most — sleep, stress, or workload? I'll choose the lighter protocol or sim path.",
+  okay:    "Anything weighing on you — sleep, life, or focus? I'll use that to lower or raise today's pace.",
+  solid:   "What's clicking — sleep, headspace, or motivation? I'll use that to choose the first pressure level.",
+  locked:  "What lit you up — sleep, mindset, or a target? I'll use that to set today's sim intensity.",
 };
 
 const ACTION_DELIVERY_TEXT: Record<CheckinLevel, string> = {

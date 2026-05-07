@@ -50,10 +50,10 @@ const GAME_PHASES = [
         name: 'Lock In',
         color: '#60a5fa',
         duration: '8–15 sec',
-        description: 'Sustained, narrow-attention focus task that establishes a baseline engagement state.',
+        description: 'Sustained, narrow-attention focus task that establishes a baseline engagement state before the disruption.',
         tiers: [
             'Beginner: Tap a target on screen in rhythm with a pulse',
-            'Intermediate: Track a moving target while ignoring peripheral visual noise',
+            'Intermediate: Track a moving live cue as it draws a recognizable path pattern; recovery is confirmed by identifying the pattern that was drawn after disruption',
             'Advanced: Execute a sequence from memory while ambient audio plays',
         ],
     },
@@ -74,13 +74,14 @@ const GAME_PHASES = [
         phase: '3',
         name: 'Reset',
         color: '#22c55e',
-        duration: 'Measured',
-        description: 'Re-engage with the focus task as fast as possible. Recovery Time is captured — the core metric.',
+        duration: 'Measured + capped',
+        description: 'Re-engage with the same task as fast as possible. Recovery Time is captured from disruption end to confirmed recovery.',
         tiers: [
-            'Moment of accurate re-engagement captured',
-            'Recovery Time = disruption end → confirmed re-engagement',
-            'Compared to personal average (Training Mode)',
-            '5–7 rounds per session, summary at end',
+            'Phone/web/native mobile default: match the drawn path pattern or complete the returned response task to confirm recovery',
+            'Handheld iOS/Android camera gaze is not a scoring source because phone-based gaze estimates are not reliable enough for athlete-facing metrics',
+            'Recovery Time = disruption end -> confirmed re-engagement',
+            'If no valid recovery occurs inside the recovery window, score the rep at the capped window and continue',
+            'Session is timer-led by default, with repeated reps until the visible session timer reaches zero',
         ],
     },
 ];
@@ -111,20 +112,25 @@ const SCIENTIFIC_FOUNDATIONS = [
 
 /* ---- SKILL SCORES ---- */
 const SKILL_SCORES = [
-    { skill: 'Attentional Shifting', pillar: 'Focus', description: 'How fast & completely the athlete redirects attention from disruption back to the task. Derived from both re-engagement latency and first-post-reset accuracy.', color: '#60a5fa' },
+    { skill: 'Attentional Shifting', pillar: 'Focus', description: 'How fast and completely the athlete redirects attention from disruption back to the task. Derived from re-engagement latency, first-post-reset accuracy, path-pattern confirmation accuracy, and missed-recovery rate.', color: '#60a5fa' },
+    { skill: 'Cue Reacquisition', pillar: 'Focus', description: 'Behavioral focus quality: how cleanly the athlete re-engages after disruption without false starts or panic taps. In Visual Disruption Reset, the drawn path pattern must be matched correctly; this is not eye tracking.', color: '#38bdf8' },
+    { skill: 'Pattern Discrimination', pillar: 'Focus', description: 'Whether the athlete can attend to the cue path through motion, retain the pattern it drew, and distinguish it from decoy patterns after disruption.', color: '#facc15' },
     { skill: 'Inhibitory Control', pillar: 'Composure', description: 'Ability to suppress the emotional/cognitive response to the disruptor and choose to refocus. Derived from false start rate and premature response patterns.', color: '#22c55e' },
     { skill: 'Pressure Stability', pillar: 'Composure', description: 'Recovery time consistency under evaluative threat and consequence modifiers vs. baseline. Stratified by modifier condition per Standards Addendum §9.', color: '#c084fc' },
 ];
 
 /* ---- RAW METRICS ---- */
 const RAW_METRICS = [
-    { metric: 'Recovery Time', description: 'Milliseconds from disruption end to confirmed re-engagement (two consecutive correct responses).', primary: true },
+    { metric: 'Recovery Time', description: 'Milliseconds from disruption end to confirmed re-engagement. Visual Disruption Reset uses the first correct path-pattern confirmation or returned task response; comparison-grade modes should require two consecutive correct responses when the task supports it.', primary: true },
     { metric: 'First-Post-Reset Accuracy', description: 'Whether the first response after disruption is correct, capturing quality of initial refocus.' },
+    { metric: 'Path Pattern Accuracy', description: 'Percent of pattern prompts answered correctly after disruption. Wrong pattern choices count against Focus even if the athlete later recovers.' },
+    { metric: 'Path Reacquisition Cleanliness', description: 'Whether the athlete confirms the drawn path pattern without false starts, wrong-pattern selections, panic taps, or missed recovery caps.' },
     { metric: 'False Start Count', description: 'Responses during the disruption phase before the reset signal. Logged separately.' },
     { metric: 'Pre-Disruption Accuracy', description: 'Focus task accuracy before the disruption, establishing per-round baseline.' },
     { metric: 'Recovery Time Variance', description: 'Within-session consistency of recovery across rounds. Feeds Consistency modifier score.' },
     { metric: 'Disruption Type Tag', description: 'Which disruption channel was active (visual, audio, cognitive, combined) for stratified analysis.' },
     { metric: 'Modifier Condition Tag', description: 'Which modifiers were active, enabling pressure-stratified scoring.' },
+    { metric: 'Input Source Tag', description: 'Records whether recovery was measured by touch/click/tap or controller so platform differences are not hidden.' },
 ];
 
 /* ---- CROSS-CUTTING MODIFIER CONTRIBUTIONS ---- */
@@ -202,19 +208,22 @@ const VARIANTS = [
 
 /* ---- MEASUREMENT RULES ---- */
 const MEASUREMENT_RULES = [
-    { rule: 'Valid re-engagement', detail: 'Two consecutive correct responses on the refocused task. A single correct + error = false start, not recovery.' },
+    { rule: 'Valid re-engagement', detail: 'Default phone/web/native mobile training requires one committed correct response to the returned live cue or task. Visual Disruption Reset must gate recovery on correct path-pattern confirmation so fast wrong responses do not score as focus. Comparison-grade runtimes should require two consecutive correct responses when the task supports it.' },
+    { rule: 'Handheld mobile gaze boundary', detail: 'iPhone and Android handheld builds must not use camera-estimated gaze as an athlete-facing score source for this sim. Focus is inferred from behavioral re-engagement quality, not claimed eye position.' },
     { rule: 'Minimum reaction time', detail: '150 ms threshold. Any response faster is flagged as motor artifact. Per Standards Addendum §2.1.' },
-    { rule: 'Maximum recovery window', detail: 'Tier 1: 3s · Tier 2: 2s · Tier 3: 1.5s · Tier 4: 1s. No valid re-engagement → failed trial at max value.' },
+    { rule: 'Maximum recovery window', detail: 'Training runtimes must cap recovery windows so the sim cannot hang. Tier targets remain goal thresholds (T1 <3s, T2 <2s, T3 <1.5s, T4 <1s), while the runtime may allow a longer capped recovery window before scoring a failed rep and continuing.' },
     { rule: 'False start definition', detail: 'Input during disruption phase before reset signal. Logged separately, not counted toward Recovery Time.' },
-    { rule: 'Attentional Shifting sourcing', detail: 'Multi-source: re-engagement latency + first-post-reset accuracy (§9). Prevents gaming via fast but inaccurate responding.' },
+    { rule: 'Attentional Shifting sourcing', detail: 'Multi-source: re-engagement latency + first-post-reset accuracy (§9) + path-pattern accuracy + missed-recovery and false-start patterns. The Focus pillar is behavioral for phone/web/native mobile.' },
     { rule: 'Pressure Stability sourcing', detail: 'Modifier-stratified: baseline vs. pressure conditions (§9). Isolates pressure effects from fatigue/randomness.' },
+    { rule: 'Timer-led session contract', detail: 'Default training sessions run against a visible total-duration countdown. Reps may vary in length, but the athlete always sees the finish line and the runtime must end when the timer expires.' },
 ];
 
 /* ---- EXPERIENCE DESIGN PRINCIPLES ---- */
 const EXPERIENCE_PRINCIPLES = [
     { title: 'Feel like training, not therapy', detail: 'The sim should feel like a drill. The athlete should want to beat their last score. Competitive energy is the engine.' },
     { title: 'Minimal UI during gameplay', detail: 'Clean, immersive screen. No navigation, no settings, no distractions beyond intentional ones. The sim owns the screen.' },
-    { title: 'Data after, not during', detail: 'Performance shown between rounds (Training) or only at session end (Trial). Focus on performing, not monitoring.' },
+    { title: 'Audio-first focus cues', detail: 'During focus tasks, visible copy should be extremely short and Nora should speak the instruction. Athletes should not have to read long text while tracking a cue.' },
+    { title: 'Timer visible, data mostly after', detail: 'During gameplay, show the session countdown and state cues. Performance details can appear as brief automatic rep transitions in Training Mode or only at session end in Trial Mode.' },
     { title: 'Sound design matters', detail: 'Audio cues, ambient sound, feedback tones support immersion and signal state changes clearly.' },
     { title: 'Celebrate improvement, not perfection', detail: 'Highlight personal bests and trend improvements, not absolute scores. Progress is the reward.' },
 ];
@@ -252,7 +261,7 @@ const ResetSpecTab: React.FC = () => {
                     <div>
                         <p className="text-[10px] uppercase tracking-widest text-red-400 font-bold">PULSE CHECK · SIM SPECIFICATION</p>
                         <h2 className="text-xl font-semibold">Reset</h2>
-                        <p className="text-xs text-zinc-500">Mental Recovery Training Simulation · Spec v2.0 · March 2025</p>
+                        <p className="text-xs text-zinc-500">Mental Recovery Training Simulation · Spec v2.5 · May 2026</p>
                     </div>
                 </div>
             </div>

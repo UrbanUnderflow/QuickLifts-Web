@@ -10,12 +10,13 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Fit With Pulse consumer fitness, Pulse Check elite athlete service technology, Macra nutrition, shared data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-05-01',
+  lastUpdated: '2026-05-06',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
     { id: 'product-handbooks', label: 'Product Handbooks', description: 'Feature-by-feature inventory for each product surface.' },
     { id: 'macra-system-overview', label: 'Macra', description: 'Native iOS nutrition AI app architecture, data ownership, Nora bridge, subscriptions, and locked App Store screenshots.' },
+    { id: 'nutrition-reasoning-layer-spec', label: 'Nutrition Reasoning Layer', description: 'Cross-app reasoning layer for fact-grounded nutrition insights, candidate scoring, Nora copy constraints, regenerate behavior, and future Pulse Check athlete nutrition context.' },
     { id: 'quicklifts-profile-health-system', label: 'Fit With Pulse Profile Health', description: 'Parent artifact for the story-led Fit With Pulse profile health surface and the shared snapshot contract underneath it. QuickLifts remains the repo/internal lineage name.' },
     { id: 'quicklifts-profile-health-story-spec', label: 'Profile Health Story Spec', description: 'Product and UX contract for integrating Health Data Stories into the Fit With Pulse profile.', parentSectionId: 'quicklifts-profile-health-system' },
     { id: 'quicklifts-profile-health-snapshot-contract', label: 'Profile Health Snapshot Contract', description: 'Runtime contract for the versioned ProfileHealthSnapshot read model, freshness rules, invalidation, and modal alignment.', parentSectionId: 'quicklifts-profile-health-system' },
@@ -79,6 +80,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-correlation-engine-pilot-dashboard', label: 'Correlation Engine Pilot Dashboard', description: 'Pilot-native monitoring surface for active pilots, rooted in Pilot and PilotEnrollment rather than whole-system analytics.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
     { id: 'pulsecheck-correlation-engine-pilot-dashboard-addendum', label: 'Pilot Dashboard Addendum', description: 'Pilot KPI glossary and reporting-separation rules for the pilot dashboard.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
     { id: 'pulsecheck-pilot-outcome-metrics-contract', label: 'Pilot Outcome Metrics Contract', description: 'Canonical contract for enrollment, adherence, mental performance improvement, escalations, speed to care, trust, and NPS across PulseCheck pilots.' },
+    { id: 'pulsecheck-adherence-psychology-spec', label: 'Adherence Psychology Spec', description: 'Product psychology and UX contract for making Pulse Check adherence a private performance pact with athlete-first copy, rescue nudges, completion closure, and pilot-dashboard state tracking.' },
     { id: 'pulsecheck-correlation-engine-pilot-ops-runbook', label: 'Pilot Ops Runbook', description: 'Operational ownership, cadence, escalation, and queue guidance for active pilot monitoring.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
     { id: 'pulsecheck-correlation-engine-pilot-research-readout', label: 'Pilot Research Readout Implementation Spec', description: 'AI-assisted, evidence-bounded interpretation-layer spec for one pilot’s governed dashboard data, including gating, output schema, and review workflow.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
     { id: 'pulsecheck-oura-integration-strategy', label: 'Oura Integration Strategy', description: 'Direct Oura OAuth/API lane, HealthKit-derived fallback lane, source-record mapping, merge precedence, and rollout recommendation for PulseCheck.', parentSectionId: 'pulsecheck-device-integration-strategy' },
@@ -132,6 +134,9 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Strengthened Visual Disruption Reset focus measurement with path-pattern confirmation: athletes now watch a moving cue draw a pattern, then must match the drawn pattern after disruption before Recovery Time is scored.',
+      'Removed the experimental handheld mobile camera gaze contract from Visual Disruption Reset after iPhone testing showed the estimates were not reliable enough for athlete-facing scoring; phone, web, iOS, and Android now use touch/click/tap recovery with concise Nora-read phase cues.',
+      'Updated the Reset family and Visual Disruption Reset registry contract so phone/web delivery is explicitly touch/click measured rather than implied gaze tracking, runs against a visible timer-led session, caps missed recoveries, and auto-advances reps without a manual round gate.',
       'Completed Phase J implementation passes 11-16 at the foundation layer with a canonical session-record writer, deterministic sport-load handoff, Pulse Check device onboarding and self-report fallback helpers, Claude-backed lift summary parsing with local fallback, QA audit validators, and end-to-end type/lint verification.',
       'Completed Phase J implementation passes 6-10 at the runtime-helper layer with sport detection profiles, Nora clarification routing, unlabeled session candidate detection, athlete session pattern learning, and coach schedule / prescribed-session context matching.',
       'Locked the Phase J Session Schema Contract with TypeScript collection constants and record shapes for session candidates, clarification prompts, context confirmation events, canonical session records, athlete session patterns, confidence transitions, actor precedence, Firestore index requirements, and required provenance fields.',
@@ -151,6 +156,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       'Added the Daily Task + Training Plan Alignment Spec to the PulseCheck runtime stack, locking the canonical DailyTask / TrainingPlan / PlanStep model, lifecycle rules, date-boundary behavior, event contract, and surface-coherence requirements across Home, Mental Training, and Nora chat.',
       'Added the Training Plan Authoring Spec to the PulseCheck runtime stack, defining how Nora authors longer-horizon mental-training blocks, chooses plan types and archetypes, persists provenance, and advances plan pointers over time.',
       'Added a pilot-scoped Correlation Engine dashboard stack, including the pilot dashboard, KPI addendum, and pilot ops runbook, and clarified that active-pilot monitoring is rooted in Pilot and PilotEnrollment rather than whole-team analytics.',
+      'Added the Adherence Psychology Spec to the PulseCheck pilot stack, locking the athlete-first performance pact, privacy language, adaptive rescue loop, completion closeout, and dashboard adherence-state model for the pilot adherence goal.',
       'Added the Pilot Outcome Metrics Contract artifact to the Correlation Engine pilot stack, locking the implementation-grounded definitions for enrollment, adherence, mental performance improvement, escalations, speed to care, trust, and NPS plus the default ownership rules needed to build the outcome system cleanly.',
       'Added a Pilot Research Readout Implementation Spec to the Correlation Engine pilot stack, defining the AI-assisted interpretation tab, readiness gates, claim-discipline rules, frozen evidence frame, and human-review workflow for pilot-level research summaries.',
       'Split Sports Intelligence into an architecture/boundary spec plus a companion Aggregation + Inference Contract, resolving AFS, travel-context, and reports-vs-dashboard tensions while locking deterministic decisioning rules for Phase 3.',

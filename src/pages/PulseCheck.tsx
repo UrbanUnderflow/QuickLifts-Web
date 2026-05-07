@@ -20,7 +20,7 @@ const STORAGE_KEY_PC = 'pulsecheck_has_seen_marketing';
 const STORAGE_KEY_NORA_ONBOARDING = 'pulsecheck_has_seen_nora_onboarding';
 const PULSECHECK_TITLE = 'PulseCheck — The Mental Performance OS for Elite Programs';
 const PULSECHECK_DESCRIPTION =
-    'PulseCheck gives coaches real-time readiness signals, intervention tools, and clinical safety nets before it shows on the scoreboard.';
+    'PulseCheck helps athletes and coaches understand how physical state shapes focus, composure, decision-making, and the mental performance environment.';
 const PULSECHECK_URL = 'https://pulsecheckmind.ai';
 const PULSECHECK_OG_IMAGE = '/pulsecheck-og.png';
 const PULSECHECK_OG_IMAGE_URL = `${PULSECHECK_URL}${PULSECHECK_OG_IMAGE}`;

@@ -33,6 +33,7 @@ import {
 } from './sportsIntelligenceReportGenerator';
 import {
   runSportsIntelligenceInference,
+  runSportsIntelligenceReasoningLayer,
   type InferenceResult,
 } from './sportsIntelligenceInferenceEngine';
 import {
@@ -196,10 +197,17 @@ export const orchestrateGeneratedReportDraft = async (
     const snapshot = snapshotsByAthlete[athlete.athleteUserId];
     if (!snapshot) continue;
     const inference: InferenceResult = runSportsIntelligenceInference({ snapshot, sport });
+    const reasoningPayload = runSportsIntelligenceReasoningLayer({
+      snapshot,
+      sport,
+      inference,
+      audience: 'coach',
+    });
     inferenceResults.push({
       athleteName: athlete.athleteName,
       role: athlete.role,
       inference,
+      reasoningPayload,
       snapshot,
     });
   }

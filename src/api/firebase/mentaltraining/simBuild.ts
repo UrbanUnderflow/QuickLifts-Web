@@ -140,9 +140,11 @@ function getRuntimeConfigValue<T = any>(record: SimVariantRecord, path: string, 
 }
 
 function buildSessionModel(record: SimVariantRecord, engineKey: SimEngineKey, archetype: SimVariantArchetype) {
+  const runtimeSession = getRuntimeConfigValue<Record<string, any>>(record, 'session', {});
   const minutes = record.moduleDraft?.durationMinutes ?? getRuntimeConfigValue(record, 'session.durationMinutes', 5);
   const lockedDuration = (record.lockedSpec as SimVariantLockedSpec | undefined)?.fixedDuration;
   return {
+    ...runtimeSession,
     durationMinutes: minutes,
     durationSeconds: minutes * 60,
     feedbackMode: getRuntimeConfigValue(record, 'session.feedbackMode', 'coached'),
@@ -155,6 +157,7 @@ function buildSessionModel(record: SimVariantRecord, engineKey: SimEngineKey, ar
 }
 
 function buildStimulusModel(record: SimVariantRecord, engineKey: SimEngineKey) {
+  const runtimeStimuli = getRuntimeConfigValue<Record<string, any>>(record, 'stimuli', {});
   const emphasis = getRuntimeConfigValue<string[]>(record, 'stimuli.emphasis', []);
   const priority = record.priority === 'high' ? 'high' : record.priority === 'medium' ? 'medium' : 'low';
   const archetype = record.archetypeOverride ?? record.runtimeConfig?.archetype ?? 'baseline';
@@ -200,14 +203,16 @@ function buildStimulusModel(record: SimVariantRecord, engineKey: SimEngineKey) {
   };
 
   return {
+    ...defaults[engineKey],
+    ...runtimeStimuli,
     priority,
     emphasis,
     audioAssets: getRuntimeConfigValue<Record<string, any>>(record, 'audioAssets', {}),
-    ...defaults[engineKey],
   };
 }
 
 function buildScoringModel(record: SimVariantRecord, engineKey: SimEngineKey) {
+  const runtimeScoring = getRuntimeConfigValue<Record<string, any>>(record, 'scoring', {});
   const scoringByEngine: Record<SimEngineKey, Record<string, any>> = {
     reset: {
       coreMetricName: 'recovery_time',
@@ -237,6 +242,7 @@ function buildScoringModel(record: SimVariantRecord, engineKey: SimEngineKey) {
 
   return {
     ...scoringByEngine[engineKey],
+    ...runtimeScoring,
     artifactFloorMs: 150,
     lockedRuleSet: record.lockedSpec ?? null,
   };

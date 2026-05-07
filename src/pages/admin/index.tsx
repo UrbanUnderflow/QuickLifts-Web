@@ -329,6 +329,12 @@ const adminCardsData = [
     link: "/admin/mealLogs"
   },
   {
+    title: "Nutrition Insight Layer",
+    description: "QA Macra daily insight facts, candidate rankings, validation traces, and final Nora copy before the layer expands to Pulse Check.",
+    icon: <Utensils className="w-5 h-5" />,
+    link: "/admin/nutritionInsightLayer"
+  },
+  {
     title: "VC Database",
     description: "Manage venture capital prospects and investor relationships for fundraising.",
     icon: <Building2 className="w-5 h-5" />,

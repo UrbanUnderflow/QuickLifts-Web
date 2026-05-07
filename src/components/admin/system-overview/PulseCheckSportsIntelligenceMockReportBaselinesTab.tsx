@@ -65,17 +65,17 @@ type SportMockReportBaseline = {
 };
 
 const REPORT_STRUCTURE = [
-  ['Weekly Sports Intelligence Report', 'Coach', 'Team posture, sport-native KPI movement, cognitive trend, load/recovery trend, athlete watchlist candidates, reviewed training adjustments.', 'Human-reviewed during pilot.'],
-  ['Game-Day Readiness Report', 'Coach', 'Athlete-by-athlete readiness band, confidence tier, key evidence, missing inputs, sport-specific pre-competition protocol, optional travel context.', 'Human-reviewed before delivery.'],
+  ['Weekly Sports Intelligence Report', 'Coach', 'Team posture, sport-native KPI movement, cognitive trend, load/recovery trend, individual vs team-wide pattern read, athlete watchlist candidates, mental-coaching prompts.', 'Human-reviewed during pilot.'],
+  ['Game-Day Readiness Report', 'Coach', 'Athlete-by-athlete mind-body state band, confidence tier, key evidence, missing inputs, sport-specific pre-competition protocol, optional travel context.', 'Human-reviewed before delivery.'],
   ['Early-Warning Candidate', 'Internal review', 'Threshold trace, evidence refs, source confidence, escalation check, proposed coach-facing language.', 'Not automatically delivered during pilot.'],
 ];
 
 const REPORT_ROW_SHAPE = [
   ['Header', 'Sport, team, report window, generatedAt, reviewStatus, reviewer, confidence summary.'],
-  ['Data Coverage / Adherence', 'Device wear rate, Nora completion, protocol/sim completion, nutrition/check-in coverage, and read confidence. Weekly reports must show this before any watchlist or recommendation block.'],
-  ['Team Lens', 'One paragraph: what changed, what matters this week, and where coaches should focus attention.'],
+  ['Data Coverage / Adherence', 'Device wear rate, Nora completion, protocol/sim completion, nutrition/check-in coverage, and read confidence. Weekly reports must show this before any watchlist or interpretation block.'],
+  ['Team Lens', 'One paragraph: what changed, whether the pattern is individual, unit-level, or team-wide, and where coaches should focus attention.'],
   ['Sport-Native KPIs', 'Only KPIs from sport config or verified team systems. Never raw vendor scores as coach judgment.'],
-  ['Athlete Rows', 'Name, role/position, readiness band, confidence tier, evidence refs, missing inputs, recommendation, copy posture.'],
+  ['Athlete Rows', 'Name, role/position, mind-body state band, confidence tier, evidence refs, missing inputs, mental-performance prompt, copy posture.'],
   ['Watchlist', 'Rare, reviewed list of athletes or role groups needing observation, not a punitive ranking.'],
   ['Coach Adjustment', 'Practice, recovery, communication, pre-competition, or nutrition-context action framed in sport language.'],
   ['Trace', 'Internal-only provenance: source lanes, stale/missing data, confidence propagation, threshold path.'],

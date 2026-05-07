@@ -7,9 +7,10 @@
 //
 // Doctrine boundaries:
 //   - Reactive only (the proactive curriculum is Phase I, separate path).
-//   - All athlete-facing strings flow through Phase C's translateForAthlete()
-//     for guardrail enforcement.  Conversation tree provides the SHAPE
-//     (opener / probe / action), Phase C provides the VOICE.
+//   - All athlete-facing strings pass the Nora voice rubric runtime before
+//     persistence. Action delivery also flows through Phase C's
+//     translateForAthlete() for domain-specific guardrails. Conversation tree
+//     provides the SHAPE (opener / probe / action), guardrails provide VOICE.
 //   - Replies are stored verbatim, classified into a state bucket via the
 //     same Anthropic SDK Phase C uses.  Classification result drives which
 //     translation row gets used for the action delivery.

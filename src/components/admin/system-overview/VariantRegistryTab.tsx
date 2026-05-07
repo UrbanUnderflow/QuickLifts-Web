@@ -348,12 +348,15 @@ function parseCommaTags(raw: string) {
 
 const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
     'Reset': {
-        mechanism: 'disruption -> reset -> rapid re-engagement to the same primary task',
+        mechanism: 'timer-led disruption -> reset -> rapid re-engagement to the same primary task',
         coreMetric: 'Recovery Time',
-        skillTargets: 'Attentional Shifting, Error Recovery Speed, and Pressure Stability',
-        boundaryRule: 'the athlete must always return to the same task rather than pivoting into a new problem or secondary challenge',
+        skillTargets: 'Attentional Shifting, Error Recovery Speed, Cue Reacquisition, Pattern Discrimination, and Pressure Stability',
+        boundaryRule: 'the athlete must always return to the same task rather than pivoting into a new problem or secondary challenge, and phone/web/native mobile builds may not imply handheld camera gaze detection',
         trainingModeDefaults: [
-            'show round-level recovery feedback and reinforce fast, clean re-engagement',
+            'show a visible session countdown and run repeated reps until the timer expires',
+            'auto-advance between reps so the athlete is not blocked by a manual next-round gate',
+            'show compact recovery feedback and reinforce fast, clean re-engagement',
+            'use audio-first concise phase cues so athletes are not asked to read long instructions while tracking',
             'allow light adaptation inside family limits without changing the recovery mechanic',
             'keep the session compact enough to feel like a competitive drill rather than a benchmark battery',
         ],
@@ -2441,9 +2444,39 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
                     'the program needs a clean visual-channel version before moving to combined-channel pressure',
                     'Nora wants a highly legible reset drill for web and phone delivery',
                 ],
+                changes: [
+                    'the pressure source is visual disruption only: flash, bounded target masking, or bounded layout scramble',
+                    'the athlete is asked to watch a live cue draw a recognizable path pattern, then recover by matching the pattern that was drawn or completing the returned response task',
+                    'the session is timer-led by default so rep length can vary without hiding the finish line',
+                    'phone, web, and native mobile builds measure touch/click/tap re-engagement; handheld camera gaze is not a scoring input',
+                ],
+                athleteFlow: [
+                    'The athlete enters a five-minute visual reset drill with a visible countdown timer.',
+                    'Each rep starts with a lock-in task where Nora tells the athlete to watch the path while a live cue draws a recognizable pattern.',
+                    'After the reset cue, the athlete immediately matches the pattern the cue drew; the first correct pattern match marks recovery.',
+                    'If recovery is missed inside the capped recovery window, the rep is scored at the cap and the sim automatically advances.',
+                ],
+                scoringNotes: [
+                    'Recovery Time is measured from disruption end to the first correct path-pattern confirmation or returned-task response on phone/web/native mobile training builds.',
+                    'Comparison-grade or richer sensor builds may require two consecutive correct responses when the task supports it.',
+                    'First-Post-Reset Accuracy, false starts, and capped missed recoveries must stay visible as separate supporting fields.',
+                    'Focus contribution is inferred from behavioral path-tracking quality: response speed, path-pattern accuracy, wrong-pattern selections, false starts, and missed-recovery caps.',
+                ],
+                artifactRisks: [
+                    'visual disruption can accidentally become target-search if the live cue is hidden too long or returns in an ambiguous way',
+                    'display lag, contrast loss, or motion timing can distort recovery time if device class is not tagged',
+                    'copy that names the answer pattern before the disruption can turn the drill into label memory instead of path tracking',
+                ],
+                buildNotes: [
+                    'Render a visible total-session countdown and end the session when the timer expires.',
+                    'Never leave the recovery phase open-ended; every rep needs a capped recovery window and automatic continuation.',
+                    'Use automatic rep transitions by default; manual round gates are not part of the default Visual Disruption Reset contract.',
+                    'Store `input_source=touch_or_click` for phone/web/native mobile delivery; do not emit camera-gaze recovery fields from handheld iOS or Android builds.',
+                    'Use short visible phase cues that Nora reads aloud: lock in, watch the path, disruption, reset, and match the path.',
+                ],
                 runtimeDefaults: {
-                    emphasis: ['screen flashes', 'target disappearance', 'layout scramble'],
-                    analyticsFocus: ['Recovery Time', 'visual-trigger false starts', 'first-post-reset accuracy'],
+                    emphasis: ['screen flashes', 'target disappearance', 'layout scramble', 'path-pattern confirmation', 'touch/click/tap re-engagement', 'Nora-read concise phase cues'],
+                    analyticsFocus: ['Recovery Time', 'visual-trigger false starts', 'first-post-reset accuracy', 'path-pattern accuracy', 'path reacquisition cleanliness', 'capped missed recoveries', 'input source'],
                 },
                 durationMinutes: 5,
             };
@@ -3235,6 +3268,12 @@ function getVariantSpecificModifierMatrix(variant: VariantEntry) {
             '`flash` = a full-field luminance pulse, strobe burst, or abrupt overlay that competes with the live cue for <= 500 ms without changing the task rule or the correct target.',
             '`target_disappearance` = the live cue is masked, hidden, or dropped for a bounded interval, then restored to the same task context so the athlete must reacquire the original target rather than solve a new problem.',
             '`layout_scramble` = non-target anchors, peripheral elements, or surrounding layout positions shift while the live cue rule remains the same and the athlete must re-engage the original task.',
+            '`path_pattern_contract` = the live cue traces a recognizable path pattern, such as circle, triangle, square, zigzag, or hexagon. The athlete must match the drawn path after disruption before recovery can be scored.',
+            '`recovery_input_contract` = phone/web/native mobile runtimes confirm recovery through a correct path-pattern match, touch/click/tap on the live cue, or returned task response.',
+            '`handheld_mobile_gaze_boundary` = iOS and Android handheld camera gaze is not a scoring source for this sim. Focus is inferred from behavioral cue reacquisition, not estimated eye position.',
+            '`audio_first_phase_cues` = visible gameplay instructions stay concise and Nora reads the phase cue aloud so the athlete can keep attention on the task.',
+            '`session_timer_contract` = default Visual Disruption Reset runs as a visible total-duration countdown. Rep length may vary, but the session ends when the timer expires.',
+            '`recovery_window_cap` = every rep must have a maximum recovery window. No valid re-engagement inside the cap is scored as a capped missed recovery and the runtime automatically advances.',
             'Tier 1 allows one modifier at a time only: `flash` or `target_disappearance` or `layout_scramble`.',
             'Tier 2 allows one modifier at a time or `flash + layout_scramble`; `target_disappearance` may pair only with low-salience flash and may not pair with simultaneous scramble.',
             'Tier 3 allows `flash + target_disappearance` or `flash + layout_scramble`; `target_disappearance + layout_scramble` remains disallowed because it risks changing the mechanic from reset recovery into target-search or rule-discovery.',
@@ -3456,6 +3495,14 @@ function getVariantSpecificTrialProfile(variant: VariantEntry) {
 function getCanonicalAnalyticsTagVocabulary(variant: VariantEntry) {
     if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'visual_channel') {
         return [
+            '`session_duration_seconds`: session field; default training value = `300` for Visual Disruption Reset unless registry override is present.',
+            '`input_source`: session field; allowed values = `touch_or_click`, `controller`.',
+            '`path_pattern_prompt_accuracy`: session field; correct path-pattern confirmations divided by pattern prompt attempts.',
+            '`path_pattern_prompt_errors`: session field; wrong path-pattern selections after disruption.',
+            '`path_reacquisition_clean_rate`: session field; pattern-confirmation rounds recovered on the first correct choice without prior wrong-pattern selection.',
+            '`path_reacquisition_clean`: event field; boolean flag for returning to the correct path pattern or task without false starts or missed-recovery cap.',
+            '`recovery_window_seconds`: event field; capped recovery window used for the rep.',
+            '`missed_recovery_capped`: event field; boolean flag for no valid recovery inside the capped window.',
             '`visual_disruption_subtype`: allowed values = `flash`, `target_disappearance`, `layout_scramble`.',
             '`visual_disruption_overlap_mode`: allowed values = `single_modifier`, `flash_plus_target_disappearance`, `flash_plus_layout_scramble`.',
             '`contrast_profile`: allowed values = `normal_contrast`, `reduced_contrast`, `glare_wash`.',
@@ -3582,6 +3629,15 @@ function getGenericArchetypeSpecNotes(variant: VariantEntry, familyBase: FamilyS
     const archetypeLabel = theme.archetype === 'baseline' && theme.variantType !== 'Branch variant'
         ? `${ARCHETYPE_LABELS[theme.archetype]} (${theme.variantType})`
         : ARCHETYPE_LABELS[theme.archetype];
+    const resetRuntimeNotes = variant.family === 'Reset'
+        ? [
+            'Default session structure is timer-led repeated reps, not a manual round-gated flow.',
+            'Default phone/web/native mobile input source is touch_or_click; handheld iOS/Android camera gaze is not a scoring source.',
+            'During gameplay, visible instructions must stay concise and Nora should speak phase cues aloud.',
+            'Each recovery phase must have a capped recovery window and automatic continuation.',
+        ]
+        : [];
+
     return [
         `Archetype: ${archetypeLabel}`,
         `Recommended session length defaults to ${getDefaultDurationMinutes(variant)} minutes unless the registry overrides it.`,
@@ -3589,6 +3645,7 @@ function getGenericArchetypeSpecNotes(variant: VariantEntry, familyBase: FamilyS
         `Adaptive difficulty is ${profile.runtimeDefaults.adaptiveDifficulty ? 'enabled inside family boundaries' : 'disabled by default'}.`,
         `Runtime emphasis: ${profile.runtimeDefaults.emphasis.join('; ')}.`,
         `Analytics focus: ${profile.runtimeDefaults.analyticsFocus.join('; ')}.`,
+        ...resetRuntimeNotes,
     ];
 }
 
@@ -3602,11 +3659,15 @@ function getNonTrialMeasurementNotes(variant: VariantEntry, theme: VariantTheme)
             : 'Sport, scenario, or delivery tags may support interpretation, but they must remain context fields and may not replace the family metric.';
 
         return [
-            'Recovery Time = disruption end -> confirmed re-engagement, with valid re-engagement requiring two consecutive correct responses on the refocused task.',
+            'Recovery Time = disruption end -> confirmed re-engagement. Visual Disruption Reset confirms re-engagement with the first correct path-pattern match or returned-task response; comparison-grade modes should require two consecutive correct responses when the task supports it.',
             'First-Post-Reset Accuracy must be reported alongside Recovery Time so the athlete cannot game the sim by reacting fast but inaccurately.',
+            'Path Pattern Accuracy must be reported for Visual Disruption Reset so behavioral Focus reflects whether the athlete tracked the live cue path through disruption.',
             'False Start Count = responses during the disruption phase before the reset signal; false starts are logged separately and do not count as recovery.',
+            'Missed Recovery Count = reps with no valid re-engagement inside the capped recovery window; these reps are scored at the cap and must automatically continue rather than leaving the runtime stuck.',
+            'Input Source must be recorded so touch/click/tap delivery is not conflated with controller input or future non-handheld platforms.',
+            'Handheld iOS/Android camera gaze fields must not be emitted for this sim because estimated eye position is not reliable enough for athlete-facing scoring.',
             'Responses below 150 ms are motor artifacts and must be excluded from the headline metric.',
-            'Attentional Shifting remains a multi-source score combining re-engagement latency with first-post-reset accuracy.',
+            'Attentional Shifting remains a multi-source score combining re-engagement latency, first-post-reset accuracy, path-pattern accuracy, false starts, and missed-recovery caps.',
             'Pressure Stability remains modifier-stratified, comparing Recovery Time under baseline versus pressure conditions instead of averaging modifier states together.',
             contextTagNote,
         ];
@@ -4519,6 +4580,9 @@ function buildDefaultRuntimeConfig(variant: VariantEntry) {
     const theme = inferVariantTheme(variant);
     const archetypeProfile = buildArchetypeProfile(variant, familyBase, theme.archetype);
     const lockedSpec = ensureLockedSpec(variant);
+    const isResetFamily = variant.family === 'Reset';
+    const isVisualReset = isResetFamily && theme.archetype === 'visual_channel';
+    const durationMinutes = inferModuleDurationMinutes(variant);
 
     return {
         schemaVersion: 'sim-variant-config/v1',
@@ -4532,21 +4596,72 @@ function buildDefaultRuntimeConfig(variant: VariantEntry) {
         primaryMetric: familyBase?.coreMetric ?? '',
         skillTargets: familyBase?.skillTargets ?? '',
         session: {
-            durationMinutes: inferModuleDurationMinutes(variant),
+            durationMinutes,
+            durationSeconds: durationMinutes * 60,
             feedbackMode: archetypeProfile.runtimeDefaults.feedbackMode,
             adaptiveDifficulty: archetypeProfile.runtimeDefaults.adaptiveDifficulty,
+            ...(isResetFamily
+                ? {
+                    durationMode: 'timer',
+                    targetSessionStructure: `${durationMinutes}-minute timer-led repeated reps`,
+                    autoAdvanceReps: true,
+                    endCondition: 'timer_elapsed',
+                    manualRoundGate: false,
+                }
+                : {}),
         },
         stimuli: {
             variantType: theme.variantType,
             emphasis: archetypeProfile.runtimeDefaults.emphasis,
+            ...(isVisualReset
+                ? {
+                    primaryTask: 'path_pattern_reacquisition',
+                    recoveryInstruction: 'match the path pattern the cue drew',
+                    inputContract: 'correct_path_pattern_match_default_no_handheld_camera_gaze',
+                    phaseCueStyle: 'nora_read_concise_visible_cues',
+                    pathPatternPrompt: {
+                        status: 'required',
+                        patternAttributes: ['motion_path_shape'],
+                        optionCount: 4,
+                        recoveryConfirmation: 'first_correct_pattern_choice',
+                    },
+                    visualDisruptionSubtypes: ['flash', 'target_disappearance', 'layout_scramble'],
+                }
+                : {}),
         },
         scoring: {
             headlineMetric: familyBase?.coreMetric ?? '',
             artifactRisks: theme.artifactRisks,
+            ...(isResetFamily
+                ? {
+                    recoveryDefinition: isVisualReset
+                        ? 'disruption_end_to_first_correct_path_pattern_confirmation'
+                        : 'disruption_end_to_confirmed_reengagement',
+                    comparisonGradeRecoveryDefinition: 'two_consecutive_correct_responses_when_supported',
+                    recoveryWindowCapSeconds: isVisualReset ? 6 : 5,
+                    missedRecoveryPolicy: 'score_at_cap_and_auto_advance',
+                    inputSourceRequired: true,
+                }
+                : {}),
         },
         analytics: {
             tags: [variant.family, variant.mode, theme.variantType, ARCHETYPE_LABELS[theme.archetype]],
             focus: archetypeProfile.runtimeDefaults.analyticsFocus,
+            ...(isVisualReset
+                ? {
+                    requiredFields: [
+                        'session_duration_seconds',
+                        'input_source',
+                        'path_pattern_prompt_accuracy',
+                        'path_pattern_prompt_errors',
+                        'path_reacquisition_clean_rate',
+                        'recovery_window_seconds',
+                        'missed_recovery_capped',
+                        'path_reacquisition_clean',
+                        'visual_disruption_subtype',
+                    ],
+                }
+                : {}),
         },
         lockedSpec: lockedSpec ?? null,
         safeguards: theme.boundarySafeguards,

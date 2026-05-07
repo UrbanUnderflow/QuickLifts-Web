@@ -146,9 +146,30 @@ export interface CoachReportAuditTrace {
   suppressionReasons: string[];
 }
 
+export interface CoachReportSportsIntelligenceLayerTrace {
+  layerVersion: string;
+  payloads: Array<{
+    athleteId: string;
+    dayKey: string;
+    selectedCandidateId: string;
+    selectedCandidateType: string;
+    finalStatus: string;
+    headline: string;
+    confidenceTier: string;
+    candidateCount: number;
+    rejectedCandidateIds: string[];
+    rubricResults: string[];
+    guardrailResults: string[];
+    unsupportedClaims: string[];
+    missingInputs: string[];
+    evidenceRefs: string[];
+  }>;
+}
+
 export interface CoachReportReviewerOnly {
   evidence: CoachReportReviewerEvidence;
   auditTrace: CoachReportAuditTrace;
+  sportsIntelligenceLayer?: CoachReportSportsIntelligenceLayerTrace;
 }
 
 export interface CoachReportRecipientAudit {

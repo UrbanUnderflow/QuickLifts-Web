@@ -5,24 +5,18 @@ import {
 } from '../../src/api/anthropic/serverBridge';
 import { admin, db, headers as corsHeaders } from './config/firebase';
 import { MACRA_DAILY_INSIGHT } from '../../src/api/anthropic/featureRouting';
-
-interface MealRecord {
-  name: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  createdAt: number;
-}
-
-interface DayTotal {
-  dayKey: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  mealCount: number;
-}
+import {
+  buildNutritionFactLedger,
+  formatDelta,
+  selectCandidateInsight,
+  validateAndAssembleInsight,
+  type CandidateInsight,
+  type DayTotal,
+  type MacroTotals,
+  type MealRecord,
+  type NutritionFactLedger,
+  type ValidatedNutritionInsight,
+} from './utils/nutritionReasoningLayer';
 
 interface MacraProfile {
   sex?: string;
@@ -59,6 +53,9 @@ interface RequestBody {
   userId?: string;      // honored only with valid internal token
   persist?: boolean;    // defaults true
   timezone?: string;    // IANA, defaults 'America/New_York'
+  preferredCandidateId?: string;
+  previousCandidateId?: string;
+  previousType?: string;
 }
 
 const INTERNAL_TOKEN_HEADER = 'x-macra-internal-token';
@@ -90,6 +87,60 @@ const tzDayKey = (date: Date, timezone: string): string => {
     day: '2-digit',
   });
   return fmt.format(date);
+};
+
+const legacyDayKey = (isoDayKey: string): string | null => {
+  const match = isoDayKey.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return `${match[2]}${match[3]}${match[1]}`;
+};
+
+const addDaysToIsoDayKey = (isoDayKey: string, days: number): string => {
+  const [year, month, day] = isoDayKey.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days, 12, 0, 0));
+  return date.toISOString().slice(0, 10);
+};
+
+const timezoneOffsetMs = (date: Date, timezone: string): number => {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(date).map(part => [part.type, part.value]));
+  const asUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second),
+  );
+  return asUtc - date.getTime();
+};
+
+const zonedStartOfDayUtcMs = (isoDayKey: string, timezone: string): number => {
+  const [year, month, day] = isoDayKey.split('-').map(Number);
+  const utcGuess = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  const firstPass = new Date(utcGuess.getTime() - timezoneOffsetMs(utcGuess, timezone));
+  return utcGuess.getTime() - timezoneOffsetMs(firstPass, timezone);
+};
+
+const mealIsoDayKey = (meal: MealRecord, fallbackTimezone: string): string => {
+  const timezone = meal.loggedTimeZoneIdentifier || fallbackTimezone;
+  return tzDayKey(new Date(meal.createdAt), timezone);
+};
+
+const sameRequestedDay = (meal: MealRecord, requestedIsoDayKey: string, fallbackTimezone: string): boolean => {
+  if (meal.dayKey === requestedIsoDayKey) return true;
+  const legacy = legacyDayKey(requestedIsoDayKey);
+  if (legacy && meal.dayKey === legacy) return true;
+  return mealIsoDayKey(meal, fallbackTimezone) === requestedIsoDayKey;
 };
 
 const localHour = (date: Date, timezone: string): number => {
@@ -171,42 +222,46 @@ const loadSportContext = async (uid: string, profile: MacraProfile | null): Prom
   }
 };
 
-const loadMealsForDay = async (uid: string, dayKey: string): Promise<MealRecord[]> => {
+const loadMealsForDay = async (uid: string, dayKey: string, timezone: string): Promise<MealRecord[]> => {
   try {
-    const snap = await db.collection('users').doc(uid).collection('mealLogs')
-      .where('dayKey', '==', dayKey)
-      .limit(50)
-      .get();
-    if (!snap.empty) return snap.docs.map(d => parseMeal(d.data())).filter(Boolean) as MealRecord[];
+    const startMs = zonedStartOfDayUtcMs(dayKey, timezone);
+    const endMs = zonedStartOfDayUtcMs(addDaysToIsoDayKey(dayKey, 1), timezone);
 
-    const [year, month, day] = dayKey.split('-').map(Number);
-    const start = Date.UTC(year, month - 1, day) / 1000;
-    const end = start + 24 * 60 * 60;
-    const fallback = await db.collection('users').doc(uid).collection('mealLogs')
-      .where('createdAt', '>=', start)
-      .where('createdAt', '<', end)
+    // Macra does not persist `dayKey` on mealLogs today. Query a widened
+    // createdAt range, then filter with the same "meal's logged timezone"
+    // bucketing the iOS app uses. This avoids UTC-day leakage around evening
+    // logs and travel.
+    const snap = await db.collection('users').doc(uid).collection('mealLogs')
+      .where('createdAt', '>=', (startMs - 24 * 60 * 60 * 1000) / 1000)
+      .where('createdAt', '<', (endMs + 24 * 60 * 60 * 1000) / 1000)
       .limit(50)
       .get();
-    return fallback.docs.map(d => parseMeal(d.data())).filter(Boolean) as MealRecord[];
+    return snap.docs
+      .map(d => parseMeal(d.data(), d.id))
+      .filter((meal): meal is MealRecord => Boolean(meal) && sameRequestedDay(meal, dayKey, timezone))
+      .sort((a, b) => a.createdAt - b.createdAt);
   } catch (err) {
     console.warn('[generate-macra-daily-insight] meals fetch failed:', err);
     return [];
   }
 };
 
-const parseMeal = (d: Record<string, unknown>): MealRecord | null => {
+const parseMeal = (d: Record<string, unknown>, id?: string): MealRecord | null => {
   const name = stringish(d.name) || stringish(d.foodName) || 'Meal';
   return {
+    id,
     name,
     calories: Math.round(numberish(d.calories)),
     protein: Math.round(numberish(d.protein)),
     carbs: Math.round(numberish(d.carbs)),
     fat: Math.round(numberish(d.fat)),
     createdAt: epochMs(d.createdAt),
+    dayKey: stringish(d.dayKey),
+    loggedTimeZoneIdentifier: stringish(d.loggedTimeZoneIdentifier),
   };
 };
 
-const loadDailyTotals = async (uid: string, todayKey: string, days: number): Promise<DayTotal[]> => {
+const loadDailyTotals = async (uid: string, todayKey: string, days: number, timezone: string): Promise<DayTotal[]> => {
   try {
     const cutoffSec = (Date.now() - days * 24 * 60 * 60 * 1000) / 1000;
     const snap = await db.collection('users').doc(uid).collection('mealLogs')
@@ -216,9 +271,9 @@ const loadDailyTotals = async (uid: string, todayKey: string, days: number): Pro
 
     const byDay = new Map<string, DayTotal>();
     for (const doc of snap.docs) {
-      const meal = parseMeal(doc.data());
+      const meal = parseMeal(doc.data(), doc.id);
       if (!meal || meal.createdAt <= 0) continue;
-      const key = (doc.data().dayKey as string) || tzDayKey(new Date(meal.createdAt), 'UTC');
+      const key = mealIsoDayKey(meal, timezone);
       const existing = byDay.get(key) || { dayKey: key, calories: 0, protein: 0, carbs: 0, fat: 0, mealCount: 0 };
       existing.calories += meal.calories;
       existing.protein += meal.protein;
@@ -309,26 +364,30 @@ const loadFwpTraining = async (uid: string, todayKey: string, timezone: string):
 };
 
 const loadMacroTarget = async (uid: string): Promise<{ calories: number; protein: number; carbs: number; fat: number } | null> => {
+  const validTarget = (target: MacroTotals): MacroTotals | null => {
+    const values = [target.calories, target.protein, target.carbs, target.fat];
+    return values.some(v => v > 0) ? target : null;
+  };
   try {
     const snap = await db.collection('macro-profile').doc(uid).collection('macro-recommendations').orderBy('createdAt', 'desc').limit(1).get();
     if (!snap.empty) {
       const d = snap.docs[0].data();
-      return {
+      return validTarget({
         calories: Math.round(numberish(d.calories)),
         protein: Math.round(numberish(d.protein)),
         carbs: Math.round(numberish(d.carbs)),
         fat: Math.round(numberish(d.fat)),
-      };
+      });
     }
     const userSnap = await db.collection('users').doc(uid).get();
     const personal = (userSnap.data()?.macros as Record<string, unknown> | undefined)?.personal as Record<string, unknown> | undefined;
     if (personal) {
-      return {
+      return validTarget({
         calories: Math.round(numberish(personal.calories)),
         protein: Math.round(numberish(personal.protein)),
         carbs: Math.round(numberish(personal.carbs)),
         fat: Math.round(numberish(personal.fat)),
-      };
+      });
     }
     return null;
   } catch {
@@ -364,7 +423,7 @@ const distributionByBucket = (meals: MealRecord[], timezone: string): { morning:
   const buckets = { morning: 0, midday: 0, evening: 0, late: 0 };
   for (const m of meals) {
     if (m.createdAt <= 0) continue;
-    const h = localHour(new Date(m.createdAt), timezone);
+    const h = localHour(new Date(m.createdAt), m.loggedTimeZoneIdentifier || timezone);
     if (h < 11) buckets.morning += m.protein;
     else if (h < 16) buckets.midday += m.protein;
     else if (h < 21) buckets.evening += m.protein;
@@ -380,23 +439,31 @@ const buildContextBlock = (params: {
   history: DayTotal[];
   frequentFoods: string[];
   training: FwpTrainingContext | null;
-  target: { calories: number; protein: number; carbs: number; fat: number } | null;
+  target: MacroTotals | null;
   weightTrend: { recentKg: number; sevenDayDeltaKg: number } | null;
   dayKey: string;
   hourLocal: number;
   timezone: string;
+  factLedger: NutritionFactLedger;
+  selectedCandidate: CandidateInsight;
+  candidates: CandidateInsight[];
 }): string => {
-  const totals = params.todayMeals.reduce((a, m) => ({
-    calories: a.calories + m.calories,
-    protein: a.protein + m.protein,
-    carbs: a.carbs + m.carbs,
-    fat: a.fat + m.fat,
-  }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
-
+  const totals = params.factLedger.totals;
   const dist = distributionByBucket(params.todayMeals, params.timezone);
 
   const lines: string[] = [];
   lines.push(`Local time: ${params.hourLocal}:00 (${params.timezone}). Date: ${params.dayKey}.`);
+  lines.push('AUTHORITATIVE FACT LEDGER:');
+  lines.push(`- Canonical selected candidate: ${params.selectedCandidate.id} (${params.selectedCandidate.type}).`);
+  lines.push(`- Canonical claim: ${params.selectedCandidate.claim}`);
+  lines.push(`- Canonical fact: ${params.selectedCandidate.evidence[0] || 'No evidence.'}`);
+  lines.push(`- Canonical interpretation: ${params.selectedCandidate.interpretation}`);
+  lines.push(`- Canonical action: ${params.selectedCandidate.recommendedAction}`);
+  if (params.factLedger.deltas.length > 0) {
+    lines.push(`- Macro gaps vs target: ${params.factLedger.deltas.map(formatDelta).join('; ')}.`);
+  }
+  lines.push(`- Alternate eligible candidates: ${params.candidates.slice(0, 5).map(c => `${c.id}:${c.type}:${Math.round(c.score)}`).join(', ') || 'none'}.`);
+  lines.push('Use the fact ledger and selected candidate for all totals/deltas. Do not invent, recalculate, or choose a different coaching angle.');
   if (params.hourLocal < 21) {
     lines.push('Window: there is still time today for the user to act on this insight.');
   } else {
@@ -429,6 +496,11 @@ const buildContextBlock = (params: {
       .map(m => `- ${m.name}: ${m.calories}kcal P${m.protein}g C${m.carbs}g F${m.fat}g`)
       .join('\n');
     lines.push(`Meals today:\n${mealList}`);
+    const contributors = Object.values(params.factLedger.topContributors)
+      .map(contributor => contributor ? `${contributor.macro}: ${contributor.mealName} (${contributor.amount}${contributor.unit})` : null)
+      .filter(Boolean)
+      .join('; ');
+    if (contributors) lines.push(`Top contributors today: ${contributors}.`);
   }
 
   const HISTORY_WINDOW_DAYS = 14;
@@ -485,99 +557,74 @@ const buildContextBlock = (params: {
 };
 
 const SYSTEM_PROMPT = [
-  "You are Nora, Macra's nutrition coach. You produce ONE daily insight that is substantive, specific, and unique to this user — not generic 'eat more protein' advice.",
+  "You are Nora, Macra's nutrition coach. You are the copy layer, not the reasoning layer.",
   "",
-  'Each insight has ONE primary angle (the type) but DELIVERS THREE DISTINCT OBSERVATIONS plus ONE concrete action. Each observation should pull from a different signal so the read feels three-dimensional, not a single point restated.',
+  'The server already selected the coaching decision. Your job is to make it clear, human, and concise without changing the facts, math, or angle.',
   "",
-  'Choose the type that best frames the day:',
-  '- predictive: still early enough to act today; project where they will land',
-  '- pattern: multi-day pattern worth surfacing (e.g. misses cluster on no-lift days)',
-  '- distribution: when they ate matters more than how much (e.g. 80% of protein landed after 6pm)',
-  '- outcome: tie food to weight trend or goal trajectory',
-  '- training_coupled: tie food to the workout/recovery context (FWP RPE, fatigue, today/tomorrow training)',
-  '- pantry: reference foods they actually log with a one-tap closer',
+  'Use only the selected candidate and authoritative fact ledger in the context.',
   "",
-  'For the THREE observations, pull from DIFFERENT signal categories where possible:',
-  '- today\'s totals or distribution by time-bucket',
-  '- multi-day pattern from the 14d history',
-  '- training/sport context (FWP RPE, fatigue, sport policy, season phase)',
-  '- weight trend / goal trajectory',
-  '- frequent foods or pantry behavior',
-  '- macro-target gap with specific gram numbers',
-  "",
-  'Each observation should:',
-  '- reference at least one specific number, food, or signal from the context',
-  '- be a single tight sentence (under 140 chars)',
-  '- stand on its own — no observation should restate or overlap another',
-  "",
-  'The action:',
-  '- one concrete, specific step the user can take today (or tomorrow if day is closed)',
-  '- name a real food or amount, not "consider eating more protein"',
-  '- under 160 chars',
+  'Output fields:',
+  '- title: decision headline, <= 56 chars. Must stand alone.',
+  '- fact: exact ledger-backed fact sentence.',
+  '- interpretation: why the fact matters. No moralizing.',
+  '- action: one concrete next move. Keep it doable.',
+  '- confidenceNote: null unless the context explicitly says confidence/data coverage is low.',
   "",
   'Hard rules:',
-  '- If the day is essentially closed (late evening), frame the action as next-day adjustment, never "eat X tonight".',
-  '- If sport context is supplied, use sport-specific framing (game-day, training load, position demand).',
-  "- Don't moralize ('good'/'bad'). Don't restate the math without insight.",
-  "- Never refer to meals as 'meal 1/2/3' — use the names they logged.",
-  "- If a frequent-food list is supplied, prefer foods from it in the action when possible.",
-  "- AVERAGES ARE COMPUTED FROM LOGGED DAYS ONLY. If the context says \"4 day(s) logged, 10 day(s) unlogged\", you must say things like \"across the 4 days you logged\" or \"on logged days you averaged\" — NEVER say \"in the last 14 days you averaged\" or otherwise imply the average covers unlogged days. Never invent a window size that isn't in the context.",
-  "- If the user has many unlogged days in the window (logging gap or consistency flag is present in context), consider making one of the three observations about tracking consistency — but only if it fits naturally with the chosen type. Don't moralize about missed logging; frame it as an opportunity (\"the days you log are useful — adding 2-3 more would let me spot patterns earlier\").",
+  '- Never invent, round differently, or calculate nutrition numbers.',
+  '- Never use numbers not present in the context.',
+  '- Do not choose a different insight type or coaching angle.',
+  '- If the day is closed, use tomorrow framing only.',
+  '- No moralizing language: good, bad, cheat, failed, clean, dirty.',
+  '- No vague actions like "be mindful" or "eat balanced".',
+  '- No trend/pattern language unless the selected candidate is a pattern candidate.',
   "",
-  'TITLE RULES (the title becomes the push notification headline — these are non-negotiable):',
-  '- Every number in the title MUST carry an explicit unit. WRONG: "253g by 8pm". RIGHT: "253g protein by 8pm". WRONG: "+30% by week\'s end". RIGHT: "+30% carbs by week\'s end". Allowed units: g protein / g carbs / g fat / kcal / oz / lb / %, hours.',
-  '- No mystery pronouns or orphan referents. WRONG: "Hit it harder tomorrow". RIGHT: "Hit protein harder tomorrow".',
-  '- No internal jargon or vague metaphors ("today\'s read", "macros on point", "the gap"). Name the actual nutrient or food.',
-  '- Must stand alone — a user reading only the title should know exactly what nutrient/behavior the insight is about.',
-  '- Stay ≤42 chars.',
-  '',
-  'POINT[0] RULES (becomes the push notification body — also non-negotiable):',
-  '- Lead with a concrete, named number ("You\'re at 173g protein with 80g left to hit your 253g target") not a vague observation ("Protein is short today").',
-  '- No mystery pronouns. Every "it / that / them" must have a same-message antecedent.',
-  '',
   'Return ONLY valid JSON matching this schema exactly — no markdown, no prose:',
   '{',
-  '  "type": "predictive|pattern|distribution|outcome|training_coupled|pantry",',
-  '  "title": "<≤42 chars, follows TITLE RULES above>",',
-  '  "icon": "<SF Symbol name>",',
-  '  "points": [',
-  '    "<observation 1 — follows POINT[0] RULES above (also serves as push body), ≤140 chars>",',
-  '    "<observation 2 from a different signal, ≤140 chars>",',
-  '    "<observation 3 from a different signal, ≤140 chars>"',
-  '  ],',
-  '  "action": "<one concrete next step, ≤160 chars>"',
+  '  "title": "<decision headline>",',
+  '  "fact": "<exact ledger-backed fact>",',
+  '  "interpretation": "<why it matters>",',
+  '  "action": "<one concrete next step>",',
+  '  "confidenceNote": null | "<short data-confidence note>"',
   '}',
 ].join('\n');
 
-interface InsightResult {
-  type: string;
+interface GeneratedInsightCopy {
   title: string;
-  icon: string;
-  points: string[];
+  fact: string;
+  interpretation: string;
   action: string;
+  confidenceNote: string | null;
 }
 
-const parseInsight = (raw: string): InsightResult => {
+const parseGeneratedCopy = (raw: string): Partial<GeneratedInsightCopy> => {
   const trimmed = raw.trim();
   const data = JSON.parse(trimmed);
 
-  const rawPoints = Array.isArray(data.points) ? data.points : [];
-  const points = rawPoints
-    .map((p: unknown) => stringish(p))
-    .filter((p: string | undefined): p is string => Boolean(p));
-
-  const fallbackResponse = stringish(data.response);
-  if (points.length === 0 && fallbackResponse) {
-    points.push(fallbackResponse);
-  }
-
   return {
-    type: stringish(data.type) || 'pattern',
-    title: stringish(data.title) || "Today's read",
-    icon: stringish(data.icon) || 'sparkles',
-    points,
+    title: stringish(data.title),
+    fact: stringish(data.fact),
+    interpretation: stringish(data.interpretation),
     action: stringish(data.action) || '',
+    confidenceNote: data.confidenceNote === null ? null : stringish(data.confidenceNote) || null,
   };
+};
+
+const loadPreviousInsightSelection = async (
+  uid: string,
+  dayKey: string,
+): Promise<{ selectedCandidateId?: string; type?: string } | null> => {
+  try {
+    const snap = await db.collection('users').doc(uid).collection('macraInsights').doc(dayKey).get();
+    if (!snap.exists) return null;
+    const data = snap.data() || {};
+    return {
+      selectedCandidateId: stringish(data.selectedCandidateId),
+      type: stringish(data.type),
+    };
+  } catch {
+    return null;
+  }
 };
 
 export const handler: Handler = async (event) => {
@@ -618,8 +665,8 @@ export const handler: Handler = async (event) => {
   const profile = await loadMacraProfile(uid);
   const [sport, todayMeals, history, frequentFoods, training, target, weightTrend] = await Promise.all([
     loadSportContext(uid, profile),
-    loadMealsForDay(uid, dayKey),
-    loadDailyTotals(uid, dayKey, 14),
+    loadMealsForDay(uid, dayKey, timezone),
+    loadDailyTotals(uid, dayKey, 14, timezone),
     loadFrequentFoods(uid, 30),
     loadFwpTraining(uid, dayKey, timezone),
     loadMacroTarget(uid),
@@ -634,9 +681,36 @@ export const handler: Handler = async (event) => {
     };
   }
 
+  const previousSelection = !isInternalCaller
+    ? await loadPreviousInsightSelection(uid, dayKey)
+    : null;
+  const previousCandidateId = stringish(body.previousCandidateId) || previousSelection?.selectedCandidateId;
+  const previousType = stringish(body.previousType) || previousSelection?.type;
+
+  const factLedger = buildNutritionFactLedger({
+    date: dayKey,
+    timezone,
+    hourLocal,
+    meals: todayMeals,
+    target,
+    history,
+    frequentFoods,
+    goalDirection: profile?.goalDirection,
+    activityLevel: profile?.activityLevel,
+  }, (meal) => localHour(new Date(meal.createdAt), meal.loggedTimeZoneIdentifier || timezone));
+
+  const { selected, candidates, rejectedCandidateIds } = selectCandidateInsight({
+    ledger: factLedger,
+    meals: todayMeals,
+    history,
+    frequentFoods,
+    previousCandidateId,
+    previousType,
+  });
+
   const contextBlock = buildContextBlock({
     profile, sport, todayMeals, history, frequentFoods, training, target, weightTrend,
-    dayKey, hourLocal, timezone,
+    dayKey, hourLocal, timezone, factLedger, selectedCandidate: selected, candidates,
   });
 
   // Phase B+ full cutover routed through serverBridge Core: same gate +
@@ -645,7 +719,7 @@ export const handler: Handler = async (event) => {
   // the JSON OUTPUT PATTERN doc block).
   // TODO(prompt-cache): SYSTEM_PROMPT is ~900 tokens — under Sonnet 4.6's 2048
   // minimum. Add cache_control here once it crosses the threshold.
-  let insightRaw: string;
+  let insightRaw: string | null = null;
   try {
     const result = await callAnthropicCore(
       {
@@ -659,21 +733,16 @@ export const handler: Handler = async (event) => {
             input_schema: {
               type: 'object',
               properties: {
-                type: {
-                  type: 'string',
-                  enum: ['predictive', 'pattern', 'distribution', 'outcome', 'training_coupled', 'pantry'],
+                title: { type: 'string', description: 'Decision headline.' },
+                fact: { type: 'string', description: 'Exact ledger-backed fact sentence.' },
+                interpretation: { type: 'string', description: 'Why the fact matters.' },
+                action: { type: 'string', description: 'One concrete next step.' },
+                confidenceNote: {
+                  type: ['string', 'null'],
+                  description: 'Short data-confidence note, or null when not needed.',
                 },
-                title: { type: 'string', description: 'Punchy headline ≤42 chars.' },
-                icon: { type: 'string', description: 'SF Symbol name.' },
-                points: {
-                  type: 'array',
-                  items: { type: 'string', description: 'Observation ≤140 chars.' },
-                  minItems: 1,
-                  maxItems: 3,
-                },
-                action: { type: 'string', description: 'One concrete next step ≤160 chars.' },
               },
-              required: ['type', 'title', 'icon', 'points', 'action'],
+              required: ['title', 'fact', 'interpretation', 'action', 'confidenceNote'],
             },
           },
         ],
@@ -697,16 +766,24 @@ export const handler: Handler = async (event) => {
     }
     insightRaw = JSON.stringify(result.toolUseInput);
   } catch (err) {
-    console.error('[generate-macra-daily-insight] anthropic error:', err);
-    return { statusCode: 502, headers: corsHeaders, body: JSON.stringify({ error: 'insight_bridge_failed' }) };
+    console.warn('[generate-macra-daily-insight] anthropic copy layer failed; using deterministic candidate copy:', err);
   }
 
-  let insight: InsightResult;
+  let insight: ValidatedNutritionInsight;
   try {
-    insight = parseInsight(insightRaw);
+    insight = validateAndAssembleInsight({
+      candidate: selected,
+      ledger: factLedger,
+      generated: insightRaw ? parseGeneratedCopy(insightRaw) : undefined,
+      rejectedCandidateIds,
+    });
   } catch {
-    console.error('[generate-macra-daily-insight] parse failed:', insightRaw.slice(0, 300));
-    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: 'insight_parse_failed' }) };
+    console.error('[generate-macra-daily-insight] parse failed:', (insightRaw || '').slice(0, 300));
+    insight = validateAndAssembleInsight({
+      candidate: selected,
+      ledger: factLedger,
+      rejectedCandidateIds,
+    });
   }
 
   const persist = body.persist !== false;
@@ -716,8 +793,31 @@ export const handler: Handler = async (event) => {
         ...insight,
         dayKey,
         timezone,
+        response: insight.points.join('\n'),
+        facts: factLedger,
+        candidates: candidates.map(candidate => ({
+          id: candidate.id,
+          type: candidate.type,
+          claim: candidate.claim,
+          evidence: candidate.evidence,
+          interpretation: candidate.interpretation,
+          recommendedAction: candidate.recommendedAction,
+          confidence: candidate.confidence,
+          score: candidate.score,
+          scoreBreakdown: candidate.scoreBreakdown,
+          guardrails: candidate.guardrails,
+        })),
+        selectedCandidate: selected,
+        nutritionContextSnapshot: {
+          date: dayKey,
+          timezone,
+          ledger: factLedger,
+          selectedCandidate: selected,
+          candidates,
+        },
         generatedAt: admin.firestore.FieldValue.serverTimestamp(),
         generatedAtEpochMs: Date.now(),
+        reasoningLayerVersion: factLedger.version,
         source: isInternalCaller ? 'scheduled' : 'manual',
       }, { merge: true });
     } catch (err) {
@@ -728,6 +828,6 @@ export const handler: Handler = async (event) => {
   return {
     statusCode: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ insight, dayKey, timezone }),
+    body: JSON.stringify({ insight, dayKey, timezone, facts: factLedger, candidates, selectedCandidate: selected }),
   };
 };

@@ -8,6 +8,7 @@
 // No Firestore deps — guardrails are unit-testable without env setup.
 
 import type { OffLimitsConfig, TranslationRow, ValidationIssue } from './types';
+import { validateNoraVoiceRubric } from '../noraVoiceRubric';
 
 const issue = (field: string, message: string): ValidationIssue => ({ field, message });
 
@@ -137,6 +138,7 @@ export const runAthletePhrasingGuardrails = (
     ...validateNegativePriming(phrasing),
     ...validateActionPresence(phrasing, row.requiredActionVerbs),
     ...validateSentenceCount(phrasing),
+    ...validateNoraVoiceRubric(phrasing),
   ];
 
   return { ok: violations.length === 0, violations };

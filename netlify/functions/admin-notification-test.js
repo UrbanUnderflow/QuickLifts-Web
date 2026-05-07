@@ -34,14 +34,21 @@ function sanitizeUser(doc) {
   const data = doc.data() || {};
   const pulseFcmToken = typeof data.fcmToken === 'string' ? data.fcmToken.trim() : '';
   const pulseCheckFcmToken = typeof data.pulseCheckFcmToken === 'string' ? data.pulseCheckFcmToken.trim() : '';
+  const pushTokens = data.pushTokens && typeof data.pushTokens === 'object' ? data.pushTokens : {};
+  const macraFcmToken = typeof data.macraFcmToken === 'string'
+    ? data.macraFcmToken.trim()
+    : typeof pushTokens.macra === 'string'
+      ? pushTokens.macra.trim()
+      : '';
   return {
     id: doc.id,
     username: data.username || '',
     displayName: data.displayName || '',
     email: data.email || '',
-    hasFcmToken: pulseFcmToken.length > 0 || pulseCheckFcmToken.length > 0,
+    hasFcmToken: pulseFcmToken.length > 0 || pulseCheckFcmToken.length > 0 || macraFcmToken.length > 0,
     hasPulseFcmToken: pulseFcmToken.length > 0,
     hasPulseCheckFcmToken: pulseCheckFcmToken.length > 0,
+    hasMacraFcmToken: macraFcmToken.length > 0,
     profileImageUrl: data.profileImage?.profileImageURL || data.profileImage?.profileImageUrl || '',
   };
 }
@@ -49,6 +56,12 @@ function sanitizeUser(doc) {
 function resolveScopedFcmToken(userData, productScope) {
   const pulseFcmToken = typeof userData.fcmToken === 'string' ? userData.fcmToken.trim() : '';
   const pulseCheckFcmToken = typeof userData.pulseCheckFcmToken === 'string' ? userData.pulseCheckFcmToken.trim() : '';
+  const pushTokens = userData.pushTokens && typeof userData.pushTokens === 'object' ? userData.pushTokens : {};
+  const macraFcmToken = typeof userData.macraFcmToken === 'string'
+    ? userData.macraFcmToken.trim()
+    : typeof pushTokens.macra === 'string'
+      ? pushTokens.macra.trim()
+      : '';
   const pulseCheckSourceApp = typeof userData.pushTokenSourceApp === 'string'
     ? userData.pushTokenSourceApp.trim().toLowerCase()
     : '';
@@ -68,10 +81,23 @@ function resolveScopedFcmToken(userData, productScope) {
     return { token: pulseCheckFcmToken, reason: 'eligible' };
   }
 
+  if (productScope === 'macra') {
+    return {
+      token: macraFcmToken,
+      reason: macraFcmToken ? 'eligible' : 'missing_macra_fcm_token',
+    };
+  }
+
   return {
     token: pulseFcmToken,
     reason: pulseFcmToken ? 'eligible' : 'missing_fcm_token',
   };
+}
+
+function productLabel(productScope) {
+  if (productScope === 'pulsecheck') return 'Pulse Check';
+  if (productScope === 'macra') return 'Macra';
+  return 'Pulse';
 }
 
 function truncateToken(token) {
@@ -294,10 +320,7 @@ async function handleSend(event) {
       },
       body: JSON.stringify({
         success: false,
-        message:
-          productScope === 'pulsecheck'
-            ? `Selected user is not eligible for a Pulse Check push (${scopedToken.reason})`
-            : 'Selected user does not have a valid FCM token',
+        message: `Selected user is not eligible for a ${productLabel(productScope)} push (${scopedToken.reason})`,
       }),
     };
   }

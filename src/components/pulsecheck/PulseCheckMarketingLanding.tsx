@@ -307,12 +307,12 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
                 </div>
                 {/* Step 3: Nora detects elevated stress (1.8s) */}
                 <div className="pc2-chat-bubble pc2-chat-nora pc2-seq" style={{ animationDelay: '1.8s' }}>
-                  <span style={{ color: '#F97316', fontWeight: 600 }}>⚠ Elevated cortisol pattern detected.</span> HRV dipped 14%. Let's reset your nervous system right now.
+                  <span style={{ color: '#F97316', fontWeight: 600 }}>Your body looks activated today.</span> That can make focus feel noisy. Let's train the reset right now.
                 </div>
                 {/* Step 4: Nora prescribes Box Breathing (2.8s) */}
                 <div className="pc2-chat-bubble pc2-chat-nora pc2-seq pc2-chat-action" style={{ animationDelay: '2.8s' }}>
-                  <div style={{ fontWeight: 700, marginBottom: 4, color: '#A05EF8' }}>🫁 Box Breathing · 4 rounds</div>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>Inhale 4s · Hold 4s · Exhale 4s · Hold 4s<br />Used by Navy SEALs to lower acute stress</div>
+                <div style={{ fontWeight: 700, marginBottom: 4, color: '#A05EF8' }}>🫁 Box Breathing · 4 rounds</div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>Inhale 4s · Hold 4s · Exhale 4s · Hold 4s<br />Use it to create a calmer mental environment</div>
                   <button className="pc2-chat-btn">Start Now →</button>
                 </div>
 
@@ -366,11 +366,11 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
               <div className="pc2-chat-log">
                 <div className="pc2-cl-nora">Hi Tremaine, today is game day. How are you feeling?</div>
                 <div className="pc2-cl-user">I feel okay, just trying to get locked in.</div>
-                <div className="pc2-cl-nora">Your baseline looks great today. RHR at 42 bpm, HRV is high — excellent CNS recovery. Your body is primed for today.</div>
+                <div className="pc2-cl-nora">Your body is giving your mind a strong environment today: sleep was solid and recovery looks steady. Let's use that to sharpen focus, not chase hype.</div>
                 <div className="pc2-cl-user">I'm not going to lie, I'm a little nervous about today.</div>
                 <div className="pc2-cl-nora">Talk to me. What feels different about today?</div>
                 <div className="pc2-cl-user">Everything just feels like it's on the line.</div>
-                <div className="pc2-cl-nora">OK. Let's slow it down. I want to run you through Box Breathing — the same technique Navy SEALs use during acute stress. Ready?</div>
+                <div className="pc2-cl-nora">OK. Let's slow it down. I want to run you through Box Breathing so your body gives your mind a calmer place to operate. Ready?</div>
                 <div className="pc2-cl-system">
                   <span>🫁</span> Box Breathing · 4 Rounds Complete
                   <div className="pc2-cl-metrics">
@@ -546,12 +546,18 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           <div className="pc2-section-text pc2-reveal">
             <span className="pc2-section-label" style={{ color: '#A05EF8', background: 'rgba(160,94,248,0.08)' }}>📊 Coach Intelligence</span>
             <h2 className="pc2-h2">Team-wide readiness.<br /><em>Before the tape.</em></h2>
-            <p className="pc2-section-sub">The Coach Dashboard gives staff a real-time roster map — Green/Yellow/Orange/Red — with actionable briefings and proactive alerts before athletes even step on the field.</p>
+            <p className="pc2-section-sub">The Coach Dashboard shows how physical state, routine quality, and mental-performance work are shaping the team environment — without telling coaches how to run the physical program.</p>
             <ul className="pc2-checklist">
-              {['Green/Yellow/Orange/Red roster map at a glance', 'Nora-generated briefing per athlete before each session', 'Proactive alerts when performance risk rises', 'Exportable reports & trend analytics'].map(t => (
+              {['Individual vs team-wide recovery patterns', 'Mind-body briefings for focus, composure, and decision-making', 'Watchlist signals with supporting data, not rankings', 'Exportable reports & trend analytics'].map(t => (
                 <li key={t}><span className="pc2-check">✓</span>{t}</li>
               ))}
             </ul>
+            <div className="pc2-sim-note">
+              <span>SPORTS INTELLIGENCE THESIS</span>
+              <p>
+                What is the athlete's physical state teaching us about their mental performance environment?
+              </p>
+            </div>
           </div>
           <div className="pc2-section-visual pc2-reveal">
             <div className="pc2-mockup pc2-mockup--dashboard">
@@ -563,8 +569,8 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
               <div className="pc2-dash-alert">
                 <div className="pc2-dash-alert-icon">⚠</div>
                 <div>
-                  <strong>Nora Alert — T. Grant · Elevated Anxiety</strong>
-                  <p>Physical baseline excellent (RHR 42, 8h sleep). Residual game-day anxiety. Box Breathing completed. Recommend pre-game check-in.</p>
+                  <strong>Nora Alert — T. Grant · Composure Opportunity</strong>
+                  <p>Body state is strong, but game-day pressure is loud. Box Breathing completed. Reinforce one next-play cue during the pre-game touchpoint.</p>
                 </div>
               </div>
               {/* Roster */}

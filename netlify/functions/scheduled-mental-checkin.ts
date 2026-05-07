@@ -71,7 +71,7 @@ function getCheckInMessage(type: 'morning' | 'evening'): { title: string; body: 
   if (type === 'morning') {
     return {
       title: 'Morning check-in',
-      body: "Rate your readiness 1-5. Nora uses your score to pick today's rep.",
+      body: "Rate your readiness 1-5. Nora uses your score to pick today's session pace.",
     };
   }
   return {

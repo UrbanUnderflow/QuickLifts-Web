@@ -35,6 +35,10 @@ import type {
   ConversationTrigger,
   TranslationDomain,
 } from '../adaptiveFramingLayer/types';
+import {
+  defaultNoraVoiceRubricFallback,
+  enforceNoraVoiceRubric,
+} from '../noraVoiceRubric';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -67,6 +71,28 @@ const dateKey = (d: Date = new Date()): string => {
   const day = String(d.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 };
+
+const enforceConversationTurnText = (
+  text: string,
+  role: ConversationTurn['role'],
+  previousTurns: ConversationTurn[] = [],
+): string =>
+  enforceNoraVoiceRubric(text, {
+    fallback: defaultNoraVoiceRubricFallback(text),
+    previousAssistantMessages: previousTurns
+      .filter((turn) => turn.role !== 'athlete-reply')
+      .map((turn) => turn.text)
+      .filter(Boolean)
+      .slice(-3),
+    onViolation: ({ violations, original, repaired }) => {
+      console.warn('[noraConversation] Nora voice rubric repaired turn', {
+        role,
+        violations,
+        originalPreview: original.slice(0, 180),
+        repairedPreview: repaired.slice(0, 180),
+      });
+    },
+  });
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Public: open conversation from a fired trigger
@@ -126,7 +152,7 @@ export const openConversationFromTrigger = async (
     turnId: buildTurnId(conversationId, 0),
     index: 0,
     role: 'nora-opener',
-    text: input.branch.opener.text,
+    text: enforceConversationTurnText(input.branch.opener.text, 'nora-opener'),
     voiceReviewStatus: input.branch.opener.voiceReviewStatus,
     createdAt: now,
   };
@@ -228,7 +254,11 @@ export const recordAthleteReply = async (
   if (convo.state === 'opened') {
     // Send probe — uses the conversation branch's static probe text.
     const probeBranch = await loadBranchForConversation(db, convo.branchId);
-    const probeText = probeBranch?.probe.text || 'Tell me a little more — how are things landing today?';
+    const probeText = enforceConversationTurnText(
+      probeBranch?.probe.text || 'Tell me a little more — how are things landing today?',
+      'nora-probe',
+      updatedTurns,
+    );
     const probeTurn: ConversationTurn = {
       turnId: buildTurnId(convo.id, updatedTurns.length),
       index: updatedTurns.length,
@@ -263,9 +293,12 @@ export const recordAthleteReply = async (
       translation = null;
     }
 
-    const actionText =
+    const actionText = enforceConversationTurnText(
       translation?.phrasing ||
-      "Got it — let's keep it simple today. Hydrate, eat well, and check in tomorrow.";
+        "Got it — let's keep it simple today. Hydrate, eat well, and check in tomorrow.",
+      'nora-action',
+      updatedTurns,
+    );
 
     const actionTurn: ConversationTurn = {
       turnId: buildTurnId(convo.id, updatedTurns.length),

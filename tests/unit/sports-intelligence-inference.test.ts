@@ -163,6 +163,88 @@ test('inference — concerning load band produces a recommendation', async () =>
   const loadRec = result.recommendations.find((r: any) => r.actionType === 'load');
   assert.ok(loadRec);
   assert.equal(loadRec.recommendationStrength, 'high');
+  assert.match(loadRec.reviewerAction, /mind-body support pattern|cue/i);
+  assert.doesNotMatch(loadRec.reviewerAction, /pull a rep|high-intensity block|less weight|shorten/i);
+});
+
+test('reasoning layer — selects a supported readiness read without screenshot-style claims', async () => {
+  const { inference } = await loadModules();
+  const sport = await fetchSport('basketball');
+  const snapshot = buildSnapshot({
+    recovery: {
+      freshness: 'fresh',
+      data: { recoveryScore: 88, sleepEfficiency: 0.91, totalSleepMin: 455 },
+      provenance: { contributingSources: ['oura'], primarySource: 'oura', dataConfidence: 'stable' },
+      sourceStatus: { oura: 'connected_synced' },
+    },
+    training: {
+      freshness: 'fresh',
+      data: { acwr: 0.72, acuteLoad7dAU: 360, chronicLoad28dAU: 500 },
+      provenance: { contributingSources: ['oura'], primarySource: 'oura', dataConfidence: 'stable' },
+      sourceStatus: { oura: 'connected_synced' },
+    },
+    behavioral: {
+      freshness: 'fresh',
+      data: { subjectiveReadiness: 4 },
+      provenance: { contributingSources: ['pulsecheck_self_report'], primarySource: 'pulsecheck_self_report', dataConfidence: 'emerging' },
+      sourceStatus: { pulsecheck_self_report: 'connected_synced' },
+    },
+  });
+  const payload = inference.runSportsIntelligenceReasoningLayer({ snapshot: snapshot as any, sport, audience: 'athlete' });
+  const copyText = JSON.stringify(payload.copy).toLowerCase();
+  assert.equal(payload.layerVersion, 'sports-intelligence-reasoning-v0.3');
+  assert.equal(payload.selectedCandidate.type, 'readiness_status');
+  assert.equal(payload.validation.finalStatus, 'approved');
+  assert.equal(payload.validation.rubricResults.length, 0);
+  assert.equal(payload.validation.unsupportedClaims.length, 0);
+  assert.equal(copyText.includes('cns'), false);
+  assert.equal(copyText.includes('pull session'), false);
+  assert.equal(copyText.includes('respiratory rate suggests'), false);
+});
+
+test('reasoning layer — routes missing recovery through data quality instead of invented certainty', async () => {
+  const { inference } = await loadModules();
+  const sport = await fetchSport('basketball');
+  const snapshot = buildSnapshot({
+    training: {
+      freshness: 'fresh',
+      data: { acwr: 0.6, acuteLoad7dAU: 300, chronicLoad28dAU: 500 },
+      provenance: { contributingSources: ['oura'], primarySource: 'oura', dataConfidence: 'stable' },
+      sourceStatus: { oura: 'connected_synced' },
+    },
+  });
+  const payload = inference.runSportsIntelligenceReasoningLayer({ snapshot: snapshot as any, sport, audience: 'athlete' });
+  assert.equal(payload.selectedCandidate.type, 'data_quality');
+  assert.equal(payload.validation.unsupportedClaims.length, 0);
+  assert.ok(payload.ledger.missingInputs.some((item: string) => item.includes('recovery')));
+});
+
+test('reasoning layer — steady readiness with missing session context avoids filler copy', async () => {
+  const { inference } = await loadModules();
+  const sport = await fetchSport('basketball');
+  const snapshot = buildSnapshot({
+    recovery: {
+      freshness: 'fresh',
+      data: { recoveryScore: 66, sleepEfficiency: 0.83, totalSleepMin: 379 },
+      provenance: { contributingSources: ['oura'], primarySource: 'oura', dataConfidence: 'stable' },
+      sourceStatus: { oura: 'connected_synced' },
+    },
+  });
+  const payload = inference.runSportsIntelligenceReasoningLayer({ snapshot: snapshot as any, sport, audience: 'athlete' });
+  const copyText = JSON.stringify(payload.copy).toLowerCase();
+  assert.equal(payload.selectedCandidate.type, 'session_confirmation_needed');
+  assert.equal(payload.validation.unsupportedClaims.length, 0);
+  assert.equal(copyText.includes('dramatic change'), false);
+  assert.equal(copyText.includes('choose the day'), false);
+  assert.equal(copyText.includes('usable'), false);
+  assert.equal(copyText.includes('baseline'), false);
+  assert.equal(copyText.includes('push signal'), false);
+  assert.equal(copyText.includes('first block'), false);
+  assert.equal(copyText.includes('accessories'), false);
+  assert.equal(copyText.includes('workout or rest day'), false);
+  assert.equal(copyText.includes('do not add more sets, reps, cardio, or exercises'), false);
+  assert.ok(copyText.includes('mindset check'));
+  assert.ok(copyText.includes('complete the nora session'));
 });
 
 test('generator — empty athleteResults produces team-on-plan top line', async () => {
@@ -173,7 +255,7 @@ test('generator — empty athleteResults produces team-on-plan top line', async 
     sport,
     team: { teamId: 'team-1', weekStart: '2026-04-21' },
   });
-  assert.ok(draft.coachSurface.topLine.whatChanged.includes('on plan'));
+  assert.ok(draft.coachSurface.topLine.whatChanged.includes('steady'));
   assert.ok(draft.generatorNotes.length > 0);
 });
 
@@ -249,7 +331,16 @@ test('generator — banned vocabulary does not leak into coach surface (smoke ch
     team: { teamId: 'team-1', weekStart: '2026-04-21' },
   });
   const surfaceText = JSON.stringify(draft.coachSurface);
-  for (const banned of ['ACWR', 'load_au', 'high_confidence', 'degraded']) {
+  for (const banned of [
+    'ACWR',
+    'load_au',
+    'high_confidence',
+    'degraded',
+    'pull a rep',
+    'high-intensity block',
+    'shorten his minutes',
+    'adjust high-intensity practice dose',
+  ]) {
     assert.equal(surfaceText.includes(banned), false, `banned phrase "${banned}" leaked into coach surface`);
   }
 });
@@ -285,6 +376,9 @@ test('orchestrator — preview mode skips Firestore writes and surfaces athlete 
   assert.equal(result.athleteTrace[0].snapshotLoaded, true);
   assert.equal(result.athleteTrace[1].snapshotLoaded, false);
   assert.ok(result.generatedDraft.coachSurface.meta.source === 'generated');
+  assert.equal(result.generatedDraft.reviewerOnly.sportsIntelligenceLayer?.layerVersion, 'sports-intelligence-reasoning-v0.3');
+  assert.equal(result.generatedDraft.reviewerOnly.sportsIntelligenceLayer?.payloads.length, 1);
+  assert.ok(result.generatedDraft.reviewerOnly.sportsIntelligenceLayer?.payloads[0].selectedCandidateType);
 });
 
 test('orchestrator — surfaces a thin-read note when athletes exist but no snapshots', async () => {

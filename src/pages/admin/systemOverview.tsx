@@ -30,6 +30,7 @@ import AdminRouteGuard from "../../components/auth/AdminRouteGuard";
 import SectionNav from "../../components/admin/system-overview/SectionNav";
 import ProductHandbook from "../../components/admin/system-overview/ProductHandbook";
 import MacraSystemOverviewTab from "../../components/admin/system-overview/MacraSystemOverviewTab";
+import NutritionReasoningLayerSpecTab from "../../components/admin/system-overview/NutritionReasoningLayerSpecTab";
 import HeartbeatProtocolTab from "../../components/admin/HeartbeatProtocolTab";
 import HunterWorldTab from "../../components/admin/HunterWorldTab";
 import SimulationTaxonomyTab from "../../components/admin/system-overview/SimulationTaxonomyTab";
@@ -93,6 +94,7 @@ import PulseCheckCorrelationEnginePilotDashboardAddendumTab from "../../componen
 import PulseCheckCorrelationEnginePilotOpsRunbookTab from "../../components/admin/system-overview/PulseCheckCorrelationEnginePilotOpsRunbookTab";
 import PulseCheckCorrelationEnginePilotResearchReadoutTab from "../../components/admin/system-overview/PulseCheckCorrelationEnginePilotResearchReadoutTab";
 import PulseCheckPilotOutcomeMetricsContractTab from "../../components/admin/system-overview/PulseCheckPilotOutcomeMetricsContractTab";
+import PulseCheckAdherencePsychologySpecTab from "../../components/admin/system-overview/PulseCheckAdherencePsychologySpecTab";
 import PulseCheckOuraIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckOuraIntegrationStrategyTab";
 import PulseCheckOuraCognitiveCorrelationSpecTab from "../../components/admin/system-overview/PulseCheckOuraCognitiveCorrelationSpecTab";
 import PulseCheckDeviceIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckDeviceIntegrationStrategyTab";
@@ -236,6 +238,13 @@ const SYSTEM_TABS: SystemTab[] = [
     sectionIds: ["macra-system-overview"],
   },
   {
+    id: "shared-intelligence",
+    label: "Shared AI",
+    icon: Brain,
+    accent: "#22d3ee",
+    sectionIds: ["nutrition-reasoning-layer-spec"],
+  },
+  {
     id: "pulsecheck",
     label: "Pulse Check",
     icon: Brain,
@@ -285,6 +294,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-correlation-engine-pilot-dashboard",
       "pulsecheck-correlation-engine-pilot-dashboard-addendum",
       "pulsecheck-pilot-outcome-metrics-contract",
+      "pulsecheck-adherence-psychology-spec",
       "pulsecheck-correlation-engine-pilot-ops-runbook",
       "pulsecheck-correlation-engine-pilot-research-readout",
       "pulsecheck-oura-integration-strategy",
@@ -577,6 +587,22 @@ const SystemOverviewPage: React.FC = () => {
               "pulseCheckFcmToken",
               "fcmToken",
               "pushTokenSourceApp",
+            );
+            break;
+          case "nutrition-reasoning-layer-spec":
+            searchTerms.push(
+              "nutrition reasoning",
+              "AI insights",
+              "daily insight",
+              "Macra insights",
+              "Nora nutrition",
+              "fact ledger",
+              "candidate insight engine",
+              "regenerate",
+              "guardrails",
+              "Pulse Check nutrition context",
+              "athlete nutrition profile",
+              "NutritionContextSnapshot",
             );
             break;
           case "ownership-release-matrix":
@@ -1072,6 +1098,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "macra-system-overview":
         return <MacraSystemOverviewTab />;
+
+      case "nutrition-reasoning-layer-spec":
+        return <NutritionReasoningLayerSpecTab />;
 
       case "pulse-club-activation-architecture":
         return <PulseClubActivationArchitectureTab />;
@@ -1942,6 +1971,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-pilot-outcome-metrics-contract":
         return <PulseCheckPilotOutcomeMetricsContractTab />;
+
+      case "pulsecheck-adherence-psychology-spec":
+        return <PulseCheckAdherencePsychologySpecTab />;
 
       case "pulsecheck-correlation-engine-pilot-ops-runbook":
         return <PulseCheckCorrelationEnginePilotOpsRunbookTab />;

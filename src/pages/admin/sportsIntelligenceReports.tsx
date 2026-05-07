@@ -147,6 +147,7 @@ const buildReviewerOnlyFromSurface = (
         actionGate.suppressionReason,
       ].filter(Boolean) as string[],
     },
+    sportsIntelligenceLayer: existing?.sportsIntelligenceLayer,
   };
 };
 
@@ -1007,6 +1008,64 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
                               <TextareaField label="Then" value={item.ifThen} rows={2} onChange={(value) => replaceLookFor(index, { ifThen: value })} />
                             </div>
                           ))}
+                        </div>
+                      </section>
+
+                      <section className="rounded-3xl border border-purple-500/20 bg-purple-950/10 p-5">
+                        <div className="mb-5 flex items-center gap-2">
+                          <ShieldCheck className="h-4 w-4 text-purple-200" />
+                          <h3 className="font-semibold text-white">Sports Intelligence Layer QA</h3>
+                        </div>
+                        <div className="grid gap-3 text-sm sm:grid-cols-2">
+                          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Validated payload</p>
+                            <p className="mt-2 text-zinc-300">
+                              {draft.reviewerOnly?.sportsIntelligenceLayer?.payloads?.length
+                                ? `${draft.reviewerOnly.sportsIntelligenceLayer.payloads.length} payload trace(s) attached.`
+                                : draft.reviewStatus === 'published'
+                                  ? 'Published after reviewer signoff.'
+                                  : 'Draft mode. Hold coach delivery until the reviewer trace supports the read.'}
+                            </p>
+                          </div>
+                          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Rubric gate</p>
+                            <p className="mt-2 text-zinc-300">
+                              {draft.reviewerOnly?.sportsIntelligenceLayer?.payloads?.some((payload) =>
+                                payload.rubricResults.length || payload.unsupportedClaims.length || payload.finalStatus === 'held_for_review'
+                              )
+                                ? 'Reasoning trace has holds. Fix unsupported claims before publish.'
+                                : draft.reviewerOnly?.auditTrace?.localizationAuditResult?.passed
+                                  ? 'Coach language posture passed. Athlete-facing Nora copy has no attached rubric holds.'
+                                  : 'Language posture blocked. Fix coach copy before publish.'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-4 space-y-4">
+                          <TechnicalList
+                            title="Required reasoning trace"
+                            items={[
+                              'SportsFactLedger: athlete context, time context, source freshness, recovery/load/session/cognitive/check-in/nutrition facts.',
+                              'SportsCandidateRead set: selected read plus rejected candidates and guardrail reasons.',
+                              'Executable Nora rubric results for athlete-facing copy; coach-language audit for report copy.',
+                              'Unsupported-claim scanner: no invented sessions, unsupported physiology, stale-data overconfidence, or clinical boundary drift.',
+                            ]}
+                          />
+                          <TechnicalList
+                            title="Current attached evidence"
+                            items={[
+                              `Evidence refs: ${draft.reviewerOnly?.evidence?.athleteEvidenceRefs?.length || 0}`,
+                              `Source provenance entries: ${draft.reviewerOnly?.evidence?.sourceProvenance?.length || 0}`,
+                              `Missing inputs: ${draft.reviewerOnly?.evidence?.missingInputs?.length || 0}`,
+                              `Suppression reasons: ${draft.reviewerOnly?.auditTrace?.suppressionReasons?.length || 0}`,
+                              `Reasoning payloads: ${draft.reviewerOnly?.sportsIntelligenceLayer?.payloads?.length || 0}`,
+                            ]}
+                          />
+                          <TechnicalList
+                            title="Selected candidate trace"
+                            items={(draft.reviewerOnly?.sportsIntelligenceLayer?.payloads || []).map((payload) =>
+                              `${payload.athleteId} / ${payload.selectedCandidateType} / ${payload.finalStatus} / ${payload.confidenceTier}`
+                            )}
+                          />
                         </div>
                       </section>
 

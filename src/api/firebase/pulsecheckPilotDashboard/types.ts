@@ -572,17 +572,35 @@ export interface PilotDashboardAthleteAdherenceSummary {
   completedCheckInDays: number;
   completedAssignmentDays: number;
   adheredDays: number;
+  rescuedDays?: number;
+  missedDays?: number;
+  excusedDays?: number;
+  checkInOnlyDays?: number;
+  taskOnlyDays?: number;
   adherenceRate: number;
   dailyCheckInRate: number;
   assignmentCompletionRate: number;
 }
+
+export type PilotDashboardAthleteDayAdherenceState =
+  | 'expected'
+  | 'checked_in'
+  | 'task_started'
+  | 'check_in_only'
+  | 'task_only'
+  | 'closed'
+  | 'rescued'
+  | 'missed'
+  | 'excused';
 
 export interface PilotDashboardAthleteAdherenceDay {
   dateKey: string;
   timezone: string;
   expected: boolean;
   status: 'green' | 'red' | 'excluded';
+  adherenceState?: PilotDashboardAthleteDayAdherenceState;
   checkInCompleted: boolean;
+  assignmentStarted?: boolean;
   assignmentCompleted: boolean;
   checkInCount: number;
   assignmentId?: string | null;
@@ -600,6 +618,23 @@ export interface PilotDashboardAthleteAdherenceDay {
     | null;
   checkInRecordedAt?: PilotDashboardTimeValue;
   assignmentCompletedAt?: PilotDashboardTimeValue;
+}
+
+export interface PilotDashboardAdherenceOrchestratorSummary {
+  expectedAthleteDays: number;
+  closedDays: number;
+  rescuedDays: number;
+  missedDays: number;
+  excusedDays: number;
+  checkInOnlyDays: number;
+  taskOnlyDays: number;
+  taskStartedOnlyDays: number;
+  openDays: number;
+  closedRate: number;
+  atRiskAthleteCount: number;
+  activeAthleteCount: number;
+  privacyBoundary: string;
+  privateContentExposed: false;
 }
 
 export interface PilotDashboardAthleteEscalationDetail {
@@ -686,6 +721,8 @@ export interface PilotDashboardDetail {
   outcomeMetricsByCohort?: Record<string, PilotDashboardOutcomeMetrics>;
   outcomeDiagnostics?: PilotDashboardOutcomeSurveyDiagnostics;
   outcomeDiagnosticsByCohort?: Record<string, PilotDashboardOutcomeSurveyDiagnostics>;
+  adherenceOrchestrator?: PilotDashboardAdherenceOrchestratorSummary;
+  adherenceOrchestratorByCohort?: Record<string, PilotDashboardAdherenceOrchestratorSummary>;
   outcomeOperationalDiagnostics?: PilotDashboardOutcomeOperationalDiagnostics;
   outcomeRecommendationTypeSlices?: Record<string, any>;
   outcomeRecommendationTypeSlicesByCohort?: Record<string, Record<string, any>>;

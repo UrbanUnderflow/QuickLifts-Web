@@ -421,6 +421,9 @@ type ProtocolCueDef = {
   description: string;
   prompt: string;
   durationSeconds: number;
+  runtimeRole?: 'signature' | 'transition' | 'ambient';
+  loop?: boolean;
+  promptInfluence?: number;
 };
 
 const PROTOCOL_ENGINE_KEY = 'pulsecheck-protocols';
@@ -471,7 +474,7 @@ function buildProtocolCueDescription(record: Pick<ProtocolCueDef, 'label' | 'pro
   }
 }
 
-const PROTOCOL_SOUND_CUES: ProtocolCueDef[] = (protocolSeed as Array<{
+const PROTOCOL_SIGNATURE_CUES: ProtocolCueDef[] = (protocolSeed as Array<{
   id: string;
   label: string;
   protocolClass: 'regulation' | 'priming' | 'recovery';
@@ -485,7 +488,43 @@ const PROTOCOL_SOUND_CUES: ProtocolCueDef[] = (protocolSeed as Array<{
   description: buildProtocolCueDescription(record),
   prompt: buildProtocolCuePrompt(record),
   durationSeconds: record.protocolClass === 'recovery' ? 6 : record.protocolClass === 'priming' ? 3 : 4,
+  runtimeRole: 'signature',
 }));
+
+const BODY_SCAN_RUNTIME_CUES: ProtocolCueDef[] = [
+  {
+    cueKey: 'protocol-body-scan-reset-body-scan-transition',
+    protocolId: 'protocol-body-scan-reset',
+    label: 'Body Scan Transition Cue',
+    protocolClass: 'regulation',
+    responseFamily: 'focus_narrowing',
+    runtimeRole: 'transition',
+    description: 'Soft step-transition cue for Body Scan Awareness so quiet holds feel active instead of stalled.',
+    prompt:
+      'A very soft calming transition cue for a guided body scan: breath-like airy chime, warm glass resonance, gentle exhale tail, subtle and reassuring, no melody, no music, no speech.',
+    durationSeconds: 2,
+    promptInfluence: 0.42,
+  },
+  {
+    cueKey: 'protocol-body-scan-reset-body-scan-ambient',
+    protocolId: 'protocol-body-scan-reset',
+    label: 'Body Scan Ambient Bed',
+    protocolClass: 'regulation',
+    responseFamily: 'focus_narrowing',
+    runtimeRole: 'ambient',
+    description: 'Looping calming white ambient bed under Body Scan Awareness while Nora guides the user hands-free.',
+    prompt:
+      'Seamless looping calming white ambient background sound for a guided body scan: soft warm white noise, gentle air tone, very subtle low cushion, meditative, no melody, no music, no water, no speech, no birds, no harsh hiss.',
+    durationSeconds: 8,
+    loop: true,
+    promptInfluence: 0.48,
+  },
+];
+
+const PROTOCOL_SOUND_CUES: ProtocolCueDef[] = [
+  ...PROTOCOL_SIGNATURE_CUES,
+  ...BODY_SCAN_RUNTIME_CUES,
+];
 
 type RunAlertCueDef = {
   cueKey: string;
@@ -923,7 +962,7 @@ const ProtocolSoundCard: React.FC<{
           </div>
           <p className="mt-1 text-xs leading-relaxed text-zinc-500">{cue.description}</p>
           <code className="mt-1 block text-[10px] font-mono text-zinc-600">
-            {cue.durationSeconds}s · ElevenLabs SFX · {cue.protocolId}
+            {cue.durationSeconds}s · ElevenLabs SFX · {cue.runtimeRole ?? 'signature'}{cue.loop ? ' · loop' : ''} · {cue.protocolId}
           </code>
         </div>
 
@@ -1335,11 +1374,20 @@ const AdminAiVoice: React.FC = () => {
     return isLocalhost ? 'http://localhost:8888/.netlify/functions' : '/.netlify/functions';
   };
 
-  const generateSfxBlob = async (prompt: string, durationSeconds: number) => {
+  const generateSfxBlob = async (
+    prompt: string,
+    durationSeconds: number,
+    options?: { loop?: boolean; promptInfluence?: number }
+  ) => {
     const res = await fetch('/api/mentaltraining/generate-sfx', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, durationSeconds }),
+      body: JSON.stringify({
+        prompt,
+        durationSeconds,
+        loop: options?.loop ?? false,
+        promptInfluence: options?.promptInfluence,
+      }),
     });
     const payload = await res.json();
     if (!res.ok || !payload?.audio) {
@@ -1512,7 +1560,10 @@ const AdminAiVoice: React.FC = () => {
       return next;
     });
     try {
-      const sfx = await generateSfxBlob(cue.prompt, cue.durationSeconds);
+      const sfx = await generateSfxBlob(cue.prompt, cue.durationSeconds, {
+        loop: cue.loop,
+        promptInfluence: cue.promptInfluence,
+      });
       const assetId = buildGeneratedDocId(PROTOCOL_ENGINE_KEY, cue.cueKey, cue.prompt);
       const path = `sim-audio-assets/${vpSlugify(PROTOCOL_ENGINE_KEY)}/${cue.cueKey}/${assetId}.mp3`;
       const sRef = storageRef(storage, path);
@@ -1542,6 +1593,8 @@ const AdminAiVoice: React.FC = () => {
         protocolId: cue.protocolId,
         protocolClass: cue.protocolClass,
         responseFamily: cue.responseFamily,
+        runtimeRole: cue.runtimeRole ?? 'signature',
+        loop: Boolean(cue.loop),
       });
       setProtocolAssets((prev) => ({ ...prev, [cue.cueKey]: assetRecord }));
     } catch (e: any) {
@@ -1562,12 +1615,13 @@ const AdminAiVoice: React.FC = () => {
     setProtocolPlayingId(null);
   };
 
-  const playProtocolSound = (cueKey: string, url: string) => {
+  const playProtocolSound = (cue: ProtocolCueDef, url: string) => {
     stopProtocolSound();
-    setProtocolPlayingId(cueKey);
+    setProtocolPlayingId(cue.cueKey);
     const audio = new Audio(url);
+    audio.loop = Boolean(cue.loop);
     protocolAudioRef.current = audio;
-    audio.volume = 0.75;
+    audio.volume = cue.runtimeRole === 'ambient' ? 0.35 : 0.75;
     audio.play().catch(() => setProtocolPlayingId(null));
     audio.onended = () => setProtocolPlayingId(null);
     audio.onerror = () => setProtocolPlayingId(null);
@@ -2421,7 +2475,7 @@ const AdminAiVoice: React.FC = () => {
             <div className="mt-4 flex items-start gap-3 rounded-xl border border-white/[0.05] bg-zinc-950/60 p-3 text-xs text-zinc-400">
               <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-zinc-500" />
               <div>
-                Each protocol gets one generated signature cue designed to match its state-shift intent. These assets are stored under <code className="font-mono text-zinc-300">sim-audio-assets/pulsecheck-protocols/</code> and can be expanded later into multi-cue packages.
+                Protocol cues include generated signature sounds plus runtime-specific assets like Body Scan transition and ambient cues. These assets are stored under <code className="font-mono text-zinc-300">sim-audio-assets/pulsecheck-protocols/</code> for the app to resolve by cue key.
               </div>
             </div>
 
@@ -2471,7 +2525,7 @@ const AdminAiVoice: React.FC = () => {
                                   onGenerate={() => generateProtocolSound(cue)}
                                   onPlay={() => {
                                     const url = protocolAssets[cue.cueKey]?.downloadURL;
-                                    if (url) playProtocolSound(cue.cueKey, url);
+                                    if (url) playProtocolSound(cue, url);
                                   }}
                                   onStop={stopProtocolSound}
                                 />

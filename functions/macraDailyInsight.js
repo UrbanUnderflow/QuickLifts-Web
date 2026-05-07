@@ -46,13 +46,27 @@ function resolveEveningHour(userData = {}) {
   return DEFAULT_EVENING_HOUR;
 }
 
-function resolveMacraFcmToken(userData = {}) {
+function resolveMacraPushToken(userData = {}) {
+  const pushTokens = userData?.pushTokens && typeof userData.pushTokens === 'object'
+    ? userData.pushTokens
+    : {};
   const candidates = [
-    userData?.macraFcmToken,
-    userData?.fcmToken,
-    userData?.pushTokens?.macra,
+    { token: userData?.macraFcmToken, source: 'users.macraFcmToken' },
+    { token: pushTokens?.macra, source: 'users.pushTokens.macra' },
   ];
-  return candidates.find((token) => typeof token === 'string' && token.trim().length > 0) || '';
+
+  for (const candidate of candidates) {
+    if (typeof candidate.token === 'string' && candidate.token.trim().length > 0) {
+      return {
+        token: candidate.token.trim(),
+        source: candidate.source,
+      };
+    }
+  }
+
+  // Never fall back to users.fcmToken here. That token belongs to Pulse, so
+  // iOS will display nutrition pushes under the Pulse app instead of Macra.
+  return { token: '', source: '' };
 }
 
 function localHourInTz(date, timezone) {
@@ -81,8 +95,13 @@ async function selectUsersForCurrentHour(now) {
     if (localHour === null) continue;
     if (localHour !== evening) continue;
 
-    const fcmToken = resolveMacraFcmToken(data);
-    targets.push({ userId: doc.id, timezone: tz, fcmToken });
+    const resolvedPushToken = resolveMacraPushToken(data);
+    targets.push({
+      userId: doc.id,
+      timezone: tz,
+      fcmToken: resolvedPushToken.token,
+      fcmTokenSource: resolvedPushToken.source,
+    });
   }
   return targets;
 }
@@ -185,7 +204,14 @@ exports.scheduledMacraDailyInsight = onSchedule(
 
     let generated = 0;
     let pushed = 0;
+    let missingMacraPushToken = 0;
     for (const target of targets) {
+      if (!target.fcmToken) {
+        missingMacraPushToken += 1;
+        console.warn(`[macraDailyInsight] Skipping ${target.userId}: no Macra push token. Refusing to fall back to Pulse fcmToken.`);
+        continue;
+      }
+
       const insight = await generateInsight(target.userId, target.timezone, internalToken);
       if (!insight) continue;
       generated += 1;
@@ -196,6 +222,8 @@ exports.scheduledMacraDailyInsight = onSchedule(
     await db.collection('notification-batch-logs').add({
       type: 'MACRA_DAILY_INSIGHT',
       totalTargeted: targets.length,
+      pushEligible: targets.length - missingMacraPushToken,
+      missingMacraPushToken,
       insightsGenerated: generated,
       pushSucceeded: pushed,
       runAt: admin.firestore.FieldValue.serverTimestamp(),

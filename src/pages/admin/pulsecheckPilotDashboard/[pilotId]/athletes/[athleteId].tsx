@@ -80,6 +80,54 @@ const formatExclusionReason = (value?: string | null) => {
   }
 };
 
+const formatAdherenceState = (day: PilotDashboardAthleteDetail['adherenceDays'][number]) => {
+  switch (day.adherenceState) {
+    case 'closed':
+      return 'Closed day';
+    case 'rescued':
+      return 'Rescue save';
+    case 'checked_in':
+    case 'check_in_only':
+      return 'Check-in only';
+    case 'task_started':
+      return 'Task started';
+    case 'task_only':
+      return 'Task only';
+    case 'expected':
+      return 'Expected today';
+    case 'missed':
+      return 'Missed day';
+    case 'excused':
+      return formatExclusionReason(day.exclusionReason);
+    default:
+      return day.status === 'green' ? 'Closed day' : day.status === 'red' ? 'Open day' : formatExclusionReason(day.exclusionReason);
+  }
+};
+
+const formatAdherenceReason = (day: PilotDashboardAthleteDetail['adherenceDays'][number]) => {
+  switch (day.adherenceState) {
+    case 'closed':
+      return 'Check-in and assigned task are complete. This day is fully closed.';
+    case 'rescued':
+      return 'The athlete still closed the day through a rescue path. Private Nora content stays private.';
+    case 'checked_in':
+    case 'check_in_only':
+      return 'Check-in is done; the assigned task is still the one step needed to close today.';
+    case 'task_only':
+      return 'The task is done; the daily check-in is still needed to close the performance signal.';
+    case 'task_started':
+      return 'The task has been started and still needs a completion event to close the day.';
+    case 'expected':
+      return 'Today is still open. The athlete needs check-in plus assigned task completion.';
+    case 'missed':
+      return 'Expected day ended without both required completion signals.';
+    case 'excused':
+      return 'Excluded days do not hurt adherence.';
+    default:
+      return day.expected ? 'Both check-in and assignment completion are needed to close the day.' : 'Excluded days do not hurt adherence.';
+  }
+};
+
 const buildInitials = (value: string) => {
   const parts = value
     .trim()
@@ -670,7 +718,9 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                   ) : (
                     detail.adherenceDays.map((day) => {
                       const statusClasses =
-                        day.status === 'green'
+                        day.adherenceState === 'rescued'
+                          ? 'border-cyan-500/30 bg-cyan-500/10'
+                          : day.status === 'green'
                           ? 'border-emerald-500/30 bg-emerald-500/10'
                           : day.status === 'red'
                             ? 'border-rose-500/30 bg-rose-500/10'
@@ -681,7 +731,7 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                             <div>
                               <div className="text-sm font-medium text-white">{formatDateKey(day.dateKey)}</div>
                               <div className="mt-1 text-xs uppercase tracking-[0.18em] text-zinc-400">
-                                {day.status === 'green' ? 'Green day' : day.status === 'red' ? 'Red day' : formatExclusionReason(day.exclusionReason)}
+                                {formatAdherenceState(day)}
                               </div>
                             </div>
                             <div className="text-xs text-zinc-300">
@@ -712,9 +762,9 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                             </div>
                             <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
                               <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Why This Day Counted</div>
-                              <div className="mt-2 text-sm font-medium text-white">{day.expected ? 'Expected day' : formatExclusionReason(day.exclusionReason)}</div>
+                              <div className="mt-2 text-sm font-medium text-white">{day.expected ? formatAdherenceState(day) : formatExclusionReason(day.exclusionReason)}</div>
                               <div className="mt-1 text-xs text-zinc-400">
-                                {day.expected ? 'Both check-in and assignment completion are needed for green.' : 'Excluded days do not hurt adherence.'}
+                                {formatAdherenceReason(day)}
                               </div>
                             </div>
                           </div>

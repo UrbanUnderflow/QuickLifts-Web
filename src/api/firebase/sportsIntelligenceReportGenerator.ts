@@ -44,6 +44,7 @@ import {
   type InferenceResult,
   type SportsRecommendation,
   type TrainingLoadInterpretation,
+  type ValidatedSportsIntelligencePayload,
 } from './sportsIntelligenceInferenceEngine';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -84,6 +85,8 @@ export interface AthleteInferenceWithIdentity {
   athleteName: string;
   role?: string;
   inference: InferenceResult;
+  /** Validated v0.3 reasoning payload for reviewer QA and future athlete surfaces. */
+  reasoningPayload?: ValidatedSportsIntelligencePayload;
   /** Optional richer context the reviewer might want shown in the technical pane. */
   snapshot?: AthleteHealthContextSnapshot;
 }
@@ -259,15 +262,15 @@ const buildWatchlistFromInference = (
       if (loadBand === 'concerning') {
         whyMattersParts.push('training load is climbing faster than recovery');
       } else if (loadBand === 'high') {
-        whyMattersParts.push('the volume is showing');
+        whyMattersParts.push('recent work is starting to show in the body-state data');
       }
 
       const coachMoveParts: string[] = [];
       if (loadBand === 'concerning' || loadBand === 'high') {
-        coachMoveParts.push('Pull a rep from the next high-intensity block and keep the install verbal.');
+        coachMoveParts.push('Ask what cue helps them stay patient when the week feels heavy.');
       }
       if (readinessBand === 'concerning' || readinessBand === 'one_to_watch') {
-        coachMoveParts.push('Five-minute check-in before practice — make it about feel, not film.');
+        coachMoveParts.push('Five-minute check-in before practice — make it about focus, energy, and composure.');
       }
 
       // Watchlist confidence reflects only domains we actually used. If
@@ -376,14 +379,14 @@ const buildGameDayLookFors = (
     if (readiness.readinessBand === 'concerning') {
       candidates.push({
         athleteOrUnit: entry.athleteName,
-        lookFor: 'flat in warm-up or quiet on the bench',
-        ifThen: 'sneak in an extra acceleration before the call. One cue only — keep it the same word every time.',
+        lookFor: 'flat energy, rushed choices, or checking out after a mistake',
+        ifThen: 'use one short cue and ask for the next-play response you want to see.',
       });
     } else if (readiness.readinessBand === 'one_to_watch') {
       candidates.push({
         athleteOrUnit: entry.athleteName,
-        lookFor: 'short on the second-ball duels or late in the rotation',
-        ifThen: 'shorten his minutes. Use the early-clock action you put in earlier this week.',
+        lookFor: 'slower focus after corrections or frustration after a miss',
+        ifThen: 'keep feedback simple and reinforce the reset cue before the next rep.',
       });
     }
   }
@@ -425,7 +428,7 @@ const buildTopLine = (
       {
         whatChanged: `${namedAthletes} are wearing the load and recovery is sitting below their usual.`,
         who: namedAthletes,
-        firstAction: 'Pull a rep from the next high-intensity block and keep the install verbal.',
+        firstAction: 'Use a short check-in and reinforce the mental cue you want under fatigue.',
         secondaryThread:
           watching.length > 0
             ? `Separate thing — ${fillRow(watching[0])} is one to watch this week, surface them in the daily.`
@@ -436,7 +439,7 @@ const buildTopLine = (
     return {
       whatChanged: applyCoachLanguageTranslations(result.primary, sport.reportPolicy),
       who: namedAthletes,
-      firstAction: 'Pull a rep from the next high-intensity block and keep the install verbal.',
+      firstAction: 'Use a short check-in and reinforce the mental cue you want under fatigue.',
       secondaryThread: result.secondary
         ? applyCoachLanguageTranslations(result.secondary, sport.reportPolicy)
         : undefined,
@@ -448,20 +451,20 @@ const buildTopLine = (
     const namedAthletes = watching.slice(0, 2).map(fillRow).join(' and ');
     return {
       whatChanged: applyCoachLanguageTranslations(
-        `${namedAthletes} are one to watch this week — recovery has been below their usual.`,
+      `${namedAthletes} are one to watch this week — recovery has been below their usual.`,
         sport.reportPolicy,
       ),
       who: namedAthletes,
-      firstAction: 'Five-minute check-in before practice. Keep it about feel, not film.',
+      firstAction: 'Five-minute check-in before practice. Keep it about focus, energy, and composure.',
       usedThinRead: false,
     };
   }
 
   return {
     whatChanged:
-      'The team is moving on plan this week — no athlete crossed the load or recovery thresholds.',
+      'The team pattern is steady this week — no athlete crossed the load or recovery watch thresholds.',
     who: 'whole team',
-    firstAction: 'Stay the course. Watch the front-of-week sessions for any drift.',
+    firstAction: 'Reinforce the same mental routine so the steady pattern keeps compounding.',
     usedThinRead: false,
   };
 };
@@ -492,6 +495,9 @@ const buildReviewerOnly = (
     `${entry.athleteName}: ${entry.inference.readiness.reviewerNote}`,
     `${entry.athleteName}: ${entry.inference.trainingLoad.reviewerNote}`,
   ]);
+  const reasoningPayloads = athleteResults
+    .map((entry) => entry.reasoningPayload)
+    .filter((payload): payload is ValidatedSportsIntelligencePayload => Boolean(payload));
 
   const lowestConfidence = inferenceConfidenceFloor(athleteResults.map((entry) => entry.inference));
 
@@ -523,6 +529,27 @@ const buildReviewerOnly = (
         ...reviewerNotes,
       ],
     },
+    sportsIntelligenceLayer: reasoningPayloads.length > 0
+      ? {
+          layerVersion: reasoningPayloads[0].layerVersion,
+          payloads: reasoningPayloads.map((payload) => ({
+            athleteId: payload.athleteId,
+            dayKey: payload.dayKey,
+            selectedCandidateId: payload.selectedCandidate.id,
+            selectedCandidateType: payload.selectedCandidate.type,
+            finalStatus: payload.validation.finalStatus,
+            headline: payload.copy.headline,
+            confidenceTier: payload.selectedCandidate.confidence,
+            candidateCount: payload.candidates.length,
+            rejectedCandidateIds: payload.validation.rejectedCandidateIds,
+            rubricResults: payload.validation.rubricResults,
+            guardrailResults: payload.validation.guardrailResults,
+            unsupportedClaims: payload.validation.unsupportedClaims,
+            missingInputs: payload.ledger.missingInputs,
+            evidenceRefs: payload.provenance.evidenceRefs,
+          })),
+        }
+      : undefined,
   };
 };
 
@@ -552,10 +579,10 @@ export const generateCoachReportDraft = (input: ReportGeneratorInput): Generated
 
   const teamSynthesis =
     dimensionState.composure === 'declining' || dimensionState.focus === 'declining'
-      ? `This is a recovery + load week — coach the watchlist names, the rest of the ${sport.name.toLowerCase()} group is sharp.`
+      ? `This is a mind-body support week — coach the watchlist names on composure and focus, then compare that pattern against the rest of the ${sport.name.toLowerCase()} group.`
       : dimensionState.composure === 'watch' || dimensionState.focus === 'watch'
-        ? `This is a one-to-watch week for the ${sport.name.toLowerCase()} group — surface the watchlist names in the daily and stay the course.`
-        : `The ${sport.name.toLowerCase()} group is moving on plan this week — stay the course and keep the front-of-week sessions clean.`;
+        ? `This is a one-to-watch week for the ${sport.name.toLowerCase()} group — surface the watchlist names and reinforce simple reset language.`
+        : `The ${sport.name.toLowerCase()} group is creating a steady performance environment this week — reinforce the routines that are making focus and composure easier.`;
 
   const coachSurface: CoachReportCoachSurface = {
     meta: {

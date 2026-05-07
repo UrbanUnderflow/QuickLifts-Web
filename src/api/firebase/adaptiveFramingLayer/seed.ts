@@ -201,7 +201,7 @@ export const SEED_TRANSLATION_ROWS: TranslationRow[] = [
     domain: 'autonomic',
     state: 'parasympathetic-restored',
     athletePhrasing:
-      'Lean in. Push the tempo on your top set and trust the reps you’ve banked.',
+      'Lean in. Push the tempo on your top set and trust the strength work you’ve banked.',
     requiredActionVerbs: ['Lean', 'Push', 'trust'],
     forbiddenTokens: [],
     voiceReviewStatus: 'seed-pending-review',
@@ -306,7 +306,7 @@ export const SEED_CONVERSATION_BRANCHES: ConversationBranch[] = [
     ),
     probe: seedNode(
       'coach-context-flag-probe',
-      'What’s one piece of last week you want to carry in today?',
+      'What is one piece of last week you want to carry into today’s session so I can set the first cue?',
     ),
     actionDelivery: seedNode(
       'coach-context-flag-action',
@@ -325,7 +325,7 @@ export const SEED_CONVERSATION_BRANCHES: ConversationBranch[] = [
     ),
     probe: seedNode(
       'hcsr-delta-probe',
-      'Where in your body are you noticing it most?',
+      'Where are you feeling the shift most so I can adjust today’s warm-up?',
     ),
     actionDelivery: seedNode(
       'hcsr-delta-action',
@@ -341,7 +341,7 @@ export const SEED_CONVERSATION_BRANCHES: ConversationBranch[] = [
     opener: seedNode('calendar-event-opener', 'Big day on the calendar.'),
     probe: seedNode(
       'calendar-event-probe',
-      'What’s the one cue that gets you locked in?',
+      'What is the one cue you want first so I can keep today’s warm-up simple?',
     ),
     actionDelivery: seedNode(
       'calendar-event-action',
@@ -360,7 +360,7 @@ export const SEED_CONVERSATION_BRANCHES: ConversationBranch[] = [
     ),
     probe: seedNode(
       'behavioral-drift-probe',
-      'Anything off the routine I should know about?',
+      'What changed in the routine so I can pick one anchor for today?',
     ),
     actionDelivery: seedNode(
       'behavioral-drift-action',

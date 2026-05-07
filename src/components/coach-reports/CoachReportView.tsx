@@ -210,7 +210,7 @@ const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, genera
                   </div>
                   <p className="mt-4 text-sm leading-relaxed text-zinc-300">{translate(entry.whyMatters)}</p>
                   <div className="mt-4 rounded-xl p-4" style={{ background: soft }}>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em]" style={{ color: accent }}>Coach move</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em]" style={{ color: accent }}>Coach prompt</p>
                     <p className="mt-1 text-sm leading-relaxed text-zinc-100">{translate(entry.coachMove)}</p>
                   </div>
                 </div>
@@ -310,7 +310,7 @@ const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, genera
         </section>
 
         {report.closer && <p className="mt-8 text-center text-sm text-zinc-300">{report.closer}</p>}
-        <p className="mt-4 text-center text-xs text-zinc-600">Decision support, not a clearance tool.</p>
+        <p className="mt-4 text-center text-xs text-zinc-600">Decision support for the mental layer, not a clearance tool or physical training prescription.</p>
       </div>
     </article>
   );

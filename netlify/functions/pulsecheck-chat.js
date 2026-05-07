@@ -12,6 +12,11 @@ const {
   hasLossOfFunctionConcern,
   isTrueCareEscalationClassification,
 } = require('./utils/pulsecheck-pilot-metrics');
+const {
+  NORA_VOICE_RUBRIC_PROMPT,
+  defaultNoraVoiceRubricFallback,
+  enforceNoraVoiceRubric,
+} = require('./utils/noraVoiceRubric');
 
 const SNAPSHOTS_COLLECTION = 'state-snapshots';
 const CONVERSATION_SIGNAL_EVENTS_COLLECTION = 'conversation-derived-signal-events';
@@ -1544,7 +1549,8 @@ Conversation Style ▸
 
 Approach ▸ Active-listening → concise reflection → actionable insight when appropriate.
 Style ▸ Use the athlete's first name. No clichés or filler. Be genuine and present.
-Don'ts ▸ Never repeat a question they already answered. Never apologize unless a real mistake.`;
+Don'ts ▸ Never repeat a question they already answered. Never apologize unless a real mistake.
+${NORA_VOICE_RUBRIC_PROMPT}`;
 
     // Build user context section
     let userContextSection = `## User Context:\n- Name: ${displayName}`;
@@ -1570,7 +1576,7 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
         assignmentContextSection += `\n- Source Date: ${todaysNoraAssignment.sourceDate}`;
       }
 
-      assignmentContextSection += `\nRules:\n- Treat this assignment as the source of truth for today's performance task.\n- If the status is deferred, superseded, or coach-adjusted, do not speak as if the original task is still active.\n- If the athlete asks what they should do today, anchor your answer to this assignment before offering broader coaching context.\n- When naming today's rep, use this saved task or a plain-language paraphrase of the same saved task.\n- Do not invent a different assignment unless you clearly frame it as separate brainstorming and not the active task.`;
+      assignmentContextSection += `\nRules:\n- Treat this assignment as the source of truth for today's performance task.\n- If the status is deferred, superseded, or coach-adjusted, do not speak as if the original task is still active.\n- If the athlete asks what they should do today, anchor your answer to this assignment before offering broader coaching context.\n- When naming today's active task, use this saved task or a plain-language paraphrase of the same saved task.\n- Before recommending or surfacing this task, explain why the athlete's message, assignment rationale, and available context markers make this the right next step.\n- Do not invent a different assignment unless you clearly frame it as separate brainstorming and not the active task.`;
       if (conversationSignalEvent && !['started', 'completed', 'deferred', 'overridden', 'superseded'].includes(todaysNoraAssignment.status || '')) {
         assignmentContextSection += assignmentRefreshApplied
           ? `\n- A newer chat-derived signal refreshed both the state snapshot and the current mutable assignment. Speak to the updated task, not the stale one.`
@@ -1595,7 +1601,7 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
         contextInstructions = `\n\n## Response Mode: TEACHING\nThe user is asking for help, explanation, or guidance.\n\nYOUR RESPONSE SHOULD:\n- Be thorough and educational (${responseContext.wordRange.min}-${responseContext.wordRange.max} words)\n- Explain the concept or strategy clearly\n- Give a specific, actionable example they can use\n- End with a check-in question to ensure understanding\n\nThis is a coaching moment - take the time to teach properly.`;
         break;
       case 'listening':
-        contextInstructions = `\n\n## Response Mode: LISTENING\nThe user is sharing something meaningful or emotional.\n\nYOUR RESPONSE MUST:\n- Be brief and validating (${responseContext.wordRange.min}-${responseContext.wordRange.max} words)\n- Show you heard the specific details they shared\n- Validate the weight of what they're carrying\n- Reframe any self-criticism positively\n- End with an open question that gives them space: "How are you feeling about that?" or "How are you holding up?"\n\nDO NOT:\n- Ask "what action can you take?" or offer solutions yet\n- Pivot to achievements/PRs unless they asked\n- Match their message length - they need space to continue sharing`;
+        contextInstructions = `\n\n## Response Mode: LISTENING\nThe user is sharing something meaningful or emotional.\n\nYOUR RESPONSE MUST:\n- Be brief and validating (${responseContext.wordRange.min}-${responseContext.wordRange.max} words)\n- Show you heard the specific details they shared\n- Validate the weight of what they're carrying\n- Reframe any self-criticism positively\n- End with one specific question that shows what you will do with the answer, e.g. "What part is heaviest right now so I can lower today's pace?"\n\nDO NOT:\n- Ask "what action can you take?" or offer solutions yet\n- Pivot to achievements/PRs unless they asked\n- Match their message length - they need space to continue sharing`;
         break;
       case 'quickExchange':
         contextInstructions = `\n\n## Response Mode: QUICK EXCHANGE\nThe user sent a short message. Match their energy.\n\nYOUR RESPONSE SHOULD:\n- Be snappy and conversational (${responseContext.wordRange.min}-${responseContext.wordRange.max} words)\n- Match their brevity\n- Keep the dialogue flowing naturally`;
@@ -1613,7 +1619,7 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
       ? `\n\n## Active Coaching Directive:\n${coachDirective}`
       : '';
 
-    let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${assignmentContextSection}${snapshotContextSection}${contextInstructions}${coachDirectiveSection}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nInstead, acknowledge their answer and advance the topic.`;
+    let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${assignmentContextSection}${snapshotContextSection}${contextInstructions}${coachDirectiveSection}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nDo not repeat the same headspace, energy, confidence, or readiness read from your previous message.\nInstead, acknowledge their answer and advance the topic.`;
     
     // Legacy support: If iOS still sends systemPromptContext (old version), use it but log a warning
     if (systemPromptContext && !healthContext) {
@@ -1845,6 +1851,23 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
         console.warn('[pulsecheck-chat] assignment reminder prompt check failed (non-blocking):', e?.message || e);
       }
     }
+
+    assistantMessage = enforceNoraVoiceRubric(assistantMessage, {
+      source: handledOnboarding ? 'pulsecheck-chat-onboarding' : 'pulsecheck-chat-openai',
+      fallback: defaultNoraVoiceRubricFallback(assistantMessage),
+      previousAssistantMessages: recentMessages
+        .filter((msg) => !msg?.isFromUser && String(msg?.content || '').trim())
+        .map((msg) => String(msg.content).trim())
+        .slice(-3),
+      onViolation: ({ source, violations, original, repaired }) => {
+        console.warn('[pulsecheck-chat] Nora voice rubric repaired/flagged response', {
+          source,
+          violations,
+          originalPreview: String(original || '').slice(0, 180),
+          repairedPreview: String(repaired || '').slice(0, 180),
+        });
+      },
+    });
 
     // Update conversation: append messages and save
     const aiMsg = {

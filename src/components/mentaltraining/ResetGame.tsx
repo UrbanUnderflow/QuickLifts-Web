@@ -32,6 +32,7 @@ import { athleteProgressService } from '../../api/firebase/mentaltraining/athlet
 import { DurationMode, type ProfileSnapshotMilestone, PressureType, SessionType, TaxonomySkill } from '../../api/firebase/mentaltraining/taxonomy';
 import { useUser } from '../../hooks/useUser';
 import { useInputIntegrity } from './useInputIntegrity';
+import { speakStep, stopNarration } from '../../utils/tts';
 
 // ============================================================================
 // TYPES
@@ -289,6 +290,7 @@ export const ResetGame: React.FC<ResetGameProps> = ({
         if (gameTimerRef.current) clearInterval(gameTimerRef.current);
         if (pulseTimerRef.current) clearInterval(pulseTimerRef.current);
         if (trackingTimerRef.current) clearInterval(trackingTimerRef.current);
+        stopNarration();
         timeoutRefs.current.forEach((timeout) => clearTimeout(timeout));
         timeoutRefs.current = [];
         if (audioContextRef.current) {
@@ -319,6 +321,24 @@ export const ResetGame: React.FC<ResetGameProps> = ({
             cleanup();
         };
     }, [cleanup]);
+
+    useEffect(() => {
+        if (gameState !== 'postMood') return;
+        if (!soundEnabled) {
+            stopNarration();
+            return;
+        }
+
+        void speakStep(`And that's the end of the ${variantTitle} simulation game. Great job. How do you feel?`, {
+            onError: (error) => {
+                console.warn('[ResetGame] Completion narration failed', error);
+            },
+        });
+
+        return () => {
+            stopNarration();
+        };
+    }, [gameState, soundEnabled, variantTitle]);
 
     // ============================================================================
     // GAME LOGIC

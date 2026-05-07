@@ -187,6 +187,7 @@ export const generateDailyAssignmentAdmin = async (
     actionType: 'protocol' as PulseCheckDailyAssignment['actionType'],
     chosenCandidateId: protocolPick.asset.id,
     chosenCandidateType: 'protocol' as PulseCheckDailyAssignment['chosenCandidateType'],
+    legacyExerciseId: (protocolPick.asset as PulseCheckProtocolDefinition).legacyExerciseId,
     protocolId: protocolPick.asset.id,
     protocolLabel: (protocolPick.asset as PulseCheckProtocolDefinition).label,
     rationale: protocolPick.rationale,

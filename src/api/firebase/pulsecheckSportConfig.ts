@@ -191,6 +191,9 @@ export const PULSECHECK_REPORT_POLICY_DEFAULTS = {
     includeTeamSentimentInAggregateOnly: true,
     includeAdherenceBlock: true,
     includeDataCoverageBlock: true,
+    coachOwnsPhysicalProgramming: true,
+    sportsIntelFramesMentalPerformanceEnvironment: true,
+    distinguishIndividualVsTeamPatterns: true,
     internalDimensionBackbone: ['focus', 'composure', 'decisioning'] as PulseCheckSportsIntelligenceDimension[],
   },
   adherenceBlockMetrics: [
@@ -353,8 +356,8 @@ const basketballReportPolicy: PulseCheckSportReportPolicy = {
     { id: 'sentiment_drop_after_role_minutes_volatility', label: 'Sentiment drop after role/minutes volatility', inputFamilies: ['sentiment', 'sport_metric_minutes', 'lineup_role_context'], linkedDimensions: ['composure'] },
   ],
   coachActions: [
-    { id: 'adjust_high_intensity_practice_dose_by_role', label: 'Adjust high-intensity practice dose by role', linkedSignals: ['low_hrv_high_acwr_high_minute', 'game_density_minutes_concentration'] },
-    { id: 'protect_late_game_decision_makers_from_extra_cognitive_load', label: 'Protect late-game decision-makers from unnecessary cognitive load', linkedSignals: ['decisioning_decline_after_congested_schedule', 'ball_handler_readiness'] },
+    { id: 'support_heavy_minute_roles_with_reset_language', label: 'Support heavy-minute roles with reset language', linkedSignals: ['low_hrv_high_acwr_high_minute', 'game_density_minutes_concentration'] },
+    { id: 'protect_late_game_decision_makers_from_extra_cognitive_load', label: 'Keep late-game decision-makers clear of unnecessary cognitive clutter', linkedSignals: ['decisioning_decline_after_congested_schedule', 'ball_handler_readiness'] },
     { id: 'use_possession_level_reset_language_in_walkthrough', label: 'Use possession-level reset language in walkthrough', linkedSignals: ['possession_level_reset_protocol', 'late_game_composure_free_throw_posture'] },
   ],
   earlyWarningFamilies: [
@@ -643,9 +646,9 @@ const footballReportPolicy: PulseCheckSportReportPolicy = {
     { id: 'weight_manipulation_pressure', label: 'Weight manipulation pressure', inputFamilies: ['sport_metric_body_weight', 'sentiment'], linkedDimensions: ['composure'] },
   ],
   coachActions: [
-    { id: 'adjust_contact_exposure_by_unit', label: 'Adjust contact exposure by unit', linkedSignals: ['collision_load_spike_poor_sleep', 'collision_accumulation_by_unit'] },
+    { id: 'support_contact_heavy_units_with_next_play_language', label: 'Support contact-heavy units with next-play language', linkedSignals: ['collision_load_spike_poor_sleep', 'collision_accumulation_by_unit'] },
     { id: 'use_pre_snap_routine_reminders', label: 'Use pre-snap routine reminders', linkedSignals: ['pre_snap_routine_stability', 'missed_assignments_with_cognitive_fatigue'] },
-    { id: 'separate_install_from_heavy_load', label: 'Separate mental install from heavy physical load when fatigue is high', linkedSignals: ['assignment_clarity_playbook_load'] },
+    { id: 'keep_install_simple_when_fatigue_is_high', label: 'Keep install communication simple when fatigue is high', linkedSignals: ['assignment_clarity_playbook_load'] },
   ],
   earlyWarningFamilies: [
     { id: 'sustained_collision_overload', label: 'Sustained collision-overload pattern', inputFamilies: ['sport_metric_collision_load', 'recovery', 'sleep'] },
@@ -777,7 +780,7 @@ const softballReportPolicy: PulseCheckSportReportPolicy = {
   ],
   coachActions: [
     { id: 'plan_predictable_fueling_windows', label: 'Plan predictable fueling windows', linkedSignals: ['tournament_underfueling', 'all_day_fueling_heat'] },
-    { id: 'adjust_extra_throwing_volume', label: 'Adjust extra throwing volume', linkedSignals: ['throwing_workload_spike', 'pitcher_catcher_workload'] },
+    { id: 'check_throwing_heavy_athletes_for_focus_support', label: 'Check throwing-heavy athletes for focus support', linkedSignals: ['throwing_workload_spike', 'pitcher_catcher_workload'] },
     { id: 'use_inning_reset_cues', label: 'Use inning-to-inning reset cues', linkedSignals: ['error_carryover', 'pitch_to_pitch_reset'] },
   ],
   earlyWarningFamilies: [
@@ -843,7 +846,7 @@ const volleyballReportPolicy: PulseCheckSportReportPolicy = {
     { id: 'tournament_underfueling', label: 'Tournament underfueling', inputFamilies: ['nutrition_hydration_context', 'training_load'], linkedDimensions: ['composure'] },
   ],
   coachActions: [
-    { id: 'adjust_jump_volume', label: 'Adjust jump volume', linkedSignals: ['jump_count_spike_low_recovery', 'jump_landing_load'] },
+    { id: 'check_high_jump_athletes_for_reset_support', label: 'Check high-jump athletes for reset support', linkedSignals: ['jump_count_spike_low_recovery', 'jump_landing_load'] },
     { id: 'reinforce_point_reset_routines', label: 'Reinforce point-reset routines', linkedSignals: ['point_to_point_reset'] },
     { id: 'time_fueling_around_play_windows', label: 'Keep fueling light and timed around play windows', linkedSignals: ['tournament_underfueling', 'long_match_gaps'] },
   ],
@@ -1256,7 +1259,7 @@ const lacrosseReportPolicy: PulseCheckSportReportPolicy = {
     { id: 'goalie_confidence_swings', label: 'Goalie confidence swings', inputFamilies: ['composure_trend', 'sport_metric_save_percentage', 'role_context_goalkeeper'], linkedDimensions: ['composure'] },
   ],
   coachActions: [
-    { id: 'adjust_high_speed_contact_dose', label: 'Adjust high-speed and contact dose', linkedSignals: ['repeat_sprint_fatigue', 'contact_accumulation'] },
+    { id: 'check_high_speed_contact_athletes_for_reset_support', label: 'Check high-speed/contact athletes for reset support', linkedSignals: ['repeat_sprint_fatigue', 'contact_accumulation'] },
     { id: 'use_possession_reset_language', label: 'Use possession reset language', linkedSignals: ['turnover_carryover', 'communication_after_turnovers'] },
     { id: 'emphasize_communication_ground_balls', label: 'Emphasize communication and ground-ball actions', linkedSignals: ['ground_ball_effort_under_fatigue'] },
   ],
@@ -1323,7 +1326,7 @@ const hockeyReportPolicy: PulseCheckSportReportPolicy = {
     { id: 'underhydration', label: 'Underhydration in cold environments', inputFamilies: ['nutrition_hydration_context'], linkedDimensions: ['focus'] },
   ],
   coachActions: [
-    { id: 'adjust_shift_workload_expectations', label: 'Adjust shift and workload expectations', linkedSignals: ['shift_fatigue', 'shift_length_repeatability'] },
+    { id: 'check_heavy_shift_athletes_for_bench_reset_support', label: 'Check heavy-shift athletes for bench-reset support', linkedSignals: ['shift_fatigue', 'shift_length_repeatability'] },
     { id: 'use_bench_reset_cueing', label: 'Use bench-reset cueing', linkedSignals: ['bench_reset', 'puck_decision_panic'] },
     { id: 'separate_goalie_skater_recommendations', label: 'Separate goalie and skater recommendations', linkedSignals: ['goalie_confidence_swings', 'goalie_tracking_confidence'] },
   ],
@@ -2834,6 +2837,16 @@ export const PULSECHECK_COACH_LANGUAGE_UNIVERSAL_BANLIST = [
   'confidenceTier',
   'rmssdMs',
   'externalLoadAU',
+  'pull a rep',
+  'high-intensity block',
+  'shorten his minutes',
+  'shorten her minutes',
+  'adjust high-intensity practice dose',
+  'adjust contact exposure',
+  'adjust extra throwing volume',
+  'adjust jump volume',
+  'adjust high-speed and contact dose',
+  'adjust shift and workload expectations',
 ] as const;
 
 const normalizeAuditCandidate = (value: string) =>

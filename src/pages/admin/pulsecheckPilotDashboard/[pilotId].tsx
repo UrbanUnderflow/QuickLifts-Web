@@ -1620,6 +1620,14 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     return detail.outcomeMetrics || null;
   }, [cohortFilter, detail]);
 
+  const visibleAdherenceOrchestrator = useMemo(() => {
+    if (!detail) return null;
+    if (cohortFilter) {
+      return detail.adherenceOrchestratorByCohort?.[cohortFilter] || detail.adherenceOrchestrator || null;
+    }
+    return detail.adherenceOrchestrator || null;
+  }, [cohortFilter, detail]);
+
   const visibleOutcomeDiagnostics = useMemo(() => {
     if (!detail) return null;
     if (cohortFilter) {
@@ -1764,6 +1772,59 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       accentClassName: 'border-white/10 bg-white/5 text-zinc-100',
     },
   ];
+
+  const adherenceOrchestratorCards = visibleAdherenceOrchestrator
+    ? [
+        {
+          label: 'Expected',
+          value: String(visibleAdherenceOrchestrator.expectedAthleteDays),
+          helper: 'Athlete-days currently counted in the adherence denominator.',
+          className: 'text-white',
+        },
+        {
+          label: 'Closed',
+          value: String(visibleAdherenceOrchestrator.closedDays),
+          helper: `${visibleAdherenceOrchestrator.closedRate.toFixed(1)}% fully closed days.`,
+          className: 'text-emerald-100',
+        },
+        {
+          label: 'Rescued',
+          value: String(visibleAdherenceOrchestrator.rescuedDays),
+          helper: 'Days saved through a short-version, late, reminder, or comeback path.',
+          className: 'text-cyan-100',
+        },
+        {
+          label: 'Missed',
+          value: String(visibleAdherenceOrchestrator.missedDays),
+          helper: 'Expected days with no check-in or completed task signal.',
+          className: 'text-rose-100',
+        },
+        {
+          label: 'Excused',
+          value: String(visibleAdherenceOrchestrator.excusedDays),
+          helper: 'Rest, pause, hold, withdrawal, or restriction days outside the denominator.',
+          className: 'text-amber-100',
+        },
+        {
+          label: 'Check-in only',
+          value: String(visibleAdherenceOrchestrator.checkInOnlyDays),
+          helper: 'Athletes gave Nora the signal but did not close the assigned rep.',
+          className: 'text-sky-100',
+        },
+        {
+          label: 'Task only',
+          value: String(visibleAdherenceOrchestrator.taskOnlyDays),
+          helper: 'Assigned rep completed without the daily check-in signal.',
+          className: 'text-violet-100',
+        },
+        {
+          label: 'At risk',
+          value: String(visibleAdherenceOrchestrator.atRiskAthleteCount),
+          helper: 'Athletes with at least one open expected day in this view.',
+          className: 'text-orange-100',
+        },
+      ]
+    : [];
 
   const selectedResearchReadout = useMemo(
     () => detail?.researchReadouts.find((readout) => readout.id === selectedReadoutId) || detail?.researchReadouts[0] || null,
@@ -3017,6 +3078,68 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         </div>
                       ))}
                     </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5" data-testid="pilot-dashboard-adherence-orchestrator">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Adherence Orchestrator</div>
+                        <h2 className="mt-2 text-lg font-semibold text-white">Closed-day operating system</h2>
+                        <p className="mt-1 max-w-3xl text-sm text-zinc-400">
+                          Canonical athlete-day state for the pilot adherence loop: expected, closed, rescued, partial, missed, and excused.
+                        </p>
+                      </div>
+                      <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-[11px] text-emerald-100">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Privacy-safe coach view
+                      </div>
+                    </div>
+
+                    {visibleAdherenceOrchestrator ? (
+                      <>
+                        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4 2xl:grid-cols-8">
+                          {adherenceOrchestratorCards.map((card) => (
+                            <div key={card.label} className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                              <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{card.label}</div>
+                              <div className={`pilot-font-mono mt-3 text-2xl leading-none ${card.className}`}>{card.value}</div>
+                              <div className="mt-2 text-xs leading-5 text-zinc-500">{card.helper}</div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr),minmax(280px,420px)]">
+                          <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                            <div className="flex items-center justify-between gap-3 text-sm">
+                              <span className="text-zinc-300">Closed-day rate</span>
+                              <span className="font-medium text-white">{visibleAdherenceOrchestrator.closedRate.toFixed(1)}%</span>
+                            </div>
+                            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                              <div
+                                className="h-full rounded-full bg-emerald-300"
+                                style={{ width: `${Math.max(0, Math.min(100, visibleAdherenceOrchestrator.closedRate))}%` }}
+                              />
+                            </div>
+                            <div className="mt-3 text-xs leading-5 text-zinc-500">
+                              Open days include missed, check-in-only, task-only, and task-started states. Rescued days count as closed because the athlete still completed the pact.
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl border border-emerald-400/15 bg-emerald-400/10 p-4">
+                            <div className="text-xs uppercase tracking-[0.18em] text-emerald-100">Nora privacy boundary</div>
+                            <p className="mt-2 text-sm leading-6 text-emerald-50/90">
+                              {visibleAdherenceOrchestrator.privacyBoundary}
+                            </p>
+                            <div className="mt-3 text-xs text-emerald-100/75">
+                              Private content exposed: {visibleAdherenceOrchestrator.privateContentExposed ? 'Review immediately' : 'No'}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-5 text-sm text-zinc-400">
+                        No adherence orchestrator rollup has been computed for this pilot yet.
+                      </div>
+                    )}
                   </div>
 
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">

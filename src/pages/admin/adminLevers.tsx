@@ -470,7 +470,272 @@ const reclassifyLegacyChallengeTypes: Lever = {
   },
 };
 
-const LEVERS: Lever[] = [backfillClubJoinCodes, reclassifyLegacyChallengeTypes];
+// ---------------------------------------------------------------------
+// Lever 3: Repair pulsecheck-protocols legacyExerciseId mismatches
+// ---------------------------------------------------------------------
+//
+// Symptom: home shows "4-7-8 Relaxation Breathing" but tapping it runs
+// Box Breathing (or some other exercise). Cause: the published
+// `pulsecheck-protocols` doc whose `label` is "4-7-8 Relaxation
+// Breathing" has its `legacyExerciseId` field set to a different
+// exercise's id (e.g. `breathing-box`) — so the iOS resolver loads the
+// wrong MentalExercise.
+//
+// Fix: compare every protocol doc's label against the canonical
+// `pulsecheck-mental-exercises` library; if a name match exists and
+// the protocol's legacyExerciseId disagrees, write the corrected id.
+
+const PULSECHECK_PROTOCOLS_COLLECTION = 'pulsecheck-protocols';
+// The legacy mental-exercise library lives at `mental-exercises` — same
+// collection MentalTrainingService.swift hits via `exerciseCollection`.
+// Earlier guess `pulsecheck-mental-exercises` was wrong (returns 0 docs).
+const PULSECHECK_EXERCISES_COLLECTION = 'mental-exercises';
+
+const normalizeName = (text: unknown): string =>
+  String(text || '').trim().toLowerCase();
+
+const repairPulseCheckProtocolLegacyExerciseIds: Lever = {
+  id: 'repair-pulsecheck-protocol-legacy-exercise-ids',
+  title: 'Repair PulseCheck Protocol legacyExerciseId',
+  description:
+    'Audits every pulsecheck-protocols doc against the mental-exercises library. When a protocol\'s label matches an exercise by name but its legacyExerciseId points to a different exercise, write the corrected id. Idempotent — safe to re-run. Use this when the home shows the right protocol label but the wrong exercise actually runs.',
+  supportsDryRun: true,
+  async run({ dryRun, handle }) {
+    handle.log(`Loading exercise library (${PULSECHECK_EXERCISES_COLLECTION})…`);
+    const exercisesSnap = await getDocs(collection(db, PULSECHECK_EXERCISES_COLLECTION));
+    const exerciseIdByName = new Map<string, string>();
+    const exerciseDuplicateNames = new Map<string, string[]>();
+    exercisesSnap.forEach((d) => {
+      const data = d.data() as { name?: string };
+      const key = normalizeName(data?.name);
+      if (!key) return;
+      const existing = exerciseDuplicateNames.get(key) ?? [];
+      existing.push(d.id);
+      exerciseDuplicateNames.set(key, existing);
+      // Last write wins on the lookup map; duplicates are reported separately.
+      exerciseIdByName.set(key, d.id);
+    });
+    handle.log(`Loaded ${exerciseIdByName.size} unique-name exercise(s) (${exercisesSnap.size} docs).`);
+
+    // Surface any duplicate names in the library — those are the
+    // smoking gun if a label resolves to the wrong exercise.
+    let dupCount = 0;
+    exerciseDuplicateNames.forEach((ids, name) => {
+      if (ids.length > 1) {
+        dupCount += 1;
+        handle.log(
+          `Duplicate exercise name "${name}": ${ids.join(', ')}`,
+          'warn',
+        );
+      }
+    });
+    if (dupCount === 0) {
+      handle.log('No duplicate exercise names found.');
+    } else {
+      handle.log(`${dupCount} duplicate exercise name(s) found — see warnings above.`, 'warn');
+    }
+    handle.log('---');
+    handle.log('Full exercise library (id → name):');
+    Array.from(exerciseDuplicateNames.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([name, ids]) => {
+        ids.forEach((id) => handle.log(`  ${id}  →  "${name}"`));
+      });
+    handle.log('---');
+
+    handle.log(`Scanning ${PULSECHECK_PROTOCOLS_COLLECTION}…`);
+    const protocolsSnap = await getDocs(collection(db, PULSECHECK_PROTOCOLS_COLLECTION));
+    const total = protocolsSnap.size;
+    handle.log(`Found ${total} protocol doc(s).`);
+    handle.log('---');
+    handle.log('Full audit (every protocol → expected exercise → current exercise):');
+    handle.setProgress(0, total);
+
+    let changed = 0;
+    let alreadyCorrect = 0;
+    let unmatched = 0;
+    let processed = 0;
+
+    for (const docSnap of protocolsSnap.docs) {
+      const data = docSnap.data() as {
+        label?: string;
+        legacyExerciseId?: string;
+      };
+      const label = (data?.label || '').trim();
+      const currentLegacyId = (data?.legacyExerciseId || '').trim();
+      processed += 1;
+      handle.setProgress(processed, total);
+
+      if (!label) {
+        handle.log(`${docSnap.id}: no label — skipping.`, 'warn');
+        unmatched += 1;
+        continue;
+      }
+
+      const expectedLegacyId = exerciseIdByName.get(normalizeName(label));
+      if (!expectedLegacyId) {
+        handle.log(
+          `${docSnap.id} label="${label}" current=${currentLegacyId || '(empty)'} → no exercise matches this label by name in mental-exercises`,
+          'warn',
+        );
+        unmatched += 1;
+        continue;
+      }
+
+      const isCorrect = normalizeName(expectedLegacyId) === normalizeName(currentLegacyId);
+      if (isCorrect) {
+        handle.log(
+          `${docSnap.id} label="${label}" → legacyExerciseId="${currentLegacyId}" ✓`,
+        );
+        alreadyCorrect += 1;
+        continue;
+      }
+
+      handle.log(
+        `${docSnap.id} label="${label}":  ${currentLegacyId || '(empty)'}  →  ${expectedLegacyId}  (would repair)`,
+        'warn',
+      );
+
+      if (!dryRun) {
+        // eslint-disable-next-line no-await-in-loop
+        await updateDoc(doc(db, PULSECHECK_PROTOCOLS_COLLECTION, docSnap.id), {
+          legacyExerciseId: expectedLegacyId,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      changed += 1;
+    }
+
+    handle.log('---');
+    handle.log(
+      `Tally: ${alreadyCorrect} already correct, ${changed} ${dryRun ? 'would be repaired' : 'repaired'}, ${unmatched} unmatched (label has no exercise by name).`,
+    );
+
+    return {
+      summary: dryRun
+        ? `Would repair ${changed} doc(s); ${alreadyCorrect} already correct; ${unmatched} unmatched.`
+        : `Repaired ${changed} doc(s); ${alreadyCorrect} already correct; ${unmatched} unmatched.`,
+      changed,
+      skipped: alreadyCorrect + unmatched,
+      total,
+    };
+  },
+};
+
+// ---------------------------------------------------------------------
+// Lever 4: Audit my recent PulseCheck daily assignments
+// ---------------------------------------------------------------------
+//
+// Read-only diagnostic. Pulls the signed-in admin's most recent
+// `pulsecheck-daily-assignments` docs and prints the fields the iOS
+// home actually reads (sourceDate, actionType, status, legacyExerciseId,
+// protocolId, protocolLabel, simSpecId, simName). When the home shows one label
+// but a different exercise actually runs, this lever lets us see
+// whether protocolId, legacyExerciseId, and protocolLabel disagree at the source.
+
+const PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION = 'pulsecheck-daily-assignments';
+
+const auditMyRecentPulseCheckAssignments: Lever = {
+  id: 'audit-my-recent-pulsecheck-assignments',
+  title: 'Audit My Recent PulseCheck Assignments',
+  description:
+    'Read-only. Pulls the signed-in admin\'s most recent pulsecheck-daily-assignments docs (last 14 days) and prints sourceDate, actionType, legacyExerciseId, protocolId, protocolLabel, simSpecId, simName, status. Use to confirm whether the home label matches the actual launch id.',
+  supportsDryRun: false,
+  async run({ handle }) {
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      handle.log('Not signed in.', 'err');
+      return { summary: 'Not signed in.', changed: 0, skipped: 0, total: 0 };
+    }
+    handle.log(`Loading recent assignments for athleteId=${uid}…`);
+
+    const q = query(
+      collection(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION),
+      where('athleteId', '==', uid),
+    );
+    const snap = await getDocs(q);
+    const total = snap.size;
+    handle.log(`Found ${total} assignment(s).`);
+
+    type Row = {
+      id: string;
+      sourceDate?: string;
+      actionType?: string;
+      status?: string;
+      legacyExerciseId?: string;
+      protocolId?: string;
+      protocolLabel?: string;
+      simSpecId?: string;
+      simName?: string;
+      isPrimaryForDate?: boolean;
+      revision?: number;
+      assignedBy?: string;
+    };
+
+    const rows: Row[] = snap.docs.map((d) => {
+      const data = d.data() as Record<string, unknown>;
+      return {
+        id: d.id,
+        sourceDate: typeof data.sourceDate === 'string' ? (data.sourceDate as string) : undefined,
+        actionType: typeof data.actionType === 'string' ? (data.actionType as string) : undefined,
+        status: typeof data.status === 'string' ? (data.status as string) : undefined,
+        legacyExerciseId: typeof data.legacyExerciseId === 'string' ? (data.legacyExerciseId as string) : undefined,
+        protocolId: typeof data.protocolId === 'string' ? (data.protocolId as string) : undefined,
+        protocolLabel: typeof data.protocolLabel === 'string' ? (data.protocolLabel as string) : undefined,
+        simSpecId: typeof data.simSpecId === 'string' ? (data.simSpecId as string) : undefined,
+        simName: typeof data.simName === 'string' ? (data.simName as string) : undefined,
+        isPrimaryForDate: typeof data.isPrimaryForDate === 'boolean' ? (data.isPrimaryForDate as boolean) : undefined,
+        revision: typeof data.revision === 'number' ? (data.revision as number) : undefined,
+        assignedBy: typeof data.assignedBy === 'string' ? (data.assignedBy as string) : undefined,
+      };
+    });
+
+    rows.sort((a, b) => (b.sourceDate || '').localeCompare(a.sourceDate || ''));
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 14);
+    const cutoffISO = cutoff.toISOString().slice(0, 10);
+    const recent = rows.filter((r) => !r.sourceDate || r.sourceDate >= cutoffISO);
+
+    handle.log(`Showing ${recent.length} assignment(s) from the last 14 days:`);
+    handle.log('---');
+    for (const r of recent) {
+      const isPrimary = r.isPrimaryForDate === true ? ' [PRIMARY]' : '';
+      const rev = typeof r.revision === 'number' ? ` rev=${r.revision}` : '';
+      const assignedBy = r.assignedBy ? ` by=${r.assignedBy}` : '';
+      handle.log(
+        `[${r.sourceDate ?? 'no-date'}]${isPrimary} ${r.actionType ?? '?'} status=${r.status ?? '?'}${rev}${assignedBy} id=${r.id}`,
+      );
+      if (r.actionType === 'protocol') {
+        handle.log(
+          `   legacyExerciseId="${r.legacyExerciseId ?? ''}"  protocolId="${r.protocolId ?? ''}"  protocolLabel="${r.protocolLabel ?? ''}"`,
+        );
+      } else if (r.actionType === 'simulation') {
+        handle.log(
+          `   simSpecId="${r.simSpecId ?? ''}"  simName="${r.simName ?? ''}"`,
+        );
+      } else {
+        handle.log(`   protocolId="${r.protocolId ?? ''}"  simSpecId="${r.simSpecId ?? ''}"`);
+      }
+    }
+    handle.log('---');
+
+    return {
+      summary: `Audited ${recent.length} recent assignment(s).`,
+      changed: 0,
+      skipped: 0,
+      total: recent.length,
+    };
+  },
+};
+
+const LEVERS: Lever[] = [
+  backfillClubJoinCodes,
+  reclassifyLegacyChallengeTypes,
+  repairPulseCheckProtocolLegacyExerciseIds,
+  auditMyRecentPulseCheckAssignments,
+];
 
 // =====================================================================
 // UI

@@ -60,7 +60,50 @@ const INTERPRETATION_RULES = [
   ['Training load', 'Compute ACWR, microcycle delta, session RPE trend, and sport-native metrics.', 'Recommendations change by sport, position, season phase, and upcoming competition density.'],
   ['Cognitive movement', 'Compare Focus / Composure / Decisioning to athlete baseline and recent sim family evidence.', 'Use confidence tier from Correlation Engine and avoid population-average claims.'],
   ['Sentiment trend', 'Aggregate check-in posture into trend and abrupt-shift signal.', 'No individual disclosure leaves clinician-gated or athlete-private contexts.'],
-  ['Recommendation selection', 'Choose the lowest-risk action that matches evidence confidence and sport policy.', 'Low confidence can recommend monitoring or coach conversation, not workload intervention.'],
+  ['Recommendation selection', 'Generate candidate reads, score them, block unsupported claims, then select the lowest-risk useful action that matches evidence confidence and sport policy.', 'Low confidence can recommend monitoring, asking for context, or coach conversation, not workload intervention.'],
+];
+
+const SPORTS_FACT_LEDGER_ROWS = [
+  ['athleteContext', 'sport, position, season phase, level, goals, risk flags, coach policy.', 'Shapes what the same data means for this athlete.'],
+  ['timeContext', 'today/yesterday, practice window, game-day window, travel window, recovery window.', 'Prevents “today” claims on historical cards and keeps actions tied to the correct decision moment.'],
+  ['sourceFreshness', 'fresh/recent/stale/missing per recovery, activity, training, cognitive, behavioral, nutrition.', 'Controls hedging and blocks overconfident reads.'],
+  ['recoveryFacts', 'sleep, HRV, resting HR, respiratory rate, readiness/recovery score, baseline deltas when available.', 'Allowed physiological facts. No interpretation without rule support.'],
+  ['loadFacts', 'sessions, duration, HR zones, RPE, ACWR, microcycle load, prescribed-vs-actual.', 'Supports load and intent claims.'],
+  ['sessionFacts', 'detected session, confirmed session, schedule match, coach intent, device coverage.', 'Blocks invented “yesterday’s pull session” style claims.'],
+  ['cognitiveFacts', 'Focus, Composure, Decisioning movement, evidence count, confidence.', 'Supports mental-performance movement without population claims.'],
+  ['checkInFacts', 'fatigue, soreness, sentiment trend, athlete-reported context, disclosure boundaries.', 'Adds athlete state while protecting privacy.'],
+  ['nutritionFacts', 'NutritionContextSnapshot from the Nutrition Insight Layer when available.', 'Fueling context can inform sports reads but cannot invent diet claims.'],
+  ['allowedClaims / blockedClaims', 'Exact facts Nora may say and tempting claims the engine forbids.', 'Turns copy validation into a deterministic check.'],
+  ['missingInputs', 'The smallest missing answer that would materially improve the read.', 'Drives session_confirmation_needed or data_quality candidates.'],
+  ['evidenceRefs', 'Snapshot ids, source-record ids, session ids, confirmation ids, sport-policy ids.', 'Makes every output replayable in admin QA.'],
+];
+
+const CANDIDATE_READ_ROWS = [
+  ['readiness_status', 'Current readiness posture.', 'Fresh/recent recovery facts support a useful status read.'],
+  ['recovery_limiter', 'Recovery is the limiting factor.', 'Readiness/recovery is materially below baseline or score band.'],
+  ['load_spike', 'Load is unusually high.', 'ACWR/microcycle/session RPE crosses configured sport threshold.'],
+  ['load_recovery_match', 'Load and recovery are aligned.', 'Recovery and load evidence agree; no dramatic adjustment needed.'],
+  ['intent_mismatch', 'Actual session diverged from plan.', 'Prescribed-vs-actual or coach confirmation shows a mismatch.'],
+  ['game_day_prep', 'Competition-window action.', 'Schedule proves competition proximity and evidence supports a pre-game move.'],
+  ['cognitive_movement', 'Focus/Composure/Decisioning shift.', 'Enough sim evidence and confidence tier support the movement.'],
+  ['fueling_context', 'Nutrition profile affects the sports read.', 'NutritionContextSnapshot is fresh enough and relevant to training/recovery.'],
+  ['session_confirmation_needed', 'Ask athlete/coach before interpreting.', 'Missing session type, RPE, soreness, or intent would change the read.'],
+  ['data_quality', 'Do not infer; improve coverage.', 'Freshness, baseline, or source coverage is too thin for a real sports claim.'],
+  ['no_intervention', 'Stay on plan.', 'Evidence is aligned and no useful correction beats staying consistent.'],
+];
+
+const SCORING_GUARDRAIL_ROWS = [
+  ['Data confidence', '+30 high_confidence / +24 stable / +14 emerging / +6 directional / block degraded high-impact claims.', 'Confidence controls both ranking and copy posture.'],
+  ['Sport relevance', '+20 when the candidate maps to sport/position/season policy.', 'Prevents generic wellness reads from winning.'],
+  ['Timing relevance', '+15 when the action affects the next real decision window.', 'Morning game-day and post-session reads should not sound the same.'],
+  ['Actionability', '+20 for one concrete next move.', 'Vague advice loses or fails rubric.'],
+  ['Materiality', '+10 for a meaningful load/recovery/cognitive change.', 'Avoids making every day a correction.'],
+  ['Novelty', '+10 when not repeating the same angle.', 'Regenerate and weekly reports should find a different eligible angle.'],
+  ['Unsupported session claim', 'Block.', 'No practice/lift/pull/competition claim unless sessionFacts or confirmation supports it.'],
+  ['Unsupported physiology claim', 'Block.', 'No CNS, autonomic, respiratory-rate causal, or parasympathetic claims without approved rule and baseline.'],
+  ['Stale-data overconfidence', 'Block or repair.', 'Freshness stale/missing/inferred requires hedging or data_quality.'],
+  ['Clinical boundary', 'Block and route.', 'Clinical-threshold signals leave Sports Intelligence.'],
+  ['Executable Nora rubric failure', 'Repair, fallback, or hold for review.', 'Athlete-facing copy must pass runtime checks, not just prompt instructions.'],
 ];
 
 const SPORT_MODIFIERS = [
@@ -80,6 +123,10 @@ const ALERT_THRESHOLDS = [
 ];
 
 const OUTPUT_SCHEMAS = [
+  ['SportsFactLedger', 'athleteContext, timeContext, sourceFreshness, recoveryFacts, loadFacts, sessionFacts, cognitiveFacts, checkInFacts, nutritionFacts, allowedClaims, blockedClaims, missingInputs, evidenceRefs.'],
+  ['SportsCandidateRead', 'id, type, claim, fact, interpretation, recommendedAction, confidence, score, scoreBreakdown, guardrails, audiencePolicy.'],
+  ['SportsReasoningTrace', 'ledgerVersion, selectedCandidateId, rejectedCandidateIds, rubricResults, guardrailResults, unsupportedClaims, finalStatus, replayFixtureId?.'],
+  ['ValidatedSportsIntelligencePayload', 'insightId, athleteId, dayKey, audience, layerVersion, ledger, candidates, selectedCandidate, copy, validation, provenance.'],
   ['AthleteReadinessInterpretation', 'athleteId, dayKey, readinessBand, evidence[], confidenceTier, missingInputs[], provenanceTrace[], coachCopy, athleteContextCopy.'],
   ['TrainingLoadInterpretation', 'athleteId, window, acuteLoad, chronicLoad, acwr, sportNativeMetrics[], loadBand, confidenceTier, recommendationIds[].'],
   ['CognitiveMovementInterpretation', 'athleteId, focusDelta, composureDelta, decisioningDelta, simEvidenceCount, confidenceTier, explanation.'],
@@ -95,11 +142,16 @@ const COPY_RULES = [
   ['Degraded confidence', 'Name the limitation internally; keep coach copy restrained.', '"Data is incomplete today" is allowed. Do not imply athlete risk.'],
   ['Self-reported provenance', 'Carry provenance into copy when material.', '"Athlete-reported fatigue has trended up" is allowed.'],
   ['Clinical boundary', 'No clinical interpretation in Sports Intelligence copy.', 'Escalation output is minimum-necessary context after AuntEDNA handoff.'],
+  ['Athlete-facing Nora copy', 'Must pass executable Nora rubric plus sports-specific unsupported-claim checks.', 'No mystery pronouns, vague actions, stale-data overconfidence, invented sessions, or physiology theater.'],
+  ['Coach-facing report copy', 'Must translate internal confidence into coach voice while preserving evidence limits.', '"This read gets sharper when practice details land" beats "confidence is emerging."'],
 ];
 
 const BUILD_EXIT_CRITERIA = [
   'Baseline jobs produce deterministic outputs for the same input frame and write provenance traces.',
   'Every recommendation can be traced to evidence refs, sport modifiers, confidence tier, and copy policy.',
+  'Every athlete-facing read persists a SportsFactLedger, candidate list, selectedCandidateId, rejectedCandidateIds, rubric results, and guardrail trace.',
+  'Candidate fixtures cover unsupported physiology claims, invented session claims, stale-data overconfidence, missing baseline, data-quality fallback, and no-intervention days.',
+  'Executable Nora rubric runs on deterministic templates as well as model-generated text.',
   'Game-day and weekly report drafts expose reviewStatus before coach delivery.',
   'Alert thresholds are tested against pilot fixtures for false positives and false negatives before automated delivery is enabled.',
   'Missing-data fixtures cover no wearable, stale wearable, source transition, self-reported-only, and conflicting source records.',
@@ -128,12 +180,12 @@ const PulseCheckSportsIntelligenceAggregationInferenceContractTab: React.FC = ()
       <DocHeader
         eyebrow="Pulse Sports Intelligence"
         title="Aggregation + Inference Contract"
-        version="Version 0.1 | April 25, 2026"
-        summary="This companion contract turns the Sports Intelligence boundary spec into deterministic engineering behavior. It defines baseline windows, minimum data rules, source precedence, confidence propagation, sport modifiers, alert gates, output schemas, and copy policy so two teams cannot build incompatible versions of the intelligence layer."
+        version="Version 0.3 | May 6, 2026"
+        summary="This companion contract turns the Sports Intelligence boundary spec into deterministic engineering behavior. Version 0.3 adds code-owned fact ledgers, candidate reads, scoring, guardrails, executable Nora rubric validation, and persisted reasoning traces so two teams cannot build incompatible or unsupported versions of the intelligence layer."
         highlights={[
           {
             title: 'Decisioning Contract',
-            body: 'Locks how raw normalized inputs become athlete-specific readiness, load, cognitive movement, sentiment trend, recommendations, and report payloads.',
+            body: 'Locks how normalized inputs become fact ledgers, eligible candidate reads, selected recommendations, copy posture, and validated payloads.',
           },
           {
             title: 'Human Review By Default',
@@ -148,7 +200,7 @@ const PulseCheckSportsIntelligenceAggregationInferenceContractTab: React.FC = ()
 
       <RuntimeAlignmentPanel
         role="Decisioning contract below the Sports Intelligence output surfaces and above the normalized health, cognitive, training, nutrition, sport-config, and schedule context records."
-        sourceOfTruth="This page owns formulas, windows, fallback behavior, source precedence, confidence propagation, alert thresholds, and canonical Sports Intelligence output schemas."
+        sourceOfTruth="This page owns formulas, windows, fallback behavior, source precedence, confidence propagation, candidate read rules, guardrails, alert thresholds, executable rubric requirements, and canonical Sports Intelligence output schemas."
         masterReference="Architecture boundaries live in Sports Intelligence Layer: Architecture & Product Boundaries. Input schemas live in Athlete Context Snapshot, Health Context Source Record, Correlation Data Model, FWP workoutSessions, Macra nutrition records, and sport configuration."
         relatedDocs={[
           'Sports Intelligence Layer: Architecture & Product Boundaries',
@@ -160,6 +212,20 @@ const PulseCheckSportsIntelligenceAggregationInferenceContractTab: React.FC = ()
           'AuntEDNA Integration Strategy',
         ]}
       />
+
+      <SectionBlock icon={FileJson} title="Fact Ledger + Candidate Reads">
+        <InfoCard
+          title="AI Does Not Notice The Read"
+          accent="purple"
+          body="The engine creates the evidence frame, candidate list, scores, and blocked-claim trace before Nora or coach-report copy runs. Model output is a copy layer, not the reasoning layer."
+        />
+        <DataTable columns={['Ledger Field', 'Contents', 'Why It Exists']} rows={SPORTS_FACT_LEDGER_ROWS} />
+        <DataTable columns={['Candidate Type', 'Meaning', 'Eligibility Signal']} rows={CANDIDATE_READ_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={ShieldCheck} title="Scoring + Guardrails">
+        <DataTable columns={['Signal / Rule', 'Score Or Gate', 'Effect']} rows={SCORING_GUARDRAIL_ROWS} />
+      </SectionBlock>
 
       <SectionBlock icon={LineChart} title="Baseline Windows">
         <DataTable columns={['Signal Family', 'Baseline Window', 'Calculation', 'Fallback Rule']} rows={BASELINE_WINDOWS} />
