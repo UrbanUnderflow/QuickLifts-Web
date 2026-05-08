@@ -116,6 +116,10 @@ exports.sendTestReflectionNotification = require("./dailyReflectionNotifications
 // Macra: scheduled daily insight (rich context, sport-aware, FWP-coupled)
 exports.scheduledMacraDailyInsight = require("./macraDailyInsight").scheduledMacraDailyInsight;
 
+// Macra: meal social notifications (likes + comments from buddies)
+exports.onMacraMealLikeCreated = require("./macraMealSocialNotifications").onMacraMealLikeCreated;
+exports.onMacraMealCommentCreated = require("./macraMealSocialNotifications").onMacraMealCommentCreated;
+
 // Export Lead Massaging worker functions
 exports.onLeadMassageJobCreated = onLeadMassageJobCreated;
 exports.onLeadMassageItemJobCreated = onLeadMassageItemJobCreated;

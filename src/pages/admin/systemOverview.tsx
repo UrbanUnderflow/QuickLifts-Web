@@ -86,6 +86,7 @@ import PulseCheckContextualSportsDetectionEngineSpecTab from "../../components/a
 import PulseCheckPhaseJSessionSchemaContractTab from "../../components/admin/system-overview/PulseCheckPhaseJSessionSchemaContractTab";
 import PulseCheckPhaseJReviewerDebugSurfaceTab from "../../components/admin/system-overview/PulseCheckPhaseJReviewerDebugSurfaceTab";
 import PulseCheckSessionDetectionMatchingSpecTab from "../../components/admin/system-overview/PulseCheckSessionDetectionMatchingSpecTab";
+import PulseCheckTrainingLoadDetectionSpecTab from "../../components/admin/system-overview/PulseCheckTrainingLoadDetectionSpecTab";
 import PulseCheckSportLoadModelSpecTab from "../../components/admin/system-overview/PulseCheckSportLoadModelSpecTab";
 import PulseCheckCorrelationDataModelSpecTab from "../../components/admin/system-overview/PulseCheckCorrelationDataModelSpecTab";
 import PulseCheckCorrelationEngineEngineeringTaskBreakdownTab from "../../components/admin/system-overview/PulseCheckCorrelationEngineEngineeringTaskBreakdownTab";
@@ -311,6 +312,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-phase-j-session-schema-contract",
       "pulsecheck-phase-j-reviewer-debug-surface",
       "pulsecheck-session-detection-matching",
+      "pulsecheck-training-load-detection-spec",
       "pulsecheck-sport-load-model",
       "pulsecheck-device-integration-strategy",
       "pulsecheck-device-registry-spec",
@@ -1968,6 +1970,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-session-detection-matching":
         return <PulseCheckSessionDetectionMatchingSpecTab />;
+
+      case "pulsecheck-training-load-detection-spec":
+        return <PulseCheckTrainingLoadDetectionSpecTab />;
 
       case "pulsecheck-sport-load-model":
         return <PulseCheckSportLoadModelSpecTab />;
