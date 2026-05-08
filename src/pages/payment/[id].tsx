@@ -23,7 +23,7 @@ const openIOSApp = (challengeId: string) => {
   if (!challengeId) return;
   
   // Create the base URL with properly encoded parameters for deep linking
-  const baseUrl = `https://www.quickliftsapp.com/?linkType=round&roundId=${challengeId}`;
+  const baseUrl = `https://fitwithpulse.ai/?linkType=round&roundId=${challengeId}`;
   const encodedBaseUrl = encodeURIComponent(baseUrl);
   const deepLinkUrl = `https://quicklifts.page.link/?link=${encodedBaseUrl}&apn=com.pulse.fitnessapp&ibi=Tremaine.QuickLifts&isi=6451497729`;
   

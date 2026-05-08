@@ -204,7 +204,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Proxy to production deploy (which has the key) via the same
     // tts-mental-step function the admin regen buttons use.
     resolvedVia = 'proxy';
-    const proxyBase = process.env.VOICE_PROXY_BASE || 'https://quickliftsapp.com';
+    const proxyBase = process.env.VOICE_PROXY_BASE || 'https://fitwithpulse.ai';
     const resp = await fetch(`${proxyBase}/.netlify/functions/tts-mental-step`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

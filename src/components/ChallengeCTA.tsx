@@ -45,7 +45,7 @@ const ChallengeCTA: React.FC<ChallengeCTAProps> = ({ challenge, ttclid }) => {
   const appStoreUrl = 'https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729';
   
   // Create the base URL with properly encoded parameters for deep linking
-  let baseUrl = `https://www.quickliftsapp.com/?linkType=round&roundId=${challenge.id}`;
+  let baseUrl = `https://fitwithpulse.ai/?linkType=round&roundId=${challenge.id}`;
   if (sharedBy) {
     baseUrl += `&sharedBy=${sharedBy}`;
   }
