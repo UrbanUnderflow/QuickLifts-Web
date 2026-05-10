@@ -61,6 +61,21 @@ const genericCheckInQuestionPatterns = [
   'how are things landing today?',
 ];
 
+const thirdPersonNoraPatterns = [
+  'nora should',
+  'nora can',
+  'nora will',
+  'nora would',
+  'nora needs to',
+];
+
+const reportVoicePatterns = [
+  'this sleep read',
+  'this read is about',
+  'the read is about',
+  'this is a good day to',
+];
+
 const vagueActionPatterns = [
   'train clean',
   "recovery's workable",
@@ -72,6 +87,14 @@ const vagueActionPatterns = [
   'clean and clear',
   'work around it',
   'build today around it',
+  'use one reset cue',
+  'one simple focus cue',
+  'aim for a steadier start time',
+  'notice how focused',
+  'notice how sharp',
+  'practice mental consistency',
+  'first demanding task',
+  'day starts to feel noisy',
 ];
 
 const technicalJargonPatterns = [
@@ -104,6 +127,8 @@ const technicalJargonPatterns = [
   'extra cardio',
   'change the workout',
   'change today\'s workout',
+  'steady but not peak state',
+  'conditions are not perfect',
 ];
 
 const assignmentDecisionPatterns = [
@@ -171,6 +196,28 @@ const replacements: Array<[string, string]> = [
   ['keep today clean and clear', "keep today's protocol and sim at the normal pace"],
   ['work around it', "use that answer to adjust today's pace"],
   ['build today around it', "use that answer to choose today's first pressure level"],
+  ['Nora should aim for a steadier start time', 'Tonight, protect a 30-minute bedtime window'],
+  ['nora should aim for a steadier start time', 'tonight, protect a 30-minute bedtime window'],
+  ['Nora should', 'I should'],
+  ['nora should', 'I should'],
+  ['Nora can', 'I can'],
+  ['nora can', 'I can'],
+  ['Nora will', "I'll"],
+  ['nora will', "I'll"],
+  ['this sleep read is about', 'your sleep pattern points to'],
+  ['This sleep read is about', 'Your sleep pattern points to'],
+  ['This is a good day to', 'Use today to'],
+  ['this is a good day to', 'use today to'],
+  ['steady but not peak state', 'steady, not maxed out'],
+  ['conditions are not perfect', 'the day has friction'],
+  ['Use one reset cue', 'Use one 6-second exhale'],
+  ['use one reset cue', 'use one 6-second exhale'],
+  ['one simple focus cue', 'one 6-second exhale'],
+  ['aim for a steadier start time', 'protect a 30-minute bedtime window'],
+  ['notice how focused you feel', 'rate your focus'],
+  ['practice mental consistency', 'practice one steady decision at a time'],
+  ['when the day starts to feel noisy', "before the first hard choice"],
+  ['during your first demanding task', 'after the first five minutes of work'],
 ];
 
 const issue = (rule: string, detail: string): ValidationIssue => ({
@@ -261,6 +308,18 @@ export const validateNoraVoiceRubric = (
   for (const pattern of genericCheckInQuestionPatterns) {
     if (lowered.includes(pattern)) {
       violations.push(issue('nameTheThing', `contains generic check-in question '${pattern}'`));
+    }
+  }
+
+  for (const pattern of thirdPersonNoraPatterns) {
+    if (lowered.includes(pattern)) {
+      violations.push(issue('coachVoice', `speaks about Nora in third person with '${pattern}'`));
+    }
+  }
+
+  for (const pattern of reportVoicePatterns) {
+    if (lowered.includes(pattern)) {
+      violations.push(issue('coachVoice', `sounds like a report instead of Nora speaking with '${pattern}'`));
     }
   }
 

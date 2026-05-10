@@ -31,6 +31,34 @@ test('Nora voice rubric rejects physical programming prescriptions in sports int
   assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.plainAthleteLanguage'));
 });
 
+test('Nora voice rubric rejects report-style sleep read copy', () => {
+  const issues = validateNoraVoiceRubric(
+    'For physique prep, this sleep read is about confidence, routine, and decision fatigue. Use one reset cue when the day starts to feel noisy.',
+  );
+
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.coachVoice'));
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.concreteAction'));
+});
+
+test('Nora voice rubric rejects third-person Nora recommendations', () => {
+  const issues = validateNoraVoiceRubric(
+    'Recent sleep starts are spread by about 5h 4m. Nora should aim for a steadier start time before changing anything else.',
+  );
+
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.coachVoice'));
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.concreteAction'));
+});
+
+test('Nora voice rubric rejects polished but vague sports-intel reads', () => {
+  const issues = validateNoraVoiceRubric(
+    'Your body is in a steady but not peak state for men’s physique: sleep 7h 47m, HRV missing, resting HR 52, readiness 66. This is a good day to practice mental consistency when conditions are not perfect. Complete your Nora session, protect bedtime tonight, and notice how focused you feel during your first demanding task.',
+  );
+
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.coachVoice'));
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.plainAthleteLanguage'));
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.concreteAction'));
+});
+
 test('Nora voice rubric rewrites generic feeling questions into a specific trade', () => {
   const repaired = enforceNoraVoiceRubric('How you feeling?', {
     fallback: defaultNoraVoiceRubricFallback('How you feeling?'),
