@@ -591,7 +591,7 @@ const buildRecommendations = (
       sportModifiers: [sport.id],
       contraindications: [],
       evidenceRefs: trainingLoad.evidence,
-      reviewerAction: 'Flag as a mind-body support pattern: ask the athlete what cue helps them stay patient when the week feels heavy.',
+      reviewerAction: 'Flag as a mind-body support pattern: ask the athlete what simple phrase helps them stay patient when the week feels heavy.',
     });
   } else if (trainingLoad.loadBand === 'high') {
     recs.push({
@@ -603,7 +603,7 @@ const buildRecommendations = (
       sportModifiers: [sport.id],
       contraindications: [],
       evidenceRefs: trainingLoad.evidence,
-      reviewerAction: 'Surface as one-to-watch in the weekly note with a focus cue, not a workout change.',
+      reviewerAction: 'Surface as one-to-watch in the weekly note with a focus phrase, not a workout change.',
     });
   }
 
@@ -991,8 +991,8 @@ const generateSportsCandidateReads = (ledger: SportsFactLedger): SportsCandidate
       ledger,
       'data_quality',
       `The ${ledger.athleteContext.sportName} data is missing key pieces: ${ledger.missingInputs.slice(0, 2).join(' ') || 'key data is missing.'}`,
-      'That makes this a light body-state read, not a full pattern.',
-      'Use the reliable mental rep today: complete the Nora session and name one cue for staying focused.',
+      'That means the pattern is still light, so I should not overstate it.',
+      'Use the reliable mental rep today: complete the Nora session and name one simple phrase that helps you stay focused.',
       ledger.confidenceTier === 'degraded' ? 'degraded' : 'directional',
       84,
       ['thin-data gate activated'],
@@ -1022,7 +1022,7 @@ const generateSportsCandidateReads = (ledger: SportsFactLedger): SportsCandidate
       'recovery_limiter',
       `Readiness is ${formatBand(readiness.readinessBand)}${metricText}.`,
       'That does not make today a bad day; it makes today a composure opportunity.',
-      'Pick one cue before pressure shows up: calm, patient, or next play. Use it when the body feels flat.',
+      'Before pressure shows up, pick one simple phrase such as calm, patient, or next play. Use it when the body feels flat.',
       readiness.confidenceTier,
       readiness.readinessBand === 'concerning' ? 88 : 78,
       [`readiness band: ${readiness.readinessBand}`],
@@ -1036,7 +1036,7 @@ const generateSportsCandidateReads = (ledger: SportsFactLedger): SportsCandidate
       'load_spike',
       `Training load is ${formatBand(load.loadBand)}${acwr !== undefined ? ` with ACWR ${acwr}` : ''}.`,
       'Heavy weeks can make focus, patience, and emotional control harder.',
-      'Use this as a mental rep: choose one reset cue before the day starts and use it the first time frustration shows up.',
+      'Use this as a mental rep: before the day starts, choose one simple phrase you can say to yourself the first time frustration shows up.',
       load.confidenceTier,
       load.loadBand === 'concerning' ? 86 : 74,
       [`load band: ${load.loadBand}`],

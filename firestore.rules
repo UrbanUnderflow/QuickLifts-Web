@@ -20,6 +20,95 @@ service cloud.firestore {
         && request.resource.data.objectives is list;
     }
 
+    function isAdminManagedPublicReadCollection(collectionName) {
+      return collectionName in [
+        'app-config',
+        'authorProfiles',
+        'daily-reflections',
+        'legal-documents',
+        'macra-version',
+        'macra-versions',
+        'pageMetaData',
+        'pressKitData',
+        'pressReleases',
+        'pulsecheck-version',
+        'pulsecheck-versions',
+        'researchArticles',
+        'shortLinks',
+        'version',
+        'versions'
+      ];
+    }
+
+    function isAdminOnlyCollection(collectionName) {
+      return collectionName in [
+        'agent-commands',
+        'agent-deliverables',
+        'agent-group-chats',
+        'agent-interventions',
+        'agent-onboarding',
+        'agent-outcomes',
+        'agent-presence',
+        'agent-tasks',
+        'corporate-partners',
+        'creator-prospects',
+        'email-sequence-config',
+        'email-templates',
+        'equity-convertible-notes',
+        'equity-documents',
+        'equity-grants',
+        'equity-pool',
+        'equity-stakeholders',
+        'errorLogs',
+        'fitnessSeeker_leads',
+        'founder-budgets',
+        'friends-business-updates',
+        'friends-of-business',
+        'functionMetadata',
+        'investorAccess',
+        'investorAccessLogs',
+        'lead-list-items',
+        'lead-lists',
+        'lead-massage-jobs',
+        'notification-logs',
+        'northstar-proposed-objectives',
+        'outreach_campaigns',
+        'payoutRecords',
+        'progress-timeline',
+        'pulsecheck-conversation-tree',
+        'pulsecheck-nora-translation-log',
+        'pulsecheck-off-limits-config',
+        'pulsecheck-translation-table',
+        'pulsecheck-user-revenue-summaries',
+        'revenue-calculations',
+        'university-prospects',
+        'venture-prospects'
+      ];
+    }
+
+    function isLockedPrivateCollection(collectionName) {
+      return collectionName in [
+        'admin',
+        'beta',
+        'payments',
+        'subscriptions'
+      ];
+    }
+
+    function isExplicitlyRuledCollection(collectionName) {
+      return collectionName in [
+        'beta-applications',
+        'company-config',
+        'document-notes',
+        'programming-access',
+        'round-exports',
+        'signingRequests',
+        'user-reports'
+      ] || isAdminManagedPublicReadCollection(collectionName)
+        || isAdminOnlyCollection(collectionName)
+        || isLockedPrivateCollection(collectionName);
+    }
+
     function hasHumanUiAuditFields() {
       return request.resource.data.updatedBySource == 'human-ui'
         && request.resource.data.updatedByUid == request.auth.uid
@@ -57,7 +146,7 @@ service cloud.firestore {
         'Monthly Subscriber',
         'Annual Subscriber',
         'Sweat Equity Partner',
-        'Executive Partner',
+        'Executive Partner'
       ];
     }
 
@@ -82,6 +171,69 @@ service cloud.firestore {
         && value.termsPath.size() > 0
         && value.privacyPath is string
         && value.privacyPath.size() > 0;
+    }
+
+    function isValidAdminDocumentCreateOrUpdate(email) {
+      return request.resource.data.email == email
+        && request.resource.data.keys().hasOnly([
+          'email',
+          'createdAt',
+          'createdBy',
+          'updatedAt',
+          'updatedBy'
+        ]);
+    }
+
+    function isPublicBetaApplicationCreate() {
+      return request.resource.data.status == 'pending'
+        && isNonEmptyString(request.resource.data.email)
+        && isNonEmptyString(request.resource.data.name);
+    }
+
+    function isPublicProgrammingAccessCreate() {
+      return request.resource.data.status == 'requested'
+        && isNonEmptyString(request.resource.data.email);
+    }
+
+    function isPublicRoundExportCreate() {
+      return isNonEmptyString(request.resource.data.email)
+        && isNonEmptyString(request.resource.data.fileName)
+        && isNonEmptyString(request.resource.data.downloadURL)
+        && request.resource.data.roundData is map;
+    }
+
+    function isPublicDocumentNoteCreate() {
+      return isNonEmptyString(request.resource.data.documentId)
+        && isNonEmptyString(request.resource.data.authorName)
+        && isNonEmptyString(request.resource.data.content)
+        && request.resource.data.xPercent is number
+        && request.resource.data.yOffset is number;
+    }
+
+    function isPublicSigningViewUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'lastSignerActivityAt',
+          'status',
+          'updatedAt',
+          'viewedAt'
+        ])
+        && resource.data.status != 'signed'
+        && request.resource.data.status == 'viewed';
+    }
+
+    function isPublicSigningSignatureUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'lastSignerActivityAt',
+          'signatureData',
+          'signedAt',
+          'status',
+          'updatedAt'
+        ])
+        && resource.data.status != 'signed'
+        && request.resource.data.status == 'signed'
+        && request.resource.data.signatureData is map
+        && isNonEmptyString(request.resource.data.signatureData.typedName)
+        && isNonEmptyString(request.resource.data.signatureData.signatureFont);
     }
 
     function hasValidLegalAcceptanceOnCreate() {
@@ -136,6 +288,101 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Company-level config is public to read for apps, but only admins can write.
+    // north-star is handled above because it has stricter audit/payload checks.
+    match /company-config/{docId} {
+      allow read: if true;
+      allow create, update: if docId != 'north-star' && isAdminUser();
+      allow delete: if false;
+    }
+
+    // Admin membership is the source of truth for admin-gated surfaces. Existing
+    // admins can manage it; non-admin clients cannot grant themselves access.
+    match /admin/{email} {
+      allow read: if isAdminUser()
+        || (hasEmail() && request.auth.token.email == email);
+      allow create, update: if isAdminUser() && isValidAdminDocumentCreateOrUpdate(email);
+      allow delete: if isAdminUser();
+    }
+
+    match /admin-settings/{document=**} {
+      // Existing Next API routes use the client SDK server-side and do not carry
+      // caller auth into Firestore. Leaving this permissive until those routes
+      // move to a less brittle server auth model.
+      allow read, write: if true;
+    }
+
+    // Public app/config documents can be fetched by clients but authored only by admins.
+    match /{collectionName}/{document=**} {
+      allow read: if isAdminManagedPublicReadCollection(collectionName);
+      allow create, update, delete: if isAdminManagedPublicReadCollection(collectionName)
+        && isAdminUser();
+    }
+
+    // Internal admin workspaces, CRM data, campaign data, logs, and equity records.
+    match /{collectionName}/{document=**} {
+      allow read, create, update, delete: if isAdminOnlyCollection(collectionName)
+        && isAdminUser();
+    }
+
+    match /subscriptions/{subscriptionId} {
+      allow read: if isAdminUser()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if isAdminUser();
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isAdminUser()
+        || (isSignedIn() && resource.data.buyerId == request.auth.uid);
+      allow create, update, delete: if isAdminUser();
+    }
+
+    match /beta/{email} {
+      allow read: if isAdminUser()
+        || (hasEmail() && resource.data.email == request.auth.token.email)
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if isAdminUser();
+    }
+
+    match /beta-applications/{applicationId} {
+      allow read: if isAdminUser();
+      allow create: if isAdminUser() || isPublicBetaApplicationCreate();
+      allow update, delete: if isAdminUser();
+    }
+
+    match /programming-access/{requestId} {
+      allow read: if isAdminUser()
+        || (hasEmail() && resource.data.email == request.auth.token.email);
+      allow create: if isAdminUser() || isPublicProgrammingAccessCreate();
+      allow update, delete: if isAdminUser();
+    }
+
+    match /round-exports/{exportId} {
+      allow read, update, delete: if isAdminUser();
+      allow create: if isPublicRoundExportCreate();
+    }
+
+    match /user-reports/{reportId} {
+      allow read, update, delete: if isAdminUser();
+      allow create: if isSignedIn()
+        && request.resource.data.reportedBy == request.auth.uid;
+    }
+
+    match /document-notes/{noteId} {
+      allow read: if true;
+      allow create: if isPublicDocumentNoteCreate();
+      allow delete: if true;
+      allow update: if false;
+    }
+
+    match /signingRequests/{requestId} {
+      allow get, list: if true;
+      allow create, delete: if isAdminUser();
+      allow update: if isAdminUser()
+        || isPublicSigningViewUpdate()
+        || isPublicSigningSignatureUpdate();
+    }
+
     // User documents: allow clients to set partnerSource only at creation.
     // After creation, partnerSource is treated as immutable and can only be
     // changed by trusted backends using the Admin SDK (which bypasses rules).
@@ -147,10 +394,13 @@ service cloud.firestore {
       allow read: if true;
     }
 
-    // Fallback rule for all other documents. This remains open for now except
-    // for company-config/north-star, which is intentionally locked above.
-    match /{document=**} {
-      allow read, write: if document != 'company-config/north-star';
+    // Compatibility fallback: unknown collections are no longer public. They
+    // remain available to signed-in clients unless a stricter rule exists above.
+    match /{collectionName}/{document=**} {
+      allow read: if isSignedIn()
+        && !isExplicitlyRuledCollection(collectionName);
+      allow create, update, delete: if isSignedIn()
+        && !isExplicitlyRuledCollection(collectionName);
     }
   }
 }

@@ -267,7 +267,7 @@ const buildWatchlistFromInference = (
 
       const coachMoveParts: string[] = [];
       if (loadBand === 'concerning' || loadBand === 'high') {
-        coachMoveParts.push('Ask what cue helps them stay patient when the week feels heavy.');
+        coachMoveParts.push('Ask what simple phrase helps them stay patient when the week feels heavy.');
       }
       if (readinessBand === 'concerning' || readinessBand === 'one_to_watch') {
         coachMoveParts.push('Five-minute check-in before practice — make it about focus, energy, and composure.');
@@ -380,13 +380,13 @@ const buildGameDayLookFors = (
       candidates.push({
         athleteOrUnit: entry.athleteName,
         lookFor: 'flat energy, rushed choices, or checking out after a mistake',
-        ifThen: 'use one short cue and ask for the next-play response you want to see.',
+        ifThen: 'use one short phrase and ask for the next-play response you want to see.',
       });
     } else if (readiness.readinessBand === 'one_to_watch') {
       candidates.push({
         athleteOrUnit: entry.athleteName,
         lookFor: 'slower focus after corrections or frustration after a miss',
-        ifThen: 'keep feedback simple and reinforce the reset cue before the next rep.',
+        ifThen: 'keep feedback simple and give one phrase the athlete can use before the next rep.',
       });
     }
   }
@@ -428,7 +428,7 @@ const buildTopLine = (
       {
         whatChanged: `${namedAthletes} are wearing the load and recovery is sitting below their usual.`,
         who: namedAthletes,
-        firstAction: 'Use a short check-in and reinforce the mental cue you want under fatigue.',
+        firstAction: 'Use a short check-in. When fatigue shows up, give the athlete one simple phrase they can use in that moment.',
         secondaryThread:
           watching.length > 0
             ? `Separate thing — ${fillRow(watching[0])} is one to watch this week, surface them in the daily.`
@@ -439,7 +439,7 @@ const buildTopLine = (
     return {
       whatChanged: applyCoachLanguageTranslations(result.primary, sport.reportPolicy),
       who: namedAthletes,
-      firstAction: 'Use a short check-in and reinforce the mental cue you want under fatigue.',
+      firstAction: 'Use a short check-in. When fatigue shows up, give the athlete one simple phrase they can use in that moment.',
       secondaryThread: result.secondary
         ? applyCoachLanguageTranslations(result.secondary, sport.reportPolicy)
         : undefined,

@@ -10,11 +10,12 @@ Every athlete-facing Nora response must pass these checks before it ships:
 5. One question rule: ask one clear question at most.
 6. No mystery pronouns: avoid fog like "that energy", "the rep", "I'll match it", or "work around it" unless the message names the actual thing first.
 7. Show the trade: if you ask a question, say what you will do with the answer.
-8. Concrete action: name the actual Nora session, reset cue, reflection, routine behavior, or next mental-performance move. Lines like "train clean", "Recovery's workable", and "use it cleanly" fail.
+8. Concrete action: name the actual Nora session, plain reset phrase, reflection, routine behavior, or next mental-performance move. Lines like "train clean", "Recovery's workable", and "use it cleanly" fail.
 9. No repetitive dialogue: do not restate the same headspace, energy, confidence, or readiness read in adjacent Nora turns. Add a new decision, constraint, or question.
 10. Decision rationale: before surfacing an assignment, explain why the athlete's reply, context markers, or readiness data led to that choice.
 11. Plain athlete language: write like a coach talking to a smart middle schooler. Avoid filler terms like "baseline", "block", "push signal", "pullback signal", "accessories", "finishers", or "normal-start read"; say the actual mental action in everyday words.
 12. Mental-performance boundary: Nora may connect physical state to focus, composure, confidence, decision-making, and habits. Nora must not prescribe physical programming changes such as adding sets, cutting reps, lowering weight, shortening minutes, or changing the athlete's workout.
+13. Spell out the coaching moment: do not write in code. If the copy says "reset cue", "mental cue", "body-state read", "mental install", or any sport shorthand, rewrite it into a full sentence that says when the moment happens, what the athlete may feel or do, what the coach should say/do, and what staff still owns. Example: "When the game gets late in the shot clock and the guards are tired or mentally cluttered, don't give them a bunch of coaching points. Give them one simple mental reset phrase they can use in that moment."
 `;
 
 const tradeMarkers = [
@@ -88,6 +89,11 @@ const vagueActionPatterns = [
   'work around it',
   'build today around it',
   'use one reset cue',
+  'reset cue',
+  'mental cue',
+  'mental install',
+  'body-state read',
+  'mental-performance prompt',
   'one simple focus cue',
   'aim for a steadier start time',
   'notice how focused',
@@ -212,6 +218,11 @@ const replacements: Array<[string, string]> = [
   ['conditions are not perfect', 'the day has friction'],
   ['Use one reset cue', 'Use one 6-second exhale'],
   ['use one reset cue', 'use one 6-second exhale'],
+  ['reset cue', 'plain phrase the athlete can use in the moment'],
+  ['mental cue', 'plain phrase the athlete can use in the moment'],
+  ['mental install', 'one clear instruction for the exact moment it will be used'],
+  ['body-state read', 'physical pattern'],
+  ['mental-performance prompt', 'plain instruction'],
   ['one simple focus cue', 'one 6-second exhale'],
   ['aim for a steadier start time', 'protect a 30-minute bedtime window'],
   ['notice how focused you feel', 'rate your focus'],

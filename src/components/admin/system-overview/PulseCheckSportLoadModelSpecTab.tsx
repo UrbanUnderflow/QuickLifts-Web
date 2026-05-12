@@ -107,7 +107,7 @@ const COACH_LANGUAGE_BAND_TABLE = [
   ['Low', 'Comfortably under sport-tolerable load', '"Plenty of room", "fresh"'],
   ['Moderate', 'Within typical training week, no flags', '"On track", "solid week of work"'],
   ['High', 'Approaching sport-tolerable ceiling', '"Heavy week", "recent work is starting to show in the body-state data"'],
-  ['Concerning', 'Past sport-tolerable ceiling OR sustained high without recovery', '"Recovery is not keeping up with the week", "reinforce the mental cue you want under fatigue"'],
+  ['Concerning', 'Past sport-tolerable ceiling OR sustained high without recovery', '"Recovery is not keeping up with the week", "when fatigue shows up, ask one short question about focus and give the athlete one simple phrase to use before the next rep"'],
 ];
 
 const SCHEMA_FIELD = [

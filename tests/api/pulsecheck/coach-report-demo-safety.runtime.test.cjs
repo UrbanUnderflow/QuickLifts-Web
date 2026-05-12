@@ -7,6 +7,7 @@ const repoRoot = path.resolve(__dirname, '../../..');
 const demoRoutePath = path.join(repoRoot, 'src/pages/coach-report-demo/[sportId].tsx');
 const coachReportViewPath = path.join(repoRoot, 'src/components/coach-reports/CoachReportView.tsx');
 const hostedReportRoutePath = path.join(repoRoot, 'src/pages/coach-reports/[teamId]/[reportId].tsx');
+const coachReportServicePath = path.join(repoRoot, 'src/api/firebase/pulsecheckCoachReports.ts');
 
 const coachSurfaceForbiddenTerms = [
   'reviewerOnly',
@@ -56,4 +57,12 @@ test('hosted coach report route renders only the coach surface', () => {
     assert.equal(source.includes(term), false, `hosted route must not read or render internal term: ${term}`);
   }
   assert.doesNotMatch(source, /missingInputs|threshold trace|source provenance/i, 'hosted route must not surface reviewer/audit wording');
+});
+
+test('coach report service enforces language posture before publish', () => {
+  const source = fs.readFileSync(coachReportServicePath, 'utf8');
+
+  assert.match(source, /const assertCoachReportPublishable/, 'service should own a publish-time guard');
+  assert.match(source, /enforceLanguagePosture\(report\.coachSurface/, 'publish guard should audit coach-facing copy');
+  assert.match(source, /assertCoachReportPublishable\(existing\);[\s\S]*await updateDoc/, 'publish should audit before the Firestore status update');
 });

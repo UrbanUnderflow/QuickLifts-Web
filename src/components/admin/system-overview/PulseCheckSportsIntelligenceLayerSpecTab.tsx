@@ -87,7 +87,7 @@ const ARCHITECTURE_LAYERS = [
   ['Inputs', 'Device-agnostic biometric surface, PulseCheck sims, daily Nora check-ins, FWP workouts, Macra nutrition, sport-config policy.', 'Sources are heterogeneous. The layer treats them as inputs to a single interpretation pipeline; no consumer reads any source directly.'],
   ['Normalization', 'Adapters convert each source into the canonical record shape (Athlete Context Snapshot, Correlation Evidence Record, sport-config attribute values).', 'Renaming or fork-defining record types is forbidden — see Health Context Source Record Spec.'],
   ['Reasoning layer', 'Sports Fact Ledger → Candidate Read Engine → Scoring + Guardrails → Nora/Coach Copy Layer → Validated Intelligence Payload.', 'AI may phrase the read; code decides eligibility, support, usefulness, and rubric safety. The core question is how physical state shapes focus, composure, decisioning, confidence, and habit formation — not whether Nora should change the physical workout.'],
-  ['Output surfaces', 'Weekly Sports Intelligence Report, Game-Day Readiness Report, Early-Warning Alerts, Macra nutrition context, Nora coaching context, AuntEDNA escalation context.', 'Each surface has its own audience, latency, and copy posture. Coaches get pattern intelligence and supporting data; coaches keep authority over physical programming decisions.'],
+  ['Output surfaces', 'Weekly Sports Intelligence Report, Game-Day Readiness Report, Early-Warning Alerts, Macra nutrition context, Nora coaching context, AuntEDNA escalation context.', 'Each surface has its own audience, latency, and copy posture. Coaches get plain-language pattern intelligence and supporting data; coaches keep authority over physical programming decisions.'],
 ];
 
 const REASONING_LAYER_ROWS = [
@@ -135,7 +135,7 @@ const SPORT_PROFILE_FIELDS = [
 ];
 
 const OUTPUT_SURFACES = [
-  ['Weekly Sports Intelligence Report', 'Coach', 'Sundays before the week starts.', 'Team load trend, aggregate sentiment, cognitive movement (Focus / Composure / Decisioning), individual vs team-wide recovery patterns, athlete watchlist, mental-coaching prompts, and reviewer-visible validated payload trace. Walk-through with Pulse Check team weekly during pilot.'],
+  ['Weekly Sports Intelligence Report', 'Coach', 'Sundays before the week starts.', 'Team load trend, aggregate sentiment, cognitive movement (Focus / Composure / Decisioning), individual vs team-wide recovery patterns, athlete watchlist, plain-language coach messages, and reviewer-visible validated payload trace. Walk-through with Pulse Check team weekly during pilot.'],
   ['Game-Day Readiness Report', 'Coach', 'Morning of competition.', 'Athlete-by-athlete mind-body state combining biometric recovery, cognitive trajectory, sentiment 48h prior, optional travel impact factor, and pre-competition protocols. Each athlete read must trace to a selected candidate and source freshness state.'],
   ['Early-Warning Alert', 'Coach', 'Real-time after review gate.', 'Sustained pattern flags are candidate alerts only until reviewed: individual under-recovery, team-wide under-recovery, sudden sentiment shift, cognitive decline. Clinical-threshold signals do NOT route here; they go through escalation.'],
   ['Coach Nora Transparency Panel', 'Coach / reviewer', 'On athlete review surfaces.', 'Read-only context panel showing recent Nora conversations plus recent assigned protocols / sims and rationale. It helps staff understand what Nora has already told the athlete without giving coaches raw athlete-Nora message review powers from Nora Guard.'],
@@ -147,14 +147,14 @@ const OUTPUT_SURFACES = [
 const ATHLETE_INSIGHT_TYPES = [
   ['Compounding Momentum', 'Sleep, recovery, routine, nutrition, and mental training are lining up.', 'Praise the pattern and teach that the small things are becoming the big edge.'],
   ['Composure Opportunity', 'Recovery is lower, but not a clinical or safety state.', 'Frame the day as a useful chance to practice staying steady when conditions are not perfect.'],
-  ['Focus Support Day', 'Sleep timing, recovery, or load suggests attention may take more effort.', 'Give one simple focus cue or reset before the first demanding task.'],
+  ['Focus Support Day', 'Sleep timing, recovery, or load suggests attention may take more effort.', 'Say when focus may get harder, what the athlete may feel, and the one simple phrase or routine to use before the first demanding task.'],
   ['Recovery Debt Pattern', 'Under-recovery repeats across several days.', 'Teach that the system needs support; protect bedtime, fueling rhythm, or recovery routine without shame language.'],
   ['Mismatch Insight', 'Mental training is improving while physical habits are not supporting it, or vice versa.', 'Show the athlete how body-state habits make mental reps stick deeper.'],
   ['Steady Builder Day', 'No dramatic signal.', 'Use average days to build identity: complete the mental rep and keep the routine clean.'],
 ];
 
 const COACH_PATTERN_ROWS = [
-  ['Individual pattern', 'One athlete is under-recovered or carrying higher load while the team is steady.', 'Name the athlete, show the supporting evidence, and suggest a mental-coaching prompt such as a quick composure check-in or reset cue.'],
+  ['Individual pattern', 'One athlete is under-recovered or carrying higher load while the team is steady.', 'Name the athlete, show the supporting evidence, and spell out the coaching moment in full sentences: when it may happen, what the athlete may feel or do, and what simple language the coach should use.'],
   ['Team-wide pattern', 'A meaningful share of the roster shows lower recovery, sleep disruption, sentiment drop, or cognitive drift.', 'Surface it as a possible environment or schedule pattern for coach review, not as an automatic training correction.'],
   ['Unit / role pattern', 'A position group, event group, lineup role, or travel group shows a shared state pattern.', 'Help the coach see whether the issue clusters by role, minutes, travel, class schedule, or competition density.'],
   ['Compounding strength', 'The team or athlete is stacking sleep, mental reps, check-ins, and stable physiology.', 'Make the good pattern visible so coaches can reinforce the identity and habits that are working.'],
@@ -164,8 +164,8 @@ const COACH_PATTERN_ROWS = [
 const COACH_BOUNDARY_ROWS = [
   ['Give the data', 'Recovery distribution, load trend, sleep consistency, cognitive movement, check-in trend, adherence, and named evidence refs.', 'Specific physical programming directives such as cut reps, reduce minutes, adjust contact, throwing, jump, sprint, or lift volume.'],
   ['Interpret the pattern', 'Whether the pattern is individual, unit-level, or team-wide, and why that distinction matters for a coach.', 'Blaming the athlete or declaring a coaching problem without enough evidence.'],
-  ['Offer mental-coaching prompts', 'Questions and cues a coach can use: “What helps you stay composed when energy is lower?” “What is your next-play cue today?”', 'Replacing the coach’s technical, tactical, or strength-and-conditioning judgment.'],
-  ['Preserve authority', 'Clear language that the report is decision support, not a clearance tool or physical training plan.', 'Any phrasing that makes Nora sound like the head coach, athletic trainer, or clinician.'],
+  ['Offer plain-language coach messages', 'Concrete sentences a coach can use: “When the game gets late in the shot clock and the guards are tired or mentally cluttered, don’t give them a bunch of coaching points. Give them one simple mental reset phrase they can use in that moment.”', 'Replacing the coach’s technical, tactical, or strength-and-conditioning judgment.'],
+  ['Preserve authority', 'Clear language that the report gives context for coach judgment, not a clearance tool or physical training plan.', 'Any phrasing that makes Nora sound like the head coach, athletic trainer, or clinician.'],
 ];
 
 const MACRA_HOOKUP_ROWS = [
@@ -208,7 +208,12 @@ const NON_NEGOTIABLES = [
   {
     title: 'Reports Carry The Interpretation, Dashboard Stays Thin',
     accent: 'green' as const,
-    body: 'Coaches do receive a dashboard, but the dashboard is intentionally thin. The interpretation layer carries the work and lands in concise narrative reports timed to coaching decisions; the dashboard exists to make those reports easy to find, scan, and act on without forcing the coach to dig through raw scores. The coach gets pattern intelligence and mental-performance prompts — never raw vendor scores delivered as judgment.',
+    body: 'Coaches do receive a dashboard, but the dashboard is intentionally thin. The interpretation layer carries the work and lands in concise narrative reports timed to coaching decisions; the dashboard exists to make those reports easy to find, scan, and act on without forcing the coach to dig through raw scores. The coach gets pattern intelligence and plain-language coach messages — never raw vendor scores delivered as judgment.',
+  },
+  {
+    title: 'Spell Out The Coaching Moment',
+    accent: 'green' as const,
+    body: 'Coach-facing copy must not speak in code. Every point must say when the moment shows up, what the athlete may feel or do, what the coach should say or do, and what staff still owns. Terms like reset cue, mental install, body-state read, and decision support fail unless immediately rewritten into plain English.',
   },
   {
     title: 'Clinical Boundary Is Architectural',
@@ -223,7 +228,7 @@ const NON_NEGOTIABLES = [
   {
     title: 'Plain Athlete Language',
     accent: 'green' as const,
-    body: 'Athlete-facing copy must sound like a coach talking to a smart middle schooler: clear, direct, and specific. Words like baseline, block, push signal, pullback signal, accessories, finishers, and normal-start read fail unless rewritten into an everyday mental action such as complete the Nora session, use one reset cue, protect bedtime, or notice focus during the first demanding task.',
+    body: 'Athlete-facing copy must sound like a coach talking to a smart middle schooler: clear, direct, and specific. Words like baseline, block, push signal, pullback signal, accessories, finishers, and normal-start read fail unless rewritten into an everyday mental action such as complete the Nora session, use one simple phrase when frustration shows up, protect bedtime, or notice focus during the first demanding task.',
   },
   {
     title: 'Coach Owns Physical Programming',
@@ -251,7 +256,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           },
           {
             title: 'Coach Context Without Overreach',
-            body: 'Coach reports distinguish individual under-recovery from team-wide under-recovery, show supporting data and trends, and offer mental-coaching prompts so coaches can make their own physical training decisions.',
+            body: 'Coach reports distinguish individual under-recovery from team-wide under-recovery, show supporting data and trends, and spell out the exact coaching moment in plain English so coaches can make their own physical training decisions.',
           },
         ]}
       />
@@ -338,7 +343,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           <InfoCard
             title="Coach Job"
             accent="green"
-            body="Show coaches which patterns are individual, unit-level, or team-wide, with enough supporting data to inform their own judgment. Sports Intelligence offers mental-performance prompts and pattern context; it does not prescribe the physical program."
+            body="Show coaches which patterns are individual, unit-level, or team-wide, with enough supporting data to inform their own judgment. Sports Intelligence offers plain-language coach messages and pattern context; it does not prescribe the physical program."
           />
         </CardGrid>
         <DataTable columns={['Athlete Insight Type', 'When It Fires', 'What It Should Teach']} rows={ATHLETE_INSIGHT_TYPES} />
@@ -439,7 +444,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           <InfoCard
             title="Coach Reports + Thin Coach Dashboard"
             accent="green"
-            body="Coaches make decisions from reports — concise, narrative outputs timed to when coaching decisions get made. The report must distinguish individual vs team-wide patterns so the coach can tell whether a state issue is isolated, clustered, or systemic. It surfaces data, trend, watchlist, adherence/coverage state, and mental-coaching prompts; it does not tell the coach how to modify the physical program. Pulse Check team does a 20-minute weekly walk-through with each head coach during pilot."
+            body="Coaches make decisions from reports — concise, narrative outputs timed to when coaching decisions get made. The report must distinguish individual vs team-wide patterns so the coach can tell whether a state issue is isolated, clustered, or systemic. It surfaces data, trend, watchlist, adherence/coverage state, and plain-language coaching moments; it does not tell the coach how to modify the physical program. Pulse Check team does a 20-minute weekly walk-through with each head coach during pilot."
           />
         </CardGrid>
       </SectionBlock>

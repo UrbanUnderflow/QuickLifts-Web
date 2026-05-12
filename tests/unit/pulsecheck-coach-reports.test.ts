@@ -18,11 +18,12 @@ const installFirebaseEnv = () => {
 
 const loadSportsIntelligenceModules = async () => {
   installFirebaseEnv();
-  const [coachReports, sportConfig] = await Promise.all([
+  const [coachReports, sportConfig, demos] = await Promise.all([
     import('../../src/api/firebase/pulsecheckCoachReports'),
     import('../../src/api/firebase/pulsecheckSportConfig'),
+    import('../../src/api/firebase/pulsecheckSportReportDemos'),
   ]);
-  return { coachReports, sportConfig };
+  return { coachReports, sportConfig, demos };
 };
 
 test('enforceLanguagePosture catches universal and sport-localized banned phrases', async () => {
@@ -73,6 +74,49 @@ test('enforceLanguagePosture catches every universal coach-surface banned term',
       ),
       `${phrase} should be reported as a universal violation`
     );
+  }
+});
+
+test('enforceLanguagePosture catches coded sports-intelligence shorthand', async () => {
+  const { coachReports, sportConfig } = await loadSportsIntelligenceModules();
+  const basketball = sportConfig.getDefaultPulseCheckSports().find((sport) => sport.id === 'basketball');
+  assert.ok(basketball);
+
+  const result = coachReports.enforceLanguagePosture(
+    {
+      topLine: {
+        whatChanged: 'The guards are one to watch.',
+        who: 'M. Johnson and T. Davis',
+        firstAction: 'Keep Wednesday mental install to one late-clock reset cue.',
+      },
+      watchlist: [
+        {
+          athleteName: 'M. Johnson',
+          whyMatters: 'Body-state read shows fatigue.',
+          coachMove: 'Use this as staff decision support.',
+        },
+      ],
+    },
+    basketball
+  );
+
+  assert.equal(result.passed, false);
+  assert.ok(
+    result.violations.some((violation) => violation.phrase === 'coded coaching shorthand'),
+    'coded shorthand should fail the language audit'
+  );
+});
+
+test('coach-report demo fixtures pass the executable language posture gate', async () => {
+  const { coachReports, sportConfig, demos } = await loadSportsIntelligenceModules();
+  const examples = demos.COACH_REPORT_DEMO_EXAMPLES || demos.default?.COACH_REPORT_DEMO_EXAMPLES;
+  assert.ok(examples);
+
+  const sports = new Map(sportConfig.getDefaultPulseCheckSports().map((sport) => [sport.id, sport]));
+  for (const [sportId, example] of Object.entries(examples)) {
+    const sport = sports.get(sportId) || sports.get('other');
+    const result = coachReports.enforceLanguagePosture(example, sport);
+    assert.equal(result.passed, true, `${sportId} demo should pass: ${JSON.stringify(result.violations)}`);
   }
 });
 

@@ -431,7 +431,7 @@ const golfReportPolicy: PulseCheckSportReportPolicy = {
     { id: 'caffeine_jitters', label: 'Caffeine jitters', inputFamilies: ['nutrition_hydration_context', 'sentiment', 'recovery'], linkedDimensions: ['composure'] },
   ],
   coachActions: [
-    { id: 'keep_cue_count_to_one', label: 'Keep cue count to one', linkedSignals: ['bad_shot_carryover', 'commitment_and_target_clarity'] },
+    { id: 'keep_cue_count_to_one', label: 'Keep the coach message to one simple phrase', linkedSignals: ['bad_shot_carryover', 'commitment_and_target_clarity'] },
     { id: 'reinforce_target_routine_acceptance', label: 'Reinforce target/routine/acceptance', linkedSignals: ['pre_shot_routine_stability', 'bad_shot_recovery'] },
     { id: 'plan_steady_small_fueling_windows', label: 'Plan steady small fueling windows', linkedSignals: ['caffeine_hydration_timing', 'late_round_fatigue_and_heat'] },
   ],
@@ -443,7 +443,7 @@ const golfReportPolicy: PulseCheckSportReportPolicy = {
   languagePosture: {
     summary: 'Caddie-style language focused on target, commitment, routine, acceptance, tempo, and course management.',
     recommendedLanguage: ['target', 'commitment', 'routine', 'acceptance', 'tempo', 'course management', 'walk', 'window'],
-    mustAvoid: ['Swing rebuilds', 'Multiple technical cues', 'Ignoring course conditions and round duration'],
+    mustAvoid: ['Swing rebuilds', 'Multiple technical thoughts', 'Ignoring course conditions and round duration'],
   },
   dimensionMap: {
     focus: ['pre-shot routine', 'target clarity', 'putting attention'],
@@ -580,8 +580,8 @@ const soccerReportPolicy: PulseCheckSportReportPolicy = {
     { id: 'underfueling_during_match_block', label: 'Underfueling during heavy match block', inputFamilies: ['nutrition_hydration_context', 'training_load'], linkedDimensions: ['composure', 'focus'] },
   ],
   coachActions: [
-    { id: 'modulate_small_sided_volume_by_position', label: 'Modulate small-sided volume by position', linkedSignals: ['high_speed_run_spike_low_recovery', 'fixture_congestion_load'] },
-    { id: 'use_role_specific_scanning_cues', label: 'Use role-specific scanning cues', linkedSignals: ['scanning_first_touch_pressure'] },
+    { id: 'modulate_small_sided_volume_by_position', label: 'Review small-sided volume with staff by position', linkedSignals: ['high_speed_run_spike_low_recovery', 'fixture_congestion_load'] },
+    { id: 'use_role_specific_scanning_cues', label: 'Use role-specific scanning language', linkedSignals: ['scanning_first_touch_pressure'] },
     { id: 'reinforce_next_action_communication', label: 'Reinforce next-action communication after errors', linkedSignals: ['composure_decline_after_mistakes', 'goalkeeper_confidence_communication'] },
   ],
   earlyWarningFamilies: [
@@ -713,7 +713,7 @@ const baseballReportPolicy: PulseCheckSportReportPolicy = {
   ],
   coachActions: [
     { id: 'protect_arm_care_window', label: 'Protect arm-care window', linkedSignals: ['throwing_workload_spike', 'pitcher_catcher_readiness'] },
-    { id: 'keep_cueing_routine_based', label: 'Keep cueing routine-based', linkedSignals: ['pitch_at_bat_routine_quality'] },
+    { id: 'keep_cueing_routine_based', label: 'Keep language routine-based', linkedSignals: ['pitch_at_bat_routine_quality'] },
     { id: 'use_at_bat_reset_prompts', label: 'Use at-bat-to-at-bat reset prompts', linkedSignals: ['command_confidence_slump_reset'] },
   ],
   earlyWarningFamilies: [
@@ -781,7 +781,7 @@ const softballReportPolicy: PulseCheckSportReportPolicy = {
   coachActions: [
     { id: 'plan_predictable_fueling_windows', label: 'Plan predictable fueling windows', linkedSignals: ['tournament_underfueling', 'all_day_fueling_heat'] },
     { id: 'check_throwing_heavy_athletes_for_focus_support', label: 'Check throwing-heavy athletes for focus support', linkedSignals: ['throwing_workload_spike', 'pitcher_catcher_workload'] },
-    { id: 'use_inning_reset_cues', label: 'Use inning-to-inning reset cues', linkedSignals: ['error_carryover', 'pitch_to_pitch_reset'] },
+    { id: 'use_inning_reset_cues', label: 'Use the same inning-to-inning phrase after errors', linkedSignals: ['error_carryover', 'pitch_to_pitch_reset'] },
   ],
   earlyWarningFamilies: [
     { id: 'all_day_underfueling_pattern', label: 'All-day underfueling pattern', inputFamilies: ['nutrition_hydration_context', 'training_load', 'heat_context'] },
@@ -789,7 +789,7 @@ const softballReportPolicy: PulseCheckSportReportPolicy = {
     { id: 'sustained_error_carryover', label: 'Sustained error carryover with sentiment drop', inputFamilies: ['composure_trend', 'sentiment'] },
   ],
   languagePosture: {
-    summary: 'Pitch-to-pitch, inning-to-inning, dugout-practical language with short action cues.',
+    summary: 'Pitch-to-pitch, inning-to-inning, dugout-practical language with short action phrases.',
     recommendedLanguage: ['approach', 'reset', 'inning', 'pitch', 'dugout', 'fueling window', 'next at-bat'],
     mustAvoid: ['Throwing rehab guidance', 'Mechanical rebuilds', 'Ignoring all-day tournament logistics'],
   },
@@ -915,7 +915,7 @@ const tennisReportPolicy: PulseCheckSportReportPolicy = {
   coachActions: [
     { id: 'use_between_point_reset_plans', label: 'Use between-point reset plans', linkedSignals: ['between_point_routine', 'momentum_swing_volatility'] },
     { id: 'prepare_portable_fueling_sodium', label: 'Prepare portable fueling and sodium', linkedSignals: ['changeover_fueling', 'heat_stress'] },
-    { id: 'keep_tactical_cue_count_low', label: 'Keep tactical cue count low', linkedSignals: ['point_construction', 'unforced_error_rise_with_fatigue'] },
+    { id: 'keep_tactical_cue_count_low', label: 'Keep tactical messages simple', linkedSignals: ['point_construction', 'unforced_error_rise_with_fatigue'] },
   ],
   earlyWarningFamilies: [
     { id: 'heat_block_overload', label: 'Heat-block overload', inputFamilies: ['heat_context', 'training_load'] },
@@ -980,7 +980,7 @@ const swimmingReportPolicy: PulseCheckSportReportPolicy = {
     { id: 'taper_anxiety', label: 'Taper anxiety', inputFamilies: ['sentiment', 'composure_trend'], linkedDimensions: ['composure'] },
   ],
   coachActions: [
-    { id: 'align_cues_to_race_segment', label: 'Align cues to race segment', linkedSignals: ['race_segment_readiness', 'split_fade_trend'] },
+    { id: 'align_cues_to_race_segment', label: 'Align language to the race segment', linkedSignals: ['race_segment_readiness', 'split_fade_trend'] },
     { id: 'protect_recovery_during_taper', label: 'Protect recovery during taper', linkedSignals: ['taper_state', 'taper_anxiety'] },
     { id: 'use_rhythm_based_language', label: 'Use rhythm-based language', linkedSignals: ['warm_up_race_timing', 'water_feel'] },
   ],
@@ -1048,7 +1048,7 @@ const trackFieldReportPolicy: PulseCheckSportReportPolicy = {
   ],
   coachActions: [
     { id: 'separate_event_group_logic', label: 'Separate sprint/jump/throw/distance logic in the weekly plan', linkedSignals: ['event_group_demands', 'distance_vs_power_recovery'] },
-    { id: 'use_event_specific_cueing', label: 'Use event-specific cueing', linkedSignals: ['approach_rhythm_consistency', 'technical_rhythm'] },
+    { id: 'use_event_specific_cueing', label: 'Use event-specific language', linkedSignals: ['approach_rhythm_consistency', 'technical_rhythm'] },
     { id: 'avoid_unnecessary_volume_meet_week', label: 'Avoid unnecessary volume near meet day', linkedSignals: ['speed_power_drop_high_load', 'meet_schedule_heat'] },
   ],
   earlyWarningFamilies: [
@@ -1207,7 +1207,7 @@ const crossfitReportPolicy: PulseCheckSportReportPolicy = {
     mustAvoid: ['Treating every miss as mental toughness', 'Ignoring movement standards', 'One fueling plan for all event types'],
   },
   dimensionMap: {
-    focus: ['movement standards', 'transition discipline', 'pacing cues'],
+    focus: ['movement standards', 'transition discipline', 'simple pacing language'],
     composure: ['response when workouts hurt', 'failed-rep recovery', 'leaderboard pressure'],
     decisioning: ['event pacing', 'limiter management', 'skill vs strength tradeoff'],
   },
@@ -1327,7 +1327,7 @@ const hockeyReportPolicy: PulseCheckSportReportPolicy = {
   ],
   coachActions: [
     { id: 'check_heavy_shift_athletes_for_bench_reset_support', label: 'Check heavy-shift athletes for bench-reset support', linkedSignals: ['shift_fatigue', 'shift_length_repeatability'] },
-    { id: 'use_bench_reset_cueing', label: 'Use bench-reset cueing', linkedSignals: ['bench_reset', 'puck_decision_panic'] },
+    { id: 'use_bench_reset_cueing', label: 'Use one simple bench phrase before the next shift', linkedSignals: ['bench_reset', 'puck_decision_panic'] },
     { id: 'separate_goalie_skater_recommendations', label: 'Separate goalie and skater recommendations', linkedSignals: ['goalie_confidence_swings', 'goalie_tracking_confidence'] },
   ],
   earlyWarningFamilies: [
@@ -1383,7 +1383,7 @@ const gymnasticsReportPolicy: PulseCheckSportReportPolicy = {
       { id: 'routine_readiness', label: 'Routine readiness', inputFamilies: ['focus_trend', 'sport_metric_routine_hit_rate'], linkedDimensions: ['focus'] },
       { id: 'air_awareness_confidence', label: 'Air-awareness confidence', inputFamilies: ['composure_trend', 'sentiment'], linkedDimensions: ['composure'] },
       { id: 'psychological_safety', label: 'Psychological safety', inputFamilies: ['sentiment', 'composure_trend'], linkedDimensions: ['composure'] },
-      { id: 'apparatus_specific_cueing', label: 'Apparatus-specific cueing', inputFamilies: ['focus_trend', 'role_context_apparatus'], linkedDimensions: ['focus'] },
+      { id: 'apparatus_specific_cueing', label: 'Apparatus-specific language', inputFamilies: ['focus_trend', 'role_context_apparatus'], linkedDimensions: ['focus'] },
     ],
   },
   watchlistSignals: [
@@ -1408,7 +1408,7 @@ const gymnasticsReportPolicy: PulseCheckSportReportPolicy = {
     mustAvoid: ['Weight or leanness shortcuts', 'Return-to-skill clearance', 'Shaming fear responses'],
   },
   dimensionMap: {
-    focus: ['routine sequence', 'apparatus cue', 'landing attention'],
+    focus: ['routine sequence', 'apparatus language', 'landing attention'],
     composure: ['fear blocks', 'meet-day nerves', 'perfectionism spiral'],
     decisioning: ['skill readiness communication', 'routine progression', 'attempt selection'],
   },
@@ -1716,7 +1716,7 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       macraNutritionContext: 'Baseball nutrition should respect long game windows, travel, heat, bullpen timing, and throwing recovery. Keep fueling practical for dugout access and avoid heavy choices that disrupt game feel.',
       riskFlags: ['throwing workload spike', 'slump rumination', 'command anxiety', 'long-game underfueling', 'travel fatigue', 'heat and hydration issues'],
       restrictedAdvice: ['Do not diagnose throwing pain or prescribe rehab.', 'Do not rebuild swing or pitching mechanics without coach context.', 'Do not ignore pitcher versus position-player demands.'],
-      recommendedLanguage: ['Use pitch-to-pitch and at-bat-to-at-bat language.', 'Emphasize routines, approach, and controllable reads.', 'Keep mechanical guidance cue-based and conservative.'],
+      recommendedLanguage: ['Use pitch-to-pitch and at-bat-to-at-bat language.', 'Emphasize routines, approach, and controllable reads.', 'Keep mechanical guidance plain, conservative, and staff-owned.'],
     },
     reportPolicy: baseballReportPolicy,
   }),
@@ -1753,7 +1753,7 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       macraNutritionContext: 'Softball nutrition should account for tournament days, heat, repeated games, dugout fueling, and throwing recovery. Favor predictable foods, hydration, and small repeatable fueling windows.',
       riskFlags: ['tournament underfueling', 'heat stress', 'throwing workload spike', 'error carryover', 'slump rumination', 'catcher fatigue'],
       restrictedAdvice: ['Do not prescribe throwing rehab or diagnose pain.', 'Do not rebuild swing or pitching mechanics without coach context.', 'Do not ignore all-day tournament fueling logistics.'],
-      recommendedLanguage: ['Use pitch-to-pitch and inning-to-inning reset language.', 'Keep cues short and action oriented.', 'Balance confidence with tactical approach.'],
+      recommendedLanguage: ['Use pitch-to-pitch and inning-to-inning reset language.', 'Keep phrases short, plain, and action oriented.', 'Balance confidence with tactical approach.'],
     },
     reportPolicy: softballReportPolicy,
   }),
@@ -1792,7 +1792,7 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       macraNutritionContext: 'Volleyball nutrition should account for tournament waves, jump volume, shoulder load, hydration, and long gaps between matches. Keep fueling light, repeatable, and timed around play windows.',
       riskFlags: ['jump load spike', 'shoulder volume', 'serve-receive anxiety', 'communication breakdown', 'tournament underfueling', 'landing fatigue'],
       restrictedAdvice: ['Do not give generic confidence advice without rotation and role context.', 'Do not prescribe shoulder or knee rehab.', 'Do not ignore tournament timing and long match gaps.'],
-      recommendedLanguage: ['Use point-to-point reset language.', 'Frame cues around read, platform, timing, and communication.', 'Separate technical cue from emotional reset.'],
+      recommendedLanguage: ['Use point-to-point reset language.', 'Frame the message around read, platform, timing, and communication.', 'Separate technical language from emotional reset.'],
     },
     reportPolicy: volleyballReportPolicy,
   }),
@@ -1829,7 +1829,7 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       macraNutritionContext: 'Tennis nutrition should account for match duration uncertainty, heat, sweat rate, tournament density, and court changeovers. Prioritize portable fueling, sodium, and recovery between matches.',
       riskFlags: ['heat stress', 'cramping risk', 'momentum spirals', 'serve yips', 'long-match underfueling', 'shoulder or elbow load', 'travel fatigue'],
       restrictedAdvice: ['Do not rebuild strokes without coach context.', 'Do not ignore surface and match duration uncertainty.', 'Do not give medical advice for tendon pain or cramping.'],
-      recommendedLanguage: ['Use point-by-point and between-point language.', 'Give reset routines and tactical intentions.', 'Keep cues simple enough to use mid-match.'],
+      recommendedLanguage: ['Use point-by-point and between-point language.', 'Give reset routines and tactical intentions.', 'Keep phrases simple enough to use mid-match.'],
     },
     reportPolicy: tennisReportPolicy,
   }),
@@ -1862,11 +1862,11 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       metric('swimming', 'sessionRpe', 'Session RPE', '1-10', 'recovery', 6),
     ],
     prompting: {
-      noraContext: 'Coach swimming through event distance, stroke mechanics, pacing, taper state, race anxiety, start/turn execution, and water feel. Keep cues rhythm-based and specific to the race segment.',
+      noraContext: 'Coach swimming through event distance, stroke mechanics, pacing, taper state, race anxiety, start/turn execution, and water feel. Keep the message rhythm-based and specific to the race segment.',
       macraNutritionContext: 'Swimming nutrition should account for high training volume, double sessions, dryland, early practices, taper, and meet-day race timing. Recovery fueling and hydration matter even when sweat is less visible.',
       riskFlags: ['taper anxiety', 'underfueling during doubles', 'shoulder load', 'race pacing panic', 'meet-day fueling gaps', 'sleep disruption from early practice'],
       restrictedAdvice: ['Do not prescribe shoulder rehab or diagnose pain.', 'Do not give generic endurance advice without event distance.', 'Do not ignore taper or championship timing.'],
-      recommendedLanguage: ['Use race-segment language: start, breakout, turn, finish.', 'Translate mindset into rhythm, breath, and execution cues.', 'Respect coach-defined stroke mechanics.'],
+      recommendedLanguage: ['Use race-segment language: start, breakout, turn, finish.', 'Translate mindset into rhythm, breath, and execution phrases.', 'Respect coach-defined stroke mechanics.'],
     },
     reportPolicy: swimmingReportPolicy,
   }),
@@ -1904,7 +1904,7 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       macraNutritionContext: 'Track nutrition should reflect event group, meet schedule, body composition pressure, training phase, and heat. Distance athletes, sprinters, jumpers, and throwers should not receive identical fueling advice.',
       riskFlags: ['event mismatch', 'peaking anxiety', 'hamstring or tendon load', 'underfueling in distance athletes', 'weight pressure', 'technical overthinking', 'meet-day timing errors'],
       restrictedAdvice: ['Do not give generic running advice without event group.', 'Do not prescribe injury rehab.', 'Do not recommend weight changes without event, phase, and staff context.'],
-      recommendedLanguage: ['Use event-specific language and concise technical cues.', 'Separate arousal, rhythm, and execution.', 'Respect peaking and taper timing.'],
+      recommendedLanguage: ['Use event-specific language and concise technical phrases.', 'Separate arousal, rhythm, and execution.', 'Respect peaking and taper timing.'],
     },
     reportPolicy: trackFieldReportPolicy,
   }),
@@ -2847,7 +2847,83 @@ export const PULSECHECK_COACH_LANGUAGE_UNIVERSAL_BANLIST = [
   'adjust jump volume',
   'adjust high-speed and contact dose',
   'adjust shift and workload expectations',
+  'cap repeat-sprint volume',
+  'cap shift length',
+  'cap defensive reps',
+  'cap Reyes at 75 pitches',
+  'cap Sanchez at 100 pitches',
+  'no live reps',
+  'pull one rep',
+  'pull Reyes from',
+  'pull Diaz out',
+  'pull Sanders out',
+  'skip extra warm-up balls',
+  'skip Tuesday',
+  'skip hard live-go',
+  'scale seven-on-seven',
+  'walking-only cardio',
+  'reduce daily step target',
+  'split catching',
+  'go to the bullpen',
+  'shorten possessions',
+  'shorten the between-set tactical talk',
 ] as const;
+
+const PHYSICAL_PROGRAMMING_BOUNDARY_FALLBACKS = {
+  firstAction:
+    'Spell out the coaching moment: name when it will show up, what the athlete may feel or do, and the one simple phrase or routine the coach should give. Staff owns any physical or tactical change',
+  coachMove:
+    'When this shows up, do not pile on coaching points. Give the athlete one simple phrase or routine they can use in that moment, and let staff own any physical or tactical change.',
+  gameDay:
+    'If this shows up in the game, do not add a list of coaching points. Give one simple phrase the athlete can use right then; staff owns any physical or tactical decision.',
+  synthesis:
+    'This week, the physical pattern tells us where focus, composure, or decision-making may get harder. The coach should give simple language for that moment while staff owns the physical plan.',
+};
+
+const PHYSICAL_PROGRAMMING_BOUNDARY_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+  {
+    label: 'physical volume or dose directive',
+    pattern:
+      /\b(?:pull|drop|skip|cap|limit|scale|reduce|increase|add|replace|cut|sit|bench)\b[^.?!]{0,100}\b(?:reps?|sets?|volume|yards?|pitches?|pitch\s*count|innings?|minutes?|seconds?|shift(?:\s+length)?|cardio|steps?|metcon|warm-?up|live(?:\s+reps?)?|block|session|practice|skate|throwing|jump|sprint|strength|bullpen|catching|lineup|rotation|workout|exercise|load|dose)\b/i,
+  },
+  {
+    label: 'specific numeric physical prescription',
+    pattern:
+      /\b(?:at|to|by|back by)\s+\d+(?:,\d{3})?\s*(?:reps?|sets?|pitches?|minutes?|seconds?|yards?|innings?|steps?|lbs?|pounds?)\b/i,
+  },
+  {
+    label: 'lineup, tactical, or substitution directive',
+    pattern:
+      /\b(?:start him|start her|start them|swap|split catching|substitute|fresh midfielder|rotate the|pair him|pair her|go to the bullpen|change on the fly|save .* for|plan substitute|designed early possession|early-clock action|simplify shape|sit a fullback|shorten possessions)\b/i,
+  },
+  {
+    label: 'practice structure directive',
+    pattern:
+      /\b(?:walk-through(?:\s+\w+){0,4}\s+only|no live reps|no full reps|no full-out|no live sets|drilling only|block start drills only|bars-only|half-out only|skill work only|single sessions only|walking-only cardio|no incline|no toes-to-bar|no muscle-up)\b/i,
+  },
+  {
+    label: 'nutrition or body-composition prescription',
+    pattern:
+      /\b(?:push|add|plan|move|skip|hold|reduce|increase|top-up|briefed)\b[^.?!]{0,100}\b(?:carb|carbs|hydration|electrolytes|water|macro|macros|calorie|fueling|meal|cardio|step target|weigh-in|scale check)\b/i,
+  },
+  {
+    label: 'authority-confusing team synthesis',
+    pattern:
+      /\bcoach the (?:legs|rotations|rotation|cuts|circle|catcher rotation|contact|deficit|engine room|attack rotation|attempts|floor|lineup|physical plan)\b/i,
+  },
+];
+
+const COACH_REPORT_PLAIN_LANGUAGE_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+  {
+    label: 'coded coaching shorthand',
+    pattern:
+      /\b(?:mental\s+install|reset\s+cue|mental\s+cue|body-state\s+read|body-state\s+pattern|mental-performance\s+prompt|decision\s+support|one\s+cue\s+only|meet\s+cue|line\s+cues?|transition-reset\s+cue|closeout\s+reset\s+cue|assignment-reset\s+cue|bench-reset\s+cue|approach-reset\s+cue|clearing-reset\s+cue)\b/i,
+  },
+  {
+    label: 'arrow-coded coach instruction',
+    pattern: /\b(?:target|scan|breathe?|breath|drive|tall|commit|next possession)\s*(?:→|->)\s*(?:target|scan|breathe?|breath|drive|tall|commit|next possession)\b/i,
+  },
+];
 
 const normalizeAuditCandidate = (value: string) =>
   value
@@ -2896,6 +2972,50 @@ const findBannedPhrase = (text: string, phrase: string) => {
   }
 
   return null;
+};
+
+export const findPhysicalProgrammingBoundaryViolation = (text: string) => {
+  const normalized = normalizeAuditCandidate(text);
+  if (!normalized) return null;
+
+  for (const { label, pattern } of PHYSICAL_PROGRAMMING_BOUNDARY_PATTERNS) {
+    const match = pattern.exec(normalized);
+    if (!match) continue;
+    return {
+      phrase: label,
+      matchedText: match[0],
+      matchedAt: match.index,
+    };
+  }
+
+  return null;
+};
+
+export const findCoachReportPlainLanguageViolation = (text: string) => {
+  const normalized = normalizeAuditCandidate(text);
+  if (!normalized) return null;
+
+  for (const { label, pattern } of COACH_REPORT_PLAIN_LANGUAGE_PATTERNS) {
+    const match = pattern.exec(normalized);
+    if (!match) continue;
+    return {
+      phrase: label,
+      matchedText: match[0],
+      matchedAt: match.index,
+    };
+  }
+
+  return null;
+};
+
+export const sanitizeCoachReportCopyForMentalLayer = (
+  text: string,
+  fallback: string = PHYSICAL_PROGRAMMING_BOUNDARY_FALLBACKS.coachMove
+): string => {
+  if (!text) return text;
+  return findPhysicalProgrammingBoundaryViolation(text) || findCoachReportPlainLanguageViolation(text)
+    ? fallback
+    : text;
 };
 
 const collectCoachFacingStrings = (value: unknown, path = '$'): Array<{ path: string; text: string }> => {
@@ -2963,6 +3083,30 @@ export const enforceLanguagePosture = (
         matchedAt: match.matchedAt,
       });
     }
+  }
+
+  for (const { path, text } of strings) {
+    const match = findPhysicalProgrammingBoundaryViolation(text);
+    if (!match) continue;
+    violations.push({
+      phrase: match.phrase,
+      source: 'universal',
+      path,
+      matchedText: match.matchedText,
+      matchedAt: match.matchedAt,
+    });
+  }
+
+  for (const { path, text } of strings) {
+    const match = findCoachReportPlainLanguageViolation(text);
+    if (!match) continue;
+    violations.push({
+      phrase: match.phrase,
+      source: 'universal',
+      path,
+      matchedText: match.matchedText,
+      matchedAt: match.matchedAt,
+    });
   }
 
   return {
@@ -3050,10 +3194,14 @@ export const composeReportTopLine = (
   }
 
   const cleanAction = firstAction.replace(/\.$/, '');
+  const safeAction = sanitizeCoachReportCopyForMentalLayer(
+    cleanAction,
+    PHYSICAL_PROGRAMMING_BOUNDARY_FALLBACKS.firstAction
+  ).replace(/\.$/, '');
   return {
     used: 'specific',
     missingFills,
-    primary: `${whatChanged} ${cleanAction}.`,
+    primary: `${whatChanged} ${safeAction}.`,
     secondary: secondaryThread || undefined,
   };
 };
@@ -3149,7 +3297,10 @@ export const composeGameDayLookFors = (items: GameDayLookFor[] | undefined): Gam
   const cleaned = (items || []).filter((item) => {
     if (!item) return false;
     return Boolean(item.athleteOrUnit && item.lookFor && item.ifThen);
-  });
+  }).map((item) => ({
+    ...item,
+    ifThen: sanitizeCoachReportCopyForMentalLayer(item.ifThen, PHYSICAL_PROGRAMMING_BOUNDARY_FALLBACKS.gameDay),
+  }));
   if (cleaned.length === 0) {
     return {
       items: [],
@@ -3216,7 +3367,10 @@ export const enforceNamedAthleteWatchlist = (
       return false;
     }
     return true;
-  });
+  }).map((entry) => ({
+    ...entry,
+    coachMove: sanitizeCoachReportCopyForMentalLayer(entry.coachMove, PHYSICAL_PROGRAMMING_BOUNDARY_FALLBACKS.coachMove),
+  }));
   if (rendered.length === 0) {
     return {
       rendered: [],
@@ -3249,8 +3403,15 @@ export const enforceCoachActionSpecificity = (
     const hasAthlete = !!(candidate.appliesTo && candidate.appliesTo.trim().length > 0);
     const hasSession = !!(candidate.session && candidate.session.trim().length > 0);
     if (!candidate.action || !candidate.action.trim()) continue;
+    const safeCandidate = {
+      ...candidate,
+      action: sanitizeCoachReportCopyForMentalLayer(
+        candidate.action,
+        PHYSICAL_PROGRAMMING_BOUNDARY_FALLBACKS.coachMove
+      ),
+    };
     if (hasAthlete || hasSession) {
-      rendered.push(candidate);
+      rendered.push(safeCandidate);
     } else {
       suppressed.push(candidate);
     }

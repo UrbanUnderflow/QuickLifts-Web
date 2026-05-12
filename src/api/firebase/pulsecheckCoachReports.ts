@@ -12,6 +12,12 @@ import {
   where,
 } from 'firebase/firestore';
 import { db, getFirebaseModeRequestHeaders } from './config';
+import {
+  enforceCoachActionSpecificity,
+  enforceLanguagePosture,
+  enforceNamedAthleteWatchlist,
+  getDefaultPulseCheckSports,
+} from './pulsecheckSportConfig';
 import type {
   CoachActionCandidate,
   CoachLanguagePostureAuditResult,
@@ -538,6 +544,34 @@ const sendPublishedReportEmail = async (
   }
 };
 
+const assertCoachReportPublishable = (report: StoredCoachReport) => {
+  const sport = getDefaultPulseCheckSports().find((entry) => entry.id === report.sportId);
+  const audit = enforceLanguagePosture(report.coachSurface, sport);
+  const watchlistGate = enforceNamedAthleteWatchlist(report.coachSurface.watchlist || []);
+  const actionGate = enforceCoachActionSpecificity(report.coachSurface.coachActions || []);
+  const failures: string[] = [];
+
+  if (!audit.passed) {
+    const violationSummary = audit.violations
+      .slice(0, 3)
+      .map((violation) => `${violation.path || 'coachSurface'}: ${violation.matchedText || violation.phrase}`)
+      .join('; ');
+    failures.push(`Language posture audit has violations${violationSummary ? ` (${violationSummary})` : ''}.`);
+  }
+
+  if (watchlistGate.suppressed) {
+    failures.push(watchlistGate.suppressionReason || 'Watchlist gate failed.');
+  }
+
+  if (actionGate.rendered.length === 0) {
+    failures.push('No coach action is specific enough to publish.');
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`[SportsIntelligenceReports] Cannot publish report ${report.id}: ${failures.join(' ')}`);
+  }
+};
+
 export const publish = async (
   teamId: string,
   reportId: string,
@@ -549,6 +583,7 @@ export const publish = async (
   if (!existing) {
     throw new Error(`[SportsIntelligenceReports] Report ${normalizedReportId} was not found for team ${scopedTeamId}.`);
   }
+  assertCoachReportPublishable(existing);
 
   await updateDoc(
     reportDocRef(scopedTeamId, normalizedReportId),

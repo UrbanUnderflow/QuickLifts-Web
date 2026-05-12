@@ -11,6 +11,7 @@ import {
   composeTeamRead,
   enforceCoachActionSpecificity,
   enforceNamedAthleteWatchlist,
+  sanitizeCoachReportCopyForMentalLayer,
 } from '../../api/firebase/pulsecheckSportConfig';
 import { getSportColor } from '../../api/firebase/pulsecheckSportReportDemos';
 
@@ -115,6 +116,10 @@ const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, genera
   const actionGate = enforceCoachActionSpecificity(report.coachActions || []);
   const gameDayGate = composeGameDayLookFors(report.gameDayLookFors || []);
   const teamRead = policy ? composeTeamRead(report.dimensionState || {}, policy) : undefined;
+  const teamSynthesis = sanitizeCoachReportCopyForMentalLayer(
+    report.teamSynthesis || fallbackSynthesis(report),
+    'This week, the physical pattern tells us where focus, composure, or decision-making may get harder. The coach should give simple language for that moment while staff owns the physical plan.'
+  );
   const calendarItems = buildCalendarItems(actionGate.rendered);
   const adherence = report.adherence || {
     wearRate7d: 0,
@@ -159,8 +164,7 @@ const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, genera
                 </div>
               </div>
               <h1
-                className="mt-5 text-[42px] font-black leading-[0.95] text-white sm:text-[56px]"
-                style={{ fontFamily: '"Thunder", "HK Grotesk", -apple-system, BlinkMacSystemFont, sans-serif' }}
+                className="mt-5 text-[38px] font-semibold leading-[1.08] text-white sm:text-[50px]"
               >
                 {sport.name} — This Week
               </h1>
@@ -210,7 +214,7 @@ const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, genera
                   </div>
                   <p className="mt-4 text-sm leading-relaxed text-zinc-300">{translate(entry.whyMatters)}</p>
                   <div className="mt-4 rounded-xl p-4" style={{ background: soft }}>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em]" style={{ color: accent }}>Coach prompt</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em]" style={{ color: accent }}>What the coach says</p>
                     <p className="mt-1 text-sm leading-relaxed text-zinc-100">{translate(entry.coachMove)}</p>
                   </div>
                 </div>
@@ -221,7 +225,7 @@ const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, genera
 
         {calendarItems.length > 0 && (
           <section className="mt-8">
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.22em] text-zinc-500">The week ahead</h2>
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.22em] text-zinc-500">Coach actions</h2>
             <ul className="mt-4 divide-y divide-zinc-800 rounded-2xl border border-zinc-800 bg-zinc-950/45">
               {calendarItems.map(({ action, day }, index) => (
                 <li key={`${action.action}-${index}`} className="flex gap-4 px-5 py-4">
@@ -265,7 +269,7 @@ const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, genera
               })}
             </div>
             <div className="mt-5 rounded-2xl border p-5" style={{ background: `${accent}10`, borderColor: `${accent}33` }}>
-              <p className="text-lg font-medium leading-relaxed text-white">{report.teamSynthesis || fallbackSynthesis(report)}</p>
+              <p className="text-lg font-medium leading-relaxed text-white">{teamSynthesis}</p>
             </div>
           </section>
         )}
@@ -310,7 +314,7 @@ const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, genera
         </section>
 
         {report.closer && <p className="mt-8 text-center text-sm text-zinc-300">{report.closer}</p>}
-        <p className="mt-4 text-center text-xs text-zinc-600">Decision support for the mental layer, not a clearance tool or physical training prescription.</p>
+        <p className="mt-4 text-center text-xs text-zinc-600">This report explains mental-performance moments. It is not a clearance tool or a physical training plan.</p>
       </div>
     </article>
   );

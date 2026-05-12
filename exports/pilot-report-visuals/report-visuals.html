@@ -1,0 +1,893 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pulse Check Coach Report Pilot Visuals</title>
+  <style>
+    :root {
+      --ink: #111827;
+      --muted: #667085;
+      --line: #d8dee8;
+      --paper: #f7f9fc;
+      --night: #080b12;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #dfe5ee;
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    }
+
+    .stack {
+      display: grid;
+      gap: 48px;
+      padding: 48px;
+    }
+
+    .visual {
+      --accent: #ff8a3d;
+      --accent-rgb: 255, 138, 61;
+      position: relative;
+      width: 1600px;
+      height: 1080px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 9% 15%, rgba(var(--accent-rgb), 0.18), transparent 25%),
+        linear-gradient(135deg, #ffffff 0%, #f6f8fb 56%, #eef2f7 100%);
+      border: 1px solid #cfd7e3;
+      border-radius: 34px;
+      box-shadow: 0 26px 80px rgba(15, 23, 42, 0.18);
+      padding: 52px 60px;
+    }
+
+    .visual::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
+      background-size: 40px 40px;
+      mask-image: linear-gradient(90deg, transparent 0%, black 28%, black 100%);
+      pointer-events: none;
+    }
+
+    .motif {
+      position: absolute;
+      right: -70px;
+      top: -70px;
+      width: 560px;
+      height: 560px;
+      opacity: 0.22;
+      pointer-events: none;
+    }
+
+    .motif.basketball {
+      border: 12px solid var(--accent);
+      border-radius: 50%;
+    }
+
+    .motif.basketball::before,
+    .motif.basketball::after {
+      content: "";
+      position: absolute;
+      inset: 64px;
+      border: 8px solid var(--accent);
+      border-radius: 50%;
+    }
+
+    .motif.basketball::after {
+      inset: -12px auto -12px 260px;
+      width: 0;
+      border-width: 0 8px 0 0;
+      border-radius: 0;
+    }
+
+    .motif.bowling {
+      opacity: 0.18;
+    }
+
+    .motif.bowling::before {
+      content: "";
+      position: absolute;
+      right: 70px;
+      top: 40px;
+      width: 290px;
+      height: 520px;
+      border-radius: 160px 160px 40px 40px;
+      background:
+        linear-gradient(90deg, transparent 0 31%, rgba(255, 255, 255, 0.9) 31% 35%, transparent 35% 65%, rgba(255, 255, 255, 0.9) 65% 69%, transparent 69%),
+        linear-gradient(180deg, rgba(var(--accent-rgb), 0.95), rgba(var(--accent-rgb), 0.12));
+      transform: perspective(700px) rotateX(18deg);
+    }
+
+    .motif.bowling::after {
+      content: "";
+      position: absolute;
+      left: 30px;
+      bottom: 70px;
+      width: 210px;
+      height: 210px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 47% 32%, transparent 0 13px, rgba(var(--accent-rgb), 0.9) 14px 25px, transparent 26px),
+        radial-gradient(circle at 60% 44%, transparent 0 12px, rgba(var(--accent-rgb), 0.9) 13px 23px, transparent 24px),
+        radial-gradient(circle at 38% 49%, transparent 0 10px, rgba(var(--accent-rgb), 0.9) 11px 21px, transparent 22px),
+        #111827;
+    }
+
+    .motif.golf {
+      opacity: 0.2;
+    }
+
+    .motif.golf::before {
+      content: "";
+      position: absolute;
+      inset: 60px 20px 70px 40px;
+      border: 10px solid var(--accent);
+      border-left-color: transparent;
+      border-bottom-color: transparent;
+      border-radius: 55% 45% 60% 40%;
+      transform: rotate(-18deg);
+    }
+
+    .motif.golf::after {
+      content: "";
+      position: absolute;
+      right: 145px;
+      top: 110px;
+      width: 9px;
+      height: 330px;
+      background: var(--accent);
+      box-shadow: 0 0 0 18px rgba(var(--accent-rgb), 0.16);
+    }
+
+    .motif.track-field {
+      opacity: 0.18;
+      border: 14px solid var(--accent);
+      border-left-color: transparent;
+      border-bottom-color: transparent;
+      border-radius: 50%;
+      transform: rotate(-18deg);
+    }
+
+    .motif.track-field::before,
+    .motif.track-field::after {
+      content: "";
+      position: absolute;
+      border: 9px solid var(--accent);
+      border-left-color: transparent;
+      border-bottom-color: transparent;
+      border-radius: 50%;
+    }
+
+    .motif.track-field::before {
+      inset: 58px;
+    }
+
+    .motif.track-field::after {
+      inset: 118px;
+    }
+
+    .canvas {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100%;
+      gap: 28px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 32px;
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .brandline {
+      color: var(--muted);
+      font-size: 17px;
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .title {
+      margin: 0;
+      max-width: 870px;
+      color: #0f172a;
+      font-size: 46px;
+      line-height: 1.04;
+      letter-spacing: -0.02em;
+    }
+
+    .sportTag {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 335px;
+      justify-content: flex-end;
+      color: #0f172a;
+      font-size: 20px;
+      font-weight: 750;
+    }
+
+    .sportDot {
+      width: 18px;
+      height: 18px;
+      border-radius: 99px;
+      background: var(--accent);
+      box-shadow: 0 0 0 10px rgba(var(--accent-rgb), 0.13);
+    }
+
+    .bodyGrid {
+      display: grid;
+      grid-template-columns: 0.95fr 1.1fr;
+      gap: 30px;
+      min-height: 0;
+    }
+
+    .story {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 22px;
+      min-width: 0;
+    }
+
+    .summaryCard {
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      border-radius: 26px;
+      background: rgba(255, 255, 255, 0.78);
+      box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+      padding: 24px;
+    }
+
+    .kicker {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .lead {
+      margin: 0;
+      color: #172033;
+      font-size: 27px;
+      line-height: 1.18;
+      font-weight: 760;
+      letter-spacing: -0.01em;
+    }
+
+    .event {
+      margin: 16px 0 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.35;
+    }
+
+    .sourceTrail {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 18px;
+    }
+
+    .sourcePill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      background: rgba(var(--accent-rgb), 0.1);
+      border: 1px solid rgba(var(--accent-rgb), 0.2);
+      color: #1f2937;
+      padding: 8px 11px;
+      font-size: 13px;
+      font-weight: 780;
+      white-space: nowrap;
+    }
+
+    .sourcePill::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .insightGrid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+    }
+
+    .insight {
+      min-height: 132px;
+      border: 1px solid rgba(15, 23, 42, 0.1);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.68);
+      padding: 18px;
+    }
+
+    .insight:nth-child(3) {
+      grid-column: 1 / -1;
+      min-height: 0;
+    }
+
+    .insightLabel {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .insightText {
+      margin: 0;
+      color: #111827;
+      font-size: 17px;
+      line-height: 1.22;
+      font-weight: 680;
+    }
+
+    .doctrine {
+      align-self: end;
+      border-radius: 26px;
+      background: #111827;
+      color: white;
+      padding: 22px 24px;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.26);
+    }
+
+    .doctrineHeader {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      color: rgba(255, 255, 255, 0.62);
+      font-size: 14px;
+      font-weight: 780;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .doctrineHeader span {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .doctrineText {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.18;
+      font-weight: 760;
+    }
+
+    .report {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 30px;
+      background:
+        radial-gradient(circle at 22% -10%, rgba(var(--accent-rgb), 0.22), transparent 34%),
+        linear-gradient(180deg, #111827 0%, #070a11 100%);
+      color: white;
+      box-shadow: 0 28px 90px rgba(15, 23, 42, 0.35);
+      padding: 24px;
+    }
+
+    .reportHeader {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 24px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .reportEyebrow {
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 850;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .reportTitle {
+      margin: 0;
+      max-width: 540px;
+      color: white;
+      font-size: 24px;
+      line-height: 1.16;
+      font-weight: 760;
+    }
+
+    .confidence {
+      display: grid;
+      gap: 8px;
+      min-width: 178px;
+      padding: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.11);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .confidence strong {
+      color: white;
+      font-size: 26px;
+      line-height: 1;
+    }
+
+    .confidence span {
+      color: rgba(255, 255, 255, 0.58);
+      font-size: 12px;
+      font-weight: 760;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .stateRow {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 11px;
+      margin-top: 16px;
+    }
+
+    .state {
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.065);
+      padding: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .stateName {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.52);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .stateValue {
+      margin: 8px 0 0;
+      color: white;
+      font-size: 18px;
+      font-weight: 780;
+    }
+
+    .watchGrid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .athlete {
+      min-height: 228px;
+      border: 1px solid rgba(255, 255, 255, 0.11);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.065);
+      padding: 17px;
+    }
+
+    .athleteTop {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      color: white;
+      background: rgba(var(--accent-rgb), 0.25);
+      border: 1px solid rgba(var(--accent-rgb), 0.6);
+      font-size: 14px;
+      font-weight: 850;
+    }
+
+    .athleteName {
+      margin: 0;
+      color: white;
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .athleteRole {
+      margin: 3px 0 0;
+      color: rgba(255, 255, 255, 0.48);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .athleteWhy {
+      margin: 0;
+      min-height: 62px;
+      color: rgba(255, 255, 255, 0.72);
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .cue {
+      margin-top: 12px;
+      border-radius: 16px;
+      background: rgba(var(--accent-rgb), 0.16);
+      border: 1px solid rgba(var(--accent-rgb), 0.28);
+      padding: 14px;
+    }
+
+    .cueLabel {
+      margin: 0 0 7px;
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .cueText {
+      margin: 0;
+      color: white;
+      font-size: 14px;
+      line-height: 1.32;
+      font-weight: 680;
+    }
+
+    .lookFor {
+      display: grid;
+      grid-template-columns: 0.9fr 1fr;
+      gap: 15px;
+      margin-top: 14px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      padding: 15px;
+    }
+
+    .lookFor p {
+      margin: 0;
+    }
+
+    .lookLabel {
+      color: rgba(255, 255, 255, 0.45);
+      font-size: 12px;
+      font-weight: 830;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .lookText {
+      margin-top: 7px !important;
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 16px;
+      line-height: 1.3;
+      font-weight: 650;
+    }
+
+    .bottomNote {
+      position: absolute;
+      right: 64px;
+      bottom: 26px;
+      left: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: rgba(15, 23, 42, 0.52);
+      font-size: 14px;
+      font-weight: 680;
+    }
+
+    .miniBars {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .miniBars span {
+      width: 56px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(var(--accent-rgb), 0.22);
+    }
+
+    .miniBars span:first-child {
+      background: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <main class="stack" id="visuals"></main>
+
+  <script>
+    const visuals = [
+      {
+        id: "basketball",
+        sport: "Basketball",
+        team: "UMES Pilot Cohort",
+        event: "Lead cohort: summer rollout | Wednesday at Riverside University",
+        accent: "#FF8A3D",
+        rgb: "255, 138, 61",
+        motif: "basketball",
+        title: "Basketball report: late-clock composure before Riverside.",
+        summary: "Johnson and Davis show below-baseline recovery, and their Nora check-ins point to decision fatigue before Wednesday.",
+        sources: ["Polar recovery", "Nora check-in", "Athlete self-report"],
+        signal: "Recovery below usual; late-practice decisions feel slower when fatigue shows up.",
+        athletes: "M. Johnson and T. Davis | Point Guards",
+        cue: "When the game gets late in the shot clock and the guards are tired or mentally cluttered, do not give them a bunch of coaching points. Give them one simple phrase they can use in that moment.",
+        doctrine: "Nora reads the physical pattern so the coach can train composure and decisioning at the right moment.",
+        topLine: "Back-to-back recovery week: late-clock composure may get harder, so keep the coach message simple.",
+        confidence: "Stable",
+        states: [["Focus", "Solid"], ["Composure", "Watch"], ["Decisioning", "Watch"]],
+        watchlist: [
+          {
+            name: "M. Johnson",
+            initials: "MJ",
+            role: "Point Guard",
+            why: "Polar recovery has been below his usual for four straight days; in Nora's check-in, he said decisions feel slower under fatigue.",
+            cue: "Staff reviews repeat-sprint exposure. If he looks tired late in the shot clock, give him one simple phrase instead of multiple corrections."
+          },
+          {
+            name: "T. Davis",
+            initials: "TD",
+            role: "Point Guard",
+            why: "Nora check-ins show lower confidence language and athlete-reported role uncertainty before the next game.",
+            cue: "Five-minute role check-in before Friday. Make it about role, not film."
+          }
+        ],
+        look: "Flat warm-up energy or athlete reports decision clutter",
+        then: "Tell them to breathe, scan, and start the action early; staff owns possession-structure decisions."
+      },
+      {
+        id: "bowling",
+        sport: "Bowling",
+        team: "UMES Pilot Cohort",
+        event: "Fall cohort: conference tournament | Day 2",
+        accent: "#8B5CF6",
+        rgb: "139, 92, 246",
+        motif: "bowling",
+        title: "Bowling report: lane-transition patience on Day 2.",
+        summary: "Ramos reported grip tension late in Block 2, while Phillips' post-block check-in showed spare-routine confidence dipping.",
+        sources: ["Nora post-block check-in", "Athlete self-report", "Optional coach note"],
+        signal: "Grip tension, lower shot-repeat confidence, and spare-routine confidence dipped.",
+        athletes: "A. Ramos | Anchor + J. Phillips | Lead",
+        cue: "When the lane starts changing and Ramos wants to adjust everything, ask him to change one thing at a time so he can stay patient and repeatable.",
+        doctrine: "The report does not coach mechanics. It highlights when mental routine and reset language matter most.",
+        topLine: "Tournament-stamina week: repeatability may get harder, so keep the coaching language the same between blocks.",
+        confidence: "Stable",
+        states: [["Focus", "Watch"], ["Composure", "Watch"], ["Decisioning", "Solid"]],
+        watchlist: [
+          {
+            name: "A. Ramos",
+            initials: "AR",
+            role: "Anchor",
+            why: "Nora post-block check-in: grip tension by the late frames and lower confidence repeating the same shot.",
+            cue: "Review warm-up volume with staff. If lane transition gets him searching, ask for one adjustment at a time."
+          },
+          {
+            name: "J. Phillips",
+            initials: "JP",
+            role: "Leadoff",
+            why: "Post-block check-in showed lower spare-routine confidence and a more negative mood tone than usual.",
+            cue: "Keep the spare-process language identical to last week; same words every time."
+          }
+        ],
+        look: "Open frame followed by a rushed pre-shot",
+        then: "Say the same process words as last week: same routine, same line. No mechanical talk."
+      },
+      {
+        id: "golf",
+        sport: "Golf",
+        team: "UMES Pilot Cohort",
+        event: "Fall cohort: conference qualifier | Pinehurst",
+        accent: "#10B981",
+        rgb: "16, 185, 129",
+        motif: "golf",
+        title: "Golf report: bad-shot response before Pinehurst.",
+        summary: "Holloway reported bad-shot carryover into the next-hole routine; Castillo had two short sleep nights and felt rushed late.",
+        sources: ["Polar sleep", "Nora post-round check-in", "Athlete self-report"],
+        signal: "Response after mistakes is shaky; sleep was off; late-round routine felt rushed.",
+        athletes: "B. Holloway + J. Castillo | Tournament starters",
+        cue: "When a bad shot carries into the next tee box, do not talk swing mechanics. Give one routine: pick the target, take one breath, and commit to the shot.",
+        doctrine: "Nora helps the coach see where routine and composure are the intervention, without pretending she has swing data.",
+        topLine: "Acceptance-and-routine week: bad-shot response may get harder, so keep the coach message simple.",
+        confidence: "Stable",
+        states: [["Focus", "Solid"], ["Composure", "Watch"], ["Decisioning", "Solid"]],
+        watchlist: [
+          {
+            name: "B. Holloway",
+            initials: "BH",
+            role: "Tournament starter",
+            why: "Nora post-round check-in: one bad shot was carrying into the next tee routine; mood language was quieter than usual.",
+            cue: "If one bad shot carries into the next hole, use the routine card: pick the target, take one breath, and commit."
+          },
+          {
+            name: "J. Castillo",
+            initials: "JC",
+            role: "Tournament starter",
+            why: "Polar sleep showed two short nights; Nora check-in said the late-round routine felt rushed.",
+            cue: "Review tee-time routine and fueling rhythm with staff. If he looks rushed late, use the same pre-shot routine."
+          }
+        ],
+        look: "Tight or rushed routine on the first two tee shots",
+        then: "Before hole 3, remind him to pick the target, take one breath, and commit to this shot."
+      },
+      {
+        id: "track-field",
+        sport: "Track & Field",
+        team: "Coach Report Example",
+        event: "Saturday meet | Westbrook University",
+        accent: "#EF4444",
+        rgb: "239, 68, 68",
+        motif: "track-field",
+        title: "Track & Field report: meet-day readiness before Westbrook.",
+        summary: "Smith and Adams show below-baseline recovery and reported heavy legs in Nora check-ins before Saturday.",
+        sources: ["Polar recovery", "Nora check-in", "Athlete self-report"],
+        signal: "Recovery below usual; heavy-leg language; low-energy concern before the meet.",
+        athletes: "D. Smith + J. Adams | Sprinters",
+        cue: "If Smith says his legs feel flat before the 200, do not add a bunch of race thoughts. Give him one phrase for the start: drive for the first steps.",
+        doctrine: "Nora can flag readiness and arousal patterns; coaches still own reps, warm-up, and race strategy.",
+        topLine: "Meet-day arousal week: some athletes may feel flat or over-wired, so keep the start message simple.",
+        confidence: "Stable",
+        states: [["Focus", "Solid"], ["Composure", "Watch"], ["Decisioning", "Solid"]],
+        watchlist: [
+          {
+            name: "D. Smith",
+            initials: "DS",
+            role: "Sprinter | 200m",
+            why: "Polar recovery has been below his usual; Nora check-in used heavy-leg language before Saturday.",
+            cue: "Review Tuesday load with staff. If he feels flat before the 200, say: drive for the first steps."
+          },
+          {
+            name: "A. Peters",
+            initials: "AP",
+            role: "Middle Distance | 800m",
+            why: "Nora check-in: missed pre-practice meal two days running and worried about low energy.",
+            cue: "Review fueling rhythm with staff; keep the athlete message concrete and non-shaming."
+          }
+        ],
+        look: "Self-reports flat legs in warm-up or gets quiet on the line",
+        then: "Say: drive for the first steps. Staff owns any warm-up adjustment."
+      }
+    ];
+
+    const stateClass = (value) => value.toLowerCase().replace(/\s+/g, "-");
+
+    const renderVisual = (item) => `
+      <section
+        id="${item.id}"
+        class="visual"
+        style="--accent: ${item.accent}; --accent-rgb: ${item.rgb};"
+        aria-label="${item.sport} coach report visual"
+      >
+        <div class="motif ${item.motif}"></div>
+        <div class="canvas">
+          <header class="topbar">
+            <div class="brand">
+              <div class="brandline">Pulse Check x auntEDNA.ai | Coach Report Visual</div>
+              <h1 class="title">${item.title}</h1>
+            </div>
+            <div class="sportTag"><span class="sportDot"></span>${item.sport}</div>
+          </header>
+
+          <div class="bodyGrid">
+            <section class="story">
+              <div class="summaryCard">
+                <p class="kicker">${item.team}</p>
+                <p class="lead">${item.summary}</p>
+                <p class="event">${item.event}</p>
+                <div class="sourceTrail" aria-label="source trail">
+                  ${item.sources.map((source) => `<span class="sourcePill">${source}</span>`).join("")}
+                </div>
+              </div>
+
+              <div class="insightGrid">
+                <div class="insight">
+                  <p class="insightLabel">Physical context</p>
+                  <p class="insightText">${item.signal}</p>
+                </div>
+                <div class="insight">
+                  <p class="insightLabel">Named athletes</p>
+                  <p class="insightText">${item.athletes}</p>
+                </div>
+                <div class="insight">
+                  <p class="insightLabel">What to say</p>
+                  <p class="insightText">${item.cue}</p>
+                </div>
+              </div>
+
+              <div class="doctrine">
+                <div class="doctrineHeader"><span></span>Core boundary</div>
+                <p class="doctrineText">${item.doctrine}</p>
+              </div>
+            </section>
+
+            <section class="report">
+              <div class="reportHeader">
+                <div>
+                  <p class="reportEyebrow">Coach-facing weekly report</p>
+                  <p class="reportTitle">${item.topLine}</p>
+                </div>
+                <div class="confidence">
+                  <strong>${item.confidence}</strong>
+                  <span>Confidence</span>
+                </div>
+              </div>
+
+              <div class="stateRow">
+                ${item.states.map(([name, value]) => `
+                  <div class="state ${stateClass(value)}">
+                    <p class="stateName">${name}</p>
+                    <p class="stateValue">${value}</p>
+                  </div>
+                `).join("")}
+              </div>
+
+              <div class="watchGrid">
+                ${item.watchlist.map((athlete) => `
+                  <div class="athlete">
+                    <div class="athleteTop">
+                      <div class="avatar">${athlete.initials}</div>
+                      <div>
+                        <p class="athleteName">${athlete.name}</p>
+                        <p class="athleteRole">${athlete.role}</p>
+                      </div>
+                    </div>
+                    <p class="athleteWhy">${athlete.why}</p>
+                    <div class="cue">
+                      <p class="cueLabel">Plain coach message</p>
+                      <p class="cueText">${athlete.cue}</p>
+                    </div>
+                  </div>
+                `).join("")}
+              </div>
+
+              <div class="lookFor">
+                <div>
+                  <p class="lookLabel">If you see</p>
+                  <p class="lookText">${item.look}</p>
+                </div>
+                <div>
+                  <p class="lookLabel">Then</p>
+                  <p class="lookText">${item.then}</p>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <footer class="bottomNote">
+          <span>This report explains mental-performance moments. It is not a clearance tool or physical training plan.</span>
+          <div class="miniBars"><span></span><span></span><span></span></div>
+        </footer>
+      </section>
+    `;
+
+    document.getElementById("visuals").innerHTML = visuals.map(renderVisual).join("");
+  </script>
+</body>
+</html>
