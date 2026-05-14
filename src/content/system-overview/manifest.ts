@@ -5,6 +5,7 @@ import { pulseAndroidHandbook } from './products/pulse-android';
 import { pulseCheckIosHandbook } from './products/pulsecheck-ios';
 import { quickliftsWebHandbook } from './products/quicklifts-web';
 import { macraIosHandbook } from './products/macra-ios';
+import { pulseRitualIosHandbook } from './products/pulse-ritual-ios';
 
 export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
@@ -136,8 +137,8 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
       'Added the Daily Curriculum assignment-intent contract so repeated sims/protocols can tell athletes “same by design,” show rep progress, explain why today, and name how they move forward across Today, Nora, and Training Room surfaces.',
-      'Strengthened Visual Disruption Reset focus measurement with path-pattern confirmation: athletes now watch a moving cue draw a pattern, then must match the drawn pattern after disruption before Recovery Time is scored.',
-      'Removed the experimental handheld mobile camera gaze contract from Visual Disruption Reset after iPhone testing showed the estimates were not reliable enough for athlete-facing scoring; phone, web, iOS, and Android now use touch/click/tap recovery with concise Nora-read phase cues.',
+      'Strengthened Visual Disruption Reset focus measurement with path-pattern confirmation: athletes now watch a moving target draw a pattern, then must match the drawn pattern after disruption before Recovery Time is scored.',
+      'Removed the experimental handheld mobile camera gaze contract from Visual Disruption Reset after iPhone testing showed the estimates were not reliable enough for athlete-facing scoring; phone, web, iOS, and Android now use touch/click/tap recovery with concise Nora-read phase signals.',
       'Updated the Reset family and Visual Disruption Reset registry contract so phone/web delivery is explicitly touch/click measured rather than implied gaze tracking, runs against a visible timer-led session, caps missed recoveries, and auto-advances reps without a manual round gate.',
       'Completed Phase J implementation passes 11-16 at the foundation layer with a canonical session-record writer, deterministic sport-load handoff, Pulse Check device onboarding and self-report fallback helpers, Claude-backed lift summary parsing with local fallback, QA audit validators, and end-to-end type/lint verification.',
       'Completed Phase J implementation passes 6-10 at the runtime-helper layer with sport detection profiles, Nora clarification routing, unlabeled session candidate detection, athlete session pattern learning, and coach schedule / prescribed-session context matching.',
@@ -422,7 +423,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       { from: 'netlify-functions', to: 'instantly', type: 'events' },
     ],
   },
-  products: [quickliftsIosHandbook, pulseAndroidHandbook, pulseCheckIosHandbook, quickliftsWebHandbook, macraIosHandbook],
+  products: [quickliftsIosHandbook, pulseAndroidHandbook, pulseCheckIosHandbook, quickliftsWebHandbook, macraIosHandbook, pulseRitualIosHandbook],
   backendServices: [
     {
       id: 'svc-firebase-auth',
