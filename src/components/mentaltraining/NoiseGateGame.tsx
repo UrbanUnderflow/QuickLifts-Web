@@ -191,7 +191,7 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
         audio.play().catch(() => undefined);
         return;
       } catch (error) {
-        console.error('Failed to play hosted Noise Gate audio cue:', error);
+        console.error('Failed to play hosted Noise Gate audio prompt:', error);
       }
     }
     const BrowserAudioContext = (window as typeof window & { webkitAudioContext?: typeof AudioContext }).AudioContext
@@ -297,7 +297,7 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
         ? `${currentRound.targetLabel} stayed live under ${currentRound.channel === 'baseline' ? 'baseline' : currentRound.channel} pressure.`
         : timedOut
           ? 'No commitment landed before the noise window closed.'
-          : `${responseLabel} pulled attention off the live cue.`,
+          : `${responseLabel} pulled attention off the live target.`,
       success: correct,
     });
     beginStage('feedback', stageDurations.feedback);
@@ -315,7 +315,7 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
 
   const handleOptionSelect = useCallback((option: string) => {
     if (stage !== 'noise') return;
-    if (!registerInputAttempt({ blockedMessage: 'Too fast. Hold the live cue before committing again.' })) {
+    if (!registerInputAttempt({ blockedMessage: 'Too fast. Hold the live target before committing again.' })) {
       return;
     }
     resolveRound(option);
@@ -488,12 +488,12 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
                 <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
                   <p className="text-xs uppercase tracking-[0.25em] text-white/40">Channel</p>
                   <p className="text-lg font-semibold mt-2">{String(buildArtifact.sessionModel.archetype).replace(/_/g, ' ')}</p>
-                  <p className="text-xs text-white/45 mt-1">Live cue stays constant while distractors rise</p>
+                  <p className="text-xs text-white/45 mt-1">Live target stays constant while distractors rise</p>
                 </div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-2">
                 <p className="text-xs uppercase tracking-[0.3em] text-white/35">How it works</p>
-                <p className="text-white/75">Memorize the live cue, then keep selecting it once clutter or sound pressure comes in. Baseline rounds establish clean tracking first. Noise rounds measure how much the distractors degrade your read.</p>
+                <p className="text-white/75">Memorize the live target, then keep selecting it once clutter or sound pressure comes in. Baseline rounds establish clean tracking first. Noise rounds measure how much the distractors degrade your read.</p>
               </div>
               <button
                 onClick={startSession}
@@ -535,13 +535,13 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
               <div className="grid grid-cols-1 lg:grid-cols-[0.45fr_0.55fr] gap-6">
                 <div className="rounded-[28px] border border-amber-500/20 bg-amber-500/10 p-6 space-y-5">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.3em] text-white/40">Live Cue</p>
+                    <p className="text-xs uppercase tracking-[0.3em] text-white/40">Live Target</p>
                     <div className="mt-3 rounded-3xl border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-6 py-8 text-center">
                       <p className="text-4xl font-black tracking-[0.2em] text-[#E0FE10]">{currentRound.targetLabel}</p>
                     </div>
                   </div>
                   <div className="space-y-2 text-sm text-white/65">
-                    <p>{stage === 'prime' ? 'Lock in on this cue before the noise phase starts.' : 'Keep this cue live once the distractors hit.'}</p>
+                    <p>{stage === 'prime' ? 'Lock in on this target before the noise phase starts.' : 'Keep this target live once the distractors hit.'}</p>
                     <p>{currentRound.channel === 'baseline' ? 'Baseline round: no heavy distractors, just establish the clean read.' : currentRound.audioCue ? `${currentRound.audioCue} is active.` : 'Visual clutter is active.'}</p>
                   </div>
                 </div>
@@ -555,13 +555,13 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
                   <div>
                     <p className="text-xs uppercase tracking-[0.3em] text-white/40">Decision Field</p>
                     <h3 className="text-2xl font-semibold mt-2">
-                      {stage === 'prime' ? 'Memorize the live cue.' : stage === 'noise' ? 'Select the live cue under noise.' : feedback?.title}
+                      {stage === 'prime' ? 'Memorize the live target.' : stage === 'noise' ? 'Select the live target under noise.' : feedback?.title}
                     </h3>
                     <p className="text-sm text-white/55 mt-2">
                       {stage === 'feedback'
                         ? feedback?.detail
                         : currentRound.channel === 'baseline'
-                          ? 'Establish the clean cue read before distractors appear.'
+                          ? 'Establish the clean read before distractors appear.'
                           : 'Ignore the distractors and commit to the original target.'}
                     </p>
                   </div>
@@ -585,7 +585,7 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
                         >
                           <p className="text-2xl font-black tracking-[0.16em]">{option}</p>
                           <p className="text-xs text-white/45 mt-3 uppercase tracking-[0.25em]">
-                            {option === currentRound.correctOption ? 'Live cue' : 'Distractor'}
+                            {option === currentRound.correctOption ? 'Live target' : 'Distractor'}
                           </p>
                         </motion.button>
                       ))}

@@ -448,7 +448,7 @@ function buildPracticeConversationScorecard({
     },
     {
       label: 'Signal awareness',
-      value: signalCount ? `${signalCount} evidence cue${signalCount === 1 ? '' : 's'} captured` : 'Awaiting evidence cues',
+      value: signalCount ? `${signalCount} evidence signal${signalCount === 1 ? '' : 's'} captured` : 'Awaiting evidence signals',
       tone: signalCount ? 'green' : 'amber',
     },
     {
@@ -2236,7 +2236,7 @@ const CoachMentalTraining: React.FC = () => {
                                   </div>
                                 ) : latestConversationSignal?.inferredDelta?.supportingEvidence?.length ? (
                                   <div className="space-y-2">
-                                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Evidence Cues</div>
+                                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Evidence Signals</div>
                                     {latestConversationSignal.inferredDelta.supportingEvidence.slice(0, 3).map((evidence, index) => (
                                       <div key={`${assignment.id}-practice-evidence-${index}`} className="rounded-xl border border-white/8 bg-white/5 px-3 py-2 text-sm text-zinc-300">
                                         {evidence}

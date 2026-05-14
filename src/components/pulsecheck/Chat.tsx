@@ -92,7 +92,7 @@ interface ChatMessage {
   messageType?: string;
   mentalNote?: MentalNote; // For mental note action cards
   exercise?: SimModule; // For sim instruction cards
-  escalationTier?: EscalationTier; // For subtle UI cue on the triggering response
+  escalationTier?: EscalationTier; // For subtle UI signal on the triggering response
 }
 
 interface MentalNote {
@@ -285,7 +285,7 @@ const Chat: React.FC = () => {
           audio.volume = 0.72;
           protocolCueAudioRef.current = audio;
           audio.play().catch((error) => {
-            console.warn('[PulseCheck] Failed to play chat protocol cue', error);
+            console.warn('[PulseCheck] Failed to play chat protocol audio', error);
             if (protocolCueAudioRef.current === audio) {
               protocolCueAudioRef.current = null;
             }
@@ -302,7 +302,7 @@ const Chat: React.FC = () => {
           };
         })
         .catch((error) => {
-          console.warn('[PulseCheck] Failed to resolve protocol cue for chat launch', error);
+          console.warn('[PulseCheck] Failed to resolve protocol audio for chat launch', error);
         });
     }
     
@@ -639,7 +639,7 @@ const Chat: React.FC = () => {
   const handleEscalation = useCallback(async (escalation: EscalationResponse, userMessage: string) => {
     if (!escalation || !escalation.shouldEscalate) return;
     
-    // Set active escalation state for visual cues (Tier 2 and 3)
+    // Set active escalation state for visual signals (Tier 2 and 3)
     if (escalation.tier === EscalationTier.ElevatedRisk || escalation.tier === EscalationTier.CriticalRisk) {
       setHasActiveEscalation(true);
       setUiEscalationTier(escalation.tier);
@@ -738,7 +738,7 @@ const Chat: React.FC = () => {
         const tier = json.escalation?.tier ?? 0;
         const tierEnum = (tier as EscalationTier) ?? EscalationTier.None;
 
-        // Update UI cue tier (Tier 1/2/3). Don't reset back to 0 automatically.
+        // Update UI signal tier (Tier 1/2/3). Don't reset back to 0 automatically.
         if (tierEnum >= EscalationTier.MonitorOnly) {
           setHasActiveEscalation(true);
           setUiEscalationTier(tierEnum);

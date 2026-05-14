@@ -37,7 +37,16 @@ test('Nora voice rubric rejects report-style sleep read copy', () => {
   );
 
   assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.coachVoice'));
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.plainAthleteLanguage'));
   assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.concreteAction'));
+});
+
+test('Nora voice rubric rejects cue language in athlete-facing copy', () => {
+  const issues = validateNoraVoiceRubric(
+    'This trains your ability to brake a wrong response when a fakeout cue appears.',
+  );
+
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.plainAthleteLanguage'));
 });
 
 test('Nora voice rubric rejects third-person Nora recommendations', () => {

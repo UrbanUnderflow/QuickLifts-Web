@@ -169,7 +169,7 @@ const EXPERIENCE_PRINCIPLES = [
     { title: 'Feel like training, not therapy', detail: 'The sim should feel like a drill. The athlete should want to beat their last score. Competitive energy is the engine.' },
     { title: 'Minimal UI during gameplay', detail: 'Clean, immersive screen. No navigation, no settings beyond intentional distractors. The sim owns the screen.' },
     { title: 'Data after, not during', detail: 'Performance shown between rounds (Training) or only at session end (Trial). Focus on performing, not monitoring.' },
-    { title: 'Sound design matters', detail: 'Audio cues, ambient sound, feedback tones support immersion and signal state changes clearly.' },
+    { title: 'Sound design matters', detail: 'Audio signals, ambient sound, feedback tones support immersion and signal state changes clearly.' },
     { title: 'Celebrate improvement, not perfection', detail: 'Highlight personal bests and trend improvements, not absolute scores. Progress is the reward.' },
 ];
 
@@ -215,7 +215,7 @@ const NoiseGateSpecTab: React.FC = () => {
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                        Noise Gate trains the athlete&apos;s ability to hold attention on the right signal while irrelevant information competes for processing. In every sport, the environment is full of noise. The athletes who perform best are not the ones who experience less noise — they are the ones whose <span className="text-white font-semibold">attentional filter is strong enough to keep the live cue in focus while the noise fades to background</span>. Noise Gate makes that filter measurable and trainable.
+                        Noise Gate trains the athlete&apos;s ability to hold attention on the right signal while irrelevant information competes for processing. In every sport, the environment is full of noise. The athletes who perform best are not the ones who experience less noise — they are the ones whose <span className="text-white font-semibold">attentional filter is strong enough to keep the live target in focus while the noise fades to background</span>. Noise Gate makes that filter measurable and trainable.
                     </p>
                 </div>
             </section>

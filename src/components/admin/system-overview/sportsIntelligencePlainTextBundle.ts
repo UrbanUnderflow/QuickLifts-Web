@@ -140,7 +140,7 @@ The dashboard is the access surface for reports, not a replacement for them. Coa
 | Supporting Sport-Native KPIs | Small KPI strip from sport config | Filtered through \`kpiRefs\` — no invented metrics. |
 | Report Archive | Searchable list of all reviewed reports | Read-only. |
 
-**Design posture:** user-friendly, stunning, easy to navigate. Calm visual hierarchy, generous whitespace, sport-color cues. Zero raw vendor scores rendered as judgment.
+**Design posture:** user-friendly, stunning, easy to navigate. Calm visual hierarchy, generous whitespace, sport-color signals. Zero raw vendor scores rendered as judgment.
 
 **What the dashboard is NOT:** not the interpretation layer; not a place to expose raw HRV / readiness scores as athlete labels; not a leaderboard; not a physical training prescription tool; not a substitute for the weekly walkthrough during pilot.
 
@@ -166,7 +166,7 @@ The dashboard is the access surface for reports, not a replacement for them. Coa
 - **Device-Agnostic By Contract** — Sports Intelligence reads from the normalized health-context surface, never directly from Polar / Whoop / Oura / Apple Health APIs. New device support is an adapter, not a Sports Intelligence change.
 - **Sport-Specific, Athlete-Specific** — Every recommendation is interpreted through the athlete's sport, position, season phase, and individual baseline.
 - **Reports Carry The Interpretation, Dashboard Stays Thin** — Coaches do receive a dashboard, but the dashboard is intentionally thin. Interpretation lives in the report; the dashboard makes those reports easy to find, scan, and act on without forcing the coach to dig through raw scores.
-- **Spell Out The Coaching Moment** — Coach-facing copy must not speak in code. Every point must say when the moment shows up, what the athlete may feel or do, and the one simple mental-performance phrase or routine the coach should give. Vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff fail unless a real named role and decision are present in the source data. Terms like reset cue, mental install, body-state read, and decision support fail unless immediately rewritten into plain English.
+- **Spell Out The Coaching Moment** — Coach-facing copy must not speak in code. Every point must say when the moment shows up, what the athlete may feel or do, and the one simple mental-performance phrase or routine the coach should give. Vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff fail unless a real named role and decision are present in the source data. Terms like mental install, body-state read, decision support, and vague readiness labels fail unless immediately rewritten into plain English.
 - **Coach Owns Physical Programming** — Sports Intelligence may show recovery, load, trend, individual, and team-wide patterns so coaches can make better decisions. It must not tell the coach to change reps, sets, minutes, contact dose, throwing volume, or any other physical programming variable.
 - **Clinical Boundary Is Architectural** — Performance signals stay in the Sports Intelligence Layer. Clinical-threshold signals route through the escalation pipeline to AuntEDNA.
 - **AI Writes, Code Reasons** — Sports Intelligence never asks AI to notice, diagnose, or infer from scratch. Code builds the ledger, selects the candidate read, blocks unsupported claims, and runs the executable Nora rubric.

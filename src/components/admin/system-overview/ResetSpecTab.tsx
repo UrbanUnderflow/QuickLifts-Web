@@ -53,7 +53,7 @@ const GAME_PHASES = [
         description: 'Sustained, narrow-attention focus task that establishes a baseline engagement state before the disruption.',
         tiers: [
             'Beginner: Tap a target on screen in rhythm with a pulse',
-            'Intermediate: Track a moving live cue as it draws a recognizable path pattern; recovery is confirmed by identifying the pattern that was drawn after disruption',
+            'Intermediate: Track a moving live target as it draws a recognizable path pattern; recovery is confirmed by identifying the pattern that was drawn after disruption',
             'Advanced: Execute a sequence from memory while ambient audio plays',
         ],
     },
@@ -113,8 +113,8 @@ const SCIENTIFIC_FOUNDATIONS = [
 /* ---- SKILL SCORES ---- */
 const SKILL_SCORES = [
     { skill: 'Attentional Shifting', pillar: 'Focus', description: 'How fast and completely the athlete redirects attention from disruption back to the task. Derived from re-engagement latency, first-post-reset accuracy, path-pattern confirmation accuracy, and missed-recovery rate.', color: '#60a5fa' },
-    { skill: 'Cue Reacquisition', pillar: 'Focus', description: 'Behavioral focus quality: how cleanly the athlete re-engages after disruption without false starts or panic taps. In Visual Disruption Reset, the drawn path pattern must be matched correctly; this is not eye tracking.', color: '#38bdf8' },
-    { skill: 'Pattern Discrimination', pillar: 'Focus', description: 'Whether the athlete can attend to the cue path through motion, retain the pattern it drew, and distinguish it from decoy patterns after disruption.', color: '#facc15' },
+    { skill: 'Target Reacquisition', pillar: 'Focus', description: 'Behavioral focus quality: how cleanly the athlete re-engages after disruption without false starts or panic taps. In Visual Disruption Reset, the drawn path pattern must be matched correctly; this is not eye tracking.', color: '#38bdf8' },
+    { skill: 'Pattern Discrimination', pillar: 'Focus', description: 'Whether the athlete can attend to the target path through motion, retain the pattern it drew, and distinguish it from decoy patterns after disruption.', color: '#facc15' },
     { skill: 'Inhibitory Control', pillar: 'Composure', description: 'Ability to suppress the emotional/cognitive response to the disruptor and choose to refocus. Derived from false start rate and premature response patterns.', color: '#22c55e' },
     { skill: 'Pressure Stability', pillar: 'Composure', description: 'Recovery time consistency under evaluative threat and consequence modifiers vs. baseline. Stratified by modifier condition per Standards Addendum §9.', color: '#c084fc' },
 ];
@@ -199,16 +199,16 @@ const DIFFICULTY_TIERS = [
 const VARIANTS = [
     { name: 'Visual Disruption', description: 'Screen-based visual interruptions only. Default variant for Tier 1–2.', status: 'Registered' },
     { name: 'Audio Disruption', description: 'Crowd noise, whistles, jarring sounds. Sport-atmosphere variant.', status: 'Registered' },
-    { name: 'Cognitive Disruption', description: 'Provocative messaging and evaluative cues. Psychological pressure variant.', status: 'Registered' },
+    { name: 'Cognitive Disruption', description: 'Provocative messaging and evaluative signals. Psychological pressure variant.', status: 'Registered' },
     { name: 'Combined Disruption', description: 'Multi-channel disruptions. Default for Tier 3–4.', status: 'Registered' },
-    { name: 'Basketball Reset', description: 'Basketball-context disruptions (buzzer, turnover cue, crowd). Sport-specific variant.', status: 'Registered' },
+    { name: 'Basketball Reset', description: 'Basketball-context disruptions (buzzer, turnover signal, crowd). Sport-specific variant.', status: 'Registered' },
     { name: 'Extended Recovery Trial', description: 'Standardized 10–15 min session at fixed Tier 3. Trial-layer assessment variant.', status: 'Registered' },
     { name: 'Reset Chamber (Vision Pro)', description: 'Active football package runtime for Reset / Next Play in the Vision Pro immersive transfer layer.', status: 'Football Package v1' },
 ];
 
 /* ---- MEASUREMENT RULES ---- */
 const MEASUREMENT_RULES = [
-    { rule: 'Valid re-engagement', detail: 'Default phone/web/native mobile training requires one committed correct response to the returned live cue or task. Visual Disruption Reset must gate recovery on correct path-pattern confirmation so fast wrong responses do not score as focus. Comparison-grade runtimes should require two consecutive correct responses when the task supports it.' },
+    { rule: 'Valid re-engagement', detail: 'Default phone/web/native mobile training requires one committed correct response to the returned live target or task. Visual Disruption Reset must gate recovery on correct path-pattern confirmation so fast wrong responses do not score as focus. Comparison-grade runtimes should require two consecutive correct responses when the task supports it.' },
     { rule: 'Handheld mobile gaze boundary', detail: 'iPhone and Android handheld builds must not use camera-estimated gaze as an athlete-facing score source for this sim. Focus is inferred from behavioral re-engagement quality, not claimed eye position.' },
     { rule: 'Minimum reaction time', detail: '150 ms threshold. Any response faster is flagged as motor artifact. Per Standards Addendum §2.1.' },
     { rule: 'Maximum recovery window', detail: 'Training runtimes must cap recovery windows so the sim cannot hang. Tier targets remain goal thresholds (T1 <3s, T2 <2s, T3 <1.5s, T4 <1s), while the runtime may allow a longer capped recovery window before scoring a failed rep and continuing.' },
@@ -222,9 +222,9 @@ const MEASUREMENT_RULES = [
 const EXPERIENCE_PRINCIPLES = [
     { title: 'Feel like training, not therapy', detail: 'The sim should feel like a drill. The athlete should want to beat their last score. Competitive energy is the engine.' },
     { title: 'Minimal UI during gameplay', detail: 'Clean, immersive screen. No navigation, no settings, no distractions beyond intentional ones. The sim owns the screen.' },
-    { title: 'Audio-first focus cues', detail: 'During focus tasks, visible copy should be extremely short and Nora should speak the instruction. Athletes should not have to read long text while tracking a cue.' },
-    { title: 'Timer visible, data mostly after', detail: 'During gameplay, show the session countdown and state cues. Performance details can appear as brief automatic rep transitions in Training Mode or only at session end in Trial Mode.' },
-    { title: 'Sound design matters', detail: 'Audio cues, ambient sound, feedback tones support immersion and signal state changes clearly.' },
+    { title: 'Audio-first focus signals', detail: 'During focus tasks, visible copy should be extremely short and Nora should speak the instruction. Athletes should not have to read long text while tracking a target.' },
+    { title: 'Timer visible, data mostly after', detail: 'During gameplay, show the session countdown and state signals. Performance details can appear as brief automatic rep transitions in Training Mode or only at session end in Trial Mode.' },
+    { title: 'Sound design matters', detail: 'Audio signals, ambient sound, feedback tones support immersion and signal state changes clearly.' },
     { title: 'Celebrate improvement, not perfection', detail: 'Highlight personal bests and trend improvements, not absolute scores. Progress is the reward.' },
 ];
 
@@ -570,7 +570,7 @@ const ResetSpecTab: React.FC = () => {
                         <p className="text-xs font-semibold text-white mb-1">Reset Chamber Scientific Contract</p>
                         <div className="space-y-1">
                             {[
-                                'Keep only the cues that strengthen condition onset, evaluative pressure, urgency, or outcome readability.',
+                                'Keep only the signals that strengthen condition onset, evaluative pressure, urgency, or outcome readability.',
                                 'Trim decorative movement that makes the room busier without changing the athlete decision or the meaning of the rep.',
                                 'Use atmosphere to support the manipulation; do not let spectacle become the manipulation.'
                             ].map((item) => (
@@ -600,7 +600,7 @@ const ResetSpecTab: React.FC = () => {
                         <p className="text-xs font-semibold text-white mb-1">Current Keep / Trim / Cut Call</p>
                         <div className="space-y-1">
                             {[
-                                'Keep the phase IBL family, ground/lane, layered crowd presence, haze shaping, and scoreboard consequence cues.',
+                                'Keep the phase IBL family, ground/lane, layered crowd presence, haze shaping, and scoreboard consequence signals.',
                                 'Trim orb disruption jitter, crowd flash intensity, recovery halo dominance, and world-space summary scale.',
                                 'Cut decorative motion that does not strengthen onset, pressure, urgency, or outcome readability.'
                             ].map((item) => (

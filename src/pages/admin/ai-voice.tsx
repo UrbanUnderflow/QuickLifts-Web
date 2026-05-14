@@ -194,7 +194,7 @@ const SOUND_EFFECTS: {
   {
     id: 'community-nearby-checkin-success',
     label: 'Nearby Check-In Success',
-    description: 'Celebration cue when a member checks in nearby and earns event points.',
+    description: 'Celebration sound when a member checks in nearby and earns event points.',
     icon: <Sparkles className="w-4 h-4" />,
     category: 'celebration',
     file: 'nearby-checkin-success',
@@ -212,7 +212,7 @@ const SOUND_EFFECTS: {
   {
     id: 'community-half-way',
     label: 'Halfway There',
-    description: 'Audible cue at 50% through a timed exercise.',
+    description: 'Audible signal at 50% through a timed exercise.',
     icon: <Volume2 className="w-4 h-4" />,
     category: 'workout',
     file: 'half-way-there',
@@ -259,7 +259,7 @@ const SOUND_EFFECTS: {
 const CATEGORY_LABELS: Record<string, string> = {
   splash: 'Splash & Launch',
   celebration: 'Celebrations',
-  workout: 'Workout Cues',
+  workout: 'Workout Signals',
   notification: 'Notifications',
   ui: 'UI Interactions',
   pulsecheck: 'Mental Training',
@@ -268,7 +268,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 const CATEGORY_ORDER = ['splash', 'pulsecheck', 'celebration', 'workout', 'notification', 'ui'];
 
 // ──────────────────────────────────────────────────────────
-// VISION PRO RESET — IMMERSIVE SOUND CUES
+// VISION PRO RESET — IMMERSIVE SOUND SETS
 // Dynamically generated via ElevenLabs and stored in Firebase.
 // These are spatial SFX tied to trial stage transitions in the
 // visionOS immersive space, NOT static files from /public/audio.
@@ -311,7 +311,7 @@ const VP_RESET_CUES: VPCueDef[] = [
     description: 'Urgent alert ping when the recovery window opens.',
     stageTag: 'recovery',
     generationMode: 'sfx',
-    prompt: 'Clear urgent recovery signal ping, bright electronic alert tone, sports performance cue, crisp and attention-grabbing',
+    prompt: 'Clear urgent recovery signal ping, bright electronic alert tone, sports performance sound, crisp and attention-grabbing',
     durationSeconds: 2,
   },
   {
@@ -353,7 +353,7 @@ const VP_RESET_CUES: VPCueDef[] = [
   {
     cueKey: 'noraResetCountdown3',
     label: 'Countdown 3',
-    description: 'Spoken countdown cue: 3.',
+    description: 'Spoken countdown signal: 3.',
     stageTag: 'countdown',
     generationMode: 'speech',
     prompt: 'Three.',
@@ -362,7 +362,7 @@ const VP_RESET_CUES: VPCueDef[] = [
   {
     cueKey: 'noraResetCountdown2',
     label: 'Countdown 2',
-    description: 'Spoken countdown cue: 2.',
+    description: 'Spoken countdown signal: 2.',
     stageTag: 'countdown',
     generationMode: 'speech',
     prompt: 'Two.',
@@ -371,7 +371,7 @@ const VP_RESET_CUES: VPCueDef[] = [
   {
     cueKey: 'noraResetCountdown1',
     label: 'Countdown 1',
-    description: 'Spoken countdown cue: 1.',
+    description: 'Spoken countdown signal: 1.',
     stageTag: 'countdown',
     generationMode: 'speech',
     prompt: 'One.',
@@ -380,7 +380,7 @@ const VP_RESET_CUES: VPCueDef[] = [
   {
     cueKey: 'noraResetCountdownBegin',
     label: 'Countdown Begin',
-    description: 'Spoken start cue that hands off into measurement.',
+    description: 'Spoken start signal that hands off into measurement.',
     stageTag: 'countdown',
     generationMode: 'speech',
     prompt: 'Begin.',
@@ -437,40 +437,40 @@ const PROTOCOL_CLASS_PALETTE: Record<ProtocolCueDef['protocolClass'], { label: s
 function buildProtocolCuePrompt(record: Pick<ProtocolCueDef, 'label' | 'protocolClass' | 'responseFamily'>) {
   switch (record.responseFamily) {
     case 'acute_downshift':
-      return 'A soft but immediate physiological reset cue, airy inhale shimmer followed by a long exhale release, calming, precise, no music, no speech.';
+      return 'A soft but immediate physiological reset phrase, airy inhale shimmer followed by a long exhale release, calming, precise, no music, no speech.';
     case 'steady_regulation':
-      return 'A balanced paced-breath cue, even pulse, composed and grounded, subtle performance breathing signal, no music, no speech.';
+      return 'A balanced paced-breath signal, even pulse, composed and grounded, subtle performance breathing signal, no music, no speech.';
     case 'focus_narrowing':
       return record.protocolClass === 'priming'
-        ? 'A sharp attentional lock cue, focused click-chime hybrid, clean and precise, cueing the next action, no music, no speech.'
-        : 'A body-awareness narrowing cue, soft inward bell with grounded resonance, calming and precise, no music, no speech.';
+        ? 'A sharp attentional lock signal, focused click-chime hybrid, clean and precise, preparing the next action, no music, no speech.'
+        : 'A body-awareness narrowing signal, soft inward bell with grounded resonance, calming and precise, no music, no speech.';
     case 'cognitive_reframe':
-      return 'An uplifted reframing cue, bright but controlled rise, pressure becoming opportunity, short and motivating, no speech.';
+      return 'An uplifted reframing signal, bright but controlled rise, pressure becoming opportunity, short and motivating, no speech.';
     case 'activation_upshift':
       return 'A compact energizing activation hit, inhale-led surge with athletic readiness, crisp and controlled, no music, no speech.';
     case 'imagery_priming':
-      return 'A cinematic execution-prime cue, clean anticipatory shimmer with focused forward motion, vivid but restrained, no speech.';
+      return 'A cinematic execution-prime signal, clean anticipatory shimmer with focused forward motion, vivid but restrained, no speech.';
     case 'confidence_priming':
-      return 'A poised embodied confidence cue, upright and expansive tonal lift, subtle authority without hype, no speech.';
+      return 'A poised embodied confidence signal, upright and expansive tonal lift, subtle authority without hype, no speech.';
     case 'recovery_downregulation':
-      return 'A deep recovery cue, slow resolving breath-like tone, soft parasympathetic downshift, restorative and spacious, no speech.';
+      return 'A deep recovery signal, slow resolving breath-like tone, soft parasympathetic downshift, restorative and spacious, no speech.';
     case 'recovery_reflection':
-      return 'A reflective post-session cue, grounded piano-like tone bed with quiet resolution, thoughtful and steady, no speech.';
+      return 'A reflective post-session signal, grounded piano-like tone bed with quiet resolution, thoughtful and steady, no speech.';
     default:
-      return `${record.label} protocol signature cue, athletic mental training sound effect, polished, short, no speech.`;
+      return `${record.label} protocol signature sound, athletic mental training sound effect, polished, short, no speech.`;
   }
 }
 
 function buildProtocolCueDescription(record: Pick<ProtocolCueDef, 'label' | 'protocolClass' | 'responseFamily'>) {
   switch (record.protocolClass) {
     case 'regulation':
-      return `Signature start cue for ${record.label}, tuned for calming, composure, and state control.`;
+      return `Signature start signal for ${record.label}, tuned for calming, composure, and state control.`;
     case 'priming':
-      return `Signature start cue for ${record.label}, tuned for readiness, precision, and competitive entry.`;
+      return `Signature start signal for ${record.label}, tuned for readiness, precision, and competitive entry.`;
     case 'recovery':
-      return `Signature start cue for ${record.label}, tuned for downshift, processing, and recovery posture.`;
+      return `Signature start signal for ${record.label}, tuned for downshift, processing, and recovery posture.`;
     default:
-      return `Signature cue for ${record.label}.`;
+      return `Signature sound for ${record.label}.`;
   }
 }
 
@@ -495,13 +495,13 @@ const BODY_SCAN_RUNTIME_CUES: ProtocolCueDef[] = [
   {
     cueKey: 'protocol-body-scan-reset-body-scan-transition',
     protocolId: 'protocol-body-scan-reset',
-    label: 'Body Scan Transition Cue',
+    label: 'Body Scan Transition Signal',
     protocolClass: 'regulation',
     responseFamily: 'focus_narrowing',
     runtimeRole: 'transition',
-    description: 'Soft step-transition cue for Body Scan Awareness so quiet holds feel active instead of stalled.',
+    description: 'Soft step-transition signal for Body Scan Awareness so quiet holds feel active instead of stalled.',
     prompt:
-      'A very soft calming transition cue for a guided body scan: breath-like airy chime, warm glass resonance, gentle exhale tail, subtle and reassuring, no melody, no music, no speech.',
+      'A very soft calming transition signal for a guided body scan: breath-like airy chime, warm glass resonance, gentle exhale tail, subtle and reassuring, no melody, no music, no speech.',
     durationSeconds: 2,
     promptInfluence: 0.42,
   },
@@ -833,7 +833,7 @@ const VPSoundCard: React.FC<{
           </div>
           <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{cue.description}</p>
           <code className="text-[10px] text-zinc-600 font-mono mt-1 block">
-            {cue.durationSeconds}s · {cue.generationMode === 'speech' ? 'ElevenLabs / Nora voice cue' : 'ElevenLabs SFX'} · {cue.cueKey}
+            {cue.durationSeconds}s · {cue.generationMode === 'speech' ? 'ElevenLabs / Nora voice line' : 'ElevenLabs SFX'} · {cue.cueKey}
           </code>
         </div>
 
@@ -1172,7 +1172,7 @@ const AdminAiVoice: React.FC = () => {
   const [playingSound, setPlayingSound] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Vision Pro immersive sound cues state
+  // Vision Pro immersive sound set state
   const [vpAssets, setVPAssets] = useState<Record<string, SimAudioAssetRef | null>>({});
   const [vpGenerating, setVPGenerating] = useState<Record<string, boolean>>({});
   const [vpLoading, setVPLoading] = useState(false);
@@ -1296,7 +1296,7 @@ const AdminAiVoice: React.FC = () => {
     audio.onerror = () => setRegistrySimPlayingId(null);
   };
 
-  // ── VP load: read Firestore for all Reset cue docs
+  // ── VP load: read Firestore for all Reset audio docs
   const loadVPAssets = async () => {
     setVPLoading(true);
     setVPLoadError(null);
@@ -1412,7 +1412,7 @@ const AdminAiVoice: React.FC = () => {
         : ELEVENLABS_VOICES[0]?.id;
 
     if (!elevenLabsVoiceId) {
-      throw new Error('No ElevenLabs Nora voice is configured for spoken Reset cues.');
+      throw new Error('No ElevenLabs Nora voice is configured for spoken Reset lines.');
     }
 
     const settings = shouldUseElevenLabsVoiceDefaults(selectedPresetId) ? null : elevenLabsSettings;
@@ -1546,7 +1546,7 @@ const AdminAiVoice: React.FC = () => {
       );
       setProtocolAssets(results);
     } catch (e: any) {
-      setProtocolLoadError(e?.message || 'Failed to load protocol sound cues');
+      setProtocolLoadError(e?.message || 'Failed to load protocol sounds');
     } finally {
       setProtocolLoading(false);
     }
@@ -1641,7 +1641,7 @@ const AdminAiVoice: React.FC = () => {
       );
       setRunAlertAssets(results);
     } catch (e: any) {
-      setRunAlertLoadError(e?.message || 'Failed to load run alert voice cues');
+      setRunAlertLoadError(e?.message || 'Failed to load run alert voice lines');
     } finally {
       setRunAlertLoading(false);
     }
@@ -1868,7 +1868,7 @@ const AdminAiVoice: React.FC = () => {
                 AI Voice & Sound Effects
               </h1>
               <p className="text-zinc-400 mt-2 text-sm">
-                Configure Nora's voice, app sound libraries, immersive Vision Pro cue sets, and generated PulseCheck protocol signature audio.
+                Configure Nora's voice, app sound libraries, immersive Vision Pro sound sets, and generated PulseCheck protocol signature audio.
               </p>
             </div>
             <button
@@ -1921,7 +1921,7 @@ const AdminAiVoice: React.FC = () => {
               active={activeTab === 'visionPro'}
               icon={<Eye className="h-4 w-4" />}
               label="Vision Pro"
-              description="Immersive chamber cues, spoken countdowns, and trial-specific audio packages."
+              description="Immersive chamber sounds, spoken countdowns, and trial-specific audio packages."
               onClick={() => setActiveTab('visionPro')}
             />
             <AudioTabButton
@@ -2317,13 +2317,13 @@ const AdminAiVoice: React.FC = () => {
                 </div>
                 <div>
                   <div className="font-semibold text-white flex items-center gap-2">
-                    Vision Pro — Reset Trial Sound Cues
+                    Vision Pro — Reset Trial Sounds
                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border" style={{ color: '#00D4AA', background: 'rgba(0,212,170,0.1)', borderColor: 'rgba(0,212,170,0.25)' }}>
                       visionOS
                     </span>
                   </div>
                   <div className="text-xs text-zinc-500 mt-0.5">
-                    Immersive Reset audio library for both spatial chamber SFX and Nora's spoken pre-brief cues. Stored in Firebase and streamed by the headset at runtime.
+                    Immersive Reset audio library for both spatial chamber SFX and Nora's spoken pre-brief lines. Stored in Firebase and streamed by the headset at runtime.
                   </div>
                 </div>
               </div>
@@ -2343,7 +2343,7 @@ const AdminAiVoice: React.FC = () => {
                 onClick={() => toggleVPSection('resetTrial')}
                 className="flex w-full items-center gap-3 px-4 py-4 text-left"
               >
-                <span className="text-sm font-semibold text-white">Vision Pro — Reset Trial Sound Cues</span>
+                <span className="text-sm font-semibold text-white">Vision Pro — Reset Trial Sounds</span>
                 <div className="h-px flex-1 bg-white/[0.05]" />
                 <span className="text-xs text-zinc-600">{Object.values(vpAssets).filter(Boolean).length} / {VP_RESET_CUES.length} generated</span>
                 {vpSectionsOpen.resetTrial ? <ChevronUp className="h-4 w-4 text-zinc-500" /> : <ChevronDown className="h-4 w-4 text-zinc-500" />}
@@ -2377,7 +2377,7 @@ const AdminAiVoice: React.FC = () => {
                         <div>
                           Generated audio is stored at <code className="font-mono text-zinc-300">sim-audio-assets/vision-pro-reset/</code> in Firebase Storage.
                           The visionOS app reads <code className="font-mono text-zinc-300">downloadURL</code> at session start to preload chamber SFX and Nora&apos;s spoken pre-brief.
-                          Spoken cues are generated with <strong className="text-zinc-200">ElevenLabs</strong> right here beside the chamber sound cues, using the Nora voice controls from the section above when available.
+                          Spoken lines are generated with <strong className="text-zinc-200">ElevenLabs</strong> right here beside the chamber sounds, using the Nora voice controls from the section above when available.
                         </div>
                       </div>
 
@@ -2415,7 +2415,7 @@ const AdminAiVoice: React.FC = () => {
                       <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-white/[0.05] pt-4 text-xs text-zinc-500">
                         <div>
                           <span className="font-semibold text-zinc-300">{Object.values(vpAssets).filter(Boolean).length}</span>
-                          {' / '}{VP_RESET_CUES.length} cues generated
+                          {' / '}{VP_RESET_CUES.length} sounds generated
                         </div>
                         {Object.values(vpGenerating).some(Boolean) && (
                           <div className="flex items-center gap-1.5 text-amber-400">
@@ -2443,9 +2443,9 @@ const AdminAiVoice: React.FC = () => {
                   <Music className="h-4 w-4 text-cyan-300" />
                 </div>
                 <div>
-                  <div className="font-semibold text-white">PulseCheck Protocol Sound Cues</div>
+                  <div className="font-semibold text-white">PulseCheck Protocol Sounds</div>
                   <div className="mt-0.5 text-xs text-zinc-500">
-                    Signature entry cues for each live protocol. Stored in Firebase and grouped by regulation, priming, and recovery.
+                    Signature entry sounds for each live protocol. Stored in Firebase and grouped by regulation, priming, and recovery.
                   </div>
                 </div>
               </div>
@@ -2475,7 +2475,7 @@ const AdminAiVoice: React.FC = () => {
             <div className="mt-4 flex items-start gap-3 rounded-xl border border-white/[0.05] bg-zinc-950/60 p-3 text-xs text-zinc-400">
               <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-zinc-500" />
               <div>
-                Protocol cues include generated signature sounds plus runtime-specific assets like Body Scan transition and ambient cues. These assets are stored under <code className="font-mono text-zinc-300">sim-audio-assets/pulsecheck-protocols/</code> for the app to resolve by cue key.
+                Protocol sounds include generated signature sounds plus runtime-specific assets like Body Scan transition and ambient sounds. These assets are stored under <code className="font-mono text-zinc-300">sim-audio-assets/pulsecheck-protocols/</code> for the app to resolve by audio key.
               </div>
             </div>
 
@@ -2497,7 +2497,7 @@ const AdminAiVoice: React.FC = () => {
                       >
                         {palette.label}
                       </span>
-                      <span className="text-sm font-semibold text-white">{palette.label} Protocol Cues</span>
+                      <span className="text-sm font-semibold text-white">{palette.label} Protocol Sounds</span>
                       <div className="h-px flex-1 bg-white/[0.05]" />
                       <span className="text-xs text-zinc-600">
                         {cues.filter((cue) => protocolAssets[cue.cueKey]).length} / {cues.length} generated
@@ -2555,7 +2555,7 @@ const AdminAiVoice: React.FC = () => {
             <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-white/[0.05] pt-4 text-xs text-zinc-500">
               <div>
                 <span className="font-semibold text-zinc-300">{Object.values(protocolAssets).filter(Boolean).length}</span>
-                {' / '}{PROTOCOL_SOUND_CUES.length} cues generated
+                {' / '}{PROTOCOL_SOUND_CUES.length} sounds generated
               </div>
               {Object.values(protocolGenerating).some(Boolean) && (
                 <div className="flex items-center gap-1.5 text-amber-400">
@@ -2578,7 +2578,7 @@ const AdminAiVoice: React.FC = () => {
                   <Bell className="h-4 w-4 text-orange-300" />
                 </div>
                 <div>
-                  <div className="font-semibold text-white">Run Warning Voice Cues</div>
+                  <div className="font-semibold text-white">Run Warning Voice Lines</div>
                   <div className="mt-0.5 text-xs text-zinc-500">
                     ElevenLabs-spoken run alerts for phone placement loss and runs that appear finished but remain active.
                   </div>
@@ -2610,7 +2610,7 @@ const AdminAiVoice: React.FC = () => {
             <div className="mt-4 flex items-start gap-3 rounded-xl border border-white/[0.05] bg-zinc-950/60 p-3 text-xs text-zinc-400">
               <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-zinc-500" />
               <div>
-                These cues are stored in <code className="font-mono text-zinc-300">sim-audio-assets/community-run-alerts/</code>.
+                These voice lines are stored in <code className="font-mono text-zinc-300">sim-audio-assets/community-run-alerts/</code>.
                 Generate and preview them here with the current Nora ElevenLabs voice. QuickLifts now syncs the latest files from <code className="font-mono text-zinc-300">/api/audio/run-alerts</code> into iOS <code className="font-mono text-zinc-300">Library/Sounds</code> using the target filename shown on each card, matching the same remote-audio delivery pattern used by Vision Pro.
                 Until the app completes its first sync, it falls back to <code className="font-mono text-zinc-300">Bell.wav</code> for local notification sound.
               </div>
@@ -2650,7 +2650,7 @@ const AdminAiVoice: React.FC = () => {
             <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-white/[0.05] pt-4 text-xs text-zinc-500">
               <div>
                 <span className="font-semibold text-zinc-300">{Object.values(runAlertAssets).filter(Boolean).length}</span>
-                {' / '}{RUN_ALERT_CUES.length} cues generated
+                {' / '}{RUN_ALERT_CUES.length} lines generated
               </div>
               {Object.values(runAlertGenerating).some(Boolean) && (
                 <div className="flex items-center gap-1.5 text-amber-400">

@@ -42,7 +42,7 @@ const FAMILY_SPECS: FamilySpecEntry[] = [
     {
         id: 'signal-window',
         label: 'Signal Window',
-        subtitle: 'Cue discrimination — read the right signal in a shrinking window.',
+        subtitle: 'Signal discrimination — read the right signal in a shrinking window.',
         icon: ScanSearch,
         accent: '#facc15',
     },

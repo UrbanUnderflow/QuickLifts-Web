@@ -351,7 +351,7 @@ const MovesPage: NextPage<MovesPageProps> = ({ metaData }) => {
                 { 
                   num: '03', 
                   title: 'Caption', 
-                  desc: 'Quick tips, cues, or muscle focus. The coaching details that make you, you.',
+                  desc: 'Quick tips, notes, or muscle focus. The coaching details that make you, you.',
                   color: '#8B5CF6'
                 },
                 { 

@@ -89,7 +89,7 @@ async function installProtocolPracticeEvaluationMock(page: Page) {
   const turnEvaluations = [
     {
       noraFeedback: 'You named the body signal quickly. Now tie it to the job you need to do next.',
-      strengths: ['You spotted the body cue right away.'],
+      strengths: ['You spotted the body signal right away.'],
       misses: ['Name the next action, not just the feeling.'],
       scores: {
         signalAwareness: 4,
@@ -102,7 +102,7 @@ async function installProtocolPracticeEvaluationMock(page: Page) {
     {
       noraFeedback: 'This is still a little broad. Say exactly what the nerves mean for your next move.',
       strengths: ['You kept the tone steady under pressure.'],
-      misses: ['Turn the feeling into a direct action cue.'],
+      misses: ['Turn the feeling into a direct action.'],
       scores: {
         signalAwareness: 3,
         techniqueFidelity: 2,
@@ -118,8 +118,8 @@ async function installProtocolPracticeEvaluationMock(page: Page) {
     },
     {
       noraFeedback: 'That was clearer. Keep the same tone and make the next answer just as specific.',
-      strengths: ['You turned the feeling into an action cue.'],
-      misses: ['Trim extra words so the cue lands even faster.'],
+      strengths: ['You turned the feeling into an action.'],
+      misses: ['Trim extra words so the phrase lands even faster.'],
       scores: {
         signalAwareness: 4,
         techniqueFidelity: 4,
@@ -129,7 +129,7 @@ async function installProtocolPracticeEvaluationMock(page: Page) {
       },
     },
     {
-      noraFeedback: 'That sounded competition-usable. You kept it direct and gave yourself a real cue to act on.',
+      noraFeedback: 'That sounded competition-usable. You kept it direct and gave yourself a real action to use.',
       strengths: ['You finished with direct, usable language.'],
       misses: ['Start this specific on the first answer next rep.'],
       scores: {
@@ -396,12 +396,12 @@ test.describe('Protocol Practice Conversation', () => {
     await page.getByRole('button', { name: /Submit Answer/i }).click();
     await expect(page.getByText(/Nora Feedback/i)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('heading', { name: /You named the body signal quickly\. Now tie it to the job you need to do next\./i })).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/You spotted the body cue right away\./i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/You spotted the body signal right away\./i)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/Name the next action, not just the feeling\./i)).toBeVisible({ timeout: 20_000 });
     await expect.poll(() =>
       spokenTexts.some((text) =>
         text.includes('You named the body signal quickly. Now tie it to the job you need to do next.')
-        && text.includes('What landed: You spotted the body cue right away.')
+        && text.includes('What landed: You spotted the body signal right away.')
         && text.includes('What to sharpen: Name the next action, not just the feeling.')
       )
     ).toBe(true);
@@ -419,14 +419,14 @@ test.describe('Protocol Practice Conversation', () => {
     await page.locator('textarea').fill('The same body signal means I am excited, fueled, and ready, not in danger.');
     await page.getByRole('button', { name: /Submit Answer/i }).click();
     await expect(page.getByRole('heading', { name: /That was clearer\. Keep the same tone and make the next answer just as specific\./i })).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/You turned the feeling into an action cue\./i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/You turned the feeling into an action\./i)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('button', { name: /^Continue$/i })).toBeVisible({ timeout: 20_000 });
     await page.getByRole('button', { name: /^Continue$/i }).click({ force: true });
 
     await expect(page.getByText(/Practice Turn 3 of 3/i)).toBeVisible({ timeout: 20_000 });
     await page.locator('textarea').fill('These butterflies are fuel. I am ready to compete and execute.');
     await page.getByRole('button', { name: /Submit Answer/i }).click();
-    await expect(page.getByRole('heading', { name: /That sounded competition-usable\. You kept it direct and gave yourself a real cue to act on\./i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('heading', { name: /That sounded competition-usable\. You kept it direct and gave yourself a real action to use\./i })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('button', { name: /^Continue$/i })).toBeVisible({ timeout: 20_000 });
     await page.getByRole('button', { name: /^Continue$/i }).click({ force: true });
 

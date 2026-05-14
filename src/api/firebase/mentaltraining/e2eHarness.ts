@@ -811,7 +811,7 @@ function resolveProtocolFixture(protocolId?: string): {
     default:
       return {
         id: 'protocol-cue-word-anchoring',
-        label: 'Cue Word Anchoring',
+        label: 'Anchor Word',
         legacyExerciseId: 'focus-cue-word',
         protocolClass: 'priming',
         protocolCategory: ExerciseCategory.Focus,
@@ -3657,9 +3657,9 @@ async function recordPulseCheckJourneyCompletion(
     completedActionLabel: fallbackExerciseName,
     nextActionLabel: 'Continue building with Nora',
     athleteHeadline: `Strong practice rep on ${fallbackExerciseName}`,
-    athleteBody: `You completed ${fallbackExerciseName} with good intent. Keep using the same cues on the next rep.`,
+    athleteBody: `You completed ${fallbackExerciseName} with good intent. Keep using the same anchors on the next rep.`,
     coachHeadline: `Athlete completed ${fallbackExerciseName}`,
-    coachBody: `The athlete completed ${fallbackExerciseName} and should keep reinforcing the same execution cues.`,
+    coachBody: `The athlete completed ${fallbackExerciseName} and should keep reinforcing the same execution anchors.`,
     targetSkills: ['signal recognition', 'execution rehearsal'],
     programChanged: false,
     generatedAt: now,

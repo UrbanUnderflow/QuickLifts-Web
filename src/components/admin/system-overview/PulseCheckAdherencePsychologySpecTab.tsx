@@ -67,7 +67,7 @@ const LITERATURE_ROWS = [
   [
     'Implementation intentions',
     'When/where/how commitments improve follow-through.',
-    'Capture the athlete pact as: after this cue, in this place, I complete Pulse Check.',
+    'Capture the athlete pact as: after this moment, in this place, I complete Pulse Check.',
   ],
   [
     'Self-Determination Theory',
@@ -92,7 +92,7 @@ const LITERATURE_ROWS = [
   [
     'Habit formation research',
     'Repeated behavior in a stable context builds automaticity over time.',
-    'Use the same daily cue, recurring appointment, and predictable closure state during the pilot.',
+    'Use the same daily moment, recurring appointment, and predictable closure state during the pilot.',
   ],
 ];
 
@@ -127,7 +127,7 @@ const PRIVACY_ROWS = [
 const SURFACE_ROWS = [
   [
     'Onboarding',
-    'Add an athlete pact step with inspirational performance framing, daily cue capture, reminder time, and privacy reassurance.',
+    'Add an athlete pact step with inspirational performance framing, daily moment capture, reminder time, and privacy reassurance.',
     'Fields: pactAcceptedAt, adherenceCueType, adherenceCueLabel, reminderTime, privacyAcknowledgedAt.',
   ],
   [
@@ -137,7 +137,7 @@ const SURFACE_ROWS = [
   ],
   [
     'Notifications',
-    'Replace static-only daily reminders with state-aware nudges: pre-commitment cue, open-day rescue, started-not-finished rescue, and closeout.',
+    'Replace static-only daily reminders with state-aware nudges: pre-commitment moment, open-day rescue, started-not-finished rescue, and closeout.',
     'Notification copy must be supportive, performance-grounded, and privacy-safe.',
   ],
   [
@@ -174,9 +174,9 @@ const ATHLETE_COPY_ROWS = [
     'Use in onboarding, chat entry, and settings.',
   ],
   [
-    'Cue reminder',
+    'Moment reminder',
     "You picked after practice. Give Nora the two-minute read so today's rep matches where your body and mind actually are.",
-    'Use when a cue-based reminder fires.',
+    'Use when a moment-based reminder fires.',
   ],
   [
     'Rescue nudge',
@@ -203,7 +203,7 @@ const ADHERENCE_STATE_ROWS = [
 const IMPLEMENTATION_STEPS = [
   {
     title: 'Lock the athlete pact in onboarding',
-    body: 'Add performance-centered pact copy, cue capture, privacy acknowledgement, and reminder setup before the athlete exits onboarding.',
+    body: 'Add performance-centered pact copy, moment capture, privacy acknowledgement, and reminder setup before the athlete exits onboarding.',
     owner: 'iOS + web onboarding',
   },
   {
@@ -218,7 +218,7 @@ const IMPLEMENTATION_STEPS = [
   },
   {
     title: 'Ship adaptive rescue nudges',
-    body: 'Trigger reminders from adherence state and athlete cue context, including started-not-finished and late short-version flows.',
+    body: 'Trigger reminders from adherence state and athlete moment context, including started-not-finished and late short-version flows.',
     owner: 'Notifications + functions',
   },
   {
@@ -308,7 +308,7 @@ const PulseCheckAdherencePsychologySpecTab: React.FC = () => {
       <SectionBlock icon={Bell} title="Nudge Rules">
         <CardGrid columns="md:grid-cols-2 xl:grid-cols-3">
           <InfoCard
-            title="Cue-Based First Prompt"
+            title="Moment-Based First Prompt"
             accent="blue"
             body="The first reminder should reference the athlete's chosen rhythm when possible, such as after practice, after film, after lift, after dinner, or before bed."
           />

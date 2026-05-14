@@ -39,7 +39,7 @@ const TRAINER_STEPS = [
     detailedSteps: [
       "Record or upload exercise videos",
       "Add detailed exercise descriptions",
-      "Include proper form cues and safety notes",
+      "Include proper form notes and safety notes",
       "Categorize exercises by muscle group",
       "Set recommended weights and rep ranges",
       "Save exercises to your personal library"

@@ -25,7 +25,7 @@ const ACCENT = '#a78bfa';
 
 const PHASES = [
     { phase: '1', name: 'Rule Establishment', color: '#60a5fa', duration: '5–10 trials', desc: 'Athlete learns the active rule set and executes trials to establish fluency before the shift.', bullets: ['Beginner: One simple rule', 'Intermediate: Two active rules', 'Advanced: Multi-dimensional conditional rules'] },
-    { phase: '2', name: 'Shift', color: '#a78bfa', duration: 'Unpredictable', desc: 'The active rule changes. Detect, suppress old rule, load new rule, execute.', bullets: ['Signaled shift: Clear cue. Default Tier 1–2.', 'Unsignaled shift: No explicit cue. Default Tier 3+.', 'Late audible: Signal arrives after execution begins.'] },
+    { phase: '2', name: 'Shift', color: '#a78bfa', duration: 'Unpredictable', desc: 'The active rule changes. Detect, suppress old rule, load new rule, execute.', bullets: ['Signaled shift: Clear signal. Default Tier 1–2.', 'Unsignaled shift: No explicit signal. Default Tier 3+.', 'Late audible: Signal arrives after execution begins.'] },
     { phase: '3', name: 'Score Capture', color: '#22c55e', duration: 'Per block', desc: 'Accuracy and RT on post-shift trials vs. pre-shift baseline. Core metric: Update Accuracy After Rule Change.', bullets: ['Post-shift window: first 3–5 trials after rule change', 'Old-rule intrusion errors classified separately', 'Switch cost: first post-shift RT vs. pre-shift rolling average', 'Session: 4–6 blocks, 1–3 shifts per block, 3–5 minutes'] },
 ];
 
@@ -80,7 +80,7 @@ const VARIANTS = [
     { name: 'Conditional Shift', desc: 'Multi-dimensional conditional rules. Default Tier 3.', status: 'Registered' },
     { name: 'Audible Series', desc: 'Sport-context rule changes via audible-style signals.', status: 'Registered' },
     { name: 'Extended Trial Sequence Shift', desc: 'Standardized 10–15 min at Tier 3 with frequent rule changes.', status: 'Registered' },
-    { name: 'Sport-Playbook Trial (Vision Pro)', desc: 'Rule changes via spatial/environmental cues. Immersive Transfer Trial.', status: 'Planned' },
+    { name: 'Sport-Playbook Trial (Vision Pro)', desc: 'Rule changes via spatial/environmental signals. Immersive Transfer Trial.', status: 'Planned' },
 ];
 
 const RULES = [
@@ -112,7 +112,7 @@ const EXP = [
     { title: 'Feel like training, not therapy', detail: 'The sim should feel like a drill. The athlete should want to beat their last score.' },
     { title: 'Minimal UI during gameplay', detail: 'Clean, immersive screen. No navigation, no settings during active rule execution.' },
     { title: 'Data after, not during', detail: 'Performance shown between rounds (Training) or only at session end (Trial).' },
-    { title: 'Sound design matters', detail: 'Audio cues signal shift moments clearly — the audible should feel like a real sport call.' },
+    { title: 'Sound design matters', detail: 'Audio signals mark shift moments clearly — the audible should feel like a real sport call.' },
     { title: 'Celebrate improvement, not perfection', detail: 'Highlight personal bests and trend improvements. Progress is the reward.' },
 ];
 
@@ -302,7 +302,7 @@ const SequenceShiftSpecTab: React.FC = () => (
             <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4"><p className="text-xs font-bold text-cyan-400 mb-1">Extended Trial Sequence Shift</p><p className="text-[10px] text-zinc-400 leading-relaxed">Standardized at Tier 3, 10–15 min with frequent rule changes. Per Standards Addendum §6.</p></div>
-                    <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4"><p className="text-xs font-bold text-purple-400 mb-1">Sport-Playbook Trial (Vision Pro)</p><p className="text-[10px] text-zinc-400 leading-relaxed">Rule changes via spatial/environmental cues. Tests rule updating in immersive contexts.</p></div>
+                    <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4"><p className="text-xs font-bold text-purple-400 mb-1">Sport-Playbook Trial (Vision Pro)</p><p className="text-[10px] text-zinc-400 leading-relaxed">Rule changes via spatial/environmental signals. Tests rule updating in immersive contexts.</p></div>
                 </div>
                 <div className="rounded-xl border border-zinc-700 bg-black/30 px-4 py-3">
                     <p className="text-xs font-semibold text-white mb-1">Transfer Gap</p>

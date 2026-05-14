@@ -67,7 +67,7 @@ const VISION_PRO_DOCS: VisionProArtifactDoc[] = [
       'The first build must be fixed-position and low-locomotion.',
       'Reusable systems include crowd pressure, scoreboard/consequence, peripheral distraction, event scripting, and logging.',
       'Reset / Next Play must preserve same-task re-engagement under immersive disruption.',
-      'Signal Window must preserve cue discrimination under time pressure while making cues spatial and immersive.',
+      'Signal Window must preserve signal discrimination under time pressure while making signals spatial and immersive.',
     ],
     outOfScope: [
       'Avatar gameplay or football movement mechanics',
@@ -562,7 +562,7 @@ const REALITYKIT_GAP_ROWS = [
   ['Environment shell', 'Placeholder arena shell exists', 'Spec calls for Football Stadium / Arena Template v1 with authored seating, field focus, crowd-pressure channels, scoreboard/consequence system, and reusable event anchors.'],
   ['Reset / Next Play interaction', 'HUD-style card with button', 'Spec calls for same-task re-engagement under immersive disruption inside the stadium, not a centered control panel.'],
   ['Noise Gate interaction', 'Spatialized choice layout in SwiftUI', 'Spec calls for layered noise pressure and target-channel holding inside the environment, with real spatial competition.'],
-  ['Signal Window interaction', 'Spatialized choice layout in SwiftUI', 'Spec calls for cue discrimination in a spatial field with environmental pressure, not only floating choice tiles.'],
+  ['Signal Window interaction', 'Spatialized choice layout in SwiftUI', 'Spec calls for signal discrimination in a spatial field with environmental pressure, not only floating choice tiles.'],
   ['Environmental pressure systems', 'Mostly metadata + labels', 'Spec calls for reusable crowd, scoreboard, peripheral distraction, spatial audio, and consequence systems that visibly alter the environment.'],
   ['RealityKit content ownership', 'Not yet separated cleanly from runtime HUD', 'Spec needs content-plane RealityKit entities to own the trial interactions while overlays handle only timing, safety, and control.'],
 ];
@@ -570,10 +570,10 @@ const REALITYKIT_GAP_ROWS = [
 const REALITYKIT_BUILD_STREAM_ROWS = [
   ['1', 'Separate control plane from content plane', 'Kiosk/session/calibration/reporting stay in SwiftUI; the measured family interactions move into RealityKit entities, anchors, and systems.'],
   ['2', 'Build Football Stadium / Arena Template v1', 'Author the fixed athlete station, main forward field, peripheral event channels, scoreboard anchor, crowd/stands layer, and lighting/audio zones as reusable RealityKit content.'],
-  ['3', 'Create shared environment systems', 'Add reusable RealityKit systems for crowd surge, scoreboard consequence pulses, peripheral distractions, directional cue routing, and condition-tag-driven event playback.'],
+  ['3', 'Create shared environment systems', 'Add reusable RealityKit systems for crowd surge, scoreboard consequence pulses, peripheral distractions, directional signal routing, and condition-tag-driven event playback.'],
   ['4', 'Implement Reset / Next Play as the first full RealityKit family', 'Translate lock-in, disruption, and re-engagement into authored spatial entities and disruptions so the user recovers inside the environment instead of tapping a panel.'],
   ['5', 'Implement Noise Gate with true spatial competition', 'Make target and distractor channels occupy different lanes/emitters in space, with environment-driven noise pressure rather than button-only choice UI.'],
-  ['6', 'Implement Signal Window with spatial cue choreography', 'Drive cue windows with authored field nodes, timing systems, directional emphasis, and environmental decoys that match the spec cadence.'],
+  ['6', 'Implement Signal Window with spatial signal choreography', 'Drive signal windows with authored field nodes, timing systems, directional emphasis, and environmental decoys that match the spec cadence.'],
   ['7', 'Reduce overlays to lightweight guidance only', 'Keep only minimal status, pause/abort, calibration, and summary overlays. The game surface itself should no longer be the overlay.'],
   ['8', 'Validate against the event script and pilot protocol', 'Make sure RealityKit events still map cleanly into the locked event schema, validity flags, family metrics, and operator workflow.'],
 ];
@@ -590,20 +590,20 @@ const REALITYKIT_SYSTEM_ROWS = [
 const REALITYKIT_FAMILY_ROWS = [
   ['Reset / Next Play', 'RealityKit target focus, disruption entity/event, recovery confirm action, same-task lock-in surface', 'This is the first family that should become fully spec-faithful because it is the cleanest bridge from current runtime to true immersive content.'],
   ['Noise Gate', 'Target lane entities, distractor emitters, directional noise pressure, sustained focus channel', 'Should feel like selecting and holding the target signal inside a noisy stadium lane, not pressing one of three tiles.'],
-  ['Signal Window / Spatial Read', 'Cue nodes, decoy nodes, timing system, spatial highlight/de-emphasis choreography', 'Should feel like reading a live cue in space under pressure, not choosing from abstract on-screen buttons.'],
+  ['Signal Window / Spatial Read', 'Signal nodes, decoy nodes, timing system, spatial highlight/de-emphasis choreography', 'Should feel like reading a live signal in space under pressure, not choosing from abstract on-screen buttons.'],
 ];
 
 const REALITYKIT_DELIVERABLE_ROWS = [
   ['Milestone 1', 'Reset / Next Play is fully RealityKit-driven in the football environment', 'Lock-in focus sphere, disruption burst, and recovery beacon are all RealityKit entities. Kiosk window is minimal standby. Operator controls are in an ornament. Telemetry path is preserved through the coordinator bridge.'],
   ['Milestone 2', 'Noise Gate is spatialized and uses environmental pressure systems', 'Target/distractor logic, event tags, and reporting all remain family-locked.'],
-  ['Milestone 3', 'Signal Window becomes full Spatial Read in the arena', 'Cue discrimination is authored in space and validated against the locked event script.'],
+  ['Milestone 3', 'Signal Window becomes full Spatial Read in the arena', 'Signal discrimination is authored in space and validated against the locked event script.'],
   ['Milestone 4', 'Overlay layer becomes minimal and operator-safe', 'Pause, abort, and summary remain available without taking over the game surface.'],
   ['Milestone 5', 'Spec-faithful pilot rehearsal', 'The build is ready for an operator walkthrough that matches the handbook protocol and runbook rather than a prototype test harness.'],
 ];
 
 const RESET_CHAMBER_SCIENCE_ROWS = [
-  ['Keep', 'Phase onset cues', 'Lighting-profile shifts, orb state changes, and crowd-state changes are allowed because they mark the condition change clearly without panel UI.'],
-  ['Keep', 'Evaluative pressure', 'Crowd presence, restrained flash behavior, and scoreboard consequence cues support the feeling of being watched and judged under pressure.'],
+  ['Keep', 'Phase onset signals', 'Lighting-profile shifts, orb state changes, and crowd-state changes are allowed because they mark the condition change clearly without panel UI.'],
+  ['Keep', 'Evaluative pressure', 'Crowd presence, restrained flash behavior, and scoreboard consequence signals support the feeling of being watched and judged under pressure.'],
   ['Keep', 'Urgency / outcome', 'Recovery should signal act-now urgency, and transition should communicate recovered vs. missed cleanly.'],
   ['Reduce', 'Abstract disruption geometry', 'Large side slabs, shutters, and ornamental ripples should stay static or disabled unless they directly improve manipulation strength or task clarity.'],
   ['Reduce', 'Ambient spectacle', 'Animation that exists only to make the chamber feel alive is not enough. It must map to pressure, consequence, urgency, or recovery.'],
@@ -613,7 +613,7 @@ const RESET_CHAMBER_SCIENCE_ROWS = [
 const RESET_CHAMBER_POLISH_SPRINT_THREE_ROWS = [
   ['Manipulation strength', 'Does the athlete feel watched, pressured, and judged before the rep breaks?', 'Keep atmosphere that increases evaluative pressure. Cut motion that only adds busyness.'],
   ['Task readability', 'Can a first-time athlete explain exactly what to do during lock-in, disruption, and recovery?', 'Elevate surfaces that clarify the task. Trim anything that competes with the task target.'],
-  ['Outcome trust', 'Does success vs. miss feel experimentally legible, not cosmetically dramatic?', 'Consequence cues should reinforce what happened, not entertain.'],
+  ['Outcome trust', 'Does success vs. miss feel experimentally legible, not cosmetically dramatic?', 'Consequence signals should reinforce what happened, not entertain.'],
   ['Measurement support', 'Does the environment make timing, urgency, and rep validity easier to interpret?', 'Polish is allowed when it improves confidence in the measurement.'],
   ['Device realism', 'Does the chamber still feel coherent on physical Vision Pro, not just in Simulator?', 'Tune final intensity, brightness, and scale on-headset before adding more layers.'],
   ['Polish rule', 'Would removing this element make the test worse, or just less flashy?', 'If it only hurts flash, remove or soften it.'],
@@ -624,14 +624,14 @@ const RESET_CHAMBER_KEEP_TRIM_CUT_ROWS = [
   ['Keep', 'Ground plane and lane', 'The floor and athlete lane anchor the station spatially and help the athlete feel placed inside a measurable trial.'],
   ['Keep', 'Layered crowd presence', 'Multiple crowd rows and restrained sway support evaluative pressure and the feeling of being watched.'],
   ['Keep', 'Haze and edge shaping', 'Atmospheric depth and darker periphery improve focus and make the pressure field feel spatial rather than screen-like.'],
-  ['Keep', 'Scoreboard consequence pulse', 'A readable forward consequence cue helps communicate that something happened to the rep, not just to the room.'],
+  ['Keep', 'Scoreboard consequence pulse', 'A readable forward consequence signal helps communicate that something happened to the rep, not just to the room.'],
   ['Trim', 'Orb disruption jitter', 'The destabilization helps mark the break, but it should stay tight enough that it feels like pressure, not chaos.'],
   ['Trim', 'Crowd flash behavior', 'Flashes are useful as evaluative pressure only if they stay sparse and never become concert-light spectacle.'],
-  ['Trim', 'Recovery halo intensity', 'The act-now recovery cue is important, but it should not become the only readable object in the room.'],
+  ['Trim', 'Recovery halo intensity', 'The act-now recovery signal is important, but it should not become the only readable object in the room.'],
   ['Trim', 'Summary card world scale', 'The summary should feel authoritative and readable on-device, but not dominate the chamber like a floating laptop.'],
   ['Cut', 'Decorative slab / shutter theatrics', 'Large side-shape motion and shutter-like sweeps do not improve the manipulation enough to justify the visual noise.'],
   ['Cut', 'Ambient movement without a rep meaning', 'If an element does not strengthen onset, pressure, urgency, or outcome readability, it should not stay animated.'],
-  ['Cut', 'Any cue that competes with the task target', 'The orb/task lane must remain the primary locus of attention; side activity should never steal that role.'],
+  ['Cut', 'Any signal that competes with the task target', 'The orb/task lane must remain the primary locus of attention; side activity should never steal that role.'],
 ];
 
 const NOISE_GATE_NORTH_STAR_ROWS = [
@@ -1300,7 +1300,7 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
                   <InfoCard
                     title="RealityKit Ownership Rule"
                     accent="blue"
-                    body="RealityKit should own the environment, trial cues, disruptions, and spatial response targets. SwiftUI should only own operator-safe overlays like calibration controls, pause/abort, timing summaries, and post-session closeout."
+                    body="RealityKit should own the environment, trial signals, disruptions, and spatial response targets. SwiftUI should only own operator-safe overlays like calibration controls, pause/abort, timing summaries, and post-session closeout."
                   />
                   <InfoCard
                     title="What To Build First"

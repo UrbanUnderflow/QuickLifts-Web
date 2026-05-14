@@ -2801,7 +2801,7 @@ const PulseCheckPage: NextPage = () => {
                                 </span>
                             </h2>
                             <p className="text-zinc-400 text-lg max-w-3xl mx-auto mt-6">
-                                Run pressure scenarios before game day. PulseCheck coaches breathing, attention control, and execution cues in the exact moments athletes usually unravel.
+                                Run pressure scenarios before game day. PulseCheck coaches breathing, attention control, and execution signals in the exact moments athletes usually unravel.
                             </p>
                         </div>
 
@@ -2837,7 +2837,7 @@ const PulseCheckPage: NextPage = () => {
                                     </div>
                                     <div className="rounded-2xl border border-blue-400/30 bg-blue-500/10 p-4">
                                         <p className="text-xs uppercase tracking-[0.16em] text-blue-300 mb-2">Nora Prompt</p>
-                                        <p className="text-zinc-200">"Reset in 8 seconds: exhale long, eyes on rim center, cue: smooth follow-through."</p>
+                                        <p className="text-zinc-200">"Reset in 8 seconds: exhale long, eyes on rim center, phrase: smooth follow-through."</p>
                                     </div>
                                     <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4">
                                         <p className="text-xs uppercase tracking-[0.16em] text-emerald-300 mb-2">Execution Result</p>
@@ -2865,7 +2865,7 @@ const PulseCheckPage: NextPage = () => {
                                         </div>
                                         <div>
                                             <p className="text-white font-semibold">2. Issue A Micro-Reset</p>
-                                            <p className="text-zinc-400 text-sm">Breath cadence and short cue are tailored to role and situation.</p>
+                                            <p className="text-zinc-400 text-sm">Breath cadence and short phrase are tailored to role and situation.</p>
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-3 p-3 rounded-xl bg-zinc-950/70 border border-zinc-800">
@@ -2900,7 +2900,7 @@ const PulseCheckPage: NextPage = () => {
                             <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5">
                                 <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Scenario B</p>
                                 <h4 className="text-white font-semibold mt-2 mb-3">Opponent Momentum Run</h4>
-                                <p className="text-zinc-400 text-sm">Skill: cognitive reframing + next-play cue.</p>
+                                <p className="text-zinc-400 text-sm">Skill: cognitive reframing + next-play phrase.</p>
                                 <p className="text-[#E0FE10] text-sm mt-3">Result: less panic decision-making under noise.</p>
                             </div>
                             <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5">

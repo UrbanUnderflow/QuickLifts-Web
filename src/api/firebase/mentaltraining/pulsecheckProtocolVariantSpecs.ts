@@ -69,7 +69,7 @@ export const SEEDED_PROTOCOL_VARIANT_SPECS: SeedProtocolVariantSpec[] = [
     deliveryMode: 'guided_focus',
     legacyExerciseId: 'focus-body-scan',
     scriptSummary:
-      'A head-to-toe guided scan that helps the athlete notice hidden tension, tighten the link between body cues and attention, and release unnecessary muscular noise before technical work.',
+      'A head-to-toe guided scan that helps the athlete notice hidden tension, tighten the link between body signals and attention, and release unnecessary muscular noise before technical work.',
     evidenceSummary:
       'This variant has the clearest rationale when the problem is unnamed tension rather than obvious anxiety. Body-scan interventions have been linked with improved interoception and body-awareness outcomes, which makes this a plausible pre-technical reset for athletes who need to detect and clear somatic interference.',
     sourceReferences: [
@@ -109,7 +109,7 @@ export const SEEDED_PROTOCOL_VARIANT_SPECS: SeedProtocolVariantSpec[] = [
     ],
   }),
   spec('priming-focus_narrowing', {
-    label: 'Cue Word Anchoring',
+    label: 'Anchor Word',
     variantKey: 'cue-word-anchoring',
     category: ExerciseCategory.Focus,
     deliveryMode: 'guided_focus',
@@ -117,7 +117,7 @@ export const SEEDED_PROTOCOL_VARIANT_SPECS: SeedProtocolVariantSpec[] = [
     scriptSummary:
       'A one-word attentional anchor trained ahead of time, then deployed between attempts or after mistakes to compress focus around the next controllable action.',
     evidenceSummary:
-      'This variant is supported by the self-talk literature, especially when the athlete needs a simple instructional cue instead of a long reset. Instructional self-talk tends to help precision and execution tasks, making cue-word anchoring a good fit for between-attempt focus recovery.',
+      'This variant is supported by the self-talk literature, especially when the athlete needs a simple instructional phrase instead of a long reset. Instructional self-talk tends to help precision and execution tasks, making anchor-word practice a good fit for between-attempt focus recovery.',
     sourceReferences: [
       'Hatzigeorgiadis A et al. Self-Talk and Sports Performance: A Meta-Analysis. Perspectives on Psychological Science (2015). PMID: 26167788. https://pubmed.ncbi.nlm.nih.gov/26167788/',
       'Wright BJ et al. Enhancing Self-Efficacy and Performance: An Experimental Comparison of Psychological Techniques. Research Quarterly for Exercise and Sport (2016). PMID: 26523398. https://pubmed.ncbi.nlm.nih.gov/26523398/',
@@ -146,7 +146,7 @@ export const SEEDED_PROTOCOL_VARIANT_SPECS: SeedProtocolVariantSpec[] = [
     deliveryMode: 'embodied_reset',
     legacyExerciseId: 'confidence-power-pose',
     scriptSummary:
-      'A short expansive-posture reset used as an embodied confidence cue before stepping into a rep, presentation, or high-visibility moment.',
+      'A short expansive-posture reset used before stepping into a rep, presentation, or high-visibility moment.',
     evidenceSummary:
       'This variant should be treated cautiously and never oversold. The best reading of the literature is that expansive posture can shift subjective feelings of power or readiness for some people, but the stronger hormonal-performance claims are not reliable enough to treat this as a deep confidence intervention on its own.',
     sourceReferences: [
@@ -193,9 +193,9 @@ export const SEEDED_PROTOCOL_VARIANT_SPECS: SeedProtocolVariantSpec[] = [
     deliveryMode: 'guided_reflection',
     legacyExerciseId: 'mindset-process-focus',
     scriptSummary:
-      'A short reflection that redirects attention from result-spiraling toward controllable cues, execution truths, and next-action process anchors.',
+      'A short reflection that redirects attention from result-spiraling toward controllable actions, execution truths, and next-action process anchors.',
     evidenceSummary:
-      'This variant is strongest when the athlete is cognitively stuck on outcomes after a miss, competition, or stressful trial. Choking and attentional-control research supports reducing maladaptive self-focus and reallocating attention toward process cues, which fits the intended use of this reflection closely.',
+      'This variant is strongest when the athlete is cognitively stuck on outcomes after a miss, competition, or stressful trial. Choking and attentional-control research supports reducing maladaptive self-focus and reallocating attention toward process actions, which fits the intended use of this reflection closely.',
     sourceReferences: [
       'Hill DM et al. Choking under pressure: theoretical models and interventions. Current Opinion in Psychology (2017). https://pubmed.ncbi.nlm.nih.gov/28813345/',
       'Englert C. Attentional processes and choking under pressure. Frontiers in Psychology (2013). https://pubmed.ncbi.nlm.nih.gov/24032339/',

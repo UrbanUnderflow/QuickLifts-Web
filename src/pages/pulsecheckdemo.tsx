@@ -562,7 +562,7 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
             status: 'Assigned',
         },
         {
-            name: 'Cue Word Anchoring',
+            name: 'Anchor Word',
             category: 'Focus',
             icon: Target,
             color: '#F59E0B',
@@ -914,8 +914,8 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                                                 status: 'Assigned',
                                             },
                                             {
-                                                name: 'Cue Word Anchoring',
-                                                desc: 'Lock a personal trigger word to an optimal performance state',
+                                                name: 'Anchor Word',
+                                                desc: 'Lock a personal anchor word to an optimal performance state',
                                                 icon: Target,
                                                 color: '#F59E0B',
                                                 status: 'In Queue',
@@ -2399,14 +2399,14 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
             ksDisruptionEndRef.current = Date.now();
             ksRecoveryStartedRef.current = false;
             setKsTapAccuracy([]);
-            // Restart pulse with re-engage sound cue
+            // Restart pulse with re-engage sound
             if (ksPulseTimerRef.current) clearInterval(ksPulseTimerRef.current);
             setKsTapAccuracy([]);
             ksPulseTimerRef.current = setInterval(() => {
                 ksExpectedTapRef.current = Date.now();
                 setKsPulseActive(true);
                 setKsPulseScale(1.3);
-                playTick(true); // higher-pitched tick = re-engage cue
+                playTick(true); // higher-pitched tick = re-engage signal
                 setTimeout(() => {
                     setKsPulseScale(1);
                     setKsPulseActive(false);
@@ -2933,7 +2933,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                         definition: 'Your ability to lock attention onto the right thing, hold it under load, and redirect it immediately after disruption. Focus is not about blocking everything out — it is about rapid, accurate reallocation of mental resources.',
                                                         skills: [
                                                             { name: 'Sustained Attention', score: 85, prev: 58, sim: 'Endurance Lock', desc: 'Maintain focus over extended time-on-task' },
-                                                            { name: 'Selective Attention', score: 81, prev: 50, sim: 'Noise Gate', desc: 'Filter distractors and hold the right cue' },
+                                                            { name: 'Selective Attention', score: 81, prev: 50, sim: 'Noise Gate', desc: 'Filter distractors and hold the right signal' },
                                                             { name: 'Attentional Shifting', score: 87, prev: 42, sim: 'The Reset Switch', desc: 'Rapidly redirect after disruption' },
                                                         ],
                                                         modifierContext: [
@@ -2947,14 +2947,14 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                         id: 'decision' as const,
                                                         label: 'Decision', score: 79,
                                                         accent: '#c084fc', accentDim: 'rgba(192,132,252,0.1)',
-                                                        definition: 'Your ability to read the right cue, suppress the wrong impulse, and act precisely under time pressure. Decision quality degrades faster than any other pillar under fatigue — it is the last pillar trained and the first one lost.',
+                                                        definition: 'Your ability to read the right signal, suppress the wrong impulse, and act precisely under time pressure. Decision quality degrades faster than any other pillar under fatigue — it is the last pillar trained and the first one lost.',
                                                         skills: [
                                                             { name: 'Response Inhibition', score: 76, prev: 54, sim: 'Brake Point', desc: 'Cancel bad actions before error cascades' },
                                                             { name: 'Working Memory Updating', score: 74, prev: 55, sim: 'Sequence Shift', desc: 'Update rules and priorities mid-execution' },
-                                                            { name: 'Cue Discrimination', score: 80, prev: 52, sim: 'Signal Window', desc: 'Read the real signal from decoys in time' },
+                                                            { name: 'Signal Discrimination', score: 80, prev: 52, sim: 'Signal Window', desc: 'Read the real signal from decoys in time' },
                                                         ],
                                                         modifierContext: [
-                                                            { label: 'Readiness', score: 82, color: '#22d3ee', impact: 'Low readiness = more impulsive errors and slower cue reads' },
+                                                            { label: 'Readiness', score: 82, color: '#22d3ee', impact: 'Low readiness = more impulsive errors and slower signal reads' },
                                                             { label: 'Consistency', score: 88, color: '#E0FE10', impact: 'Decision accuracy varies the most across sessions of all pillars' },
                                                             { label: 'Fatigability', score: 71, color: '#f59e0b', impact: 'Inhibition degrades fastest under fatigue — false starts increase' },
                                                             { label: 'Pressure Sensitivity', score: 78, color: '#fb923c', impact: 'Decision speed holds but accuracy drops under evaluative threat' },

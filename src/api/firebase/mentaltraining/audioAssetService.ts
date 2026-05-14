@@ -80,8 +80,8 @@ function buildCueTemplates(record: SimVariantRecord): AudioCueTemplate[] {
       },
       {
         cueKey: 'startle_cue',
-        label: 'Startle Cue',
-        prompt: 'A sudden startle-like arena cue or crowd sting, brief and disruptive, sports-safe, no music, no speech.',
+        label: 'Startle Signal',
+        prompt: 'A sudden startle-like arena sound or crowd sting, brief and disruptive, sports-safe, no music, no speech.',
         durationSeconds: 2,
       },
     ];
@@ -110,7 +110,7 @@ function buildCueTemplates(record: SimVariantRecord): AudioCueTemplate[] {
     {
       cueKey: 'buzzer_shock',
       label: 'Buzzer Shock',
-      prompt: 'A loud arena buzzer shock cue for competitive play, short and urgent, no music.',
+      prompt: 'A loud arena buzzer shock signal for competitive play, short and urgent, no music.',
       durationSeconds: 2,
     },
   ];
@@ -218,7 +218,7 @@ export async function resolveVariantAudioAssets(record: SimVariantRecord): Promi
       return [cue.cueKey, resolved] as const;
     } catch (error: any) {
       console.warn(
-        `[audioAssetService] Failed to resolve audio cue "${cue.cueKey}" for ${record.name}. Falling back to synthetic runtime audio.`,
+        `[audioAssetService] Failed to resolve audio prompt "${cue.cueKey}" for ${record.name}. Falling back to synthetic runtime audio.`,
         error?.message || error
       );
       return null;

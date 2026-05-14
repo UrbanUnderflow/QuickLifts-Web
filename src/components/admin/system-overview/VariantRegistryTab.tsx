@@ -350,13 +350,13 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
     'Reset': {
         mechanism: 'timer-led disruption -> reset -> rapid re-engagement to the same primary task',
         coreMetric: 'Recovery Time',
-        skillTargets: 'Attentional Shifting, Error Recovery Speed, Cue Reacquisition, Pattern Discrimination, and Pressure Stability',
+        skillTargets: 'Attentional Shifting, Error Recovery Speed, Target Reacquisition, Pattern Discrimination, and Pressure Stability',
         boundaryRule: 'the athlete must always return to the same task rather than pivoting into a new problem or secondary challenge, and phone/web/native mobile builds may not imply handheld camera gaze detection',
         trainingModeDefaults: [
             'show a visible session countdown and run repeated reps until the timer expires',
             'auto-advance between reps so the athlete is not blocked by a manual next-round gate',
             'show compact recovery feedback and reinforce fast, clean re-engagement',
-            'use audio-first concise phase cues so athletes are not asked to read long instructions while tracking',
+            'use audio-first concise phase signals so athletes are not asked to read long instructions while tracking',
             'allow light adaptation inside family limits without changing the recovery mechanic',
             'keep the session compact enough to feel like a competitive drill rather than a benchmark battery',
         ],
@@ -373,7 +373,7 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
         ],
     },
     'Noise Gate': {
-        mechanism: 'maintain the live cue while filtering irrelevant noise',
+        mechanism: 'maintain the live target while filtering irrelevant noise',
         coreMetric: 'Distractor Cost',
         skillTargets: 'Selective Attention, Interference Control, and Pressure Stability',
         boundaryRule: 'distractors must stay irrelevant and may not become a second monitored target or a divided-attention task',
@@ -398,7 +398,7 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
         mechanism: 'cancel or inhibit the wrong action when the stop signal appears',
         coreMetric: 'Stop Latency',
         skillTargets: 'Response Inhibition, Impulse Control, and Pressure Stability',
-        boundaryRule: 'the task must remain response cancellation rather than shifting into a cue-reading or multi-step decision task',
+        boundaryRule: 'the task must remain response cancellation rather than shifting into a signal-reading or multi-step decision task',
         trainingModeDefaults: [
             'surface stop-quality feedback without overwhelming the athlete with analytics',
             'scale stop-signal timing or decoy intensity inside fixed family boundaries',
@@ -417,19 +417,19 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
         ],
     },
     'Signal Window': {
-        mechanism: 'identify and commit to the correct cue before the decision window closes',
+        mechanism: 'identify and commit to the correct signal before the decision window closes',
         coreMetric: 'Correct Read Under Time Pressure',
-        skillTargets: 'Rapid Cue Recognition, Decision Accuracy, and Pressure Stability',
-        boundaryRule: 'the task must remain cue discrimination with a clearly correct answer rather than a blind or ambiguous commitment task',
+        skillTargets: 'Rapid Signal Recognition, Decision Accuracy, and Pressure Stability',
+        boundaryRule: 'the task must remain signal discrimination with a clearly correct answer rather than a blind or ambiguous commitment task',
         trainingModeDefaults: [
             'show concise decision feedback and reinforce fast-but-correct reads',
-            'adapt cue complexity and window duration only within family limits',
+            'adapt signal complexity and window duration only within family limits',
             'keep the sim feeling like a read, not a memorization or inhibition task',
         ],
         trialModeDefaults: [
-            'fix cue timing, presentation order, and difficulty tier for standardized comparison',
+            'fix signal timing, presentation order, and difficulty tier for standardized comparison',
             'suppress feedback until the session ends',
-            'log cue type, ambiguity level, and response timing for analysis',
+            'log signal type, ambiguity level, and response timing for analysis',
         ],
         governingDocs: [
             'Sim Specification Standards Addendum (v2)',
@@ -530,7 +530,7 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
         mechanism: 'force a commit before full information becomes available',
         coreMetric: 'Commit Quality',
         skillTargets: 'Decision Commitment, Confidence Calibration, and Pressure Stability',
-        boundaryRule: 'the task must stay focused on committing under incomplete information rather than a normal cue-read with a fully visible answer',
+        boundaryRule: 'the task must stay focused on committing under incomplete information rather than a normal signal read with a fully visible answer',
         trainingModeDefaults: [
             'show decision-outcome feedback after the commitment point',
             'scale information availability and time pressure inside candidate boundaries',
@@ -555,11 +555,11 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
         boundaryRule: 'pressure framing can rise, but the base task should not morph into a different family mechanism',
         trainingModeDefaults: [
             'show compact pressure-context feedback without breaking immersion',
-            'escalate stakes and evaluative cues within family limits',
+            'escalate stakes and evaluative signals within family limits',
             'preserve a performance-under-pressure feel rather than a fear-based experience',
         ],
         trialModeDefaults: [
-            'fix pressure cues, timing, and stakes profile',
+            'fix pressure signals, timing, and stakes profile',
             'suppress mid-session feedback and log context conditions carefully',
             'separate baseline and pressure-condition reporting',
         ],
@@ -603,7 +603,7 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
             'keep the experience deliberate and precise rather than frantic',
         ],
         trialModeDefaults: [
-            'fix timing, target presentation, and pressure cues',
+            'fix timing, target presentation, and pressure signals',
             'hide feedback until the full session ends',
             'log fixation timing and break points for later analysis',
         ],
@@ -665,8 +665,8 @@ const VARIANT_REGISTRY: VariantEntry[] = [
     { name: 'Spatial Brake', family: 'Brake Point', familyStatus: 'locked', mode: 'library', specStatus: 'needs-spec', priority: 'medium' },
 
     // ── SIGNAL WINDOW (LOCKED) ── Branch Variants
-    { name: 'Ambiguous Cue Signal Window', family: 'Signal Window', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
-    { name: 'Decoy Cue Signal Window', family: 'Signal Window', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
+    { name: 'Ambiguous Signal Window', family: 'Signal Window', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
+    { name: 'Decoy Signal Window', family: 'Signal Window', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
     { name: 'Shot-Clock Signal Window', family: 'Signal Window', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
     { name: 'Rapid Recognition Signal Window', family: 'Signal Window', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
     { name: 'Spatial Read Signal Window', family: 'Signal Window', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
@@ -1039,7 +1039,7 @@ const BUILD_NOTE_OVERLAP_SIGNAL_TOKENS = new Set([
     'start',
     'intrusion',
     'shift',
-    'cue',
+    'signal',
 ]);
 
 function runPolishAudit(variant: VariantEntry, parsed: ParsedSpec, findings: SpecAuditFinding[]) {
@@ -1370,7 +1370,7 @@ function runNonTrialArchetypeAudit(variant: VariantEntry, lowerRaw: string, find
                 findings,
                 lowerRaw,
                 'decoy_missing_decoy_definition',
-                'Decoy/discrimination variants should explicitly describe false triggers or near-target cues.',
+                'Decoy/discrimination variants should explicitly describe false triggers or near-target signals.',
                 ['decoy', 'false trigger', 'near-target', 'false starts']
             );
             pushArchetypeRequirementFinding(
@@ -1542,8 +1542,8 @@ function runNonTrialFamilyAudit(variant: VariantEntry, lowerRaw: string, finding
                 findings,
                 lowerRaw,
                 'signal_window_sport_missing_context_tags',
-                'Sport-context Signal Window variants should store sport/scenario/cue-context tags for interpretability.',
-                ['sport', 'scenario', 'cue type', 'phase of play', 'shot-clock']
+                'Sport-context Signal Window variants should store sport/scenario/signal-context tags for interpretability.',
+                ['sport', 'scenario', 'signal type', 'phase of play', 'shot-clock']
             );
         }
     }
@@ -2206,7 +2206,7 @@ function buildArchetypeProfile(
                     'the build roadmap includes platform-specific immersive hardware or richer scene presentation',
                 ],
                 changes: [
-                    'environmental presentation, spatial cues, and atmosphere become more prominent',
+                    'environmental presentation, spatial signals, and atmosphere become more prominent',
                     'pressure comes from immersion and contextual fidelity rather than a rule change',
                     'analytics should capture immersion-specific state and device context',
                 ],
@@ -2234,7 +2234,7 @@ function buildArchetypeProfile(
                     'Nora needs a version that is easier to explain in team or sport-specific language',
                 ],
                 changes: [
-                    'stimulus framing, copy, and environmental cues become sport-specific',
+                    'stimulus framing, copy, and environmental signals become sport-specific',
                     'the family mechanism and metric remain unchanged beneath the sport wrapper',
                     'variant assets should support transfer without introducing sport-specific rule drift',
                 ],
@@ -2263,7 +2263,7 @@ function buildArchetypeProfile(
                     'the target rule should remain clear even when the screen gets noisier',
                 ],
                 artifactRisks: [
-                    'overdesigned clutter can blur the live cue and accidentally change the task itself',
+                    'overdesigned clutter can blur the live target and accidentally change the task itself',
                     'display lag, peripheral scaling, or contrast issues can distort difficulty',
                 ],
                 runtimeDefaults: {
@@ -2342,7 +2342,7 @@ function buildArchetypeProfile(
                     'the program needs a more psychologically realistic expression of the same core task',
                 ],
                 changes: [
-                    'pressure comes from language, ambiguity, reveal timing, or psychologically loaded cues',
+                    'pressure comes from language, ambiguity, reveal timing, or psychologically loaded signals',
                     'the athlete should still be solving the same family task underneath the provocation',
                     'copy and pacing need tight guardrails so pressure stays sharp but not confusing',
                 ],
@@ -2390,8 +2390,8 @@ function buildArchetypeProfile(
                     'the program wants to stress discrimination without changing the family score model',
                 ],
                 changes: [
-                    'decoy quality, false triggers, or near-correct cues become the main pressure source',
-                    'the real cue must stay definable so the variant remains measurable and fair',
+                    'decoy quality, false triggers, or near-correct signals become the main pressure source',
+                    'the real signal must stay definable so the variant remains measurable and fair',
                     'analytics should classify decoy-triggered errors explicitly',
                 ],
                 runtimeDefaults: {
@@ -2446,14 +2446,14 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
                 ],
                 changes: [
                     'the pressure source is visual disruption only: flash, bounded target masking, or bounded layout scramble',
-                    'the athlete is asked to watch a live cue draw a recognizable path pattern, then recover by matching the pattern that was drawn or completing the returned response task',
+                    'the athlete is asked to watch a live target draw a recognizable path pattern, then recover by matching the pattern that was drawn or completing the returned response task',
                     'the session is timer-led by default so rep length can vary without hiding the finish line',
                     'phone, web, and native mobile builds measure touch/click/tap re-engagement; handheld camera gaze is not a scoring input',
                 ],
                 athleteFlow: [
                     'The athlete enters a five-minute visual reset drill with a visible countdown timer.',
-                    'Each rep starts with a lock-in task where Nora tells the athlete to watch the path while a live cue draws a recognizable pattern.',
-                    'After the reset cue, the athlete immediately matches the pattern the cue drew; the first correct pattern match marks recovery.',
+                    'Each rep starts with a lock-in task where Nora tells the athlete to watch the path while a live target draws a recognizable pattern.',
+                    'After the reset signal, the athlete immediately matches the pattern the target drew; the first correct pattern match marks recovery.',
                     'If recovery is missed inside the capped recovery window, the rep is scored at the cap and the sim automatically advances.',
                 ],
                 scoringNotes: [
@@ -2463,7 +2463,7 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
                     'Focus contribution is inferred from behavioral path-tracking quality: response speed, path-pattern accuracy, wrong-pattern selections, false starts, and missed-recovery caps.',
                 ],
                 artifactRisks: [
-                    'visual disruption can accidentally become target-search if the live cue is hidden too long or returns in an ambiguous way',
+                    'visual disruption can accidentally become target-search if the live target is hidden too long or returns in an ambiguous way',
                     'display lag, contrast loss, or motion timing can distort recovery time if device class is not tagged',
                     'copy that names the answer pattern before the disruption can turn the drill into label memory instead of path tracking',
                 ],
@@ -2472,10 +2472,10 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
                     'Never leave the recovery phase open-ended; every rep needs a capped recovery window and automatic continuation.',
                     'Use automatic rep transitions by default; manual round gates are not part of the default Visual Disruption Reset contract.',
                     'Store `input_source=touch_or_click` for phone/web/native mobile delivery; do not emit camera-gaze recovery fields from handheld iOS or Android builds.',
-                    'Use short visible phase cues that Nora reads aloud: lock in, watch the path, disruption, reset, and match the path.',
+                    'Use short visible phase signals that Nora reads aloud: lock in, watch the path, disruption, reset, and match the path.',
                 ],
                 runtimeDefaults: {
-                    emphasis: ['screen flashes', 'target disappearance', 'layout scramble', 'path-pattern confirmation', 'touch/click/tap re-engagement', 'Nora-read concise phase cues'],
+                    emphasis: ['screen flashes', 'target disappearance', 'layout scramble', 'path-pattern confirmation', 'touch/click/tap re-engagement', 'Nora-read concise phase signals'],
                     analyticsFocus: ['Recovery Time', 'visual-trigger false starts', 'first-post-reset accuracy', 'path-pattern accuracy', 'path reacquisition cleanliness', 'capped missed recoveries', 'input source'],
                 },
                 durationMinutes: 5,
@@ -2501,7 +2501,7 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
 
         if (name.includes('cognitive-provocation')) {
             return {
-                purpose: 'This variant expresses Reset through provocative language, evaluative cues, and psychological disruption without changing the reset mechanic.',
+                purpose: 'This variant expresses Reset through provocative language, evaluative signals, and psychological disruption without changing the reset mechanic.',
                 expectedBenefit: 'Reveal whether the athlete can recover when disruption arrives through thought and self-talk rather than pure sensory noise.',
                 bestUse: [
                     'the athlete spirals after mistakes, criticism, or ambiguity',
@@ -2509,7 +2509,7 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
                     'Nora needs a version that targets evaluative threat and internal disruption directly',
                 ],
                 runtimeDefaults: {
-                    emphasis: ['provocative copy', 'evaluative cues', 'psychological interruption'],
+                    emphasis: ['provocative copy', 'evaluative signals', 'psychological interruption'],
                     analyticsFocus: ['Recovery Time', 'pressure stability under provocation', 'post-provocation first accuracy'],
                 },
                 durationMinutes: 5,
@@ -2543,7 +2543,7 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
                     'Nora needs an assignment that feels closer to film room or sideline context',
                 ],
                 runtimeDefaults: {
-                    emphasis: ['sport-context cues', 'game-like reset moments', 'transfer framing'],
+                    emphasis: ['sport-context signals', 'game-like reset moments', 'transfer framing'],
                     analyticsFocus: ['Recovery Time', 'context-tagged performance', 'coach-facing transfer notes'],
                 },
                 durationMinutes: 5,
@@ -2625,9 +2625,9 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
         if (name.includes('peripheral bait')) {
             return {
                 purpose: 'This variant stresses Noise Gate through peripheral lure stimuli that compete for attention while the true target remains central.',
-                expectedBenefit: 'Reduce peripheral bait errors and improve discipline around the live cue.',
+                expectedBenefit: 'Reduce peripheral bait errors and improve discipline around the live target.',
                 runtimeDefaults: {
-                    emphasis: ['peripheral lure cues', 'attention bait', 'central-target discipline'],
+                    emphasis: ['peripheral lure signals', 'attention bait', 'central-target discipline'],
                     analyticsFocus: ['Distractor Cost', 'peripheral bait error rate', 'target-lock consistency'],
                 },
                 durationMinutes: 5,
@@ -2683,11 +2683,11 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
     if (variant.family === 'Signal Window') {
         if (name.includes('shot-clock')) {
             return {
-                purpose: 'This variant expresses Signal Window through shot-clock pressure and late-clock game framing while preserving the same cue-discrimination mechanic.',
+                purpose: 'This variant expresses Signal Window through shot-clock pressure and late-clock game framing while preserving the same signal-discrimination mechanic.',
                 expectedBenefit: 'Increase transfer to late-clock decision windows where the athlete must read correctly before time collapses.',
                 bestUse: [
                     'the athlete reads well with time but degrades when the decision window visibly shrinks',
-                    'the coach wants cue-recognition language that maps directly to end-of-clock situations',
+                    'the coach wants signal-recognition language that maps directly to end-of-clock situations',
                     'Nora needs a sport-native time-pressure version without changing the family scoring model',
                 ],
                 runtimeDefaults: {
@@ -2700,15 +2700,15 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
         if (name.includes('rapid recognition')) {
             return {
                 variantType: 'Recognition-speed variant',
-                purpose: 'This variant expresses Signal Window through compressed cue exposure and earlier commitment pressure while preserving the same cue-discrimination mechanic.',
+                purpose: 'This variant expresses Signal Window through compressed signal exposure and earlier commitment pressure while preserving the same signal-discrimination mechanic.',
                 expectedBenefit: 'Improve first-read speed so the athlete can identify and commit before hesitation collapses the decision window.',
                 bestUse: [
-                    'the athlete eventually finds the right cue but commits too late',
+                    'the athlete eventually finds the right signal but commits too late',
                     'the program wants a fast-recognition branch before layering in heavier sport-context or trial packaging',
                     'Nora needs an assignment that rewards clean first commitments instead of prolonged scanning',
                 ],
                 changes: [
-                    'cue exposure is compressed so the athlete must extract the signal earlier',
+                    'signal exposure is compressed so the athlete must extract the signal earlier',
                     'the variant emphasizes first-commit quality over extended scan time',
                     'decision pressure comes from reduced deliberation time, not from changing the correct-answer structure',
                 ],
@@ -2719,7 +2719,7 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
                     'Add first-commit timing buckets so coaches can distinguish late certainty from early clean recognition.',
                 ],
                 runtimeDefaults: {
-                    emphasis: ['fast cue recognition', 'compressed window', 'quick commit'],
+                    emphasis: ['fast signal recognition', 'compressed window', 'quick commit'],
                     analyticsFocus: ['Correct Read Under Time Pressure', 'recognition speed', 'first-commit quality'],
                 },
                 durationMinutes: 5,
@@ -2966,9 +2966,9 @@ function buildDefaultLockedSpec(variant: VariantEntry): SimVariantLockedSpec | u
             return {
                 ...generic,
                 targetSessionStructure: '60 fixed reads',
-                fixedProfileDetails: 'Use the standardized Tier 3 Signal Window profile with fixed cue window, ambiguity tier, and presentation order.',
-                validResponseRule: 'Valid read requires one committed correct response inside the standardized cue window.',
-                falseStartRule: 'False start = response before display onset or before the valid cue window opens.',
+                fixedProfileDetails: 'Use the standardized Tier 3 Signal Window profile with fixed signal window, ambiguity tier, and presentation order.',
+                validResponseRule: 'Valid read requires one committed correct response inside the standardized signal window.',
+                falseStartRule: 'False start = response before display onset or before the valid signal window opens.',
             };
         case 'Sequence Shift':
             return {
@@ -3241,21 +3241,21 @@ function getArtifactRiskPattern(variant: VariantEntry, theme: VariantTheme) {
     if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'visual_channel') {
         return [
             ...theme.artifactRisks,
-            'If a visual modifier makes the live cue ambiguous enough to create a new decision problem, classify it as a build defect rather than athlete failure.',
+            'If a visual modifier makes the live target ambiguous enough to create a new decision problem, classify it as a build defect rather than athlete failure.',
         ];
     }
 
     if (variant.family === 'Noise Gate' && resolveVariantArchetype(variant) === 'visual_channel') {
         return [
             ...theme.artifactRisks,
-            'If visual clutter, peripheral bait, motion clutter, or salience conflict makes the live cue ambiguous enough to create a new search or divided-attention task, classify it as a build defect rather than athlete failure.',
+            'If visual clutter, peripheral bait, motion clutter, or salience conflict makes the live target ambiguous enough to create a new search or divided-attention task, classify it as a build defect rather than athlete failure.',
         ];
     }
 
     if (variant.family === 'Endurance Lock' && resolveVariantArchetype(variant) === 'visual_channel') {
         return [
             ...theme.artifactRisks,
-            'If visual clutter, peripheral bait, or contrast drift makes the live cue ambiguous enough to create a new search task, classify it as a build defect rather than athlete failure.',
+            'If visual clutter, peripheral bait, or contrast drift makes the live target ambiguous enough to create a new search task, classify it as a build defect rather than athlete failure.',
         ];
     }
 
@@ -3265,13 +3265,13 @@ function getArtifactRiskPattern(variant: VariantEntry, theme: VariantTheme) {
 function getVariantSpecificModifierMatrix(variant: VariantEntry) {
     if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'visual_channel') {
         return [
-            '`flash` = a full-field luminance pulse, strobe burst, or abrupt overlay that competes with the live cue for <= 500 ms without changing the task rule or the correct target.',
-            '`target_disappearance` = the live cue is masked, hidden, or dropped for a bounded interval, then restored to the same task context so the athlete must reacquire the original target rather than solve a new problem.',
-            '`layout_scramble` = non-target anchors, peripheral elements, or surrounding layout positions shift while the live cue rule remains the same and the athlete must re-engage the original task.',
-            '`path_pattern_contract` = the live cue traces a recognizable path pattern, such as circle, triangle, square, zigzag, or hexagon. The athlete must match the drawn path after disruption before recovery can be scored.',
-            '`recovery_input_contract` = phone/web/native mobile runtimes confirm recovery through a correct path-pattern match, touch/click/tap on the live cue, or returned task response.',
-            '`handheld_mobile_gaze_boundary` = iOS and Android handheld camera gaze is not a scoring source for this sim. Focus is inferred from behavioral cue reacquisition, not estimated eye position.',
-            '`audio_first_phase_cues` = visible gameplay instructions stay concise and Nora reads the phase cue aloud so the athlete can keep attention on the task.',
+            '`flash` = a full-field luminance pulse, strobe burst, or abrupt overlay that competes with the live target for <= 500 ms without changing the task rule or the correct target.',
+            '`target_disappearance` = the live target is masked, hidden, or dropped for a bounded interval, then restored to the same task context so the athlete must reacquire the original target rather than solve a new problem.',
+            '`layout_scramble` = non-target anchors, peripheral elements, or surrounding layout positions shift while the live target rule remains the same and the athlete must re-engage the original task.',
+            '`path_pattern_contract` = the live target traces a recognizable path pattern, such as circle, triangle, square, zigzag, or hexagon. The athlete must match the drawn path after disruption before recovery can be scored.',
+            '`recovery_input_contract` = phone/web/native mobile runtimes confirm recovery through a correct path-pattern match, touch/click/tap on the live target, or returned task response.',
+            '`handheld_mobile_gaze_boundary` = iOS and Android handheld camera gaze is not a scoring source for this sim. Focus is inferred from behavioral target reacquisition, not estimated eye position.',
+            '`audio_first_phase_signals` = visible gameplay instructions stay concise and Nora reads the phase signal aloud so the athlete can keep attention on the task.',
             '`session_timer_contract` = default Visual Disruption Reset runs as a visible total-duration countdown. Rep length may vary, but the session ends when the timer expires.',
             '`recovery_window_cap` = every rep must have a maximum recovery window. No valid re-engagement inside the cap is scored as a capped missed recovery and the runtime automatically advances.',
             'Tier 1 allows one modifier at a time only: `flash` or `target_disappearance` or `layout_scramble`.',
@@ -3284,7 +3284,7 @@ function getVariantSpecificModifierMatrix(variant: VariantEntry) {
         return [
             '`stop_signal_delay_profile` = the standardized stop/cancel timing profile that determines how long Go momentum is allowed before inhibition is required; it must remain reproducible and may not drift trial to trial.',
             '`no_go_type` = the inhibitory challenge class presented on a given trial; approved values are `obvious_stop`, `fakeout_lure`, `late_reveal_stop`, and `spatial_cancel`.',
-            '`lure_timing_profile` = the timing bucket describing when a false or competing lure appears relative to the Go cue; approved values are `early_lure`, `mid_lure`, and `late_lure`.',
+            '`lure_timing_profile` = the timing bucket describing when a false or competing lure appears relative to the Go signal; approved values are `early_lure`, `mid_lure`, and `late_lure`.',
             '`modifier_profile_id` = one named Brake Point package selected per published module; approved profile ids are `go_no_go_v1`, `fakeout_lure_v1`, `late_reveal_v1`, and `spatial_cancel_v1` and they may not be mixed inside the same build.',
             '`go_no_go_v1` maps one-to-one to Tier 1 = `no_go_type=obvious_stop` with fixed stop-signal timing and no fakeout lures layered in.',
             '`fakeout_lure_v1` maps one-to-one to Tier 2 = `no_go_type=fakeout_lure` with fixed `lure_timing_profile=mid_lure` and a standardized stop-signal delay profile.',
@@ -3296,9 +3296,9 @@ function getVariantSpecificModifierMatrix(variant: VariantEntry) {
 
     if (variant.family === 'Signal Window') {
         return [
-            '`window_length_profile` = the standardized cue-exposure duration profile that determines how long the athlete has to read and commit before the decision window closes.',
-            '`ambiguity_tier` = the degree of cue ambiguity or information incompleteness; approved values are `low`, `medium`, and `high`.',
-            '`decoy_classification` = the plausible-wrong cue family presented on a given read; approved values are `none`, `adjacent_plausible`, `timing_bait`, and `spatial_bait`.',
+            '`window_length_profile` = the standardized signal-exposure duration profile that determines how long the athlete has to read and commit before the decision window closes.',
+            '`ambiguity_tier` = the degree of signal ambiguity or information incompleteness; approved values are `low`, `medium`, and `high`.',
+            '`decoy_classification` = the plausible-wrong signal family presented on a given read; approved values are `none`, `adjacent_plausible`, `timing_bait`, and `spatial_bait`.',
             '`modifier_profile_id` = one named Signal Window package selected per published module; approved profile ids are `rapid_recognition_v1`, `ambiguous_cue_v1`, `decoy_cue_v1`, `shot_clock_v1`, and `spatial_read_v1` and they may not be mixed inside the same build.',
             '`rapid_recognition_v1` maps one-to-one to Tier 1 = fixed short decision windows with `ambiguity_tier=low` and `decoy_classification=none`.',
             '`ambiguous_cue_v1` maps one-to-one to Tier 2 = fixed medium decision windows with `ambiguity_tier=high` and `decoy_classification=none`.',
@@ -3325,14 +3325,14 @@ function getVariantSpecificModifierMatrix(variant: VariantEntry) {
 
     if (variant.family === 'Noise Gate' && resolveVariantArchetype(variant) === 'visual_channel') {
         return [
-            '`visual_density` = non-target visual clutter around the live cue that increases crowding pressure without changing the target rule or making distractors into a second monitored target.',
+            '`visual_density` = non-target visual clutter around the live target that increases crowding pressure without changing the target rule or making distractors into a second monitored target.',
             '`peripheral_bait` = edge-loaded decoys, flickers, or lure stimuli that compete for attention while the true target remains primary and central to the task.',
             '`motion_clutter` = irrelevant background or peripheral motion that raises screen noise without changing the target-response mapping.',
-            '`distractor_salience` = bounded increases in distractor contrast, brightness, or prominence relative to the live cue; distractor salience may rise, but the live cue must remain legible above the approved floor.',
+            '`distractor_salience` = bounded increases in distractor contrast, brightness, or prominence relative to the live target; distractor salience may rise, but the live target must remain legible above the approved floor.',
             '`visual_profile_id` = one named visual Noise Gate package selected per published module; approved profile ids are `clutter_ramp_v1`, `peripheral_competition_v1`, or `salience_conflict_v1` and they may not be mixed inside the same build.',
             'Tier 1 = `visual_density + one visual_profile_id`.',
             'Tier 2 = `visual_density + one visual_profile_id + peripheral_bait` or `visual_density + one visual_profile_id + motion_clutter`.',
-            'Tier 3 = `visual_density + one visual_profile_id + peripheral_bait + distractor_salience` only if the live cue remains visually unambiguous and distractors remain irrelevant.',
+            'Tier 3 = `visual_density + one visual_profile_id + peripheral_bait + distractor_salience` only if the live target remains visually unambiguous and distractors remain irrelevant.',
             '`visual_profile_id` may not rotate between clutter, peripheral, and salience-conflict packages inside a single assignment; choose one normalized profile per published module so Distractor Cost stays comparable across runs.',
             '`clutter_ramp_v1` fixed recipe = clean-reference baseline for the first 60 seconds with `visual_density_tier=low`, controlled clutter ramp for minutes 2-3 with `visual_density_tier=medium`, and sustained clutter challenge for minutes 4-5 with `visual_density_tier=high` while `peripheral_load_tier=low`, `motion_profile=static_noise`, and `distractor_salience_tier=medium` stay fixed.',
             '`peripheral_competition_v1` fixed recipe = clean-reference baseline for the first 60 seconds with `peripheral_load_tier=low`, medium edge-bait competition for minutes 2-3 with `peripheral_load_tier=medium`, and repeated peripheral competition for minutes 4-5 with `peripheral_load_tier=high` while `visual_density_tier=medium`, `motion_profile=edge_flicker`, and `distractor_salience_tier=medium` stay fixed.',
@@ -3346,7 +3346,7 @@ function getVariantSpecificModifierMatrix(variant: VariantEntry) {
             return [
                 '`sustained_load` = a fixed six-block endurance structure with minimal rest, stable task identity, and load carried through repetition density rather than task-switching.',
                 '`late_pressure_profile` = one named finish-phase pressure package applied only in Blocks 5-6; approved profile ids are `clock_compression_v1`, `score_weight_v1`, or `error_consequence_v1` and they may not be mixed inside the same build.',
-                '`stakes_messaging` = optional explicit finish-phase cueing that reminds the athlete the final blocks matter more; it may amplify the named late-pressure profile but may not introduce a new mechanic.',
+                '`stakes_messaging` = optional explicit finish-phase signaling that reminds the athlete the final blocks matter more; it may amplify the named late-pressure profile but may not introduce a new mechanic.',
                 'Tier 2 = `sustained_load + one late_pressure_profile`.',
                 'Tier 3 = `sustained_load + one late_pressure_profile + stakes_messaging`.',
                 '`late_pressure_profile` may not rotate between time pressure, scoring weight, and consequence inside a single assignment; choose one normalized profile per published module so comparisons stay interpretable.',
@@ -3389,15 +3389,15 @@ function getVariantSpecificModifierMatrix(variant: VariantEntry) {
         return [
             '`visual_density` = a fixed six-block endurance structure where non-target visual clutter increases through approved density tiers while the task identity and correct target mapping remain unchanged.',
             '`peripheral_bait` = peripheral motion, decoy pulses, or edge-loaded competition that competes for attention without becoming a second task or changing the correct response rule.',
-            '`contrast_drift` = a bounded reduction in cue salience or background contrast that preserves live-cue legibility above the approved floor and may not turn the task into target search.',
+            '`contrast_drift` = a bounded reduction in target salience or background contrast that preserves live-target legibility above the approved floor and may not turn the task into target search.',
             '`visual_profile_id` = one named visual-load package selected per published module; approved profile ids are `clutter_ramp_v1`, `peripheral_bait_v1`, or `contrast_decay_v1` and they may not be mixed inside the same build.',
             'Tier 1 = `visual_density + one visual_profile_id`.',
             'Tier 2 = `visual_density + one visual_profile_id + peripheral_bait` or `visual_density + one visual_profile_id + contrast_drift`.',
-            'Tier 3 = `visual_density + one visual_profile_id + peripheral_bait + contrast_drift` only if cue legibility remains above the approved threshold for the full six-block session.',
+            'Tier 3 = `visual_density + one visual_profile_id + peripheral_bait + contrast_drift` only if target legibility remains above the approved threshold for the full six-block session.',
             '`visual_profile_id` may not rotate between clutter, peripheral bait, and contrast-decay packages inside a single assignment; choose one normalized visual profile per published module so degradation curves stay interpretable.',
             '`clutter_ramp_v1` fixed recipe = Blocks 1-2 clean-reference baseline with `visual_density_tier=low`; Blocks 3-4 controlled clutter ramp at `visual_density_tier=medium`; Blocks 5-6 high-clutter continuation at `visual_density_tier=high` with no added peripheral bait or contrast drift.',
             '`peripheral_bait_v1` fixed recipe = Blocks 1-2 clean-reference baseline with `peripheral_load_tier=low`; Blocks 3-4 low-salience edge decoys at `peripheral_load_tier=medium`; Blocks 5-6 repeated peripheral competition at `peripheral_load_tier=high` while `visual_density_tier` stays fixed at `medium` and `contrast_profile` stays `normal_contrast`.',
-            '`contrast_decay_v1` fixed recipe = Blocks 1-2 clean-reference baseline with `contrast_profile=normal_contrast`; Blocks 3-4 controlled cue-salience reduction at `contrast_profile=reduced_contrast`; Blocks 5-6 repeated low-salience continuation at `contrast_profile=glare_wash` while `visual_density_tier` stays `medium` and `peripheral_load_tier` stays `low`.',
+            '`contrast_decay_v1` fixed recipe = Blocks 1-2 clean-reference baseline with `contrast_profile=normal_contrast`; Blocks 3-4 controlled target-salience reduction at `contrast_profile=reduced_contrast`; Blocks 5-6 repeated low-salience continuation at `contrast_profile=glare_wash` while `visual_density_tier` stays `medium` and `peripheral_load_tier` stays `low`.',
         ];
     }
 
@@ -3426,9 +3426,9 @@ function getVariantSpecificTrialProfile(variant: VariantEntry) {
 
     if (variant.family === 'Signal Window') {
         return [
-            'If Trial Mode is used for this variant, lock one named Signal Window profile: `modifier_profile_id` fixed, 60 total reads, adaptive difficulty off, fixed seed, fixed device class, fixed window-length profile, and fixed cue-order schedule.',
-            'Recommended fixed schedule: early reads establish clean baseline commitment behavior, middle reads apply the locked ambiguity / decoy pattern for the selected `modifier_profile_id`, and late reads repeat the same read structure without changing cue-order logic or decision-window length.',
-            'Keep `modifier_profile_id`, `window_length_profile`, `ambiguity_tier`, `decoy_classification`, and cue-order schedule fixed for the full trial so correct-read quality and decision-latency comparisons stay reproducible across builds.',
+            'If Trial Mode is used for this variant, lock one named Signal Window profile: `modifier_profile_id` fixed, 60 total reads, adaptive difficulty off, fixed seed, fixed device class, fixed window-length profile, and fixed signal-order schedule.',
+            'Recommended fixed schedule: early reads establish clean baseline commitment behavior, middle reads apply the locked ambiguity / decoy pattern for the selected `modifier_profile_id`, and late reads repeat the same read structure without changing signal-order logic or decision-window length.',
+            'Keep `modifier_profile_id`, `window_length_profile`, `ambiguity_tier`, `decoy_classification`, and signal-order schedule fixed for the full trial so correct-read quality and decision-latency comparisons stay reproducible across builds.',
         ];
     }
 
@@ -3633,7 +3633,7 @@ function getGenericArchetypeSpecNotes(variant: VariantEntry, familyBase: FamilyS
         ? [
             'Default session structure is timer-led repeated reps, not a manual round-gated flow.',
             'Default phone/web/native mobile input source is touch_or_click; handheld iOS/Android camera gaze is not a scoring source.',
-            'During gameplay, visible instructions must stay concise and Nora should speak phase cues aloud.',
+            'During gameplay, visible instructions must stay concise and Nora should speak phase signals aloud.',
             'Each recovery phase must have a capped recovery window and automatic continuation.',
         ]
         : [];
@@ -3661,7 +3661,7 @@ function getNonTrialMeasurementNotes(variant: VariantEntry, theme: VariantTheme)
         return [
             'Recovery Time = disruption end -> confirmed re-engagement. Visual Disruption Reset confirms re-engagement with the first correct path-pattern match or returned-task response; comparison-grade modes should require two consecutive correct responses when the task supports it.',
             'First-Post-Reset Accuracy must be reported alongside Recovery Time so the athlete cannot game the sim by reacting fast but inaccurately.',
-            'Path Pattern Accuracy must be reported for Visual Disruption Reset so behavioral Focus reflects whether the athlete tracked the live cue path through disruption.',
+            'Path Pattern Accuracy must be reported for Visual Disruption Reset so behavioral Focus reflects whether the athlete tracked the live target path through disruption.',
             'False Start Count = responses during the disruption phase before the reset signal; false starts are logged separately and do not count as recovery.',
             'Missed Recovery Count = reps with no valid re-engagement inside the capped recovery window; these reps are scored at the cap and must automatically continue rather than leaving the runtime stuck.',
             'Input Source must be recorded so touch/click/tap delivery is not conflated with controller input or future non-handheld platforms.',
@@ -3716,10 +3716,10 @@ function getNonTrialMeasurementNotes(variant: VariantEntry, theme: VariantTheme)
         return [
             'Valid response = the first committed response after display onset, above 150 ms; only one response per trial and the first commitment is final.',
             'Correct Read Under Time Pressure is the headline metric, combining correct-read rate with decision latency; both components must be reported separately as well.',
-            'Decoy Susceptibility must classify plausible-wrong cue selections separately from neutral misses rather than collapsing both into one error bucket.',
+            'Decoy Susceptibility must classify plausible-wrong signal selections separately from neutral misses rather than collapsing both into one error bucket.',
             'Window Utilization must be tracked so the build can distinguish early guesses from late, information-rich commitments.',
             'Pressure Stability should be read as decision quality under baseline versus pressure modifier conditions, stratified by modifier condition rather than averaged together.',
-            'Cue type, ambiguity level, and window-length tags should support interpretation, but they must remain context fields rather than a replacement scoring system.',
+            'Signal type, ambiguity level, and window-length tags should support interpretation, but they must remain context fields rather than a replacement scoring system.',
         ];
     }
 
@@ -3805,22 +3805,22 @@ function getNonTrialModeNotes(variant: VariantEntry, theme: VariantTheme) {
 
     if (variant.family === 'Signal Window') {
         const sportContextTrainingNotes = archetype === 'sport_context'
-            ? ['use sport-native cue language and shot-clock or scenario tags, but keep coaching anchored to correct reads, decision latency, and cue commitment quality']
+            ? ['use sport-native signal language and shot-clock or scenario tags, but keep coaching anchored to correct reads, decision latency, and signal commitment quality']
             : [];
         const sportContextTrialNotes = archetype === 'sport_context'
-            ? ['if trial-layer packaging is used, hold sport scenario, cue type, window length, and ambiguity profile constant across comparison sessions']
+            ? ['if trial-layer packaging is used, hold sport scenario, signal type, window length, and ambiguity profile constant across comparison sessions']
             : [];
 
         return {
             trainingMode: [
                 ...trainingMode,
                 'show read-quality coaching by ambiguity tier and decoy class so the athlete can see whether misses came from rushed reads, plausible wrong reads, or slow commitments',
-                'training-mode adaptation may change pacing cadence or cue order only inside approved family bounds, but it may not change the target rule, selected `modifier_profile_id`, or the first-commit scoring rule',
+                'training-mode adaptation may change pacing cadence or signal order only inside approved family bounds, but it may not change the target rule, selected `modifier_profile_id`, or the first-commit scoring rule',
                 ...sportContextTrainingNotes,
             ],
             trialMode: [
                 ...trialMode,
-                'if trial-layer packaging is used, hold selected `modifier_profile_id`, window-length profile, ambiguity tier, decoy classification, device class, and cue-order schedule constant so correct-read comparisons stay reproducible',
+                'if trial-layer packaging is used, hold selected `modifier_profile_id`, window-length profile, ambiguity tier, decoy classification, device class, and signal-order schedule constant so correct-read comparisons stay reproducible',
                 ...sportContextTrialNotes,
             ],
         };
@@ -3922,14 +3922,14 @@ function getNonTrialBuildNotes(variant: VariantEntry, theme: VariantTheme) {
             ...theme.buildNotes,
             'Store `visual_disruption_subtype`, `visual_disruption_overlap_mode`, `contrast_profile`, `peripheral_load_tier`, `visual_density_tier`, and `delivery_surface` using the canonical allowed values only.',
             'Preserve which visual disruption was active when a false start, motor artifact, or slow recovery occurred so coaches can separate reset speed from display-driven artifacts.',
-            'Keep the live cue visually legible under every modifier state; if the build changes the task identity instead of the disruption pressure, fail the variant for review.',
+            'Keep the live target visually legible under every modifier state; if the build changes the task identity instead of the disruption pressure, fail the variant for review.',
         ];
     }
 
     if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'audio_channel') {
         return [
             ...theme.buildNotes,
-            'Store audio disruption subtype tags such as crowd surge, whistle, buzzer, and startle cue in the session record so recovery failures are attributable to the active sound event.',
+            'Store audio disruption subtype tags such as crowd surge, whistle, buzzer, and startle signal in the session record so recovery failures are attributable to the active sound event.',
             'Store audio-route, output-device class, and volume-profile tags so sound-driven difficulty is inspectable rather than anecdotal.',
             'Preserve which audio disruption was active when a false start, motor artifact, or slow recovery occurred so coaches can separate reset speed from audio-routing artifacts.',
         ];
@@ -3939,7 +3939,7 @@ function getNonTrialBuildNotes(variant: VariantEntry, theme: VariantTheme) {
         return [
             ...theme.buildNotes,
             'Store sport, scenario, phase-of-play, and reset-moment tags in the session record so sport framing stays inspectable rather than anecdotal.',
-            'Keep the same primary-task mapping under the sport wrapper; assets, copy, and environmental cues may change, but the reset target may not.',
+            'Keep the same primary-task mapping under the sport wrapper; assets, copy, and environmental signals may change, but the reset target may not.',
             'Preserve disruption-channel tags beneath the sport layer so coaches can distinguish sport context from visual, audio, or cognitive pressure sources.',
         ];
     }
@@ -3959,7 +3959,7 @@ function getNonTrialBuildNotes(variant: VariantEntry, theme: VariantTheme) {
             'Store `visual_profile_id`, `visual_profile_schedule_version`, `baseline_reference_method`, `visual_density_tier`, `peripheral_load_tier`, `motion_profile`, `distractor_salience_tier`, `contrast_profile`, `device_class`, `delivery_surface`, and `audio_route` using the canonical allowed values only.',
             'Store `distractor_type` on every false alarm or distractor-contact event so channel-vulnerability output can be joined back to the actual display-state conditions.',
             'Export false alarms using a fixed denominator basis of `per_distractor_exposure`; do not allow per-response-opportunity or unlabeled basis changes across builds.',
-            'Keep the live cue visually legible under every approved display state; if clutter, salience conflict, or peripheral bait changes the task identity instead of the noise pressure, fail the variant for review.',
+            'Keep the live target visually legible under every approved display state; if clutter, salience conflict, or peripheral bait changes the task identity instead of the noise pressure, fail the variant for review.',
         ];
     }
 
@@ -3983,9 +3983,9 @@ function getNonTrialBuildNotes(variant: VariantEntry, theme: VariantTheme) {
     if (variant.family === 'Signal Window' && resolveVariantArchetype(variant) === 'sport_context') {
         return [
             ...theme.buildNotes,
-            'Store sport, scenario, cue type, phase-of-play, and shot-clock or time-pressure tags in the session record so the sport wrapper is inspectable rather than anecdotal.',
+            'Store sport, scenario, signal type, phase-of-play, and shot-clock or time-pressure tags in the session record so the sport wrapper is inspectable rather than anecdotal.',
             'Export window length, ambiguity level, decoy classification, and decision-latency fields separately so coaches can see whether misses came from rushed reads or wrong reads.',
-            'Keep the underlying cue-discrimination task stable under the sport wrapper; contextual assets may change, but the correct-answer structure may not.',
+            'Keep the underlying signal-discrimination task stable under the sport wrapper; contextual assets may change, but the correct-answer structure may not.',
         ];
     }
 
@@ -3993,7 +3993,7 @@ function getNonTrialBuildNotes(variant: VariantEntry, theme: VariantTheme) {
         return [
             ...theme.buildNotes,
             'Store `modifier_profile_id`, `window_length_profile`, `device_class`, and `delivery_surface` as session fields so read-window builds remain inspectable and reproducible.',
-            'Store cue type, ambiguity level, window length, and decoy classification tags in the session record so read-quality errors are interpretable.',
+            'Store signal type, ambiguity level, window length, and decoy classification tags in the session record so read-quality errors are interpretable.',
             'Export first-commit timing, decision latency, decoy susceptibility, and window-utilization fields separately instead of flattening all misses into one read score.',
         ];
     }
@@ -4014,7 +4014,7 @@ function getNonTrialBuildNotes(variant: VariantEntry, theme: VariantTheme) {
                 'Store visual_profile_id, visual_profile_schedule_version, device_class, delivery_surface, and block_structure_version as session fields, plus baseline-window markers and block identities so visual endurance failures are interpretable.',
                 'Export baseline performance, mid-session performance, finish-phase performance, block-by-block accuracy, degradation slope, onset timing, and display-state transitions separately rather than flattening the full session into one fatigue score.',
                 'Treat block_identity, active_modifier, visual_density_tier, peripheral_load_tier, and contrast_profile as block-scoped event tags; treat visual_profile_id / visual_profile_schedule_version / device_class / delivery_surface / block_structure_version as session fields; and treat baseline_performance / degradation_onset_block / degradation_slope as derived metrics.',
-                'Keep the live cue visually legible under every approved display state; if clutter, contrast drift, or peripheral bait changes the task identity instead of visual endurance pressure, fail the variant for review.',
+                'Keep the live target visually legible under every approved display state; if clutter, contrast drift, or peripheral bait changes the task identity instead of visual endurance pressure, fail the variant for review.',
             ];
         }
 
@@ -4052,22 +4052,22 @@ function cleanupGeneratedBuildNotes(variant: VariantEntry, notes: string[]) {
     }
 
     if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'audio_channel') {
-        const disruptionIndex = cleaned.findIndex((note) => note.toLowerCase().includes('store audio disruption subtype tags such as crowd surge, whistle, buzzer, and startle cue'));
+        const disruptionIndex = cleaned.findIndex((note) => note.toLowerCase().includes('store audio disruption subtype tags such as crowd surge, whistle, buzzer, and startle signal'));
         const routeIndex = cleaned.findIndex((note) => note.toLowerCase().includes('store audio-route, output-device class, and volume-profile tags'));
         const preserveIndex = cleaned.findIndex((note) => note.toLowerCase().includes('preserve which audio disruption was active when a false start'));
         if (disruptionIndex >= 0 && routeIndex >= 0 && preserveIndex >= 0) {
             const next = cleaned.filter((_, index) => index !== routeIndex && index !== preserveIndex);
-            next[disruptionIndex] = 'Store audio disruption subtype tags such as crowd surge, whistle, buzzer, and startle cue, plus audio-route, output-device class, and volume-profile tags, and preserve which sound event was active when a false start, motor artifact, or slow recovery occurred so recovery failures are attributable to the active audio disruption.';
+            next[disruptionIndex] = 'Store audio disruption subtype tags such as crowd surge, whistle, buzzer, and startle signal, plus audio-route, output-device class, and volume-profile tags, and preserve which sound event was active when a false start, motor artifact, or slow recovery occurred so recovery failures are attributable to the active audio disruption.';
             return next;
         }
     }
 
     if (variant.family === 'Signal Window' && variant.name.toLowerCase().includes('rapid recognition')) {
         const hasFirstCommit = cleaned.some((note) => note.toLowerCase().includes('first-commit timing buckets'));
-        const cueIndex = cleaned.findIndex((note) => note.toLowerCase().includes('store cue type, ambiguity level, window length, and decoy classification tags'));
-        if (hasFirstCommit && cueIndex >= 0) {
+        const signalIndex = cleaned.findIndex((note) => note.toLowerCase().includes('store signal type, ambiguity level, window length, and decoy classification tags'));
+        if (hasFirstCommit && signalIndex >= 0) {
             const next = cleaned.filter((note) => !note.toLowerCase().includes('first-commit timing buckets'));
-            next[cueIndex] = 'Store cue type, ambiguity level, window length, decoy classification, and first-commit timing buckets in the session record so read-quality errors are interpretable.';
+            next[signalIndex] = 'Store signal type, ambiguity level, window length, decoy classification, and first-commit timing buckets in the session record so read-quality errors are interpretable.';
             return next;
         }
     }
@@ -4616,7 +4616,7 @@ function buildDefaultRuntimeConfig(variant: VariantEntry) {
             ...(isVisualReset
                 ? {
                     primaryTask: 'path_pattern_reacquisition',
-                    recoveryInstruction: 'match the path pattern the cue drew',
+                    recoveryInstruction: 'match the path pattern the target drew',
                     inputContract: 'correct_path_pattern_match_default_no_handheld_camera_gaze',
                     phaseCueStyle: 'nora_read_concise_visible_cues',
                     pathPatternPrompt: {
@@ -6111,7 +6111,7 @@ function VariantWorkspaceModal({
                                                         <div className="flex items-center justify-between gap-3">
                                                             <div>
                                                                 <p className="text-xs font-semibold text-white">Signal Window Blocks</p>
-                                                                <p className="text-[11px] text-zinc-500 mt-1">{editableVisionRuntimePlan.signalWindowBlocks.length} authored blocks in the cue-read sequence.</p>
+                                                                <p className="text-[11px] text-zinc-500 mt-1">{editableVisionRuntimePlan.signalWindowBlocks.length} authored blocks in the signal-read sequence.</p>
                                                             </div>
                                                             <button
                                                                 type="button"
@@ -6162,7 +6162,7 @@ function VariantWorkspaceModal({
                                                                     </div>
                                                                     <div className="grid grid-cols-2 gap-3">
                                                                         <div>
-                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Cue Window</label>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Signal Window</label>
                                                                             <input type="number" step="0.1" min={0} value={block.cueWindowSeconds} onChange={(event) => updateSignalBlock(index, (current) => ({ ...current, cueWindowSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
                                                                         </div>
                                                                         <div>

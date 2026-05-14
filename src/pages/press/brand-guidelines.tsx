@@ -1248,7 +1248,7 @@ const BrandGuidelines = () => {
                   
                   <p className="text-zinc-400 text-lg mb-8">
                     Our icon system uses a clean, consistent style with 2px stroke weights and rounded caps. 
-                    Icons should be used to enhance usability and provide visual cues for navigation and actions.
+                    Icons should be used to enhance usability and provide visual signals for navigation and actions.
                   </p>
                   
                   <h4 className="text-white text-lg font-semibold mb-4">Icon Usage Guidelines</h4>

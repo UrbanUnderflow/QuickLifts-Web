@@ -143,7 +143,7 @@ const ProtocolGovernanceOverviewDoc: React.FC = () => {
           <InfoCard
             title="Why Athlete Responsiveness Matters"
             accent="purple"
-            body="Two athletes can both be Yellow, but one may respond well to acute breathing while another responds better to cue-word or imagery priming. Governance should anticipate that the system will learn those differences over time."
+            body="Two athletes can both be Yellow, but one may respond well to acute breathing while another responds better to anchor-word or imagery priming. Governance should anticipate that the system will learn those differences over time."
           />
         </CardGrid>
       </SectionBlock>

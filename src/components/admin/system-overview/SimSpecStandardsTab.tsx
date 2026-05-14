@@ -70,7 +70,7 @@ const MODIFIER_BOUNDARIES = [
     { family: 'Reset', boundary: 'Modifiers may not introduce a secondary cognitive task that changes the recovery mechanism from "return to primary task" to "solve a new problem." The athlete must always recover to the same task, not pivot to a different one.' },
     { family: 'Noise Gate', boundary: 'Distractors must remain irrelevant. If the distractor becomes a secondary target the athlete must monitor, the sim shifts from selective attention to divided attention (Split Stream territory).' },
     { family: 'Brake Point', boundary: 'The inhibition target must remain response cancellation. If modifiers add deliberation (e.g., "decide which response is correct"), it shifts into Signal Window territory.' },
-    { family: 'Signal Window', boundary: 'The task must remain cue discrimination. If modifiers add ambiguity to the point where the athlete must commit without a correct answer, it shifts into Blind Commit territory.' },
+    { family: 'Signal Window', boundary: 'The task must remain signal discrimination. If modifiers add ambiguity to the point where the athlete must commit without a correct answer, it shifts into Blind Commit territory.' },
     { family: 'Sequence Shift', boundary: 'Rule changes must always have a correct answer. If modifiers create rule ambiguity (no clearly correct response), the sim shifts into Chaos Read territory.' },
     { family: 'Endurance Lock', boundary: 'Endurance Lock exists to measure degradation over time, not to create new cognitive demand. Modifiers should not increase task complexity — they should increase duration, monotony, or fatigue load.' },
 ];

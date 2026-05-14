@@ -150,7 +150,7 @@ const DIFFICULTY_TIERS = [
 const VARIANTS = [
     { name: 'Standard Go/No-Go', description: 'Simple visual targets. Default Tier 1–2.', status: 'Registered' },
     { name: 'Fakeout Series', description: 'Near-identical No-Go stimuli. Discrimination under speed variant.', status: 'Registered' },
-    { name: 'Sport-Context Brake', description: 'Sport-specific stimuli (ball trajectory, player movement cues). Applied variant.', status: 'Registered' },
+    { name: 'Sport-Context Brake', description: 'Sport-specific stimuli (ball trajectory, player movement signals). Applied variant.', status: 'Registered' },
     { name: 'Extended Trial Brake Point', description: 'Standardized 8–12 min at fixed Tier 3, 150–200 trials. Trial-layer assessment.', status: 'Registered' },
     { name: 'Immersive Spatial Brake (Vision Pro)', description: '3D spatial stimuli. Immersive Transfer Trial.', status: 'Planned' },
 ];
@@ -168,7 +168,7 @@ const EXPERIENCE_PRINCIPLES = [
     { title: 'Speed is the engine, not the enemy', detail: 'Brake Point should feel fast. The sim rewards controlled speed, not cautious slowness.' },
     { title: 'Minimal UI during gameplay', detail: 'Clean, immersive screen. No navigation, no settings. The sim owns the screen.' },
     { title: 'Data after, not during', detail: 'Performance shown between rounds (Training) or only at session end (Trial).' },
-    { title: 'Sound design matters', detail: 'Audio cues, ambient sound, feedback tones support immersion and signal state changes clearly.' },
+    { title: 'Sound design matters', detail: 'Audio signals, ambient sound, feedback tones support immersion and signal state changes clearly.' },
     { title: 'Celebrate improvement, not perfection', detail: 'Highlight personal bests and trend improvements, not absolute scores. Progress is the reward.' },
 ];
 

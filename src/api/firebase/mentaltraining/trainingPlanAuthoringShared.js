@@ -45,7 +45,7 @@ const PROTOCOL_LIBRARY = {
   },
   focus_cue: {
     id: 'protocol-cue-word-anchoring',
-    label: 'Cue Word Anchoring',
+    label: 'Anchor Word',
     protocolClass: 'priming',
     durationSeconds: 120,
   },

@@ -3213,8 +3213,8 @@ export const composeReportTopLine = (
 
 // --- Team Read composer ---------------------------------------------------------------
 //
-// State-driven instead of cue-listing. Each dimension carries a state verb (solid /
-// watch / declining) plus a concise sport-localized cue. The team read leads with a
+// State-driven instead of signal-listing. Each dimension carries a state verb (solid /
+// watch / declining) plus a concise sport-localized signal. The team read leads with a
 // one-sentence verdict per dimension instead of dumping the dimensionMap verbatim.
 
 export type ReportDimensionState = 'solid' | 'watch' | 'declining' | 'thin_evidence';

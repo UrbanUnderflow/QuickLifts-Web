@@ -61,7 +61,7 @@ const VISUAL_PATTERN_ROWS = [
 
 const COLOR_RULE_ROWS = [
   ['Primary green', 'Core brand emphasis and primary CTA energy.', 'Primary action, main highlight, and signature Pulse moments.'],
-  ['Blue / cyan', 'Secondary energy and clarity.', 'Supporting actions, informational emphasis, cardio/run-adjacent cues.'],
+  ['Blue / cyan', 'Secondary energy and clarity.', 'Supporting actions, informational emphasis, cardio/run-adjacent signals.'],
   ['Purple', 'Stretch, reflection, and softer mental-space moments.', 'Recovery, flexibility, narrative, or secondary focus surfaces.'],
   ['Red / amber', 'Danger, urgency, warning, and destructive flows.', 'Errors, fatigue, destructive actions, and caution states.'],
   ['Charcoal / black / slate', 'Foundation and structure.', 'Backgrounds, containers, dividers, and secondary text.'],

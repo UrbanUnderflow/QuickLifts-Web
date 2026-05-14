@@ -164,7 +164,7 @@ const AGENT_REGISTRY: Record<string, AgentMeta> = {
 
 const AGENT_ARTIFACTS: Record<string, Artifact[]> = {
     sage: [
-        { id: 'brainstorm-extract', title: 'Brainstorm — Source Extraction', category: 'persona', path: 'docs/sage/brainstorm-extract.md', description: "Every description of Sage's role, tone, duties, and narrative cues.", tags: ['brainstorm', 'identity'], emoji: '💡' },
+        { id: 'brainstorm-extract', title: 'Brainstorm — Source Extraction', category: 'persona', path: 'docs/sage/brainstorm-extract.md', description: "Every description of Sage's role, tone, duties, and narrative signals.", tags: ['brainstorm', 'identity'], emoji: '💡' },
         { id: 'persona-narrative', title: 'Persona Narrative & Creed', category: 'persona', path: 'docs/sage/persona.md', description: "Sage's lantern-carrying field correspondent narrative plus the five living vows.", tags: ['creed', 'narrative'], emoji: '📜' },
         { id: 'responsibilities', title: 'Core Responsibilities', category: 'persona', path: 'docs/sage/responsibilities.md', description: 'Three operating stages: Field Research, Pattern Synthesis, Feed + Report Delivery.', tags: ['duties', 'field-research'], emoji: '📋' },
         { id: 'sage-persona-agent', title: 'Research Intelligence Envoy Persona', category: 'persona', path: 'docs/agents/sage-persona.md', description: 'Voice & creed guidelines, primary duties, operating constraints, and OpenClaw config.', tags: ['voice', 'constraints'], emoji: '🎙️' },

@@ -15,7 +15,7 @@ Every athlete-facing Nora response must pass these checks before it ships:
 10. Decision rationale: before surfacing an assignment, explain why the athlete's reply, context markers, or readiness data led to that choice.
 11. Plain athlete language: write like a coach talking to a smart middle schooler. Avoid filler terms like "baseline", "block", "push signal", "pullback signal", "accessories", "finishers", or "normal-start read"; say the actual mental action in everyday words.
 12. Mental-performance boundary: Nora may connect physical state to focus, composure, confidence, decision-making, and habits. Nora must not prescribe physical programming changes such as adding sets, cutting reps, lowering weight, shortening minutes, or changing the athlete's workout.
-13. Spell out the coaching moment: do not write in code. If the copy says "reset cue", "mental cue", "body-state read", "mental install", or any sport shorthand, rewrite it into a full sentence that says when the moment happens, what the athlete may feel or do, and the one simple mental-performance phrase or routine the coach should give. Do not add vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff unless a real named role and decision are present in the source data. Example: "When the game gets late in the shot clock and the guards are tired or mentally cluttered, don't give them a bunch of coaching points. Give them one simple mental reset phrase they can use in that moment."
+13. Spell out the coaching moment: do not write in code. If the copy uses shorthand like "body-state read", "mental install", or any sport shorthand, rewrite it into a full sentence that says when the moment happens, what the athlete may feel or do, and the one simple mental-performance phrase or routine the coach should give. Do not add vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff unless a real named role and decision are present in the source data. Example: "When the game gets late in the shot clock and the guards are tired or mentally cluttered, don't give them a bunch of coaching points. Give them one simple mental reset phrase they can use in that moment."
 `;
 
 const tradeMarkers = [
@@ -95,6 +95,8 @@ const vagueActionPatterns = [
   'body-state read',
   'mental-performance prompt',
   'one simple focus cue',
+  'one focus cue',
+  'focus cue',
   'aim for a steadier start time',
   'notice how focused',
   'notice how sharp',
@@ -136,6 +138,16 @@ const technicalJargonPatterns = [
   'steady but not peak state',
   'conditions are not perfect',
 ];
+
+const bannedAthleteFacingTokens = new Set([
+  'rep',
+  'reps',
+  'repetition',
+  'cue',
+  'cues',
+  'cued',
+  'cueing',
+]);
 
 const assignmentDecisionPatterns = [
   "let's start",
@@ -224,6 +236,12 @@ const replacements: Array<[string, string]> = [
   ['body-state read', 'physical pattern'],
   ['mental-performance prompt', 'plain instruction'],
   ['one simple focus cue', 'one 6-second exhale'],
+  ['one focus cue', 'one 6-second exhale'],
+  ['focus cue', '6-second exhale'],
+  ['cue word', 'anchor word'],
+  ['cue-word', 'anchor-word'],
+  ['body cue', 'body signal'],
+  ['live cue', 'main target'],
   ['aim for a steadier start time', 'protect a 30-minute bedtime window'],
   ['notice how focused you feel', 'rate your focus'],
   ['practice mental consistency', 'practice one steady decision at a time'],
@@ -343,6 +361,13 @@ export const validateNoraVoiceRubric = (
   for (const pattern of technicalJargonPatterns) {
     if (lowered.includes(pattern)) {
       violations.push(issue('plainAthleteLanguage', `contains technical or vague athlete-facing phrase '${pattern}'`));
+    }
+  }
+
+  const tokens = new Set(lowered.split(/[^a-z0-9]+/i).filter(Boolean));
+  for (const token of bannedAthleteFacingTokens) {
+    if (tokens.has(token)) {
+      violations.push(issue('plainAthleteLanguage', `contains banned athlete-facing word '${token}'`));
     }
   }
 

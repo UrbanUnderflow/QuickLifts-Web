@@ -81,7 +81,7 @@ const ARTIFACTS: Artifact[] = [
     title: 'Brainstorm — Source Extraction',
     category: 'persona',
     path: 'docs/sage/brainstorm-extract.md',
-    description: 'Every description of Sage\'s role, tone, duties, and narrative cues from the Round Table brainstorm transcript.',
+    description: 'Every description of Sage\'s role, tone, duties, and narrative signals from the Round Table brainstorm transcript.',
     tags: ['brainstorm', 'identity', 'naming'],
     emoji: '💡',
   },

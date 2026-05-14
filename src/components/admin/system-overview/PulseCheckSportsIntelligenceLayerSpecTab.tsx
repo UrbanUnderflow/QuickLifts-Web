@@ -213,7 +213,7 @@ const NON_NEGOTIABLES = [
   {
     title: 'Spell Out The Coaching Moment',
     accent: 'green' as const,
-    body: 'Coach-facing copy must not speak in code. Every point must say when the moment shows up, what the athlete may feel or do, and the one simple mental-performance phrase or routine the coach should give. Vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff fail unless a real named role and decision are present in the source data. Terms like reset cue, mental install, body-state read, and decision support fail unless immediately rewritten into plain English.',
+    body: 'Coach-facing copy must not speak in code. Every point must say when the moment shows up, what the athlete may feel or do, and the one simple mental-performance phrase or routine the coach should give. Vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff fail unless a real named role and decision are present in the source data. Terms like mental install, body-state read, decision support, and vague readiness labels fail unless immediately rewritten into plain English.',
   },
   {
     title: 'Clinical Boundary Is Architectural',
@@ -471,7 +471,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           <InfoCard
             title="Design Posture"
             accent="purple"
-            body="User-friendly, stunning, and easy to navigate. Calm visual hierarchy, generous whitespace, sport-color cues that match the sport-config registry, and zero raw vendor scores rendered as judgment. The dashboard should feel like a coach's home page, not an analytics console."
+            body="User-friendly, stunning, and easy to navigate. Calm visual hierarchy, generous whitespace, sport-color signals that match the sport-config registry, and zero raw vendor scores rendered as judgment. The dashboard should feel like a coach's home page, not an analytics console."
           />
           <InfoCard
             title="What The Dashboard Is NOT"

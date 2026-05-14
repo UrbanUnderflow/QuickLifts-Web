@@ -48,20 +48,20 @@ interface SignalResponse {
 }
 
 const GENERIC_SCENARIOS = [
-  { prompt: 'Pick the live cue before the display closes.', subPrompt: 'The first commitment is final.', tag: 'standard_read' },
+  { prompt: 'Pick the live target before the display closes.', subPrompt: 'The first commitment is final.', tag: 'standard_read' },
   { prompt: 'Read the correct signal under narrowing time.', subPrompt: 'Late commitment will cost the round.', tag: 'shrinking_window' },
   { prompt: 'Ignore the plausible decoy and commit cleanly.', subPrompt: 'Wrong-but-plausible reads are tracked separately.', tag: 'plausible_wrong' },
 ];
 
 const SPORT_SCENARIOS = [
   { prompt: 'Shot clock is collapsing. Read the clean window now.', subPrompt: 'End-of-clock pressure is active.', tag: 'late_clock' },
-  { prompt: 'Formation shifts late. Commit to the right cue before it closes.', subPrompt: 'Scenario framing is sport-native, but the read rule stays stable.', tag: 'formation_read' },
+  { prompt: 'Formation shifts late. Commit to the right target before it closes.', subPrompt: 'Scenario framing is sport-native, but the read rule stays stable.', tag: 'formation_read' },
   { prompt: 'The passing lane opens and closes fast. Take the clean read.', subPrompt: 'Your first commitment is final.', tag: 'phase_of_play' },
 ];
 
 const OPTION_SETS = [
   ['Strong-Side Read', 'Weak-Side Decoy', 'Neutral Hold'],
-  ['Primary Cue', 'Plausible Wrong', 'Late Bail'],
+  ['Primary Target', 'Plausible Wrong', 'Late Bail'],
   ['Live Lane', 'Look-Off Decoy', 'Static Miss'],
   ['Correct Window', 'Early Guess', 'Late Panic'],
 ];
@@ -115,7 +115,7 @@ function buildSignalRounds(buildArtifact: SimBuildArtifact): SignalRound[] {
       cueType,
       prompt: cueType === 'late_window' ? 'The read window is collapsing. Commit now.' : scenario.prompt,
       subPrompt: cueType === 'ambiguous'
-        ? 'A plausible-wrong cue is active. Commit only if you see the clean read.'
+        ? 'A plausible-wrong option is active. Commit only if you see the clean read.'
         : scenario.subPrompt,
       scenarioTag: scenario.tag,
       options,
@@ -281,12 +281,12 @@ export const SignalWindowGame: React.FC<SignalWindowGameProps> = ({
     setFeedback({
       title: nextResponse.correct ? 'Clean Read' : response === null ? 'Window Closed' : response === currentRound.plausibleWrong ? 'Decoy Grabbed' : 'Wrong Read',
       detail: nextResponse.correct
-        ? 'You committed to the correct cue inside the active window.'
+        ? 'You committed to the correct target inside the active window.'
         : response === null
           ? 'The decision window closed before a committed response.'
           : response === currentRound.plausibleWrong
-            ? 'You selected the plausible-wrong cue instead of the live read.'
-            : 'The committed read did not match the active cue.',
+            ? 'You selected the plausible-wrong option instead of the live read.'
+            : 'The committed read did not match the active target.',
       success: nextResponse.correct,
     });
     beginStage('feedback', 900);
@@ -306,7 +306,7 @@ export const SignalWindowGame: React.FC<SignalWindowGameProps> = ({
 
   const handleOptionSelect = useCallback((option: string) => {
     if (stage !== 'response') return;
-    if (!registerInputAttempt({ blockedMessage: 'Too fast. Let the cue resolve before committing another read.' })) {
+    if (!registerInputAttempt({ blockedMessage: 'Too fast. Let the display settle before committing another read.' })) {
       return;
     }
     resolveRound(option);
@@ -423,7 +423,7 @@ export const SignalWindowGame: React.FC<SignalWindowGameProps> = ({
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-2">
                 <p className="text-xs uppercase tracking-[0.3em] text-white/35">How it works</p>
-                <p className="text-white/75">A cue appears for a limited window. You get one committed read per round, and the first commitment is final. Late, hesitant, or plausible-wrong choices are all measured separately.</p>
+                <p className="text-white/75">A target appears for a limited window. You get one committed read per round, and the first commitment is final. Late, hesitant, or plausible-wrong choices are all measured separately.</p>
               </div>
               <button onClick={startSession} className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#E0FE10] text-black font-semibold">
                 <Play className="w-4 h-4" />
@@ -467,7 +467,7 @@ export const SignalWindowGame: React.FC<SignalWindowGameProps> = ({
                     </div>
                   </div>
                   <div className="space-y-2 text-sm text-white/65">
-                    <p>{stage === 'ready' ? 'Load the display. The cue window opens automatically.' : currentRound.prompt}</p>
+                    <p>{stage === 'ready' ? 'Load the display. The window opens automatically.' : currentRound.prompt}</p>
                     <p>{currentRound.pressureTag === 'pressure' ? 'Pressure is active. Commit early enough to beat the closing window.' : 'Keep the read clean. One commitment only.'}</p>
                   </div>
                 </div>
@@ -492,7 +492,7 @@ export const SignalWindowGame: React.FC<SignalWindowGameProps> = ({
 
                   {stage === 'ready' ? (
                     <div className="rounded-3xl border border-white/10 bg-black/20 p-8 text-center text-white/55">
-                      Cue field is loading.
+                      Target field is loading.
                     </div>
                   ) : stage === 'response' ? (
                     <div className="grid grid-cols-1 gap-4">
@@ -509,7 +509,7 @@ export const SignalWindowGame: React.FC<SignalWindowGameProps> = ({
                             <Eye className="w-5 h-5 mt-0.5 text-cyan-300" />
                             <div>
                               <p className="text-xl font-semibold">{option}</p>
-                              <p className="text-xs text-white/45 mt-2">{option === currentRound.plausibleWrong ? 'Plausible wrong read. Tempting but incorrect.' : option === currentRound.correctOption ? 'Live cue if the display supports it.' : 'Neutral miss or late bailout.'}</p>
+                              <p className="text-xs text-white/45 mt-2">{option === currentRound.plausibleWrong ? 'Plausible wrong read. Tempting but incorrect.' : option === currentRound.correctOption ? 'Live target if the display supports it.' : 'Neutral miss or late bailout.'}</p>
                             </div>
                           </div>
                         </motion.button>

@@ -8,10 +8,10 @@ Every athlete-facing Nora response must pass these checks before it ships:
 5. One question rule: ask one clear question at most.
 6. No mystery pronouns: avoid fog like "that energy", "the rep", "I'll match it", or "work around it" unless the message names the actual thing first.
 7. Show the trade: if you ask a question, say what you will do with the answer.
-8. Concrete action: name the actual Nora session, reset cue, reflection, routine behavior, or next mental-performance move. Lines like "train clean", "Recovery's workable", and "use it cleanly" fail.
+8. Concrete action: name the actual Nora session, plain reset phrase, reflection, routine behavior, or next mental-performance move. Lines like "train clean", "Recovery's workable", and "use it cleanly" fail.
 9. No repetitive dialogue: do not restate the same headspace, energy, confidence, or readiness read in adjacent Nora turns. Add a new decision, constraint, or question.
 10. Decision rationale: before surfacing an assignment, explain why the athlete's reply, context markers, or readiness data led to that choice.
-11. Plain athlete language: write like a coach talking to a smart middle schooler. Avoid filler terms like "baseline", "block", "push signal", "pullback signal", "accessories", "finishers", or "normal-start read"; say the actual mental action in everyday words.
+11. Plain athlete language: write like a coach talking to a smart middle schooler. Avoid filler terms like "baseline", "block", "cue", "cues", "push signal", "pullback signal", "accessories", "finishers", or "normal-start read"; say the actual mental action in everyday words.
 12. Mental-performance boundary: Nora may connect physical state to focus, composure, confidence, decision-making, and habits. Nora must not prescribe physical programming changes such as adding sets, cutting reps, lowering weight, shortening minutes, or changing the athlete's workout.
 `;
 
@@ -86,7 +86,11 @@ const vagueActionPatterns = [
   'work around it',
   'build today around it',
   'use one reset cue',
+  'reset cue',
+  'mental cue',
   'one simple focus cue',
+  'one focus cue',
+  'focus cue',
   'aim for a steadier start time',
   'notice how focused',
   'notice how sharp',
@@ -128,6 +132,16 @@ const technicalJargonPatterns = [
   'steady but not peak state',
   'conditions are not perfect',
 ];
+
+const bannedAthleteFacingTokens = new Set([
+  'rep',
+  'reps',
+  'repetition',
+  'cue',
+  'cues',
+  'cued',
+  'cueing',
+]);
 
 const assignmentDecisionPatterns = [
   "let's start",
@@ -210,7 +224,15 @@ const replacements = [
   ['conditions are not perfect', 'the day has friction'],
   ['Use one reset cue', 'Use one 6-second exhale'],
   ['use one reset cue', 'use one 6-second exhale'],
+  ['reset cue', 'plain reset phrase'],
+  ['mental cue', 'plain reset phrase'],
   ['one simple focus cue', 'one 6-second exhale'],
+  ['one focus cue', 'one 6-second exhale'],
+  ['focus cue', '6-second exhale'],
+  ['cue word', 'anchor word'],
+  ['cue-word', 'anchor-word'],
+  ['body cue', 'body signal'],
+  ['live cue', 'main target'],
   ['aim for a steadier start time', 'protect a 30-minute bedtime window'],
   ['notice how focused you feel', 'rate your focus'],
   ['practice mental consistency', 'practice one steady decision at a time'],
@@ -321,6 +343,13 @@ function validateNoraVoiceRubric(text, optionsOrPrevious = {}) {
   for (const pattern of technicalJargonPatterns) {
     if (lowered.includes(pattern)) {
       violations.push({ rule: 'plain-athlete-language', detail: `contains technical or vague athlete-facing phrase '${pattern}'` });
+    }
+  }
+
+  const tokens = new Set(lowered.split(/[^a-z0-9]+/i).filter(Boolean));
+  for (const token of bannedAthleteFacingTokens) {
+    if (tokens.has(token)) {
+      violations.push({ rule: 'plain-athlete-language', detail: `contains banned athlete-facing word '${token}'` });
     }
   }
 

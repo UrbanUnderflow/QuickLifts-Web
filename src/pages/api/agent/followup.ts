@@ -47,7 +47,7 @@ Participants: ${participantNames.join(', ')}
 
 Example outputs:
 - "@Scout That dependency model is interesting — but what happens when two agents claim the same resource simultaneously? Have you thought about conflict resolution?"
-- "@Solara You mentioned narrative cues over backlogs. How would we track accountability without explicit story points?"
+- "@Solara You mentioned narrative signals over backlogs. How would we track accountability without explicit story points?"
 - "@Sage The health data pipeline you described — could that same architecture power the real-time agent monitoring we've been discussing?"`;
 
     const userPrompt = `Here's the recent conversation:\n\n${context}\n\nGenerate a single follow-up question for @${targetName}:`;

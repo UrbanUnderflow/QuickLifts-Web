@@ -33,7 +33,7 @@ const lowRiskSignals: FramingScaleSignalEntry[] = [
     primingRiskTier: 'low',
     framingTier: 'mild',
     surfaceVisibility: 'athlete-allowed',
-    rationale: 'Schedule anchor; framed as a rhythm cue, not a performance verdict.',
+    rationale: 'Schedule anchor; framed as a rhythm signal, not a performance verdict.',
   },
   {
     signalId: 'sleepMidpointShiftMinutes',
@@ -47,7 +47,7 @@ const lowRiskSignals: FramingScaleSignalEntry[] = [
     primingRiskTier: 'low',
     framingTier: 'mild',
     surfaceVisibility: 'athlete-allowed',
-    rationale: 'Time-in-state framing; usable as a daily texture cue without scoring.',
+    rationale: 'Time-in-state framing; usable as a daily texture signal without scoring.',
   },
   {
     signalId: 'circadianDisruption',
@@ -306,7 +306,7 @@ export const SEED_CONVERSATION_BRANCHES: ConversationBranch[] = [
     ),
     probe: seedNode(
       'coach-context-flag-probe',
-      'What is one piece of last week you want to carry into today’s session so I can set the first cue?',
+      'What is one piece of last week you want to carry into today’s session so I can set the first phrase?',
     ),
     actionDelivery: seedNode(
       'coach-context-flag-action',
@@ -341,7 +341,7 @@ export const SEED_CONVERSATION_BRANCHES: ConversationBranch[] = [
     opener: seedNode('calendar-event-opener', 'Big day on the calendar.'),
     probe: seedNode(
       'calendar-event-probe',
-      'What is the one cue you want first so I can keep today’s warm-up simple?',
+      'What is the one phrase you want first so I can keep today’s warm-up simple?',
     ),
     actionDelivery: seedNode(
       'calendar-event-action',

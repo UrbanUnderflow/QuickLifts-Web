@@ -348,7 +348,7 @@ export const ResetGame: React.FC<ResetGameProps> = ({
         const options = normalizedEmphasis.some((item) => item.includes('whistle') || item.includes('buzzer'))
             ? ['Whistle blast', 'Buzzer shock', 'Crowd surge']
             : normalizedEmphasis.some((item) => item.includes('crowd'))
-                ? ['Crowd surge', 'Commentary burst', 'Startle cue']
+                ? ['Crowd surge', 'Commentary burst', 'Startle signal']
                 : ['Audio startle', 'Crowd surge', 'Whistle blast'];
         return options[Math.floor(Math.random() * options.length)];
     }, [normalizedEmphasis]);
@@ -559,7 +559,7 @@ export const ResetGame: React.FC<ResetGameProps> = ({
             clearDisruption();
             setPhase('resetBreath');
             setShowReset(true);
-            setPhaseMessage('Reset cue. Breathe, then re-engage the same task.');
+            setPhaseMessage('Reset moment. Breathe, then re-engage the same task.');
             setPhaseCountdown(0.8);
 
             const resetStartedAt = Date.now();
@@ -584,7 +584,7 @@ export const ResetGame: React.FC<ResetGameProps> = ({
                 setPhaseMessage(currentTier === 'foundation'
                     ? 'Tap in rhythm as soon as you have the target again.'
                     : currentTier === 'sharpening'
-                        ? 'Track the live cue immediately after the reset.'
+                        ? 'Track the live target immediately after the reset.'
                         : variantArchetype === 'immersive'
                             ? 'Re-anchor to the same target immediately inside the chamber.'
                             : 'Re-enter the same sequence cleanly and fast.'
@@ -1218,7 +1218,7 @@ export const ResetGame: React.FC<ResetGameProps> = ({
                                         <p className="text-red-300 text-[11px] font-bold tracking-[0.35em] uppercase">Disruption</p>
                                         <p className="text-white/55 text-sm">{phaseMessage}</p>
                                         {phaseCountdown !== null && (
-                                            <p className="text-white/35 text-xs">{phaseCountdown.toFixed(1)}s until reset cue</p>
+                                            <p className="text-white/35 text-xs">{phaseCountdown.toFixed(1)}s until reset</p>
                                         )}
                                     </div>
                                     {showProvocMessage && (
@@ -1308,7 +1308,7 @@ export const ResetGame: React.FC<ResetGameProps> = ({
                             {phase === 'resetBreath' && (
                                 <div className="flex flex-col items-center gap-6">
                                     <div className="text-center space-y-2">
-                                        <p className="text-cyan-300 text-[11px] font-bold tracking-[0.35em] uppercase">Reset Cue</p>
+                                        <p className="text-cyan-300 text-[11px] font-bold tracking-[0.35em] uppercase">Reset Moment</p>
                                         <p className="text-white/55 text-sm">{phaseMessage}</p>
                                         {phaseCountdown !== null && (
                                             <p className="text-white/35 text-xs">{phaseCountdown.toFixed(1)}s</p>

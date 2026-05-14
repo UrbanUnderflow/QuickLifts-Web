@@ -120,7 +120,7 @@ const PROTOCOL_VISUALS_BY_EXERCISE_ID: Record<string, ProtocolVisualConfig> = {
     gradientClass: 'from-emerald-500 to-teal-600',
   },
   'focus-cue-word': {
-    label: 'Cue Word Anchoring',
+    label: 'Anchor Word',
     Icon: Quote,
     accentHex: '#FACC15',
     gradientClass: 'from-yellow-400 to-yellow-500',
@@ -433,7 +433,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
         }
       })
       .catch((error) => {
-        console.warn('[ExercisePlayer] Failed to resolve protocol signature cue', error);
+        console.warn('[ExercisePlayer] Failed to resolve protocol signature audio', error);
         if (!cancelled) {
           setProtocolCueUrl(null);
         }
@@ -496,7 +496,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
     protocolCueAudioRef.current = audio;
     protocolCuePlayedKeyRef.current = playbackKey;
     audio.play().catch((error) => {
-      console.warn('[ExercisePlayer] Failed to play protocol signature cue', error);
+      console.warn('[ExercisePlayer] Failed to play protocol signature audio', error);
       if (protocolCueAudioRef.current === audio) {
         protocolCueAudioRef.current = null;
       }
@@ -562,7 +562,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
     });
 
     updateDoc(doc(db, 'users', currentUser.id), updates).catch((error) => {
-      console.warn('[ExercisePlayer] Failed to save protocol cue word preference', error);
+      console.warn('[ExercisePlayer] Failed to save protocol anchor word preference', error);
     });
   };
 
@@ -948,10 +948,10 @@ const ProtocolIntroScreen: React.FC<ProtocolIntroScreenProps> = ({
         </div>
       </div>
 
-      <div className="mb-3 text-xs uppercase tracking-[0.22em] text-white/50">Protocol Cue</div>
+      <div className="mb-3 text-xs uppercase tracking-[0.22em] text-white/50">Protocol Prep</div>
       <h2 className="mx-auto max-w-xl text-3xl font-semibold text-white">{protocolLabel}</h2>
       <p className="mx-auto mt-4 max-w-lg text-base leading-7 text-white/65">
-        Entering the protocol now. Nora will begin guidance as soon as the cue finishes.
+        Entering the protocol now. Nora will begin guidance as soon as the intro finishes.
       </p>
     </motion.div>
   );
@@ -1160,7 +1160,7 @@ type BodyScanScriptStep = {
 };
 
 const BODY_SCAN_SETTLE_TEXT =
-  'Settle onto your back if you can, or sit fully supported. Put the phone down now. Close your eyes and take two easy breaths. You will hear the next cue automatically; no tapping until we finish.';
+  'Settle onto your back if you can, or sit fully supported. Put the phone down now. Close your eyes and take two easy breaths. You will hear the next step automatically; no tapping until we finish.';
 
 const DEFAULT_BODY_SCAN_SCRIPT: BodyScanScriptStep[] = [
   {
@@ -1474,7 +1474,7 @@ const BodyScanExercise: React.FC<BodyScanExerciseProps> = ({
 
 type FocusPhase = 'instructions' | 'cueWord' | 'getReady' | 'practice';
 
-// Only these focus exercise types should have the cue word selection phase
+// Only these focus exercise types should have the anchor word selection phase.
 const CUE_WORD_EXERCISE_TYPES = ['cue_word', 'cue_word_anchoring', 'anchoring'];
 
 interface FocusExerciseProps {
@@ -1525,7 +1525,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
   const currentInstruction = instructions[step] || 'Keep your attention on the target.';
   const mode = config?.type || 'single_point';
 
-  // Determine if this exercise type uses cue word anchoring
+  // Determine if this exercise type uses anchor word selection.
   const usesCueWord = CUE_WORD_EXERCISE_TYPES.includes(mode);
 
   useEffect(() => {
@@ -1779,11 +1779,11 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
     if (step < safeTotalSteps - 1) {
       setStep((prev) => prev + 1);
     } else {
-      // Move to next phase - cue word selection only for anchoring exercises
+      // Move to next phase - anchor word selection only for anchoring exercises.
       if (usesCueWord) {
         setPhase('cueWord');
       } else {
-        // Skip cue word selection and go directly to practice
+        // Skip anchor word selection and go directly to practice.
         setPhase('getReady');
       }
     }
@@ -1996,7 +1996,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
       ? { x: [0, 120, -80, 140, 0], y: [0, -90, 110, 40, 0] }
       : { x: [0, 10, -8, 6, 0], y: [0, -6, 8, -4, 0], scale: [1, 1.08, 1] };
 
-  // Cue Word Phase
+  // Anchor Word Phase
   if (phase === 'cueWord') {
     return (
       <motion.div
@@ -2018,7 +2018,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
           </div>
           <p className="text-white/60 text-sm leading-relaxed">
             Elite athletes use "anchoring" to trigger peak mental states on demand. You'll build
-            a state of deep focus, then connect it to a cue word. Later, just saying this word
+            a state of deep focus, then connect it to an anchor word. Later, just saying this word
             will instantly bring back the focused state.
           </p>
         </div>
@@ -2083,7 +2083,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
         exit={{ opacity: 0, scale: 0.9 }}
         className="text-center"
       >
-        {/* Show cue word badge only for anchoring exercises */}
+        {/* Show anchor word badge only for anchoring exercises */}
         {usesCueWord && cueWord && (
           <div className="mb-4">
             <span className={`inline-block px-4 py-2 rounded-full bg-gradient-to-r ${categoryColor} text-white font-bold text-lg mb-4`}>
@@ -2096,7 +2096,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
           {usesCueWord ? (
             <>
               <p className="text-white/60 text-lg mb-2">Get ready to anchor your focus</p>
-              <p className="text-white/40 text-sm">You'll learn to trigger this state with your cue word</p>
+              <p className="text-white/40 text-sm">You'll learn to trigger this state with your anchor word</p>
             </>
           ) : (
             <>
@@ -2331,14 +2331,14 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
         debugLabel={`FocusExercise:${debugIdRef.current}:step-${step + 1}`}
         onDone={() => {
           if (instructions.length <= 1) {
-            // Skip cue word for non-anchoring exercises
+            // Skip anchor word for non-anchoring exercises.
             setPhase(usesCueWord ? 'cueWord' : 'getReady');
             return;
           }
           if (step < safeTotalSteps - 1) {
             setStep((prev) => prev + 1);
           } else {
-            // Skip cue word for non-anchoring exercises
+            // Skip anchor word for non-anchoring exercises.
             setPhase(usesCueWord ? 'cueWord' : 'getReady');
           }
         }}
@@ -2363,7 +2363,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
           onClick={handleNextStep}
           className={`flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r ${categoryColor} text-white font-semibold`}
         >
-          {step < safeTotalSteps - 1 ? 'Next' : 'Choose Cue Word'}
+          {step < safeTotalSteps - 1 ? 'Next' : 'Choose Anchor Word'}
           <ChevronRight className="w-5 h-5" />
         </motion.button>
       </div>

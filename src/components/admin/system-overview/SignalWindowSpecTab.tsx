@@ -51,7 +51,7 @@ const GAME_PHASES = [
         name: 'Display',
         color: '#facc15',
         duration: '0.5–3 sec',
-        description: 'Information-rich display with correct cue embedded among neutral or decoy information. Duration is limited.',
+        description: 'Information-rich display with correct signal embedded among neutral or decoy information. Duration is limited.',
         tiers: [
             'Beginner: Simple display, 2–3 second window',
             'Intermediate: Complex display with decoys, 1–2 second window',
@@ -88,17 +88,17 @@ const SCIENTIFIC_FOUNDATIONS = [
     {
         name: 'Perceptual-Cognitive Expertise',
         authors: 'Sport cognition research',
-        summary: 'Expert performers extract relevant cues faster and more accurately than novices. Signal Window trains the perceptual-cognitive skills that distinguish expert from novice decision-making under time constraint.',
+        summary: 'Expert performers extract relevant signals faster and more accurately than novices. Signal Window trains the perceptual-cognitive skills that distinguish expert from novice decision-making under time constraint.',
     },
     {
         name: 'Attentional Control Theory',
         authors: 'Eysenck et al., 2007',
-        summary: 'Anxiety slows cue extraction. Signal Window trains the system to maintain decision quality as available processing time shrinks.',
+        summary: 'Anxiety slows signal extraction. Signal Window trains the system to maintain decision quality as available processing time shrinks.',
     },
     {
         name: 'Attentional Width and Direction',
         authors: 'Nideffer & Sagal, 2006',
-        summary: 'Signal Window exercises external-narrow focus for rapid cue identification and broad-to-narrow transitions for complex display scanning.',
+        summary: 'Signal Window exercises external-narrow focus for rapid signal identification and broad-to-narrow transitions for complex display scanning.',
     },
     {
         name: 'Stress Inoculation Training',
@@ -109,7 +109,7 @@ const SCIENTIFIC_FOUNDATIONS = [
 
 const SKILL_SCORES = [
     { skill: 'Correct Read Under Time Pressure', pillar: 'Decision', description: 'Combined metric of correct-read rate weighted by decision latency. Core skill score. Both components reported separately and as combined score.', color: ACCENT },
-    { skill: 'Decoy Resistance', pillar: 'Decision', description: 'Inverse of decoy false alarm rate. How well the athlete avoids plausible-but-wrong cues. Distinguishes discrimination errors from random misses.', color: '#f97316' },
+    { skill: 'Decoy Resistance', pillar: 'Decision', description: 'Inverse of decoy false alarm rate. How well the athlete avoids plausible-but-wrong signals. Distinguishes discrimination errors from random misses.', color: '#f97316' },
     { skill: 'Pressure Stability', pillar: 'Composure', description: 'Decision accuracy consistency under evaluative threat and consequence modifiers vs. baseline. Per Standards Addendum §9.', color: '#c084fc' },
 ];
 
@@ -132,10 +132,10 @@ const CROSSCUTTING_CONTRIBUTIONS = [
 
 const MODIFIER_COMPAT = [
     { modifier: 'Distraction', behavior: 'Adds irrelevant visual elements to the display, increasing noise-to-signal ratio.', levels: 'Low / Medium / High' },
-    { modifier: 'Time Pressure', behavior: 'Shrinks the display window further, reducing available cue extraction time.', levels: 'Standard / Tight / Extreme' },
+    { modifier: 'Time Pressure', behavior: 'Shrinks the display window further, reducing available signal extraction time.', levels: 'Standard / Tight / Extreme' },
     { modifier: 'Evaluative Threat', behavior: 'Stakes messaging during decision window. Social pressure on accuracy under time constraint.', levels: 'Subtle / Moderate / Direct' },
     { modifier: 'Consequence', behavior: 'Wrong reads cost something. Raises emotional stakes of each commitment.', levels: 'Low / Medium / High' },
-    { modifier: 'Ambiguity', behavior: 'Display content and cue salience more ambiguous. Reduces certainty before window closes.', levels: 'Slight / Moderate / Full' },
+    { modifier: 'Ambiguity', behavior: 'Display content and signal clarity become more ambiguous. Reduces certainty before window closes.', levels: 'Slight / Moderate / Full' },
     { modifier: 'Fatigue Load', behavior: 'Longer sessions to measure decision quality degradation under cognitive fatigue.', levels: 'Standard / Elevated / Extended' },
 ];
 
@@ -148,8 +148,8 @@ const DIFFICULTY_TIERS = [
 
 const VARIANTS = [
     { name: 'Static display', description: 'Fixed information field. Default Tier 1–2.', status: 'Registered' },
-    { name: 'Dynamic display', description: 'Moving or time-evolving cues. Intermediate variant.', status: 'Registered' },
-    { name: 'Sport-context cue read', description: 'Sport-specific displays (formation reads, ball-flight cues). Applied variant.', status: 'Registered' },
+    { name: 'Dynamic display', description: 'Moving or time-evolving signals. Intermediate variant.', status: 'Registered' },
+    { name: 'Sport-context signal read', description: 'Sport-specific displays (formation reads, ball-flight signals). Applied variant.', status: 'Registered' },
     { name: 'Field-Read Trial Signal Window', description: 'Standardized 10–15 min at fixed Tier 3. Trial-layer assessment.', status: 'Registered' },
     { name: '3D Spatial Read (Vision Pro)', description: 'Active football package runtime for Signal Window / Spatial Read in the Vision Pro immersive transfer layer.', status: 'Football Package v1' },
 ];
@@ -166,7 +166,7 @@ const EXPERIENCE_PRINCIPLES = [
     { title: 'Feel like training, not therapy', detail: 'The sim should feel like a drill. The athlete should want to beat their last score. Competitive energy is the engine.' },
     { title: 'Minimal UI during gameplay', detail: 'Clean, immersive screen. No navigation, no settings. The sim owns the screen during the display window.' },
     { title: 'Data after, not during', detail: 'Performance shown between rounds (Training) or only at session end (Trial).' },
-    { title: 'Sound design matters', detail: 'Audio cues signal display onset and commitment windows clearly.' },
+    { title: 'Sound design matters', detail: 'Audio signals mark display onset and commitment windows clearly.' },
     { title: 'Celebrate improvement, not perfection', detail: 'Highlight personal bests and trend improvements, not absolute scores. Progress is the reward.' },
 ];
 
@@ -200,7 +200,7 @@ const SignalWindowSpecTab: React.FC = () => {
                     <div>
                         <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: ACCENT }}>PULSE CHECK · SIM SPECIFICATION</p>
                         <h2 className="text-xl font-semibold">Signal Window</h2>
-                        <p className="text-xs text-zinc-500">Cue Discrimination Training Simulation · Spec v2.0 · March 2025</p>
+                        <p className="text-xs text-zinc-500">Signal Discrimination Training Simulation · Spec v2.0 · March 2025</p>
                     </div>
                 </div>
             </div>
@@ -212,7 +212,7 @@ const SignalWindowSpecTab: React.FC = () => {
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                        Signal Window trains the athlete&apos;s ability to <span className="text-white font-semibold">read the right cue and make the correct decision within a shrinking time window</span>. In every sport, critical decisions happen in compressed moments. Signal Window simulates that compression, presents information-rich displays, gives the athlete a limited window to identify the correct read, and measures both accuracy and speed.
+                        Signal Window trains the athlete&apos;s ability to <span className="text-white font-semibold">read the right signal and make the correct decision within a shrinking time window</span>. In every sport, critical decisions happen in compressed moments. Signal Window simulates that compression, presents information-rich displays, gives the athlete a limited window to identify the correct read, and measures both accuracy and speed.
                     </p>
                 </div>
             </section>
@@ -422,7 +422,7 @@ const SignalWindowSpecTab: React.FC = () => {
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-3">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                        Family-level spec. Mechanism (cue discrimination under time pressure), core metric (Correct Read Under Time Pressure), and score architecture are <span className="text-white font-semibold">fixed</span>.
+                        Family-level spec. Mechanism (signal discrimination under time pressure), core metric (Correct Read Under Time Pressure), and score architecture are <span className="text-white font-semibold">fixed</span>.
                     </p>
                     <p className="text-[9px] uppercase tracking-widest font-bold text-zinc-600">Registered Variants</p>
                     <div className="space-y-1.5">
@@ -460,7 +460,7 @@ const SignalWindowSpecTab: React.FC = () => {
                         </div>
                         <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">
                             <p className="text-xs font-bold text-purple-400 mb-1">3D Spatial Read (Vision Pro)</p>
-                            <p className="text-[10px] text-zinc-400 leading-relaxed">Cues in spatial 3D environment. Immersive Transfer Trial — tests read accuracy in richer perceptual context.</p>
+                            <p className="text-[10px] text-zinc-400 leading-relaxed">Signals in spatial 3D environment. Immersive Transfer Trial — tests read accuracy in richer perceptual context.</p>
                         </div>
                     </div>
                     <div className="rounded-xl border border-zinc-700 bg-black/30 px-4 py-3">

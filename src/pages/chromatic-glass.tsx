@@ -177,7 +177,7 @@ const ChromaticGlassPage: NextPage = () => {
     ],
     warning: [
       { name: 'Escalation', color: '#E48900', hex: '#E48900', meaning: 'Last step before danger', useFor: '"Are you sure?", Unsaved changes' },
-      { name: 'Risk', color: '#FFAD30', hex: '#FFAD30', meaning: 'Consequences possible', useFor: 'Overtraining warnings, Fatigue cues' },
+      { name: 'Risk', color: '#FFAD30', hex: '#FFAD30', meaning: 'Consequences possible', useFor: 'Overtraining warnings, fatigue signals' },
       { name: 'Urgent', color: '#FFD24D', hex: '#FFD24D', meaning: 'User must notice this', useFor: '"Workout ending soon", Sync about to fail' },
       { name: 'Attention', color: '#FFC870', hex: '#FFC870', meaning: 'Something needs awareness', useFor: 'Resume workout banner, Delayed session notice' },
       { name: 'Hint', color: '#FFD586', hex: '#FFD586', meaning: 'Gentle nudge', useFor: '"Still there?", Incomplete rep warning' },

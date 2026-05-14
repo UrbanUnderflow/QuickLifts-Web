@@ -81,7 +81,7 @@
   },
   {
     "id": "protocol-cue-word-anchoring",
-    "label": "Cue Word Anchoring",
+    "label": "Anchor Word",
     "legacyExerciseId": "focus-cue-word",
     "protocolClass": "priming",
     "category": "focus",
@@ -89,7 +89,7 @@
     "deliveryMode": "guided_focus",
     "triggerTags": ["scattered_focus", "mistake_recovery", "between_attempts"],
     "preferredContextTags": ["competition_window", "between_reps"],
-    "rationale": "Fast state-anchoring protocol for athletes who need one clean cue to lock into the next action.",
+    "rationale": "Fast state-anchoring protocol for athletes who need one clean phrase to lock into the next action.",
     "durationSeconds": 300,
     "sortOrder": 20,
     "publishStatus": "published",

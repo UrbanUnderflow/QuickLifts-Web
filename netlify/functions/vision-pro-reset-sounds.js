@@ -52,6 +52,6 @@ exports.handler = async (event) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[vision-pro-reset-sounds] Error:', message);
-    return json(500, { error: 'Failed to fetch sound cues', detail: message });
+    return json(500, { error: 'Failed to fetch sound assets', detail: message });
   }
 };

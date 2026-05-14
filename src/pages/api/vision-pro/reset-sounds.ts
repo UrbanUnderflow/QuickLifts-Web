@@ -24,7 +24,7 @@ type ResetSoundsResponse =
 /**
  * GET /api/vision-pro/reset-sounds
  *
- * Returns the five Vision Pro Reset / Next Play spatial sound cues stored in
+ * Returns the five Vision Pro Reset / Next Play spatial sound assets stored in
  * the `sim-audio-assets` Firestore collection (family = "vision-pro-reset").
  *
  * Called by the visionOS app at session start to preload audio without
@@ -73,6 +73,6 @@ export default async function handler(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[vision-pro/reset-sounds] Firestore error:', message);
-    return res.status(500).json({ error: 'Failed to fetch sound cues', detail: message });
+    return res.status(500).json({ error: 'Failed to fetch sound assets', detail: message });
   }
 }

@@ -196,7 +196,7 @@ const SPORT_BLUEPRINTS: Record<SportsIntelligenceFixtureSportId, SportFixtureBlu
     gameDayLookFor: {
       athleteOrUnit: 'M. Johnson',
       lookFor: 'flat warm-up energy or late-clock hesitation in the first quarter',
-      ifThen: 'start with one designed early possession and keep the cue to "next read."',
+      ifThen: 'start with one designed early possession and keep the phrase to "next read."',
     },
     secondGameDayLookFor: {
       athleteOrUnit: 'guard unit',
@@ -219,9 +219,9 @@ const SPORT_BLUEPRINTS: Record<SportsIntelligenceFixtureSportId, SportFixtureBlu
       name: 'B. Holloway',
       role: 'Tournament Starter',
       stableWhy: 'Bad shots have been carrying into the next hole, especially after the turn. The swing is not the story this week; the response routine is.',
-      stableMove: 'Thursday short-game session gets one cue only: target, commit, accept.',
+      stableMove: 'Thursday short-game session gets one phrase only: target, commit, accept.',
       extraWhy: 'The walking load and long round are showing, but target clarity stayed steady in the last two practice rounds.',
-      extraMove: 'Move warm-up earlier, keep the cue count to one, and protect the fueling window after hole six.',
+      extraMove: 'Move warm-up earlier, keep the phrase count to one, and protect the fueling window after hole six.',
     },
     secondaryAthlete: {
       name: 'J. Castillo',
@@ -238,12 +238,12 @@ const SPORT_BLUEPRINTS: Record<SportsIntelligenceFixtureSportId, SportFixtureBlu
     gameDayLookFor: {
       athleteOrUnit: 'B. Holloway',
       lookFor: 'rushed routine on the first two tee shots',
-      ifThen: 'walk to him before hole three and give one cue: target, commit.',
+      ifThen: 'walk to him before hole three and give one phrase: target, commit.',
     },
     secondGameDayLookFor: {
       athleteOrUnit: 'J. Castillo',
       lookFor: 'tempo getting quick around holes 12 through 15',
-      ifThen: 'check water and a small carb snack at the turn. Do not add swing cues.',
+      ifThen: 'check water and a small carb snack at the turn. Do not add swing thoughts.',
     },
     actionSession: 'Thursday short-game session',
     dimensionGood: { focus: 'solid', composure: 'solid', decisioning: 'solid' },
@@ -269,7 +269,7 @@ const SPORT_BLUEPRINTS: Record<SportsIntelligenceFixtureSportId, SportFixtureBlu
       name: 'J. Phillips',
       role: 'Lead',
       stableWhy: 'Spare conversion dipped late after Day 1 fatigue, and his pre-shot routine sped up after open frames.',
-      stableMove: 'Use the same spare-process cue as last week. No new mechanics during the block.',
+      stableMove: 'Use the same spare-process phrase as last week. No new mechanics during the block.',
     },
     unit: 'travel pair',
     sportLoadPhrase: 'repeating the same shot got harder late',
@@ -280,7 +280,7 @@ const SPORT_BLUEPRINTS: Record<SportsIntelligenceFixtureSportId, SportFixtureBlu
     gameDayLookFor: {
       athleteOrUnit: 'A. Ramos',
       lookFor: 'grip tight or shoulders rounding by frame six',
-      ifThen: 'cue "tempo, not power" and skip extra reps in the next break.',
+      ifThen: 'say "tempo, not power" and skip extra reps in the next break.',
     },
     secondGameDayLookFor: {
       athleteOrUnit: 'J. Phillips',
@@ -322,12 +322,12 @@ const SPORT_BLUEPRINTS: Record<SportsIntelligenceFixtureSportId, SportFixtureBlu
     gameDayLookFor: {
       athleteOrUnit: 'D. Smith',
       lookFor: 'flat warm-up jog or quiet energy on the line',
-      ifThen: 'sneak in one extra acceleration before the 200 call and keep the cue to "drive."',
+      ifThen: 'sneak in one extra acceleration before the 200 call and keep the phrase to "drive."',
     },
     secondGameDayLookFor: {
       athleteOrUnit: 'sprint group',
       lookFor: 'tight shoulders during strides',
-      ifThen: 'one cue per athlete. Skip tactical add-ons in the final five minutes.',
+      ifThen: 'one phrase per athlete. Skip tactical add-ons in the final five minutes.',
     },
     actionSession: 'Tuesday 4x200 session',
     dimensionGood: { focus: 'solid', composure: 'solid', decisioning: 'solid' },

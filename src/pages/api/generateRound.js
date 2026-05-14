@@ -98,7 +98,7 @@ async function generateUniqueWorkoutStacks(numberOfStacks, existingWorkouts = []
           content: `### Pulse Object Model & Gameplay Concepts (for internal use)
 
 **Move**
-• Atomic exercise unit: name, video demo, coaching cues, muscle tags, difficulty, equipment, default rep/time target.
+• Atomic exercise unit: name, video demo, coaching notes, muscle tags, difficulty, equipment, default rep/time target.
 • Creators upload and own Moves; each Move can be reused infinitely.
 
 **Stack**
@@ -377,7 +377,7 @@ async function generateFullSchedule(totalNeeded, existingWorkouts = [], retryCou
           content: `### Pulse Object Model & Gameplay Concepts (for internal use)
 
 **Move**
-• Atomic exercise unit: name, video demo, coaching cues, muscle tags, difficulty, equipment, default rep/time target.
+• Atomic exercise unit: name, video demo, coaching notes, muscle tags, difficulty, equipment, default rep/time target.
 • Creators upload and own Moves; each Move can be reused infinitely.
 
 **Stack**

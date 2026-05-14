@@ -13,13 +13,13 @@ import {
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
 
 const EXPERIENCE_ROWS = [
-  ['Teach', 'Nora introduces the protocol, explains the mechanism, models the target language, and gives the member a felt-sense frame for what they are about to do.', 'The member reaches the final instructional step with clear expectations and hears the Nora-selected voice + protocol cue package.'],
+  ['Teach', 'Nora introduces the protocol, explains the mechanism, models the target language, and gives the member a felt-sense frame for what they are about to do.', 'The member reaches the final instructional step with clear expectations and hears the Nora-selected voice + protocol audio package.'],
   ['Practice Conversation', 'After the teaching layer, Nora opens a live guided exchange where the athlete has to answer, rehearse, or perform the technique instead of passively consuming slides.', 'The member completes the required protocol turns or explicit fallback path, producing enough signal to judge whether they actually applied the technique.'],
   ['Evaluate', 'Nora closes the session with protocol-specific feedback, confidence language, and a quick summary of what was strong versus what needs work next rep.', 'The session stores a lightweight scorecard, the member gets clear feedback, and runtime evidence can update from something richer than completion alone.'],
 ];
 
 const STATE_ROWS = [
-  ['protocol-intro', 'Play protocol cue and entrance animation before spoken instruction begins.'],
+  ['protocol-intro', 'Play protocol audio and entrance animation before spoken instruction begins.'],
   ['teach', 'Run the bounded instruction sequence with Nora narration and manual pacing where needed.'],
   ['practice-intro', 'Transition from learning mode into application mode so the user understands they now need to respond.'],
   ['practice-turn', 'Show Nora prompt, capture user response by text or microphone, and store the turn payload.'],
@@ -37,7 +37,7 @@ const TURN_ROWS = [
 ];
 
 const SCORECARD_ROWS = [
-  ['Signal awareness', 'Did the athlete identify the relevant body/state cues the protocol is designed to work on?'],
+  ['Signal awareness', 'Did the athlete identify the relevant body/state signals the protocol is designed to work on?'],
   ['Technique fidelity', 'Did the response match the intended mechanism of the protocol rather than generic self-talk?'],
   ['Language quality', 'Did the athlete use target words, framing, and posture aligned to the technique?'],
   ['Shift quality', 'Did the athlete report or demonstrate a meaningful movement toward the desired state?'],

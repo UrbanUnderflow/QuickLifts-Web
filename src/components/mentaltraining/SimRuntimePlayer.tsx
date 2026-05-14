@@ -92,9 +92,9 @@ function buildSimPreflightBriefing(exercise: SimModule, buildArtifact: SimBuildA
     case 'noise_gate':
       return `Nora here. This one is ${variantName}. You will have one real target, and the screen will try to pull your eyes away from it. Your job is simple: stay on the true target and let the clutter be noise. Clean attention beats busy attention here. ${commonFinish}`;
     case 'brake_point':
-      return `Nora here. This one is ${variantName}. Most cues will tempt you to go, but some are traps. Your job is to move with conviction when it's real and slam the brakes the instant it isn't. Fast is good, but only if it's under control. ${commonFinish}`;
+      return `Nora here. This one is ${variantName}. Most words will tempt you to go, but some are traps. Your job is to move with conviction when it's real and hit the brakes the instant it isn't. Fast is good, but only if it's under control. ${commonFinish}`;
     case 'signal_window':
-      return `Nora here. This one is ${variantName}. You get a short window to read the cue and make one choice. Read it, trust what is actually there, and commit before the window closes. Don't guess early and don't freeze late. ${commonFinish}`;
+      return `Nora here. This one is ${variantName}. You get a short window to read the display and make one choice. Read it, trust what is actually there, and commit before the window closes. Don't guess early and don't freeze late. ${commonFinish}`;
     case 'sequence_shift':
       return `Nora here. This one is ${variantName}. The rule will change while you're in motion. Your job is to spot the change, let go of the old pattern right away, and switch cleanly to the new one. The mistake to avoid is dragging the old rule into the next decision. ${commonFinish}`;
     case 'endurance_lock':
@@ -187,11 +187,11 @@ function buildDefaultAdapter(engineKey: SimBuildArtifact['engineKey']): RuntimeA
       initialize: (artifact) => createBinaryRounds(
         parseRoundCount(artifact.sessionModel.targetSessionStructure, artifact.sessionModel.durationMinutes),
         (index) => ({
-          prompt: index % 3 === 0 ? 'Ignore the distractor and keep the live target.' : 'Hold the target cue under noise.',
+          prompt: index % 3 === 0 ? 'Ignore the distractor and keep the live target.' : 'Hold the target under noise.',
           subPrompt: index % 4 === 0 ? 'Commentary and crowd rise together.' : 'Keep your read on the primary signal.',
           tags: [index % 2 === 0 ? 'audio' : 'visual', index % 3 === 0 ? 'overlap' : 'single_channel'],
         }),
-        'Track Live Cue',
+        'Track Live Target',
         'Chase Distractor',
       ),
       score: (artifact, responses) => {
@@ -213,7 +213,7 @@ function buildDefaultAdapter(engineKey: SimBuildArtifact['engineKey']): RuntimeA
       summarize: (_artifact, responses) => {
         const misses = responses.filter((response) => !response.correct).length;
         return [
-          `${responses.length - misses}/${responses.length} clean cue holds under noise.`,
+          `${responses.length - misses}/${responses.length} clean target holds under noise.`,
           `${responses.filter((response) => response.tags.includes('overlap')).length} layered-noise rounds were logged for channel breakdowns.`,
         ];
       },
@@ -223,7 +223,7 @@ function buildDefaultAdapter(engineKey: SimBuildArtifact['engineKey']): RuntimeA
       initialize: (artifact) => createBinaryRounds(
         parseRoundCount(artifact.sessionModel.targetSessionStructure, artifact.sessionModel.durationMinutes),
         (index) => ({
-          prompt: index % 3 === 0 ? 'Stop when the fakeout cue appears.' : 'Commit only if the lane stays green.',
+          prompt: index % 3 === 0 ? 'Stop when the fakeout appears.' : 'Commit only if the lane stays green.',
           subPrompt: index % 4 === 0 ? 'Late reveal pressure is active.' : 'Brake cleanly on the wrong action.',
           tags: [index % 3 === 0 ? 'late_reveal' : index % 2 === 0 ? 'fakeout' : 'obvious'],
         }),
@@ -256,7 +256,7 @@ function buildDefaultAdapter(engineKey: SimBuildArtifact['engineKey']): RuntimeA
         parseRoundCount(artifact.sessionModel.targetSessionStructure, artifact.sessionModel.durationMinutes),
         (index) => ({
           prompt: index % 3 === 0 ? 'Commit before the late-clock window closes.' : 'Read the signal and commit cleanly.',
-          subPrompt: index % 4 === 0 ? 'The cue window is shrinking.' : 'First commitment is final.',
+          subPrompt: index % 4 === 0 ? 'The window is shrinking.' : 'First commitment is final.',
           tags: [index % 3 === 0 ? 'late_window' : 'standard_window', index % 2 === 0 ? 'plausible_wrong' : 'neutral'],
         }),
         'Correct Read',
@@ -505,7 +505,7 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
         });
         return;
       } catch (error) {
-        console.warn('Failed to play hosted sim preflight cue', error);
+        console.warn('Failed to play hosted sim preflight audio prompt', error);
       }
     }
     const BrowserAudioContext = (window as typeof window & { webkitAudioContext?: typeof AudioContext }).AudioContext

@@ -419,8 +419,8 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
                   name: 'Decision',
                   color: '#c084fc',
                   accent: 'rgba(192,132,252,0.12)',
-                  def: 'Process the cue, inhibit the wrong response, act on the right one in time.',
-                  skills: ['Response Inhibition', 'Working Memory Updating', 'Cue Discrimination'],
+                  def: 'Process the signal, inhibit the wrong response, act on the right one in time.',
+                  skills: ['Response Inhibition', 'Working Memory Updating', 'Signal Discrimination'],
                 },
               ].map((p) => (
                 <div key={p.name} className="pc2-pillar" style={{ borderLeftColor: p.color }}>
@@ -504,7 +504,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
                   </div>
                 </div>
                 <div className="pc2-asb-cue">
-                  "Green cue is the go. Ignore the amber decoys — they speed up after trial 12."
+                  "Green signal is the go. Ignore the amber decoys — they speed up after trial 12."
                 </div>
               </div>
 
@@ -570,7 +570,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
                 <div className="pc2-dash-alert-icon">⚠</div>
                 <div>
                   <strong>Nora Alert — T. Grant · Composure Opportunity</strong>
-                  <p>Body state is strong, but game-day pressure is loud. Box Breathing completed. Reinforce one next-play cue during the pre-game touchpoint.</p>
+                  <p>Body state is strong, but game-day pressure is loud. Box Breathing completed. Reinforce one next-play phrase during the pre-game touchpoint.</p>
                 </div>
               </div>
               {/* Roster */}

@@ -117,13 +117,13 @@ export const SEEDED_PROTOCOL_FAMILY_SPECS: SeedProtocolFamilySpec[] = [
   spec('priming', 'focus_narrowing', {
     label: 'Focus Narrowing',
     mechanismSummary:
-      'Instructional self-talk and cue-word anchoring compress attention around one task-relevant directive, reducing distraction and simplifying the next action.',
+      'Instructional self-talk and anchor-word practice compress attention around one task-relevant directive, reducing distraction and simplifying the next action.',
     targetBottleneck:
       'Scattered focus, between-attempt drift, and overthinking when the athlete needs one clean attentional anchor.',
     expectedStateShift:
-      'Condense the athlete’s focus around one controllable cue and improve immediate attentional discipline before the next rep.',
+      'Condense the athlete’s focus around one controllable target and improve immediate attentional discipline before the next rep.',
     evidenceSummary:
-      'Cue-based attentional priming is supported by the self-talk literature. Meta-analytic sport evidence shows that self-talk interventions improve task performance, with instructional self-talk especially helpful for fine-motor and precision demands. Experimental work also suggests instructional self-statements can outperform imagery and several other psychological techniques on task performance.',
+      'Anchor-word attentional priming is supported by the self-talk literature. Meta-analytic sport evidence shows that self-talk interventions improve task performance, with instructional self-talk especially helpful for fine-motor and precision demands. Experimental work also suggests instructional self-statements can outperform imagery and several other psychological techniques on task performance.',
     sourceReferences: [
       'Hatzigeorgiadis A et al. Self-Talk and Sports Performance: A Meta-Analysis. Perspectives on Psychological Science (2015). PMID: 26167788. https://pubmed.ncbi.nlm.nih.gov/26167788/',
       'Wright BJ et al. Enhancing Self-Efficacy and Performance: An Experimental Comparison of Psychological Techniques. Research Quarterly for Exercise and Sport (2016). PMID: 26523398. https://pubmed.ncbi.nlm.nih.gov/26523398/',
@@ -147,13 +147,13 @@ export const SEEDED_PROTOCOL_FAMILY_SPECS: SeedProtocolFamilySpec[] = [
   spec('priming', 'confidence_priming', {
     label: 'Confidence Priming',
     mechanismSummary:
-      'Embodied-confidence cues use posture and self-presentation to alter subjective readiness, but they should be treated as low-dose state nudges rather than as deep confidence builders on their own.',
+      'Embodied-confidence resets use posture and self-presentation to alter subjective readiness, but they should be treated as low-dose state nudges rather than as deep confidence builders on their own.',
     targetBottleneck:
-      'Low presence, hesitation, and reduced felt readiness when the athlete needs a short embodied cue before stepping in.',
+      'Low presence, hesitation, and reduced felt readiness when the athlete needs a short embodied reset before stepping in.',
     expectedStateShift:
       'Increase subjective feelings of readiness and presence enough to help the athlete commit to action.',
     evidenceSummary:
-      'The confidence-priming evidence base is more mixed than the breathing, self-talk, or imagery families. Recent posture-feedback work suggests body position can influence mood-related outcomes, but the older power-posing literature has important replication problems and at least one randomized trial found no meaningful augmentative effect. For launch, this family should be framed conservatively: a brief embodied cue that may help subjective readiness, not a stand-alone confidence treatment.',
+      'The confidence-priming evidence base is more mixed than the breathing, self-talk, or imagery families. Recent posture-feedback work suggests body position can influence mood-related outcomes, but the older power-posing literature has important replication problems and at least one randomized trial found no meaningful augmentative effect. For launch, this family should be framed conservatively: a brief embodied reset that may help subjective readiness, not a stand-alone confidence treatment.',
     sourceReferences: [
       'Körner R et al. Dominance and Prestige: Meta-Analytic Review of Experimentally Induced Body Position Effects on Behavioral, Self-Report, and Physiological Dependent Variables. Psychological Bulletin (2022). DOI: 10.1037/bul0000356. https://www.researchgate.net/publication/360577810_Dominance_and_prestige_Meta-analytic_review_of_experimentally_induced_body_position_effects_on_behavioral_self-report_and_physiological_dependent_variables',
       'Davis ML et al. A randomized controlled study of power posing before public speaking exposure for social anxiety disorder: No evidence for augmentative effects. Journal of Anxiety Disorders (2017). PMID: 28946020. https://pubmed.ncbi.nlm.nih.gov/28946020/',
@@ -178,13 +178,13 @@ export const SEEDED_PROTOCOL_FAMILY_SPECS: SeedProtocolFamilySpec[] = [
   spec('recovery', 'recovery_reflection', {
     label: 'Recovery Reflection',
     mechanismSummary:
-      'Structured reflection moves the athlete out of rumination and toward evidence, controllable process cues, and constructive meaning-making after setbacks or demanding sessions.',
+      'Structured reflection moves the athlete out of rumination and toward evidence, controllable process actions, and constructive meaning-making after setbacks or demanding sessions.',
     targetBottleneck:
       'Outcome rumination, self-doubt, and maladaptive post-session narratives that prolong distress and delay recovery.',
     expectedStateShift:
       'Reduce spiraling and restore a more grounded, process-oriented recovery posture built on evidence and controllables.',
     evidenceSummary:
-      'This family sits at the intersection of reflective writing and process-focused coping. Written emotional disclosure work in athletes suggests structured writing can improve self-awareness, acceptance, and performance readiness during stressful periods. Choking-under-pressure research also supports interventions that reduce maladaptive self-focus and redirect attention toward more adaptive process cues. Taken together, the evidence supports reflective recovery as a useful post-load intervention when the athlete is cognitively stuck rather than physiologically overactivated.',
+      'This family sits at the intersection of reflective writing and process-focused coping. Written emotional disclosure work in athletes suggests structured writing can improve self-awareness, acceptance, and performance readiness during stressful periods. Choking-under-pressure research also supports interventions that reduce maladaptive self-focus and redirect attention toward more adaptive process actions. Taken together, the evidence supports reflective recovery as a useful post-load intervention when the athlete is cognitively stuck rather than physiologically overactivated.',
     sourceReferences: [
       'Harmes N et al. Written Emotional Disclosure Can Promote Athletes’ Mental Health and Performance Readiness During the COVID-19 Pandemic. Frontiers in Psychology (2020). https://pmc.ncbi.nlm.nih.gov/articles/PMC7728796/',
       'Hill DM et al. Choking under pressure: theoretical models and interventions. Current Opinion in Psychology (2017). https://pubmed.ncbi.nlm.nih.gov/28813345/',

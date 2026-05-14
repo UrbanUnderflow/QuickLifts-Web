@@ -207,7 +207,7 @@ function buildVisualChannelProfile(profileId: EnduranceLockVisualProfileId): End
         blockPlans: [
           buildBlockPlan(0, 'baseline', 1260, 500, 'Clean-reference baseline. Hold the target.', 'low', 'low', 'normal_contrast', ['visual_density']),
           buildBlockPlan(1, 'baseline', 1220, 480, 'Keep the same centered read.', 'low', 'low', 'normal_contrast', ['visual_density']),
-          buildBlockPlan(2, 'middle', 1160, 450, 'Cue salience drops. Stay precise.', 'medium', 'low', 'reduced_contrast', ['visual_density', 'contrast_drift']),
+          buildBlockPlan(2, 'middle', 1160, 450, 'Target clarity drops. Stay precise.', 'medium', 'low', 'reduced_contrast', ['visual_density', 'contrast_drift']),
           buildBlockPlan(3, 'middle', 1120, 430, 'Reduced contrast continues. Do not oversearch.', 'medium', 'low', 'reduced_contrast', ['visual_density', 'contrast_drift']),
           buildBlockPlan(4, 'finish', 1060, 410, 'Low-salience finish block. Keep the target alive.', 'medium', 'low', 'glare_wash', ['visual_density', 'contrast_drift']),
           buildBlockPlan(5, 'finish', 1020, 390, 'Glare-wash continuation. Finish clean.', 'medium', 'low', 'glare_wash', ['visual_density', 'contrast_drift']),
@@ -264,4 +264,3 @@ export function resolveEnduranceLockRuntimeProfile(params: ResolveEnduranceLockR
   }
   return buildGenericProfile();
 }
-
