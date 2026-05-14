@@ -213,7 +213,7 @@ const NON_NEGOTIABLES = [
   {
     title: 'Spell Out The Coaching Moment',
     accent: 'green' as const,
-    body: 'Coach-facing copy must not speak in code. Every point must say when the moment shows up, what the athlete may feel or do, what the coach should say or do, and what staff still owns. Terms like reset cue, mental install, body-state read, and decision support fail unless immediately rewritten into plain English.',
+    body: 'Coach-facing copy must not speak in code. Every point must say when the moment shows up, what the athlete may feel or do, and the one simple mental-performance phrase or routine the coach should give. Vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff fail unless a real named role and decision are present in the source data. Terms like reset cue, mental install, body-state read, and decision support fail unless immediately rewritten into plain English.',
   },
   {
     title: 'Clinical Boundary Is Architectural',

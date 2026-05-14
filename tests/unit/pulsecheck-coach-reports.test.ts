@@ -107,6 +107,36 @@ test('enforceLanguagePosture catches coded sports-intelligence shorthand', async
   );
 });
 
+test('enforceLanguagePosture catches anonymous staff handoff filler', async () => {
+  const { coachReports, sportConfig } = await loadSportsIntelligenceModules();
+  const track = sportConfig.getDefaultPulseCheckSports().find((sport) => sport.id === 'track-field');
+  assert.ok(track);
+
+  const result = coachReports.enforceLanguagePosture(
+    {
+      topLine: {
+        whatChanged: 'Smith reported heavy legs before the 200.',
+        who: 'D. Smith',
+        firstAction: 'Review Tuesday load with staff. If he feels flat before the 200, say: drive for the first steps.',
+      },
+      gameDayLookFors: [
+        {
+          athleteOrUnit: 'D. Smith',
+          lookFor: 'flat legs in warm-up',
+          ifThen: 'Say: drive for the first steps. Staff owns any warm-up adjustment.',
+        },
+      ],
+    },
+    track
+  );
+
+  assert.equal(result.passed, false);
+  assert.ok(
+    result.violations.some((violation) => violation.phrase === 'anonymous staff handoff filler'),
+    'anonymous staff handoff filler should fail the language audit'
+  );
+});
+
 test('coach-report demo fixtures pass the executable language posture gate', async () => {
   const { coachReports, sportConfig, demos } = await loadSportsIntelligenceModules();
   const examples = demos.COACH_REPORT_DEMO_EXAMPLES || demos.default?.COACH_REPORT_DEMO_EXAMPLES;

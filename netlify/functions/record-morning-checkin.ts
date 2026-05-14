@@ -30,7 +30,10 @@ import type { ConversationBranch, TranslationDomain } from '../../src/api/fireba
  * Body:
  *   { level: 'drained' | 'low' | 'okay' | 'solid' | 'locked',
  *     levelLabel?: string,        // optional display label override
- *     timezone?: string }
+ *     timezone?: string,
+ *     openerText?: string,        // optional iOS context-selected opener
+ *     probeText?: string,         // optional iOS context-selected probe
+ *     probeVariant?: string }
  */
 
 const RESPONSE_HEADERS = {
@@ -52,9 +55,9 @@ const VALID_LEVELS: ReadonlyArray<CheckinLevel> = ['drained', 'low', 'okay', 'so
 // Voice review status is 'reviewed' rather than 'seed-pending-review'
 // because these strings already exist and have been used in production
 // via the iOS in-place display.
-const synthesizeBranch = (level: CheckinLevel): ConversationBranch => {
-  const opener = OPENER_TEXT[level];
-  const probe = PROBE_TEXT[level];
+const synthesizeBranch = (level: CheckinLevel, openerText?: string, probeText?: string): ConversationBranch => {
+  const opener = openerText || OPENER_TEXT[level];
+  const probe = probeText || PROBE_TEXT[level];
   const action = ACTION_DELIVERY_TEXT[level];
   const branchId = `morning-checkin-tone-${level}`;
   return {
@@ -118,27 +121,27 @@ const primeMorningCheckinProbe = async (
 // `noraResponse` cases — both must pass the Nora voice rubric (10
 // questions) documented at the top of that file.
 const OPENER_TEXT: Record<CheckinLevel, string> = {
-  drained: "You came in drained today — low fuel. We'll lower the pace and cut the sim if it won't help.",
-  low:     "You came in low today — less fuel than usual. We'll start with the protocol and keep the sim optional.",
-  okay:    "You came in steady today — not flat, not flying. We'll keep today's protocol and sim at the normal pace.",
-  solid:   "You came in with good energy today. We'll start controlled, then raise pressure in the sim.",
-  locked:  "You came in locked today — high energy. We'll put that into today's sim, not extra volume.",
+  drained: "You said you feel drained today. Start with Step 1, then move to Step 2 when you're ready.",
+  low:     "You said you feel low today. Start with Step 1 first, then Step 2.",
+  okay:    "You said you feel okay today. Start with Step 1 first, then Step 2.",
+  solid:   "You said you feel good today. Start with Step 1 first, then Step 2.",
+  locked:  "You said you feel locked in today. Start with Step 1 first, then bring that focus into Step 2.",
 };
 
 const PROBE_TEXT: Record<CheckinLevel, string> = {
-  drained: "Where's the drag worst — body, head, or schedule? I'll cut the sim or lower the pace.",
-  low:     "What's pulling you down most — sleep, stress, or workload? I'll choose the lighter protocol or sim path.",
-  okay:    "Anything weighing on you — sleep, life, or focus? I'll use that to lower or raise today's pace.",
-  solid:   "What's clicking — sleep, headspace, or motivation? I'll use that to choose the first pressure level.",
-  locked:  "What lit you up — sleep, mindset, or a target? I'll use that to set today's sim intensity.",
+  drained: "What is making today hardest: your body, your mind, or your schedule?",
+  low:     "What is the main reason you feel low today: sleep, stress, or workload?",
+  okay:    "Is anything making today harder: sleep, stress, or focus?",
+  solid:   "What is the main reason you feel good today: sleep, mood, or motivation?",
+  locked:  "What is driving that locked-in feeling: good sleep, confidence, or a clear target?",
 };
 
 const ACTION_DELIVERY_TEXT: Record<CheckinLevel, string> = {
-  drained: "Got it. Today's plan is on the home screen — start with the protocol; sim is optional. Hydrate.",
-  low:     "Heard. Today's plan is on the home screen — protocol first, sim when you're ready.",
-  okay:    "Got it. Today's plan is on the home screen — knock out both when you can.",
-  solid:   "Nice. Today's plan is on the home screen — both protocol and sim are queued up.",
-  locked:  "Let's go. Today's plan is on the home screen — protocol's the warm-up, sim's the work.",
+  drained: "Got it. Today's plan is on the home screen. Start with Step 1, then Step 2 when you're ready.",
+  low:     "Heard. Today's plan is on the home screen. Step 1 first, then Step 2.",
+  okay:    "Got it. Today's plan is on the home screen. Step 1 first, then Step 2.",
+  solid:   "Good. Today's plan is on the home screen. Step 1 first, then Step 2.",
+  locked:  "Let's use it. Today's plan is on the home screen. Step 1 first, Step 2 second.",
 };
 
 // Domain mapping for Phase C translation lookups during the action-delivery
@@ -176,6 +179,26 @@ const formatYmdInTz = (nowUtc: Date, timeZone: string): string => {
   return `${y}-${m}-${day}`;
 };
 
+const sanitizeProbeText = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim().replace(/\s+/g, ' ');
+  if (trimmed.length < 12 || trimmed.length > 320) return undefined;
+  return trimmed;
+};
+
+const sanitizeOpenerText = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim().replace(/\s+/g, ' ');
+  if (trimmed.length < 12 || trimmed.length > 420) return undefined;
+  return trimmed;
+};
+
+const sanitizeProbeVariant = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim().toLowerCase();
+  return /^[a-z0-9_-]{1,48}$/.test(trimmed) ? trimmed : undefined;
+};
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers: RESPONSE_HEADERS, body: '' };
@@ -193,7 +216,7 @@ export const handler: Handler = async (event) => {
     return { statusCode: 401, headers: RESPONSE_HEADERS, body: JSON.stringify({ error: 'unauthenticated' }) };
   }
 
-  let body: { level?: string; levelLabel?: string; timezone?: string };
+  let body: { level?: string; levelLabel?: string; timezone?: string; openerText?: unknown; probeText?: unknown; probeVariant?: unknown };
   try {
     body = typeof event.body === 'string' ? JSON.parse(event.body) : (event.body as any) || {};
   } catch {
@@ -232,6 +255,9 @@ export const handler: Handler = async (event) => {
   const dayKey = formatYmdInTz(new Date(), timezone);
   const checkinDocId = `${auth.uid}_${dayKey}`;
   const now = Date.now();
+  const openerText = sanitizeOpenerText(body.openerText) || OPENER_TEXT[level];
+  const probeText = sanitizeProbeText(body.probeText) || PROBE_TEXT[level];
+  const probeVariant = sanitizeProbeVariant(body.probeVariant) || 'baseline';
 
   // Persist check-in.  This is the first source of truth for "athlete
   // started their day with tone X" — read by curriculum, coach reports,
@@ -245,6 +271,9 @@ export const handler: Handler = async (event) => {
         dayKey,
         level,
         levelLabel: body.levelLabel || level,
+        openerText,
+        probeText,
+        probeVariant,
         timezone,
         createdAt: now,
       },
@@ -262,7 +291,7 @@ export const handler: Handler = async (event) => {
   // noraResponse text as the opener so the athlete experiences a
   // continuous narrative whether they stay on the home screen or
   // navigate into the chat thread.
-  const branch = synthesizeBranch(level);
+  const branch = synthesizeBranch(level, openerText, probeText);
   let conversation;
   try {
     conversation = await openConversationFromTrigger(
@@ -273,7 +302,7 @@ export const handler: Handler = async (event) => {
         branch,
         actionDomain: ACTION_DOMAIN[level],
         evidence: {
-          summary: `Morning check-in tone: ${level}.`,
+          summary: `Morning check-in tone: ${level}. Probe variant: ${probeVariant}.`,
         },
         dayKey,
       },
@@ -299,7 +328,9 @@ export const handler: Handler = async (event) => {
       ok: true,
       conversationId: conversation.id,
       checkinDocId,
-      noraResponse: OPENER_TEXT[level],
+      noraResponse: openerText,
+      noraProbe: probeText,
+      probeVariant,
     }),
   };
 };

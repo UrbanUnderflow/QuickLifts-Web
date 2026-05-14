@@ -127,6 +127,14 @@ function buildRefreshNote({ assignment, eventType, reason }) {
   }
 }
 
+function resolveAssignmentCognitivePillar(assignment) {
+  return assignment?.cognitivePillar
+    || assignment?.curriculumIntent?.cognitivePillar
+    || assignment?.curriculumIntent?.drivingPillar
+    || assignment?.phaseProgress?.cognitivePillar
+    || null;
+}
+
 function summarizeAssignmentForEvent(assignment, executionTruthOwner) {
   if (!assignment) {
     return null;
@@ -145,6 +153,9 @@ function summarizeAssignmentForEvent(assignment, executionTruthOwner) {
       || assignment.actionType
     ) || 'Nora task',
     chosenCandidateId: assignment.chosenCandidateId || null,
+    protocolId: assignment.protocolId || null,
+    simSpecId: assignment.simSpecId || null,
+    cognitivePillar: resolveAssignmentCognitivePillar(assignment),
     sourceStateSnapshotId: assignment.sourceStateSnapshotId || null,
     rationale: assignment.rationale || null,
     plannerSummary: assignment.plannerSummary || null,
@@ -791,6 +802,11 @@ exports.handler = async (event) => {
       teamId: assignment.teamId || '',
       sourceDate: assignment.sourceDate || '',
       eventType,
+      actionType: nextAssignment.actionType || assignment.actionType || null,
+      chosenCandidateId: nextAssignment.chosenCandidateId || assignment.chosenCandidateId || null,
+      protocolId: nextAssignment.protocolId || assignment.protocolId || null,
+      simSpecId: nextAssignment.simSpecId || assignment.simSpecId || null,
+      cognitivePillar: resolveAssignmentCognitivePillar(nextAssignment) || resolveAssignmentCognitivePillar(assignment),
       actorType,
       actorUserId,
       eventAt,

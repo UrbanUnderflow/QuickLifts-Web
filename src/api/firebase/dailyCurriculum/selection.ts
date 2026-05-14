@@ -28,6 +28,11 @@ export interface CompletionsSnapshot {
   byAssetId: Map<string, number>;
   /** Pillar rep totals from completions. */
   byPillar: Record<TaxonomyPillar, number>;
+  /** Pillar rep totals split by track so protocol work does not satisfy sim work, or vice versa. */
+  byPillarByKind?: {
+    protocol: Record<TaxonomyPillar, number>;
+    sim: Record<TaxonomyPillar, number>;
+  };
   /** Asset ids assigned in the last N days, used for variety filter. */
   recentlyAssignedIds: (lookbackDays: number) => Set<string>;
 }

@@ -101,6 +101,73 @@ const subtractDaysUtc = (d: Date, days: number): Date => {
   return r;
 };
 
+const emptyPillarCounts = (): Record<TaxonomyPillar, number> => ({
+  [TaxonomyPillar.Composure]: 0,
+  [TaxonomyPillar.Focus]: 0,
+  [TaxonomyPillar.Decision]: 0,
+});
+
+const normalizeAssignmentKind = (value: unknown): 'protocol' | 'sim' | undefined => {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (normalized === 'protocol') return 'protocol';
+  if (normalized === 'simulation' || normalized === 'sim') return 'sim';
+  return undefined;
+};
+
+const eventAssignmentKind = (ev: Record<string, unknown>): 'protocol' | 'sim' | undefined => {
+  const metadata = ev.metadata as Record<string, unknown> | undefined;
+  const nextSummary = metadata?.nextAssignmentSummary as Record<string, unknown> | undefined;
+  const previousSummary = metadata?.previousAssignmentSummary as Record<string, unknown> | undefined;
+  return normalizeAssignmentKind(ev.actionType)
+    || normalizeAssignmentKind(nextSummary?.actionType)
+    || normalizeAssignmentKind(previousSummary?.actionType);
+};
+
+const eventAssetId = (ev: Record<string, unknown>): string | undefined => {
+  const metadata = ev.metadata as Record<string, unknown> | undefined;
+  const nextSummary = metadata?.nextAssignmentSummary as Record<string, unknown> | undefined;
+  const previousSummary = metadata?.previousAssignmentSummary as Record<string, unknown> | undefined;
+  return (ev.chosenCandidateId as string | undefined)
+    || (ev.protocolId as string | undefined)
+    || (ev.simSpecId as string | undefined)
+    || (nextSummary?.chosenCandidateId as string | undefined)
+    || (nextSummary?.protocolId as string | undefined)
+    || (nextSummary?.simSpecId as string | undefined)
+    || (previousSummary?.chosenCandidateId as string | undefined)
+    || (previousSummary?.protocolId as string | undefined)
+    || (previousSummary?.simSpecId as string | undefined);
+};
+
+const eventPillar = (ev: Record<string, unknown>): TaxonomyPillar | undefined => {
+  const metadata = ev.metadata as Record<string, unknown> | undefined;
+  const nextSummary = metadata?.nextAssignmentSummary as Record<string, unknown> | undefined;
+  const previousSummary = metadata?.previousAssignmentSummary as Record<string, unknown> | undefined;
+  const intent = ev.curriculumIntent as Record<string, unknown> | undefined;
+  const value = (ev.cognitivePillar as string | undefined)
+    || (nextSummary?.cognitivePillar as string | undefined)
+    || (previousSummary?.cognitivePillar as string | undefined)
+    || (intent?.cognitivePillar as string | undefined)
+    || (intent?.drivingPillar as string | undefined);
+  return value && Object.values(TaxonomyPillar).includes(value as TaxonomyPillar)
+    ? value as TaxonomyPillar
+    : undefined;
+};
+
+const isCompletedAssignmentRecord = (assignment: Record<string, unknown>): boolean => {
+  if (assignment.status === 'completed') return true;
+  if (assignment.actionType !== 'protocol') return false;
+
+  const session = assignment.protocolPracticeSession as Record<string, unknown> | undefined;
+  if (!session) return false;
+
+  const completedAt = session.completedAt;
+  if (typeof completedAt === 'number' && completedAt > 0) return true;
+  if (completedAt && typeof completedAt === 'object') return true;
+
+  const scorecard = session.scorecard as Record<string, unknown> | undefined;
+  return Boolean(scorecard && Object.keys(scorecard).length > 0);
+};
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Inputs to the generator
 // ──────────────────────────────────────────────────────────────────────────────
@@ -149,8 +216,16 @@ export const generateDailyAssignment = async (
   const pillarRepCounts = countRepsByPillar(completions, protocols, sims);
   const recentlyAssigned = completions.recentlyAssignedIds(2);
   const pillarWeights = resolvePillarWeightsForSport(config, input.sportId);
-  const drivingPillar = pickWorstGapPillar(
-    pillarRepCounts,
+  const protocolPillarRepCounts = completions.byPillarByKind?.protocol ?? pillarRepCounts;
+  const simPillarRepCounts = completions.byPillarByKind?.sim ?? pillarRepCounts;
+  const protocolDrivingPillar = pickWorstGapPillar(
+    protocolPillarRepCounts,
+    pillarWeights,
+    config.frequencyTargetsByLevel,
+    protocols,
+  );
+  const simDrivingPillar = pickWorstGapPillar(
+    simPillarRepCounts,
     pillarWeights,
     config.frequencyTargetsByLevel,
     protocols,
@@ -158,7 +233,7 @@ export const generateDailyAssignment = async (
 
   const protocolPick = pickAsset({
     pool: protocols,
-    drivingPillar,
+    drivingPillar: protocolDrivingPillar,
     completions,
     overrides,
     recentlyAssigned,
@@ -168,7 +243,7 @@ export const generateDailyAssignment = async (
 
   const simPick = pickAsset({
     pool: sims,
-    drivingPillar,
+    drivingPillar: simDrivingPillar,
     completions,
     overrides,
     recentlyAssigned,
@@ -185,7 +260,7 @@ export const generateDailyAssignment = async (
   const protocolIntent = buildCurriculumAssignmentIntent({
     kind: 'protocol',
     assetLabel: protocolLabel,
-    drivingPillar,
+    drivingPillar: protocolDrivingPillar,
     cognitivePillar: protocolPick.cognitivePillar,
     progressionLevel: protocolPick.progressionLevel,
     actualReps: protocolPick.actualReps,
@@ -195,7 +270,7 @@ export const generateDailyAssignment = async (
   const simIntent = buildCurriculumAssignmentIntent({
     kind: 'simulation',
     assetLabel: simLabel,
-    drivingPillar,
+    drivingPillar: simDrivingPillar,
     cognitivePillar: simPick.cognitivePillar,
     progressionLevel: simPick.progressionLevel,
     actualReps: simPick.actualReps,
@@ -205,9 +280,19 @@ export const generateDailyAssignment = async (
 
   const generatorNotes: string[] = [];
   generatorNotes.push(
-    `Driving pillar: ${drivingPillar} (worst-gap from baseline of ${
+    `Protocol driving pillar: ${protocolDrivingPillar} (protocol track from ${
+      protocolPillarRepCounts.composure
+    }/${protocolPillarRepCounts.focus}/${protocolPillarRepCounts.decision} composure/focus/decision).`,
+  );
+  generatorNotes.push(
+    `Sim driving pillar: ${simDrivingPillar} (sim track from ${
+      simPillarRepCounts.composure
+    }/${simPillarRepCounts.focus}/${simPillarRepCounts.decision} composure/focus/decision).`,
+  );
+  generatorNotes.push(
+    `Combined pillar balance: ${
       pillarRepCounts.composure
-    }/${pillarRepCounts.focus}/${pillarRepCounts.decision} composure/focus/decision).`,
+    }/${pillarRepCounts.focus}/${pillarRepCounts.decision} composure/focus/decision.`,
   );
   if (protocolPick.coachOverrideId) {
     generatorNotes.push(`Coach override applied for protocol: ${protocolPick.coachOverrideId}`);
@@ -280,7 +365,7 @@ export const generateDailyAssignment = async (
       protocolLabel,
       cognitivePillar: protocolPick.cognitivePillar,
       progressionLevel: protocolPick.progressionLevel,
-      drivingPillar,
+      drivingPillar: protocolDrivingPillar,
       rationale: protocolPick.rationale,
       curriculumIntent: protocolIntent,
       coachOverrideApplied: protocolPick.coachOverrideId,
@@ -290,7 +375,7 @@ export const generateDailyAssignment = async (
       simName: simLabel,
       cognitivePillar: simPick.cognitivePillar,
       progressionLevel: simPick.progressionLevel,
-      drivingPillar,
+      drivingPillar: simDrivingPillar,
       rationale: simPick.rationale,
       curriculumIntent: simIntent,
       coachOverrideApplied: simPick.coachOverrideId,
@@ -374,7 +459,7 @@ const fetchLast30DaysCompletions = async (
     collection(db, DAILY_ASSIGNMENTS_COLLECTION),
     where('athleteId', '==', athleteUserId),
     orderBy('createdAt', 'desc'),
-    limit(20),
+    limit(200),
   );
 
   let events: Array<Record<string, unknown>> = [];
@@ -393,26 +478,54 @@ const fetchLast30DaysCompletions = async (
   }
 
   const byAssetId = new Map<string, number>();
-  const byPillar: Record<TaxonomyPillar, number> = {
-    [TaxonomyPillar.Composure]: 0,
-    [TaxonomyPillar.Focus]: 0,
-    [TaxonomyPillar.Decision]: 0,
+  const byPillar = emptyPillarCounts();
+  const byPillarByKind = {
+    protocol: emptyPillarCounts(),
+    sim: emptyPillarCounts(),
   };
+  const completedAssignmentIdsFromEvents = new Set<string>();
 
   for (const ev of events) {
+    if (typeof ev.assignmentId === 'string' && ev.assignmentId) {
+      completedAssignmentIdsFromEvents.add(ev.assignmentId);
+    }
     // Resolve which asset id this event was for. Event docs reference
     // assignment by `assignmentId`; we resolve via assignment lookup at
     // most once per event. For Phase I Part 1 we use the inlined fields
     // when available (chosenCandidateId on event), else skip.
-    const assetId = (ev.chosenCandidateId as string | undefined) ||
-      (ev.protocolId as string | undefined) ||
-      (ev.simSpecId as string | undefined);
+    const assetId = eventAssetId(ev);
     if (assetId) {
       byAssetId.set(assetId, (byAssetId.get(assetId) || 0) + 1);
     }
-    const pillarFromEvent = ev.cognitivePillar as TaxonomyPillar | undefined;
+    const pillarFromEvent = eventPillar(ev);
     if (pillarFromEvent && byPillar[pillarFromEvent] !== undefined) {
       byPillar[pillarFromEvent] += 1;
+      const kind = eventAssignmentKind(ev);
+      if (kind) {
+        byPillarByKind[kind][pillarFromEvent] += 1;
+      }
+    }
+  }
+
+  for (const assignment of recentAssignments) {
+    const assignmentId = assignment.id as string | undefined;
+    const assignmentSourceDate = assignment.sourceDate as string | undefined;
+    if (!assignmentId || completedAssignmentIdsFromEvents.has(assignmentId)) continue;
+    if (!assignmentSourceDate || assignmentSourceDate < dateKey(new Date(windowStartMs)) || assignmentSourceDate > sourceDate) continue;
+    if (!isCompletedAssignmentRecord(assignment)) continue;
+
+    const assetId = eventAssetId(assignment);
+    if (assetId) {
+      byAssetId.set(assetId, (byAssetId.get(assetId) || 0) + 1);
+    }
+
+    const pillarFromAssignment = eventPillar(assignment);
+    if (pillarFromAssignment && byPillar[pillarFromAssignment] !== undefined) {
+      byPillar[pillarFromAssignment] += 1;
+      const kind = eventAssignmentKind(assignment);
+      if (kind) {
+        byPillarByKind[kind][pillarFromAssignment] += 1;
+      }
     }
   }
 
@@ -432,7 +545,7 @@ const fetchLast30DaysCompletions = async (
     return set;
   };
 
-  return { byAssetId, byPillar, recentlyAssignedIds };
+  return { byAssetId, byPillar, byPillarByKind, recentlyAssignedIds };
 };
 
 const fetchEligibleProtocols = async (): Promise<PulseCheckProtocolDefinition[]> => {

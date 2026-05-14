@@ -118,7 +118,7 @@ const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, genera
   const teamRead = policy ? composeTeamRead(report.dimensionState || {}, policy) : undefined;
   const teamSynthesis = sanitizeCoachReportCopyForMentalLayer(
     report.teamSynthesis || fallbackSynthesis(report),
-    'This week, the physical pattern tells us where focus, composure, or decision-making may get harder. The coach should give simple language for that moment while staff owns the physical plan.'
+    'This week, the physical pattern tells us where focus, composure, or decision-making may get harder. The report should stop at the mental-performance moment and should not recommend changes to the physical plan.'
   );
   const calendarItems = buildCalendarItems(actionGate.rendered);
   const adherence = report.adherence || {

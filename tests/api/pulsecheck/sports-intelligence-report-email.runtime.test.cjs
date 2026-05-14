@@ -66,7 +66,7 @@ function createReportFixture(overrides = {}) {
         watchlist: [],
         coachActions: [],
         gameDayLookFors: [],
-        closer: 'Bring this into the Sunday staff plan and keep the first action simple.',
+        closer: 'Bring this into the Sunday coach review and keep the first action simple.',
         adherence: {
           deviceCoveragePct: 0.86,
           noraCompletionPct: 0.78,

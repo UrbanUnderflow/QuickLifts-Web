@@ -27,11 +27,39 @@ import {
 // ──────────────────────────────────────────────────────────────────────────────
 
 const PIPELINE_STEPS = [
-  ['1. Detect', 'Continuous device stream → activity-segmenter splits the day into candidate sessions when HR/movement crosses thresholds.', 'Sport-aware threshold profiles (sprinter: speed > 7 m/s; distance: HR > Z2 for 10+ min; basketball: sustained HR + jump cluster).'],
+  ['1. Detect', 'Timestamped primitive stream or explicit workout records → activity-segmenter splits the day into candidate sessions when HR/movement crosses thresholds.', 'Sport-aware threshold profiles (sprinter: speed > 7 m/s; distance: HR > Z2 for 10+ min; basketball: sustained HR + jump cluster). Daily rollups are excluded here.'],
   ['2. Classify', 'Each candidate session gets a session-type guess from its biometric signature (interval / steady / strength / game / scrimmage / recovery / unscheduled).', 'Classifier uses sport-aware feature templates; outputs class + a "this guess is solid / this guess is rough" tier.'],
   ['3. Match', 'Detected session is bound to a `team_schedule_event` and (when present) a `prescribed_session` from the Nora Context Capture layer.', 'Match by time-window overlap + sport context + (when GPS available) location proximity.'],
   ['4. Compare', 'When a `prescribed_session` matched, the executor compares device-detected blocks against prescribed blocks (executed 4 of 6 reps; pace 4% slower; 2 reps missing).', 'Comparison fan-out lives on the session_record so the load model and report generator can speak to deviation.'],
   ['5. Emit', 'Final `session_record` lands in Firestore with: detected blocks, classification, match status, prescribed-comparison delta, confidence tier, and a coach-voice summary line.', 'Single record consumed by load model, dimension-state engine, and report generator.'],
+];
+
+const SESSION_CANDIDATE_GATE_ROWS = [
+  [
+    'Accepted origin: timestamped primitives',
+    'Minute/sample bins with observed start/end, local timezone, HR/MET/activity class/cadence/ACC/distance coverage.',
+    'Can open a session_candidate when sustained signal and quiet-gap rules produce a real detectedStart/detectedEnd.',
+  ],
+  [
+    'Accepted origin: explicit workout/session record',
+    'HealthKit workout, vendor workout, QuickLifts workout completion, scheduled session confirmed by athlete/coach, or app-started session runtime.',
+    'Can create or seed a session_candidate because the source already provides a real window and provenance.',
+  ],
+  [
+    'Rejected origin: daily rollup only',
+    'Steps, calories, active minutes, activity-class counts, max/avg MET, date-level Polar/Oura summaries.',
+    'Evidence only. Can support a reviewer clue or targeted question, but cannot create a session_record or athlete-facing training-load row.',
+  ],
+  [
+    'Local-time requirement',
+    'Every candidate must carry UTC timestamps for ordering plus localDateKey/timezone for display and day attribution.',
+    'Prevents UTC/local drift and stops a late-night boundary from becoming a fake workout window.',
+  ],
+  [
+    'Holding-back behavior',
+    'If primitives imply movement but cannot segment a real window, the system may hold a debug/reviewer candidate with missingContext.',
+    'No coach report assertion, no load contribution, and no athlete-facing bucket until a real window or confirmation exists.',
+  ],
 ];
 
 const DETECTION_SIGNATURES = [
@@ -104,6 +132,10 @@ const COACH_VOICE_NUDGES = [
 
 const FAILURE_MODES = [
   [
+    'Only daily rollup evidence exists',
+    'The system records daily activity evidence and may note "training-like movement, no session window" in reviewer/debug surfaces. It does not emit a session_record, does not count load, and does not synthesize a start/end time.',
+  ],
+  [
     'Device sees a session that doesn\'t look like training',
     'A long walk during a campus tour, a yoga class, a dance party. Classifier marks it `non_training` — kept on the record but excluded from training load. Coach can confirm or correct via Nora.',
   ],
@@ -145,8 +177,8 @@ const PulseCheckSessionDetectionMatchingSpecTab: React.FC = () => {
       <DocHeader
         eyebrow="Pulse Sports Intelligence"
         title="Session Detection + Matching"
-        version="Version 0.1 | April 25, 2026"
-        summary="The bridge between what the device saw and what the coach planned. Detects training and competition sessions from continuous biometric signals, classifies them by activity signature, matches them to the schedule + prescribed-plan records produced by Nora Context Capture, compares execution against prescribed structure, and emits the session_record consumed by the load model and report generator. Designed so device-only inference still produces a usable read; richer context just tightens it."
+        version="Version 0.2 | May 13, 2026"
+        summary="The bridge between what the device saw and what the coach planned. Detects training and competition sessions from timestamped biometric primitives or explicit workout/session records, classifies them by activity signature, matches them to the schedule + prescribed-plan records produced by Nora Context Capture, compares execution against prescribed structure, and emits the session_record consumed by the load model and report generator. Daily rollups can support context, but they cannot create sessions."
         highlights={[
           {
             title: 'Device Sees It First',
@@ -164,8 +196,8 @@ const PulseCheckSessionDetectionMatchingSpecTab: React.FC = () => {
       />
 
       <RuntimeAlignmentPanel
-        role="The bridge layer between device data (Health Context Source Records) and the coach-context records (team_schedule_event, prescribed_session, coach_observation). Owns session detection, classification, schedule + plan matching, prescribed-comparison logic, and confidence-tier propagation."
-        sourceOfTruth="This page owns the pipeline (detect → classify → match → compare → emit), the per-sport detection signatures, the matching rules, the prescribed-comparison shape, and the session_record schema. Aggregation + Inference Contract owns thresholds for downstream confidence; Nora Context Capture owns the inputs this layer consumes."
+        role="The bridge layer between timestamped device primitives / explicit workout records and the coach-context records (team_schedule_event, prescribed_session, coach_observation). Owns session detection, classification, schedule + plan matching, prescribed-comparison logic, and confidence-tier propagation."
+        sourceOfTruth="This page owns the pipeline (detect → classify → match → compare → emit), the session-candidate gate, the per-sport detection signatures, the matching rules, the prescribed-comparison shape, and the session_record schema. Aggregation + Inference Contract owns thresholds for downstream confidence; Nora Context Capture owns the inputs this layer consumes."
         masterReference="session_record lands in Firestore at `athletes/{athleteId}/sessionRecords/{sessionRecordId}` with a denormalized team-level index at `teams/{teamId}/sessionRecords` for report generation."
         relatedDocs={[
           'Sports Intelligence Layer',
@@ -183,6 +215,18 @@ const PulseCheckSessionDetectionMatchingSpecTab: React.FC = () => {
         <DataTable
           columns={['Step', 'What Happens', 'Notes']}
           rows={PIPELINE_STEPS}
+        />
+      </SectionBlock>
+
+      <SectionBlock icon={ShieldCheck} title="Session-Candidate Gate">
+        <InfoCard
+          title="No Window, No Session"
+          accent="amber"
+          body="Session Detection is downstream of the evidence split. It accepts timestamped primitives and explicit workout/session records. It rejects date-level rollups as session origins, because a day summary can show movement happened without proving when it happened."
+        />
+        <DataTable
+          columns={['Gate', 'Definition', 'Behavior']}
+          rows={SESSION_CANDIDATE_GATE_ROWS}
         />
       </SectionBlock>
 

@@ -62,7 +62,7 @@ const PIPELINE_STEPS = [
   {
     title: 'Detect',
     owner: 'Device + primitive extraction',
-    body: 'Continuous signals create candidate sessions from HR, movement density, acceleration bursts, device coverage, and time windows. Output is evidence, not a hard claim.',
+    body: 'Timestamped signals create candidate sessions from HR, movement density, acceleration bursts, device coverage, and real time windows. Daily rollups remain evidence only. Output is evidence, not a hard claim.',
   },
   {
     title: 'Contextualize',
@@ -89,6 +89,34 @@ const PIPELINE_STEPS = [
     owner: 'Athlete pattern model',
     body: 'Repeated confirmations calibrate future reads: same team practice window, same athlete lift pattern, same coach schedule rhythm, same sport-specific session signature.',
   },
+];
+
+const EVIDENCE_TO_MEANING_ROWS = [
+  [
+    'Daily rollup',
+    'Date-level facts such as steps, calories, active minutes, activity-class counts, sleep, recovery, and source coverage.',
+    'Context clue only. It may trigger "we saw training-like movement today" in reviewer/debug surfaces, but it cannot become a session, bucket, or load contribution.',
+  ],
+  [
+    'Timestamped primitive window',
+    'A segmented start/end window built from minute/sample-level HR, MET, activity class, cadence, distance, ACC bursts, rest gaps, and coverage.',
+    'Eligible for session_candidate and training-load bucket because it proves when the activity happened.',
+  ],
+  [
+    'Explicit session source',
+    'HealthKit workout, vendor workout, QuickLifts workout completion, app-started workout runtime, or athlete/coach-confirmed scheduled session.',
+    'Eligible for session_candidate because the source gives a real window and provenance. Context still decides final meaning.',
+  ],
+  [
+    'Ambiguous movement',
+    'Training-like evidence exists, but missing timestamps, poor coverage, or conflicting signals prevent segmentation.',
+    'Hold back or ask a targeted question only if the answer changes classification, confidence, load, recommendation, or reviewer delivery posture.',
+  ],
+  [
+    'Final meaning',
+    'A session_record with evidenceRefs, contextRefs, confirmationRefs, actor precedence, confidence tier, and load contribution.',
+    'Downstream truth. It is never created from aggregate-only movement evidence.',
+  ],
 ];
 
 const CLARIFICATION_TRIGGERS = [
@@ -182,8 +210,13 @@ const STRUCTURED_RECORDS = [
 
 const TECHNICAL_IMPLEMENTATION_ROWS = [
   [
+    'Daily evidence ledger',
+    'Write date-keyed aggregate activity evidence separately from timestamped primitives. Mark aggregate-only source records as not session-candidate eligible.',
+    'Pulse Check iOS / shared Fit With Pulse health services',
+  ],
+  [
     'iOS primitive extractor',
-    'Generalize the current lift/Polar work into a SessionPrimitiveAccumulator for HR zones, movement density, accel bursts, rest gaps, step/distance, and device coverage.',
+    'Generalize the current lift/Polar work into a SessionPrimitiveAccumulator for timestamped HR zones, movement density, accel bursts, rest gaps, step/distance, and device coverage.',
     'Pulse Check iOS / shared Fit With Pulse health services',
   ],
   [
@@ -378,6 +411,8 @@ const CURRICULUM_BOUNDARY_ROWS = [
 
 const PRODUCT_RULES = [
   'The device layer provides evidence; Nora plus athlete/coach context provides meaning.',
+  'Daily summaries are not sessions. No timestamped evidence or explicit session source means no athlete-facing session card, no bucket, and no load contribution.',
+  'Never synthesize a session window from aggregate active minutes, day-boundary math, snapshot end, or refresh time.',
   'When confidence is low, do not guess harder. Ask better.',
   'Nora should ask only the smallest useful question, and only when the answer can change classification, confidence, load, or recommendation.',
   'Athlete and coach answers are data with provenance. They must be saved as structured confirmation events, not buried in chat transcripts.',
@@ -402,7 +437,7 @@ const BUILD_ORDER = [
   ],
   [
     '4. Extract primitives',
-    'Move Polar lift/run learnings into a sport-agnostic primitive accumulator with device coverage, HR, movement, accel, and rest windows.',
+    'Move Polar lift/run learnings into a sport-agnostic primitive accumulator with device coverage, HR, movement, accel, rest windows, local timezone, and explicit separation from daily rollups.',
   ],
   [
     '5. Wire sport profiles',
@@ -423,6 +458,7 @@ const BUILD_ORDER = [
 ];
 
 const EXIT_CRITERIA = [
+  'Aggregate-only daily movement evidence can never create a session_candidate, session_record, training-load bucket, or athlete-facing activity card.',
   'A device-only lift, practice-like session, or conditioning session can become a session_candidate without a hard final claim.',
   'Nora can ask the athlete or coach one targeted question when the missing answer changes the read and friction caps allow it.',
   'Athlete text/voice context is parsed and saved as context_confirmation_event, then visible on the final session_record.',
@@ -441,8 +477,8 @@ const PulseCheckContextualSportsDetectionEngineSpecTab: React.FC = () => {
       <DocHeader
         eyebrow="Pulse Sports Intelligence"
         title="Contextual Sports Detection Engine"
-        version="Version 0.2 | May 1, 2026"
-        summary="The differentiating Sports Intelligence loop: sensor evidence starts the read, but athlete profile, coach context, Nora clarification, and historical corrections turn ambiguous activity into sport-specific meaning. Pulse Check does not depend solely on the wearable. It uses the wearable as evidence, then intelligently closes gaps with the athlete and coach."
+        version="Version 0.3 | May 13, 2026"
+        summary="The differentiating Sports Intelligence loop: timestamped sensor evidence starts the read, but athlete profile, coach context, Nora clarification, and historical corrections turn ambiguous activity into sport-specific meaning. Pulse Check does not depend solely on the wearable. It uses the wearable as evidence, separates daily rollups from session candidates, then intelligently closes gaps with the athlete and coach."
         highlights={[
           {
             title: 'Device Gives Evidence, Nora Gives Meaning',
@@ -493,6 +529,15 @@ const PulseCheckContextualSportsDetectionEngineSpecTab: React.FC = () => {
 
       <SectionBlock icon={GitMerge} title="Five Context Layers">
         <DataTable columns={['Layer', 'What It Contains', 'Why It Matters']} rows={LAYER_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={ShieldCheck} title="Evidence To Meaning Boundary">
+        <InfoCard
+          title="Daily Evidence Is Not Session Truth"
+          accent="amber"
+          body="The contextual engine may use a daily rollup as a clue, but it cannot turn that clue into a session. A final session needs a real window, an explicit workout/session source, or a confirmation event with provenance."
+        />
+        <DataTable columns={['Evidence Type', 'What It Means', 'Allowed Product Behavior']} rows={EVIDENCE_TO_MEANING_ROWS} />
       </SectionBlock>
 
       <SectionBlock icon={Workflow} title="Pipeline: Detect -> Contextualize -> Ask -> Confirm -> Interpret -> Learn">

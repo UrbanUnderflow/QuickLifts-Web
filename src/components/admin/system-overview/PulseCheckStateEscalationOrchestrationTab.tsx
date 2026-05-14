@@ -20,13 +20,13 @@ const DECISION_ROWS = [
 const DASHBOARD_ROWS = [
   ['State / readiness', 'Green / Yellow / Red distribution, sentiment and fatigue trends, protocol demand', 'Shows how the roster is trending right now'],
   ['Performance / profile', 'Skill trends, family scores, modifier sensitivities, sim and trial outputs', 'Shows what the athlete is good at and where they are improving'],
-  ['Escalation / safety', 'Tier events, active escalations, support flags, handoff status', 'Shows when staff or clinical action is needed'],
+  ['Escalation / safety', 'Tier events, active escalations, support flags, handoff status', 'Shows when coach, reviewer, or clinical action is needed'],
 ];
 
 const SUPPORT_DEFAULT_ROWS = [
   ['Activation rule', 'Use one global default to start: persistent red activates after 3 consecutive red snapshots or 4 red snapshots within the latest 7 state-bearing sessions.'],
   ['Clear rule', 'Clear the support flag after 2 consecutive non-red snapshots and no active Tier 1-3 escalation state.'],
-  ['Programming effect', 'High-pressure exposure, max-intensity modifiers, and Trial scheduling should be reduced or deferred while the support flag is active unless explicitly staff-approved.'],
+  ['Programming effect', 'High-pressure exposure, max-intensity modifiers, and Trial scheduling should pause while the support flag is active unless the configured reviewer or clinician explicitly clears them.'],
   ['Escalation handoff rule', 'If support visibility is active and explicit safety language or elevated-risk admin conditions appear, the safety lane immediately takes over.'],
 ];
 
@@ -126,7 +126,7 @@ const PulseCheckStateEscalationOrchestrationTab: React.FC = () => {
       <SectionBlock icon={Users} title="Persistent-Red Support Logic">
         <CardGrid columns="md:grid-cols-3">
           <InfoCard title="Trigger" accent="amber" body="Use one global pilot default: 3 consecutive red snapshots or 4 red snapshots within the latest 7 state-bearing sessions." />
-          <InfoCard title="Response" accent="green" body="Elevate coach or support-staff visibility, recommend human follow-up, reduce programming aggressiveness, and track whether the pattern resolves." />
+          <InfoCard title="Response" accent="green" body="Elevate coach or named support-role visibility, recommend human follow-up, reduce programming aggressiveness, and track whether the pattern resolves." />
           <InfoCard title="Boundary" accent="red" body="Persistent red is a support flag, not a diagnosis and not an AuntEDNA handoff by default." />
         </CardGrid>
       </SectionBlock>

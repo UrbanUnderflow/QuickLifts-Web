@@ -15,7 +15,7 @@ Every athlete-facing Nora response must pass these checks before it ships:
 10. Decision rationale: before surfacing an assignment, explain why the athlete's reply, context markers, or readiness data led to that choice.
 11. Plain athlete language: write like a coach talking to a smart middle schooler. Avoid filler terms like "baseline", "block", "push signal", "pullback signal", "accessories", "finishers", or "normal-start read"; say the actual mental action in everyday words.
 12. Mental-performance boundary: Nora may connect physical state to focus, composure, confidence, decision-making, and habits. Nora must not prescribe physical programming changes such as adding sets, cutting reps, lowering weight, shortening minutes, or changing the athlete's workout.
-13. Spell out the coaching moment: do not write in code. If the copy says "reset cue", "mental cue", "body-state read", "mental install", or any sport shorthand, rewrite it into a full sentence that says when the moment happens, what the athlete may feel or do, what the coach should say/do, and what staff still owns. Example: "When the game gets late in the shot clock and the guards are tired or mentally cluttered, don't give them a bunch of coaching points. Give them one simple mental reset phrase they can use in that moment."
+13. Spell out the coaching moment: do not write in code. If the copy says "reset cue", "mental cue", "body-state read", "mental install", or any sport shorthand, rewrite it into a full sentence that says when the moment happens, what the athlete may feel or do, and the one simple mental-performance phrase or routine the coach should give. Do not add vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff unless a real named role and decision are present in the source data. Example: "When the game gets late in the shot clock and the guards are tired or mentally cluttered, don't give them a bunch of coaching points. Give them one simple mental reset phrase they can use in that moment."
 `;
 
 const tradeMarkers = [
@@ -186,22 +186,22 @@ const repetitionStopwords = new Set([
 ]);
 
 const replacements: Array<[string, string]> = [
-  ['How you feeling?', "How are you feeling right now so I can set the pace for today's session?"],
-  ['How are you feeling?', "How are you feeling right now so I can set the pace for today's session?"],
-  ['how you feeling?', "how are you feeling right now so I can set the pace for today's session?"],
-  ['how are you feeling?', "how are you feeling right now so I can set the pace for today's session?"],
-  ['how are things landing today?', "how are you feeling right now so I can set the pace for today's session?"],
+  ['How you feeling?', "How are you feeling right now?"],
+  ['How are you feeling?', "How are you feeling right now?"],
+  ['how you feeling?', "how are you feeling right now?"],
+  ['how are you feeling?', "how are you feeling right now?"],
+  ['how are things landing today?', "how are you feeling right now?"],
   ["Recovery's workable", "No recovery red flags for today's session"],
   ["recovery's workable", "no recovery red flags for today's session"],
   ['recovery is workable', "no recovery red flags for today's session"],
-  ['keep the rep clean', "keep today's session paced"],
-  ['train clean today', "start today's session at a controlled pace"],
-  ['train clean', "start today's session at a controlled pace"],
-  ['use it cleanly', "use your answer to set today's pace"],
+  ['keep the rep clean', "keep today's session simple"],
+  ['train clean today', "start today's session with one simple reset"],
+  ['train clean', "start today's session with one simple reset"],
+  ['use it cleanly', "use your answer to understand today"],
   ['spend it clean', "put today's effort into the named sim"],
-  ['keep today clean and clear', "keep today's protocol and sim at the normal pace"],
-  ['work around it', "use that answer to adjust today's pace"],
-  ['build today around it', "use that answer to choose today's first pressure level"],
+  ['keep today clean and clear', "do today's protocol and sim in order"],
+  ['work around it', "use that answer to understand today"],
+  ['build today around it', "use that answer to understand today"],
   ['Nora should aim for a steadier start time', 'Tonight, protect a 30-minute bedtime window'],
   ['nora should aim for a steadier start time', 'tonight, protect a 30-minute bedtime window'],
   ['Nora should', 'I should'],
@@ -364,7 +364,7 @@ export const repairObviousNoraVoiceFailures = (text: string): string => {
 
   const lowered = repaired.toLowerCase();
   if (repaired.includes('?') && !tradeMarkers.some((marker) => lowered.includes(marker))) {
-    repaired += " I'll use your answer to set the pace for today's session.";
+    repaired += " Your answer gives me context for today's session.";
   }
 
   return repaired;
@@ -373,7 +373,7 @@ export const repairObviousNoraVoiceFailures = (text: string): string => {
 export const defaultNoraVoiceRubricFallback = (text: string): string => {
   const lowered = String(text || '').toLowerCase();
   if (isAssignmentDecisionText(lowered)) {
-    return "I'm choosing today's session because your check-in points to focused reset work right now. Let's start today's session.";
+    return "Today's session is here because your check-in points to focused reset work right now. Let's start today's session.";
   }
   if (
     lowered.includes('headspace') ||
@@ -381,12 +381,12 @@ export const defaultNoraVoiceRubricFallback = (text: string): string => {
     lowered.includes('confidence') ||
     lowered.includes('confident')
   ) {
-    return "I heard the prep signal. Tell me the one part of today's session that needs the most precision so I can set the pace.";
+    return "I heard the prep signal. Tell me the one part of today's session that needs the most attention.";
   }
   if (String(text || '').includes('?')) {
-    return "How are you feeling right now so I can set the pace for today's session?";
+    return "How are you feeling right now?";
   }
-  return "I need to make this concrete: tell me how you feel right now, and I'll set the pace for today's session.";
+  return "I need to make this concrete: tell me how you feel right now.";
 };
 
 export const enforceNoraVoiceRubric = (

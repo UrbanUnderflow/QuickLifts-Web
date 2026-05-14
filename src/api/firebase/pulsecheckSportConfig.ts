@@ -580,7 +580,7 @@ const soccerReportPolicy: PulseCheckSportReportPolicy = {
     { id: 'underfueling_during_match_block', label: 'Underfueling during heavy match block', inputFamilies: ['nutrition_hydration_context', 'training_load'], linkedDimensions: ['composure', 'focus'] },
   ],
   coachActions: [
-    { id: 'modulate_small_sided_volume_by_position', label: 'Review small-sided volume with staff by position', linkedSignals: ['high_speed_run_spike_low_recovery', 'fixture_congestion_load'] },
+    { id: 'modulate_small_sided_volume_by_position', label: 'Use position-specific small-sided context to time mental reset language', linkedSignals: ['high_speed_run_spike_low_recovery', 'fixture_congestion_load'] },
     { id: 'use_role_specific_scanning_cues', label: 'Use role-specific scanning language', linkedSignals: ['scanning_first_touch_pressure'] },
     { id: 'reinforce_next_action_communication', label: 'Reinforce next-action communication after errors', linkedSignals: ['composure_decline_after_mistakes', 'goalkeeper_confidence_communication'] },
   ],
@@ -592,7 +592,7 @@ const soccerReportPolicy: PulseCheckSportReportPolicy = {
   languagePosture: {
     summary: 'Match-phase language focused on build-up, transition, final third, defending, set pieces, and next-action communication.',
     recommendedLanguage: ['build-up', 'transition', 'final third', 'defending', 'set piece', 'next action', 'shape', 'press', 'cover'],
-    mustAvoid: ['One conditioning recommendation for all positions', 'Technique overreach without tactical role', 'Body-weight advice without staff context'],
+    mustAvoid: ['One conditioning recommendation for all positions', 'Technique overreach without tactical role', 'Body-weight advice without coach-provided context'],
   },
   dimensionMap: {
     focus: ['scanning', 'first touch under pressure', 'set-piece assignment'],
@@ -658,7 +658,7 @@ const footballReportPolicy: PulseCheckSportReportPolicy = {
   languagePosture: {
     summary: 'Direct position-room language focused on unit, assignment, snap, pre-snap, next play, and explosive intent.',
     recommendedLanguage: ['unit', 'assignment', 'snap', 'pre-snap', 'next play', 'install', 'explosive', 'finish'],
-    mustAvoid: ['Concussion or return-to-play advice', 'Flattening positions into one load model', 'Weight-change recommendations without staff context'],
+    mustAvoid: ['Concussion or return-to-play advice', 'Flattening positions into one load model', 'Weight-change recommendations without coach-provided context'],
   },
   dimensionMap: {
     focus: ['assignment clarity', 'pre-snap routine', 'position-room install'],
@@ -1395,7 +1395,7 @@ const gymnasticsReportPolicy: PulseCheckSportReportPolicy = {
   coachActions: [
     { id: 'use_safe_progression_language', label: 'Use safe, precise progression language', linkedSignals: ['fear_block_routine_confidence', 'routine_readiness'] },
     { id: 'separate_courage_from_readiness', label: 'Separate courage from readiness', linkedSignals: ['fear_block_escalation', 'air_awareness_confidence'] },
-    { id: 'encourage_support_staff_communication', label: 'Encourage support-staff communication when needed', linkedSignals: ['restrictive_eating_pressure', 'perfectionism_spiral'] },
+    { id: 'encourage_support_staff_communication', label: 'Encourage named support communication when needed', linkedSignals: ['restrictive_eating_pressure', 'perfectionism_spiral'] },
   ],
   earlyWarningFamilies: [
     { id: 'restrictive_eating_pattern', label: 'Restrictive eating pattern', inputFamilies: ['sentiment', 'nutrition_context'] },
@@ -1637,7 +1637,7 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       noraContext: 'Coach soccer through position, tactical system, scanning, decision windows, aerobic-repeat sprint demands, and emotional control after mistakes. Goalkeepers require separate confidence, communication, and reaction framing.',
       macraNutritionContext: 'Soccer fueling should reflect match minutes, high-speed running, heat, travel, and fixture congestion. Prioritize glycogen restoration, hydration, and recovery timing around matches and heavy training.',
       riskFlags: ['fixture congestion', 'hamstring or groin load', 'confidence after mistakes', 'underfueling during high-speed blocks', 'heat stress', 'travel fatigue'],
-      restrictedAdvice: ['Do not give one-size-fits-all conditioning advice across positions.', 'Do not suggest aggressive body-weight changes in-season without performance staff context.', 'Do not overcoach technique without knowing tactical role.'],
+      restrictedAdvice: ['Do not give one-size-fits-all conditioning advice across positions.', 'Do not suggest aggressive body-weight changes in-season without coach-provided context.', 'Do not overcoach technique without knowing tactical role.'],
       recommendedLanguage: ['Use match-phase language: build-up, transition, final third, defending.', 'Frame mindset around the next action and communication.', 'Connect biomechanics to repeatable field behaviors.'],
     },
     reportPolicy: soccerReportPolicy,
@@ -1677,8 +1677,8 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       noraContext: 'Coach football by unit, position, playbook responsibility, collision exposure, explosive intent, and arousal control. Prioritize assignment clarity and repeatable pre-snap or pre-play routines.',
       macraNutritionContext: 'Football nutrition should account for position body composition goals, collision recovery, heat, camp load, and weekly game rhythm. Fueling differs sharply between skill, big-skill, linemen, and specialists.',
       riskFlags: ['collision fatigue', 'playbook overload', 'weight manipulation pressure', 'camp under-recovery', 'heat stress', 'over-arousal', 'return-to-contact risk'],
-      restrictedAdvice: ['Do not recommend body-weight changes without position and staff context.', 'Do not give medical concussion or injury-clearance advice.', 'Do not flatten all positions into the same conditioning or nutrition plan.'],
-      recommendedLanguage: ['Use direct position-room language.', 'Translate psychology into pre-snap routines and next-play resets.', 'Respect staff, scheme, and return-to-play boundaries.'],
+      restrictedAdvice: ['Do not recommend body-weight changes without position and coach-provided context.', 'Do not give medical concussion or injury-clearance advice.', 'Do not flatten all positions into the same conditioning or nutrition plan.'],
+      recommendedLanguage: ['Use direct position-room language.', 'Translate psychology into pre-snap routines and next-play resets.', 'Respect scheme and return-to-play boundaries.'],
     },
     reportPolicy: footballReportPolicy,
   }),
@@ -1716,7 +1716,7 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       macraNutritionContext: 'Baseball nutrition should respect long game windows, travel, heat, bullpen timing, and throwing recovery. Keep fueling practical for dugout access and avoid heavy choices that disrupt game feel.',
       riskFlags: ['throwing workload spike', 'slump rumination', 'command anxiety', 'long-game underfueling', 'travel fatigue', 'heat and hydration issues'],
       restrictedAdvice: ['Do not diagnose throwing pain or prescribe rehab.', 'Do not rebuild swing or pitching mechanics without coach context.', 'Do not ignore pitcher versus position-player demands.'],
-      recommendedLanguage: ['Use pitch-to-pitch and at-bat-to-at-bat language.', 'Emphasize routines, approach, and controllable reads.', 'Keep mechanical guidance plain, conservative, and staff-owned.'],
+      recommendedLanguage: ['Use pitch-to-pitch and at-bat-to-at-bat language.', 'Emphasize routines, approach, and controllable reads.', 'Keep mechanical guidance plain, conservative, and out of report scope.'],
     },
     reportPolicy: baseballReportPolicy,
   }),
@@ -1903,7 +1903,7 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       noraContext: 'Coach track and field by event group first. Sprint, hurdle, distance, jump, throw, and multi-event athletes have different arousal, rhythm, technical, and energy-system needs.',
       macraNutritionContext: 'Track nutrition should reflect event group, meet schedule, body composition pressure, training phase, and heat. Distance athletes, sprinters, jumpers, and throwers should not receive identical fueling advice.',
       riskFlags: ['event mismatch', 'peaking anxiety', 'hamstring or tendon load', 'underfueling in distance athletes', 'weight pressure', 'technical overthinking', 'meet-day timing errors'],
-      restrictedAdvice: ['Do not give generic running advice without event group.', 'Do not prescribe injury rehab.', 'Do not recommend weight changes without event, phase, and staff context.'],
+      restrictedAdvice: ['Do not give generic running advice without event group.', 'Do not prescribe injury rehab.', 'Do not recommend weight changes without event, phase, and coach-provided context.'],
       recommendedLanguage: ['Use event-specific language and concise technical phrases.', 'Separate arousal, rhythm, and execution.', 'Respect peaking and taper timing.'],
     },
     reportPolicy: trackFieldReportPolicy,
@@ -2156,7 +2156,7 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       macraNutritionContext: 'Gymnastics nutrition should support growth, recovery, concentration, and high-skill training without reinforcing harmful body pressure. Flag restrictive patterns and prioritize safe fueling language.',
       riskFlags: ['fear block', 'landing load spike', 'restrictive eating pressure', 'growth and recovery sensitivity', 'overuse pain', 'meet anxiety', 'perfectionism spiral'],
       restrictedAdvice: ['Do not encourage weight loss or leanness as a performance shortcut.', 'Do not prescribe injury rehab or return-to-skill clearance.', 'Do not shame fear responses.'],
-      recommendedLanguage: ['Use psychologically safe, precise language.', 'Separate courage, readiness, and technical progression.', 'Reinforce communication with coach and support staff.'],
+      recommendedLanguage: ['Use psychologically safe, precise language.', 'Separate courage, readiness, and technical progression.', 'Reinforce communication with the coach and named support roles.'],
     },
     reportPolicy: gymnasticsReportPolicy,
   }),
@@ -2871,13 +2871,13 @@ export const PULSECHECK_COACH_LANGUAGE_UNIVERSAL_BANLIST = [
 
 const PHYSICAL_PROGRAMMING_BOUNDARY_FALLBACKS = {
   firstAction:
-    'Spell out the coaching moment: name when it will show up, what the athlete may feel or do, and the one simple phrase or routine the coach should give. Staff owns any physical or tactical change',
+    'Spell out the coaching moment: name when it will show up, what the athlete may feel or do, and the one simple phrase or routine the coach should give. Do not recommend changes to warm-up, lineup, tactics, training, or recovery.',
   coachMove:
-    'When this shows up, do not pile on coaching points. Give the athlete one simple phrase or routine they can use in that moment, and let staff own any physical or tactical change.',
+    'When this shows up, do not pile on coaching points. Give the athlete one simple phrase or routine they can use in that moment. Do not add warm-up, lineup, tactics, training, or recovery instructions.',
   gameDay:
-    'If this shows up in the game, do not add a list of coaching points. Give one simple phrase the athlete can use right then; staff owns any physical or tactical decision.',
+    'If this shows up in the game, give one simple phrase the athlete can use right then. Do not add a warm-up, lineup, tactics, training, or recovery decision.',
   synthesis:
-    'This week, the physical pattern tells us where focus, composure, or decision-making may get harder. The coach should give simple language for that moment while staff owns the physical plan.',
+    'This week, the physical pattern tells us where focus, composure, or decision-making may get harder. The report should stop at the mental-performance moment and should not recommend changes to the physical plan.',
 };
 
 const PHYSICAL_PROGRAMMING_BOUNDARY_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
@@ -2914,6 +2914,11 @@ const PHYSICAL_PROGRAMMING_BOUNDARY_PATTERNS: Array<{ label: string; pattern: Re
 ];
 
 const COACH_REPORT_PLAIN_LANGUAGE_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+  {
+    label: 'anonymous staff handoff filler',
+    pattern:
+      /\b(?:review\b[^.?!]{0,80}\bwith staff|ask staff to|flag\b[^.?!]{0,80}\bto staff|for staff review|staff owns|let staff own|while staff owns|staff chooses|unless staff chooses|staff expected|staff targets|staff plan|staff-owned)\b/i,
+  },
   {
     label: 'coded coaching shorthand',
     pattern:

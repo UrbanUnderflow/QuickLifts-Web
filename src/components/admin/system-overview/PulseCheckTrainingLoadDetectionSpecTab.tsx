@@ -31,11 +31,12 @@ import {
 // ──────────────────────────────────────────────────────────────────────────────
 
 const PIPELINE_STEPS = [
-  ['1. Window', 'Continuous health-context-source-records (HR, ACC, MET, steps, distance, sleep) → activity-window detector splits the day into candidate windows when sustained activity crosses the rest baseline.', 'Window boundary heuristic: ≥3 min sustained MET ≥ 3.0 OR HR ≥ 50% reserve OR ACC dynamic magnitude > rest baseline. Quiet ≥ 5 min closes the window.'],
-  ['2. Fingerprint', 'Each candidate window is fingerprinted across HR statistics, ACC peak/variance, cadence, MET distribution, distance/GPS (when present), and duration.', 'Sport-agnostic feature snapshot. Same shape feeds Phase J classifier downstream — this layer just bakes it earlier so we can speak to the athlete before Phase J runs.'],
-  ['3. Bucket', 'Fingerprint maps to a high-confidence training-load bucket (8 total). Bucket selection prefers under-claim over over-claim: ambiguous windows fall back to the broader bucket.', 'Heuristic v0. v1 will retrain bucket thresholds on confirmed annotations. Buckets stay stable across versions; thresholds tune.'],
-  ['4. Card', 'Detected load surfaces on the Polar 360 sheet (FWP) and the athlete profile (PulseCheck) as a card: bucket name, detected window, headline metrics, and a "Tell us what this was →" tap target.', 'Replaces the existing "Recent Workouts" card on PolarPairingView. Same backend feeds the PulseCheck athlete profile session list.'],
-  ['5. Annotate', 'Athlete reply (free-text + optional sport tag + optional photo) attaches to the detected load via the same record shape used by WorkoutCompleteCheckIn.promptReply.', 'Annotation closes the loop. Coach (when present) sees the athlete\'s words. Phase J consumes both bucket + annotation as priors when scheduling context arrives.'],
+  ['1. Evidence Split', 'Continuous health-context-source-records are split into two lanes: daily evidence rollups and timestamped primitive streams. Rollups summarize the day; primitives are the only lane allowed to open candidate windows.', 'Hard rule: daily totals, activity-class counts, and aggregate active minutes are evidence only. They never become a session card, bucket, or clock range by themselves.'],
+  ['2. Window', 'Timestamped primitives (HR, ACC, MET, steps, cadence, distance, vendor workout events) → activity-window detector splits the day into candidate windows when sustained activity crosses the rest baseline.', 'Window boundary heuristic: ≥3 min sustained MET ≥ 3.0 OR HR ≥ 50% reserve OR ACC dynamic magnitude > rest baseline. Quiet ≥ 5 min closes the window.'],
+  ['3. Fingerprint', 'Each candidate window is fingerprinted across HR statistics, ACC peak/variance, cadence, MET distribution, distance/GPS (when present), and duration.', 'Sport-agnostic feature snapshot. Same shape feeds Phase J classifier downstream — this layer just bakes it earlier so we can speak to the athlete before Phase J runs.'],
+  ['4. Bucket', 'Fingerprint maps to a high-confidence training-load bucket (8 total). Bucket selection prefers under-claim over over-claim: ambiguous windows fall back to the broader bucket.', 'Heuristic v0. v1 will retrain bucket thresholds on confirmed annotations. Buckets stay stable across versions; thresholds tune.'],
+  ['5. Card', 'Detected load surfaces on the Polar 360 sheet (FWP) and the athlete profile (PulseCheck) only when it has a real detectedStart + detectedEnd from timestamped evidence or an explicit workout record.', 'Never synthesize a clock range by subtracting aggregate active minutes from midnight, snapshot end, or refresh time. If the only evidence is day-level rollup, keep it on debug/evidence surfaces.'],
+  ['6. Annotate', 'Athlete reply (free-text + optional sport tag + optional photo) attaches to the detected load via the same record shape used by WorkoutCompleteCheckIn.promptReply.', 'Annotation closes the loop. Coach (when present) sees the athlete\'s words. Phase J consumes both bucket + annotation as priors when scheduling context arrives.'],
 ];
 
 const TRAINING_LOAD_BUCKETS = [
@@ -47,6 +48,47 @@ const TRAINING_LOAD_BUCKETS = [
   ['Mixed Conditioning', 'Sustained MET ≥ 6 with high HR variance, high ACC variance, no clean rest pattern.', 'CrossFit · HIIT · circuit · bootcamp · MetCon', 'High'],
   ['Game / Practice', 'Long duration (>45 min), intermittent intensity, mixed cadence with bursts, irregular ACC pattern.', 'Basketball / soccer / hockey practice or game · martial arts class · field session', 'High when calendar context present, Medium without'],
   ['Active Recovery', 'Sustained low MET (2–3), low HR (<60% reserve), walking cadence or near-zero ACC variance.', 'Walk · mobility flow · shake-out · easy spin', 'High'],
+];
+
+const EVIDENCE_BOUNDARY_ROWS = [
+  [
+    'Daily Evidence Ledger',
+    'Date-keyed rollups: steps, active calories, activity-class totals, active minutes, max/avg MET, sleep, recovery, source coverage, quality flags.',
+    'Can say "training-like movement existed today." Cannot create a workout card, bucket, start time, end time, or load contribution by itself.',
+  ],
+  [
+    'Primitive Event Stream',
+    'Timestamped minute/sample bins: HR, MET, activity class, steps/cadence, distance/GPS when present, ACC burst metrics, device coverage.',
+    'This is the only sensor-derived input that can open and close a session candidate window.',
+  ],
+  [
+    'Explicit Workout Record',
+    'HealthKit workout, Polar/Apple/Garmin vendor workout, QuickLifts workout completion, or confirmed athlete/coach session record with start/end.',
+    'Trusted as a window source when timestamps and provenance are present. Vendor labels are evidence, not final sport meaning.',
+  ],
+  [
+    'Session Candidate Segmenter',
+    'Consumes primitive streams and explicit workouts. Opens windows on sustained signal and closes on quiet/rest gaps.',
+    'Owns detectedStart/detectedEnd. If it cannot produce a real window, downstream bucket/card layers hold back.',
+  ],
+  [
+    'Bucket Classifier',
+    'Consumes only candidate windows, never raw day totals.',
+    'Chooses one of the 8 buckets or holds back. A bucket without a real window is a product bug.',
+  ],
+  [
+    'Display Policy',
+    'Athlete-facing cards require a real window or explicit workout record. Aggregate-only evidence can appear in debug and reviewer surfaces.',
+    'No timestamped evidence, no session card. No fake precision.',
+  ],
+];
+
+const TIMESTAMP_AND_TIMEZONE_RULES = [
+  'All athlete-facing windows display in the athlete/device local timezone captured on the source record. UTC can be stored for ordering, but local dateKey + timezone must travel with the evidence.',
+  'Never derive a window from day-boundary math such as "midnight minus activeMinutes", "snapshotEnd minus activeMinutes", or "refreshTime minus activeMinutes".',
+  'If a source provides only a date-level summary, store it under the daily evidence ledger and mark sessionCandidateEligible=false.',
+  'If timestamped primitives exist but are too sparse to segment, emit a holding-back candidate only on debug/reviewer surfaces unless the athlete confirms it.',
+  'A training-load card can say "Detected today" only after a real candidate exists but display precision is intentionally withheld. It cannot be used as a fallback for aggregate-only evidence.',
 ];
 
 const FINGERPRINT_FEATURES = [
@@ -84,6 +126,10 @@ const COACH_VOICE_NUDGES = [
 
 const FAILURE_MODES = [
   [
+    'Only daily rollup evidence exists',
+    'Store steps/MET/class-count facts in the daily evidence ledger. Do not create a detected_training_load, do not display a bucket, and do not invent a time range. Reviewer/debug surface may show "training-like movement, no window."',
+  ],
+  [
     'Window has activity but device coverage is thin',
     'ACC + HR present for <50% of the window. Confidence drops to "holding back". Card surfaces as "Activity detected · tap to log" without a bucket. Athlete annotation upgrades it.',
   ],
@@ -111,6 +157,21 @@ const FAILURE_MODES = [
 
 const RECORD_SHAPE = [
   [
+    'daily_activity_evidence',
+    '{ id, userId, dateKey, timezone, sourceLane, rollup: { steps?, activeCalories?, activeMinutes?, metStats?, activityClassCounts? }, coverage: { wearPercent?, qualityFlags[] }, sessionCandidateEligible: false, createdAt, updatedAt }',
+    'Date-level evidence ledger. Useful for debug, health summaries, and "movement happened today" context. Never consumed directly as a training-load session.',
+  ],
+  [
+    'activity_primitive_bin',
+    '{ id, userId, startsAt, endsAt, localDateKey, timezone, sourceLane, hr?, met?, activityClass?, stepsDelta?, cadence?, distanceDelta?, accBurstStats?, coverageFlags[] }',
+    'Compact timestamped evidence used by the segmenter. Retention can be shorter than canonical session records, but enough bins must remain to audit a candidate.',
+  ],
+  [
+    'session_candidate',
+    '{ id, userId, detectedStart, detectedEnd, sourceRefs[], primitiveCoverage, candidateKinds[], missingContext[], confidenceTier, segmentationReason, createdAt }',
+    'Working record from timestamped primitives or explicit workout records. This is the earliest object that can become a card or bucket.',
+  ],
+  [
     'detected_training_load',
     '{ id, userId, detectedStart, detectedEnd, bucket: TrainingLoadBucket, candidates[]: { bucket, confidence }, confidenceTier: strong|best|wide|holding_back, fingerprintSnapshot: { hrStats, accStats, metStats, cadenceStats, distance?, gps? }, deviceCoverage: { wearPercent, qualityFlags[] }, sourceLane: polar_ble | polar_accesslink | apple_health | phone_fallback | oura, athleteAnnotation?: { text, sportTag?, photoPath?, correctedBucket?, dismissed?: bool }, phaseJSessionRecordId?, createdAt, updatedAt }',
     'Backbone record. One per detected window. Lives at `users/{userId}/detectedTrainingLoads/{id}`. Indexed by detectedStart desc + sourceLane. Phase J session_records link back via phaseJSessionRecordId when matched.',
@@ -118,6 +179,8 @@ const RECORD_SHAPE = [
 ];
 
 const IMPLEMENTATION_CHECKLIST_BACKEND = [
+  'Split the detection data model into `daily_activity_evidence`, `activity_primitive_bin`, `session_candidate`, and `detected_training_load`. Daily rollups feed context/debug only; timestamped primitives or explicit workout records feed the segmenter.',
+  'Add a hard sessionCandidateEligible gate. If a source record has no timestamped window and no explicit workout start/end, it cannot create a card, bucket, or load contribution.',
   'Generalize RetroactiveActivityDetectionService.Kind enum from `{ run, bike }` to `TrainingLoadBucket` with the 8 buckets defined here. Keep run/bike as legacy mappings during rollout (Steady Cardio + Long Endurance + Burst Sprints subsume run; Steady Cardio subsumes bike).',
   'Add `TrainingLoadFingerprint` struct (Swift) with the 6 feature families above. Expose a `fingerprint(window:)` method on the activity-window detector that consumes health-context-source-records.',
   'Add `TrainingLoadBucketClassifier` with heuristic v0 thresholds. Single source of truth for bucket → fingerprint mapping. v0 lives in Swift; v1 mirrors to a server function for retraining hooks.',
@@ -129,6 +192,7 @@ const IMPLEMENTATION_CHECKLIST_BACKEND = [
 ];
 
 const IMPLEMENTATION_CHECKLIST_IOS_UI = [
+  'Remove aggregate-day fallback from athlete-facing training-load cards. If the app only has daily counts/classes, show that in debug/data-dump surfaces, not as a Recent Training Load row.',
   'Replace WorkoutsChromaticCard at PolarPairingView.swift:3476 with TrainingLoadsChromaticCard. Same chromatic accent (orange flame) — copy reads "Recent Training Loads" / "None in this window" → "Tap-to-log activity will appear here as we detect it on your Polar 360."',
   'Card row shape: bucket name (e.g. "Burst Sprints") · window ("1:00 PM – 2:11 PM · 71 min") · headline metric (avg HR · peak ACC · distance when present) · trailing chevron.',
   'Tap on a row opens TrainingLoadAnnotationSheet (new SwiftUI view): free-text field, sport-tag chip row, photo picker, "Bucket was right / pick again" affordance, "Wasn\'t a workout" dismiss button.',
@@ -152,6 +216,8 @@ const IMPLEMENTATION_CHECKLIST_ADMIN = [
 ];
 
 const EXIT_CRITERIA = [
+  'Aggregate daily activity evidence can never produce a training-load card in athlete-facing UI. A test fixture with only `CONTINUOUS_MODERATE:16` + `CONTINUOUS_VIGOROUS:3` produces debug evidence only, no fake 19-minute session.',
+  'Every athlete-facing training-load row has a real detectedStart + detectedEnd derived from timestamped primitives, an explicit workout record, or a direct confirmation event.',
   'On the initial 8 buckets, classifier agrees with athlete annotation on >85% of windows after 4 weeks of pilot data.',
   'No window is bucketed as a riskier call when a broader bucket is within 15% confidence — wide-call fallback is verifiable from the record.',
   'Athlete annotation flow can be completed in <10 seconds on the Polar 360 sheet (free-text + send).',
@@ -168,8 +234,8 @@ const PulseCheckTrainingLoadDetectionSpecTab: React.FC = () => {
       <DocHeader
         eyebrow="Pulse Sports Intelligence"
         title="Training Load Detection"
-        version="Version 0.1 | May 7, 2026"
-        summary="Device-first, sport-agnostic detection layer that turns continuous biometric + activity signal into bucketed training-load candidates the athlete annotates. Replaces the Polar 360 sheet's Recent Workouts card with Recent Training Loads. Sits upstream of Phase J Session Detection + Matching: when no schedule + prescribed plan is present, this layer is what the device alone can confidently say. Athlete annotation closes the loop and feeds Phase J priors when scheduling context arrives."
+        version="Version 0.2 | May 13, 2026"
+        summary="Device-first, sport-agnostic detection layer that turns timestamped biometric + activity signal into bucketed training-load candidates the athlete annotates. Replaces the Polar 360 sheet's Recent Workouts card with Recent Training Loads. Sits upstream of Phase J Session Detection + Matching: when no schedule + prescribed plan is present, this layer is what the device alone can confidently say. Daily rollups are evidence only; athlete-facing cards require real session windows."
         highlights={[
           {
             title: 'Eight Buckets, Sport-Agnostic',
@@ -183,12 +249,16 @@ const PulseCheckTrainingLoadDetectionSpecTab: React.FC = () => {
             title: 'Under-claim Beats Over-claim',
             body: 'Two close buckets collapse to the broader call. Thin device coverage drops to "Activity detected · tap to log" with no bucket. The system is allowed to be vague — never wrong on purpose.',
           },
+          {
+            title: 'No Timestamp, No Session Card',
+            body: 'Day-level activity totals can prove movement happened, but they cannot prove a workout window. The product must not invent start/end times from aggregate active minutes.',
+          },
         ]}
       />
 
       <RuntimeAlignmentPanel
-        role="Device-confident detection layer between Health Context Source Records (input) and Phase J Session Detection + Matching (downstream refinement). Owns activity-window detection, bucket fingerprinting, confidence-tier propagation, athlete-annotation capture, and the Polar 360 sheet card surface."
-        sourceOfTruth="This page owns the 8 training-load buckets, the fingerprint feature families, the bucket→fingerprint thresholds, the confidence-tier definitions, the athlete-annotation contract, and the detected_training_load Firestore record shape. Phase J Session Detection + Matching owns refined sport-specific session_record + prescribed-comparison; this layer is the upstream coarse call. Sport Load Model consumes detected_training_load.bucket as a load primitive when no session_record is matched."
+        role="Device-confident detection layer between Health Context Source Records (input) and Phase J Session Detection + Matching (downstream refinement). Owns the daily-evidence vs. session-candidate boundary, activity-window detection, bucket fingerprinting, confidence-tier propagation, athlete-annotation capture, and the Polar 360 sheet card surface."
+        sourceOfTruth="This page owns the 8 training-load buckets, the evidence-boundary rules, the fingerprint feature families, the bucket→fingerprint thresholds, the confidence-tier definitions, the athlete-annotation contract, and the detected_training_load Firestore record shape. Phase J Session Detection + Matching owns refined sport-specific session_record + prescribed-comparison; this layer is the upstream coarse call. Sport Load Model consumes detected_training_load.bucket as a load primitive when no session_record is matched."
         masterReference="detected_training_load lands at `users/{userId}/detectedTrainingLoads/{detectedTrainingLoadId}`. Indexed by detectedStart desc + sourceLane. Phase J session_records link via `phaseJSessionRecordId` for provenance."
         relatedDocs={[
           'Sports Intelligence Layer',
@@ -202,7 +272,20 @@ const PulseCheckTrainingLoadDetectionSpecTab: React.FC = () => {
         ]}
       />
 
-      <SectionBlock icon={Workflow} title="Pipeline (Window → Fingerprint → Bucket → Card → Annotate)">
+      <SectionBlock icon={Layers} title="Evidence Boundary: Daily Rollup vs. Session Candidate">
+        <InfoCard
+          title="No Fake Precision"
+          accent="amber"
+          body="Daily activity totals are useful evidence, but they are not sessions. A row like 16 moderate + 3 vigorous markers can explain why Pulse suspects training-like movement happened today, but it cannot identify when it happened or what bucket it belonged to without timestamped primitives or an explicit workout record."
+        />
+        <DataTable columns={['Layer', 'What It Contains', 'Product Rule']} rows={EVIDENCE_BOUNDARY_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={ShieldCheck} title="Timestamp + Timezone Contract">
+        <InfoCard title="Hard Rules" accent="blue" body={<BulletList items={TIMESTAMP_AND_TIMEZONE_RULES} />} />
+      </SectionBlock>
+
+      <SectionBlock icon={Workflow} title="Pipeline (Evidence Split → Window → Fingerprint → Bucket → Card → Annotate)">
         <DataTable columns={['Step', 'What Happens', 'Notes']} rows={PIPELINE_STEPS} />
       </SectionBlock>
 
@@ -254,7 +337,7 @@ const PulseCheckTrainingLoadDetectionSpecTab: React.FC = () => {
         <DataTable columns={['Situation', 'How It\'s Handled']} rows={FAILURE_MODES} />
       </SectionBlock>
 
-      <SectionBlock icon={Layers} title="detected_training_load Schema (Engineering)">
+      <SectionBlock icon={Layers} title="Evidence + Training Load Schema (Engineering)">
         <DataTable columns={['Record', 'Shape', 'Notes']} rows={RECORD_SHAPE} />
       </SectionBlock>
 

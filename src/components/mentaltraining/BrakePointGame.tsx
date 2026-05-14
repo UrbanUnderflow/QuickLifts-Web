@@ -90,12 +90,12 @@ function buildBrakeRounds(buildArtifact: SimBuildArtifact): BrakeRound[] {
     const labelPool = cueType === 'go' ? GO_LABELS : NO_GO_LABELS[cueType];
     const signalLabel = labelPool[index % labelPool.length];
     const instruction = cueType === 'go'
-      ? 'Commit only if the lane stays clean.'
+      ? 'Go cue: tap Commit.'
       : cueType === 'late_reveal'
-        ? 'The stop cue appears late. Brake before the action commits.'
+        ? 'Late stop or abort cue: tap Brake.'
         : cueType === 'fakeout'
-          ? 'Ignore the fake start and brake the wrong action.'
-          : 'Brake as soon as the stop cue appears.';
+          ? 'Fake, hold, or check cue: tap Brake.'
+          : 'Stop, red, or brake cue: tap Brake.';
 
     return {
       id: `brake-round-${index + 1}`,
@@ -242,7 +242,7 @@ export const BrakePointGame: React.FC<BrakePointGameProps> = ({
     }
 
     setFeedback({
-      title: `${correctCount}/${finalResponses.length} clean brakes`,
+      title: `${correctCount}/${finalResponses.length} correct choices`,
       detail: `Stop Latency ${avgStopLatency}ms · False Alarm ${Math.round((falseAlarms / Math.max(1, brakeTrials.length)) * 100)}% · Over-Inhibition ${Math.round((overInhibition / Math.max(1, goTrials.length)) * 100)}%${spamDetected ? ' · Session flagged for rapid input' : ''}`,
       success: normalizedScore >= 70 && !spamDetected,
     });
@@ -265,16 +265,16 @@ export const BrakePointGame: React.FC<BrakePointGameProps> = ({
     const nextResponses = [...responses, nextResponse];
     setResponses(nextResponses);
     setFeedback({
-      title: nextResponse.correct ? (currentRound.correctAction === 'brake' ? 'Clean Brake' : 'Commit Landed') : response === null ? 'No Commit' : 'Wrong Action',
+      title: nextResponse.correct ? (currentRound.correctAction === 'brake' ? 'Brake Held' : 'Commit Landed') : response === null ? 'Window Missed' : 'Wrong Button',
       detail: nextResponse.correct
         ? currentRound.correctAction === 'brake'
-          ? `${currentRound.signalLabel} was stopped before the action executed.`
-          : 'You committed cleanly on the valid go signal.'
+          ? 'Correct. Stop and fake cues are Brake cues.'
+          : 'Correct. Go cues are Commit cues.'
         : response === null
           ? 'The response window closed before a committed action.'
           : response === 'commit'
-            ? 'You launched into a no-go cue.'
-            : 'You braked a valid go signal.',
+            ? 'That cue needed Brake, not Commit.'
+            : 'That cue needed Commit, not Brake.',
       success: nextResponse.correct,
     });
     beginStage('feedback', stageDurations.feedback);
@@ -417,7 +417,7 @@ export const BrakePointGame: React.FC<BrakePointGameProps> = ({
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-[0.35em] text-white/40">Brake Point</p>
                 <h1 className="text-4xl font-black">{buildArtifact.variantName}</h1>
-                <p className="text-white/60 max-w-2xl">{buildArtifact.feedbackModel.athleteLabels.description}</p>
+                <p className="text-white/60 max-w-2xl">Cue words decide the button: Commit for GO, GREEN, CLEAR, or OPEN; Brake for STOP, RED, BRAKE, HOLD, FAKE, CHECK, BRAKE NOW, or ABORT.</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
@@ -428,17 +428,17 @@ export const BrakePointGame: React.FC<BrakePointGameProps> = ({
                 <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
                   <p className="text-xs uppercase tracking-[0.25em] text-white/40">Core Metric</p>
                   <p className="text-lg font-semibold mt-2">Stop Latency</p>
-                  <p className="text-xs text-white/45 mt-1">Brake the wrong action before it commits</p>
+                  <p className="text-xs text-white/45 mt-1">How fast you tap Brake on stop/fake cues</p>
                 </div>
                 <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
                   <p className="text-xs uppercase tracking-[0.25em] text-white/40">Pressure</p>
                   <p className="text-lg font-semibold mt-2">{String(buildArtifact.sessionModel.archetype).replace(/_/g, ' ')}</p>
-                  <p className="text-xs text-white/45 mt-1">Fakeouts and late reveals punish impulsive launch</p>
+                  <p className="text-xs text-white/45 mt-1">Stop and fake cues punish early Commit taps</p>
                 </div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-2">
                 <p className="text-xs uppercase tracking-[0.3em] text-white/35">How it works</p>
-                <p className="text-white/75">Track the lane, then commit only if the signal stays clean. When the brake cue appears, you have to kill the wrong action before it executes. Fast is good, but only if you brake the fakeouts.</p>
+                <p className="text-white/75">Each round shows one cue word. Tap Commit for GO, GREEN, CLEAR, or OPEN. Tap Brake for STOP, RED, BRAKE, HOLD, FAKE, CHECK, BRAKE NOW, or ABORT. One tap decides the round.</p>
               </div>
               <button
                 onClick={startSession}
@@ -490,8 +490,8 @@ export const BrakePointGame: React.FC<BrakePointGameProps> = ({
                     </motion.div>
                   </div>
                   <div className="space-y-2 text-sm text-white/65">
-                    <p>{stage === 'ready' ? 'Set the lane and wait for the live signal.' : currentRound.instruction}</p>
-                    <p>{currentRound.correctAction === 'commit' ? 'This is a Go cue. Commit fast and clean.' : 'This is a brake cue. Stop the wrong action before it executes.'}</p>
+                    <p>{stage === 'ready' ? 'Wait for the cue word, then choose one button.' : currentRound.instruction}</p>
+                    <p>{currentRound.correctAction === 'commit' ? 'GO, GREEN, CLEAR, OPEN = Commit.' : 'STOP, RED, BRAKE, HOLD, FAKE, CHECK, BRAKE NOW, ABORT = Brake.'}</p>
                   </div>
                 </div>
 
@@ -504,14 +504,14 @@ export const BrakePointGame: React.FC<BrakePointGameProps> = ({
                   <div>
                     <p className="text-xs uppercase tracking-[0.3em] text-white/40">Action Field</p>
                     <h3 className="text-2xl font-semibold mt-2">
-                      {stage === 'ready' ? 'Load the lane.' : stage === 'response' ? 'Commit or brake before the window closes.' : feedback?.title}
+                      {stage === 'ready' ? 'Get ready.' : stage === 'response' ? 'Choose the matching button.' : feedback?.title}
                     </h3>
                     <p className="text-sm text-white/55 mt-2">
                       {stage === 'feedback'
                         ? feedback?.detail
                         : currentRound.correctAction === 'commit'
-                          ? 'The lane is valid. Launch only if the signal stays clean.'
-                          : 'The wrong action is live. Brake it before it lands.'}
+                          ? 'This cue is a Commit cue.'
+                          : 'This cue is a Brake cue.'}
                     </p>
                   </div>
 
@@ -529,7 +529,7 @@ export const BrakePointGame: React.FC<BrakePointGameProps> = ({
                         className={`rounded-3xl border px-5 py-8 text-left transition-colors border-[#E0FE10]/30 bg-[#E0FE10]/10 ${isPaused ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#E0FE10]/15'}`}
                       >
                         <p className="text-2xl font-black tracking-[0.14em]">COMMIT</p>
-                        <p className="text-xs text-white/45 mt-3 uppercase tracking-[0.25em]">Launch the action</p>
+                        <p className="text-xs text-white/45 mt-3 uppercase tracking-[0.25em]">Go cue</p>
                       </motion.button>
                       <motion.button
                         onClick={() => handleActionSelect('brake')}
@@ -539,7 +539,7 @@ export const BrakePointGame: React.FC<BrakePointGameProps> = ({
                         className={`rounded-3xl border px-5 py-8 text-left transition-colors border-emerald-400/30 bg-emerald-400/10 ${isPaused ? 'opacity-50 cursor-not-allowed' : 'hover:bg-emerald-400/15'}`}
                       >
                         <p className="text-2xl font-black tracking-[0.14em]">BRAKE</p>
-                        <p className="text-xs text-white/45 mt-3 uppercase tracking-[0.25em]">Cancel the wrong action</p>
+                        <p className="text-xs text-white/45 mt-3 uppercase tracking-[0.25em]">Stop or fake cue</p>
                       </motion.button>
                     </div>
                   ) : (
@@ -581,17 +581,17 @@ export const BrakePointGame: React.FC<BrakePointGameProps> = ({
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                   <p className="text-xs uppercase tracking-[0.25em] text-white/45">Core Metric</p>
                   <p className="text-lg font-semibold mt-2">Stop Latency</p>
-                  <p className="text-sm text-white/65 mt-1">Derived from successful brakes on no-go cues.</p>
+                  <p className="text-sm text-white/65 mt-1">Derived from successful Brake taps on stop/fake cues.</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                   <p className="text-xs uppercase tracking-[0.25em] text-white/45">False Alarms</p>
                   <p className="text-lg font-semibold mt-2">{responses.filter((response) => response.correctAction === 'brake' && response.response === 'commit').length}</p>
-                  <p className="text-sm text-white/65 mt-1">Go responses on no-go cues.</p>
+                  <p className="text-sm text-white/65 mt-1">Commit taps on Brake cues.</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                   <p className="text-xs uppercase tracking-[0.25em] text-white/45">Over-Inhibition</p>
                   <p className="text-lg font-semibold mt-2">{responses.filter((response) => response.correctAction === 'commit' && response.response !== 'commit').length}</p>
-                  <p className="text-sm text-white/65 mt-1">Braking valid go signals or freezing.</p>
+                  <p className="text-sm text-white/65 mt-1">Brake taps on Commit cues, or freezing.</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:col-span-3">
                   <p className="text-xs uppercase tracking-[0.25em] text-white/45">Input Integrity</p>

@@ -29,7 +29,7 @@ const HEADER = `# Pulse Sports Intelligence — Full Spec Bundle
 
 > **v0.3 reasoning-layer rule:** Sports Intelligence follows the Nutrition Layer pattern: code builds the fact ledger, candidate reads, scoring, guardrails, executable Nora rubric results, and validated payload trace before Nora or coach-report copy is allowed to phrase anything.
 
-> **Plain-language report rule:** Coach-facing copy must not speak in code. Every point must say when the moment shows up, what the athlete may feel or do, what the coach should say or do, and what staff still owns. Example: "When the game gets late in the shot clock and the guards are tired or mentally cluttered, don't give them a bunch of coaching points. Give them one simple mental reset phrase they can use in that moment."
+> **Plain-language report rule:** Coach-facing copy must not speak in code. Every point must say when the moment shows up, what the athlete may feel or do, and the one simple mental-performance phrase or routine the coach should give. Do not add vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff unless a real named role and decision are present in the source data. Example: "When the game gets late in the shot clock and the guards are tired or mentally cluttered, don't give them a bunch of coaching points. Give them one simple mental reset phrase they can use in that moment."
 
 > **Operating thesis:** "What is the athlete's physical state teaching us about their mental performance environment?" Athlete reads create mindset change. Coach reads distinguish individual, unit, and team-wide patterns while preserving the coach's authority over physical programming.
 
@@ -166,7 +166,7 @@ The dashboard is the access surface for reports, not a replacement for them. Coa
 - **Device-Agnostic By Contract** — Sports Intelligence reads from the normalized health-context surface, never directly from Polar / Whoop / Oura / Apple Health APIs. New device support is an adapter, not a Sports Intelligence change.
 - **Sport-Specific, Athlete-Specific** — Every recommendation is interpreted through the athlete's sport, position, season phase, and individual baseline.
 - **Reports Carry The Interpretation, Dashboard Stays Thin** — Coaches do receive a dashboard, but the dashboard is intentionally thin. Interpretation lives in the report; the dashboard makes those reports easy to find, scan, and act on without forcing the coach to dig through raw scores.
-- **Spell Out The Coaching Moment** — Coach-facing copy must not speak in code. Every point must say when the moment shows up, what the athlete may feel or do, what the coach should say or do, and what staff still owns. Terms like reset cue, mental install, body-state read, and decision support fail unless immediately rewritten into plain English.
+- **Spell Out The Coaching Moment** — Coach-facing copy must not speak in code. Every point must say when the moment shows up, what the athlete may feel or do, and the one simple mental-performance phrase or routine the coach should give. Vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff fail unless a real named role and decision are present in the source data. Terms like reset cue, mental install, body-state read, and decision support fail unless immediately rewritten into plain English.
 - **Coach Owns Physical Programming** — Sports Intelligence may show recovery, load, trend, individual, and team-wide patterns so coaches can make better decisions. It must not tell the coach to change reps, sets, minutes, contact dose, throwing volume, or any other physical programming variable.
 - **Clinical Boundary Is Architectural** — Performance signals stay in the Sports Intelligence Layer. Clinical-threshold signals route through the escalation pipeline to AuntEDNA.
 - **AI Writes, Code Reasons** — Sports Intelligence never asks AI to notice, diagnose, or infer from scratch. Code builds the ledger, selects the candidate read, blocks unsupported claims, and runs the executable Nora rubric.
@@ -386,10 +386,18 @@ Mock report baselines define expected report shape and language. They do not ove
 const SPEC_4_CONTEXTUAL_DETECTION = `
 ## 4. Contextual Detection Engine
 
-The differentiating Sports Intelligence loop: sensor evidence starts the read, but athlete profile, coach context, Nora clarification, and historical corrections turn ambiguous activity into sport-specific meaning. Pulse Check does not depend solely on the wearable. It uses the wearable as evidence, then intelligently closes gaps with the athlete and coach.
+The differentiating Sports Intelligence loop: timestamped sensor evidence starts the read, but athlete profile, coach context, Nora clarification, and historical corrections turn ambiguous activity into sport-specific meaning. Pulse Check does not depend solely on the wearable. It uses the wearable as evidence, separates daily rollups from session candidates, then intelligently closes gaps with the athlete and coach.
 
 ### Core Rule
 When confidence is low, do not guess harder. Ask better. Nora is the missing-signal engine: she asks for the one answer that can change the classification, confidence tier, load contribution, or recommendation.
+
+### Evidence To Meaning Boundary
+| Evidence Type | What It Means | Allowed Product Behavior |
+|---|---|---|
+| Daily rollup | Date-level facts such as steps, calories, active minutes, activity-class counts, sleep, recovery, and source coverage. | Context clue only. It may trigger "training-like movement today" in reviewer/debug surfaces, but it cannot become a session, bucket, or load contribution. |
+| Timestamped primitive window | A segmented start/end window built from minute/sample-level HR, MET, activity class, cadence, distance, ACC bursts, rest gaps, and coverage. | Eligible for session_candidate and training-load bucket because it proves when the activity happened. |
+| Explicit session source | HealthKit workout, vendor workout, QuickLifts workout completion, app-started workout runtime, or athlete/coach-confirmed scheduled session. | Eligible for session_candidate because the source gives a real window and provenance. Context still decides final meaning. |
+| Ambiguous movement | Training-like evidence exists, but missing timestamps, poor coverage, or conflicting signals prevent segmentation. | Hold back or ask a targeted question only if the answer changes classification, confidence, load, recommendation, or reviewer delivery posture. |
 
 ### Five Context Layers
 | Layer | What It Contains | Why It Matters |
@@ -403,7 +411,7 @@ When confidence is low, do not guess harder. Ask better. Nora is the missing-sig
 ### Pipeline
 Detect -> Contextualize -> Ask -> Confirm -> Interpret -> Learn.
 
-- **Detect:** continuous signals create candidate sessions from HR, movement density, acceleration bursts, device coverage, and time windows. Output is evidence, not a hard claim.
+- **Detect:** timestamped signals create candidate sessions from HR, movement density, acceleration bursts, device coverage, and real time windows. Daily rollups remain evidence only. Output is evidence, not a hard claim.
 - **Contextualize:** enrich with athlete sport/position, team schedule, prescribed sessions, venue context, coach notes, and historical pattern memory.
 - **Ask:** if confidence is incomplete and the missing answer matters, Nora asks a small, specific question in athlete or coach voice.
 - **Confirm:** answers, dismissals, corrections, and text/voice context become first-class confirmation events with provenance.
@@ -462,6 +470,7 @@ Physical session records feed load/readiness and can influence Nora planning con
 ### Technical Implementation
 | Workstream | Implementation |
 |---|---|
+| Daily evidence ledger | Write date-keyed aggregate activity evidence separately from timestamped primitives. Mark aggregate-only source records as not session-candidate eligible. |
 | iOS primitive extractor | Generalize lift/Polar work into SessionPrimitiveAccumulator for HR zones, movement density, accel bursts, rest gaps, step/distance, and device coverage. |
 | Sport detection profiles | Load sport/position policy from pulsecheck sport configuration: relevant primitives, thresholds, confidence gates, clarification questions, load-model inputs. |
 | Candidate emitter | Emit session_candidate from device evidence without overclaiming. Include missingContext and "what would tighten this read" fields. |
@@ -474,6 +483,8 @@ Physical session records feed load/readiness and can influence Nora planning con
 
 ### Product Rules
 - The device layer provides evidence; Nora plus athlete/coach context provides meaning.
+- Daily summaries are not sessions. No timestamped evidence or explicit session source means no athlete-facing session card, no bucket, and no load contribution.
+- Never synthesize a session window from aggregate active minutes, day-boundary math, snapshot end, or refresh time.
 - Nora should ask only the smallest useful question, and only when the answer can change classification, confidence, load, or recommendation.
 - Athlete and coach answers are data with provenance. They must be saved as structured confirmation events, not buried in chat transcripts.
 - Repeated confirmations should reduce future friction. The system should learn team rhythm, athlete-specific patterns, and sport-specific signatures.
@@ -573,7 +584,7 @@ Coach-facing input layer. Athlete enters nothing on training data; coach spends 
 const SPEC_5_SESSION_DETECTION = `
 ## 5. Session Detection + Matching
 
-The bridge between what the device saw and what the coach planned. Detects training and competition sessions from continuous biometric signals, classifies them by activity signature, matches them to schedule + prescribed-plan records, compares execution against prescribed structure, emits the session_record consumed downstream.
+The bridge between what the device saw and what the coach planned. Detects training and competition sessions from timestamped biometric primitives or explicit workout/session records, classifies them by activity signature, matches them to schedule + prescribed-plan records, compares execution against prescribed structure, emits the session_record consumed downstream. Daily rollups can support context, but they cannot create sessions.
 
 ### Highlights
 - **Device Sees It First** — Continuous biometrics let the system detect and classify sessions without any logging. Coach context tightens the read; absence of context does not break it.
@@ -583,11 +594,19 @@ The bridge between what the device saw and what the coach planned. Detects train
 ### Pipeline (Detect → Classify → Match → Compare → Emit)
 | Step | What Happens | Notes |
 |---|---|---|
-| 1. Detect | Continuous device stream → activity-segmenter splits day into candidate sessions when HR/movement crosses thresholds | Sport-aware threshold profiles |
+| 1. Detect | Timestamped primitive stream or explicit workout records → activity-segmenter splits day into candidate sessions when HR/movement crosses thresholds | Sport-aware threshold profiles; daily rollups are excluded |
 | 2. Classify | Each candidate gets a session-type guess from biometric signature (interval / steady / strength / game / scrimmage / recovery / unscheduled) | Outputs class + a "this guess is solid / rough" tier |
 | 3. Match | Detected session bound to team_schedule_event and (when present) prescribed_session | Time-window overlap + sport context + (when GPS) location proximity |
 | 4. Compare | When prescribed_session matched, compare device-detected blocks against prescribed (executed 4 of 6 reps; pace 4% slower) | Comparison fan-out lives on session_record |
 | 5. Emit | Final session_record lands in Firestore | Consumed by load model + dimension-state engine + report generator |
+
+### Session-Candidate Gate
+| Gate | Definition | Behavior |
+|---|---|---|
+| Accepted: timestamped primitives | Minute/sample bins with observed start/end, local timezone, HR/MET/activity class/cadence/ACC/distance coverage. | Can open a session_candidate when sustained signal and quiet-gap rules produce real detectedStart/detectedEnd. |
+| Accepted: explicit workout/session record | HealthKit workout, vendor workout, QuickLifts workout completion, scheduled session confirmed by athlete/coach, or app-started session runtime. | Can create or seed a session_candidate because the source already provides a real window and provenance. |
+| Rejected: daily rollup only | Steps, calories, active minutes, activity-class counts, max/avg MET, date-level Polar/Oura summaries. | Evidence only. Can support a reviewer clue or targeted question, but cannot create a session_record or athlete-facing training-load row. |
+| Local-time requirement | Every candidate carries UTC timestamps for ordering plus localDateKey/timezone for display and day attribution. | Prevents UTC/local drift and stops a late-night boundary from becoming a fake workout window. |
 
 ### Per-Sport Detection Signatures (Device-Only Inference)
 | Sport | Detection Signature | Inferred From Device Alone | Read Quality |
@@ -643,6 +662,7 @@ The bridge between what the device saw and what the coach planned. Detects train
 - Conflicting plans: "We have two practice plans for Tuesday — using the latest one. Heads up if that's wrong."
 
 ### Failure Modes
+- **Only daily rollup evidence exists:** Record daily activity evidence and optionally show "training-like movement, no session window" in reviewer/debug surfaces. Do not emit a session_record, count load, or synthesize start/end.
 - **Non-training activity:** Long walk, yoga, dance party. Classifier marks non_training; excluded from training load. Coach can confirm/correct via Nora.
 - **Athlete forgot device for key session:** session_record emitted with device_data: missing, flagged. Load model uses prescribed plan as proxy if confidence high enough; otherwise excluded.
 - **Genuinely uncertain classification:** session_record carries both candidates + "holding back" tier. Reviewer surfaces uncertainty; coach disambiguates in one tap.
