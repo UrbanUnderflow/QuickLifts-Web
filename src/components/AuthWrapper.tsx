@@ -514,6 +514,19 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     console.error('Sign in error:', error);
   };
 
+  // pulseintelligencelabs.com is the company marketing site — every route is
+  // public. Bypass the auth wrapper entirely: no signin modal, no auth-check
+  // spinner, no redirects. Site loads instantly for anonymous visitors.
+  const isPILHost =
+    typeof window !== 'undefined' &&
+    /^(www\.)?pulseintelligencelabs\.com$/.test(
+      window.location.host.toLowerCase().split(':')[0],
+    );
+
+  if (isPILHost) {
+    return <>{children}</>;
+  }
+
   // Don't render anything until initial auth check is complete
   if (!authChecked || isLoading) {
     return <div className="flex items-center justify-center min-h-screen">

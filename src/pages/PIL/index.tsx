@@ -10,6 +10,12 @@ const META_DESCRIPTION =
   'Pulse Intelligence Labs is an AI lab building the human performance stack — training, nutrition, mindset, and daily ritual — for athletes, coaches, and the people behind them.';
 const META_URL = 'https://pulseintelligencelabs.com';
 
+// Hero video lives at /public/pil-hero.mp4. Drop a cinematic sprinter clip
+// there (1080p+, 8–20s loopable, ideally h.264 mp4 + webm transcode).
+// Optional poster at /public/pil-hero-poster.jpg for the first paint.
+const HERO_VIDEO_SRC = '/pil-hero.mp4';
+const HERO_VIDEO_POSTER = '/pil-hero-poster.jpg';
+
 type Pillar = {
   id: string;
   label: string;
@@ -60,19 +66,19 @@ const PILLARS: Pillar[] = [
 ];
 
 const APP_TILES = [
-  { name: 'Fit With Pulse', icon: '/pulseIcon.png', dot: 'bg-[#E0FE10]' },
-  { name: 'Macra', icon: '/macra-icon.png', dot: 'bg-[#3B82F6]' },
-  { name: 'Pulse Check', icon: '/pulseCheckIcon.png', dot: 'bg-[#A05EF8]' },
-  { name: 'Pulse Ritual', icon: '', dot: 'bg-[#5EEAD4]' },
+  { name: 'Fit With Pulse', icon: '/pulseIcon.png', dot: 'bg-[#E0FE10]', status: 'Available' },
+  { name: 'Macra', icon: '/macra-icon.png', dot: 'bg-[#3B82F6]', status: 'Available' },
+  { name: 'Pulse Check', icon: '/pulseCheckIcon.png', dot: 'bg-[#A05EF8]', status: 'Available' },
+  { name: 'Pulse Ritual', icon: '', dot: 'bg-[#5EEAD4]', status: 'Coming soon' },
 ];
 
-const PILLogoMark: React.FC = () => (
+const PILLogoMark: React.FC<{ tone?: 'light' | 'dark' }> = ({ tone = 'light' }) => (
   <div className="flex items-center gap-2.5">
     <span className="relative inline-flex h-2.5 w-2.5">
-      <span className="absolute inset-0 rounded-full bg-white animate-ping opacity-60" />
-      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-white" />
+      <span className={`absolute inset-0 rounded-full ${tone === 'light' ? 'bg-white' : 'bg-black'} animate-ping opacity-60`} />
+      <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${tone === 'light' ? 'bg-white' : 'bg-black'}`} />
     </span>
-    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300">
+    <span className={`text-xs font-semibold uppercase tracking-[0.2em] ${tone === 'light' ? 'text-zinc-200' : 'text-zinc-700'}`}>
       Pulse Intelligence Labs
     </span>
   </div>
@@ -91,101 +97,159 @@ const PILPage: NextPage = () => {
         <meta name="twitter:card" content="summary_large_image" />
       </Head>
 
-      <main className="relative min-h-screen overflow-hidden bg-zinc-950 text-white selection:bg-white/20">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[860px]">
-          <div className="absolute left-1/2 top-[-220px] h-[820px] w-[1280px] -translate-x-1/2 rounded-full bg-gradient-to-br from-[#E0FE10]/12 via-[#A05EF8]/14 to-[#5EEAD4]/12 blur-[120px]" />
-          <div className="absolute left-1/2 top-[-120px] h-[420px] w-[820px] -translate-x-1/2 rounded-full bg-gradient-to-br from-[#3B82F6]/10 via-transparent to-[#A05EF8]/12 blur-[100px]" />
-        </div>
-
-        <nav className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 pt-7">
-          <PILLogoMark />
-          <div className="hidden items-center gap-7 text-sm text-zinc-400 sm:flex">
-            <Link href="/apps" className="hover:text-white transition-colors">Apps</Link>
-            <a href="https://fitwithpulse.ai/pulseintelligencelabs" className="hover:text-white transition-colors">Lab</a>
-            <a href="mailto:hello@pulseintelligencelabs.com" className="hover:text-white transition-colors">Contact</a>
-          </div>
-          <Link
-            href="/apps"
-            className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-semibold text-black hover:bg-zinc-200 transition-colors"
+      <main className="relative min-h-screen bg-black text-white selection:bg-white/20">
+        {/* ───────────────────── HERO: full-bleed sprinter video ───────────────────── */}
+        <section className="relative h-screen min-h-[640px] w-full overflow-hidden">
+          {/* Background video */}
+          <video
+            className="absolute inset-0 h-full w-full object-cover"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            poster={HERO_VIDEO_POSTER}
+            aria-hidden="true"
           >
-            Download apps
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </Link>
-        </nav>
+            <source src={HERO_VIDEO_SRC} type="video/mp4" />
+          </video>
 
-        <section className="relative mx-auto max-w-6xl px-6 pt-24 pb-32 sm:pt-36 sm:pb-44">
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-            className="max-w-4xl"
-          >
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-zinc-300 backdrop-blur-sm mb-8">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#E0FE10]" />
-              An AI lab for human performance
-            </span>
-            <h1 className="text-[clamp(2.75rem,7.5vw,5.75rem)] font-semibold tracking-tight leading-[0.98]">
-              The Human{' '}
-              <span className="bg-gradient-to-r from-[#E0FE10] via-[#A05EF8] to-[#5EEAD4] bg-clip-text text-transparent">
-                Performance
-              </span>{' '}
-              Company.
-            </h1>
-            <p className="mt-8 max-w-2xl text-lg sm:text-xl text-zinc-300 leading-relaxed">
-              We build AI for the people who show up — athletes, coaches, and the staff behind them.
-              Four products covering training, nutrition, mindset, and ritual, all under one roof.
-            </p>
+          {/* Dark cinematic overlay — bottom-heavy for text legibility */}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/65 via-black/30 to-black/90" />
+          {/* Brand color wash — barely there, gives the video the PIL signature */}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-[#E0FE10]/[0.06] via-transparent to-[#A05EF8]/[0.08] mix-blend-overlay" />
+          {/* Vignette on edges */}
+          <div className="pointer-events-none absolute inset-0 [background:radial-gradient(ellipse_at_center,transparent_50%,rgba(0,0,0,0.55)_100%)]" />
 
-            <div className="mt-10 flex flex-wrap items-center gap-3">
-              <Link
-                href="/apps"
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors"
-              >
-                Explore the apps
-                <ArrowUpRight className="h-4 w-4" />
-              </Link>
-              <a
-                href="https://fitwithpulse.ai/pulseintelligencelabs"
-                className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10 transition-colors backdrop-blur-sm"
-              >
-                Inside the lab
-              </a>
+          {/* Nav over the video */}
+          <nav className="relative z-20 mx-auto flex max-w-6xl items-center justify-between px-6 pt-7">
+            <PILLogoMark tone="light" />
+            <div className="hidden items-center gap-7 text-sm text-zinc-300 sm:flex">
+              <Link href="/apps" className="hover:text-white transition-colors">Apps</Link>
+              <a href="https://fitwithpulse.ai/pulseintelligencelabs" className="hover:text-white transition-colors">Lab</a>
+              <a href="mailto:hello@pulseintelligencelabs.com" className="hover:text-white transition-colors">Contact</a>
             </div>
-          </motion.div>
+            <Link
+              href="/apps"
+              className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-semibold text-black hover:bg-zinc-200 transition-colors"
+            >
+              Download apps
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </nav>
 
+          {/* Hero content — bottom-aligned, big and confident */}
+          <div className="relative z-10 mx-auto flex h-full max-w-6xl flex-col justify-end px-6 pb-20 sm:pb-28">
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/40 px-3 py-1 text-xs font-medium text-white backdrop-blur-md mb-6 sm:mb-8">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#E0FE10] animate-pulse" />
+                An AI lab for human performance
+              </span>
+              <h1 className="text-[clamp(3rem,9vw,7.5rem)] font-semibold tracking-tight leading-[0.92] max-w-5xl">
+                The Human{' '}
+                <span className="bg-gradient-to-r from-[#E0FE10] via-[#A05EF8] to-[#5EEAD4] bg-clip-text text-transparent">
+                  Performance
+                </span>{' '}
+                Company.
+              </h1>
+              <p className="mt-7 max-w-2xl text-lg sm:text-2xl text-zinc-200 leading-relaxed drop-shadow-[0_1px_8px_rgba(0,0,0,0.6)]">
+                We build AI for the people who show up — athletes, coaches, and the staff behind them.
+              </p>
+
+              <div className="mt-10 flex flex-wrap items-center gap-3">
+                <Link
+                  href="/apps"
+                  className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3.5 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors shadow-2xl shadow-black/40"
+                >
+                  Explore the apps
+                  <ArrowUpRight className="h-4 w-4" />
+                </Link>
+                <a
+                  href="https://fitwithpulse.ai/pulseintelligencelabs"
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-6 py-3.5 text-sm font-semibold text-white hover:bg-white/20 transition-colors backdrop-blur-md"
+                >
+                  Inside the lab
+                </a>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Scroll indicator */}
           <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.9, delay: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            className="mt-24 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.2, duration: 0.8 }}
+            className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2"
           >
-            {APP_TILES.map((tile) => (
-              <Link
-                key={tile.name}
-                href="/apps"
-                className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 backdrop-blur-sm hover:bg-white/[0.06] transition-colors"
-              >
-                <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-xl ring-1 ring-white/10">
-                  {tile.icon ? (
-                    <img src={tile.icon} alt={tile.name} className="h-full w-full object-cover" draggable={false} />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
-                      <span className={`h-2.5 w-2.5 rounded-full ${tile.dot}`} />
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-white">{tile.name}</p>
-                  <p className="truncate text-xs text-zinc-500">
-                    {tile.name === 'Pulse Ritual' ? 'Coming soon' : 'Available'}
-                  </p>
-                </div>
-              </Link>
-            ))}
+            <div className="flex h-10 w-6 items-start justify-center rounded-full border border-white/30 p-1.5">
+              <motion.div
+                animate={{ y: [0, 10, 0] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+                className="h-1.5 w-1 rounded-full bg-white/70"
+              />
+            </div>
           </motion.div>
         </section>
 
-        <section className="relative border-t border-white/5 bg-black/30">
+        {/* ───────────────────── APP TILES ───────────────────── */}
+        <section className="relative border-t border-white/5 bg-black">
+          <div className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
+            <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500 mb-3">
+                  The Apps
+                </p>
+                <h2 className="text-2xl sm:text-4xl font-semibold tracking-tight leading-tight">
+                  Four products. One stack.
+                </h2>
+              </div>
+              <Link
+                href="/apps"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+              >
+                See all apps
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-60px' }}
+              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+              className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+            >
+              {APP_TILES.map((tile) => (
+                <Link
+                  key={tile.name}
+                  href="/apps"
+                  className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 backdrop-blur-sm hover:bg-white/[0.06] transition-colors"
+                >
+                  <div className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl ring-1 ring-white/10">
+                    {tile.icon ? (
+                      <img src={tile.icon} alt={tile.name} className="h-full w-full object-cover" draggable={false} />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
+                        <span className={`h-2.5 w-2.5 rounded-full ${tile.dot}`} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-white">{tile.name}</p>
+                    <p className="truncate text-xs text-zinc-500">{tile.status}</p>
+                  </div>
+                </Link>
+              ))}
+            </motion.div>
+          </div>
+        </section>
+
+        {/* ───────────────────── THE STACK — four pillars ───────────────────── */}
+        <section className="relative border-t border-white/5 bg-black/40">
           <div className="mx-auto max-w-6xl px-6 py-24 sm:py-32">
             <motion.div
               initial={{ opacity: 0, y: 12 }}
@@ -238,6 +302,7 @@ const PILPage: NextPage = () => {
           </div>
         </section>
 
+        {/* ───────────────────── MISSION QUOTE ───────────────────── */}
         <section className="relative border-t border-white/5">
           <div className="mx-auto max-w-4xl px-6 py-28 sm:py-36 text-center">
             <motion.blockquote
@@ -256,6 +321,7 @@ const PILPage: NextPage = () => {
           </div>
         </section>
 
+        {/* ───────────────────── CTA ───────────────────── */}
         <section className="relative border-t border-white/5 bg-gradient-to-b from-zinc-950 to-black">
           <div className="mx-auto max-w-6xl px-6 py-24 sm:py-32">
             <div className="grid items-end gap-10 md:grid-cols-[1.4fr,1fr]">
@@ -296,6 +362,7 @@ const PILPage: NextPage = () => {
           </div>
         </section>
 
+        {/* ───────────────────── FOOTER ───────────────────── */}
         <footer className="relative border-t border-white/5">
           <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">

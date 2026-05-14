@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 const MACRA_HOSTS = new Set(['eatwithmacra.ai', 'www.eatwithmacra.ai']);
 const PULSECHECK_HOSTS = new Set(['pulsecheckmind.ai', 'www.pulsecheckmind.ai']);
 const PIL_HOSTS = new Set(['pulseintelligencelabs.com', 'www.pulseintelligencelabs.com']);
+const FWP_HOSTS = new Set(['fitwithpulse.ai', 'www.fitwithpulse.ai']);
 
 const PIL_PREFIX = '/PIL';
 
@@ -15,6 +16,12 @@ const getSinglePageHostTarget = (host: string) => {
 
 export function middleware(request: NextRequest) {
   const host = (request.headers.get('host') ?? '').toLowerCase().split(':')[0];
+
+  // fitwithpulse.ai/apps → 308 redirect to the canonical home at pulseintelligencelabs.com/apps.
+  // Scoped to the production FWP host only so Netlify previews can still hit /PIL/apps directly.
+  if (FWP_HOSTS.has(host) && request.nextUrl.pathname === '/apps') {
+    return NextResponse.redirect('https://pulseintelligencelabs.com/apps', 308);
+  }
 
   // pulseintelligencelabs.com → prefix-rewrites the entire site under /PIL
   // e.g. pulseintelligencelabs.com/        → /PIL
