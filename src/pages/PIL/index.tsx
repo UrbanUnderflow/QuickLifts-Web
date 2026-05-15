@@ -66,7 +66,7 @@ const PILLARS: Pillar[] = [
 ];
 
 const APP_TILES = [
-  { name: 'Fit With Pulse', icon: '/pulseIcon.png', dot: 'bg-[#E0FE10]', status: 'Available' },
+  { name: 'Fit With Pulse', icon: '/fwp-app-icon.jpg', dot: 'bg-[#E0FE10]', status: 'Available' },
   { name: 'Macra', icon: '/macra-icon.png', dot: 'bg-[#3B82F6]', status: 'Available' },
   { name: 'Pulse Check', icon: '/pulseCheckIcon.png', dot: 'bg-[#A05EF8]', status: 'Available' },
   { name: 'Pulse Ritual', icon: '', dot: 'bg-[#5EEAD4]', status: 'Coming soon' },

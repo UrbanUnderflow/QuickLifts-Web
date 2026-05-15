@@ -42,7 +42,7 @@ const APPS: AppEntry[] = [
     tagline: 'Train with your people.',
     description:
       'Build routines, join clubs, and train alongside the community that pushes you. Coached by Nora — your in-app AI training partner.',
-    icon: '/pulseIcon.png',
+    icon: '/fwp-app-icon.jpg',
     hue: {
       ring: 'ring-[#E0FE10]/40',
       glow: 'from-[#E0FE10]/30 via-[#E0FE10]/10 to-transparent',
