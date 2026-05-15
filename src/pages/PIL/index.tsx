@@ -9,6 +9,7 @@ const META_TITLE = 'Pulse Intelligence Labs — The Human Performance Company';
 const META_DESCRIPTION =
   'Pulse Intelligence Labs is an AI lab building the human performance stack — training, nutrition, mindset, and daily ritual — for athletes, coaches, and the people behind them.';
 const META_URL = 'https://pulseintelligencelabs.com';
+const META_OG_IMAGE = 'https://pulseintelligencelabs.com/pil-og.png';
 
 // Hero video lives at /public/pil-hero.mp4. Drop a cinematic sprinter clip
 // there (1080p+, 8–20s loopable, ideally h.264 mp4 + webm transcode).
@@ -94,7 +95,12 @@ const PILPage: NextPage = () => {
         <meta property="og:description" content={META_DESCRIPTION} />
         <meta property="og:url" content={META_URL} />
         <meta property="og:type" content="website" />
+        <meta property="og:image" content={META_OG_IMAGE} key="og:image" />
+        <meta property="og:image:secure_url" content={META_OG_IMAGE} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content={META_OG_IMAGE} key="twitter:image" />
       </Head>
 
       <main className="relative min-h-screen bg-black text-white selection:bg-white/20">
@@ -391,6 +397,7 @@ export const getStaticProps: GetStaticProps = async () => ({
     ogMeta: {
       title: META_TITLE,
       description: META_DESCRIPTION,
+      image: META_OG_IMAGE,
       url: META_URL,
       type: 'website',
       siteName: 'Pulse Intelligence Labs',

@@ -108,6 +108,7 @@ const META_TITLE = 'The Pulse Apps — Pulse Intelligence Labs';
 const META_DESCRIPTION =
   'The Pulse Intelligence Labs app suite — Fit With Pulse, Macra, Pulse Check, and Pulse Ritual. Performance, nutrition, mindset, and daily ritual, all in one place.';
 const META_URL = 'https://pulseintelligencelabs.com/apps';
+const META_OG_IMAGE = 'https://pulseintelligencelabs.com/pil-og.png';
 
 const RitualGlyph: React.FC<{ className?: string }> = ({ className }) => (
   <svg
@@ -250,7 +251,12 @@ const AppsPage: NextPage = () => {
         <meta property="og:description" content={META_DESCRIPTION} />
         <meta property="og:url" content={META_URL} />
         <meta property="og:type" content="website" />
+        <meta property="og:image" content={META_OG_IMAGE} key="og:image" />
+        <meta property="og:image:secure_url" content={META_OG_IMAGE} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content={META_OG_IMAGE} key="twitter:image" />
       </Head>
 
       <main className="relative min-h-screen overflow-hidden bg-zinc-950 text-white selection:bg-white/20">
@@ -314,6 +320,7 @@ export const getStaticProps: GetStaticProps = async () => ({
     ogMeta: {
       title: META_TITLE,
       description: META_DESCRIPTION,
+      image: META_OG_IMAGE,
       url: META_URL,
       type: 'website',
       siteName: 'Pulse Intelligence Labs',
