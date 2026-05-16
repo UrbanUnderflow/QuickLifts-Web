@@ -286,7 +286,7 @@ type PulseRitualSound = {
   label: string;
   description: string;
   icon: React.ReactNode;
-  category: 'daily' | 'milestone' | 'navigation';
+  category: 'onboarding' | 'daily' | 'milestone' | 'navigation';
   /// Filename (without extension) used by the iOS bundle. Pair with
   /// the call site in HapticsService / SoundService.
   file: string;
@@ -480,15 +480,95 @@ const RITUAL_SOUNDS: PulseRitualSound[] = [
     pairedHapticNote: 'HapticsService.selection() in RhythmView cell tap',
     priority: 'low',
   },
+
+  // ── Onboarding "big moments" — fire once each per install. These
+  // set the emotional ceiling for the whole product, so they're
+  // higher priority than daily SFX even though they're rare.
+  {
+    id: 'ritual-welcome-orb-intro',
+    label: 'Welcome Orb Intro',
+    description:
+      'Plays as the welcome orb scales in and the halo rings expand. First sound the user hears from Pulse Ritual.',
+    icon: <Sparkles className="w-4 h-4" />,
+    category: 'onboarding',
+    file: 'ritual-welcome-orb-intro',
+    prompt:
+      'Long ambient inhale tone, breathy soft pad rising from silence, peaceful and meditative, very slow attack with gentle bloom, calming first-touch sound, no music, no speech',
+    durationSeconds: 2.6,
+    promptInfluence: 0.55,
+    pairedHapticNote: 'WelcomeView.onAppear orb intro animation',
+    priority: 'high',
+  },
+  {
+    id: 'ritual-chip-trio-complete',
+    label: 'Chip Selection Complete',
+    description:
+      'Quiet acknowledgement when the user finishes a multi-pick onboarding row (e.g. picked 2 of 2 Grow chips). Reads as "you\'re done here," not a celebration.',
+    icon: <CheckCircle className="w-4 h-4" />,
+    category: 'onboarding',
+    file: 'ritual-chip-trio-complete',
+    prompt:
+      'Soft warm two-note settling tone, gentle felt resonance, peaceful acknowledgement, very brief, calming, no music, no speech',
+    durationSeconds: 0.7,
+    promptInfluence: 0.5,
+    pairedHapticNote: 'GrowView / FallOffView when pick count hits the required max',
+    priority: 'medium',
+  },
+  {
+    id: 'ritual-picks-trio-complete',
+    label: 'Ritual Picks Trio Complete',
+    description:
+      'Plays the moment the user lands the 3rd seed on the Ritual Picks screen. Three seed icons line up and briefly form a triangle constellation as this fires.',
+    icon: <Sparkles className="w-4 h-4" />,
+    category: 'onboarding',
+    file: 'ritual-picks-trio-complete',
+    prompt:
+      'Short three-note ascending chord, soft glass bell harmonics, peaceful triad in the same key, gentle resonance, calming, very brief, no music, no speech',
+    durationSeconds: 1.2,
+    promptInfluence: 0.55,
+    pairedHapticNote: 'RitualPicksView when all 3 seeds are picked',
+    priority: 'high',
+  },
+  {
+    id: 'ritual-reveal-handoff',
+    label: 'Reveal Hand-off',
+    description:
+      'The hero onboarding moment. Plays during the orb-dissolves-into-3-seeds animation on the Reveal screen — combines a slow orb dissolve with three soft golden seed thuds as each seed lands in its phantom pot.',
+    icon: <Sparkles className="w-4 h-4" />,
+    category: 'onboarding',
+    file: 'ritual-reveal-handoff',
+    prompt:
+      'Slow ambient orb dissolve sound followed by three soft warm earth thuds in sequence, gentle golden shimmer between the thuds, peaceful and ceremonial, calming first-ritual handoff moment, no music, no speech',
+    durationSeconds: 3.2,
+    promptInfluence: 0.55,
+    pairedHapticNote: 'RevealView runIntro animation (orb-to-seeds transition)',
+    priority: 'high',
+  },
+  {
+    id: 'ritual-start-watering-sweep',
+    label: 'Start Watering Sunrise',
+    description:
+      'Plays as the "Start watering" tap cross-fades from the Reveal screen into the Today tab. Soft sunrise swell that resolves into a single water-tap as the user lands in the app.',
+    icon: <Sparkles className="w-4 h-4" />,
+    category: 'onboarding',
+    file: 'ritual-start-watering-sweep',
+    prompt:
+      'Soft sunrise swell, warm pad gradually brightening over two seconds, resolving into a single gentle water droplet at the end, peaceful and welcoming, calming, no music, no speech',
+    durationSeconds: 2.8,
+    promptInfluence: 0.55,
+    pairedHapticNote: 'RevealView "Start watering" CTA tap before onStart()',
+    priority: 'high',
+  },
 ];
 
 const RITUAL_CATEGORY_LABELS: Record<string, string> = {
+  onboarding: 'Onboarding Moments',
   daily: 'Daily Cadence',
   milestone: 'Milestone Moments',
   navigation: 'Navigation & Movement',
 };
 
-const RITUAL_CATEGORY_ORDER: PulseRitualSound['category'][] = ['daily', 'milestone', 'navigation'];
+const RITUAL_CATEGORY_ORDER: PulseRitualSound['category'][] = ['onboarding', 'daily', 'milestone', 'navigation'];
 
 const RITUAL_PRIORITY_BADGE: Record<PulseRitualSound['priority'], { label: string; classes: string }> = {
   high: { label: 'Priority · High', classes: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25' },
