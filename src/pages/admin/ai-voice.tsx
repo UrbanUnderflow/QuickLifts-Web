@@ -626,7 +626,7 @@ const VP_STAGE_PALETTE: Record<VPCueDef['stageTag'], { label: string; color: str
   countdown:  { label: 'Countdown',   color: '#FFD60A', dimColor: 'rgba(255,214,10,0.15)' },
 };
 
-type AdminAudioTab = 'voice' | 'appLibrary' | 'ritual' | 'registrySims' | 'visionPro' | 'protocols' | 'runAlerts';
+type AdminAudioTab = 'voice' | 'macraOnboarding' | 'appLibrary' | 'ritual' | 'registrySims' | 'visionPro' | 'protocols' | 'runAlerts';
 
 type RegistrySimAudioAssetEntry = {
   variantId: string;
@@ -765,6 +765,138 @@ type RunAlertCueDef = {
 };
 
 const RUN_ALERT_ENGINE_KEY = 'community-run-alerts';
+
+type MacraOnboardingNarrationCue = {
+  cueKey: string;
+  label: string;
+  stepIndex: number;
+  prompt: string;
+};
+
+const MACRA_ONBOARDING_ENGINE_KEY = 'macra-onboarding';
+
+const MACRA_ONBOARDING_NARRATION_CUES: MacraOnboardingNarrationCue[] = [
+  {
+    cueKey: 'welcome',
+    label: 'Welcome',
+    stepIndex: 1,
+    prompt: 'Welcome to Macra. I am Nora. I will help turn your goal into numbers, meals, and decisions you can actually follow.',
+  },
+  {
+    cueKey: 'meet_nora',
+    label: 'Meet Nora',
+    stepIndex: 2,
+    prompt: 'I am here to make food feel less random. Answer a few questions, and I will shape the plan around your body and your life.',
+  },
+  {
+    cueKey: 'coach_assigned_plan',
+    label: 'Coach Assigned Plan',
+    stepIndex: 3,
+    prompt: 'I found a coach assigned plan for you. If this is the plan you want to use, I can bring it into Macra and keep your nutrition aligned.',
+  },
+  {
+    cueKey: 'fwp_macros_handoff',
+    label: 'FWP Macros Handoff',
+    stepIndex: 4,
+    prompt: 'I found macro targets from your Fit With Pulse profile. You can use those here, or we can reassess them together.',
+  },
+  {
+    cueKey: 'sex',
+    label: 'Sex',
+    stepIndex: 5,
+    prompt: 'First, choose the biological sex you want me to use for your calorie and macro estimate.',
+  },
+  {
+    cueKey: 'age',
+    label: 'Age',
+    stepIndex: 6,
+    prompt: 'Next, add your age. This helps me estimate your baseline needs more accurately.',
+  },
+  {
+    cueKey: 'height',
+    label: 'Height',
+    stepIndex: 7,
+    prompt: 'Now add your height. I use it with your weight and activity to build a better starting target.',
+  },
+  {
+    cueKey: 'current_weight',
+    label: 'Current Weight',
+    stepIndex: 8,
+    prompt: 'Tell me where you are starting today. This is just the baseline, not a judgment.',
+  },
+  {
+    cueKey: 'goal_weight',
+    label: 'Goal Weight',
+    stepIndex: 9,
+    prompt: 'Now choose the weight you want to move toward. I will use this to shape the pace of your plan.',
+  },
+  {
+    cueKey: 'pace',
+    label: 'Pace',
+    stepIndex: 10,
+    prompt: 'Pick the pace that feels sustainable. Faster is not always better if it makes the plan harder to live with.',
+  },
+  {
+    cueKey: 'activity_level',
+    label: 'Activity Level',
+    stepIndex: 11,
+    prompt: 'Choose the activity level that best matches your normal week. If you regularly play a sport, choose athlete and I will ask which one.',
+  },
+  {
+    cueKey: 'sport_selection',
+    label: 'Sport Selection',
+    stepIndex: 12,
+    prompt: 'Choose the sport you play most often. I will use it to tune fueling, training days, and game day recommendations.',
+  },
+  {
+    cueKey: 'dietary_preference',
+    label: 'Dietary Preference',
+    stepIndex: 13,
+    prompt: 'Tell me any dietary preference you want respected. I will tailor meal suggestions around it.',
+  },
+  {
+    cueKey: 'biggest_struggle',
+    label: 'Biggest Struggle',
+    stepIndex: 14,
+    prompt: 'Choose the thing that usually breaks the plan for you. This tells me where to coach hardest.',
+  },
+  {
+    cueKey: 'generating_plan',
+    label: 'Generating Plan',
+    stepIndex: 15,
+    prompt: 'I am turning your answers into a calorie target, macro targets, and a simple starting plan.',
+  },
+  {
+    cueKey: 'prediction',
+    label: 'Prediction',
+    stepIndex: 16,
+    prompt: 'Here is the projected path. These numbers are a starting point, and I will adapt as your real logs come in.',
+  },
+  {
+    cueKey: 'plan_ready',
+    label: 'Plan Ready',
+    stepIndex: 17,
+    prompt: 'I start with simple meals that fit your numbers. The more you log, the more I learn what you like, what you dislike, and how to make the plan more personal.',
+  },
+  {
+    cueKey: 'features',
+    label: 'Features',
+    stepIndex: 18,
+    prompt: 'These are the tools I will use with you: photo logging, macro targets, labels, meal planning, and daily coaching.',
+  },
+  {
+    cueKey: 'notification_preferences',
+    label: 'Notification Preferences',
+    stepIndex: 19,
+    prompt: 'Before you unlock Macra, choose when you want me to pull you back on track. This is your first commitment to the plan.',
+  },
+  {
+    cueKey: 'commit_trial',
+    label: 'Commit Trial',
+    stepIndex: 20,
+    prompt: 'Your plan is ready. Unlock Macra to start using your targets, meal plan, scanner, and Nora coaching.',
+  },
+];
 
 const RUN_ALERT_PALETTE: Record<RunAlertCueDef['intent'], { label: string; color: string; dimColor: string }> = {
   phonePlacement: { label: 'Phone Placement', color: '#F97316', dimColor: 'rgba(249,115,22,0.14)' },
@@ -1375,6 +1507,113 @@ const RunAlertSoundCard: React.FC<{
   );
 };
 
+const MacraOnboardingNarrationCard: React.FC<{
+  cue: MacraOnboardingNarrationCue;
+  asset: SimAudioAssetRef | null;
+  generating: boolean;
+  isPlaying: boolean;
+  onGenerate: () => void;
+  onPlay: () => void;
+  onStop: () => void;
+}> = ({ cue, asset, generating, isPlaying, onGenerate, onPlay, onStop }) => {
+  const isReady = Boolean(asset?.downloadURL);
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`rounded-xl border p-4 transition-all duration-200 ${
+        isPlaying
+          ? 'border-[#E0FE10]/30 bg-[#E0FE10]/5'
+          : 'border-white/[0.07] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-[#E0FE10]/25 bg-[#E0FE10]/12">
+          <Smartphone className="h-4 w-4 text-[#E0FE10]" />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-white">{cue.label}</span>
+            <span className="rounded-md border border-[#E0FE10]/20 bg-[#E0FE10]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#E0FE10]">
+              Step {cue.stepIndex}
+            </span>
+            <span className="rounded-md border border-white/[0.08] bg-white/[0.03] px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+              {cue.cueKey}
+            </span>
+            {generating ? (
+              <span className="flex items-center gap-1 rounded-md border border-amber-700/30 bg-amber-900/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+                <Loader2 className="h-2.5 w-2.5 animate-spin" />Generating…
+              </span>
+            ) : isReady ? (
+              <span className="rounded-md border border-emerald-700/30 bg-emerald-900/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                Ready
+              </span>
+            ) : (
+              <span className="rounded-md border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500">
+                Not Generated
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-zinc-400">{cue.prompt}</p>
+          {isReady && asset ? (
+            <code className="mt-2 block break-all text-[10px] font-mono text-zinc-600">{asset.storagePath}</code>
+          ) : null}
+        </div>
+
+        <div className="flex flex-shrink-0 items-center gap-1.5">
+          {isReady && !generating && (
+            <button
+              onClick={isPlaying ? onStop : onPlay}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                isPlaying
+                  ? 'border border-[#E0FE10]/25 bg-[#E0FE10]/15 text-[#E0FE10] hover:bg-[#E0FE10]/20'
+                  : 'border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white'
+              }`}
+            >
+              {isPlaying ? <><Square className="h-3 w-3" />Stop</> : <><Play className="h-3 w-3" />Preview</>}
+            </button>
+          )}
+          <button
+            onClick={onGenerate}
+            disabled={generating}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+              generating
+                ? 'cursor-not-allowed border border-zinc-700 bg-zinc-800 text-zinc-500'
+                : isReady
+                  ? 'border border-zinc-700 bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                  : 'border border-[#E0FE10]/30 bg-[#E0FE10]/15 text-[#E0FE10] hover:bg-[#E0FE10]/25'
+            }`}
+          >
+            {generating ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : isReady ? (
+              <><RotateCcw className="h-3 w-3" />Regen</>
+            ) : (
+              <><Wand2 className="h-3 w-3" />Generate</>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {isPlaying && (
+        <div className="mt-3 flex h-4 items-center gap-0.5">
+          {Array.from({ length: 20 }).map((_, i) => (
+            <motion.div
+              key={i}
+              className="w-1 rounded-full bg-[#E0FE10]"
+              animate={{ height: ['4px', `${Math.random() * 14 + 4}px`, '4px'] }}
+              transition={{ duration: 0.5 + Math.random() * 0.4, repeat: Infinity, delay: i * 0.07, ease: 'easeInOut' }}
+            />
+          ))}
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
 // ──────────────────────────────────────────────────────────
 // MAIN PAGE
 // ──────────────────────────────────────────────────────────
@@ -1400,13 +1639,15 @@ const AdminAiVoice: React.FC = () => {
   const [playingSound, setPlayingSound] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Pulse Ritual generation state — generated audio is held as an
-  // in-memory blob URL so the user can preview before downloading.
-  // No Firebase upload; the user saves the .mp3 directly into the
-  // iOS bundle.
-  const [ritualGenerated, setRitualGenerated] = useState<Record<string, string>>({});
-  const [ritualBlobs, setRitualBlobs] = useState<Record<string, Blob>>({});
+  // Pulse Ritual generation state — generated audio is uploaded to
+  // Firebase Storage and tracked in Firestore at
+  // `ritual-sfx-assets/{soundId}` so it survives page reloads and
+  // regeneration can be skipped on return visits. Downloads pull
+  // from the Storage downloadURL.
+  const [ritualAssets, setRitualAssets] = useState<Record<string, SimAudioAssetRef | null>>({});
   const [ritualGenerating, setRitualGenerating] = useState<Record<string, boolean>>({});
+  const [ritualLoading, setRitualLoading] = useState(false);
+  const [ritualLoadError, setRitualLoadError] = useState<string | null>(null);
   const [ritualGenErrors, setRitualGenErrors] = useState<Record<string, string>>({});
 
   // Vision Pro immersive sound set state
@@ -1438,6 +1679,13 @@ const AdminAiVoice: React.FC = () => {
   const [runAlertGenErrors, setRunAlertGenErrors] = useState<Record<string, string>>({});
   const [runAlertPlayingId, setRunAlertPlayingId] = useState<string | null>(null);
   const runAlertAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [macraOnboardingAssets, setMacraOnboardingAssets] = useState<Record<string, SimAudioAssetRef | null>>({});
+  const [macraOnboardingGenerating, setMacraOnboardingGenerating] = useState<Record<string, boolean>>({});
+  const [macraOnboardingLoading, setMacraOnboardingLoading] = useState(false);
+  const [macraOnboardingLoadError, setMacraOnboardingLoadError] = useState<string | null>(null);
+  const [macraOnboardingGenErrors, setMacraOnboardingGenErrors] = useState<Record<string, string>>({});
+  const [macraOnboardingPlayingId, setMacraOnboardingPlayingId] = useState<string | null>(null);
+  const macraOnboardingAudioRef = useRef<HTMLAudioElement | null>(null);
   const [protocolSectionsOpen, setProtocolSectionsOpen] = useState<Record<ProtocolCueDef['protocolClass'], boolean>>({
     regulation: true,
     priming: true,
@@ -1952,6 +2200,105 @@ const AdminAiVoice: React.FC = () => {
     audio.onerror = () => setRunAlertPlayingId(null);
   };
 
+  const loadMacraOnboardingAssets = async () => {
+    setMacraOnboardingLoading(true);
+    setMacraOnboardingLoadError(null);
+    try {
+      const snap = await getDoc(doc(db, CONFIG_COLLECTION, CONFIG_DOC_ID));
+      const rawAssets = (snap.data()?.macraOnboardingNarrations ?? {}) as Record<string, SimAudioAssetRef>;
+      const results: Record<string, SimAudioAssetRef | null> = {};
+      MACRA_ONBOARDING_NARRATION_CUES.forEach((cue) => {
+        results[cue.cueKey] = rawAssets[cue.cueKey] ?? null;
+      });
+      setMacraOnboardingAssets(results);
+    } catch (e: any) {
+      setMacraOnboardingLoadError(e?.message || 'Failed to load Macra onboarding narrations');
+    } finally {
+      setMacraOnboardingLoading(false);
+    }
+  };
+
+  const generateMacraOnboardingNarration = async (cue: MacraOnboardingNarrationCue) => {
+    setMacraOnboardingGenerating((prev) => ({ ...prev, [cue.cueKey]: true }));
+    setMacraOnboardingGenErrors((prev) => {
+      const next = { ...prev };
+      delete next[cue.cueKey];
+      return next;
+    });
+    try {
+      const speech = await generateSpeechBlob(cue.prompt);
+      const assetId = buildGeneratedDocId(MACRA_ONBOARDING_ENGINE_KEY, cue.cueKey, cue.prompt);
+      const path = `sim-audio-assets/${vpSlugify(MACRA_ONBOARDING_ENGINE_KEY)}/${cue.cueKey}/${assetId}.mp3`;
+      const sRef = storageRef(storage, path);
+      const snapshot = await uploadBytes(sRef, speech.blob, { contentType: speech.contentType });
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      const gsUrl = `gs://${snapshot.ref.bucket}/${snapshot.ref.fullPath}`;
+      const now = Date.now();
+      const assetRecord: SimAudioAssetRef = {
+        id: assetId,
+        cueKey: cue.cueKey,
+        label: cue.label,
+        prompt: cue.prompt,
+        provider: speech.providerId,
+        format: 'mp3',
+        contentType: speech.contentType,
+        storagePath: path,
+        gsUrl,
+        downloadURL,
+        createdAt: macraOnboardingAssets[cue.cueKey]?.createdAt ?? now,
+        updatedAt: now,
+      };
+
+      await setDoc(doc(db, 'sim-audio-assets', assetId), {
+        ...assetRecord,
+        family: MACRA_ONBOARDING_ENGINE_KEY,
+        engineKey: MACRA_ONBOARDING_ENGINE_KEY,
+        archetype: 'voice_channel',
+        app: 'macra',
+        stepIndex: cue.stepIndex,
+      });
+
+      const configRef = doc(db, CONFIG_COLLECTION, CONFIG_DOC_ID);
+      const configSnap = await getDoc(configRef);
+      const existingNarrations = (configSnap.data()?.macraOnboardingNarrations ?? {}) as Record<string, SimAudioAssetRef>;
+      await setDoc(configRef, {
+        macraOnboardingNarrations: {
+          ...existingNarrations,
+          [cue.cueKey]: assetRecord,
+        },
+        updatedAt: now,
+      }, { merge: true });
+
+      setMacraOnboardingAssets((prev) => ({ ...prev, [cue.cueKey]: assetRecord }));
+    } catch (e: any) {
+      const msg = e?.message || 'Generation failed';
+      setMacraOnboardingGenErrors((prev) => ({ ...prev, [cue.cueKey]: msg }));
+      console.error(`[Macra Onboarding] ${cue.cueKey}:`, msg);
+    } finally {
+      setMacraOnboardingGenerating((prev) => ({ ...prev, [cue.cueKey]: false }));
+    }
+  };
+
+  const stopMacraOnboardingNarration = () => {
+    if (macraOnboardingAudioRef.current) {
+      macraOnboardingAudioRef.current.pause();
+      macraOnboardingAudioRef.current.currentTime = 0;
+      macraOnboardingAudioRef.current = null;
+    }
+    setMacraOnboardingPlayingId(null);
+  };
+
+  const playMacraOnboardingNarration = (cueKey: string, url: string) => {
+    stopMacraOnboardingNarration();
+    setMacraOnboardingPlayingId(cueKey);
+    const audio = new Audio(url);
+    macraOnboardingAudioRef.current = audio;
+    audio.volume = 0.9;
+    audio.play().catch(() => setMacraOnboardingPlayingId(null));
+    audio.onended = () => setMacraOnboardingPlayingId(null);
+    audio.onerror = () => setMacraOnboardingPlayingId(null);
+  };
+
   const loadConfig = async () => {
     setLoading(true);
     setError(null);
@@ -1977,9 +2324,11 @@ const AdminAiVoice: React.FC = () => {
   useEffect(() => {
     loadConfig();
     loadVPAssets();
+    loadRitualAssets();
     loadRegistrySimAssets();
     loadProtocolAssets();
     loadRunAlertAssets();
+    loadMacraOnboardingAssets();
     return () => {
       stopNarration();
       stopSoundEffect();
@@ -1987,6 +2336,7 @@ const AdminAiVoice: React.FC = () => {
       stopRegistrySimSound();
       stopProtocolSound();
       stopRunAlertSound();
+      stopMacraOnboardingNarration();
     };
   }, []);
 
@@ -2087,11 +2437,32 @@ const AdminAiVoice: React.FC = () => {
   };
 
   // ── Pulse Ritual generation / preview / download handlers ────────
-  // The Ritual sounds are NOT staged into Firebase Storage like VP
-  // cues — they're bundled into the iOS app at build time. So the
-  // flow here is: generate → in-memory blob URL → preview locally →
-  // download as `{file}.mp3` for the engineer to drop into the
-  // PulseRitual bundle under Resources/Sounds/.
+  // Mirrors the VP pattern: generate → upload to Firebase Storage →
+  // write a Firestore doc at `ritual-sfx-assets/{soundId}`. The
+  // downloadURL survives page reloads so previously generated sounds
+  // come back with a Regen / Preview / Download row instead of
+  // silently losing the audio.
+
+  const RITUAL_SFX_COLLECTION = 'ritual-sfx-assets';
+
+  const loadRitualAssets = async () => {
+    setRitualLoading(true);
+    setRitualLoadError(null);
+    try {
+      const results: Record<string, SimAudioAssetRef | null> = {};
+      await Promise.all(
+        RITUAL_SOUNDS.map(async (sound) => {
+          const snap = await getDoc(doc(db, RITUAL_SFX_COLLECTION, sound.id));
+          results[sound.id] = snap.exists() ? (snap.data() as SimAudioAssetRef) : null;
+        })
+      );
+      setRitualAssets(results);
+    } catch (e: any) {
+      setRitualLoadError(e?.message || 'Failed to load Pulse Ritual sounds');
+    } finally {
+      setRitualLoading(false);
+    }
+  };
 
   const generateRitualSound = async (sound: PulseRitualSound) => {
     setRitualGenErrors((prev) => {
@@ -2101,14 +2472,44 @@ const AdminAiVoice: React.FC = () => {
     });
     setRitualGenerating((prev) => ({ ...prev, [sound.id]: true }));
     try {
-      const { blob } = await generateSfxBlob(sound.prompt, sound.durationSeconds, {
+      const sfx = await generateSfxBlob(sound.prompt, sound.durationSeconds, {
         promptInfluence: sound.promptInfluence,
       });
-      const previousUrl = ritualGenerated[sound.id];
-      if (previousUrl) URL.revokeObjectURL(previousUrl);
-      const url = URL.createObjectURL(blob);
-      setRitualBlobs((prev) => ({ ...prev, [sound.id]: blob }));
-      setRitualGenerated((prev) => ({ ...prev, [sound.id]: url }));
+
+      // Upload to Firebase Storage at a stable path so previews on
+      // future visits keep working.
+      const path = `ritual-sfx/${sound.id}/${sound.file}.mp3`;
+      const sRef = storageRef(storage, path);
+      const snapshot = await uploadBytes(sRef, sfx.blob, { contentType: sfx.contentType });
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      const gsUrl = `gs://${snapshot.ref.bucket}/${snapshot.ref.fullPath}`;
+
+      const now = Date.now();
+      const previous = ritualAssets[sound.id];
+      const assetRecord: SimAudioAssetRef = {
+        id: sound.id,
+        cueKey: sound.id,
+        label: sound.label,
+        prompt: sound.prompt,
+        provider: sfx.providerId,
+        format: 'mp3',
+        contentType: sfx.contentType,
+        storagePath: path,
+        gsUrl,
+        downloadURL,
+        createdAt: previous?.createdAt ?? now,
+        updatedAt: now,
+      };
+      await setDoc(doc(db, RITUAL_SFX_COLLECTION, sound.id), {
+        ...assetRecord,
+        family: 'pulse-ritual',
+        category: sound.category,
+        file: sound.file,
+        priority: sound.priority,
+        durationSeconds: sound.durationSeconds,
+      });
+
+      setRitualAssets((prev) => ({ ...prev, [sound.id]: assetRecord }));
     } catch (err: any) {
       console.error('[ritual sfx] generation failed', err);
       setRitualGenErrors((prev) => ({
@@ -2121,24 +2522,30 @@ const AdminAiVoice: React.FC = () => {
   };
 
   const previewRitualSound = (sound: PulseRitualSound) => {
-    const url = ritualGenerated[sound.id];
-    if (!url) return;
+    const asset = ritualAssets[sound.id];
+    if (!asset?.downloadURL) return;
     stopSoundEffect();
     setPlayingSound(sound.id);
-    playAudioUrl(url);
+    playAudioUrl(asset.downloadURL);
   };
 
-  const downloadRitualSound = (sound: PulseRitualSound) => {
-    const blob = ritualBlobs[sound.id];
-    if (!blob) return;
-    const a = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    a.href = url;
-    a.download = `${sound.file}.mp3`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const downloadRitualSound = async (sound: PulseRitualSound) => {
+    const asset = ritualAssets[sound.id];
+    if (!asset?.downloadURL) return;
+    try {
+      const res = await fetch(asset.downloadURL);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      a.href = url;
+      a.download = `${sound.file}.mp3`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[ritual sfx] download failed', err);
+    }
   };
 
   return (
@@ -2160,11 +2567,14 @@ const AdminAiVoice: React.FC = () => {
                 AI Voice & Sound Effects
               </h1>
               <p className="text-zinc-400 mt-2 text-sm">
-                Configure Nora's voice, app sound libraries, immersive Vision Pro sound sets, and generated PulseCheck protocol signature audio.
+                Configure Nora's voice, Macra onboarding narration, app sound libraries, immersive Vision Pro sound sets, and generated PulseCheck protocol signature audio.
               </p>
             </div>
             <button
-              onClick={loadConfig}
+              onClick={() => {
+                loadConfig();
+                loadMacraOnboardingAssets();
+              }}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-white hover:bg-zinc-700 transition-colors"
               disabled={loading}
             >
@@ -2194,6 +2604,13 @@ const AdminAiVoice: React.FC = () => {
               label="Nora Voice"
               description="Global narration voice, provider selection, presets, and preview."
               onClick={() => setActiveTab('voice')}
+            />
+            <AudioTabButton
+              active={activeTab === 'macraOnboarding'}
+              icon={<Smartphone className="h-4 w-4" />}
+              label="Macra Onboarding"
+              description="Pre-generated Nora voice clips for each Macra onboarding step."
+              onClick={() => setActiveTab('macraOnboarding')}
             />
             <AudioTabButton
               active={activeTab === 'appLibrary'}
@@ -2406,11 +2823,104 @@ const AdminAiVoice: React.FC = () => {
               )}
             </AnimatePresence>
           </div>
-          )}
+	          )}
 
-          {/* ════════════════════════
-              SECTION 2: SOUND EFFECTS
-          ════════════════════════ */}
+	          {activeTab === 'macraOnboarding' && (
+	          <div className="rounded-2xl bg-zinc-900/40 border border-white/10 backdrop-blur-xl p-5">
+	            <div className="mb-1 flex items-center justify-between gap-3">
+	              <div className="flex items-center gap-3">
+	                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#E0FE10]/25 bg-[#E0FE10]/12">
+	                  <Smartphone className="h-4 w-4 text-[#E0FE10]" />
+	                </div>
+	                <div>
+	                  <div className="font-semibold text-white">Macra Onboarding Nora Narrations</div>
+	                  <div className="mt-0.5 text-xs text-zinc-500">
+	                    Generate each fixed onboarding line once, store the MP3 URL on the AI voice config, then Macra iOS fetches and plays it by step key.
+	                  </div>
+	                </div>
+	              </div>
+	              <button
+	                onClick={loadMacraOnboardingAssets}
+	                disabled={macraOnboardingLoading}
+	                className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-white transition-colors hover:bg-zinc-700 disabled:opacity-50"
+	              >
+	                {macraOnboardingLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+	                Refresh
+	              </button>
+	            </div>
+
+	            <AnimatePresence>
+	              {macraOnboardingLoadError && (
+	                <motion.div
+	                  initial={{ opacity: 0, height: 0 }}
+	                  animate={{ opacity: 1, height: 'auto' }}
+	                  exit={{ opacity: 0, height: 0 }}
+	                  className="mt-3 rounded-xl border border-red-700/40 bg-red-900/20 p-3 text-xs text-red-200"
+	                >
+	                  {macraOnboardingLoadError}
+	                </motion.div>
+	              )}
+	            </AnimatePresence>
+
+	            <div className="mt-4 flex items-start gap-3 rounded-xl border border-white/[0.05] bg-zinc-950/60 p-3 text-xs text-zinc-400">
+	              <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-zinc-500" />
+	              <div>
+	                Assets are written to <code className="font-mono text-zinc-300">app-config/ai-voice.macraOnboardingNarrations</code> and uploaded under <code className="font-mono text-zinc-300">sim-audio-assets/macra-onboarding/</code>. Regenerate a line whenever its copy changes.
+	              </div>
+	            </div>
+
+	            <div className="mt-5 grid grid-cols-1 gap-3">
+	              {MACRA_ONBOARDING_NARRATION_CUES.map((cue) => (
+	                <div key={cue.cueKey}>
+	                  <MacraOnboardingNarrationCard
+	                    cue={cue}
+	                    asset={macraOnboardingAssets[cue.cueKey] ?? null}
+	                    generating={macraOnboardingGenerating[cue.cueKey] ?? false}
+	                    isPlaying={macraOnboardingPlayingId === cue.cueKey}
+	                    onGenerate={() => generateMacraOnboardingNarration(cue)}
+	                    onPlay={() => {
+	                      const url = macraOnboardingAssets[cue.cueKey]?.downloadURL;
+	                      if (url) playMacraOnboardingNarration(cue.cueKey, url);
+	                    }}
+	                    onStop={stopMacraOnboardingNarration}
+	                  />
+	                  <AnimatePresence>
+	                    {macraOnboardingGenErrors[cue.cueKey] && (
+	                      <motion.div
+	                        initial={{ opacity: 0, height: 0 }}
+	                        animate={{ opacity: 1, height: 'auto' }}
+	                        exit={{ opacity: 0, height: 0 }}
+	                        className="mt-1 rounded-lg border border-red-700/30 bg-red-900/20 px-3 py-2 text-[11px] text-red-300"
+	                      >
+	                        {macraOnboardingGenErrors[cue.cueKey]}
+	                      </motion.div>
+	                    )}
+	                  </AnimatePresence>
+	                </div>
+	              ))}
+	            </div>
+
+	            <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-white/[0.05] pt-4 text-xs text-zinc-500">
+	              <div>
+	                <span className="font-semibold text-zinc-300">{Object.values(macraOnboardingAssets).filter(Boolean).length}</span>
+	                {' / '}{MACRA_ONBOARDING_NARRATION_CUES.length} lines generated
+	              </div>
+	              {Object.values(macraOnboardingGenerating).some(Boolean) && (
+	                <div className="flex items-center gap-1.5 text-amber-400">
+	                  <Loader2 className="h-3 w-3 animate-spin" />
+	                  {Object.values(macraOnboardingGenerating).filter(Boolean).length} generating…
+	                </div>
+	              )}
+	              <div className="ml-auto text-zinc-600">
+	                Firestore: <code className="font-mono">app-config/ai-voice</code> · Storage: <code className="font-mono">sim-audio-assets/macra-onboarding/</code>
+	              </div>
+	            </div>
+	          </div>
+	          )}
+
+	          {/* ════════════════════════
+	              SECTION 2: SOUND EFFECTS
+	          ════════════════════════ */}
           {activeTab === 'appLibrary' && (
           <div className="rounded-2xl bg-zinc-900/40 border border-white/10 backdrop-blur-xl p-5">
             <div className="flex items-center gap-3 mb-6">
@@ -2498,21 +3008,38 @@ const AdminAiVoice: React.FC = () => {
               <div className="w-8 h-8 rounded-lg bg-teal-500/15 border border-teal-500/25 flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-teal-300" />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="font-semibold text-white">Pulse Ritual Sound Effects</div>
                 <div className="text-xs text-zinc-500">
                   Soft, intentional, peaceful — {RITUAL_SOUNDS.length} sounds segmented from the Community + PulseCheck libraries.
-                  Generate, preview locally, download into the iOS bundle as <code className="font-mono">Resources/Sounds/&lt;file&gt;.mp3</code>.
+                  Generated audio is persisted to Firebase Storage and survives reloads — download into the iOS bundle as <code className="font-mono">Resources/Sounds/&lt;file&gt;.mp3</code>.
                 </div>
+                {ritualLoadError && (
+                  <div className="mt-2 text-[11px] text-red-300">{ritualLoadError}</div>
+                )}
               </div>
-              {playingSound && (
+              <div className="ml-auto flex items-center gap-2">
+                {ritualLoading && (
+                  <span className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+                    <Loader2 className="w-3 h-3 animate-spin" />Loading
+                  </span>
+                )}
                 <button
-                  onClick={stopSoundEffect}
-                  className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-700"
+                  onClick={loadRitualAssets}
+                  disabled={ritualLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-700 disabled:opacity-50"
                 >
-                  <VolumeX className="w-3.5 h-3.5" />Stop preview
+                  <RefreshCw className="w-3.5 h-3.5" />Refresh
                 </button>
-              )}
+                {playingSound && (
+                  <button
+                    onClick={stopSoundEffect}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-700"
+                  >
+                    <VolumeX className="w-3.5 h-3.5" />Stop preview
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="space-y-8">
@@ -2531,7 +3058,8 @@ const AdminAiVoice: React.FC = () => {
                     <div className="grid grid-cols-1 gap-3 px-4 pb-4">
                       {sounds.map((sound) => {
                         const generating = Boolean(ritualGenerating[sound.id]);
-                        const generated = Boolean(ritualGenerated[sound.id]);
+                        const asset = ritualAssets[sound.id];
+                        const generated = Boolean(asset?.downloadURL);
                         const error = ritualGenErrors[sound.id];
                         const isPlaying = playingSound === sound.id;
                         const priorityBadge = RITUAL_PRIORITY_BADGE[sound.priority];
@@ -2636,6 +3164,14 @@ const AdminAiVoice: React.FC = () => {
                             {error && (
                               <div className="mt-3 rounded-lg border border-red-700/40 bg-red-900/20 px-3 py-2 text-[11px] text-red-200">
                                 {error}
+                              </div>
+                            )}
+
+                            {generated && asset && (
+                              <div className="mt-3 rounded-lg border border-emerald-700/30 bg-emerald-900/10 px-3 py-2 text-[10px] text-emerald-300/80 leading-relaxed">
+                                <span className="uppercase tracking-wider text-emerald-400/70 mr-1.5">Saved</span>
+                                {new Date(asset.updatedAt).toLocaleString()} ·{' '}
+                                <code className="font-mono text-emerald-300/70 break-all">{asset.storagePath}</code>
                               </div>
                             )}
 
