@@ -545,6 +545,21 @@ const RITUAL_SOUNDS: PulseRitualSound[] = [
     priority: 'high',
   },
   {
+    id: 'ritual-first-seed-ceremony',
+    label: 'First Seed Ceremony',
+    description:
+      'Hero moment — fires the very first time a seed is planted (the user picks their first ritual on the Ritual Picks screen). Full-screen overlay teaches the three pillars: Mind, Body, Spirit. Ceremonial, slightly longer than the regular seed-planted sound.',
+    icon: <Sparkles className="w-4 h-4" />,
+    category: 'onboarding',
+    file: 'ritual-first-seed-ceremony',
+    prompt:
+      'Slow ceremonial earth settle followed by a gentle ascending three-note chord, soft warm golden shimmer, peaceful and intentional, longer reverb tail than the regular seed-planted sound, calming first-ritual moment, no music, no speech',
+    durationSeconds: 3.5,
+    promptInfluence: 0.55,
+    pairedHapticNote: 'RitualPicksView when pickedCount transitions 0 → 1',
+    priority: 'high',
+  },
+  {
     id: 'ritual-start-watering-sweep',
     label: 'Start Watering Sunrise',
     description:
