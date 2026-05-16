@@ -15,6 +15,7 @@ import type { SimAudioAssetRef } from '../../api/firebase/mentaltraining/audioAs
 import type { PulseCheckProtocolDefinition } from '../../api/firebase/mentaltraining';
 import { SIM_VARIANTS_COLLECTION } from '../../api/firebase/mentaltraining/collections';
 import { persistVoiceConfig, speakStep, stopNarration } from '../../utils/tts';
+import { resolvePulseCheckFunctionUrl } from '../../api/firebase/mentaltraining/pulseCheckFunctionsUrl';
 import {
   AiVoiceConfig,
   ELEVENLABS_PRESETS,
@@ -1649,6 +1650,11 @@ const AdminAiVoice: React.FC = () => {
   const [ritualLoading, setRitualLoading] = useState(false);
   const [ritualLoadError, setRitualLoadError] = useState<string | null>(null);
   const [ritualGenErrors, setRitualGenErrors] = useState<Record<string, string>>({});
+  // Refinement loop — designer types plain-English feedback, OpenAI
+  // rewrites the prompt, then we regenerate with the new prompt.
+  const [ritualFeedback, setRitualFeedback] = useState<Record<string, string>>({});
+  const [ritualEffectivePrompts, setRitualEffectivePrompts] = useState<Record<string, string>>({});
+  const [ritualRefining, setRitualRefining] = useState<Record<string, boolean>>({});
 
   // Vision Pro immersive sound set state
   const [vpAssets, setVPAssets] = useState<Record<string, SimAudioAssetRef | null>>({});
@@ -1852,11 +1858,8 @@ const AdminAiVoice: React.FC = () => {
     }
   };
 
-  const getNetlifyFunctionsBase = () => {
-    if (typeof window === 'undefined') return '/.netlify/functions';
-    const isLocalhost =
-      window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    return isLocalhost ? 'http://localhost:8888/.netlify/functions' : '/.netlify/functions';
+  const getTtsMentalStepUrl = () => {
+    return resolvePulseCheckFunctionUrl('/.netlify/functions/tts-mental-step');
   };
 
   const generateSfxBlob = async (
@@ -1901,7 +1904,7 @@ const AdminAiVoice: React.FC = () => {
     }
 
     const settings = shouldUseElevenLabsVoiceDefaults(selectedPresetId) ? null : elevenLabsSettings;
-    const response = await fetch(`${getNetlifyFunctionsBase()}/tts-mental-step`, {
+    const response = await fetch(getTtsMentalStepUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2279,6 +2282,14 @@ const AdminAiVoice: React.FC = () => {
     }
   };
 
+  const generateMissingMacraOnboardingNarrations = async () => {
+    for (const cue of MACRA_ONBOARDING_NARRATION_CUES) {
+      if (!macraOnboardingAssets[cue.cueKey]?.downloadURL) {
+        await generateMacraOnboardingNarration(cue);
+      }
+    }
+  };
+
   const stopMacraOnboardingNarration = () => {
     if (macraOnboardingAudioRef.current) {
       macraOnboardingAudioRef.current.pause();
@@ -2450,13 +2461,25 @@ const AdminAiVoice: React.FC = () => {
     setRitualLoadError(null);
     try {
       const results: Record<string, SimAudioAssetRef | null> = {};
+      const prompts: Record<string, string> = {};
       await Promise.all(
         RITUAL_SOUNDS.map(async (sound) => {
           const snap = await getDoc(doc(db, RITUAL_SFX_COLLECTION, sound.id));
-          results[sound.id] = snap.exists() ? (snap.data() as SimAudioAssetRef) : null;
+          if (snap.exists()) {
+            const data = snap.data() as SimAudioAssetRef & { effectivePrompt?: string };
+            results[sound.id] = data;
+            // Persisted refined prompt overrides the static spec prompt
+            // so the next regen continues from the latest iteration.
+            if (data.effectivePrompt && data.effectivePrompt !== sound.prompt) {
+              prompts[sound.id] = data.effectivePrompt;
+            }
+          } else {
+            results[sound.id] = null;
+          }
         })
       );
       setRitualAssets(results);
+      setRitualEffectivePrompts(prompts);
     } catch (e: any) {
       setRitualLoadError(e?.message || 'Failed to load Pulse Ritual sounds');
     } finally {
@@ -2464,7 +2487,17 @@ const AdminAiVoice: React.FC = () => {
     }
   };
 
-  const generateRitualSound = async (sound: PulseRitualSound) => {
+  /// Generate (or regenerate) a Pulse Ritual sound. `overridePrompt`
+  /// is set by the refinement loop so iterations don't lose the
+  /// designer's edits. The effective prompt is stored on the asset
+  /// record so future loads continue from the latest version.
+  const generateRitualSound = async (
+    sound: PulseRitualSound,
+    overridePrompt?: string,
+    feedbackForHistory?: string
+  ) => {
+    const effectivePrompt = (overridePrompt ?? ritualEffectivePrompts[sound.id] ?? sound.prompt).trim();
+
     setRitualGenErrors((prev) => {
       const next = { ...prev };
       delete next[sound.id];
@@ -2472,7 +2505,7 @@ const AdminAiVoice: React.FC = () => {
     });
     setRitualGenerating((prev) => ({ ...prev, [sound.id]: true }));
     try {
-      const sfx = await generateSfxBlob(sound.prompt, sound.durationSeconds, {
+      const sfx = await generateSfxBlob(effectivePrompt, sound.durationSeconds, {
         promptInfluence: sound.promptInfluence,
       });
 
@@ -2500,6 +2533,18 @@ const AdminAiVoice: React.FC = () => {
         createdAt: previous?.createdAt ?? now,
         updatedAt: now,
       };
+      // Track refinement history as an append-only array on the doc
+      // so the designer can see what feedback produced what prompt.
+      const existingHistory = ((previous as any)?.refinementHistory ?? []) as Array<{
+        at: number;
+        feedback: string;
+        prompt: string;
+      }>;
+      const refinementHistory =
+        feedbackForHistory && overridePrompt
+          ? [...existingHistory, { at: now, feedback: feedbackForHistory, prompt: overridePrompt }]
+          : existingHistory;
+
       await setDoc(doc(db, RITUAL_SFX_COLLECTION, sound.id), {
         ...assetRecord,
         family: 'pulse-ritual',
@@ -2507,9 +2552,18 @@ const AdminAiVoice: React.FC = () => {
         file: sound.file,
         priority: sound.priority,
         durationSeconds: sound.durationSeconds,
+        effectivePrompt,
+        refinementHistory,
       });
 
-      setRitualAssets((prev) => ({ ...prev, [sound.id]: assetRecord }));
+      setRitualAssets((prev) => ({
+        ...prev,
+        [sound.id]: { ...assetRecord, refinementHistory, effectivePrompt } as any,
+      }));
+      if (overridePrompt) {
+        setRitualEffectivePrompts((prev) => ({ ...prev, [sound.id]: effectivePrompt }));
+        setRitualFeedback((prev) => ({ ...prev, [sound.id]: '' }));
+      }
     } catch (err: any) {
       console.error('[ritual sfx] generation failed', err);
       setRitualGenErrors((prev) => ({
@@ -2518,6 +2572,71 @@ const AdminAiVoice: React.FC = () => {
       }));
     } finally {
       setRitualGenerating((prev) => ({ ...prev, [sound.id]: false }));
+    }
+  };
+
+  /// Pipe the designer's feedback through OpenAI to refine the prompt
+  /// for this sound, then regenerate with the refined prompt. The
+  /// refined prompt + feedback get persisted onto the Firestore doc
+  /// so the iteration history is visible on future loads.
+  const refineAndRegenRitualSound = async (sound: PulseRitualSound) => {
+    const feedback = (ritualFeedback[sound.id] ?? '').trim();
+    if (!feedback) return;
+    const currentPrompt = ritualEffectivePrompts[sound.id] ?? sound.prompt;
+
+    setRitualGenErrors((prev) => {
+      const next = { ...prev };
+      delete next[sound.id];
+      return next;
+    });
+    setRitualRefining((prev) => ({ ...prev, [sound.id]: true }));
+    try {
+      const res = await fetch('/api/admin/refine-sfx-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          originalPrompt: currentPrompt,
+          feedback,
+          label: sound.label,
+          description: sound.description,
+          durationSeconds: sound.durationSeconds,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok || !payload?.refinedPrompt) {
+        throw new Error(payload?.error || 'Refinement failed');
+      }
+      await generateRitualSound(sound, payload.refinedPrompt as string, feedback);
+    } catch (err: any) {
+      console.error('[ritual sfx] refinement failed', err);
+      setRitualGenErrors((prev) => ({
+        ...prev,
+        [sound.id]: err?.message || 'Refinement failed',
+      }));
+    } finally {
+      setRitualRefining((prev) => ({ ...prev, [sound.id]: false }));
+    }
+  };
+
+  /// Discard the refined prompt and reset to the original spec.
+  const resetRitualPrompt = async (sound: PulseRitualSound) => {
+    setRitualEffectivePrompts((prev) => {
+      const next = { ...prev };
+      delete next[sound.id];
+      return next;
+    });
+    setRitualFeedback((prev) => ({ ...prev, [sound.id]: '' }));
+    const existing = ritualAssets[sound.id];
+    if (existing) {
+      await setDoc(
+        doc(db, RITUAL_SFX_COLLECTION, sound.id),
+        { effectivePrompt: sound.prompt },
+        { merge: true }
+      );
+      setRitualAssets((prev) => ({
+        ...prev,
+        [sound.id]: { ...(existing as any), effectivePrompt: sound.prompt },
+      }));
     }
   };
 
@@ -2839,14 +2958,24 @@ const AdminAiVoice: React.FC = () => {
 	                  </div>
 	                </div>
 	              </div>
-	              <button
-	                onClick={loadMacraOnboardingAssets}
-	                disabled={macraOnboardingLoading}
-	                className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-white transition-colors hover:bg-zinc-700 disabled:opacity-50"
-	              >
-	                {macraOnboardingLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-	                Refresh
-	              </button>
+	              <div className="flex flex-shrink-0 items-center gap-2">
+	                <button
+	                  onClick={generateMissingMacraOnboardingNarrations}
+	                  disabled={Object.values(macraOnboardingGenerating).some(Boolean)}
+	                  className="flex items-center gap-2 rounded-xl border border-[#E0FE10]/30 bg-[#E0FE10]/15 px-3 py-1.5 text-xs font-semibold text-[#E0FE10] transition-colors hover:bg-[#E0FE10]/20 disabled:opacity-50"
+	                >
+	                  <Wand2 className="h-3.5 w-3.5" />
+	                  Generate Missing
+	                </button>
+	                <button
+	                  onClick={loadMacraOnboardingAssets}
+	                  disabled={macraOnboardingLoading}
+	                  className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-white transition-colors hover:bg-zinc-700 disabled:opacity-50"
+	                >
+	                  {macraOnboardingLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+	                  Refresh
+	                </button>
+	              </div>
 	            </div>
 
 	            <AnimatePresence>
@@ -3058,11 +3187,20 @@ const AdminAiVoice: React.FC = () => {
                     <div className="grid grid-cols-1 gap-3 px-4 pb-4">
                       {sounds.map((sound) => {
                         const generating = Boolean(ritualGenerating[sound.id]);
+                        const refining = Boolean(ritualRefining[sound.id]);
                         const asset = ritualAssets[sound.id];
                         const generated = Boolean(asset?.downloadURL);
                         const error = ritualGenErrors[sound.id];
                         const isPlaying = playingSound === sound.id;
                         const priorityBadge = RITUAL_PRIORITY_BADGE[sound.priority];
+                        const effectivePrompt = ritualEffectivePrompts[sound.id];
+                        const hasRefinement = Boolean(effectivePrompt && effectivePrompt !== sound.prompt);
+                        const feedbackText = ritualFeedback[sound.id] ?? '';
+                        const history = ((asset as any)?.refinementHistory ?? []) as Array<{
+                          at: number;
+                          feedback: string;
+                          prompt: string;
+                        }>;
 
                         return (
                           <motion.div
@@ -3098,10 +3236,27 @@ const AdminAiVoice: React.FC = () => {
                                     </span>
                                   </div>
                                   <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{sound.description}</p>
-                                  <p className="text-[11px] text-zinc-400 mt-2 leading-relaxed">
-                                    <span className="text-zinc-500 uppercase tracking-wider text-[9px] mr-1">Prompt</span>
-                                    {sound.prompt}
-                                  </p>
+
+                                  {hasRefinement ? (
+                                    <>
+                                      <p className="text-[11px] text-teal-300/85 mt-2 leading-relaxed">
+                                        <span className="text-teal-400/70 uppercase tracking-wider text-[9px] mr-1">Refined Prompt</span>
+                                        {effectivePrompt}
+                                      </p>
+                                      <details className="mt-1">
+                                        <summary className="text-[10px] text-zinc-600 cursor-pointer hover:text-zinc-400">
+                                          Original spec prompt
+                                        </summary>
+                                        <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">{sound.prompt}</p>
+                                      </details>
+                                    </>
+                                  ) : (
+                                    <p className="text-[11px] text-zinc-400 mt-2 leading-relaxed">
+                                      <span className="text-zinc-500 uppercase tracking-wider text-[9px] mr-1">Prompt</span>
+                                      {sound.prompt}
+                                    </p>
+                                  )}
+
                                   <p className="text-[10px] text-zinc-600 mt-2">
                                     <span className="uppercase tracking-wider mr-1">Pairs with</span>
                                     {sound.pairedHapticNote}
@@ -3172,6 +3327,86 @@ const AdminAiVoice: React.FC = () => {
                                 <span className="uppercase tracking-wider text-emerald-400/70 mr-1.5">Saved</span>
                                 {new Date(asset.updatedAt).toLocaleString()} ·{' '}
                                 <code className="font-mono text-emerald-300/70 break-all">{asset.storagePath}</code>
+                              </div>
+                            )}
+
+                            {generated && (
+                              <div className="mt-3 rounded-lg border border-white/[0.06] bg-black/20 p-3">
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                  <label className="text-[10px] uppercase tracking-wider text-zinc-500">
+                                    Feedback on this take
+                                  </label>
+                                  {hasRefinement && (
+                                    <button
+                                      onClick={() => resetRitualPrompt(sound)}
+                                      className="text-[10px] text-zinc-500 hover:text-zinc-300 underline-offset-2 hover:underline"
+                                    >
+                                      Reset to spec prompt
+                                    </button>
+                                  )}
+                                </div>
+                                <textarea
+                                  value={feedbackText}
+                                  onChange={(e) =>
+                                    setRitualFeedback((prev) => ({ ...prev, [sound.id]: e.target.value }))
+                                  }
+                                  placeholder='e.g. "too sharp, soften the attack" or "needs more reverb decay" or "feels too cheerful"'
+                                  rows={2}
+                                  disabled={refining || generating}
+                                  className="w-full resize-none rounded-md border border-white/[0.08] bg-black/40 px-3 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-teal-400/40 focus:outline-none disabled:opacity-50"
+                                />
+                                <div className="mt-2 flex items-center justify-between gap-2">
+                                  <span className="text-[10px] text-zinc-600">
+                                    {history.length > 0
+                                      ? `${history.length} refinement${history.length === 1 ? '' : 's'} so far`
+                                      : 'OpenAI rewrites the prompt with your feedback, then regenerates.'}
+                                  </span>
+                                  <button
+                                    onClick={() => refineAndRegenRitualSound(sound)}
+                                    disabled={!feedbackText.trim() || refining || generating}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                                      !feedbackText.trim() || refining || generating
+                                        ? 'bg-teal-500/5 border-teal-500/15 text-teal-300/40 cursor-not-allowed'
+                                        : 'bg-teal-500/15 border-teal-500/30 text-teal-300 hover:bg-teal-500/20'
+                                    }`}
+                                  >
+                                    {refining ? (
+                                      <><Loader2 className="w-3 h-3 animate-spin" />Refining prompt</>
+                                    ) : generating ? (
+                                      <><Loader2 className="w-3 h-3 animate-spin" />Regenerating</>
+                                    ) : (
+                                      <><Wand2 className="w-3 h-3" />Refine + regen</>
+                                    )}
+                                  </button>
+                                </div>
+
+                                {history.length > 0 && (
+                                  <details className="mt-3">
+                                    <summary className="text-[10px] text-zinc-500 cursor-pointer hover:text-zinc-300">
+                                      Refinement history
+                                    </summary>
+                                    <ol className="mt-2 space-y-2">
+                                      {history.map((entry, idx) => (
+                                        <li
+                                          key={`${entry.at}-${idx}`}
+                                          className="rounded-md border border-white/[0.04] bg-black/30 px-2 py-1.5"
+                                        >
+                                          <div className="text-[10px] text-zinc-500">
+                                            {new Date(entry.at).toLocaleString()}
+                                          </div>
+                                          <div className="text-[11px] text-zinc-300 mt-0.5">
+                                            <span className="text-zinc-500 mr-1">Feedback:</span>
+                                            {entry.feedback}
+                                          </div>
+                                          <div className="text-[10px] text-zinc-500 mt-0.5 leading-snug">
+                                            <span className="text-zinc-600 mr-1 uppercase tracking-wider">Prompt</span>
+                                            {entry.prompt}
+                                          </div>
+                                        </li>
+                                      ))}
+                                    </ol>
+                                  </details>
+                                )}
                               </div>
                             )}
 
