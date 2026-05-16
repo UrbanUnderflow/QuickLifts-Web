@@ -268,6 +268,234 @@ const CATEGORY_LABELS: Record<string, string> = {
 const CATEGORY_ORDER = ['splash', 'pulsecheck', 'celebration', 'workout', 'notification', 'ui'];
 
 // ──────────────────────────────────────────────────────────
+// PULSE RITUAL — SOUND EFFECTS LIBRARY
+//
+// Design tone for every clip: soft, intentional, peaceful, calming.
+// No mechanical clicks. No game-y dings. Singing bowls, water,
+// breath, warm felt taps. Sounds that lower the heart rate.
+//
+// Generation: hand each `prompt` to the ElevenLabs SFX endpoint via
+// the existing `generateSfxBlob(...)` helper, then download the
+// returned blob as `{file}.mp3` to drop into the Pulse Ritual iOS
+// bundle under Resources/Sounds/.
+// ──────────────────────────────────────────────────────────
+
+type PulseRitualSound = {
+  id: string;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  category: 'daily' | 'milestone' | 'navigation';
+  /// Filename (without extension) used by the iOS bundle. Pair with
+  /// the call site in HapticsService / SoundService.
+  file: string;
+  /// ElevenLabs SFX prompt — describes the desired sonic texture in
+  /// natural language. Tuned for the "calming, intentional" voice.
+  prompt: string;
+  durationSeconds: number;
+  /// Lower influence (~0.3) gives ElevenLabs more freedom; higher
+  /// (~0.6) sticks closer to the prompt text. Soft / abstract cues
+  /// usually sound better with lower influence.
+  promptInfluence?: number;
+  /// Existing iOS trigger point the sound should fire alongside.
+  /// Helps the engineer wire `SoundService.play(...)` next to the
+  /// matching `HapticsService.X()` call.
+  pairedHapticNote: string;
+  /// Priority order for which sounds to generate + ship first.
+  priority: 'high' | 'medium' | 'low';
+};
+
+const RITUAL_SOUNDS: PulseRitualSound[] = [
+  // ── Daily cadence — must be the quietest in the set; users hear
+  // these dozens of times a week.
+  {
+    id: 'ritual-water-tap',
+    label: 'Water Tap',
+    description:
+      'Fires when the user taps WATER on a drop card or Garden plant. Most frequent sound in the app — must never feel grating.',
+    icon: <Music className="w-4 h-4" />,
+    category: 'daily',
+    file: 'ritual-water-tap',
+    prompt:
+      'Single soft water droplet landing on a still pond, gentle plip with a short ripple decay, calm and peaceful, very short, no music, no speech, no reverb tail',
+    durationSeconds: 1,
+    promptInfluence: 0.45,
+    pairedHapticNote: 'HapticsService.waterTap() in DropCardView + GardenPlantCard + PotView',
+    priority: 'high',
+  },
+  {
+    id: 'ritual-all-watered-today',
+    label: 'Daily Three Complete',
+    description:
+      'Plays once per day when wateredCount transitions to 3-of-3. A quiet "settling into place," not a fanfare.',
+    icon: <CheckCircle className="w-4 h-4" />,
+    category: 'daily',
+    file: 'ritual-all-watered-today',
+    prompt:
+      'Very brief three-note settling exhale chord, soft glass bell harmonics, peaceful resolution, gentle low-to-mid frequency, calming, no music, no speech, no reverb tail',
+    durationSeconds: 1.4,
+    promptInfluence: 0.5,
+    pairedHapticNote: 'Fires alongside the rhythm-building banner in TodayView when count == 3',
+    priority: 'high',
+  },
+  {
+    id: 'ritual-onboarding-pick',
+    label: 'Onboarding Pick',
+    description:
+      'Chip select during onboarding (Grow, Fall-off, Windows, Ritual Picks). Played in quick succession — must be the softest sound in the whole set.',
+    icon: <Zap className="w-4 h-4" />,
+    category: 'daily',
+    file: 'ritual-onboarding-pick',
+    prompt:
+      'Very soft felt-marble tap, brief warm wood tone, intentional and quiet, calming, very short, no music, no speech',
+    durationSeconds: 0.4,
+    promptInfluence: 0.4,
+    pairedHapticNote: 'HapticsService.selection() in ChipView + WindowsView + onboarding chip rows',
+    priority: 'medium',
+  },
+
+  // ── Milestone moments — ceremonial, larger emotional weight.
+  // The user hears these rarely so they can carry more presence.
+  {
+    id: 'ritual-seed-planted',
+    label: 'Seed Planted',
+    description:
+      'Plays when a fresh seed lands in a pot — both first-onboarding plant and post-bloom replant from the Greenhouse. Pairs with the golden seed-drop animation.',
+    icon: <Sparkles className="w-4 h-4" />,
+    category: 'milestone',
+    file: 'ritual-seed-planted',
+    prompt:
+      'Soft warm earth settling, a gentle low thud followed by a subtle golden shimmer tail, peaceful and intentional, brief, calming, no music, no speech',
+    durationSeconds: 1.6,
+    promptInfluence: 0.5,
+    pairedHapticNote: 'Fires when PotView.firePlanting() runs (ritualId transitions nil → some)',
+    priority: 'high',
+  },
+  {
+    id: 'ritual-sprout-celebration',
+    label: 'Sprout Celebration (Day 7)',
+    description:
+      'The hero milestone sound. Plays when StageCelebrationView opens for a sprout transition. Single calming bowl tone with breath-like attack and release.',
+    icon: <Sparkles className="w-4 h-4" />,
+    category: 'milestone',
+    file: 'ritual-sprout-celebration',
+    prompt:
+      'Soft singing bowl tone, peaceful breath-like attack and slow release, calming meditation chime, single warm mid-range tone, gentle resonance, no music, no speech',
+    durationSeconds: 1.6,
+    promptInfluence: 0.5,
+    pairedHapticNote: 'StageCelebrationView with stage == .sprout',
+    priority: 'high',
+  },
+  {
+    id: 'ritual-bloom-celebration',
+    label: 'Bloom Celebration (Day 28)',
+    description:
+      'Same family as Sprout but a fifth higher with a subtle harmonic shimmer overlay — reads as "richer" without being louder.',
+    icon: <Sparkles className="w-4 h-4" />,
+    category: 'milestone',
+    file: 'ritual-bloom-celebration',
+    prompt:
+      'Soft singing bowl tone with a light harmonic shimmer overlay, peaceful breath-like attack and slow release, mid-high tone with gentle sparkle, calming and ceremonial, no music, no speech',
+    durationSeconds: 1.9,
+    promptInfluence: 0.55,
+    pairedHapticNote: 'StageCelebrationView with stage == .bloom',
+    priority: 'high',
+  },
+  {
+    id: 'ritual-garden-lock',
+    label: 'Garden Plant Locked',
+    description:
+      'Plays when the user confirms BloomLockView and a bloomed habit is moved into the Garden permanently. Slow-decay bell, longer than the bloom tone.',
+    icon: <Sparkles className="w-4 h-4" />,
+    category: 'milestone',
+    file: 'ritual-garden-lock',
+    prompt:
+      'Slow-decay meditation bell, ceremonial single tone with long peaceful release, warm low-mid frequency, contemplative, no music, no speech',
+    durationSeconds: 2.4,
+    promptInfluence: 0.55,
+    pairedHapticNote: 'Fires when RitualStore.lockBloomToGarden() runs from BloomLockView',
+    priority: 'medium',
+  },
+  {
+    id: 'ritual-expansion-pick',
+    label: 'Sprout / Bloom Expansion Accepted',
+    description:
+      'Very short ascending shimmer when the user picks the next version of a routine from ProgressionEventView. Marks the commitment to the expanded habit.',
+    icon: <CheckCircle className="w-4 h-4" />,
+    category: 'milestone',
+    file: 'ritual-expansion-pick',
+    prompt:
+      'Very short ascending shimmer, three quick gentle glass tones rising in pitch, peaceful affirmation, calming, very brief, no music, no speech',
+    durationSeconds: 0.8,
+    promptInfluence: 0.5,
+    pairedHapticNote: 'Fires when ProgressionEventView onAccept callback runs (sproutPlant / bloomPlant)',
+    priority: 'medium',
+  },
+
+  // ── Navigation & movement — lowest-priority polish. Risk of
+  // becoming noise; ship only after the higher-tier sounds land well.
+  {
+    id: 'ritual-move-seed',
+    label: 'Move Seed Between Pots',
+    description:
+      'Plays when the user moves a planted seed/sprout/bloom from one pot to another via the overflow menu.',
+    icon: <Zap className="w-4 h-4" />,
+    category: 'navigation',
+    file: 'ritual-move-seed',
+    prompt:
+      'Soft whoosh slide, gentle airy transition tone, peaceful movement sound, very brief, calming, no music, no speech',
+    durationSeconds: 0.7,
+    promptInfluence: 0.4,
+    pairedHapticNote: 'Fires when RitualStore.moveSeed() runs (DropCardView move menu)',
+    priority: 'low',
+  },
+  {
+    id: 'ritual-tab-change',
+    label: 'Tab Change',
+    description:
+      'Bottom tab bar tap. Almost-silent felt tap — ship only if it adds to the feel rather than becoming noise.',
+    icon: <Zap className="w-4 h-4" />,
+    category: 'navigation',
+    file: 'ritual-tab-change',
+    prompt:
+      'Almost-silent felt tap, very brief warm low tone, navigation feedback, soft and peaceful, very short, no music, no speech',
+    durationSeconds: 0.3,
+    promptInfluence: 0.35,
+    pairedHapticNote: 'Tab switch in MainTabView / TabRouter',
+    priority: 'low',
+  },
+  {
+    id: 'ritual-rhythm-cell-tap',
+    label: 'Rhythm Cell Tap',
+    description:
+      '28-day grid cell tap that opens DayDetailModalView. Could share asset with onboarding-pick; included separately in case you want a distinct timbre.',
+    icon: <Zap className="w-4 h-4" />,
+    category: 'navigation',
+    file: 'ritual-rhythm-cell-tap',
+    prompt:
+      'Very soft glass tap, brief gentle ping, calming UI feedback, very short, no music, no speech',
+    durationSeconds: 0.3,
+    promptInfluence: 0.4,
+    pairedHapticNote: 'HapticsService.selection() in RhythmView cell tap',
+    priority: 'low',
+  },
+];
+
+const RITUAL_CATEGORY_LABELS: Record<string, string> = {
+  daily: 'Daily Cadence',
+  milestone: 'Milestone Moments',
+  navigation: 'Navigation & Movement',
+};
+
+const RITUAL_CATEGORY_ORDER: PulseRitualSound['category'][] = ['daily', 'milestone', 'navigation'];
+
+const RITUAL_PRIORITY_BADGE: Record<PulseRitualSound['priority'], { label: string; classes: string }> = {
+  high: { label: 'Priority · High', classes: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25' },
+  medium: { label: 'Priority · Medium', classes: 'bg-amber-500/15 text-amber-300 border-amber-500/25' },
+  low: { label: 'Priority · Low', classes: 'bg-zinc-700/40 text-zinc-400 border-zinc-700/50' },
+};
+
+// ──────────────────────────────────────────────────────────
 // VISION PRO RESET — IMMERSIVE SOUND SETS
 // Dynamically generated via ElevenLabs and stored in Firebase.
 // These are spatial SFX tied to trial stage transitions in the
@@ -398,7 +626,7 @@ const VP_STAGE_PALETTE: Record<VPCueDef['stageTag'], { label: string; color: str
   countdown:  { label: 'Countdown',   color: '#FFD60A', dimColor: 'rgba(255,214,10,0.15)' },
 };
 
-type AdminAudioTab = 'voice' | 'appLibrary' | 'registrySims' | 'visionPro' | 'protocols' | 'runAlerts';
+type AdminAudioTab = 'voice' | 'appLibrary' | 'ritual' | 'registrySims' | 'visionPro' | 'protocols' | 'runAlerts';
 
 type RegistrySimAudioAssetEntry = {
   variantId: string;
@@ -1172,6 +1400,15 @@ const AdminAiVoice: React.FC = () => {
   const [playingSound, setPlayingSound] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Pulse Ritual generation state — generated audio is held as an
+  // in-memory blob URL so the user can preview before downloading.
+  // No Firebase upload; the user saves the .mp3 directly into the
+  // iOS bundle.
+  const [ritualGenerated, setRitualGenerated] = useState<Record<string, string>>({});
+  const [ritualBlobs, setRitualBlobs] = useState<Record<string, Blob>>({});
+  const [ritualGenerating, setRitualGenerating] = useState<Record<string, boolean>>({});
+  const [ritualGenErrors, setRitualGenErrors] = useState<Record<string, string>>({});
+
   // Vision Pro immersive sound set state
   const [vpAssets, setVPAssets] = useState<Record<string, SimAudioAssetRef | null>>({});
   const [vpGenerating, setVPGenerating] = useState<Record<string, boolean>>({});
@@ -1849,6 +2086,61 @@ const AdminAiVoice: React.FC = () => {
     playAudioUrl(`/audio/sfx/${sound.file}.mp3`);
   };
 
+  // ── Pulse Ritual generation / preview / download handlers ────────
+  // The Ritual sounds are NOT staged into Firebase Storage like VP
+  // cues — they're bundled into the iOS app at build time. So the
+  // flow here is: generate → in-memory blob URL → preview locally →
+  // download as `{file}.mp3` for the engineer to drop into the
+  // PulseRitual bundle under Resources/Sounds/.
+
+  const generateRitualSound = async (sound: PulseRitualSound) => {
+    setRitualGenErrors((prev) => {
+      const next = { ...prev };
+      delete next[sound.id];
+      return next;
+    });
+    setRitualGenerating((prev) => ({ ...prev, [sound.id]: true }));
+    try {
+      const { blob } = await generateSfxBlob(sound.prompt, sound.durationSeconds, {
+        promptInfluence: sound.promptInfluence,
+      });
+      const previousUrl = ritualGenerated[sound.id];
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+      const url = URL.createObjectURL(blob);
+      setRitualBlobs((prev) => ({ ...prev, [sound.id]: blob }));
+      setRitualGenerated((prev) => ({ ...prev, [sound.id]: url }));
+    } catch (err: any) {
+      console.error('[ritual sfx] generation failed', err);
+      setRitualGenErrors((prev) => ({
+        ...prev,
+        [sound.id]: err?.message || 'Generation failed',
+      }));
+    } finally {
+      setRitualGenerating((prev) => ({ ...prev, [sound.id]: false }));
+    }
+  };
+
+  const previewRitualSound = (sound: PulseRitualSound) => {
+    const url = ritualGenerated[sound.id];
+    if (!url) return;
+    stopSoundEffect();
+    setPlayingSound(sound.id);
+    playAudioUrl(url);
+  };
+
+  const downloadRitualSound = (sound: PulseRitualSound) => {
+    const blob = ritualBlobs[sound.id];
+    if (!blob) return;
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    a.href = url;
+    a.download = `${sound.file}.mp3`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <AdminRouteGuard>
       <Head>
@@ -1909,6 +2201,13 @@ const AdminAiVoice: React.FC = () => {
               label="App Library"
               description="Pulse Community and PulseCheck app sound libraries with category-based preview."
               onClick={() => setActiveTab('appLibrary')}
+            />
+            <AudioTabButton
+              active={activeTab === 'ritual'}
+              icon={<Sparkles className="h-4 w-4" />}
+              label="Pulse Ritual"
+              description="Soft, intentional, peaceful SFX for the Pulse Ritual iOS app. Generate, preview, download."
+              onClick={() => setActiveTab('ritual')}
             />
             <AudioTabButton
               active={activeTab === 'registrySims'}
@@ -2188,6 +2487,192 @@ const AdminAiVoice: React.FC = () => {
               </div>
               <div className="ml-auto text-zinc-600">
                 Preview plays from <code className="font-mono">/public/audio/</code> — iOS plays from bundle
+              </div>
+            </div>
+          </div>
+          )}
+
+          {activeTab === 'ritual' && (
+          <div className="rounded-2xl bg-zinc-900/40 border border-white/10 backdrop-blur-xl p-5">
+            <div className="mb-6 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-teal-500/15 border border-teal-500/25 flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-teal-300" />
+              </div>
+              <div>
+                <div className="font-semibold text-white">Pulse Ritual Sound Effects</div>
+                <div className="text-xs text-zinc-500">
+                  Soft, intentional, peaceful — {RITUAL_SOUNDS.length} sounds segmented from the Community + PulseCheck libraries.
+                  Generate, preview locally, download into the iOS bundle as <code className="font-mono">Resources/Sounds/&lt;file&gt;.mp3</code>.
+                </div>
+              </div>
+              {playingSound && (
+                <button
+                  onClick={stopSoundEffect}
+                  className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-700"
+                >
+                  <VolumeX className="w-3.5 h-3.5" />Stop preview
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-8">
+              {RITUAL_CATEGORY_ORDER.map((cat) => {
+                const sounds = RITUAL_SOUNDS.filter((s) => s.category === cat);
+                if (sounds.length === 0) return null;
+                return (
+                  <div key={cat} className="rounded-2xl border border-white/[0.06] bg-black/10">
+                    <div className="flex items-center gap-2 px-4 py-4">
+                      <span className="text-xs font-semibold uppercase tracking-[0.15em] text-zinc-500">
+                        {RITUAL_CATEGORY_LABELS[cat]}
+                      </span>
+                      <div className="h-px flex-1 bg-white/[0.05]" />
+                      <span className="text-xs text-zinc-600">{sounds.length} sounds</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 px-4 pb-4">
+                      {sounds.map((sound) => {
+                        const generating = Boolean(ritualGenerating[sound.id]);
+                        const generated = Boolean(ritualGenerated[sound.id]);
+                        const error = ritualGenErrors[sound.id];
+                        const isPlaying = playingSound === sound.id;
+                        const priorityBadge = RITUAL_PRIORITY_BADGE[sound.priority];
+
+                        return (
+                          <motion.div
+                            key={sound.id}
+                            layout
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className={`rounded-xl border p-4 transition-all duration-200 ${
+                              isPlaying
+                                ? 'border-teal-400/40 bg-teal-500/[0.04]'
+                                : 'border-white/[0.07] bg-white/[0.02] hover:border-white/[0.12]'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-3 min-w-0">
+                                <div
+                                  className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${
+                                    isPlaying ? 'bg-teal-500/20 text-teal-300' : 'bg-white/5 text-zinc-400'
+                                  }`}
+                                >
+                                  {sound.icon}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-sm font-semibold text-white">{sound.label}</span>
+                                    <span
+                                      className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md border ${priorityBadge.classes}`}
+                                    >
+                                      {priorityBadge.label}
+                                    </span>
+                                    <span className="text-[10px] text-zinc-500">
+                                      {sound.durationSeconds}s
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{sound.description}</p>
+                                  <p className="text-[11px] text-zinc-400 mt-2 leading-relaxed">
+                                    <span className="text-zinc-500 uppercase tracking-wider text-[9px] mr-1">Prompt</span>
+                                    {sound.prompt}
+                                  </p>
+                                  <p className="text-[10px] text-zinc-600 mt-2">
+                                    <span className="uppercase tracking-wider mr-1">Pairs with</span>
+                                    {sound.pairedHapticNote}
+                                  </p>
+                                  <code className="text-[10px] text-zinc-600 font-mono mt-2 block">
+                                    {sound.file}.mp3
+                                  </code>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-shrink-0 flex-col gap-1.5">
+                                <button
+                                  onClick={() => generateRitualSound(sound)}
+                                  disabled={generating}
+                                  className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                                    generating
+                                      ? 'bg-teal-500/10 border-teal-500/25 text-teal-300 cursor-wait'
+                                      : generated
+                                      ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                                      : 'bg-teal-500/15 border-teal-500/30 text-teal-300 hover:bg-teal-500/20'
+                                  }`}
+                                >
+                                  {generating ? (
+                                    <><Loader2 className="w-3 h-3 animate-spin" />Generating</>
+                                  ) : generated ? (
+                                    <><RotateCcw className="w-3 h-3" />Regen</>
+                                  ) : (
+                                    <><Wand2 className="w-3 h-3" />Generate</>
+                                  )}
+                                </button>
+
+                                {generated && (
+                                  <>
+                                    <button
+                                      onClick={isPlaying ? stopSoundEffect : () => previewRitualSound(sound)}
+                                      className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                                        isPlaying
+                                          ? 'bg-teal-500/15 border-teal-500/30 text-teal-300'
+                                          : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                                      }`}
+                                    >
+                                      {isPlaying ? (
+                                        <><Square className="w-3 h-3" />Stop</>
+                                      ) : (
+                                        <><Play className="w-3 h-3" />Preview</>
+                                      )}
+                                    </button>
+
+                                    <button
+                                      onClick={() => downloadRitualSound(sound)}
+                                      className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700"
+                                    >
+                                      <Save className="w-3 h-3" />Download
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            {error && (
+                              <div className="mt-3 rounded-lg border border-red-700/40 bg-red-900/20 px-3 py-2 text-[11px] text-red-200">
+                                {error}
+                              </div>
+                            )}
+
+                            {isPlaying && (
+                              <div className="flex items-center gap-0.5 mt-3 h-4">
+                                {Array.from({ length: 20 }).map((_, i) => (
+                                  <motion.div
+                                    key={i}
+                                    className="w-1 bg-teal-400 rounded-full"
+                                    animate={{ height: ['4px', `${Math.random() * 14 + 4}px`, '4px'] }}
+                                    transition={{
+                                      duration: 0.5 + Math.random() * 0.4,
+                                      repeat: Infinity,
+                                      delay: i * 0.07,
+                                      ease: 'easeInOut',
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-8 flex flex-wrap gap-3 text-xs text-zinc-500 border-t border-white/[0.05] pt-5">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-teal-400/60" />
+                Pulse Ritual iOS App
+              </div>
+              <div className="ml-auto text-zinc-600">
+                Generation calls <code className="font-mono">ElevenLabs SFX</code> · downloads save as
+                {' '}<code className="font-mono">&lt;file&gt;.mp3</code>
               </div>
             </div>
           </div>
