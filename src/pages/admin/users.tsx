@@ -20,6 +20,11 @@ type User = {
   username: string;
   isAdmin?: boolean;
   subscriptionType?: SubscriptionType | string;
+  registrationEntryPoint?: string;
+  pushTokenSourceApp?: string;
+  hasCompletedMacraOnboarding?: boolean;
+  pulseCheckOnboardingComplete?: boolean;
+  ritualRegistered?: boolean;
   registrationComplete?: boolean;
   createdAt?: any;
   adminVerified?: boolean; // Flag to track actual admin status from admin collection
@@ -32,14 +37,81 @@ const isBetaSubscription = (value?: string) => {
   return normalized === 'beta' || normalized === SubscriptionType.beta.toLowerCase();
 };
 
+type RegistrationOriginKey = 'fit_with_pulse' | 'macra' | 'pulse_check' | 'pulse_ritual' | 'unknown';
+type OriginTabType = 'originFitWithPulse' | 'originMacra' | 'originPulseCheck' | 'originPulseRitual' | 'originUnknown';
+type TabType = 'all' | 'admins' | 'creators' | 'workoutSessions' | 'logs' | 'betaApplications' | OriginTabType;
+
+const originTabConfigs: Array<{
+  tab: OriginTabType;
+  key: RegistrationOriginKey;
+  label: string;
+  caption: string;
+  badgeClassName: string;
+}> = [
+  {
+    tab: 'originFitWithPulse',
+    key: 'fit_with_pulse',
+    label: 'Fit With Pulse',
+    caption: 'Fitness origin',
+    badgeClassName: 'bg-blue-900/30 text-blue-300 border-blue-900',
+  },
+  {
+    tab: 'originMacra',
+    key: 'macra',
+    label: 'Macra',
+    caption: 'Nutrition origin',
+    badgeClassName: 'bg-lime-900/30 text-lime-300 border-lime-900',
+  },
+  {
+    tab: 'originPulseCheck',
+    key: 'pulse_check',
+    label: 'Pulse Check',
+    caption: 'Mind origin',
+    badgeClassName: 'bg-purple-900/30 text-purple-300 border-purple-900',
+  },
+  {
+    tab: 'originPulseRitual',
+    key: 'pulse_ritual',
+    label: 'Pulse Ritual',
+    caption: 'Ritual origin',
+    badgeClassName: 'bg-emerald-900/30 text-emerald-300 border-emerald-900',
+  },
+  {
+    tab: 'originUnknown',
+    key: 'unknown',
+    label: 'Unknown',
+    caption: 'Missing field',
+    badgeClassName: 'bg-gray-900/30 text-gray-400 border-gray-700',
+  },
+];
+
+const normalizeRegistrationEntryPoint = (value?: string): RegistrationOriginKey => {
+  const normalized = (value || '').trim().toLowerCase().replace(/\s+/g, '_');
+
+  if (!normalized) return 'unknown';
+
+  if (['macra'].includes(normalized)) return 'macra';
+  if (['pulse_check', 'pulse-check', 'pulsecheck'].includes(normalized)) return 'pulse_check';
+  if (['pulse_ritual', 'pulse-ritual', 'pulseritual', 'ritual'].includes(normalized)) return 'pulse_ritual';
+  if (['fit_with_pulse', 'fit-with-pulse', 'fitwithpulse', 'fwp', 'quicklifts', 'quicklifts_web', 'quicklifts-ios', 'quicklifts_ios'].includes(normalized)) {
+    return 'fit_with_pulse';
+  }
+
+  return 'unknown';
+};
+
+const getRegistrationOriginConfig = (user: User) => {
+  const originKey = normalizeRegistrationEntryPoint(user.registrationEntryPoint);
+  return originTabConfigs.find(config => config.key === originKey) || originTabConfigs[originTabConfigs.length - 1];
+};
+
+const getOriginTabConfig = (tab: TabType) => originTabConfigs.find(config => config.tab === tab);
+
 // Define a type for workout session display data
 type WorkoutSessionDisplay = {
   workout: Workout;
   logs: ExerciseLog[];
 };
-
-// Update TabType to include 'logs', 'betaApplications', and 'creators'
-type TabType = 'all' | 'admins' | 'creators' | 'workoutSessions' | 'logs' | 'betaApplications';
 
 const UsersManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -303,6 +375,19 @@ const UsersManagement: React.FC = () => {
       return filteredUsers.every(user => selectedUserIds.has(user.id));
   }, [filteredUsers, selectedUserIds, isSelectingForDelete]);
 
+  const registrationOriginCounts = useMemo(() => {
+    return originTabConfigs.reduce<Record<RegistrationOriginKey, number>>((counts, config) => {
+      counts[config.key] = users.filter(user => normalizeRegistrationEntryPoint(user.registrationEntryPoint) === config.key).length;
+      return counts;
+    }, {
+      fit_with_pulse: 0,
+      macra: 0,
+      pulse_check: 0,
+      pulse_ritual: 0,
+      unknown: 0,
+    });
+  }, [users]);
+
   const handleSelectAllVisibleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       const isChecked = event.target.checked;
       setSelectedUserIds(prev => {
@@ -449,9 +534,12 @@ const UsersManagement: React.FC = () => {
   // Update filtered users based on search term and active tab
   const updateFilteredUsers = (allUsers: User[], term: string, tab: TabType) => {
     let filtered = [...allUsers];
+    const originConfig = getOriginTabConfig(tab);
     
     // Apply tab filter
-    if (tab === 'admins') {
+    if (originConfig) {
+      filtered = filtered.filter(user => normalizeRegistrationEntryPoint(user.registrationEntryPoint) === originConfig.key);
+    } else if (tab === 'admins') {
       filtered = filtered.filter(user => user.adminVerified);
     } else if (tab === 'creators') {
       // Show only users who have uploaded videos (identified by videoCount > 0)
@@ -465,7 +553,9 @@ const UsersManagement: React.FC = () => {
         (user.email?.toLowerCase().includes(lowercaseTerm)) ||
         (user.displayName?.toLowerCase().includes(lowercaseTerm)) ||
         (user.username?.toLowerCase().includes(lowercaseTerm)) ||
-        (user.id?.toLowerCase().includes(lowercaseTerm))
+        (user.id?.toLowerCase().includes(lowercaseTerm)) ||
+        (user.registrationEntryPoint?.toLowerCase().includes(lowercaseTerm)) ||
+        (getRegistrationOriginConfig(user).label.toLowerCase().includes(lowercaseTerm))
       );
     }
     
@@ -536,7 +626,7 @@ const UsersManagement: React.FC = () => {
       loadBetaApplications();
     }
     
-    // Only apply filtering for 'all' and 'admins' tabs
+    // Only apply filtering for user-list tabs.
     if (tab !== 'workoutSessions' && tab !== 'betaApplications') {
       updateFilteredUsers(users, searchTerm, tab);
     }
@@ -1359,6 +1449,7 @@ const UsersManagement: React.FC = () => {
   const renderUserDetails = (user: User) => {
     // Get all properties from the user object
     const userProps = Object.entries(user).filter(([key]) => key !== 'adminVerified');
+    const registrationOriginConfig = getRegistrationOriginConfig(user);
     
     return (
       <div className="bg-[#1d2b3a] border-t border-blue-800 animate-fade-in-up p-4">
@@ -1442,6 +1533,20 @@ const UsersManagement: React.FC = () => {
                         Incomplete
                       </span>
                     )}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-gray-400 text-xs">Origin Registration Source</div>
+                  <div className="mt-1">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium border ${registrationOriginConfig.badgeClassName}`}
+                      title={user.registrationEntryPoint || 'No registrationEntryPoint set'}
+                    >
+                      {registrationOriginConfig.label}
+                    </span>
+                    <div className="mt-1 text-xs text-gray-500 font-mono">
+                      {user.registrationEntryPoint || 'registrationEntryPoint missing'}
+                    </div>
                   </div>
                 </div>
                 <div>
@@ -2350,7 +2455,7 @@ const UsersManagement: React.FC = () => {
               </div>
             </div>
             {/* Tabs */}
-            <div className="flex border-b border-gray-700 mb-4">
+            <div className="flex flex-wrap gap-x-2 gap-y-2 border-b border-gray-700 mb-4">
               <button
                 className={`py-2 px-4 mr-2 font-medium text-sm transition-colors relative ${
                   activeTab === 'all'
@@ -2477,6 +2582,49 @@ const UsersManagement: React.FC = () => {
                   <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-purple-500 to-[#d7ff00]"></div>
                 )}
               </button>
+            </div>
+
+            {/* Origin registration source tabs */}
+            <div className="mb-5 rounded-lg border border-gray-800 bg-[#171a20]/70 p-3">
+              <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.2em] text-gray-500">Origin registration source</div>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Filters users by <span className="font-mono text-gray-300">users.registrationEntryPoint</span>, the first app that created their ecosystem account.
+                  </p>
+                </div>
+                {activeTab.startsWith('origin') && (
+                  <button
+                    onClick={() => handleTabChange('all')}
+                    disabled={isBatchDeleting}
+                    className="rounded-md border border-gray-700 bg-gray-900/40 px-3 py-1.5 text-xs font-medium text-gray-300 transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Clear origin filter
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {originTabConfigs.map(config => (
+                  <button
+                    key={config.tab}
+                    className={`rounded-lg border px-3 py-2 text-left transition ${
+                      activeTab === config.tab
+                        ? `${config.badgeClassName} ring-1 ring-[#d7ff00]/50`
+                        : 'border-gray-700 bg-[#262a30] text-gray-400 hover:border-gray-600 hover:text-gray-200'
+                    } ${isBatchDeleting ? 'pointer-events-none opacity-60' : ''}`}
+                    onClick={() => handleTabChange(config.tab)}
+                    disabled={isBatchDeleting}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold">{config.label}</span>
+                      <span className="rounded-full bg-black/30 px-2 py-0.5 text-xs">
+                        {registrationOriginCounts[config.key]}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-[11px] opacity-70">{config.caption}</div>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Batch Deletion Progress UI */}
@@ -3118,6 +3266,7 @@ const UsersManagement: React.FC = () => {
                       <th className="py-3 px-4 text-left text-gray-300 font-medium">Email</th>
                         <th className="py-3 px-4 text-left text-gray-300 font-medium">Username</th>
                         <th className="py-3 px-4 text-left text-gray-300 font-medium">Registration</th>
+                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Origin Source</th>
                         <th className="py-3 px-4 text-left text-gray-300 font-medium">Admin</th>
                         <th className="py-3 px-4 text-left text-gray-300 font-medium">Plan</th>
                         <th className="py-3 px-4 text-center text-gray-300 font-medium">Admin Actions</th>
@@ -3156,6 +3305,25 @@ const UsersManagement: React.FC = () => {
                               <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">Complete</span> : 
                               <span className="px-2 py-1 bg-orange-900/30 text-orange-400 rounded-full text-xs font-medium border border-orange-900">Incomplete</span>
                             }
+                          </td>
+                          <td className="py-3 px-4 border-b border-gray-700">
+                            {(() => {
+                              const originConfig = getRegistrationOriginConfig(user);
+
+                              return (
+                                <div>
+                                  <span
+                                    className={`px-2 py-1 rounded-full text-xs font-medium border ${originConfig.badgeClassName}`}
+                                    title={user.registrationEntryPoint || 'No registrationEntryPoint set'}
+                                  >
+                                    {originConfig.label}
+                                  </span>
+                                  <div className="mt-1 max-w-[150px] truncate text-[10px] text-gray-500 font-mono">
+                                    {user.registrationEntryPoint || 'missing'}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </td>
                             <td className="py-3 px-4 border-b border-gray-700">
                               {user.adminVerified ? 
@@ -3261,7 +3429,7 @@ const UsersManagement: React.FC = () => {
                                 </tr>
                         {selectedUser?.id === user.id && (
                                   <tr>
-                              <td colSpan={isSelectingForDelete ? 9 : 8} className="p-0 border-b border-gray-700">
+                              <td colSpan={isSelectingForDelete ? 10 : 9} className="p-0 border-b border-gray-700">
                               {renderUserDetails(user)}
                                     </td>
                                   </tr>
