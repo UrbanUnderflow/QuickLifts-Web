@@ -189,7 +189,6 @@ const PILPage: NextPage = () => {
             }`}
             autoPlay
             muted
-            defaultMuted
             loop
             controls={false}
             playsInline
