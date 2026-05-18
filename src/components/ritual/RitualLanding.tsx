@@ -1,12 +1,12 @@
 import React from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, CheckCircle2, Droplet, Flame, Leaf, Moon, Sparkles } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, Droplet, Flame, Moon, Sparkles, Sprout } from 'lucide-react';
 import RitualEarlyAccessForm from './RitualEarlyAccessForm';
 
 const RITUAL_MARKS = [
   { label: 'Mind', Icon: Moon, text: 'Start with a two-minute reset that meets the day you are actually in.' },
   { label: 'Body', Icon: Flame, text: 'Keep hydration, mobility, recovery, and training signals in one daily rhythm.' },
-  { label: 'Fuel', Icon: Leaf, text: 'Carry nutrition and energy intent from Macra into the rest of the Pulse stack.' },
+  { label: 'Spirit', Icon: Sprout, text: 'Keep a small daily promise to the part of you that needs care, meaning, and momentum.' },
 ];
 
 const RitualLanding: React.FC = () => {
@@ -85,7 +85,7 @@ const RitualLanding: React.FC = () => {
           </div>
           <div className="space-y-4">
             {[
-              'Three drops a day: Mind, Body, and Fuel.',
+              'Three drops a day: Mind, Body, and Spirit.',
               'Auto-waters from Pulse Check, Fit With Pulse, and Macra as the ecosystem grows.',
               'Designed as a calm daily layer for athletes, coaches, wellness operators, and anyone building better performance habits.',
             ].map((item) => (
