@@ -7,6 +7,8 @@ const PIL_HOSTS = new Set(['pulseintelligencelabs.com', 'www.pulseintelligencela
 const FWP_HOSTS = new Set(['fitwithpulse.ai', 'www.fitwithpulse.ai']);
 
 const PIL_PREFIX = '/PIL';
+const LINK_PREVIEW_CRAWLER_PATTERN =
+  /(bot|crawler|spider|preview|facebookexternalhit|facebot|twitterbot|slackbot|linkedinbot|whatsapp|telegrambot|discordbot|pinterest|vkshare|skypeuripreview|applebot)/i;
 
 const getSinglePageHostTarget = (host: string) => {
   if (MACRA_HOSTS.has(host)) return '/Macra';
@@ -16,6 +18,8 @@ const getSinglePageHostTarget = (host: string) => {
 
 export function middleware(request: NextRequest) {
   const host = (request.headers.get('host') ?? '').toLowerCase().split(':')[0];
+  const userAgent = request.headers.get('user-agent') ?? '';
+  const isLinkPreviewCrawler = LINK_PREVIEW_CRAWLER_PATTERN.test(userAgent);
 
   // fitwithpulse.ai/apps → 308 redirect to the canonical home at pulseintelligencelabs.com/apps.
   // Scoped to the production FWP host only so Netlify previews can still hit /PIL/apps directly.
@@ -45,11 +49,17 @@ export function middleware(request: NextRequest) {
 
     // Canonicalize direct visits to the underlying /PIL paths back to "/" form.
     if (pathname === PIL_PREFIX) {
+      if (isLinkPreviewCrawler) {
+        return NextResponse.next();
+      }
       const url = request.nextUrl.clone();
       url.pathname = '/';
       return NextResponse.redirect(url);
     }
     if (pathname.startsWith(`${PIL_PREFIX}/`)) {
+      if (isLinkPreviewCrawler) {
+        return NextResponse.next();
+      }
       const url = request.nextUrl.clone();
       url.pathname = pathname.slice(PIL_PREFIX.length);
       return NextResponse.redirect(url);
