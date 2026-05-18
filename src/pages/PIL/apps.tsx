@@ -4,6 +4,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowUpRight, Play, Sparkles } from 'lucide-react';
+import RitualEarlyAccessForm from '../../components/ritual/RitualEarlyAccessForm';
 
 const AppleLogo: React.FC<{ className?: string }> = ({ className }) => (
   <svg
@@ -32,6 +33,7 @@ type AppEntry = {
   iosUrl?: string;
   androidUrl?: string;
   webUrl?: string;
+  landingUrl?: string;
   status: 'available' | 'coming-soon';
 };
 
@@ -93,13 +95,14 @@ const APPS: AppEntry[] = [
     tagline: 'Water your body, mind, and spirit.',
     description:
       'The daily watering layer for human performance. Three small drops a day — watch yourself grow.',
-    icon: '',
+    icon: '/pulse-ritual-icon.png',
     hue: {
       ring: 'ring-[#5EEAD4]/40',
       glow: 'from-[#5EEAD4]/30 via-[#10B981]/10 to-transparent',
       badge: 'bg-[#5EEAD4] text-black',
       text: 'text-[#5EEAD4]',
     },
+    landingUrl: '/Ritual',
     status: 'coming-soon',
   },
 ];
@@ -229,10 +232,17 @@ const AppCard: React.FC<{ app: AppEntry; index: number }> = ({ app, index }) => 
           )}
 
           {isComingSoon && (
-            <div className="mt-6">
-              <span className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-zinc-400">
-                Launching later this year
-              </span>
+            <div className="mt-6 max-w-2xl space-y-4">
+              <RitualEarlyAccessForm source="pil-apps-card" compact />
+              {app.landingUrl && (
+                <Link
+                  href={app.landingUrl}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-400 transition-colors hover:text-white"
+                >
+                  Open Ritual page
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+              )}
             </div>
           )}
         </div>

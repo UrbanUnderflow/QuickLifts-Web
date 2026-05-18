@@ -124,6 +124,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/Nora',
     // Macra marketing landing (public)
     '/Macra',
+    // Pulse Ritual marketing landing (public)
+    '/Ritual',
   ].map(route => route?.toLowerCase());
 
   const publicPathPatterns = [

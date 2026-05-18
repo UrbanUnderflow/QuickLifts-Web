@@ -67,10 +67,10 @@ const PILLARS: Pillar[] = [
 ];
 
 const APP_TILES = [
-  { name: 'Fit With Pulse', icon: '/fwp-app-icon.jpg', dot: 'bg-[#E0FE10]', status: 'Available' },
-  { name: 'Macra', icon: '/macra-icon.png', dot: 'bg-[#3B82F6]', status: 'Available' },
-  { name: 'Pulse Check', icon: '/pulseCheckIcon.png', dot: 'bg-[#A05EF8]', status: 'Available' },
-  { name: 'Pulse Ritual', icon: '', dot: 'bg-[#5EEAD4]', status: 'Coming soon' },
+  { name: 'Fit With Pulse', icon: '/fwp-app-icon.jpg', dot: 'bg-[#E0FE10]', status: 'Available', href: '/apps' },
+  { name: 'Macra', icon: '/macra-icon.png', dot: 'bg-[#3B82F6]', status: 'Available', href: '/apps' },
+  { name: 'Pulse Check', icon: '/pulseCheckIcon.png', dot: 'bg-[#A05EF8]', status: 'Available', href: '/apps' },
+  { name: 'Pulse Ritual', icon: '/pulse-ritual-icon.png', dot: 'bg-[#5EEAD4]', status: 'Join early access', href: '/Ritual' },
 ];
 
 const PILLogoMark: React.FC<{ tone?: 'light' | 'dark' }> = ({ tone = 'light' }) => (
@@ -311,7 +311,7 @@ const PILPage: NextPage = () => {
               {APP_TILES.map((tile) => (
                 <Link
                   key={tile.name}
-                  href="/apps"
+                  href={tile.href}
                   className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 backdrop-blur-sm hover:bg-white/[0.06] transition-colors"
                 >
                   <div className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl ring-1 ring-white/10">
