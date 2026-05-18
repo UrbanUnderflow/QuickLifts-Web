@@ -722,7 +722,7 @@ const VP_STAGE_PALETTE: Record<VPCueDef['stageTag'], { label: string; color: str
   countdown:  { label: 'Countdown',   color: '#FFD60A', dimColor: 'rgba(255,214,10,0.15)' },
 };
 
-type AdminAudioTab = 'voice' | 'macraOnboarding' | 'appLibrary' | 'ritual' | 'registrySims' | 'visionPro' | 'protocols' | 'runAlerts';
+type AdminAudioTab = 'voice' | 'macraOnboarding' | 'pulseCheckTutorial' | 'appLibrary' | 'ritual' | 'registrySims' | 'visionPro' | 'protocols' | 'runAlerts';
 
 type RegistrySimAudioAssetEntry = {
   variantId: string;
@@ -862,14 +862,19 @@ type RunAlertCueDef = {
 
 const RUN_ALERT_ENGINE_KEY = 'community-run-alerts';
 
-type MacraOnboardingNarrationCue = {
+type FixedNarrationCue = {
   cueKey: string;
   label: string;
   stepIndex: number;
   prompt: string;
 };
 
+type MacraOnboardingNarrationCue = FixedNarrationCue;
+type PulseCheckTutorialNarrationCue = FixedNarrationCue;
+
 const MACRA_ONBOARDING_ENGINE_KEY = 'macra-onboarding';
+const PULSECHECK_TUTORIAL_ENGINE_KEY = 'pulsecheck-home-tutorial';
+const PULSECHECK_TUTORIAL_NARRATION_CONFIG_FIELD = 'pulseCheckTutorialNarrations';
 
 const MACRA_ONBOARDING_NARRATION_CUES: MacraOnboardingNarrationCue[] = [
   {
@@ -991,6 +996,33 @@ const MACRA_ONBOARDING_NARRATION_CUES: MacraOnboardingNarrationCue[] = [
     label: 'Commit Trial',
     stepIndex: 20,
     prompt: 'Your plan is ready. Unlock Macra to start using your targets, meal plan, scanner, and Nora coaching.',
+  },
+];
+
+const PULSECHECK_TUTORIAL_NARRATION_CUES: PulseCheckTutorialNarrationCue[] = [
+  {
+    cueKey: 'goal',
+    label: 'The Goal',
+    stepIndex: 1,
+    prompt: 'Hey, this is the lay of the land. PulseCheck trains the mental side of performance: composure, focus, and decision control under pressure.',
+  },
+  {
+    cueKey: 'protocols',
+    label: 'Protocols',
+    stepIndex: 2,
+    prompt: 'Protocols are guided training for regulation. They help athletes settle emotion, steady the body, and recover focus before the next moment.',
+  },
+  {
+    cueKey: 'sims',
+    label: 'Sims',
+    stepIndex: 3,
+    prompt: 'Sims sharpen cognitive skills: attention, inhibition, decision speed, and pressure reading. They make the mind faster and cleaner in live sport.',
+  },
+  {
+    cueKey: 'automaticity',
+    label: 'Automaticity',
+    stepIndex: 4,
+    prompt: 'Automaticity means the right response starts without a long internal debate. The goal is muscle memory for the mind, so trained patterns move closer to subconscious response in game moments.',
   },
 ];
 
@@ -1603,8 +1635,8 @@ const RunAlertSoundCard: React.FC<{
   );
 };
 
-const MacraOnboardingNarrationCard: React.FC<{
-  cue: MacraOnboardingNarrationCue;
+const FixedNarrationCard: React.FC<{
+  cue: FixedNarrationCue;
   asset: SimAudioAssetRef | null;
   generating: boolean;
   isPlaying: boolean;
@@ -1787,6 +1819,13 @@ const AdminAiVoice: React.FC = () => {
   const [macraOnboardingGenErrors, setMacraOnboardingGenErrors] = useState<Record<string, string>>({});
   const [macraOnboardingPlayingId, setMacraOnboardingPlayingId] = useState<string | null>(null);
   const macraOnboardingAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [pulseCheckTutorialAssets, setPulseCheckTutorialAssets] = useState<Record<string, SimAudioAssetRef | null>>({});
+  const [pulseCheckTutorialGenerating, setPulseCheckTutorialGenerating] = useState<Record<string, boolean>>({});
+  const [pulseCheckTutorialLoading, setPulseCheckTutorialLoading] = useState(false);
+  const [pulseCheckTutorialLoadError, setPulseCheckTutorialLoadError] = useState<string | null>(null);
+  const [pulseCheckTutorialGenErrors, setPulseCheckTutorialGenErrors] = useState<Record<string, string>>({});
+  const [pulseCheckTutorialPlayingId, setPulseCheckTutorialPlayingId] = useState<string | null>(null);
+  const pulseCheckTutorialAudioRef = useRef<HTMLAudioElement | null>(null);
   const [protocolSectionsOpen, setProtocolSectionsOpen] = useState<Record<ProtocolCueDef['protocolClass'], boolean>>({
     regulation: true,
     priming: true,
@@ -2405,6 +2444,114 @@ const AdminAiVoice: React.FC = () => {
     audio.onerror = () => setMacraOnboardingPlayingId(null);
   };
 
+  const loadPulseCheckTutorialAssets = async () => {
+    setPulseCheckTutorialLoading(true);
+    setPulseCheckTutorialLoadError(null);
+    try {
+      const snap = await getDoc(doc(db, CONFIG_COLLECTION, CONFIG_DOC_ID));
+      const rawAssets = (snap.data()?.[PULSECHECK_TUTORIAL_NARRATION_CONFIG_FIELD] ?? {}) as Record<string, SimAudioAssetRef>;
+      const results: Record<string, SimAudioAssetRef | null> = {};
+      PULSECHECK_TUTORIAL_NARRATION_CUES.forEach((cue) => {
+        results[cue.cueKey] = rawAssets[cue.cueKey] ?? null;
+      });
+      setPulseCheckTutorialAssets(results);
+    } catch (e: any) {
+      setPulseCheckTutorialLoadError(e?.message || 'Failed to load PulseCheck tutorial narrations');
+    } finally {
+      setPulseCheckTutorialLoading(false);
+    }
+  };
+
+  const generatePulseCheckTutorialNarration = async (cue: PulseCheckTutorialNarrationCue) => {
+    setPulseCheckTutorialGenerating((prev) => ({ ...prev, [cue.cueKey]: true }));
+    setPulseCheckTutorialGenErrors((prev) => {
+      const next = { ...prev };
+      delete next[cue.cueKey];
+      return next;
+    });
+    try {
+      const speech = await generateSpeechBlob(cue.prompt);
+      const assetId = buildGeneratedDocId(PULSECHECK_TUTORIAL_ENGINE_KEY, cue.cueKey, cue.prompt);
+      const path = `sim-audio-assets/${vpSlugify(PULSECHECK_TUTORIAL_ENGINE_KEY)}/${cue.cueKey}/${assetId}.mp3`;
+      const sRef = storageRef(storage, path);
+      const snapshot = await uploadBytes(sRef, speech.blob, { contentType: speech.contentType });
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      const gsUrl = `gs://${snapshot.ref.bucket}/${snapshot.ref.fullPath}`;
+      const now = Date.now();
+      const assetRecord: SimAudioAssetRef = {
+        id: assetId,
+        cueKey: cue.cueKey,
+        label: cue.label,
+        prompt: cue.prompt,
+        provider: speech.providerId,
+        format: 'mp3',
+        contentType: speech.contentType,
+        storagePath: path,
+        gsUrl,
+        downloadURL,
+        createdAt: pulseCheckTutorialAssets[cue.cueKey]?.createdAt ?? now,
+        updatedAt: now,
+      };
+
+      await setDoc(doc(db, 'sim-audio-assets', assetId), {
+        ...assetRecord,
+        family: PULSECHECK_TUTORIAL_ENGINE_KEY,
+        engineKey: PULSECHECK_TUTORIAL_ENGINE_KEY,
+        archetype: 'voice_channel',
+        app: 'pulsecheck',
+        screen: 'nora_home_tutorial',
+        stepIndex: cue.stepIndex,
+      });
+
+      const configRef = doc(db, CONFIG_COLLECTION, CONFIG_DOC_ID);
+      const configSnap = await getDoc(configRef);
+      const existingNarrations = (configSnap.data()?.[PULSECHECK_TUTORIAL_NARRATION_CONFIG_FIELD] ?? {}) as Record<string, SimAudioAssetRef>;
+      await setDoc(configRef, {
+        [PULSECHECK_TUTORIAL_NARRATION_CONFIG_FIELD]: {
+          ...existingNarrations,
+          [cue.cueKey]: assetRecord,
+        },
+        updatedAt: now,
+      }, { merge: true });
+
+      setPulseCheckTutorialAssets((prev) => ({ ...prev, [cue.cueKey]: assetRecord }));
+    } catch (e: any) {
+      const msg = e?.message || 'Generation failed';
+      setPulseCheckTutorialGenErrors((prev) => ({ ...prev, [cue.cueKey]: msg }));
+      console.error(`[PulseCheck Tutorial] ${cue.cueKey}:`, msg);
+    } finally {
+      setPulseCheckTutorialGenerating((prev) => ({ ...prev, [cue.cueKey]: false }));
+    }
+  };
+
+  const generateMissingPulseCheckTutorialNarrations = async () => {
+    for (const cue of PULSECHECK_TUTORIAL_NARRATION_CUES) {
+      if (!pulseCheckTutorialAssets[cue.cueKey]?.downloadURL) {
+        await generatePulseCheckTutorialNarration(cue);
+      }
+    }
+  };
+
+  const stopPulseCheckTutorialNarration = () => {
+    if (pulseCheckTutorialAudioRef.current) {
+      pulseCheckTutorialAudioRef.current.pause();
+      pulseCheckTutorialAudioRef.current.currentTime = 0;
+      pulseCheckTutorialAudioRef.current = null;
+    }
+    setPulseCheckTutorialPlayingId(null);
+  };
+
+  const playPulseCheckTutorialNarration = (cueKey: string, url: string) => {
+    stopPulseCheckTutorialNarration();
+    setPulseCheckTutorialPlayingId(cueKey);
+    const audio = new Audio(url);
+    pulseCheckTutorialAudioRef.current = audio;
+    audio.volume = 0.9;
+    audio.play().catch(() => setPulseCheckTutorialPlayingId(null));
+    audio.onended = () => setPulseCheckTutorialPlayingId(null);
+    audio.onerror = () => setPulseCheckTutorialPlayingId(null);
+  };
+
   const loadConfig = async () => {
     setLoading(true);
     setError(null);
@@ -2435,6 +2582,7 @@ const AdminAiVoice: React.FC = () => {
     loadProtocolAssets();
     loadRunAlertAssets();
     loadMacraOnboardingAssets();
+    loadPulseCheckTutorialAssets();
     return () => {
       stopNarration();
       stopSoundEffect();
@@ -2443,6 +2591,7 @@ const AdminAiVoice: React.FC = () => {
       stopProtocolSound();
       stopRunAlertSound();
       stopMacraOnboardingNarration();
+      stopPulseCheckTutorialNarration();
     };
   }, []);
 
@@ -2781,13 +2930,14 @@ const AdminAiVoice: React.FC = () => {
                 AI Voice & Sound Effects
               </h1>
               <p className="text-zinc-400 mt-2 text-sm">
-                Configure Nora's voice, Macra onboarding narration, app sound libraries, immersive Vision Pro sound sets, and generated PulseCheck protocol signature audio.
+                Configure Nora's voice, Macra onboarding narration, PulseCheck tutorial narration, app sound libraries, immersive Vision Pro sound sets, and generated PulseCheck protocol signature audio.
               </p>
             </div>
             <button
               onClick={() => {
                 loadConfig();
                 loadMacraOnboardingAssets();
+                loadPulseCheckTutorialAssets();
               }}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-white hover:bg-zinc-700 transition-colors"
               disabled={loading}
@@ -2825,6 +2975,13 @@ const AdminAiVoice: React.FC = () => {
               label="Macra Onboarding"
               description="Pre-generated Nora voice clips for each Macra onboarding step."
               onClick={() => setActiveTab('macraOnboarding')}
+            />
+            <AudioTabButton
+              active={activeTab === 'pulseCheckTutorial'}
+              icon={<MessageSquare className="h-4 w-4" />}
+              label="PulseCheck Tutorial"
+              description="Pre-generated Nora voice clips for the home tutorial sheet."
+              onClick={() => setActiveTab('pulseCheckTutorial')}
             />
             <AudioTabButton
               active={activeTab === 'appLibrary'}
@@ -3096,7 +3253,7 @@ const AdminAiVoice: React.FC = () => {
 	            <div className="mt-5 grid grid-cols-1 gap-3">
 	              {MACRA_ONBOARDING_NARRATION_CUES.map((cue) => (
 	                <div key={cue.cueKey}>
-	                  <MacraOnboardingNarrationCard
+	                  <FixedNarrationCard
 	                    cue={cue}
 	                    asset={macraOnboardingAssets[cue.cueKey] ?? null}
 	                    generating={macraOnboardingGenerating[cue.cueKey] ?? false}
@@ -3137,6 +3294,109 @@ const AdminAiVoice: React.FC = () => {
 	              )}
 	              <div className="ml-auto text-zinc-600">
 	                Firestore: <code className="font-mono">app-config/ai-voice</code> · Storage: <code className="font-mono">sim-audio-assets/macra-onboarding/</code>
+	              </div>
+	            </div>
+	          </div>
+	          )}
+
+	          {activeTab === 'pulseCheckTutorial' && (
+	          <div className="rounded-2xl bg-zinc-900/40 border border-white/10 backdrop-blur-xl p-5">
+	            <div className="mb-1 flex items-center justify-between gap-3">
+	              <div className="flex items-center gap-3">
+	                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#E0FE10]/25 bg-[#E0FE10]/12">
+	                  <MessageSquare className="h-4 w-4 text-[#E0FE10]" />
+	                </div>
+	                <div>
+	                  <div className="font-semibold text-white">PulseCheck Tutorial Nora Narrations</div>
+	                  <div className="mt-0.5 text-xs text-zinc-500">
+	                    Generate each fixed home tutorial line once, store the MP3 URL on the AI voice config, then PulseCheck iOS fetches and plays it by tutorial key.
+	                  </div>
+	                </div>
+	              </div>
+	              <div className="flex flex-shrink-0 items-center gap-2">
+	                <button
+	                  onClick={generateMissingPulseCheckTutorialNarrations}
+	                  disabled={Object.values(pulseCheckTutorialGenerating).some(Boolean)}
+	                  className="flex items-center gap-2 rounded-xl border border-[#E0FE10]/30 bg-[#E0FE10]/15 px-3 py-1.5 text-xs font-semibold text-[#E0FE10] transition-colors hover:bg-[#E0FE10]/20 disabled:opacity-50"
+	                >
+	                  <Wand2 className="h-3.5 w-3.5" />
+	                  Generate Missing
+	                </button>
+	                <button
+	                  onClick={loadPulseCheckTutorialAssets}
+	                  disabled={pulseCheckTutorialLoading}
+	                  className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-white transition-colors hover:bg-zinc-700 disabled:opacity-50"
+	                >
+	                  {pulseCheckTutorialLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+	                  Refresh
+	                </button>
+	              </div>
+	            </div>
+
+	            <AnimatePresence>
+	              {pulseCheckTutorialLoadError && (
+	                <motion.div
+	                  initial={{ opacity: 0, height: 0 }}
+	                  animate={{ opacity: 1, height: 'auto' }}
+	                  exit={{ opacity: 0, height: 0 }}
+	                  className="mt-3 rounded-xl border border-red-700/40 bg-red-900/20 p-3 text-xs text-red-200"
+	                >
+	                  {pulseCheckTutorialLoadError}
+	                </motion.div>
+	              )}
+	            </AnimatePresence>
+
+	            <div className="mt-4 flex items-start gap-3 rounded-xl border border-white/[0.05] bg-zinc-950/60 p-3 text-xs text-zinc-400">
+	              <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-zinc-500" />
+	              <div>
+	                Assets are written to <code className="font-mono text-zinc-300">app-config/ai-voice.{PULSECHECK_TUTORIAL_NARRATION_CONFIG_FIELD}</code> and uploaded under <code className="font-mono text-zinc-300">sim-audio-assets/{PULSECHECK_TUTORIAL_ENGINE_KEY}/</code>. Regenerate a line whenever its copy changes.
+	              </div>
+	            </div>
+
+	            <div className="mt-5 grid grid-cols-1 gap-3">
+	              {PULSECHECK_TUTORIAL_NARRATION_CUES.map((cue) => (
+	                <div key={cue.cueKey}>
+	                  <FixedNarrationCard
+	                    cue={cue}
+	                    asset={pulseCheckTutorialAssets[cue.cueKey] ?? null}
+	                    generating={pulseCheckTutorialGenerating[cue.cueKey] ?? false}
+	                    isPlaying={pulseCheckTutorialPlayingId === cue.cueKey}
+	                    onGenerate={() => generatePulseCheckTutorialNarration(cue)}
+	                    onPlay={() => {
+	                      const url = pulseCheckTutorialAssets[cue.cueKey]?.downloadURL;
+	                      if (url) playPulseCheckTutorialNarration(cue.cueKey, url);
+	                    }}
+	                    onStop={stopPulseCheckTutorialNarration}
+	                  />
+	                  <AnimatePresence>
+	                    {pulseCheckTutorialGenErrors[cue.cueKey] && (
+	                      <motion.div
+	                        initial={{ opacity: 0, height: 0 }}
+	                        animate={{ opacity: 1, height: 'auto' }}
+	                        exit={{ opacity: 0, height: 0 }}
+	                        className="mt-1 rounded-lg border border-red-700/30 bg-red-900/20 px-3 py-2 text-[11px] text-red-300"
+	                      >
+	                        {pulseCheckTutorialGenErrors[cue.cueKey]}
+	                      </motion.div>
+	                    )}
+	                  </AnimatePresence>
+	                </div>
+	              ))}
+	            </div>
+
+	            <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-white/[0.05] pt-4 text-xs text-zinc-500">
+	              <div>
+	                <span className="font-semibold text-zinc-300">{Object.values(pulseCheckTutorialAssets).filter(Boolean).length}</span>
+	                {' / '}{PULSECHECK_TUTORIAL_NARRATION_CUES.length} lines generated
+	              </div>
+	              {Object.values(pulseCheckTutorialGenerating).some(Boolean) && (
+	                <div className="flex items-center gap-1.5 text-amber-400">
+	                  <Loader2 className="h-3 w-3 animate-spin" />
+	                  {Object.values(pulseCheckTutorialGenerating).filter(Boolean).length} generating…
+	                </div>
+	              )}
+	              <div className="ml-auto text-zinc-600">
+	                Firestore: <code className="font-mono">app-config/ai-voice</code> · Storage: <code className="font-mono">sim-audio-assets/{PULSECHECK_TUTORIAL_ENGINE_KEY}/</code>
 	              </div>
 	            </div>
 	          </div>

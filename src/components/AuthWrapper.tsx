@@ -15,6 +15,18 @@ interface AuthWrapperProps {
   children: React.ReactNode;
 }
 
+const CheckoutBridgeLoadingScreen: React.FC = () => (
+  <div className="fixed inset-0 z-[2147483647] flex min-h-screen items-center justify-center bg-zinc-950 px-6 text-white">
+    <div className="w-full max-w-sm text-center">
+      <div className="mx-auto mb-5 h-12 w-12 animate-spin rounded-full border-2 border-zinc-800 border-t-[#E0FE10]" />
+      <div className="text-lg font-semibold">Preparing secure checkout</div>
+      <p className="mt-2 text-sm text-zinc-400">
+        Taking you to Stripe.
+      </p>
+    </div>
+  </div>
+);
+
 // Utility for shallow comparison
 function shallowEqual(objA: any, objB: any): boolean {
   if (objA === objB) return true;
@@ -70,6 +82,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/starter-pack', '/one-on-one', '/train-your-client', '/stacks', '/moves', '/terms', '/press', '/100trainers',
     '/subscribe', '/pricing', '/download', '/morning-mobility-challenge', '/review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch', '/secure', '/haveyoupaid',
     '/delete-account', '/deleteAccount',
+    '/checkout-redirect', '/subscription-success', '/subscription-error',
     '/group-meet', '/group-meet/privacy', '/group-meet/terms',
     // Public onboarding/marketing entry points
     '/sign-up', '/coach', '/coach/sign-up', '/build-your-round', '/creator-onboarding',
@@ -242,6 +255,19 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     return !reservedPrefixes.has(segments[0]);
   };
 
+  const checkoutBridgePath = (router.asPath || router.pathname || '').split('?')[0].split('#')[0] || '/';
+  const normalizedCheckoutBridgePath = (checkoutBridgePath === '/' ? '/' : checkoutBridgePath.replace(/\/$/, '')).toLowerCase();
+  const isCheckoutBridgeRoute =
+    normalizedCheckoutBridgePath === '/checkout-redirect' ||
+    (
+      (normalizedCheckoutBridgePath === '/subscription-success' || normalizedCheckoutBridgePath === '/subscription-error') &&
+      (
+        (router.asPath || '').includes('appReturnUrl=') ||
+        (router.asPath || '').includes('source=macra_ios_paywall') ||
+        (router.asPath || '').includes('source=pulse_ritual_ios_paywall')
+      )
+    );
+
   // Add debug useEffect to track currentUser changes with Safari-specific logging
   useEffect(() => {
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
@@ -275,6 +301,13 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
   // This is the main auth effect that should contain our logs
   useEffect(() => {
+    if (isCheckoutBridgeRoute) {
+      setShowSignInModal(false);
+      dispatch(setLoading(false));
+      setAuthChecked(true);
+      return;
+    }
+
     console.log('Auth effect starting...', {
       pathname: router.pathname,
       hasCurrentUser: !!currentUser,
@@ -479,7 +512,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       dispatch(setLoading(false));
       setAuthChecked(true);
     }
-  }, [auth, dispatch, router.pathname, router]);
+  }, [auth, dispatch, router.pathname, router, isCheckoutBridgeRoute]);
 
   // Open sign-in modal immediately if URL has ?signin or ?signup
   useEffect(() => {
@@ -490,6 +523,11 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         Object.prototype.hasOwnProperty.call(query, 'signup');
 
       if (wantsSignIn) {
+        if (isCheckoutBridgeRoute) {
+          setShowSignInModal(false);
+          return;
+        }
+
         if (!currentUser) {
           console.log('[AuthWrapper] Query requested auth modal (?signin|?signup). Showing SignInModal.');
           setShowSignInModal(true);
@@ -504,7 +542,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     } catch (e) {
       console.warn('[AuthWrapper] Error processing auth query params', e);
     }
-  }, [router?.query, router?.asPath, router?.pathname, currentUser]);
+  }, [router?.query, router?.asPath, router?.pathname, currentUser, isCheckoutBridgeRoute]);
 
   const handleSignInSuccess = () => {
     // Modal will auto-close based on Redux state
@@ -525,6 +563,15 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
   if (isPILHost) {
     return <>{children}</>;
+  }
+
+  if (isCheckoutBridgeRoute) {
+    return (
+      <>
+        {children}
+        <CheckoutBridgeLoadingScreen />
+      </>
+    );
   }
 
   // Don't render anything until initial auth check is complete

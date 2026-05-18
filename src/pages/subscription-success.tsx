@@ -9,6 +9,33 @@ import { isLocalhost } from '../utils/stripeKey';
 // Define verification status types
 type VerificationStatus = 'idle' | 'verifying' | 'verified' | 'error';
 
+const singleQueryValue = (value: string | string[] | undefined) => {
+  if (Array.isArray(value)) return value[0] || '';
+  return typeof value === 'string' ? value : '';
+};
+
+const buildAppReturnUrl = (baseUrl: string, params: Record<string, string | undefined>) => {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) searchParams.set(key, value);
+  });
+
+  try {
+    const url = new URL(baseUrl);
+    searchParams.forEach((value, key) => {
+      url.searchParams.set(key, value);
+    });
+    return url.toString();
+  } catch {
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    return `${baseUrl}${separator}${searchParams.toString()}`;
+  }
+};
+
+const redirectToApp = (baseUrl: string, params: Record<string, string | undefined>) => {
+  window.location.replace(buildAppReturnUrl(baseUrl, params));
+};
+
 const SubscriptionSuccessPage: React.FC = () => {
   const router = useRouter();
   const dispatch = useDispatch();
@@ -23,14 +50,69 @@ const SubscriptionSuccessPage: React.FC = () => {
     setIsLocal(isLocalhost());
   }, []);
 
+  const sessionId = router.isReady ? singleQueryValue(router.query.session_id) : '';
+  const queryUserId = router.isReady ? singleQueryValue(router.query.userId) : '';
+  const appReturnUrl = router.isReady ? singleQueryValue(router.query.appReturnUrl) : '';
+  const source = router.isReady ? singleQueryValue(router.query.source) : '';
+  const isCancelledReturn = router.isReady && singleQueryValue(router.query.cancelled) === '1';
+  const verificationUserId = currentUser?.id || queryUserId;
+
+  useEffect(() => {
+    if (!router.isReady || !isCancelledReturn) return;
+
+    if (appReturnUrl) {
+      redirectToApp(appReturnUrl, {
+        status: 'cancelled',
+        userId: verificationUserId,
+        source,
+      });
+      return;
+    }
+
+    router.replace('/subscribe');
+  }, [router, router.isReady, isCancelledReturn, appReturnUrl, verificationUserId, source]);
+
   // Effect for verification
   useEffect(() => {
-    // Only run verification if router is ready, user is loaded, and we haven't started yet
-    if (router.isReady && currentUser && verificationStatus === 'idle') {
-      const sessionId = router.query.session_id as string | undefined;
+    // Only run verification if router is ready and we haven't started yet.
+    // App checkout returns include the app user id, so the user does not need
+    // to be logged into the web app for this page to verify the Stripe session.
+    if (router.isReady && !isCancelledReturn && verificationStatus === 'idle') {
+      if (!verificationUserId) {
+        console.error('[SubscriptionSuccess] Missing user id for subscription verification.');
+
+        if (appReturnUrl) {
+          redirectToApp(appReturnUrl, {
+            status: 'error',
+            error: 'missing_user_id',
+            session_id: sessionId,
+            source,
+          });
+          return;
+        }
+
+        const errorParams = new URLSearchParams({
+          message: 'Missing account information. Please try subscribing again.',
+          error: 'MISSING_USER_ID',
+          details: 'The user ID was not found in the URL parameters.'
+        });
+
+        router.replace(`/subscription-error?${errorParams.toString()}`);
+        return;
+      }
 
       if (!sessionId) {
         console.error('[SubscriptionSuccess] Missing session_id in query parameters.');
+
+        if (appReturnUrl) {
+          redirectToApp(appReturnUrl, {
+            status: 'error',
+            error: 'missing_session_id',
+            userId: verificationUserId,
+            source,
+          });
+          return;
+        }
         
         // Redirect to error page for missing session ID
         const errorParams = new URLSearchParams({
@@ -55,7 +137,7 @@ const SubscriptionSuccessPage: React.FC = () => {
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ sessionId: sessionId, userId: currentUser.id }),
+            body: JSON.stringify({ sessionId: sessionId, userId: verificationUserId }),
           });
 
           if (!response.ok) {
@@ -66,6 +148,15 @@ const SubscriptionSuccessPage: React.FC = () => {
           // Success!
           console.log('[SubscriptionSuccess] Verification successful.');
           setVerificationStatus('verified');
+
+          if (appReturnUrl) {
+            redirectToApp(appReturnUrl, {
+              status: 'success',
+              session_id: sessionId,
+              userId: verificationUserId,
+              source,
+            });
+          }
         } catch (error) {
           console.error('[SubscriptionSuccess] Verification API call failed:', error);
           
@@ -101,6 +192,17 @@ const SubscriptionSuccessPage: React.FC = () => {
             error: errorCode,
             details: errorDetails
           });
+
+          if (appReturnUrl) {
+            redirectToApp(appReturnUrl, {
+              status: 'error',
+              error: errorCode,
+              session_id: sessionId,
+              userId: verificationUserId,
+              source,
+            });
+            return;
+          }
           
           router.replace(`/subscription-error?${errorParams.toString()}`);
         }
@@ -108,7 +210,16 @@ const SubscriptionSuccessPage: React.FC = () => {
 
       verifySession();
     }
-  }, [router.isReady, router.query.session_id, currentUser, verificationStatus]); // Add dependencies
+  }, [
+    router,
+    router.isReady,
+    sessionId,
+    verificationUserId,
+    verificationStatus,
+    appReturnUrl,
+    source,
+    isCancelledReturn,
+  ]);
 
   // Effect for countdown timer (only runs after verification)
   useEffect(() => {
@@ -123,7 +234,7 @@ const SubscriptionSuccessPage: React.FC = () => {
 
   // Effect for redirecting (only runs after verification and countdown)
   useEffect(() => {
-    if (verificationStatus === 'verified' && countdown <= 0 && currentUser && router.isReady) {
+    if (verificationStatus === 'verified' && countdown <= 0 && !appReturnUrl && verificationUserId && router.isReady) {
       const destination = '/'; // Always redirect to home
       console.log(`[SubscriptionSuccess] Verified, redirecting to home: ${destination}`);
       
@@ -141,7 +252,7 @@ const SubscriptionSuccessPage: React.FC = () => {
 
       router.replace(finalDestination);
     }
-  }, [currentUser, router, dispatch, countdown, verificationStatus, isLocal]);
+  }, [appReturnUrl, verificationUserId, router, dispatch, countdown, verificationStatus, isLocal]);
 
   // --- Render Logic ---
   const renderContent = () => {
@@ -162,13 +273,13 @@ const SubscriptionSuccessPage: React.FC = () => {
       case 'verified':
         return (
           <>
-            {countdown > 0 && (
+            {(countdown > 0 || appReturnUrl) && (
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#E0FE10] mb-6"></div>
             )}
             <h1 className="text-2xl font-bold mb-2">Subscription Successful!</h1>
             <p className="text-zinc-400">Thank you for subscribing to Pulse.</p>
             <p className="text-zinc-500 mt-1">
-              {countdown > 0 ? `Redirecting you in ${countdown} seconds...` : 'Redirecting you now...'}
+              {appReturnUrl ? 'Returning to your app...' : countdown > 0 ? `Redirecting you in ${countdown} seconds...` : 'Redirecting you now...'}
             </p>
             {isLocal && (
               <div className="mt-4 px-3 py-1 bg-yellow-500/20 text-yellow-300 text-xs rounded-full">
@@ -246,4 +357,4 @@ const SubscriptionSuccessPage: React.FC = () => {
   );
 };
 
-export default SubscriptionSuccessPage; 
+export default SubscriptionSuccessPage;

@@ -6,7 +6,7 @@
  */
 
 const Stripe = require('stripe');
-const { db, headers } = require('./config/firebase');
+const { admin, db, headers } = require('./config/firebase');
 
 // Helper to determine if the request is from localhost
 const isLocalhostRequest = (event) => {
@@ -29,7 +29,162 @@ const USERS_COLLECTION = 'users';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
 
+const LIVE_ATHLETE_MONTHLY_PRICE_ID = 'price_1PDq26RobSf56MUOucDIKLhd';
+const LIVE_ATHLETE_ANNUAL_PRICE_ID = 'price_1PDq3LRobSf56MUOng0UxhCC';
+const TEST_ATHLETE_MONTHLY_PRICE_ID = 'price_1RMIUNRobSf56MUOfeB4gIot';
+const TEST_ATHLETE_ANNUAL_PRICE_ID = 'price_1RMISFRobSf56MUOpcSoohjP';
+
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
+
+const normalizeFirebaseIdToken = (value) => {
+  const token = normalizeString(value);
+  return token.replace(/^Bearer\s+/i, '');
+};
+
+const firebaseIdTokenFromRequest = (event, explicitToken) => {
+  const authHeader = event.headers.authorization || event.headers.Authorization || '';
+  return normalizeFirebaseIdToken(explicitToken || authHeader);
+};
+
+const verifyCheckoutFirebaseToken = async ({ firebaseIdToken, requestedUserId }) => {
+  const normalizedToken = normalizeFirebaseIdToken(firebaseIdToken);
+  const normalizedRequestedUserId = normalizeString(requestedUserId);
+
+  if (!normalizedToken) {
+    return {
+      userId: normalizedRequestedUserId,
+      verified: false,
+    };
+  }
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(normalizedToken);
+    const tokenUserId = normalizeString(decodedToken.uid);
+
+    if (!tokenUserId) {
+      const error = new Error('Firebase token did not include a user id.');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    if (normalizedRequestedUserId && normalizedRequestedUserId !== tokenUserId) {
+      const error = new Error('Firebase token user does not match requested user.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    return {
+      userId: normalizedRequestedUserId || tokenUserId,
+      verified: true,
+    };
+  } catch (error) {
+    if (!error.statusCode) error.statusCode = 401;
+    throw error;
+  }
+};
+
+const normalizeCheckoutPlan = (value) => {
+  const normalized = normalizeString(value).toLowerCase();
+  if (['monthly', 'month', 'mo'].includes(normalized)) return 'monthly';
+  if (['annual', 'yearly', 'year', 'yr'].includes(normalized)) return 'annual';
+  return 'annual';
+};
+
+const resolveAthletePriceId = ({ priceId, plan, isLocalhost }) => {
+  const providedPriceId = normalizeString(priceId);
+  if (providedPriceId) return providedPriceId;
+
+  const normalizedPlan = normalizeCheckoutPlan(plan);
+  if (normalizedPlan === 'monthly') {
+    if (isLocalhost) {
+      return process.env.STRIPE_TEST_PRICE_ATHLETE_MONTHLY || TEST_ATHLETE_MONTHLY_PRICE_ID;
+    }
+
+    return (
+      process.env.STRIPE_PRICE_ATHLETE_MONTHLY ||
+      process.env.NEXT_PUBLIC_STRIPE_PRICE_ATHLETE_MONTHLY ||
+      LIVE_ATHLETE_MONTHLY_PRICE_ID
+    );
+  }
+
+  if (isLocalhost) {
+    return process.env.STRIPE_TEST_PRICE_ATHLETE_ANNUAL || TEST_ATHLETE_ANNUAL_PRICE_ID;
+  }
+
+  return (
+    process.env.STRIPE_PRICE_ATHLETE_ANNUAL ||
+    process.env.NEXT_PUBLIC_STRIPE_PRICE_ATHLETE_ANNUAL ||
+    LIVE_ATHLETE_ANNUAL_PRICE_ID
+  );
+};
+
+const normalizeAppReturnUrl = (value) => {
+  const candidate = normalizeString(value);
+  if (!candidate) return '';
+
+  try {
+    const parsed = new URL(candidate);
+    const host = parsed.hostname.toLowerCase();
+    const allowedFirstPartyHost =
+      host === 'fitwithpulse.ai' ||
+      host === 'www.fitwithpulse.ai' ||
+      host === 'localhost' ||
+      host === '127.0.0.1';
+    const allowedFirstPartyAppProtocol =
+      parsed.protocol === 'macra:' ||
+      parsed.protocol === 'pulseritual:';
+    if (allowedFirstPartyAppProtocol || allowedFirstPartyHost) {
+      return parsed.toString();
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
+};
+
+const buildReturnUrl = (baseReturnUrl, params = {}) => {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value) !== '') {
+      searchParams.set(key, String(value));
+    }
+  });
+
+  try {
+    const url = new URL(baseReturnUrl);
+    searchParams.forEach((value, key) => {
+      url.searchParams.set(key, value);
+    });
+    return url
+      .toString()
+      .replace(/%7BCHECKOUT_SESSION_ID%7D/g, '{CHECKOUT_SESSION_ID}');
+  } catch {
+    const separator = baseReturnUrl.includes('?') ? '&' : '?';
+    return `${baseReturnUrl}${separator}${searchParams.toString()}`
+      .replace(/%7BCHECKOUT_SESSION_ID%7D/g, '{CHECKOUT_SESSION_ID}');
+  }
+};
+
+const subscriptionSuccessUrl = ({ baseUrl, userId, appReturnUrl, source }) => {
+  const params = {
+    session_id: '{CHECKOUT_SESSION_ID}',
+    userId,
+    source,
+  };
+  if (appReturnUrl) params.appReturnUrl = appReturnUrl;
+  return buildReturnUrl(`${baseUrl}/subscription-success`, params);
+};
+
+const subscriptionCancelUrl = ({ baseUrl, fallback, appCancelUrl, userId, source }) => {
+  if (!appCancelUrl) return fallback;
+  return buildReturnUrl(`${baseUrl}/subscription-success`, {
+    cancelled: '1',
+    userId,
+    source,
+    appReturnUrl: appCancelUrl,
+  });
+};
 
 const normalizeBoolean = (value) => {
   if (typeof value === 'boolean') return value;
@@ -181,25 +336,54 @@ const handler = async (event) => {
   // Support server-side redirect flow for better mobile behavior
   if (event.httpMethod === 'GET') {
     const qp = event.queryStringParameters || {};
-    const priceId = qp.priceId;
-    const userId = qp.userId;
-    const email = qp.email;
-    const organizationId = qp.organizationId;
-    const teamId = qp.teamId;
-    const inviteToken = qp.inviteToken;
+    let userId = normalizeString(qp.userId);
+    const email = normalizeString(qp.email);
+    const organizationId = normalizeString(qp.organizationId);
+    const teamId = normalizeString(qp.teamId);
+    const inviteToken = normalizeString(qp.inviteToken);
+    const plan = normalizeCheckoutPlan(qp.plan);
+    const source = normalizeString(qp.source);
+    const appReturnUrl = normalizeAppReturnUrl(qp.appReturnUrl);
+    const appCancelUrl = normalizeAppReturnUrl(qp.appCancelUrl);
+    const firebaseIdToken = firebaseIdTokenFromRequest(event, qp.firebaseIdToken || qp.authToken);
     const debug = qp.debug === '1' || qp.debug === 'true';
+    const isLocalhost = isLocalhostRequest(event);
+    const priceId = resolveAthletePriceId({
+      priceId: qp.priceId,
+      plan,
+      isLocalhost,
+    });
+    let checkoutAuthVerified = false;
+
+    try {
+      const authResult = await verifyCheckoutFirebaseToken({
+        firebaseIdToken,
+        requestedUserId: userId,
+      });
+      userId = authResult.userId;
+      checkoutAuthVerified = authResult.verified;
+    } catch (authError) {
+      console.warn('[AthleteCheckout][GET] Invalid checkout auth token:', authError);
+      return {
+        statusCode: authError.statusCode || 401,
+        headers,
+        body: JSON.stringify({
+          message: 'Unable to verify signed-in app user.',
+          ...(debug ? { error: authError?.message, code: authError?.code } : {})
+        })
+      };
+    }
 
     if (!priceId || !userId) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ message: 'Missing required parameters: priceId and userId' })
+        body: JSON.stringify({ message: 'Missing required parameters: userId and a resolvable priceId or plan' })
       };
     }
 
     try {
       const siteUrl = process.env.SITE_URL || 'https://fitwithpulse.ai';
-      const isLocalhost = isLocalhostRequest(event);
       const baseUrl = isLocalhost ? (event.headers.origin || 'http://localhost:8888') : siteUrl;
       const attribution = await resolvePulseCheckAttribution({
         userId,
@@ -209,8 +393,14 @@ const handler = async (event) => {
       });
 
       if (attribution.commercialSnapshot?.teamPlanBypassesPaywall) {
-        const coveredLocation =
-          attribution.organizationId && attribution.teamId
+        const coveredLocation = appReturnUrl
+          ? buildReturnUrl(appReturnUrl, {
+              status: 'success',
+              userId,
+              source,
+              coveredByTeamPlan: '1',
+            })
+          : attribution.organizationId && attribution.teamId
             ? `${baseUrl}/PulseCheck/team-workspace?organizationId=${encodeURIComponent(attribution.organizationId)}&teamId=${encodeURIComponent(attribution.teamId)}&teamPlan=1`
             : `${baseUrl}/PulseCheck?web=1`;
 
@@ -238,6 +428,10 @@ const handler = async (event) => {
         pulsecheckReferralRevenueSharePct: String(attribution.commercialSnapshot?.referralRevenueSharePct || 0),
         pulsecheckRevenueRecipientUserId: attribution.commercialSnapshot?.revenueRecipientUserId || '',
         pulsecheckRevenueRecipientRole: attribution.commercialSnapshot?.revenueRecipientRole || '',
+        checkoutSource: source || '',
+        checkoutPlan: plan || '',
+        appReturnUrlProvided: appReturnUrl ? 'true' : 'false',
+        checkoutAuthVerified: checkoutAuthVerified ? 'true' : 'false',
       };
 
       const session = await stripe.checkout.sessions.create({
@@ -246,8 +440,19 @@ const handler = async (event) => {
         mode: 'subscription',
         client_reference_id: userId,
         ...(email ? { customer_email: email } : {}),
-        success_url: `${baseUrl}/subscription-success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}/subscribe`,
+        success_url: subscriptionSuccessUrl({
+          baseUrl,
+          userId,
+          appReturnUrl,
+          source,
+        }),
+        cancel_url: subscriptionCancelUrl({
+          baseUrl,
+          fallback: `${baseUrl}/subscribe`,
+          appCancelUrl,
+          userId,
+          source,
+        }),
         metadata,
         subscription_data: {
           metadata,
@@ -298,24 +503,62 @@ const handler = async (event) => {
 
   const { 
     priceId, 
-    userId,
+    userId: bodyUserId,
     email, // Optional: prefill Checkout email
     organizationId,
     teamId,
     inviteToken,
+    plan,
+    source,
+    appReturnUrl,
+    appCancelUrl,
+    firebaseIdToken: bodyFirebaseIdToken,
+    authToken,
   } = body || {};
+  let userId = normalizeString(bodyUserId);
+  const isLocalhost = isLocalhostRequest(event);
+  const resolvedPriceId = resolveAthletePriceId({
+    priceId,
+    plan,
+    isLocalhost,
+  });
+  const normalizedPlan = normalizeCheckoutPlan(plan);
+  const normalizedSource = normalizeString(source);
+  const normalizedAppReturnUrl = normalizeAppReturnUrl(appReturnUrl);
+  const normalizedAppCancelUrl = normalizeAppReturnUrl(appCancelUrl);
+  const firebaseIdToken = firebaseIdTokenFromRequest(event, bodyFirebaseIdToken || authToken);
+  let checkoutAuthVerified = false;
 
-  if (!priceId || !userId) {
+  try {
+    const authResult = await verifyCheckoutFirebaseToken({
+      firebaseIdToken,
+      requestedUserId: userId,
+    });
+    userId = authResult.userId;
+    checkoutAuthVerified = authResult.verified;
+  } catch (authError) {
+    console.warn('[AthleteCheckout] Invalid checkout auth token:', authError);
+    return {
+      statusCode: authError.statusCode || 401,
+      headers,
+      body: JSON.stringify({
+        message: 'Unable to verify signed-in app user.',
+        error: authError?.message,
+      }),
+    };
+  }
+
+  if (!resolvedPriceId || !userId) {
     console.warn('[AthleteCheckout] Missing parameters:', { 
-      priceId: !!priceId, 
+      priceId: !!resolvedPriceId,
       userId: !!userId 
     });
     return { 
       statusCode: 400, 
       headers,
       body: JSON.stringify({ 
-        message: 'Missing required parameters: priceId and userId',
-        debug: { priceId, userId }
+        message: 'Missing required parameters: userId and a resolvable priceId or plan',
+        debug: { priceId: resolvedPriceId, userId }
       }) 
     };
   }
@@ -324,6 +567,8 @@ const handler = async (event) => {
   // Accept both legacy Pulse (athlete) and PulseCheck price envs (if set).
   // NOTE: We do not hard fail if priceId is not in this list; client provides the exact Stripe Price ID.
   const validAthletePrices = [
+    process.env.STRIPE_TEST_PRICE_ATHLETE_MONTHLY,
+    process.env.STRIPE_TEST_PRICE_ATHLETE_ANNUAL,
     process.env.STRIPE_PRICE_ATHLETE_MONTHLY,
     process.env.STRIPE_PRICE_ATHLETE_ANNUAL,
     process.env.STRIPE_PRICE_PULSECHECK_WEEKLY,
@@ -331,13 +576,13 @@ const handler = async (event) => {
     process.env.STRIPE_PRICE_PULSECHECK_ANNUAL
   ].filter(Boolean);
 
-  if (validAthletePrices.length > 0 && !validAthletePrices.includes(priceId)) {
-    console.warn('[AthleteCheckout] PriceId not in known env list; proceeding anyway for flexibility:', priceId);
+  if (validAthletePrices.length > 0 && !validAthletePrices.includes(resolvedPriceId)) {
+    console.warn('[AthleteCheckout] PriceId not in known env list; proceeding anyway for flexibility:', resolvedPriceId);
   }
 
   const siteUrl = process.env.SITE_URL || 'https://fitwithpulse.ai';
 
-  console.log(`[AthleteCheckout] Creating athlete session for user: ${userId}, price: ${priceId}`);
+  console.log(`[AthleteCheckout] Creating athlete session for user: ${userId}, price: ${resolvedPriceId}`);
 
   try {
     // Check if athlete is linked to a coach (which would change the flow)
@@ -368,12 +613,19 @@ const handler = async (event) => {
           coveredByTeamPlan: true,
           organizationId: attribution.organizationId,
           teamId: attribution.teamId,
+          url: normalizedAppReturnUrl
+            ? buildReturnUrl(normalizedAppReturnUrl, {
+                status: 'success',
+                userId,
+                source: normalizedSource,
+                coveredByTeamPlan: '1',
+              })
+            : null,
         }),
       };
     }
 
     // Determine the base URL for success and cancel redirects
-    const isLocalhost = isLocalhostRequest(event);
     const baseUrl = isLocalhost ? 
       (event.headers.origin || 'http://localhost:8888') : 
       siteUrl;
@@ -395,6 +647,10 @@ const handler = async (event) => {
       pulsecheckReferralRevenueSharePct: String(attribution.commercialSnapshot?.referralRevenueSharePct || 0),
       pulsecheckRevenueRecipientUserId: attribution.commercialSnapshot?.revenueRecipientUserId || '',
       pulsecheckRevenueRecipientRole: attribution.commercialSnapshot?.revenueRecipientRole || '',
+      checkoutSource: normalizedSource || '',
+      checkoutPlan: normalizedPlan || '',
+      appReturnUrlProvided: normalizedAppReturnUrl ? 'true' : 'false',
+      checkoutAuthVerified: checkoutAuthVerified ? 'true' : 'false',
     };
 
     if (attribution.teamId) {
@@ -406,15 +662,26 @@ const handler = async (event) => {
       payment_method_types: ['card'],
       line_items: [
         {
-          price: priceId,
+          price: resolvedPriceId,
           quantity: 1,
         },
       ],
       mode: 'subscription',
       client_reference_id: userId,
       ...(email ? { customer_email: email } : {}),
-      success_url: `${baseUrl}/subscription-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/subscribe`,
+      success_url: subscriptionSuccessUrl({
+        baseUrl,
+        userId,
+        appReturnUrl: normalizedAppReturnUrl,
+        source: normalizedSource,
+      }),
+      cancel_url: subscriptionCancelUrl({
+        baseUrl,
+        fallback: `${baseUrl}/subscribe`,
+        appCancelUrl: normalizedAppCancelUrl,
+        userId,
+        source: normalizedSource,
+      }),
       metadata: metadata,
       subscription_data: {
         metadata

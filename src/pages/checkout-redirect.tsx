@@ -12,6 +12,11 @@ const CheckoutRedirectPage = () => {
     const type = typeof params.type === 'string' ? params.type : 'athlete';
     const userId = typeof params.userId === 'string' ? params.userId : '';
     const priceId = typeof params.priceId === 'string' ? params.priceId : '';
+    const plan = typeof params.plan === 'string' ? params.plan : '';
+    const source = typeof params.source === 'string' ? params.source : '';
+    const appReturnUrl = typeof params.appReturnUrl === 'string' ? params.appReturnUrl : '';
+    const appCancelUrl = typeof params.appCancelUrl === 'string' ? params.appCancelUrl : '';
+    const firebaseIdToken = typeof params.firebaseIdToken === 'string' ? params.firebaseIdToken : '';
     const email = typeof params.email === 'string' ? params.email : '';
     const organizationId = typeof params.organizationId === 'string' ? params.organizationId : '';
     const teamId = typeof params.teamId === 'string' ? params.teamId : '';
@@ -21,6 +26,11 @@ const CheckoutRedirectPage = () => {
     const q = new URLSearchParams();
     if (userId) q.set('userId', userId);
     if (priceId) q.set('priceId', priceId);
+    if (plan) q.set('plan', plan);
+    if (source) q.set('source', source);
+    if (appReturnUrl) q.set('appReturnUrl', appReturnUrl);
+    if (appCancelUrl) q.set('appCancelUrl', appCancelUrl);
+    if (firebaseIdToken) q.set('firebaseIdToken', firebaseIdToken);
     if (email) q.set('email', email);
     if (organizationId) q.set('organizationId', organizationId);
     if (teamId) q.set('teamId', teamId);
