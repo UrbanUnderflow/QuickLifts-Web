@@ -125,14 +125,10 @@ const PILPage: NextPage = () => {
     };
 
     primeVideoForMobileAutoplay();
-
-    if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
-      tryPlay();
-    } else {
-      video.addEventListener('loadeddata', tryPlay, { once: true });
-      video.addEventListener('canplay', tryPlay, { once: true });
-    }
     video.addEventListener('playing', handlePlaying);
+    video.addEventListener('loadeddata', tryPlay, { once: true });
+    video.addEventListener('canplay', tryPlay, { once: true });
+    tryPlay();
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && video.paused) {
