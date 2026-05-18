@@ -1,5 +1,5 @@
 import type { GetStaticProps, NextPage } from 'next';
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -86,6 +86,81 @@ const PILLogoMark: React.FC<{ tone?: 'light' | 'dark' }> = ({ tone = 'light' }) 
 );
 
 const PILPage: NextPage = () => {
+  const heroVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [heroVideoIsPlaying, setHeroVideoIsPlaying] = useState(false);
+
+  useEffect(() => {
+    const video = heroVideoRef.current;
+    if (!video) return;
+
+    let isMounted = true;
+
+    const primeVideoForMobileAutoplay = () => {
+      video.muted = true;
+      video.defaultMuted = true;
+      video.autoplay = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.controls = false;
+      video.setAttribute('muted', '');
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', '');
+    };
+
+    const tryPlay = () => {
+      if (!isMounted) return;
+      primeVideoForMobileAutoplay();
+      const playAttempt = video.play();
+      if (playAttempt) {
+        playAttempt.catch(() => {
+          // iOS can still pause autoplay in Low Power Mode; the next gesture retries it.
+        });
+      }
+    };
+
+    const handlePlaying = () => {
+      if (isMounted) {
+        setHeroVideoIsPlaying(true);
+      }
+    };
+
+    primeVideoForMobileAutoplay();
+
+    if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+      tryPlay();
+    } else {
+      video.addEventListener('loadeddata', tryPlay, { once: true });
+      video.addEventListener('canplay', tryPlay, { once: true });
+    }
+    video.addEventListener('playing', handlePlaying);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && video.paused) {
+        tryPlay();
+      }
+    };
+
+    const handleFirstGesture = () => {
+      if (video.paused) {
+        tryPlay();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('touchstart', handleFirstGesture, { once: true, passive: true });
+    window.addEventListener('pointerdown', handleFirstGesture, { once: true });
+
+    return () => {
+      isMounted = false;
+      video.removeEventListener('loadeddata', tryPlay);
+      video.removeEventListener('canplay', tryPlay);
+      video.removeEventListener('playing', handlePlaying);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('touchstart', handleFirstGesture);
+      window.removeEventListener('pointerdown', handleFirstGesture);
+    };
+  }, []);
+
   return (
     <>
       <Head>
@@ -105,16 +180,25 @@ const PILPage: NextPage = () => {
 
       <main className="relative min-h-screen bg-black text-white selection:bg-white/20">
         {/* ───────────────────── HERO: full-bleed sprinter video ───────────────────── */}
-        <section className="relative h-screen min-h-[640px] w-full overflow-hidden">
+        <section className="relative h-[100svh] min-h-[640px] w-full overflow-hidden sm:h-screen">
           {/* Background video */}
           <video
-            className="absolute inset-0 h-full w-full object-cover"
+            ref={heroVideoRef}
+            className={`pointer-events-none absolute inset-0 h-full w-full select-none object-cover transition-opacity duration-500 ${
+              heroVideoIsPlaying ? 'opacity-100' : 'opacity-0'
+            }`}
             autoPlay
             muted
+            defaultMuted
             loop
+            controls={false}
             playsInline
             preload="auto"
             poster={HERO_VIDEO_POSTER}
+            disablePictureInPicture
+            controlsList="nodownload nofullscreen noremoteplayback"
+            tabIndex={-1}
+            onContextMenu={(event) => event.preventDefault()}
             aria-hidden="true"
           >
             <source src={HERO_VIDEO_SRC} type="video/mp4" />
@@ -189,7 +273,7 @@ const PILPage: NextPage = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1.2, duration: 0.8 }}
-            className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2"
+            className="pointer-events-none absolute bottom-6 left-1/2 z-10 hidden -translate-x-1/2 sm:block"
           >
             <div className="flex h-10 w-6 items-start justify-center rounded-full border border-white/30 p-1.5">
               <motion.div
