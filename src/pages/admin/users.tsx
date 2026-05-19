@@ -27,6 +27,18 @@ type User = {
   ritualRegistered?: boolean;
   registrationComplete?: boolean;
   createdAt?: any;
+  updatedAt?: any;
+  macros?: Record<string, any>;
+  macra?: Record<string, any>;
+  macraNotificationPreferences?: Record<string, any>;
+  macraEmailPreferences?: Record<string, any>;
+  macraOnboardingCompletedAt?: any;
+  macraProfile?: Record<string, any> | null;
+  macraProfileLoaded?: boolean;
+  macraProfileLoadError?: string;
+  athleteSport?: string;
+  athleteSportName?: string;
+  athleteSportPosition?: string;
   adminVerified?: boolean; // Flag to track actual admin status from admin collection
   // Approximate number of videos the user has uploaded to the platform (if tracked)
   videoCount?: number;
@@ -103,6 +115,16 @@ const normalizeRegistrationEntryPoint = (value?: string): RegistrationOriginKey 
 const getRegistrationOriginConfig = (user: User) => {
   const originKey = normalizeRegistrationEntryPoint(user.registrationEntryPoint);
   return originTabConfigs.find(config => config.key === originKey) || originTabConfigs[originTabConfigs.length - 1];
+};
+
+const shouldLoadMacraProfile = (user: User) => {
+  return normalizeRegistrationEntryPoint(user.registrationEntryPoint) === 'macra'
+    || Boolean(user.hasCompletedMacraOnboarding)
+    || Boolean(user.macraOnboardingCompletedAt)
+    || Boolean(user.macra)
+    || Boolean(user.macraNotificationPreferences)
+    || Boolean(user.macraEmailPreferences)
+    || Boolean(user.athleteSport || user.athleteSportName || user.athleteSportPosition);
 };
 
 const getOriginTabConfig = (tab: TabType) => originTabConfigs.find(config => config.tab === tab);
@@ -239,9 +261,34 @@ const UsersManagement: React.FC = () => {
         })
       );
 
+      const usersWithMacraProfiles = await Promise.all(
+        usersWithAdminStatus.map(async (user) => {
+          if (!shouldLoadMacraProfile(user)) {
+            return user;
+          }
+
+          try {
+            const profileDoc = await getDoc(doc(db, 'users', user.id, 'macra', 'profile'));
+            return {
+              ...user,
+              macraProfile: profileDoc.exists() ? profileDoc.data() : null,
+              macraProfileLoaded: true,
+            };
+          } catch (error) {
+            console.warn('Error loading Macra profile for user:', user.id, error);
+            return {
+              ...user,
+              macraProfile: null,
+              macraProfileLoaded: false,
+              macraProfileLoadError: error instanceof Error ? error.message : 'Failed to load Macra profile',
+            };
+          }
+        })
+      );
+
       // Update state with the final user list that includes admin status
-      setUsers(usersWithAdminStatus);
-      updateFilteredUsers(usersWithAdminStatus, searchTerm, activeTab);
+      setUsers(usersWithMacraProfiles);
+      updateFilteredUsers(usersWithMacraProfiles, searchTerm, activeTab);
       
     } catch (error) {
       console.error('Error loading users:', error);
@@ -645,9 +692,92 @@ const UsersManagement: React.FC = () => {
     if (date && typeof date.toDate === 'function') {
       date = date.toDate();
     }
-      
-    return new Date(date).toLocaleString();
+
+    if (typeof date === 'number') {
+      date = date > 0 && date < 100000000000 ? date * 1000 : date;
+    }
+
+    if (typeof date === 'string' && /^\d+(\.\d+)?$/.test(date.trim())) {
+      const numericDate = Number(date);
+      date = numericDate > 0 && numericDate < 100000000000 ? numericDate * 1000 : numericDate;
+    }
+
+    const parsedDate = new Date(date);
+    return Number.isNaN(parsedDate.getTime()) ? 'Not available' : parsedDate.toLocaleString();
   };
+
+  const isRecord = (value: any): value is Record<string, any> => {
+    return Boolean(value)
+      && typeof value === 'object'
+      && !Array.isArray(value)
+      && typeof value.toDate !== 'function';
+  };
+
+  const titleizeValue = (value: any): string => {
+    if (value === undefined || value === null || value === '') return 'Not set';
+    return String(value)
+      .replace(/[_-]+/g, ' ')
+      .replace(/\b\w/g, char => char.toUpperCase());
+  };
+
+  const formatBooleanLabel = (value: any) => value ? 'Yes' : 'No';
+
+  const formatHeight = (heightCm: any) => {
+    const cm = Number(heightCm);
+    if (!Number.isFinite(cm) || cm <= 0) return 'Not set';
+    const totalInches = Math.round(cm / 2.54);
+    const feet = Math.floor(totalInches / 12);
+    const inches = totalInches % 12;
+    return `${feet}'${inches}" (${Math.round(cm)} cm)`;
+  };
+
+  const formatWeight = (weightKg: any) => {
+    const kg = Number(weightKg);
+    if (!Number.isFinite(kg) || kg <= 0) return 'Not set';
+    return `${Math.round(kg * 2.20462)} lb (${kg.toFixed(1)} kg)`;
+  };
+
+  const getPersonalMacros = (user: User): Record<string, any> | null => {
+    const macros = isRecord(user.macros) ? user.macros : null;
+    const macra = isRecord(user.macra) ? user.macra : null;
+    const personal = isRecord(macros?.personal)
+      ? macros?.personal
+      : isRecord(macra?.personal)
+        ? macra?.personal
+        : null;
+
+    if (personal) return personal;
+    if (macros && ['calories', 'protein', 'carbs', 'fat'].some(key => macros[key] !== undefined)) return macros;
+    if (macra && ['calories', 'protein', 'carbs', 'fat'].some(key => macra[key] !== undefined)) return macra;
+    return null;
+  };
+
+  const formatMacroTargets = (macros: Record<string, any> | null) => {
+    if (!macros) return 'Not set';
+    const calories = macros.calories ?? macros.kcal;
+    const protein = macros.protein;
+    const carbs = macros.carbs;
+    const fat = macros.fat;
+    const parts = [
+      calories !== undefined ? `${calories} cal` : null,
+      protein !== undefined ? `P ${protein}` : null,
+      carbs !== undefined ? `C ${carbs}` : null,
+      fat !== undefined ? `F ${fat}` : null,
+    ].filter(Boolean);
+
+    return parts.length > 0 ? parts.join(' / ') : 'Not set';
+  };
+
+  const getMacraProfileValue = (user: User, key: string) => {
+    return isRecord(user.macraProfile) ? user.macraProfile[key] : undefined;
+  };
+
+  const renderDetailValue = (label: string, value: React.ReactNode) => (
+    <div>
+      <div className="text-gray-500 text-xs uppercase tracking-wide">{label}</div>
+      <div className="mt-1 text-gray-200 text-sm">{value}</div>
+    </div>
+  );
 
   // *** START: Username Migration Functions ***
   
@@ -1445,6 +1575,131 @@ const UsersManagement: React.FC = () => {
     );
   };
 
+  const renderMacraProfileDetails = (user: User) => {
+    const macraProfile = isRecord(user.macraProfile) ? user.macraProfile : null;
+    const rootMacra = isRecord(user.macra) ? user.macra : null;
+    const macros = getPersonalMacros(user);
+    const pushPrefs = isRecord(user.macraNotificationPreferences) ? user.macraNotificationPreferences : null;
+    const emailPrefs = isRecord(user.macraEmailPreferences) ? user.macraEmailPreferences : null;
+    const isMacraRelated = shouldLoadMacraProfile(user) || Boolean(macraProfile);
+
+    if (!isMacraRelated) return null;
+
+    const profileRows = macraProfile
+      ? Object.entries(macraProfile).filter(([key]) => key !== 'adminVerified')
+      : [];
+
+    return (
+      <div className="mt-6 border-t border-lime-900/40 pt-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h5 className="text-lime-300 text-sm font-semibold">Macra Profile</h5>
+            <p className="text-xs text-gray-500 font-mono">users/{user.id}/macra/profile</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
+              user.hasCompletedMacraOnboarding
+                ? 'bg-lime-900/30 text-lime-300 border-lime-900'
+                : 'bg-orange-900/30 text-orange-400 border-orange-900'
+            }`}>
+              {user.hasCompletedMacraOnboarding ? 'Onboarding complete' : 'Onboarding incomplete'}
+            </span>
+            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
+              macraProfile
+                ? 'bg-blue-900/30 text-blue-300 border-blue-900'
+                : 'bg-gray-900/30 text-gray-400 border-gray-700'
+            }`}>
+              {macraProfile ? 'Nested profile found' : user.macraProfileLoaded ? 'No nested profile' : 'Profile not loaded'}
+            </span>
+          </div>
+        </div>
+
+        {user.macraProfileLoadError && (
+          <div className="mb-4 rounded-lg border border-red-900 bg-red-950/20 p-3 text-sm text-red-300">
+            {user.macraProfileLoadError}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-4">
+          <div className="space-y-3">
+            <h6 className="border-b border-gray-800 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Commitment</h6>
+            {renderDetailValue('Origin', user.registrationEntryPoint || 'Not set')}
+            {renderDetailValue('Completed', formatBooleanLabel(user.hasCompletedMacraOnboarding))}
+            {renderDetailValue('Completed At', formatDate(user.macraOnboardingCompletedAt))}
+            {renderDetailValue('Profile Updated', formatDate(macraProfile?.updatedAt || user.updatedAt))}
+          </div>
+
+          <div className="space-y-3">
+            <h6 className="border-b border-gray-800 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Body + Goal</h6>
+            {renderDetailValue('Sex', titleizeValue(macraProfile?.sex))}
+            {renderDetailValue('Birthdate', formatDate(macraProfile?.birthdate))}
+            {renderDetailValue('Height', formatHeight(macraProfile?.heightCm))}
+            {renderDetailValue('Current Weight', formatWeight(macraProfile?.currentWeightKg))}
+            {renderDetailValue('Goal Weight', formatWeight(macraProfile?.goalWeightKg))}
+          </div>
+
+          <div className="space-y-3">
+            <h6 className="border-b border-gray-800 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Plan Inputs</h6>
+            {renderDetailValue('Direction', titleizeValue(macraProfile?.goalDirection))}
+            {renderDetailValue('Pace', titleizeValue(macraProfile?.pace))}
+            {renderDetailValue('Activity', titleizeValue(macraProfile?.activityLevel))}
+            {renderDetailValue('Diet', titleizeValue(macraProfile?.dietaryPreference))}
+            {renderDetailValue('Struggle', titleizeValue(macraProfile?.biggestStruggle))}
+          </div>
+
+          <div className="space-y-3">
+            <h6 className="border-b border-gray-800 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Targets + Preferences</h6>
+            {renderDetailValue('Macros', formatMacroTargets(macros))}
+            {renderDetailValue('Sport', titleizeValue(macraProfile?.sportName || user.athleteSportName || macraProfile?.sport || user.athleteSport))}
+            {renderDetailValue('Position', titleizeValue(macraProfile?.sportPosition || user.athleteSportPosition))}
+            {renderDetailValue('Push Reminders', pushPrefs ? `Meal ${formatBooleanLabel(pushPrefs.mealReminders)} / Morning ${formatBooleanLabel(pushPrefs.morningLogReminder)} / EOD ${formatBooleanLabel(pushPrefs.endOfDayCheckin)}` : 'Not set')}
+            {renderDetailValue('Emails', emailPrefs ? `Tips ${formatBooleanLabel(emailPrefs.tipsSeries)} / Winback ${formatBooleanLabel(emailPrefs.inactivityWinback)}` : 'Not set')}
+          </div>
+        </div>
+
+        {(rootMacra || profileRows.length > 0) && (
+          <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {profileRows.length > 0 && (
+              <div className="overflow-x-auto rounded-lg bg-[#262a30] p-3">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Nested Profile Properties</div>
+                <table className="w-full text-sm">
+                  <tbody>
+                    {profileRows.map(([key, value]) => (
+                      <tr key={key} className="border-b border-gray-800 last:border-0">
+                        <td className="py-2 pr-3 text-blue-400 font-mono">{key}</td>
+                        <td className="py-2 text-gray-300 font-mono">
+                          {isRecord(value) || Array.isArray(value) ? JSON.stringify(value) : key.toLowerCase().includes('at') || key.toLowerCase().includes('date') ? formatDate(value) : value?.toString() || 'null'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {rootMacra && (
+              <div className="overflow-x-auto rounded-lg bg-[#262a30] p-3">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Root Macra Summary</div>
+                <table className="w-full text-sm">
+                  <tbody>
+                    {Object.entries(rootMacra).map(([key, value]) => (
+                      <tr key={key} className="border-b border-gray-800 last:border-0">
+                        <td className="py-2 pr-3 text-blue-400 font-mono">{key}</td>
+                        <td className="py-2 text-gray-300 font-mono">
+                          {isRecord(value) || Array.isArray(value) ? JSON.stringify(value) : value?.toString() || 'null'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Render user details for expanded row
   const renderUserDetails = (user: User) => {
     // Get all properties from the user object
@@ -1581,6 +1836,8 @@ const UsersManagement: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {renderMacraProfileDetails(user)}
 
         {/* Additional Properties Section */}
         <div className="mt-6">
@@ -2361,7 +2618,7 @@ const UsersManagement: React.FC = () => {
       </Head>
       
       <div className="min-h-screen bg-[#111417] text-white py-10 px-4">
-        <div className="max-w-6xl mx-auto">
+        <div className="w-full max-w-6xl mx-auto lg:max-w-none">
           <h1 className="text-2xl font-bold mb-8 flex items-center">
             <span className="text-[#d7ff00] mr-2">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
@@ -3246,7 +3503,7 @@ const UsersManagement: React.FC = () => {
             ) : (
               // Display Users Table for 'all' and 'admins' tabs
                       <div className="overflow-x-auto">
-                <table className={`min-w-full bg-[#262a30] rounded-lg overflow-hidden ${isBatchDeleting ? 'opacity-60 pointer-events-none' : ''}`}>
+                <table className={`w-full min-w-[1500px] bg-[#262a30] rounded-lg overflow-hidden ${isBatchDeleting ? 'opacity-60 pointer-events-none' : ''}`}>
                           <thead>
                             <tr className="border-b border-gray-700">
                       {/* Conditional Checkbox Header */}
@@ -3267,10 +3524,13 @@ const UsersManagement: React.FC = () => {
                         <th className="py-3 px-4 text-left text-gray-300 font-medium">Username</th>
                         <th className="py-3 px-4 text-left text-gray-300 font-medium">Registration</th>
                         <th className="py-3 px-4 text-left text-gray-300 font-medium">Origin Source</th>
-                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Admin</th>
-                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Plan</th>
-                        <th className="py-3 px-4 text-center text-gray-300 font-medium">Admin Actions</th>
-                        <th className="py-3 px-4 text-center text-gray-300 font-medium">View</th>
+	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Admin</th>
+	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Plan</th>
+	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Macra Profile</th>
+	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Goal</th>
+	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Targets</th>
+	                        <th className="py-3 px-4 text-center text-gray-300 font-medium">Admin Actions</th>
+	                        <th className="py-3 px-4 text-center text-gray-300 font-medium">View</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -3331,17 +3591,50 @@ const UsersManagement: React.FC = () => {
                                 <span className="px-2 py-1 bg-gray-900/30 text-gray-400 rounded-full text-xs font-medium border border-gray-700">No</span>
                               }
                             </td>
-                            <td className="py-3 px-4 border-b border-gray-700">
-                              {isBetaSubscription(user.subscriptionType) ? (
-                                <span className="px-2 py-1 bg-lime-900/30 text-lime-300 rounded-full text-xs font-medium border border-lime-900">Beta</span>
-                              ) : (
-                                <span className="px-2 py-1 bg-gray-900/30 text-gray-400 rounded-full text-xs font-medium border border-gray-700">
+	                            <td className="py-3 px-4 border-b border-gray-700">
+	                              {isBetaSubscription(user.subscriptionType) ? (
+	                                <span className="px-2 py-1 bg-lime-900/30 text-lime-300 rounded-full text-xs font-medium border border-lime-900">Beta</span>
+	                              ) : (
+	                                <span className="px-2 py-1 bg-gray-900/30 text-gray-400 rounded-full text-xs font-medium border border-gray-700">
                                   {user.subscriptionType || 'Unsubscribed'}
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 border-b border-gray-700 text-center">
-                              <div className="flex gap-1 justify-center">
+	                                </span>
+	                              )}
+	                            </td>
+	                            <td className="py-3 px-4 border-b border-gray-700">
+	                              {shouldLoadMacraProfile(user) ? (
+	                                <div>
+	                                  <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
+	                                    user.hasCompletedMacraOnboarding
+	                                      ? 'bg-lime-900/30 text-lime-300 border-lime-900'
+	                                      : 'bg-orange-900/30 text-orange-400 border-orange-900'
+	                                  }`}>
+	                                    {user.hasCompletedMacraOnboarding ? 'Complete' : 'Incomplete'}
+	                                  </span>
+	                                  <div className="mt-1 text-[10px] text-gray-500">
+	                                    {isRecord(user.macraProfile) ? 'Profile doc' : user.macraProfileLoaded ? 'No profile doc' : 'Profile pending'}
+	                                  </div>
+	                                </div>
+	                              ) : (
+	                                <span className="text-xs text-gray-500">Not Macra</span>
+	                              )}
+	                            </td>
+	                            <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+	                              {isRecord(user.macraProfile) ? (
+	                                <div className="text-xs">
+	                                  <div>{formatWeight(getMacraProfileValue(user, 'currentWeightKg'))} → {formatWeight(getMacraProfileValue(user, 'goalWeightKg'))}</div>
+	                                  <div className="mt-1 text-gray-500">{titleizeValue(getMacraProfileValue(user, 'goalDirection'))} · {titleizeValue(getMacraProfileValue(user, 'activityLevel'))}</div>
+	                                </div>
+	                              ) : (
+	                                <span className="text-xs text-gray-500">Not set</span>
+	                              )}
+	                            </td>
+	                            <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+	                              <div className="max-w-[220px] text-xs leading-5">
+	                                {formatMacroTargets(getPersonalMacros(user))}
+	                              </div>
+	                            </td>
+	                            <td className="py-3 px-4 border-b border-gray-700 text-center">
+	                              <div className="flex gap-1 justify-center">
                               <button
                                 onClick={() => toggleAdminStatus(user)}
                                 disabled={!user.email || processingAdmin === user.email}
@@ -3427,10 +3720,10 @@ const UsersManagement: React.FC = () => {
                                     </button>
                                   </td>
                                 </tr>
-                        {selectedUser?.id === user.id && (
-                                  <tr>
-                              <td colSpan={isSelectingForDelete ? 10 : 9} className="p-0 border-b border-gray-700">
-                              {renderUserDetails(user)}
+	                        {selectedUser?.id === user.id && (
+	                                  <tr>
+	                              <td colSpan={isSelectingForDelete ? 13 : 12} className="p-0 border-b border-gray-700">
+	                              {renderUserDetails(user)}
                                     </td>
                                   </tr>
                                 )}
