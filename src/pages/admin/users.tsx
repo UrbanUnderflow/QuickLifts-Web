@@ -4,7 +4,7 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, doc, getDoc, setDoc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../api/firebase/config';
 import debounce from 'lodash.debounce';
-import { Trash2 as TrashIcon, Trash2, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, ArrowRight, ChevronRight, Code, Users, Shield, LogIn, Search, Sparkles } from 'lucide-react';
+import { Trash2 as TrashIcon, Trash2, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, ArrowRight, ChevronRight, Code, Users, Shield, LogIn, Search, Sparkles, Clipboard } from 'lucide-react';
 import { workoutService } from '../../api/firebase/workout/service';
 import { Workout, WorkoutStatus, WorkoutSummary, RepsAndWeightLog } from '../../api/firebase/workout/types';
 import { ExerciseLog } from '../../api/firebase/exercise/types';
@@ -838,6 +838,92 @@ const UsersManagement: React.FC = () => {
 
   const getMacraProfileValue = (user: User, key: string) => {
     return isRecord(user.macraProfile) ? user.macraProfile[key] : undefined;
+  };
+
+  const sanitizeClipboardCell = (value: any) => {
+    if (value === undefined || value === null) return '';
+    return String(value).replace(/\t/g, ' ').replace(/\r?\n/g, ' ').trim();
+  };
+
+  const handleCopyVisibleUsersTable = async () => {
+    const headers = [
+      'User ID',
+      'Email',
+      'Username',
+      'Display Name',
+      'Registration Complete',
+      'Join Date',
+      'Origin Source',
+      'Admin',
+      'Plan',
+      'Macra Onboarding',
+      'Macra Profile Doc',
+      'Sex',
+      'Age',
+      'Birthdate',
+      'Height',
+      'Current Weight',
+      'Goal Weight',
+      'Goal Direction',
+      'Pace',
+      'Activity',
+      'Diet',
+      'Biggest Struggle',
+      'Macro Targets',
+      'Macra Completed At',
+      'Profile Updated',
+    ];
+
+    const rows = filteredUsers.map(user => {
+      const originConfig = getRegistrationOriginConfig(user);
+      const hasMacraProfile = isRecord(user.macraProfile);
+
+      return [
+        user.id,
+        user.email,
+        user.username || '',
+        user.displayName || '',
+        formatBooleanLabel(user.registrationComplete),
+        formatDate(user.createdAt),
+        `${originConfig.label} (${user.registrationEntryPoint || 'missing'})`,
+        formatBooleanLabel(user.adminVerified),
+        user.subscriptionType || 'Unsubscribed',
+        shouldLoadMacraProfile(user) ? formatBooleanLabel(user.hasCompletedMacraOnboarding) : 'Not Macra',
+        hasMacraProfile ? 'Yes' : user.macraProfileLoaded ? 'No' : 'Not loaded',
+        titleizeValue(getMacraProfileValue(user, 'sex')),
+        formatAge(getMacraProfileValue(user, 'birthdate')),
+        formatDate(getMacraProfileValue(user, 'birthdate')),
+        formatHeight(getMacraProfileValue(user, 'heightCm')),
+        formatWeight(getMacraProfileValue(user, 'currentWeightKg')),
+        formatWeight(getMacraProfileValue(user, 'goalWeightKg')),
+        titleizeValue(getMacraProfileValue(user, 'goalDirection')),
+        titleizeValue(getMacraProfileValue(user, 'pace')),
+        titleizeValue(getMacraProfileValue(user, 'activityLevel')),
+        titleizeValue(getMacraProfileValue(user, 'dietaryPreference')),
+        titleizeValue(getMacraProfileValue(user, 'biggestStruggle')),
+        formatMacroTargets(getPersonalMacros(user)),
+        formatDate(user.macraOnboardingCompletedAt),
+        formatDate(getMacraProfileValue(user, 'updatedAt') || user.updatedAt),
+      ];
+    });
+
+    const clipboardText = [headers, ...rows]
+      .map(row => row.map(sanitizeClipboardCell).join('\t'))
+      .join('\n');
+
+    try {
+      await navigator.clipboard.writeText(clipboardText);
+      setToastMessage({
+        type: 'success',
+        text: `Copied ${filteredUsers.length} visible users to clipboard.`,
+      });
+    } catch (error) {
+      console.error('Failed to copy user table data:', error);
+      setToastMessage({
+        type: 'error',
+        text: 'Failed to copy user table data.',
+      });
+    }
   };
 
   const renderDetailValue = (label: string, value: React.ReactNode) => (
@@ -3570,6 +3656,21 @@ const UsersManagement: React.FC = () => {
               <div>Logs content...</div>
             ) : (
               // Display Users Table for 'all' and 'admins' tabs
+              <div>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-xs text-gray-400">
+                    Showing <span className="font-semibold text-gray-200">{filteredUsers.length}</span> users. Copy exports the current filtered and sorted table.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyVisibleUsersTable}
+                    disabled={filteredUsers.length === 0 || isBatchDeleting}
+                    className="inline-flex items-center gap-2 rounded-lg border border-lime-900 bg-lime-900/30 px-3 py-2 text-xs font-medium text-lime-300 transition hover:bg-lime-900/50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Clipboard className="h-4 w-4" />
+                    Copy Table Data
+                  </button>
+                </div>
                       <div className="overflow-x-auto">
                 <table className={`w-full min-w-[2200px] bg-[#262a30] rounded-lg overflow-hidden ${isBatchDeleting ? 'opacity-60 pointer-events-none' : ''}`}>
                           <thead>
@@ -3862,6 +3963,7 @@ const UsersManagement: React.FC = () => {
                           </tbody>
                         </table>
                       </div>
+              </div>
             )}
           </div>
         </div>
