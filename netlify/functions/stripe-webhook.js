@@ -6,6 +6,12 @@ const {
   recalculatePulseCheckRevenueSummaries,
   readPulseCheckAttributionFromMetadata,
 } = require('./utils/pulsecheck-revenue');
+const {
+  isMacraSubscriptionContext,
+  mapMacraPriceIdToPlanType,
+  mapMacraPriceIdToSubscriptionType,
+  markMacraWebOfferState,
+} = require('./utils/macraStripe');
 
 // Subscription type mappings
 const SubscriptionType = {
@@ -55,6 +61,12 @@ async function syncPulseCheckRevenueFromAthleteSubscription(subscription, userId
 function mapPriceIdToSubscriptionType(priceId) {
   console.log(`[Webhook] Mapping price ID: ${priceId}`);
 
+  const macraSubscriptionType = mapMacraPriceIdToSubscriptionType(priceId, SubscriptionType);
+  if (macraSubscriptionType) {
+    console.log(`[Webhook] Mapped Macra price ${priceId} to ${macraSubscriptionType}`);
+    return macraSubscriptionType;
+  }
+
   // Live price IDs (from subscribe.tsx)
   const LIVE_MONTHLY_PRICE_ID = 'price_1PDq26RobSf56MUOucDIKLhd';
   const LIVE_ANNUAL_PRICE_ID = 'price_1PDq3LRobSf56MUOng0UxhCC';
@@ -73,6 +85,19 @@ function mapPriceIdToSubscriptionType(priceId) {
   const mappedType = priceMapping[priceId] || SubscriptionType.unsubscribed;
   console.log(`[Webhook] Mapped ${priceId} to ${mappedType}`);
   return mappedType;
+}
+
+function mapPriceIdToPlanType(priceId) {
+  const macraPlanType = mapMacraPriceIdToPlanType(priceId);
+  if (macraPlanType) return macraPlanType;
+
+  switch (priceId) {
+    case 'price_1PDq26RobSf56MUOucDIKLhd': return 'pulsecheck-monthly';
+    case 'price_1PDq3LRobSf56MUOng0UxhCC': return 'pulsecheck-annual';
+    case 'price_1RMIUNRobSf56MUOfeB4gIot': return 'pulsecheck-monthly';
+    case 'price_1RMISFRobSf56MUOpcSoohjP': return 'pulsecheck-annual';
+    default: return null;
+  }
 }
 
 // Helper function to get user ID from subscription
@@ -236,17 +261,7 @@ async function handleSubscriptionCreated(subscription) {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    // reuse previously derived priceId for plan mapping
-    const toPlanType = (pid) => {
-      switch (pid) {
-        case 'price_1PDq26RobSf56MUOucDIKLhd': return 'pulsecheck-monthly';
-        case 'price_1PDq3LRobSf56MUOng0UxhCC': return 'pulsecheck-annual';
-        case 'price_1RMIUNRobSf56MUOfeB4gIot': return 'pulsecheck-monthly';
-        case 'price_1RMISFRobSf56MUOpcSoohjP': return 'pulsecheck-annual';
-        default: return null;
-      }
-    };
-    const planType = toPlanType(priceId);
+    const planType = mapPriceIdToPlanType(priceId);
     const expSec = subscription.current_period_end || null;
     if (planType && expSec) {
       const snap = await subRef.get();
@@ -272,6 +287,13 @@ async function handleSubscriptionCreated(subscription) {
     }
 
     await syncPulseCheckRevenueFromAthleteSubscription(subscription, userId);
+    await markMacraWebOfferState({
+      db,
+      admin,
+      userId,
+      subscription,
+      stage: 'converted',
+    });
 
     console.log(`[Webhook] Successfully processed subscription created for user: ${userId}`);
 
@@ -361,17 +383,7 @@ async function handleSubscriptionUpdated(subscription) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    const toPlanType = (pid) => {
-      switch (pid) {
-        case 'price_1PDq26RobSf56MUOucDIKLhd': return 'pulsecheck-monthly';
-        case 'price_1PDq3LRobSf56MUOng0UxhCC': return 'pulsecheck-annual';
-        case 'price_1RMIUNRobSf56MUOfeB4gIot': return 'pulsecheck-monthly';
-        case 'price_1RMISFRobSf56MUOpcSoohjP': return 'pulsecheck-annual';
-        default: return null;
-      }
-    };
-    // reuse previously derived priceId for plan mapping
-    const planType = toPlanType(priceId);
+    const planType = mapPriceIdToPlanType(priceId);
     const expSec = subscription.current_period_end || null;
     if (planType && expSec) {
       const snap = await subRef.get();
@@ -397,6 +409,13 @@ async function handleSubscriptionUpdated(subscription) {
     }
 
     await syncPulseCheckRevenueFromAthleteSubscription(subscription, userId);
+    await markMacraWebOfferState({
+      db,
+      admin,
+      userId,
+      subscription,
+      stage: subscription.status === 'trialing' || subscription.status === 'active' ? 'converted' : subscription.status,
+    });
 
     console.log(`[Webhook] Successfully processed subscription updated for user: ${userId}`);
 
@@ -444,6 +463,13 @@ async function handleSubscriptionDeleted(subscription) {
     await db.collection('subscriptions').doc(userId).update(subscriptionData);
 
     await syncPulseCheckRevenueFromAthleteSubscription(subscription, userId);
+    await markMacraWebOfferState({
+      db,
+      admin,
+      userId,
+      subscription,
+      stage: 'subscription_deleted',
+    });
 
     console.log(`[Webhook] Successfully processed subscription deleted for user: ${userId}`);
 
@@ -464,6 +490,17 @@ async function handleCheckoutSessionCompleted(session) {
     if (!lineItems || !lineItems.data || lineItems.data.length === 0) {
       console.error('No line items found in the checkout session');
       return;
+    }
+
+    const checkoutPriceId = lineItems.data[0]?.price?.id;
+    if (isMacraSubscriptionContext({ session, priceId: checkoutPriceId })) {
+      await markMacraWebOfferState({
+        db,
+        admin,
+        userId: metadata?.userId || client_reference_id,
+        session,
+        stage: 'checkout_completed',
+      });
     }
 
     // Extract metadata

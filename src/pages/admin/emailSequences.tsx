@@ -174,6 +174,14 @@ const SEQUENCES: SequenceRow[] = [
     templateDocId: 'macra-inactivity-winback-v1',
     scheduleConfigDocId: 'macra-inactivity-winback-v1',
   },
+  {
+    id: 'macra-web-offer-24h-v1',
+    name: 'Macra Web Offer 24h',
+    trigger: 'Scheduled function. Sends once 24h after Macra onboarding when no active trial/subscription exists. Excludes missing-age and under-18 profiles. Checkout uses Stripe web, not StoreKit.',
+    defaultSubject: 'Your Macra plan is ready, plus a free month',
+    functionPath: '/.netlify/functions/send-macra-web-offer-email',
+    templateDocId: 'macra-web-offer-24h-v1',
+  },
 ];
 
 const EmailSequencesAdmin: React.FC = () => {
@@ -183,6 +191,7 @@ const EmailSequencesAdmin: React.FC = () => {
   const [activeSequence, setActiveSequence] = useState<SequenceRow | null>(null);
   const [testEmail, setTestEmail] = useState('');
   const [testName, setTestName] = useState('');
+  const [testUserId, setTestUserId] = useState('');
   const [sending, setSending] = useState(false);
 
   // Template editing
@@ -238,6 +247,7 @@ const EmailSequencesAdmin: React.FC = () => {
     setActiveSequence(seq);
     setTestEmail('');
     setTestName('');
+    setTestUserId('');
     setIsTestModalOpen(true);
     setMessage(null);
   };
@@ -389,6 +399,7 @@ const EmailSequencesAdmin: React.FC = () => {
         body: JSON.stringify({
           toEmail: testEmail.trim(),
           firstName: testName.trim() || undefined,
+          userId: testUserId.trim() || undefined,
           subjectOverride: templateSubject.trim() || undefined,
           htmlOverride: templateHtml.trim() || undefined,
           isTest: true,
@@ -564,6 +575,20 @@ const EmailSequencesAdmin: React.FC = () => {
                   className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#d7ff00] transition-colors"
                   disabled={sending}
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-2">User ID (optional)</label>
+                <input
+                  value={testUserId}
+                  onChange={(e) => setTestUserId(e.target.value)}
+                  placeholder="Paste a real user ID for signed offer links"
+                  className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#d7ff00] transition-colors"
+                  disabled={sending}
+                />
+                <p className="text-xs text-zinc-500 mt-2">
+                  Use this for Macra offer tests when you want the CTA to include a real signed Stripe checkout link.
+                </p>
               </div>
             </div>
 

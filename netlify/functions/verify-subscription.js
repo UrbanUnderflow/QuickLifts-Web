@@ -6,6 +6,12 @@ const {
   upsertPulseCheckRevenueEvent,
   recalculatePulseCheckRevenueSummaries,
 } = require('./utils/pulsecheck-revenue');
+const {
+  isMacraSubscriptionContext,
+  mapMacraPriceIdToPlanType,
+  mapMacraPriceIdToSubscriptionType,
+  markMacraWebOfferState,
+} = require('./utils/macraStripe');
 
 // Helper to determine if the request is from localhost
 const isLocalhostRequest = (event) => {
@@ -47,6 +53,9 @@ const readPulseCheckSubscriptionAttribution = (session) =>
 
 // Price ID mappings
 const mapPriceIdToSubscriptionType = (priceId, isTestMode) => {
+  const macraSubscriptionType = mapMacraPriceIdToSubscriptionType(priceId, SubscriptionType);
+  if (macraSubscriptionType) return macraSubscriptionType;
+
   const LIVE_MONTHLY_PRICE_ID = 'price_1PDq26RobSf56MUOucDIKLhd';
   const LIVE_ANNUAL_PRICE_ID = 'price_1PDq3LRobSf56MUOng0UxhCC';
   const TEST_MONTHLY_PRICE_ID = 'price_1RMIUNRobSf56MUOfeB4gIot';
@@ -60,6 +69,19 @@ const mapPriceIdToSubscriptionType = (priceId, isTestMode) => {
   };
   
   return priceMapping[priceId] || SubscriptionType.unsubscribed;
+};
+
+const mapPriceIdToPlanType = (priceId) => {
+  const macraPlanType = mapMacraPriceIdToPlanType(priceId);
+  if (macraPlanType) return macraPlanType;
+
+  switch (priceId) {
+    case 'price_1PDq26RobSf56MUOucDIKLhd': return 'pulsecheck-monthly';
+    case 'price_1PDq3LRobSf56MUOng0UxhCC': return 'pulsecheck-annual';
+    case 'price_1RMIUNRobSf56MUOfeB4gIot': return 'pulsecheck-monthly';
+    case 'price_1RMISFRobSf56MUOpcSoohjP': return 'pulsecheck-annual';
+    default: return null;
+  }
 };
 
 const handler = async (event) => {
@@ -108,7 +130,10 @@ const handler = async (event) => {
 
     // 2. Validate the session
     console.log('[VerifySubscription] Validating session...');
-    if (session.status !== 'complete' || session.payment_status !== 'paid') {
+    const paymentStatusAllowed =
+      session.payment_status === 'paid' ||
+      session.subscription?.status === 'trialing';
+    if (session.status !== 'complete' || !paymentStatusAllowed) {
       console.error(`[VerifySubscription] Session not complete/paid. Status: ${session.status}, PaymentStatus: ${session.payment_status}`);
       return { statusCode: 400, body: JSON.stringify({ message: 'Payment session not complete or not paid.' }) };
     }
@@ -220,16 +245,7 @@ const handler = async (event) => {
 
     // Determine plan type and expiration
     const mappedPriceId = session.subscription?.items?.data?.[0]?.price?.id;
-    const planTypeMap = (pid) => {
-      switch (pid) {
-        case 'price_1PDq26RobSf56MUOucDIKLhd': return 'pulsecheck-monthly';
-        case 'price_1PDq3LRobSf56MUOng0UxhCC': return 'pulsecheck-annual';
-        case 'price_1RMIUNRobSf56MUOfeB4gIot': return 'pulsecheck-monthly';
-        case 'price_1RMISFRobSf56MUOpcSoohjP': return 'pulsecheck-annual';
-        default: return null;
-      }
-    };
-    const planType = planTypeMap(mappedPriceId);
+    const planType = mapPriceIdToPlanType(mappedPriceId);
     const currentPeriodEnd = session.subscription?.current_period_end;
     if (planType && currentPeriodEnd) {
       const expSec = currentPeriodEnd;
@@ -243,7 +259,7 @@ const handler = async (event) => {
         return !acc || e > acc ? e : acc;
       }, 0);
       if (Math.abs(latestSame - expSec) >= 1) {
-        await subscriptionRef.update({
+        batch.set(subscriptionRef, {
           plans: admin.firestore.FieldValue.arrayUnion({
             type: planType,
             expiration: expSec,
@@ -252,7 +268,7 @@ const handler = async (event) => {
             platform: 'web',
             productId: mappedPriceId || null,
           })
-        });
+        }, { merge: true });
       }
     }
     console.log(`[VerifySubscription] Setting subscription doc: ${subscriptionRef.path}`);
@@ -260,6 +276,17 @@ const handler = async (event) => {
     // 6. Commit batch
     await batch.commit();
     console.log('[VerifySubscription] Firestore updates committed successfully.');
+
+    if (isMacraSubscriptionContext({ subscription: session.subscription, session, priceId })) {
+      await markMacraWebOfferState({
+        db,
+        admin,
+        userId,
+        subscription: session.subscription,
+        session,
+        stage: 'converted',
+      });
+    }
 
     if (pulseCheckAttribution.teamId) {
       try {

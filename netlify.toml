@@ -580,3 +580,7 @@
 # Macra: tips series at day 2 / 4 / 7 after Macra onboarding
 [functions.schedule-macra-tips-email]
   schedule = "30 14 * * *"  # Once daily at 2:30PM UTC
+
+# Macra: web Stripe retargeting offer 24h after onboarding, adult users only
+[functions.schedule-macra-web-offer-email]
+  schedule = "0 * * * *"  # Hourly

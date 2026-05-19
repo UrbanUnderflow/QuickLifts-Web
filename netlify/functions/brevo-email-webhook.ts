@@ -99,6 +99,60 @@ const applyStatusUpdate = (
   }
 };
 
+const updateMacraEmailSequenceStatus = async (args: {
+  userId: string;
+  eventType: BrevoWebhookEvent['event'];
+  email: string;
+  messageId?: string;
+  link?: string;
+  now: Date;
+}) => {
+  const { userId, eventType, email, messageId, link, now } = args;
+  if (!userId) return;
+
+  const stateUpdate: Record<string, any> = {
+    webOffer24hLastEmailEvent: eventType,
+    webOffer24hLastEmailEventAt: now,
+    webOffer24hLastEmailEventEmail: email || null,
+    webOffer24hLastUpdatedAt: now,
+  };
+
+  if (messageId) {
+    stateUpdate.webOffer24hEmailMessageId = messageId;
+  }
+
+  switch (eventType) {
+    case 'delivered':
+      stateUpdate.webOffer24hDeliveredAt = now;
+      break;
+    case 'opened':
+      stateUpdate.webOffer24hOpenedAt = now;
+      stateUpdate.webOffer24hOpenCount = admin.firestore.FieldValue.increment(1);
+      break;
+    case 'click':
+      stateUpdate.webOffer24hClickedAt = now;
+      stateUpdate.webOffer24hClickCount = admin.firestore.FieldValue.increment(1);
+      stateUpdate.webOffer24hClickedLink = link || null;
+      break;
+    case 'soft_bounce':
+    case 'hard_bounce':
+    case 'blocked':
+    case 'deferred':
+    case 'spam':
+    case 'unsubscribe':
+      stateUpdate.webOffer24hStatus = `email_${eventType}`;
+      stateUpdate.webOffer24hEmailIssueAt = now;
+      break;
+  }
+
+  await db.collection('users').doc(userId).set(
+    {
+      macraEmailSequenceState: stateUpdate,
+    },
+    { merge: true }
+  );
+};
+
 const applyPilotAthleteCommunicationStatusUpdate = (
   updateData: Record<string, any>,
   eventType: BrevoWebhookEvent['event'],
@@ -293,6 +347,10 @@ export const handler: Handler = async (event) => {
       let updatePeriodId: string | null = null;
       let pilotAthleteCommunicationId: string | null = null;
       let signingRequestId: string | null = null;
+      let emailSequenceId: string | null = null;
+      let campaignId: string | null = null;
+      let product: string | null = null;
+      let userId: string | null = null;
       
       if (webhookEvent['X-Mailin-custom']) {
         try {
@@ -302,9 +360,28 @@ export const handler: Handler = async (event) => {
           updatePeriodId = custom.updatePeriodId || null;
           pilotAthleteCommunicationId = custom.pilotAthleteCommunicationId || null;
           signingRequestId = custom.signingRequestId || null;
+          emailSequenceId = custom.emailSequenceId || null;
+          campaignId = custom.campaignId || null;
+          product = custom.product || null;
+          userId = custom.userId || null;
         } catch (e) {
           console.warn('[brevo-webhook] Failed to parse X-Mailin-custom:', e);
         }
+      }
+
+      if (
+        product === 'macra' &&
+        (emailSequenceId === 'macra-web-offer-24h-v1' || campaignId === 'macra-web-offer-24h-v1') &&
+        userId
+      ) {
+        await updateMacraEmailSequenceStatus({
+          userId,
+          eventType,
+          email,
+          messageId,
+          link,
+          now,
+        });
       }
 
       if (signingRequestId) {

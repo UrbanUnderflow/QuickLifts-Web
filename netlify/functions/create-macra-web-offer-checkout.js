@@ -1,0 +1,273 @@
+const Stripe = require('stripe');
+const { admin, db } = require('./config/firebase');
+const {
+  MACRA_WEB_OFFER_CAMPAIGN_ID,
+  ageFromBirthdateMs,
+  getMacraBirthdateMs,
+  hasActiveRootSubscription,
+  hasActiveSubscriptionPlan,
+  normalizePlan,
+  normalizeString,
+  resolveMacraPriceId,
+  verifyMacraOfferLinkSignature,
+} = require('./utils/macraStripe');
+
+const jsonHeaders = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'no-store',
+};
+
+const isLocalhostRequest = (event) => {
+  const origin = event.headers.origin || event.headers.referer || event.headers.host || '';
+  return origin.includes('localhost') || origin.includes('127.0.0.1');
+};
+
+const getBaseUrl = (event) => {
+  if (isLocalhostRequest(event)) {
+    const origin = normalizeString(event.headers.origin);
+    if (origin) return origin;
+    const host = normalizeString(event.headers.host);
+    if (host) return `http://${host}`;
+  }
+  return process.env.SITE_URL || process.env.URL || 'https://fitwithpulse.ai';
+};
+
+const getStripeInstance = (event, forceTestMode) => {
+  const isTestMode = forceTestMode || isLocalhostRequest(event);
+  const secretKey = isTestMode
+    ? (process.env.STRIPE_TEST_SECRET_KEY || process.env.STRIPE_SECRET_KEY)
+    : process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error(isTestMode ? 'STRIPE_TEST_SECRET_KEY is not configured.' : 'STRIPE_SECRET_KEY is not configured.');
+  }
+  return { stripe: new Stripe(secretKey), isTestMode };
+};
+
+const buildSuccessUrl = ({ baseUrl, userId }) => {
+  const url = new URL('/subscription-success', baseUrl);
+  url.searchParams.set('session_id', '{CHECKOUT_SESSION_ID}');
+  url.searchParams.set('userId', userId);
+  url.searchParams.set('source', 'macra_web_offer_24h');
+  return url.toString().replace(/%7BCHECKOUT_SESSION_ID%7D/g, '{CHECKOUT_SESSION_ID}');
+};
+
+const buildCancelUrl = ({ baseUrl }) => {
+  const url = new URL('/Macra', baseUrl);
+  url.searchParams.set('macra_offer', 'cancelled');
+  url.searchParams.set('campaign', MACRA_WEB_OFFER_CAMPAIGN_ID);
+  return url.toString();
+};
+
+exports.handler = async (event) => {
+  if (event.httpMethod !== 'GET') {
+    return {
+      statusCode: 405,
+      headers: jsonHeaders,
+      body: JSON.stringify({ success: false, error: 'Method not allowed' }),
+    };
+  }
+
+  const qp = event.queryStringParameters || {};
+  const userId = normalizeString(qp.uid || qp.userId);
+  const campaignId = normalizeString(qp.campaign || qp.campaignId);
+  const plan = normalizePlan(qp.plan || 'monthly');
+  const expiresAt = Number(qp.expires || qp.expiresAt || 0);
+  const signature = normalizeString(qp.sig || qp.signature);
+  const forceTestMode = qp.test === '1' || qp.test === 'true';
+
+  if (!userId || campaignId !== MACRA_WEB_OFFER_CAMPAIGN_ID || !expiresAt || !signature) {
+    return {
+      statusCode: 400,
+      headers: jsonHeaders,
+      body: JSON.stringify({ success: false, error: 'Invalid offer link.' }),
+    };
+  }
+
+  if (Date.now() > expiresAt) {
+    return {
+      statusCode: 410,
+      headers: jsonHeaders,
+      body: JSON.stringify({ success: false, error: 'This offer link has expired.' }),
+    };
+  }
+
+  let validSignature = false;
+  try {
+    validSignature = verifyMacraOfferLinkSignature({ userId, campaignId, plan, expiresAt, signature });
+  } catch (error) {
+    console.error('[create-macra-web-offer-checkout] Signature check failed:', error);
+  }
+
+  if (!validSignature) {
+    return {
+      statusCode: 403,
+      headers: jsonHeaders,
+      body: JSON.stringify({ success: false, error: 'Invalid offer link signature.' }),
+    };
+  }
+
+  try {
+    const userRef = db.collection('users').doc(userId);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      return {
+        statusCode: 404,
+        headers: jsonHeaders,
+        body: JSON.stringify({ success: false, error: 'User not found.' }),
+      };
+    }
+
+    const userData = userSnap.data() || {};
+    const nowMs = Date.now();
+    const email = normalizeString(userData.email);
+
+    await userRef.set(
+      {
+        macraEmailSequenceState: {
+          webOffer24hClickedAt: admin.firestore.FieldValue.serverTimestamp(),
+          webOffer24hStatus: 'clicked',
+          webOffer24hLastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          webOffer24hPlan: plan,
+        },
+      },
+      { merge: true }
+    );
+
+    if (!email) {
+      return {
+        statusCode: 400,
+        headers: jsonHeaders,
+        body: JSON.stringify({ success: false, error: 'User email is required for checkout.' }),
+      };
+    }
+
+    const birthdateMs = await getMacraBirthdateMs({ db, userId, userData });
+    const age = ageFromBirthdateMs(birthdateMs, nowMs);
+    if (age === null || age < 18) {
+      await userRef.set(
+        {
+          macraEmailSequenceState: {
+            webOffer24hBlockedAt: admin.firestore.FieldValue.serverTimestamp(),
+            webOffer24hBlockReason: age === null ? 'missing_birthdate' : 'under_18',
+            webOffer24hEligibilityAge: age,
+            webOffer24hStatus: age === null ? 'blocked:missing_birthdate' : 'blocked:under_18',
+            webOffer24hLastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+        },
+        { merge: true }
+      );
+      return {
+        statusCode: 403,
+        headers: jsonHeaders,
+        body: JSON.stringify({ success: false, error: 'This offer is only available to adults.' }),
+      };
+    }
+
+    if (hasActiveRootSubscription(userData, nowMs) || (await hasActiveSubscriptionPlan({ db, userId, nowMs }))) {
+      await userRef.set(
+        {
+          macraEmailSequenceState: {
+            webOffer24hBlockedAt: admin.firestore.FieldValue.serverTimestamp(),
+            webOffer24hBlockReason: 'already_subscribed_or_trialing',
+            webOffer24hStatus: 'blocked:already_subscribed_or_trialing',
+            webOffer24hLastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+        },
+        { merge: true }
+      );
+      return {
+        statusCode: 409,
+        headers: jsonHeaders,
+        body: JSON.stringify({ success: false, error: 'This account already has active access.' }),
+      };
+    }
+
+    const { stripe, isTestMode } = getStripeInstance(event, forceTestMode);
+    const priceId = resolveMacraPriceId({ plan, isTestMode });
+    if (!priceId) {
+      return {
+        statusCode: 500,
+        headers: jsonHeaders,
+        body: JSON.stringify({
+          success: false,
+          error: isTestMode
+            ? 'Macra test Stripe price is not configured.'
+            : 'Macra live Stripe price is not configured.',
+        }),
+      };
+    }
+
+    const baseUrl = getBaseUrl(event);
+    const metadata = {
+      userId,
+      userType: 'macra',
+      product: 'macra',
+      checkoutSource: 'macra_retarget_email',
+      checkoutPlan: plan,
+      campaignId: MACRA_WEB_OFFER_CAMPAIGN_ID,
+      offerId: MACRA_WEB_OFFER_CAMPAIGN_ID,
+      webOffer: 'true',
+    };
+
+    const stripeCustomerId = normalizeString(userData.stripeCustomerId);
+    const checkoutParams = {
+      payment_method_types: ['card'],
+      line_items: [{ price: priceId, quantity: 1 }],
+      mode: 'subscription',
+      client_reference_id: userId,
+      ...(stripeCustomerId ? { customer: stripeCustomerId } : { customer_email: email }),
+      allow_promotion_codes: true,
+      success_url: buildSuccessUrl({ baseUrl, userId }),
+      cancel_url: buildCancelUrl({ baseUrl }),
+      metadata,
+      subscription_data: {
+        trial_period_days: 30,
+        metadata,
+      },
+    };
+
+    let session;
+    try {
+      session = await stripe.checkout.sessions.create(checkoutParams);
+    } catch (stripeError) {
+      if (!stripeCustomerId || stripeError?.code !== 'resource_missing') {
+        throw stripeError;
+      }
+      console.warn('[create-macra-web-offer-checkout] Stored customer could not be used; retrying with email:', stripeCustomerId);
+      const retryParams = { ...checkoutParams };
+      delete retryParams.customer;
+      retryParams.customer_email = email;
+      session = await stripe.checkout.sessions.create(retryParams);
+    }
+
+    await userRef.set(
+      {
+        macraEmailSequenceState: {
+          webOffer24hCheckoutStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+          webOffer24hCheckoutSessionId: session.id,
+          webOffer24hStripePriceId: priceId,
+          webOffer24hStatus: 'checkout_started',
+          webOffer24hLastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          webOffer24hPlan: plan,
+        },
+      },
+      { merge: true }
+    );
+
+    return {
+      statusCode: 302,
+      headers: {
+        Location: session.url,
+        'Cache-Control': 'no-store',
+      },
+      body: '',
+    };
+  } catch (error) {
+    console.error('[create-macra-web-offer-checkout] Error:', error);
+    return {
+      statusCode: 500,
+      headers: jsonHeaders,
+      body: JSON.stringify({ success: false, error: error?.message || 'Internal error' }),
+    };
+  }
+};
