@@ -684,9 +684,8 @@ const UsersManagement: React.FC = () => {
     }
   };
 
-  // Format date helper function
-  const formatDate = (date: any): string => {
-    if (!date) return 'Not available';
+  const parseDateValue = (date: any): Date | null => {
+    if (!date) return null;
     
     // If it's a Firebase timestamp, use toDate()
     if (date && typeof date.toDate === 'function') {
@@ -703,7 +702,37 @@ const UsersManagement: React.FC = () => {
     }
 
     const parsedDate = new Date(date);
-    return Number.isNaN(parsedDate.getTime()) ? 'Not available' : parsedDate.toLocaleString();
+    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+  };
+
+  // Format date helper function
+  const formatDate = (date: any): string => {
+    const parsedDate = parseDateValue(date);
+    return parsedDate ? parsedDate.toLocaleString() : 'Not available';
+  };
+
+  const formatCompactDate = (date: any): string => {
+    const parsedDate = parseDateValue(date);
+    if (!parsedDate) return 'Not set';
+    return parsedDate.toLocaleDateString(undefined, {
+      month: 'numeric',
+      day: 'numeric',
+      year: '2-digit',
+    });
+  };
+
+  const formatAge = (date: any): string => {
+    const parsedDate = parseDateValue(date);
+    if (!parsedDate) return 'Age not set';
+
+    const today = new Date();
+    let age = today.getFullYear() - parsedDate.getFullYear();
+    const hasHadBirthdayThisYear =
+      today.getMonth() > parsedDate.getMonth()
+      || (today.getMonth() === parsedDate.getMonth() && today.getDate() >= parsedDate.getDate());
+
+    if (!hasHadBirthdayThisYear) age -= 1;
+    return age >= 0 && age < 120 ? `${age} yrs` : 'Age not set';
   };
 
   const isRecord = (value: any): value is Record<string, any> => {
@@ -735,6 +764,12 @@ const UsersManagement: React.FC = () => {
     const kg = Number(weightKg);
     if (!Number.isFinite(kg) || kg <= 0) return 'Not set';
     return `${Math.round(kg * 2.20462)} lb (${kg.toFixed(1)} kg)`;
+  };
+
+  const formatWeightShort = (weightKg: any) => {
+    const kg = Number(weightKg);
+    if (!Number.isFinite(kg) || kg <= 0) return 'Not set';
+    return `${Math.round(kg * 2.20462)} lb`;
   };
 
   const getPersonalMacros = (user: User): Record<string, any> | null => {
@@ -3503,7 +3538,7 @@ const UsersManagement: React.FC = () => {
             ) : (
               // Display Users Table for 'all' and 'admins' tabs
                       <div className="overflow-x-auto">
-                <table className={`w-full min-w-[1500px] bg-[#262a30] rounded-lg overflow-hidden ${isBatchDeleting ? 'opacity-60 pointer-events-none' : ''}`}>
+                <table className={`w-full min-w-[2100px] bg-[#262a30] rounded-lg overflow-hidden ${isBatchDeleting ? 'opacity-60 pointer-events-none' : ''}`}>
                           <thead>
                             <tr className="border-b border-gray-700">
                       {/* Conditional Checkbox Header */}
@@ -3527,8 +3562,12 @@ const UsersManagement: React.FC = () => {
 	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Admin</th>
 	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Plan</th>
 	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Macra Profile</th>
+	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Body</th>
 	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Goal</th>
+	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Plan Inputs</th>
+	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Struggle</th>
 	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Targets</th>
+	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Profile Timing</th>
 	                        <th className="py-3 px-4 text-center text-gray-300 font-medium">Admin Actions</th>
 	                        <th className="py-3 px-4 text-center text-gray-300 font-medium">View</th>
                             </tr>
@@ -3620,9 +3659,39 @@ const UsersManagement: React.FC = () => {
 	                            </td>
 	                            <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
 	                              {isRecord(user.macraProfile) ? (
-	                                <div className="text-xs">
-	                                  <div>{formatWeight(getMacraProfileValue(user, 'currentWeightKg'))} → {formatWeight(getMacraProfileValue(user, 'goalWeightKg'))}</div>
-	                                  <div className="mt-1 text-gray-500">{titleizeValue(getMacraProfileValue(user, 'goalDirection'))} · {titleizeValue(getMacraProfileValue(user, 'activityLevel'))}</div>
+	                                <div className="text-xs leading-5">
+	                                  <div>{titleizeValue(getMacraProfileValue(user, 'sex'))} · {formatAge(getMacraProfileValue(user, 'birthdate'))}</div>
+	                                  <div className="text-gray-500">{formatHeight(getMacraProfileValue(user, 'heightCm'))}</div>
+	                                </div>
+	                              ) : (
+	                                <span className="text-xs text-gray-500">Not set</span>
+	                              )}
+	                            </td>
+	                            <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+	                              {isRecord(user.macraProfile) ? (
+	                                <div className="text-xs leading-5">
+	                                  <div>{formatWeightShort(getMacraProfileValue(user, 'currentWeightKg'))} → {formatWeightShort(getMacraProfileValue(user, 'goalWeightKg'))}</div>
+	                                  <div className="text-gray-500">{titleizeValue(getMacraProfileValue(user, 'goalDirection'))}</div>
+	                                </div>
+	                              ) : (
+	                                <span className="text-xs text-gray-500">Not set</span>
+	                              )}
+	                            </td>
+	                            <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+	                              {isRecord(user.macraProfile) ? (
+	                                <div className="text-xs leading-5">
+	                                  <div>{titleizeValue(getMacraProfileValue(user, 'pace'))}</div>
+	                                  <div className="text-gray-500">{titleizeValue(getMacraProfileValue(user, 'activityLevel'))}</div>
+	                                  <div className="text-gray-500">{titleizeValue(getMacraProfileValue(user, 'dietaryPreference'))}</div>
+	                                </div>
+	                              ) : (
+	                                <span className="text-xs text-gray-500">Not set</span>
+	                              )}
+	                            </td>
+	                            <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+	                              {isRecord(user.macraProfile) ? (
+	                                <div className="max-w-[160px] text-xs leading-5">
+	                                  {titleizeValue(getMacraProfileValue(user, 'biggestStruggle'))}
 	                                </div>
 	                              ) : (
 	                                <span className="text-xs text-gray-500">Not set</span>
@@ -3632,6 +3701,16 @@ const UsersManagement: React.FC = () => {
 	                              <div className="max-w-[220px] text-xs leading-5">
 	                                {formatMacroTargets(getPersonalMacros(user))}
 	                              </div>
+	                            </td>
+	                            <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+	                              {shouldLoadMacraProfile(user) ? (
+	                                <div className="text-xs leading-5">
+	                                  <div>Done {formatCompactDate(user.macraOnboardingCompletedAt)}</div>
+	                                  <div className="text-gray-500">Updated {formatCompactDate(getMacraProfileValue(user, 'updatedAt') || user.updatedAt)}</div>
+	                                </div>
+	                              ) : (
+	                                <span className="text-xs text-gray-500">Not Macra</span>
+	                              )}
 	                            </td>
 	                            <td className="py-3 px-4 border-b border-gray-700 text-center">
 	                              <div className="flex gap-1 justify-center">
@@ -3722,7 +3801,7 @@ const UsersManagement: React.FC = () => {
                                 </tr>
 	                        {selectedUser?.id === user.id && (
 	                                  <tr>
-	                              <td colSpan={isSelectingForDelete ? 13 : 12} className="p-0 border-b border-gray-700">
+	                              <td colSpan={isSelectingForDelete ? 17 : 16} className="p-0 border-b border-gray-700">
 	                              {renderUserDetails(user)}
                                     </td>
                                   </tr>
