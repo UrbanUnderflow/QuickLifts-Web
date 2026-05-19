@@ -10,6 +10,7 @@ const META_DESCRIPTION =
   'Pulse Intelligence Labs is an AI lab building the human performance stack — training, nutrition, mindset, and daily ritual — for athletes, coaches, and the people behind them.';
 const META_URL = 'https://pulseintelligencelabs.com';
 const META_OG_IMAGE = 'https://pulseintelligencelabs.com/pil-og.png';
+const CONTACT_EMAIL = 'tre@fitwithpulse.ai';
 
 // Hero video lives at /public/pil-hero.mp4. Drop a cinematic sprinter clip
 // there (1080p+, 8–20s loopable, ideally h.264 mp4 + webm transcode).
@@ -212,7 +213,7 @@ const PILPage: NextPage = () => {
             <div className="hidden items-center gap-7 text-sm text-zinc-300 sm:flex">
               <Link href="/apps" className="hover:text-white transition-colors">Apps</Link>
               <a href="https://fitwithpulse.ai/pulseintelligencelabs" className="hover:text-white transition-colors">Lab</a>
-              <a href="mailto:hello@pulseintelligencelabs.com" className="hover:text-white transition-colors">Contact</a>
+              <a href={`mailto:${CONTACT_EMAIL}`} className="hover:text-white transition-colors">Contact</a>
             </div>
             <Link
               href="/apps"
@@ -397,10 +398,10 @@ const PILPage: NextPage = () => {
               transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
               className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight leading-[1.15] text-white"
             >
-              We are not in the wellness business.
+              We're betting the next level of health is performance,
               <br />
               <span className="text-zinc-400">
-                We are in the business of helping humans perform.
+                and building tools for the way people train, recover, work, and live.
               </span>
             </motion.blockquote>
           </div>
@@ -437,10 +438,10 @@ const PILPage: NextPage = () => {
                   <ArrowUpRight className="h-4 w-4" />
                 </Link>
                 <a
-                  href="mailto:hello@pulseintelligencelabs.com"
+                  href={`mailto:${CONTACT_EMAIL}`}
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10 transition-colors w-full md:w-auto"
                 >
-                  hello@pulseintelligencelabs.com
+                  Contact us
                 </a>
               </div>
             </div>
