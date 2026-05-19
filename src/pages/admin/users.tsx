@@ -52,6 +52,7 @@ const isBetaSubscription = (value?: string) => {
 type RegistrationOriginKey = 'fit_with_pulse' | 'macra' | 'pulse_check' | 'pulse_ritual' | 'unknown';
 type OriginTabType = 'originFitWithPulse' | 'originMacra' | 'originPulseCheck' | 'originPulseRitual' | 'originUnknown';
 type TabType = 'all' | 'admins' | 'creators' | 'workoutSessions' | 'logs' | 'betaApplications' | OriginTabType;
+type JoinDateSortDirection = 'asc' | 'desc';
 
 const originTabConfigs: Array<{
   tab: OriginTabType;
@@ -143,6 +144,7 @@ const UsersManagement: React.FC = () => {
   const [processingAdmin, setProcessingAdmin] = useState<string | null>(null);
   const [processingDelete, setProcessingDelete] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('all');
+  const [joinDateSortDirection, setJoinDateSortDirection] = useState<JoinDateSortDirection>('desc');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [copiedId, setCopiedId] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
@@ -288,7 +290,7 @@ const UsersManagement: React.FC = () => {
 
       // Update state with the final user list that includes admin status
       setUsers(usersWithMacraProfiles);
-      updateFilteredUsers(usersWithMacraProfiles, searchTerm, activeTab);
+      updateFilteredUsers(usersWithMacraProfiles, searchTerm, activeTab, joinDateSortDirection);
       
     } catch (error) {
       console.error('Error loading users:', error);
@@ -573,13 +575,57 @@ const UsersManagement: React.FC = () => {
     setSelectedUserIds(new Set()); // Clear selection
   };
 
+  const parseDateValue = (date: any): Date | null => {
+    if (!date) return null;
+
+    // If it's a Firebase timestamp, use toDate()
+    if (date && typeof date.toDate === 'function') {
+      date = date.toDate();
+    }
+
+    if (typeof date === 'number') {
+      date = date > 0 && date < 100000000000 ? date * 1000 : date;
+    }
+
+    if (typeof date === 'string' && /^\d+(\.\d+)?$/.test(date.trim())) {
+      const numericDate = Number(date);
+      date = numericDate > 0 && numericDate < 100000000000 ? numericDate * 1000 : numericDate;
+    }
+
+    const parsedDate = new Date(date);
+    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+  };
+
+  const getJoinDateSortTime = (user: User): number | null => {
+    const parsedDate = parseDateValue(user.createdAt);
+    return parsedDate ? parsedDate.getTime() : null;
+  };
+
+  const sortUsersByJoinDate = (userList: User[], direction: JoinDateSortDirection) => {
+    return [...userList].sort((a, b) => {
+      const aTime = getJoinDateSortTime(a);
+      const bTime = getJoinDateSortTime(b);
+
+      if (aTime === null && bTime === null) return 0;
+      if (aTime === null) return 1;
+      if (bTime === null) return -1;
+
+      return direction === 'asc' ? aTime - bTime : bTime - aTime;
+    });
+  };
+
   useEffect(() => {
     loadAllUsers();
     loadBetaApplications(); // Load beta applications on mount to check for existing ones
   }, []);
 
   // Update filtered users based on search term and active tab
-  const updateFilteredUsers = (allUsers: User[], term: string, tab: TabType) => {
+  const updateFilteredUsers = (
+    allUsers: User[],
+    term: string,
+    tab: TabType,
+    sortDirection: JoinDateSortDirection = joinDateSortDirection
+  ) => {
     let filtered = [...allUsers];
     const originConfig = getOriginTabConfig(tab);
     
@@ -606,7 +652,7 @@ const UsersManagement: React.FC = () => {
       );
     }
     
-    setFilteredUsers(filtered);
+    setFilteredUsers(sortUsersByJoinDate(filtered, sortDirection));
   };
 
   // Handle search term changes with debounce
@@ -614,7 +660,7 @@ const UsersManagement: React.FC = () => {
       return debounce((term: string) => {
           updateFilteredUsers(users, term, activeTab);
       }, 300);
-  }, [users, activeTab]); // Recreate debounce function if users or activeTab change
+  }, [users, activeTab, joinDateSortDirection]); // Recreate debounce function if users, active tab, or sort changes
 
   useEffect(() => {
       // Call the debounced search function when searchTerm changes
@@ -684,25 +730,12 @@ const UsersManagement: React.FC = () => {
     }
   };
 
-  const parseDateValue = (date: any): Date | null => {
-    if (!date) return null;
-    
-    // If it's a Firebase timestamp, use toDate()
-    if (date && typeof date.toDate === 'function') {
-      date = date.toDate();
-    }
-
-    if (typeof date === 'number') {
-      date = date > 0 && date < 100000000000 ? date * 1000 : date;
-    }
-
-    if (typeof date === 'string' && /^\d+(\.\d+)?$/.test(date.trim())) {
-      const numericDate = Number(date);
-      date = numericDate > 0 && numericDate < 100000000000 ? numericDate * 1000 : numericDate;
-    }
-
-    const parsedDate = new Date(date);
-    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+  const handleJoinDateSortToggle = () => {
+    setJoinDateSortDirection(previousDirection => {
+      const nextDirection = previousDirection === 'desc' ? 'asc' : 'desc';
+      updateFilteredUsers(users, searchTerm, activeTab, nextDirection);
+      return nextDirection;
+    });
   };
 
   // Format date helper function
@@ -3538,7 +3571,7 @@ const UsersManagement: React.FC = () => {
             ) : (
               // Display Users Table for 'all' and 'admins' tabs
                       <div className="overflow-x-auto">
-                <table className={`w-full min-w-[2100px] bg-[#262a30] rounded-lg overflow-hidden ${isBatchDeleting ? 'opacity-60 pointer-events-none' : ''}`}>
+                <table className={`w-full min-w-[2200px] bg-[#262a30] rounded-lg overflow-hidden ${isBatchDeleting ? 'opacity-60 pointer-events-none' : ''}`}>
                           <thead>
                             <tr className="border-b border-gray-700">
                       {/* Conditional Checkbox Header */}
@@ -3558,6 +3591,19 @@ const UsersManagement: React.FC = () => {
                       <th className="py-3 px-4 text-left text-gray-300 font-medium">Email</th>
                         <th className="py-3 px-4 text-left text-gray-300 font-medium">Username</th>
                         <th className="py-3 px-4 text-left text-gray-300 font-medium">Registration</th>
+                        <th className="py-3 px-4 text-left text-gray-300 font-medium">
+                          <button
+                            type="button"
+                            onClick={handleJoinDateSortToggle}
+                            className="group text-left text-gray-300 transition-colors hover:text-white"
+                            title={`Sort by join date ${joinDateSortDirection === 'desc' ? 'oldest first' : 'newest first'}`}
+                          >
+                            <span>Join Date</span>
+                            <span className="block text-[10px] font-normal text-gray-500 group-hover:text-gray-300">
+                              {joinDateSortDirection === 'desc' ? 'Newest first' : 'Oldest first'}
+                            </span>
+                          </button>
+                        </th>
                         <th className="py-3 px-4 text-left text-gray-300 font-medium">Origin Source</th>
 	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Admin</th>
 	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Plan</th>
@@ -3604,6 +3650,11 @@ const UsersManagement: React.FC = () => {
                               <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">Complete</span> : 
                               <span className="px-2 py-1 bg-orange-900/30 text-orange-400 rounded-full text-xs font-medium border border-orange-900">Incomplete</span>
                             }
+                          </td>
+                          <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+                            <div className="text-xs" title={formatDate(user.createdAt)}>
+                              {formatCompactDate(user.createdAt)}
+                            </div>
                           </td>
                           <td className="py-3 px-4 border-b border-gray-700">
                             {(() => {
@@ -3801,7 +3852,7 @@ const UsersManagement: React.FC = () => {
                                 </tr>
 	                        {selectedUser?.id === user.id && (
 	                                  <tr>
-	                              <td colSpan={isSelectingForDelete ? 17 : 16} className="p-0 border-b border-gray-700">
+	                              <td colSpan={isSelectingForDelete ? 18 : 17} className="p-0 border-b border-gray-700">
 	                              {renderUserDetails(user)}
                                     </td>
                                   </tr>
