@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
+import { useDispatch } from 'react-redux';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { Mail, Send, Loader2, CheckCircle, AlertCircle, X, Edit3, Eye, Copy, Clock } from 'lucide-react';
+import { showToast } from '../../redux/toastSlice';
 
 type SequenceRow = {
   id: string;
@@ -185,6 +187,7 @@ const SEQUENCES: SequenceRow[] = [
 ];
 
 const EmailSequencesAdmin: React.FC = () => {
+  const dispatch = useDispatch();
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
@@ -192,6 +195,7 @@ const EmailSequencesAdmin: React.FC = () => {
   const [testEmail, setTestEmail] = useState('');
   const [testName, setTestName] = useState('');
   const [testUserId, setTestUserId] = useState('');
+  const [lastTestCheckoutUrl, setLastTestCheckoutUrl] = useState('');
   const [sending, setSending] = useState(false);
 
   // Template editing
@@ -248,6 +252,7 @@ const EmailSequencesAdmin: React.FC = () => {
     setTestEmail('');
     setTestName('');
     setTestUserId('');
+    setLastTestCheckoutUrl('');
     setIsTestModalOpen(true);
     setMessage(null);
   };
@@ -389,9 +394,14 @@ const EmailSequencesAdmin: React.FC = () => {
       setMessage({ type: 'error', text: 'Please enter a test email address' });
       return;
     }
+    if (activeSequence.id === 'macra-web-offer-24h-v1' && !testUserId.trim()) {
+      setMessage({ type: 'error', text: 'Macra web offer tests need a real user ID so the CTA can require sign-in and then open Stripe.' });
+      return;
+    }
 
     setSending(true);
     setMessage(null);
+    setLastTestCheckoutUrl('');
     try {
       const resp = await fetch(activeSequence.functionPath, {
         method: 'POST',
@@ -409,13 +419,26 @@ const EmailSequencesAdmin: React.FC = () => {
       if (!resp.ok) {
         throw new Error(json?.error || `Failed to send test email (HTTP ${resp.status})`);
       }
-      setMessage({ type: 'success', text: 'Test email sent successfully.' });
+      const successMessage = 'Test email sent successfully.';
+      setLastTestCheckoutUrl(typeof json?.checkoutUrl === 'string' ? json.checkoutUrl : '');
+      setMessage({ type: 'success', text: successMessage });
+      dispatch(showToast({ message: successMessage, type: 'success' }));
     } catch (e: any) {
-      setMessage({ type: 'error', text: e?.message || 'Failed to send test email' });
+      const errorMessage = e?.message || 'Failed to send test email';
+      setMessage({ type: 'error', text: errorMessage });
+      dispatch(showToast({ message: errorMessage, type: 'error', duration: 5000 }));
     } finally {
       setSending(false);
     }
   };
+
+  const copyLastTestCheckoutUrl = async () => {
+    if (!lastTestCheckoutUrl) return;
+    await navigator.clipboard.writeText(lastTestCheckoutUrl);
+    setMessage({ type: 'success', text: 'Generated offer link copied to clipboard.' });
+  };
+
+  const activeTestRequiresUserId = activeSequence?.id === 'macra-web-offer-24h-v1';
 
   return (
     <AdminRouteGuard>
@@ -578,7 +601,9 @@ const EmailSequencesAdmin: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-2">User ID (optional)</label>
+                <label className="block text-sm font-medium text-zinc-400 mb-2">
+                  User ID {activeTestRequiresUserId ? '(required for this sequence)' : '(optional)'}
+                </label>
                 <input
                   value={testUserId}
                   onChange={(e) => setTestUserId(e.target.value)}
@@ -587,8 +612,23 @@ const EmailSequencesAdmin: React.FC = () => {
                   disabled={sending}
                 />
                 <p className="text-xs text-zinc-500 mt-2">
-                  Use this for Macra offer tests when you want the CTA to include a real signed Stripe checkout link.
+                  Macra offer CTAs need this so the email opens a signed sign-in bridge and then Stripe checkout.
                 </p>
+                {lastTestCheckoutUrl ? (
+                  <div className="mt-3 rounded-xl border border-zinc-700 bg-zinc-900/70 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs text-zinc-400 truncate">{lastTestCheckoutUrl}</p>
+                      <button
+                        type="button"
+                        onClick={copyLastTestCheckoutUrl}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -602,8 +642,8 @@ const EmailSequencesAdmin: React.FC = () => {
               </button>
               <button
                 onClick={sendTest}
-                disabled={sending || !testEmail.trim()}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${sending || !testEmail.trim()
+                disabled={sending || !testEmail.trim() || (activeTestRequiresUserId && !testUserId.trim())}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${sending || !testEmail.trim() || (activeTestRequiresUserId && !testUserId.trim())
                   ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
                   : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
                   }`}

@@ -43,6 +43,46 @@ const getStripeInstance = (event, forceTestMode) => {
   return { stripe: new Stripe(secretKey), isTestMode };
 };
 
+const normalizeFirebaseIdToken = (value) => normalizeString(value).replace(/^Bearer\s+/i, '');
+
+const firebaseIdTokenFromRequest = (event, explicitToken) => {
+  const authHeader = event.headers.authorization || event.headers.Authorization || '';
+  return normalizeFirebaseIdToken(explicitToken || authHeader);
+};
+
+const verifyCheckoutFirebaseToken = async ({ firebaseIdToken, requestedUserId }) => {
+  const normalizedToken = normalizeFirebaseIdToken(firebaseIdToken);
+  const normalizedRequestedUserId = normalizeString(requestedUserId);
+
+  if (!normalizedToken) {
+    const error = new Error('Sign in is required before starting this Macra offer checkout.');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(normalizedToken);
+    const tokenUserId = normalizeString(decodedToken.uid);
+
+    if (!tokenUserId) {
+      const error = new Error('Firebase token did not include a user id.');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    if (normalizedRequestedUserId && normalizedRequestedUserId !== tokenUserId) {
+      const error = new Error('Signed-in user does not match this Macra offer.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    return tokenUserId;
+  } catch (error) {
+    if (!error.statusCode) error.statusCode = 401;
+    throw error;
+  }
+};
+
 const buildSuccessUrl = ({ baseUrl, userId }) => {
   const url = new URL('/subscription-success', baseUrl);
   url.searchParams.set('session_id', '{CHECKOUT_SESSION_ID}');
@@ -74,6 +114,7 @@ exports.handler = async (event) => {
   const expiresAt = Number(qp.expires || qp.expiresAt || 0);
   const signature = normalizeString(qp.sig || qp.signature);
   const forceTestMode = qp.test === '1' || qp.test === 'true';
+  const requireAuth = qp.requireAuth === '1' || qp.requireAuth === 'true';
 
   if (!userId || campaignId !== MACRA_WEB_OFFER_CAMPAIGN_ID || !expiresAt || !signature) {
     return {
@@ -107,6 +148,15 @@ exports.handler = async (event) => {
   }
 
   try {
+    let authVerified = false;
+    if (requireAuth) {
+      await verifyCheckoutFirebaseToken({
+        firebaseIdToken: firebaseIdTokenFromRequest(event, qp.firebaseIdToken || qp.authToken),
+        requestedUserId: userId,
+      });
+      authVerified = true;
+    }
+
     const userRef = db.collection('users').doc(userId);
     const userSnap = await userRef.get();
     if (!userSnap.exists) {
@@ -128,6 +178,8 @@ exports.handler = async (event) => {
           webOffer24hStatus: 'clicked',
           webOffer24hLastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
           webOffer24hPlan: plan,
+          webOffer24hAuthRequired: requireAuth,
+          ...(authVerified ? { webOffer24hAuthenticatedAt: admin.firestore.FieldValue.serverTimestamp() } : {}),
         },
       },
       { merge: true }
@@ -207,6 +259,7 @@ exports.handler = async (event) => {
       campaignId: MACRA_WEB_OFFER_CAMPAIGN_ID,
       offerId: MACRA_WEB_OFFER_CAMPAIGN_ID,
       webOffer: 'true',
+      checkoutAuthVerified: authVerified ? 'true' : 'false',
     };
 
     const stripeCustomerId = normalizeString(userData.stripeCustomerId);
@@ -265,7 +318,7 @@ exports.handler = async (event) => {
   } catch (error) {
     console.error('[create-macra-web-offer-checkout] Error:', error);
     return {
-      statusCode: 500,
+      statusCode: error?.statusCode || 500,
       headers: jsonHeaders,
       body: JSON.stringify({ success: false, error: error?.message || 'Internal error' }),
     };

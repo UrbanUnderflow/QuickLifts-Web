@@ -49,7 +49,7 @@ function buildCheckoutUrl(args: { userId: string; plan: string }): string {
     expiresAt,
   });
 
-  const url = new URL('/.netlify/functions/create-macra-web-offer-checkout', siteUrl);
+  const url = new URL('/macra-offer', siteUrl);
   url.searchParams.set('uid', args.userId);
   url.searchParams.set('campaign', campaignId);
   url.searchParams.set('plan', normalizedPlan);
@@ -96,10 +96,10 @@ function renderFallbackHtml(args: { firstName: string; checkoutUrl: string }): s
                       Your Macra plan is ready, ${escapeHtml(greeting)}.
                     </h1>
                     <p style="margin:0 0 18px 0;font-size:15px;line-height:1.7;color:#D4D4D8;">
-                      You already built your nutrition profile. Start Macra through the web today and your first month is free before the subscription renews.
+                      You already built your nutrition profile. Start Macra today and your first month is free before the subscription renews.
                     </p>
                     <p style="margin:0 0 22px 0;font-size:13px;line-height:1.7;color:#A1A1AA;">
-                      This offer uses Stripe checkout on the web. You can cancel before renewal if Macra is not the right fit.
+                      You can cancel before renewal if Macra is not the right fit.
                     </p>
                     <a href="${checkoutUrl}" style="display:inline-block;background:#E0FE10;color:#101113;text-decoration:none;padding:13px 18px;border-radius:12px;font-weight:900;font-size:14px;">
                       Start your free month
@@ -128,6 +128,21 @@ function renderFallbackHtml(args: { firstName: string; checkoutUrl: string }): s
   </html>`;
 }
 
+function ensureCheckoutUrlInHtml(html: string, checkoutUrl: string): string {
+  const escapedCheckoutUrl = escapeHtml(checkoutUrl);
+  if (!html || html.includes(checkoutUrl) || html.includes(escapedCheckoutUrl)) return html;
+
+  const macraLandingHrefPattern =
+    /href=(["'])(https?:\/\/(?:www\.)?fitwithpulse\.ai\/Macra(?:\?[^"']*)?|\/Macra(?:\?[^"']*)?)\1/gi;
+  const rewritten = html.replace(macraLandingHrefPattern, `href="${escapedCheckoutUrl}"`);
+
+  if (!rewritten.includes(checkoutUrl) && !rewritten.includes(escapedCheckoutUrl)) {
+    console.warn('[send-macra-web-offer-email] Template did not contain a checkout placeholder or replaceable Macra CTA href.');
+  }
+
+  return rewritten;
+}
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return {
@@ -139,11 +154,12 @@ export const handler: Handler = async (event) => {
 
   try {
     const body = (event.body ? JSON.parse(event.body) : {}) as RequestBody;
-    const { userId, isTest, subjectOverride, htmlOverride } = body;
+    const userId = (body.userId || '').trim();
+    const { isTest, subjectOverride, htmlOverride } = body;
     const plan = normalizePlan(body.plan || 'monthly');
 
     const recipient = await resolveRecipient({
-      userId,
+      userId: userId || undefined,
       toEmail: body.toEmail,
       firstName: body.firstName,
     });
@@ -153,6 +169,17 @@ export const handler: Handler = async (event) => {
         statusCode: 400,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ success: false, error: 'Missing toEmail / could not resolve recipient' } satisfies SendResponse),
+      };
+    }
+
+    if (!userId) {
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          success: false,
+          error: 'Macra web offer emails require a real userId so the signed checkout link can require sign-in before Stripe.',
+        } satisfies SendResponse),
       };
     }
 
@@ -174,9 +201,7 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    const checkoutUrl = userId
-      ? buildCheckoutUrl({ userId, plan })
-      : `${getBaseSiteUrl()}/Macra?macra_offer=preview`;
+    const checkoutUrl = buildCheckoutUrl({ userId, plan });
 
     let subject = (subjectOverride || '').trim();
     let html = (htmlOverride || '').trim();
@@ -206,6 +231,7 @@ export const handler: Handler = async (event) => {
     };
     subject = applyTemplateVars(subject, vars) || subject;
     html = applyTemplateVars(html, vars) || html;
+    html = ensureCheckoutUrlInHtml(html, checkoutUrl);
 
     const idempotencyKey = !isTest ? buildEmailDedupeKey([MACRA_WEB_OFFER_CAMPAIGN_ID, userId || recipient.toEmail]) : '';
     const customHeader = {
