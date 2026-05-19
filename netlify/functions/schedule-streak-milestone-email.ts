@@ -1,8 +1,9 @@
 import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
-import { getBaseSiteUrl, toMillis } from './utils/emailSequenceHelpers';
+import { getBaseSiteUrl, loadScheduledSequenceConfig, toMillis } from './utils/emailSequenceHelpers';
 import { buildStreakMilestoneDedupeKey, findSiblingSentStreakMilestone } from './utils/emailSafety';
 
+const SEQUENCE_ID = 'streak-milestone-v1';
 const STREAK_MILESTONES = [3, 7, 14, 30];
 const LOOKBACK_DAYS = 31;
 const RECENT_COMPLETION_HOURS = 48;
@@ -302,6 +303,15 @@ async function sendStreakMilestone(args: {
 export const handler: Handler = async () => {
   try {
     const db = await getFirestore();
+    const config = await loadScheduledSequenceConfig(db, SEQUENCE_ID, { batchLimit: BATCH_LIMIT });
+
+    if (!config.enabled) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ success: true, disabled: true, scanned: 0, sent: 0, skipped: 0 }),
+      };
+    }
+
     const nowMs = Date.now();
     const runId = `streak-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
     const lookbackSec = Math.floor((nowMs - LOOKBACK_DAYS * 24 * 60 * 60 * 1000) / 1000);
@@ -311,7 +321,7 @@ export const handler: Handler = async () => {
       .collection('user-challenge')
       .where('updatedAt', '>=', lookbackSec)
       .orderBy('updatedAt', 'desc')
-      .limit(BATCH_LIMIT)
+      .limit(config.batchLimit)
       .get();
 
     if (querySnap.empty) {

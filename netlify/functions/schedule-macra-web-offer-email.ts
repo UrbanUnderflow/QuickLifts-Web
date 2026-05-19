@@ -47,7 +47,7 @@ async function loadConfig(): Promise<Config> {
   const snap = await db.collection('email-sequence-config').doc(MACRA_WEB_OFFER_CAMPAIGN_ID).get();
   const data = (snap.exists ? snap.data() || {} : {}) as Record<string, any>;
   return {
-    enabled: data.enabled !== false,
+    enabled: data.enabled === true,
     delayHours: Math.max(1, Number(data.delayHours || DEFAULT_DELAY_HOURS) || DEFAULT_DELAY_HOURS),
     batchLimit: Math.max(25, Number(data.batchLimit || DEFAULT_BATCH_LIMIT) || DEFAULT_BATCH_LIMIT),
     maxSendsPerRun: Math.max(1, Number(data.maxSendsPerRun || DEFAULT_MAX_SENDS_PER_RUN) || DEFAULT_MAX_SENDS_PER_RUN),

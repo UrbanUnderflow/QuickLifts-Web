@@ -5,10 +5,12 @@ import {
   claimScheduledSequenceSend,
   finalizeScheduledSequenceSend,
   getBaseSiteUrl,
+  loadScheduledSequenceConfig,
   releaseScheduledSequenceSend,
   toMillis,
 } from './utils/emailSequenceHelpers';
 
+const SEQUENCE_ID = 'challenge-ending-soon-v1';
 const HOURS_24 = 24;
 const HOURS_72 = 72;
 const HOUR_MS = 60 * 60 * 1000;
@@ -80,6 +82,15 @@ async function sendChallengeEndingSoon(args: {
 export const handler: Handler = async () => {
   try {
     const db = await getFirestore();
+    const config = await loadScheduledSequenceConfig(db, SEQUENCE_ID, { batchLimit: BATCH_LIMIT });
+
+    if (!config.enabled) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ success: true, disabled: true, scanned: 0, sent: 0, skipped: 0 }),
+      };
+    }
+
     const nowMs = Date.now();
     const runId = `challenge-ending-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
     const nowSec = Math.floor(nowMs / 1000);
@@ -91,7 +102,7 @@ export const handler: Handler = async () => {
       .where('challenge.endDate', '>=', nowSec)
       .where('challenge.endDate', '<=', horizonSec)
       .orderBy('challenge.endDate', 'asc')
-      .limit(BATCH_LIMIT)
+      .limit(config.batchLimit)
       .get();
 
     if (querySnap.empty) {
@@ -134,7 +145,7 @@ export const handler: Handler = async () => {
       const pendingField = bucket === HOURS_72
         ? 'emailSequenceState.challengeEndingSoon72hPending'
         : 'emailSequenceState.challengeEndingSoon24hPending';
-      const dedupeKey = buildEmailDedupeKey(['challenge-ending-soon-v1', data.userId || doc.id, data.challengeId || doc.id, bucket]);
+      const dedupeKey = buildEmailDedupeKey([SEQUENCE_ID, data.userId || doc.id, data.challengeId || doc.id, bucket]);
       if (claimedDedupeKeys.has(dedupeKey)) {
         skipped++;
         continue;
@@ -148,7 +159,7 @@ export const handler: Handler = async () => {
         runId,
         nowMs,
         metadata: {
-          sequence: 'challenge-ending-soon-v1',
+          sequence: SEQUENCE_ID,
           userId: data.userId || null,
           challengeId: data.challengeId || null,
           hoursRemaining: bucket,

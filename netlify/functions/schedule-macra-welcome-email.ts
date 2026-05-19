@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { getFirestore } from './utils/getServiceAccount';
-import { getBaseSiteUrl } from './utils/emailSequenceHelpers';
+import { getBaseSiteUrl, loadScheduledSequenceConfig } from './utils/emailSequenceHelpers';
 
 /**
  * Safety-net sweeper for the Macra welcome email.
@@ -16,6 +16,7 @@ import { getBaseSiteUrl } from './utils/emailSequenceHelpers';
 
 const BATCH_LIMIT = 200;
 const FRESHNESS_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const SEQUENCE_ID = 'macra-welcome-v1';
 
 function toEpochMs(value: unknown): number | null {
   if (!value) return null;
@@ -54,11 +55,19 @@ async function sendWelcome(args: { userId: string }): Promise<{ skipped: boolean
 export const handler: Handler = async () => {
   try {
     const db = await getFirestore();
+    const config = await loadScheduledSequenceConfig(db, SEQUENCE_ID, { batchLimit: BATCH_LIMIT });
+
+    if (!config.enabled) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ success: true, disabled: true, scanned: 0, sent: 0, skipped: 0 }),
+      };
+    }
 
     const snap = await db
       .collection('users')
       .where('hasCompletedMacraOnboarding', '==', true)
-      .limit(BATCH_LIMIT)
+      .limit(config.batchLimit)
       .get();
 
     if (snap.empty) {

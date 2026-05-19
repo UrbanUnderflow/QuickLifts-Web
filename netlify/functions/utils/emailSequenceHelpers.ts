@@ -28,6 +28,11 @@ export type SequenceEmailSendResult = {
   error?: string;
 };
 
+export type ScheduledSequenceConfig = {
+  enabled: boolean;
+  batchLimit: number;
+};
+
 type LockState = {
   runId?: string;
   claimedAt?: any;
@@ -86,6 +91,22 @@ function getNestedValue(source: Record<string, any>, path: string): any {
 
 export function buildEmailDedupeKey(parts: any[]): string {
   return buildSharedEmailDedupeKey(parts);
+}
+
+export async function loadScheduledSequenceConfig(
+  db: any,
+  sequenceId: string,
+  defaults: { enabled?: boolean; batchLimit?: number } = {}
+): Promise<ScheduledSequenceConfig> {
+  const snap = await db.collection('email-sequence-config').doc(sequenceId).get();
+  const data = (snap.exists ? snap.data() || {} : {}) as Record<string, any>;
+  const defaultEnabled = defaults.enabled !== undefined ? defaults.enabled : true;
+  const defaultBatchLimit = Math.max(1, Number(defaults.batchLimit || 500) || 500);
+
+  return {
+    enabled: snap.exists ? data.enabled !== false : defaultEnabled,
+    batchLimit: Math.max(1, Number(data.batchLimit || defaultBatchLimit) || defaultBatchLimit),
+  };
 }
 
 async function claimRecipientDailyQuota(args: {

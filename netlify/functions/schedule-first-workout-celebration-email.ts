@@ -5,10 +5,12 @@ import {
   claimScheduledSequenceSend,
   finalizeScheduledSequenceSend,
   getBaseSiteUrl,
+  loadScheduledSequenceConfig,
   releaseScheduledSequenceSend,
   toMillis,
 } from './utils/emailSequenceHelpers';
 
+const SEQUENCE_ID = 'first-workout-celebration-v1';
 const LOOKBACK_DAYS = 7;
 const FIRST_WORKOUT_RECENCY_HOURS = 72;
 const BATCH_LIMIT = 600;
@@ -69,6 +71,15 @@ async function sendFirstWorkoutCelebration(args: {
 export const handler: Handler = async () => {
   try {
     const db = await getFirestore();
+    const config = await loadScheduledSequenceConfig(db, SEQUENCE_ID, { batchLimit: BATCH_LIMIT });
+
+    if (!config.enabled) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ success: true, disabled: true, scanned: 0, sent: 0, skipped: 0 }),
+      };
+    }
+
     const nowMs = Date.now();
     const runId = `first-workout-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
     const lookbackSec = Math.floor((nowMs - LOOKBACK_DAYS * 24 * 60 * 60 * 1000) / 1000);
@@ -78,7 +89,7 @@ export const handler: Handler = async () => {
       .collection('user-challenge')
       .where('updatedAt', '>=', lookbackSec)
       .orderBy('updatedAt', 'desc')
-      .limit(BATCH_LIMIT)
+      .limit(config.batchLimit)
       .get();
 
     if (querySnap.empty) {
@@ -118,7 +129,7 @@ export const handler: Handler = async () => {
       }
 
       const pendingField = 'emailSequenceState.firstWorkoutCelebrationPending';
-      const dedupeKey = buildEmailDedupeKey(['first-workout-celebration-v1', data.userId || doc.id, data.challengeId || doc.id]);
+      const dedupeKey = buildEmailDedupeKey([SEQUENCE_ID, data.userId || doc.id, data.challengeId || doc.id]);
       if (claimedDedupeKeys.has(dedupeKey)) {
         skipped++;
         continue;
@@ -135,7 +146,7 @@ export const handler: Handler = async () => {
         runId,
         nowMs,
         metadata: {
-          sequence: 'first-workout-celebration-v1',
+          sequence: SEQUENCE_ID,
           userId: data.userId || null,
           challengeId: data.challengeId || null,
         },

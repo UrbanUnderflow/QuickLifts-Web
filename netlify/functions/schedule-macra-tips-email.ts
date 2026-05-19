@@ -28,6 +28,16 @@ const TIPS: Array<{ dayOffset: number; tipId: TipId }> = [
 ];
 
 const BATCH_LIMIT = 500;
+const SEQUENCE_ID = 'macra-tips-v1';
+
+async function loadConfig(db: any): Promise<{ enabled: boolean; batchLimit: number }> {
+  const snap = await db.collection('email-sequence-config').doc(SEQUENCE_ID).get();
+  const data = (snap.exists ? snap.data() || {} : {}) as Record<string, any>;
+  return {
+    enabled: data.enabled !== false,
+    batchLimit: Math.max(25, Number(data.batchLimit || BATCH_LIMIT) || BATCH_LIMIT),
+  };
+}
 
 async function sendTip(args: { userId: string; tipId: TipId }): Promise<{ skipped: boolean }> {
   const resp = await fetch(`${getBaseSiteUrl()}/.netlify/functions/send-macra-tips-email`, {
@@ -45,6 +55,15 @@ async function sendTip(args: { userId: string; tipId: TipId }): Promise<{ skippe
 export const handler: Handler = async () => {
   try {
     const db = await getFirestore();
+    const config = await loadConfig(db);
+
+    if (!config.enabled) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ success: true, disabled: true, scanned: 0, sent: 0, skipped: 0 }),
+      };
+    }
+
     const nowMs = Date.now();
     const runId = `macra-tips-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
     const claimedDedupeKeys = new Set<string>();
@@ -52,7 +71,7 @@ export const handler: Handler = async () => {
     const snap = await db
       .collection('users')
       .where('hasCompletedMacraOnboarding', '==', true)
-      .limit(BATCH_LIMIT)
+      .limit(config.batchLimit)
       .get();
 
     if (snap.empty) {
@@ -90,7 +109,7 @@ export const handler: Handler = async () => {
       }
 
       const pendingField = `macraEmailSequenceState.tipsPending.${eligible.tipId}`;
-      const dedupeKey = buildEmailDedupeKey(['macra-tips-v1', doc.id, eligible.tipId]);
+      const dedupeKey = buildEmailDedupeKey([SEQUENCE_ID, doc.id, eligible.tipId]);
       if (claimedDedupeKeys.has(dedupeKey)) {
         skipped++;
         continue;

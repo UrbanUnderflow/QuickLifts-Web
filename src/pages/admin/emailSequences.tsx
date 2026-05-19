@@ -14,7 +14,10 @@ type SequenceRow = {
   defaultSubject: string;
   functionPath: string;
   templateDocId: string;
-  scheduleConfigDocId?: string; // if present, allows admin to set daily send time
+  scheduleConfigDocId?: string; // if present, allows admin to control scheduled automation config
+  scheduleDescription?: string;
+  supportsScheduleTime?: boolean;
+  defaultScheduleEnabled?: boolean;
   deliveryRuntime?: 'netlify' | 'firebase';
   supportsTemplateEditing?: boolean;
   supportsTestSend?: boolean;
@@ -39,6 +42,8 @@ const SEQUENCES: SequenceRow[] = [
     functionPath: '/.netlify/functions/send-username-reminder-email',
     templateDocId: 'username-reminder-v1',
     scheduleConfigDocId: 'username-reminder-v1',
+    scheduleDescription: 'Configurable daily UTC send window',
+    defaultScheduleEnabled: true,
   },
   {
     id: 'new-follower-v1',
@@ -87,6 +92,10 @@ const SEQUENCES: SequenceRow[] = [
     defaultSubject: 'Your Round is waiting - start your first workout',
     functionPath: '/.netlify/functions/send-joined-round-no-workout-email',
     templateDocId: 'joined-round-no-workout-v1',
+    scheduleConfigDocId: 'joined-round-no-workout-v1',
+    scheduleDescription: 'Netlify cron: every 30 minutes; sends after the 24h no-workout delay',
+    supportsScheduleTime: false,
+    defaultScheduleEnabled: true,
   },
   {
     id: 'first-workout-celebration-v1',
@@ -95,6 +104,10 @@ const SEQUENCES: SequenceRow[] = [
     defaultSubject: 'You completed your first workout - keep it rolling',
     functionPath: '/.netlify/functions/send-first-workout-celebration-email',
     templateDocId: 'first-workout-celebration-v1',
+    scheduleConfigDocId: 'first-workout-celebration-v1',
+    scheduleDescription: 'Netlify cron: every 30 minutes; detects recent first workout completions',
+    supportsScheduleTime: false,
+    defaultScheduleEnabled: true,
   },
   {
     id: 'streak-milestone-v1',
@@ -103,6 +116,10 @@ const SEQUENCES: SequenceRow[] = [
     defaultSubject: '🔥 {{milestone}}-day streak - keep it alive',
     functionPath: '/.netlify/functions/send-streak-milestone-email',
     templateDocId: 'streak-milestone-v1',
+    scheduleConfigDocId: 'streak-milestone-v1',
+    scheduleDescription: 'Netlify cron: every 30 minutes; sends 3/7/14/30-day streak milestones',
+    supportsScheduleTime: false,
+    defaultScheduleEnabled: true,
   },
   {
     id: 'challenge-ending-soon-v1',
@@ -111,6 +128,10 @@ const SEQUENCES: SequenceRow[] = [
     defaultSubject: '{{hoursRemaining}}h left in {{challengeTitle}} - finish strong',
     functionPath: '/.netlify/functions/send-challenge-ending-soon-email',
     templateDocId: 'challenge-ending-soon-v1',
+    scheduleConfigDocId: 'challenge-ending-soon-v1',
+    scheduleDescription: 'Netlify cron: every 30 minutes; sends at roughly 72h and 24h remaining',
+    supportsScheduleTime: false,
+    defaultScheduleEnabled: true,
   },
   {
     id: 'irl-event-analytics-report-v1',
@@ -119,6 +140,10 @@ const SEQUENCES: SequenceRow[] = [
     defaultSubject: 'Your {{eventTitle}} analytics report',
     functionPath: '/.netlify/functions/send-irl-event-analytics-report-email',
     templateDocId: 'irl-event-analytics-report-v1',
+    scheduleConfigDocId: 'irl-event-analytics-report-v1',
+    scheduleDescription: 'Netlify cron: every 30 minutes; sends host report about 1 hour after an event ends',
+    supportsScheduleTime: false,
+    defaultScheduleEnabled: true,
   },
   {
     id: 'inactivity-winback-v1',
@@ -127,6 +152,10 @@ const SEQUENCES: SequenceRow[] = [
     defaultSubject: "Let's get you back in motion on Pulse",
     functionPath: '/.netlify/functions/send-inactivity-winback-email',
     templateDocId: 'inactivity-winback-v1',
+    scheduleConfigDocId: 'inactivity-winback-v1',
+    scheduleDescription: 'Netlify cron: every 30 minutes; sends at 3/7/14 days of inactivity',
+    supportsScheduleTime: false,
+    defaultScheduleEnabled: true,
   },
   {
     id: 'password-reset-v1',
@@ -157,6 +186,10 @@ const SEQUENCES: SequenceRow[] = [
     defaultSubject: 'Welcome to Macra — your plan is ready',
     functionPath: '/.netlify/functions/send-macra-welcome-email',
     templateDocId: 'macra-welcome-v1',
+    scheduleConfigDocId: 'macra-welcome-v1',
+    scheduleDescription: 'Netlify cron: hourly safety-net sweep for missed client-side welcome sends',
+    supportsScheduleTime: false,
+    defaultScheduleEnabled: true,
   },
   {
     id: 'macra-tips-v1',
@@ -166,6 +199,9 @@ const SEQUENCES: SequenceRow[] = [
     functionPath: '/.netlify/functions/send-macra-tips-email',
     templateDocId: 'macra-tips-v1',
     scheduleConfigDocId: 'macra-tips-v1',
+    scheduleDescription: 'Netlify cron: daily at 2:30 PM UTC',
+    supportsScheduleTime: false,
+    defaultScheduleEnabled: true,
   },
   {
     id: 'macra-inactivity-winback-v1',
@@ -175,6 +211,9 @@ const SEQUENCES: SequenceRow[] = [
     functionPath: '/.netlify/functions/send-macra-inactivity-email',
     templateDocId: 'macra-inactivity-winback-v1',
     scheduleConfigDocId: 'macra-inactivity-winback-v1',
+    scheduleDescription: 'Netlify cron: daily at 3:00 PM UTC',
+    supportsScheduleTime: false,
+    defaultScheduleEnabled: true,
   },
   {
     id: 'macra-web-offer-24h-v1',
@@ -183,6 +222,10 @@ const SEQUENCES: SequenceRow[] = [
     defaultSubject: 'Your Macra plan is ready, plus a free month',
     functionPath: '/.netlify/functions/send-macra-web-offer-email',
     templateDocId: 'macra-web-offer-24h-v1',
+    scheduleConfigDocId: 'macra-web-offer-24h-v1',
+    scheduleDescription: 'Netlify cron: hourly; sends only eligible users after the 24h delay',
+    supportsScheduleTime: false,
+    defaultScheduleEnabled: false,
   },
 ];
 
@@ -208,10 +251,13 @@ const EmailSequencesAdmin: React.FC = () => {
 
   // Schedule config (daily send time)
   const [scheduleTimeById, setScheduleTimeById] = useState<Record<string, string>>({});
+  const [scheduleEnabledById, setScheduleEnabledById] = useState<Record<string, boolean>>({});
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [scheduleEditingSequence, setScheduleEditingSequence] = useState<SequenceRow | null>(null);
   const [scheduleTimeDraft, setScheduleTimeDraft] = useState('14:00');
+  const [scheduleEnabledDraft, setScheduleEnabledDraft] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
+  const [savingScheduleId, setSavingScheduleId] = useState<string | null>(null);
 
   const scheduleOptions = useMemo(() => {
     const out: string[] = [];
@@ -227,14 +273,22 @@ const EmailSequencesAdmin: React.FC = () => {
     const load = async () => {
       try {
         const updates: Record<string, string> = {};
+        const enabledUpdates: Record<string, boolean> = {};
         for (const seq of SEQUENCES) {
           if (!seq.scheduleConfigDocId) continue;
           const ref = doc(db, 'email-sequence-config', seq.scheduleConfigDocId);
           const snap = await getDoc(ref);
-          const time = (snap.exists() ? ((snap.data() as any)?.sendTimeUtc as string) : '') || '';
+          const data = snap.exists() ? ((snap.data() || {}) as any) : {};
+          const time = (data?.sendTimeUtc as string) || '';
           updates[seq.id] = (time || '14:00').trim();
+          enabledUpdates[seq.id] = snap.exists()
+            ? seq.defaultScheduleEnabled === false
+              ? data?.enabled === true
+              : data?.enabled !== false
+            : seq.defaultScheduleEnabled === true;
         }
         setScheduleTimeById(updates);
+        setScheduleEnabledById(enabledUpdates);
       } catch (_) {
         // Non-blocking; default values will display
       }
@@ -257,10 +311,14 @@ const EmailSequencesAdmin: React.FC = () => {
     setMessage(null);
   };
 
+  const isScheduleEnabled = (seq: SequenceRow) =>
+    scheduleEnabledById[seq.id] ?? (seq.defaultScheduleEnabled === true);
+
   const openScheduleModal = (seq: SequenceRow) => {
     setScheduleEditingSequence(seq);
     const existing = scheduleTimeById[seq.id] || '14:00';
     setScheduleTimeDraft(existing);
+    setScheduleEnabledDraft(isScheduleEnabled(seq));
     setIsScheduleModalOpen(true);
     setMessage(null);
   };
@@ -268,7 +326,7 @@ const EmailSequencesAdmin: React.FC = () => {
   const saveScheduleTime = async () => {
     if (!scheduleEditingSequence?.scheduleConfigDocId) return;
     const t = (scheduleTimeDraft || '').trim();
-    if (!/^\d{2}:\d{2}$/.test(t)) {
+    if (scheduleEditingSequence.supportsScheduleTime !== false && !/^\d{2}:\d{2}$/.test(t)) {
       setMessage({ type: 'error', text: 'Invalid time format' });
       return;
     }
@@ -279,19 +337,49 @@ const EmailSequencesAdmin: React.FC = () => {
         ref,
         {
           id: scheduleEditingSequence.scheduleConfigDocId,
-          sendTimeUtc: t,
-          enabled: true,
+          ...(scheduleEditingSequence.supportsScheduleTime === false ? {} : { sendTimeUtc: t }),
+          enabled: scheduleEnabledDraft,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
       );
-      setScheduleTimeById((prev) => ({ ...prev, [scheduleEditingSequence.id]: t }));
-      setMessage({ type: 'success', text: `Scheduled time saved: ${t} UTC` });
+      setScheduleTimeById((prev) => ({ ...prev, [scheduleEditingSequence.id]: t || prev[scheduleEditingSequence.id] || '14:00' }));
+      setScheduleEnabledById((prev) => ({ ...prev, [scheduleEditingSequence.id]: scheduleEnabledDraft }));
+      setMessage({
+        type: 'success',
+        text: `${scheduleEditingSequence.name} ${scheduleEnabledDraft ? 'enabled' : 'paused'}${scheduleEditingSequence.supportsScheduleTime === false ? '' : ` at ${t} UTC`}.`,
+      });
       setIsScheduleModalOpen(false);
     } catch (e: any) {
       setMessage({ type: 'error', text: e?.message || 'Failed to save scheduled time' });
     } finally {
       setSavingSchedule(false);
+    }
+  };
+
+  const toggleScheduleEnabled = async (seq: SequenceRow) => {
+    if (!seq.scheduleConfigDocId) return;
+    const nextEnabled = !isScheduleEnabled(seq);
+    setSavingScheduleId(seq.id);
+    setMessage(null);
+    try {
+      const ref = doc(db, 'email-sequence-config', seq.scheduleConfigDocId);
+      await setDoc(
+        ref,
+        {
+          id: seq.scheduleConfigDocId,
+          enabled: nextEnabled,
+          ...(seq.supportsScheduleTime === false ? {} : { sendTimeUtc: scheduleTimeById[seq.id] || '14:00' }),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      setScheduleEnabledById((prev) => ({ ...prev, [seq.id]: nextEnabled }));
+      setMessage({ type: 'success', text: `${seq.name} ${nextEnabled ? 'enabled' : 'paused'}.` });
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e?.message || 'Failed to update automation status' });
+    } finally {
+      setSavingScheduleId(null);
     }
   };
 
@@ -494,7 +582,9 @@ const EmailSequencesAdmin: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
-                  {SEQUENCES.map((seq) => (
+                  {SEQUENCES.map((seq) => {
+                    const scheduleEnabled = isScheduleEnabled(seq);
+                    return (
                     <tr key={seq.id} className="hover:bg-zinc-900/30">
                       <td className="px-4 py-3 text-zinc-200 font-medium">{seq.name}</td>
                       <td className="px-4 py-3 text-zinc-400">
@@ -503,8 +593,24 @@ const EmailSequencesAdmin: React.FC = () => {
                           Runtime: {seq.deliveryRuntime === 'firebase' ? 'Firebase Functions' : 'Netlify Functions'}
                         </div>
                         {seq.scheduleConfigDocId ? (
-                          <div className="text-xs text-zinc-500 mt-1">
-                            Scheduled: {(scheduleTimeById[seq.id] || '14:00').trim()} UTC
+                          <div className="mt-2 space-y-1">
+                            <div
+                              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${scheduleEnabled
+                                ? 'bg-green-900/20 border-green-700/70 text-green-300'
+                                : 'bg-amber-900/20 border-amber-700/70 text-amber-300'
+                                }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${scheduleEnabled ? 'bg-green-300' : 'bg-amber-300'}`} />
+                              {scheduleEnabled ? 'Enabled' : 'Paused'}
+                            </div>
+                            <div className="text-xs text-zinc-500">
+                              {seq.scheduleDescription || 'Scheduled automation'}
+                            </div>
+                            {seq.supportsScheduleTime !== false ? (
+                              <div className="text-xs text-zinc-500">
+                                Send time: {(scheduleTimeById[seq.id] || '14:00').trim()} UTC
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
                       </td>
@@ -522,14 +628,28 @@ const EmailSequencesAdmin: React.FC = () => {
                             </a>
                           ) : null}
                           {seq.scheduleConfigDocId ? (
-                            <button
-                              onClick={() => openScheduleModal(seq)}
-                              className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors"
-                              title="Change scheduled time"
-                            >
-                              <Clock className="w-4 h-4" />
-                              Schedule
-                            </button>
+                            <>
+                              <button
+                                onClick={() => toggleScheduleEnabled(seq)}
+                                disabled={savingScheduleId === seq.id}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${scheduleEnabled
+                                  ? 'bg-amber-900/30 hover:bg-amber-900/50 text-amber-200 border border-amber-800/60'
+                                  : 'bg-green-900/30 hover:bg-green-900/50 text-green-200 border border-green-800/60'
+                                  }`}
+                                title={scheduleEnabled ? 'Pause this automation' : 'Enable this automation'}
+                              >
+                                {savingScheduleId === seq.id ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                {scheduleEnabled ? 'Pause' : 'Enable'}
+                              </button>
+                              <button
+                                onClick={() => openScheduleModal(seq)}
+                                className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors"
+                                title="Edit automation settings"
+                              >
+                                <Clock className="w-4 h-4" />
+                                Settings
+                              </button>
+                            </>
                           ) : null}
                           {seq.supportsTemplateEditing !== false ? (
                             <button
@@ -552,7 +672,8 @@ const EmailSequencesAdmin: React.FC = () => {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -672,9 +793,9 @@ const EmailSequencesAdmin: React.FC = () => {
               <div>
                 <h2 className="text-xl font-semibold text-white flex items-center gap-2">
                   <Clock className="w-5 h-5 text-zinc-300" />
-                  Schedule email
+                  Automation settings
                 </h2>
-                <p className="text-sm text-zinc-400 mt-1">{scheduleEditingSequence.name} • UTC time</p>
+                <p className="text-sm text-zinc-400 mt-1">{scheduleEditingSequence.name}</p>
               </div>
               <button
                 onClick={() => setIsScheduleModalOpen(false)}
@@ -686,24 +807,53 @@ const EmailSequencesAdmin: React.FC = () => {
             </div>
 
             <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-2">Daily send time (UTC)</label>
-                <select
-                  value={scheduleTimeDraft}
-                  onChange={(e) => setScheduleTimeDraft(e.target.value)}
+              <label className="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3">
+                <div>
+                  <div className="text-sm font-medium text-white">Automation enabled</div>
+                  <div className="text-xs text-zinc-500 mt-1">
+                    Disabled automations exit before scanning users or sending email.
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={scheduleEnabledDraft}
+                  onChange={(e) => setScheduleEnabledDraft(e.target.checked)}
                   disabled={savingSchedule}
-                  className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white focus:outline-none focus:border-[#d7ff00] transition-colors"
-                >
-                  {scheduleOptions.map((t) => (
-                    <option key={t} value={t}>
-                      {t} UTC
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-zinc-500 mt-2">
-                  Note: times are in 30-minute increments.
+                  className="h-5 w-5 accent-[#d7ff00]"
+                />
+              </label>
+
+              {scheduleEditingSequence.scheduleDescription ? (
+                <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
+                  <div className="text-xs uppercase tracking-wider text-zinc-500 mb-1">Schedule</div>
+                  <div className="text-sm text-zinc-300">{scheduleEditingSequence.scheduleDescription}</div>
+                </div>
+              ) : null}
+
+              {scheduleEditingSequence.supportsScheduleTime !== false ? (
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-2">Daily send time (UTC)</label>
+                  <select
+                    value={scheduleTimeDraft}
+                    onChange={(e) => setScheduleTimeDraft(e.target.value)}
+                    disabled={savingSchedule}
+                    className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white focus:outline-none focus:border-[#d7ff00] transition-colors"
+                  >
+                    {scheduleOptions.map((t) => (
+                      <option key={t} value={t}>
+                        {t} UTC
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-zinc-500 mt-2">
+                    Note: times are in 30-minute increments.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-500">
+                  This automation runs on the Netlify cron schedule shown above; this admin switch controls whether it is allowed to send.
                 </p>
-              </div>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-3 p-6 border-t border-zinc-700">
@@ -726,7 +876,7 @@ const EmailSequencesAdmin: React.FC = () => {
                     Saving...
                   </>
                 ) : (
-                  'Save time'
+                  'Save automation'
                 )}
               </button>
             </div>

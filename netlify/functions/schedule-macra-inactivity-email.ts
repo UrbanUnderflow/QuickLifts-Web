@@ -21,6 +21,16 @@ import {
 
 const INACTIVITY_MILESTONES = [3, 7, 14];
 const BATCH_LIMIT = 500;
+const SEQUENCE_ID = 'macra-inactivity-winback-v1';
+
+async function loadConfig(db: any): Promise<{ enabled: boolean; batchLimit: number }> {
+  const snap = await db.collection('email-sequence-config').doc(SEQUENCE_ID).get();
+  const data = (snap.exists ? snap.data() || {} : {}) as Record<string, any>;
+  return {
+    enabled: data.enabled !== false,
+    batchLimit: Math.max(25, Number(data.batchLimit || BATCH_LIMIT) || BATCH_LIMIT),
+  };
+}
 
 function chooseMilestone(daysInactive: number, sentState: Record<string, any>): number | null {
   const candidates = INACTIVITY_MILESTONES.filter((m) => daysInactive >= m && !sentState[String(m)]);
@@ -44,6 +54,15 @@ async function sendWinback(args: { userId: string; daysInactive: number }): Prom
 export const handler: Handler = async () => {
   try {
     const db = await getFirestore();
+    const config = await loadConfig(db);
+
+    if (!config.enabled) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ success: true, disabled: true, scanned: 0, sent: 0, skipped: 0 }),
+      };
+    }
+
     const nowMs = Date.now();
     const runId = `macra-inactivity-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
     const claimedDedupeKeys = new Set<string>();
@@ -51,7 +70,7 @@ export const handler: Handler = async () => {
     const snap = await db
       .collection('users')
       .where('hasCompletedMacraOnboarding', '==', true)
-      .limit(BATCH_LIMIT)
+      .limit(config.batchLimit)
       .get();
 
     if (snap.empty) {
@@ -92,7 +111,7 @@ export const handler: Handler = async () => {
       }
 
       const pendingField = `macraEmailSequenceState.inactivityWinbackPending.${milestone}`;
-      const dedupeKey = buildEmailDedupeKey(['macra-inactivity-winback-v1', doc.id, milestone]);
+      const dedupeKey = buildEmailDedupeKey([SEQUENCE_ID, doc.id, milestone]);
       if (claimedDedupeKeys.has(dedupeKey)) {
         skipped++;
         continue;

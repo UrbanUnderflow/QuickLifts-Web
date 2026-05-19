@@ -5,10 +5,12 @@ import {
   claimScheduledSequenceSend,
   finalizeScheduledSequenceSend,
   getBaseSiteUrl,
+  loadScheduledSequenceConfig,
   releaseScheduledSequenceSend,
   toMillis,
 } from './utils/emailSequenceHelpers';
 
+const SEQUENCE_ID = 'irl-event-analytics-report-v1';
 const SEND_DELAY_MINUTES = 60;
 const WINDOW_LENGTH_MINUTES = 30;
 const BATCH_LIMIT = 300;
@@ -162,6 +164,15 @@ async function sendIrlEventAnalyticsReport(args: {
 export const handler: Handler = async () => {
   try {
     const db = await getFirestore();
+    const config = await loadScheduledSequenceConfig(db, SEQUENCE_ID, { batchLimit: BATCH_LIMIT });
+
+    if (!config.enabled) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ success: true, disabled: true, scanned: 0, sent: 0, skipped: 0 }),
+      };
+    }
+
     const nowMs = Date.now();
     const runId = `irl-report-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
     const minEndSec = Math.floor((nowMs - (SEND_DELAY_MINUTES + WINDOW_LENGTH_MINUTES) * 60 * 1000) / 1000);
@@ -173,7 +184,7 @@ export const handler: Handler = async () => {
       .where('endDate', '>=', minEndSec)
       .where('endDate', '<=', maxEndSec)
       .orderBy('endDate', 'asc')
-      .limit(BATCH_LIMIT)
+      .limit(config.batchLimit)
       .get();
 
     if (querySnap.empty) {
@@ -198,7 +209,7 @@ export const handler: Handler = async () => {
       const clubId = toTrimmedString(eventData.clubId) || doc.ref.parent.parent?.id || '';
       const creatorId = toTrimmedString(eventData.creatorId);
       const pendingField = 'emailSequenceState.irlEventAnalyticsReportPending';
-      const dedupeKey = buildEmailDedupeKey(['irl-event-analytics-report-v1', doc.id, creatorId || clubId || doc.id]);
+      const dedupeKey = buildEmailDedupeKey([SEQUENCE_ID, doc.id, creatorId || clubId || doc.id]);
 
       if (claimedDedupeKeys.has(dedupeKey)) {
         skipped++;
@@ -216,7 +227,7 @@ export const handler: Handler = async () => {
         runId,
         nowMs,
         metadata: {
-          sequence: 'irl-event-analytics-report-v1',
+          sequence: SEQUENCE_ID,
           clubId: clubId || null,
           eventId: doc.id,
           userId: creatorId || null,
