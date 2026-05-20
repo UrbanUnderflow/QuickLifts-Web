@@ -95,6 +95,14 @@ const buildSuccessUrl = ({ baseUrl, userId }) => {
   return url.toString().replace(/%7BCHECKOUT_SESSION_ID%7D/g, '{CHECKOUT_SESSION_ID}');
 };
 
+const buildAlreadyActiveUrl = ({ baseUrl, userId }) => {
+  const url = new URL('/subscription-success', baseUrl);
+  url.searchParams.set('userId', userId);
+  url.searchParams.set('source', 'macra_web_offer_24h');
+  url.searchParams.set('status', 'already_active');
+  return url.toString();
+};
+
 const buildCancelUrl = ({ baseUrl }) => {
   const url = new URL('/Macra', baseUrl);
   url.searchParams.set('macra_offer', 'cancelled');
@@ -219,6 +227,8 @@ exports.handler = async (event) => {
       };
     }
 
+    const baseUrl = getBaseUrl(event);
+
     if (hasActiveRootSubscription(userData, nowMs) || (await hasActiveSubscriptionPlan({ db, userId, nowMs }))) {
       await userRef.set(
         {
@@ -232,9 +242,12 @@ exports.handler = async (event) => {
         { merge: true }
       );
       return {
-        statusCode: 409,
-        headers: jsonHeaders,
-        body: JSON.stringify({ success: false, error: 'This account already has active access.' }),
+        statusCode: 302,
+        headers: {
+          Location: buildAlreadyActiveUrl({ baseUrl, userId }),
+          'Cache-Control': 'no-store',
+        },
+        body: '',
       };
     }
 
@@ -253,7 +266,6 @@ exports.handler = async (event) => {
       };
     }
 
-    const baseUrl = getBaseUrl(event);
     const metadata = {
       userId,
       userType: 'macra',

@@ -61,8 +61,10 @@ const SubscriptionSuccessPage: React.FC = () => {
   const queryUserId = router.isReady ? singleQueryValue(router.query.userId) : '';
   const appReturnUrl = router.isReady ? singleQueryValue(router.query.appReturnUrl) : '';
   const source = router.isReady ? singleQueryValue(router.query.source) : '';
+  const macraOfferStatus = router.isReady ? singleQueryValue(router.query.status || router.query.macra_offer) : '';
   const isCancelledReturn = router.isReady && singleQueryValue(router.query.cancelled) === '1';
   const isMacraWebOffer = source === MACRA_WEB_OFFER_SOURCE;
+  const isMacraAlreadyActiveReturn = isMacraWebOffer && macraOfferStatus === 'already_active';
   const verificationUserId = isMacraWebOffer ? queryUserId : currentUser?.id || queryUserId;
 
   useEffect(() => {
@@ -85,7 +87,7 @@ const SubscriptionSuccessPage: React.FC = () => {
     // Only run verification if router is ready and we haven't started yet.
     // App checkout returns include the app user id, so the user does not need
     // to be logged into the web app for this page to verify the Stripe session.
-    if (router.isReady && !isCancelledReturn && verificationStatus === 'idle') {
+    if (router.isReady && !isCancelledReturn && !isMacraAlreadyActiveReturn && verificationStatus === 'idle') {
       if (!verificationUserId) {
         console.error('[SubscriptionSuccess] Missing user id for subscription verification.');
 
@@ -234,6 +236,7 @@ const SubscriptionSuccessPage: React.FC = () => {
     appReturnUrl,
     source,
     isCancelledReturn,
+    isMacraAlreadyActiveReturn,
   ]);
 
   // Effect for countdown timer (only runs after verification)
@@ -270,6 +273,79 @@ const SubscriptionSuccessPage: React.FC = () => {
       router.replace(finalDestination);
     }
   }, [appReturnUrl, verificationUserId, router, dispatch, countdown, verificationStatus, isLocal, isMacraWebOffer]);
+
+  if (isMacraAlreadyActiveReturn && !appReturnUrl) {
+    return (
+      <>
+        <Head>
+          <title>Macra Access Active | Macra</title>
+          <meta name="robots" content="noindex,nofollow" />
+        </Head>
+
+        <main className="relative min-h-screen overflow-hidden bg-[#060806] text-white">
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(224,254,16,0.13),transparent_34%,rgba(255,255,255,0.05)_68%,transparent)]" />
+          <div className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:linear-gradient(rgba(255,255,255,0.7)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.7)_1px,transparent_1px)] [background-size:44px_44px]" />
+
+          <section className="relative z-10 flex min-h-screen items-center justify-center px-5 py-10">
+            <div className="w-full max-w-3xl rounded-[28px] border border-white/[0.12] bg-black/[0.55] p-6 shadow-2xl backdrop-blur md:p-10">
+              <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-3xl border border-[#e0fe10]/40 bg-[#e0fe10]/10 shadow-[0_0_48px_rgba(224,254,16,0.24)]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/macra-icon.png" alt="Macra" className="h-14 w-14 rounded-2xl" />
+              </div>
+
+              <div className="mx-auto max-w-2xl text-center">
+                <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#e0fe10]/30 bg-[#e0fe10]/10 px-4 py-2 text-sm font-bold text-[#e0fe10]">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Access already active
+                </div>
+
+                <h1 className="text-5xl font-black tracking-normal text-white sm:text-6xl">You are already set.</h1>
+                <p className="mt-5 text-2xl font-black leading-tight text-[#e0fe10] sm:text-3xl">
+                  No checkout needed.
+                </p>
+                <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-zinc-300 sm:text-lg">
+                  This Macra account already has active access. Download the Macra app, then sign in with the same
+                  email address that received this offer and you will be ready to use it.
+                </p>
+              </div>
+
+              <div className="mt-9 grid gap-3 sm:grid-cols-3">
+                {[
+                  'Checkout skipped',
+                  'Access confirmed',
+                  'Macra ready',
+                ].map((label) => (
+                  <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-4 text-center">
+                    <CheckCircle2 className="mx-auto mb-2 h-5 w-5 text-[#e0fe10]" />
+                    <p className="text-sm font-bold text-zinc-100">{label}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:justify-center">
+                <a
+                  href={MACRA_APP_STORE_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#e0fe10] px-6 py-4 text-base font-black text-black transition-colors hover:bg-[#cbed0e]"
+                >
+                  <Download className="h-5 w-5" />
+                  Download Macra
+                </a>
+                <a
+                  href={MACRA_OPEN_URL}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/[0.12] bg-white/[0.08] px-6 py-4 text-base font-black text-white transition-colors hover:bg-white/[0.13]"
+                >
+                  Open Macra
+                  <ArrowRight className="h-5 w-5" />
+                </a>
+              </div>
+            </div>
+          </section>
+        </main>
+      </>
+    );
+  }
 
   if (isMacraWebOffer && verificationStatus === 'verified' && !appReturnUrl) {
     return (
