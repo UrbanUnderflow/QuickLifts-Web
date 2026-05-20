@@ -1,24 +1,14 @@
-import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import {
-  GoogleAuthProvider,
-  OAuthProvider,
-  User,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  signInWithRedirect,
-  signOut,
-} from 'firebase/auth';
-import { AlertCircle, ArrowRight, Loader2, LockKeyhole, Mail } from 'lucide-react';
-import { auth } from '../api/firebase/config';
+import { AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
 
 type OfferParams = {
   userId: string;
   campaignId: string;
   plan: string;
-  expiresAt: string;
+  expiresAt: number;
+  expiresAtRaw: string;
   signature: string;
   test: string;
 };
@@ -28,13 +18,21 @@ const normalizeQueryValue = (value: string | string[] | undefined) => {
   return value || '';
 };
 
+const buildCheckoutBridgeUrl = (offerParams: OfferParams) => {
+  const target = new URL('/.netlify/functions/create-macra-web-offer-checkout', window.location.origin);
+  target.searchParams.set('uid', offerParams.userId);
+  target.searchParams.set('campaign', offerParams.campaignId);
+  target.searchParams.set('plan', offerParams.plan);
+  target.searchParams.set('expires', offerParams.expiresAtRaw);
+  target.searchParams.set('sig', offerParams.signature);
+  if (offerParams.test) {
+    target.searchParams.set('test', offerParams.test);
+  }
+  return target.toString();
+};
+
 const MacraOfferPage: React.FC = () => {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSigningIn, setIsSigningIn] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [error, setError] = useState('');
   const redirectStartedRef = useRef(false);
@@ -45,115 +43,36 @@ const MacraOfferPage: React.FC = () => {
     const userId = normalizeQueryValue(router.query.uid || router.query.userId);
     const campaignId = normalizeQueryValue(router.query.campaign || router.query.campaignId);
     const plan = normalizeQueryValue(router.query.plan) || 'monthly';
-    const expiresAt = normalizeQueryValue(router.query.expires || router.query.expiresAt);
+    const expiresAtRaw = normalizeQueryValue(router.query.expires || router.query.expiresAt);
     const signature = normalizeQueryValue(router.query.sig || router.query.signature);
     const test = normalizeQueryValue(router.query.test);
+    const expiresAt = Number(expiresAtRaw);
 
-    if (!userId || !campaignId || !expiresAt || !signature) {
+    if (!userId || !campaignId || !expiresAtRaw || !signature || !Number.isFinite(expiresAt)) {
       return null;
     }
 
-    return { userId, campaignId, plan, expiresAt, signature, test };
+    return { userId, campaignId, plan, expiresAt, expiresAtRaw, signature, test };
   }, [router.isReady, router.query]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setAuthReady(true);
-    });
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    if (!router.isReady || !authReady || !offerParams || !currentUser || redirectStartedRef.current) {
+    if (!router.isReady || !offerParams || redirectStartedRef.current) {
       return;
     }
 
-    if (currentUser.uid !== offerParams.userId) {
-      setError('This offer belongs to a different account. Sign in with the account that received the email.');
+    if (Date.now() > offerParams.expiresAt) {
+      setError('This offer link has expired. Open the latest Macra offer email and tap the button again.');
       return;
     }
 
-    const startCheckout = async () => {
-      redirectStartedRef.current = true;
-      setIsRedirecting(true);
-      setError('');
-
-      try {
-        const firebaseIdToken = await currentUser.getIdToken(true);
-        const target = new URL('/.netlify/functions/create-macra-web-offer-checkout', window.location.origin);
-        target.searchParams.set('uid', offerParams.userId);
-        target.searchParams.set('campaign', offerParams.campaignId);
-        target.searchParams.set('plan', offerParams.plan);
-        target.searchParams.set('expires', offerParams.expiresAt);
-        target.searchParams.set('sig', offerParams.signature);
-        target.searchParams.set('requireAuth', '1');
-        target.searchParams.set('firebaseIdToken', firebaseIdToken);
-        if (offerParams.test) {
-          target.searchParams.set('test', offerParams.test);
-        }
-
-        window.location.replace(target.toString());
-      } catch (err) {
-        redirectStartedRef.current = false;
-        setIsRedirecting(false);
-        setError(err instanceof Error ? err.message : 'Could not start checkout. Please try again.');
-      }
-    };
-
-    startCheckout();
-  }, [authReady, currentUser, offerParams, router.isReady]);
-
-  const handleEmailSignIn = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!email.trim() || !password) {
-      setError('Enter your email and password to continue.');
-      return;
-    }
-
-    setIsSigningIn(true);
+    redirectStartedRef.current = true;
+    setIsRedirecting(true);
     setError('');
-    try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not sign in. Please try again.');
-    } finally {
-      setIsSigningIn(false);
-    }
-  };
-
-  const handleProviderSignIn = async (providerName: 'google' | 'apple') => {
-    setIsSigningIn(true);
-    setError('');
-    try {
-      const provider = providerName === 'apple' ? new OAuthProvider('apple.com') : new GoogleAuthProvider();
-      if (providerName === 'apple') {
-        provider.addScope('email');
-        provider.addScope('name');
-      }
-      const shouldUseRedirect =
-        typeof window !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(window.navigator.userAgent || '');
-      if (shouldUseRedirect) {
-        await signInWithRedirect(auth, provider);
-        return;
-      }
-      await signInWithPopup(auth, provider);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not sign in. Please try again.');
-    } finally {
-      setIsSigningIn(false);
-    }
-  };
-
-  const handleSwitchAccount = async () => {
-    setError('');
-    redirectStartedRef.current = false;
-    await signOut(auth);
-  };
+    window.location.replace(buildCheckoutBridgeUrl(offerParams));
+  }, [offerParams, router.isReady]);
 
   const missingParams = router.isReady && !offerParams;
-  const signedInWrongAccount = !!currentUser && !!offerParams && currentUser.uid !== offerParams.userId;
-  const waiting = !router.isReady || !authReady;
+  const checkingOffer = !router.isReady || (!!offerParams && !error);
 
   return (
     <>
@@ -174,14 +93,13 @@ const MacraOfferPage: React.FC = () => {
           </div>
 
           <section className="rounded-2xl border border-white/10 bg-white/[0.06] p-6 shadow-2xl">
-            {waiting || isRedirecting ? (
+            {checkingOffer || isRedirecting ? (
               <div className="text-center py-8">
                 <Loader2 className="w-8 h-8 animate-spin text-[#e0fe10] mx-auto mb-4" />
-                <h2 className="text-xl font-black mb-2">
-                  {isRedirecting ? 'Opening secure checkout' : 'Checking your offer'}
-                </h2>
+                <h2 className="text-xl font-black mb-2">Opening secure checkout</h2>
                 <p className="text-zinc-400 text-sm">
-                  {isRedirecting ? 'You are being sent directly to Stripe.' : 'One quick check before we continue.'}
+                  You are being sent directly to Stripe. Your free month will be applied to the account that received
+                  this offer after checkout.
                 </p>
               </div>
             ) : missingParams ? (
@@ -191,96 +109,11 @@ const MacraOfferPage: React.FC = () => {
                 <p className="text-zinc-400 text-sm">Open the latest Macra offer email and tap the button again.</p>
               </div>
             ) : (
-              <>
-                <div className="flex items-start gap-3 rounded-xl bg-black/25 border border-white/10 p-4 mb-5">
-                  <LockKeyhole className="w-5 h-5 text-[#e0fe10] mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-zinc-300 leading-6">
-                    Sign in with the same account that received this email. Then we will take you straight to Stripe for
-                    your one-month Macra trial.
-                  </p>
-                </div>
-
-                {error ? (
-                  <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
-                    {error}
-                  </div>
-                ) : null}
-
-                {signedInWrongAccount ? (
-                  <button
-                    type="button"
-                    onClick={handleSwitchAccount}
-                    className="w-full rounded-xl bg-[#e0fe10] text-black font-black py-3 px-4 hover:bg-[#cbed0e] transition-colors"
-                  >
-                    Sign in with another account
-                  </button>
-                ) : currentUser ? (
-                  <div className="text-center py-6">
-                    <Loader2 className="w-7 h-7 animate-spin text-[#e0fe10] mx-auto mb-3" />
-                    <p className="text-zinc-300 text-sm">Preparing your checkout session...</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <form onSubmit={handleEmailSignIn} className="space-y-3">
-                      <div>
-                        <label className="block text-xs uppercase tracking-[0.18em] text-zinc-500 font-bold mb-2">
-                          Email
-                        </label>
-                        <input
-                          value={email}
-                          onChange={(event) => setEmail(event.target.value)}
-                          type="email"
-                          autoComplete="email"
-                          className="w-full rounded-xl bg-black/35 border border-white/10 px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:border-[#e0fe10]"
-                          placeholder="you@example.com"
-                          disabled={isSigningIn}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs uppercase tracking-[0.18em] text-zinc-500 font-bold mb-2">
-                          Password
-                        </label>
-                        <input
-                          value={password}
-                          onChange={(event) => setPassword(event.target.value)}
-                          type="password"
-                          autoComplete="current-password"
-                          className="w-full rounded-xl bg-black/35 border border-white/10 px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:border-[#e0fe10]"
-                          placeholder="Password"
-                          disabled={isSigningIn}
-                        />
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={isSigningIn}
-                        className="w-full rounded-xl bg-[#e0fe10] text-black font-black py-3 px-4 hover:bg-[#cbed0e] transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
-                      >
-                        {isSigningIn ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                        Continue to checkout
-                      </button>
-                    </form>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => handleProviderSignIn('apple')}
-                        disabled={isSigningIn}
-                        className="rounded-xl border border-white/10 bg-white/[0.08] px-4 py-3 font-bold hover:bg-white/[0.12] transition-colors disabled:opacity-70"
-                      >
-                        Apple
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleProviderSignIn('google')}
-                        disabled={isSigningIn}
-                        className="rounded-xl border border-white/10 bg-white/[0.08] px-4 py-3 font-bold hover:bg-white/[0.12] transition-colors disabled:opacity-70"
-                      >
-                        Google
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
+              <div className="text-center py-8">
+                <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-4" />
+                <h2 className="text-xl font-black mb-2">We could not open checkout.</h2>
+                <p className="text-zinc-400 text-sm">{error || 'Open the latest Macra offer email and try again.'}</p>
+              </div>
             )}
           </section>
 

@@ -178,7 +178,7 @@ export const handler: Handler = async (event) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           success: false,
-          error: 'Macra web offer emails require a real userId so the signed checkout link can require sign-in before Stripe.',
+          error: 'Macra web offer emails require a real user ID so the signed checkout link can apply checkout to the correct account.',
         } satisfies SendResponse),
       };
     }

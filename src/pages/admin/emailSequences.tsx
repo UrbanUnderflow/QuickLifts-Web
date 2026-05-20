@@ -483,7 +483,7 @@ const EmailSequencesAdmin: React.FC = () => {
       return;
     }
     if (activeSequence.id === 'macra-web-offer-24h-v1' && !testUserId.trim()) {
-      setMessage({ type: 'error', text: 'Macra web offer tests need a real user ID so the CTA can require sign-in and then open Stripe.' });
+      setMessage({ type: 'error', text: 'Macra web offer tests need a real user ID so the CTA can apply checkout to the correct account.' });
       return;
     }
 
@@ -733,7 +733,7 @@ const EmailSequencesAdmin: React.FC = () => {
                   disabled={sending}
                 />
                 <p className="text-xs text-zinc-500 mt-2">
-                  Macra offer CTAs need this so the email opens a signed sign-in bridge and then Stripe checkout.
+                  Macra offer CTAs need this so the signed checkout bridge can apply the offer to the correct account.
                 </p>
                 {lastTestCheckoutUrl ? (
                   <div className="mt-3 rounded-xl border border-zinc-700 bg-zinc-900/70 p-3">
