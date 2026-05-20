@@ -299,6 +299,12 @@ const adminCardsData = [
     link: "/admin/NotificationLogs"
   },
   {
+    title: "Email Logs",
+    description: "View Brevo email sends, delivery events, opens, clicks, and campaign metadata.",
+    icon: <Mail className="w-5 h-5" />,
+    link: "/admin/emailLogs"
+  },
+  {
     title: "Error Logs",
     description: "View and manage application error logs from Firestore for debugging and monitoring.",
     icon: <Bug className="w-5 h-5" />,

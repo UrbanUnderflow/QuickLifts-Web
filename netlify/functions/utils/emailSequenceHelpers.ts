@@ -52,10 +52,87 @@ type RecipientDailyState = {
 const EMAIL_SEND_LOCK_COLLECTION = 'email-send-idempotency';
 const EMAIL_SEQUENCE_LOCK_COLLECTION = 'email-sequence-locks';
 const EMAIL_RECIPIENT_DAILY_COLLECTION = 'email-recipient-daily-limits';
+const EMAIL_LOG_COLLECTION = 'email-logs';
 
 function toText(value: any): string {
   if (value === null || value === undefined) return '';
   return String(value);
+}
+
+function buildBrevoEmailLogDocId(messageId: string): string {
+  return `brevo_${encodeURIComponent(messageId).slice(0, 900)}`;
+}
+
+function parseBrevoCustomHeader(headers?: Record<string, string>): Record<string, any> {
+  const raw = headers?.['X-Mailin-custom'] || headers?.['x-mailin-custom'] || '';
+  if (!raw) return {};
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function writeBrevoEmailLog(args: {
+  status: 'sent' | 'failed';
+  messageId?: string;
+  toEmail: string;
+  toName?: string;
+  subject: string;
+  senderEmail: string;
+  senderName: string;
+  replyTo?: { email?: string; name?: string };
+  tags?: string[];
+  headers?: Record<string, string>;
+  idempotencyKey?: string;
+  idempotencyMetadata?: Record<string, any>;
+  scheduledAt?: string;
+  error?: string;
+}) {
+  try {
+    const db = await getFirestore();
+    const now = new Date();
+    const custom = parseBrevoCustomHeader(args.headers);
+    const logRef = args.messageId
+      ? db.collection(EMAIL_LOG_COLLECTION).doc(buildBrevoEmailLogDocId(args.messageId))
+      : db.collection(EMAIL_LOG_COLLECTION).doc();
+
+    await logRef.set(
+      {
+        provider: 'brevo',
+        status: args.status,
+        success: args.status === 'sent',
+        messageId: args.messageId || null,
+        toEmail: normalizeEmailAddress(args.toEmail),
+        toName: args.toName || args.toEmail,
+        subject: args.subject,
+        senderEmail: args.senderEmail,
+        senderName: args.senderName,
+        replyToEmail: args.replyTo?.email || null,
+        replyToName: args.replyTo?.name || null,
+        tags: args.tags || [],
+        sequenceId: custom.emailSequenceId || custom.sequence || args.idempotencyMetadata?.sequence || null,
+        campaignId: custom.campaignId || args.idempotencyMetadata?.campaignId || null,
+        product: custom.product || args.idempotencyMetadata?.product || null,
+        userId: custom.userId || args.idempotencyMetadata?.userId || null,
+        plan: custom.plan || args.idempotencyMetadata?.plan || null,
+        custom,
+        idempotencyKey: args.idempotencyKey || null,
+        idempotencyMetadata: args.idempotencyMetadata || null,
+        scheduledAt: args.scheduledAt || null,
+        sentAt: args.status === 'sent' ? now : null,
+        failedAt: args.status === 'failed' ? now : null,
+        error: args.error || null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    console.warn('[emailSequenceHelpers] Failed to write email log:', error);
+  }
 }
 
 export function escapeHtml(input: string): string {
@@ -689,6 +766,21 @@ export async function sendBrevoTransactionalEmail(args: {
 
   if (!resp.ok) {
     const errJson = await resp.json().catch(() => ({}));
+    await writeBrevoEmailLog({
+      status: 'failed',
+      toEmail: args.toEmail,
+      toName: args.toName,
+      subject: args.subject,
+      senderEmail,
+      senderName,
+      replyTo: payload.replyTo,
+      tags,
+      headers: args.headers,
+      idempotencyKey: args.idempotencyKey,
+      idempotencyMetadata: args.idempotencyMetadata,
+      scheduledAt: args.scheduledAt,
+      error: errJson?.message || `Brevo API error (${resp.status})`,
+    });
     if (args.idempotencyKey) {
       await releaseGlobalLock({
         collectionName: EMAIL_SEND_LOCK_COLLECTION,
@@ -710,6 +802,21 @@ export async function sendBrevoTransactionalEmail(args: {
   }
 
   const data = await resp.json().catch(() => ({}));
+  await writeBrevoEmailLog({
+    status: 'sent',
+    messageId: data?.messageId,
+    toEmail: args.toEmail,
+    toName: args.toName,
+    subject: args.subject,
+    senderEmail,
+    senderName,
+    replyTo: payload.replyTo,
+    tags,
+    headers: args.headers,
+    idempotencyKey: args.idempotencyKey,
+    idempotencyMetadata: args.idempotencyMetadata,
+    scheduledAt: args.scheduledAt,
+  });
   if (args.idempotencyKey) {
     await finalizeGlobalLock({
       collectionName: EMAIL_SEND_LOCK_COLLECTION,

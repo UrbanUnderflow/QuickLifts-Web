@@ -9,6 +9,7 @@ const {
 const db = admin.firestore();
 const PILOT_ATHLETE_COMMUNICATIONS_COLLECTION = 'pulsecheck-pilot-athlete-communications';
 const MACRA_WEB_OFFER_CAMPAIGN_ID = 'macra-web-offer-24h-v1';
+const EMAIL_LOG_COLLECTION = 'email-logs';
 
 /**
  * Brevo Webhook Event Types:
@@ -50,6 +51,78 @@ const MACRA_BREVO_ISSUE_EVENTS = new Set<BrevoWebhookEvent['event']>([
   'spam',
   'unsubscribe',
 ]);
+
+const buildBrevoEmailLogDocId = (messageId: string) =>
+  `brevo_${encodeURIComponent(messageId).slice(0, 900)}`;
+
+const getWebhookEventTime = (webhookEvent: BrevoWebhookEvent, fallback: Date) => {
+  const candidates = [webhookEvent.ts_event, webhookEvent.ts_epoch, webhookEvent.ts];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'number' || !Number.isFinite(candidate)) continue;
+    const date = new Date(candidate < 1_000_000_000_000 ? candidate * 1000 : candidate);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+
+  if (webhookEvent.date) {
+    const date = new Date(webhookEvent.date);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+
+  return fallback;
+};
+
+const updateEmailLogFromBrevoEvent = async (args: {
+  webhookEvent: BrevoWebhookEvent;
+  eventType: BrevoWebhookEvent['event'];
+  email: string;
+  messageId?: string;
+  link?: string;
+  now: Date;
+}) => {
+  if (!args.messageId) return;
+
+  const FieldValue = admin.firestore.FieldValue;
+  const eventAt = getWebhookEventTime(args.webhookEvent, args.now);
+  const updateData: Record<string, any> = {
+    provider: 'brevo',
+    messageId: args.messageId,
+    toEmail: args.email || null,
+    subject: args.webhookEvent.subject || null,
+    lastEvent: args.eventType,
+    lastEventAt: eventAt,
+    updatedAt: args.now,
+  };
+
+  switch (args.eventType) {
+    case 'delivered':
+      updateData.status = 'delivered';
+      updateData.deliveredAt = eventAt;
+      break;
+    case 'opened':
+      updateData.status = 'opened';
+      updateData.openedAt = eventAt;
+      updateData.openCount = FieldValue.increment(1);
+      break;
+    case 'click':
+      updateData.status = 'clicked';
+      updateData.clickedAt = eventAt;
+      updateData.clickedLink = args.link || null;
+      updateData.clickCount = FieldValue.increment(1);
+      break;
+    case 'soft_bounce':
+    case 'hard_bounce':
+    case 'blocked':
+    case 'deferred':
+    case 'spam':
+    case 'unsubscribe':
+      updateData.status = args.eventType;
+      updateData.issueAt = eventAt;
+      updateData.lastError = args.eventType;
+      break;
+  }
+
+  await db.collection(EMAIL_LOG_COLLECTION).doc(buildBrevoEmailLogDocId(args.messageId)).set(updateData, { merge: true });
+};
 
 const applyStatusUpdate = (
   updateData: Record<string, any>,
@@ -360,6 +433,17 @@ export const handler: Handler = async (event) => {
       const now = new Date();
       
       console.log(`[brevo-webhook] Processing event: ${eventType} for ${email}`);
+
+      await updateEmailLogFromBrevoEvent({
+        webhookEvent,
+        eventType,
+        email,
+        messageId,
+        link,
+        now,
+      }).catch((error) => {
+        console.warn('[brevo-webhook] Failed to update email log:', error?.message || error);
+      });
 
       // Parse custom headers to get friendId and updatePeriodId
       let friendId: string | null = null;

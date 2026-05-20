@@ -10,9 +10,71 @@ const {
 
 const EMAIL_SEND_LOCK_COLLECTION = 'email-send-idempotency';
 const EMAIL_RECIPIENT_DAILY_COLLECTION = 'email-recipient-daily-limits';
+const EMAIL_LOG_COLLECTION = 'email-logs';
 
 function getDb() {
   return getFirebaseAdminApp().firestore();
+}
+
+function buildBrevoEmailLogDocId(messageId) {
+  return `brevo_${encodeURIComponent(String(messageId || '')).slice(0, 900)}`;
+}
+
+function parseBrevoCustomHeader(headers = {}) {
+  const raw = headers['X-Mailin-custom'] || headers['x-mailin-custom'] || '';
+  if (!raw) return {};
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function writeBrevoEmailLog(args) {
+  try {
+    const db = getDb();
+    const now = new Date();
+    const custom = parseBrevoCustomHeader(args.headers);
+    const logRef = args.messageId
+      ? db.collection(EMAIL_LOG_COLLECTION).doc(buildBrevoEmailLogDocId(args.messageId))
+      : db.collection(EMAIL_LOG_COLLECTION).doc();
+
+    await logRef.set(
+      {
+        provider: 'brevo',
+        status: args.status,
+        success: args.status === 'sent',
+        messageId: args.messageId || null,
+        toEmail: normalizeEmailAddress(args.toEmail),
+        toName: args.toName || args.toEmail,
+        subject: args.subject,
+        senderEmail: args.senderEmail,
+        senderName: args.senderName,
+        replyToEmail: args.replyTo?.email || null,
+        replyToName: args.replyTo?.name || null,
+        tags: args.tags || [],
+        sequenceId: custom.emailSequenceId || custom.sequence || args.idempotencyMetadata?.sequence || null,
+        campaignId: custom.campaignId || args.idempotencyMetadata?.campaignId || null,
+        product: custom.product || args.idempotencyMetadata?.product || null,
+        userId: custom.userId || args.idempotencyMetadata?.userId || null,
+        plan: custom.plan || args.idempotencyMetadata?.plan || null,
+        custom,
+        idempotencyKey: args.idempotencyKey || null,
+        idempotencyMetadata: args.idempotencyMetadata || null,
+        scheduledAt: args.scheduledAt || null,
+        sentAt: args.status === 'sent' ? now : null,
+        failedAt: args.status === 'failed' ? now : null,
+        error: args.error || null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    console.warn('[sendBrevoTransactionalEmail] Failed to write email log:', error);
+  }
 }
 
 function toMillis(value) {
@@ -307,6 +369,21 @@ async function sendBrevoTransactionalEmail(args) {
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
+    await writeBrevoEmailLog({
+      status: 'failed',
+      toEmail: args.toEmail,
+      toName: args.toName,
+      subject: args.subject,
+      senderEmail,
+      senderName,
+      replyTo,
+      tags,
+      headers: args.headers,
+      idempotencyKey: args.idempotencyKey,
+      idempotencyMetadata: args.idempotencyMetadata,
+      scheduledAt: args.scheduledAt,
+      error: errorBody?.message || `Brevo API error (${response.status})`,
+    });
     if (args.idempotencyKey) {
       await releaseGlobalLock({
         dedupeKey: args.idempotencyKey,
@@ -327,6 +404,21 @@ async function sendBrevoTransactionalEmail(args) {
   }
 
   const data = await response.json().catch(() => ({}));
+  await writeBrevoEmailLog({
+    status: 'sent',
+    messageId: data?.messageId,
+    toEmail: args.toEmail,
+    toName: args.toName,
+    subject: args.subject,
+    senderEmail,
+    senderName,
+    replyTo,
+    tags,
+    headers: args.headers,
+    idempotencyKey: args.idempotencyKey,
+    idempotencyMetadata: args.idempotencyMetadata,
+    scheduledAt: args.scheduledAt,
+  });
   if (args.idempotencyKey) {
     await finalizeGlobalLock({
       dedupeKey: args.idempotencyKey,

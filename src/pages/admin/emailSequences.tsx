@@ -21,8 +21,35 @@ type SequenceRow = {
   deliveryRuntime?: 'netlify' | 'firebase';
   supportsTemplateEditing?: boolean;
   supportsTestSend?: boolean;
+  supportsCampaignConfig?: boolean;
   openInAdminPath?: string;
   openInAdminLabel?: string;
+};
+
+type CampaignConfig = {
+  delayHours: number;
+  batchLimit: number;
+  maxSendsPerRun: number;
+};
+
+const MACRA_WEB_OFFER_SEQUENCE_ID = 'macra-web-offer-24h-v1';
+const DEFAULT_CAMPAIGN_CONFIG: CampaignConfig = {
+  delayHours: 24,
+  batchLimit: 250,
+  maxSendsPerRun: 80,
+};
+
+const normalizeCampaignConfig = (data: Record<string, any> = {}): CampaignConfig => ({
+  delayHours: Math.max(1, Number(data.delayHours || DEFAULT_CAMPAIGN_CONFIG.delayHours) || DEFAULT_CAMPAIGN_CONFIG.delayHours),
+  batchLimit: Math.max(25, Number(data.batchLimit || DEFAULT_CAMPAIGN_CONFIG.batchLimit) || DEFAULT_CAMPAIGN_CONFIG.batchLimit),
+  maxSendsPerRun: Math.max(1, Number(data.maxSendsPerRun || DEFAULT_CAMPAIGN_CONFIG.maxSendsPerRun) || DEFAULT_CAMPAIGN_CONFIG.maxSendsPerRun),
+});
+
+const parseIntegerDraft = (value: string): number | null => {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) ? parsed : null;
 };
 
 const SEQUENCES: SequenceRow[] = [
@@ -216,7 +243,7 @@ const SEQUENCES: SequenceRow[] = [
     defaultScheduleEnabled: true,
   },
   {
-    id: 'macra-web-offer-24h-v1',
+    id: MACRA_WEB_OFFER_SEQUENCE_ID,
     name: 'Macra Web Offer 24h',
     trigger: 'Scheduled function. Sends once 24h after Macra onboarding when no active trial/subscription exists. Excludes missing-age and under-18 profiles. Checkout uses Stripe web, not StoreKit.',
     defaultSubject: 'Your Macra plan is ready, plus a free month',
@@ -226,6 +253,7 @@ const SEQUENCES: SequenceRow[] = [
     scheduleDescription: 'Netlify cron: hourly; sends only eligible users after the 24h delay',
     supportsScheduleTime: false,
     defaultScheduleEnabled: false,
+    supportsCampaignConfig: true,
   },
 ];
 
@@ -258,6 +286,10 @@ const EmailSequencesAdmin: React.FC = () => {
   const [scheduleEnabledDraft, setScheduleEnabledDraft] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [savingScheduleId, setSavingScheduleId] = useState<string | null>(null);
+  const [campaignConfigById, setCampaignConfigById] = useState<Record<string, CampaignConfig>>({});
+  const [delayHoursDraft, setDelayHoursDraft] = useState(String(DEFAULT_CAMPAIGN_CONFIG.delayHours));
+  const [batchLimitDraft, setBatchLimitDraft] = useState(String(DEFAULT_CAMPAIGN_CONFIG.batchLimit));
+  const [maxSendsPerRunDraft, setMaxSendsPerRunDraft] = useState(String(DEFAULT_CAMPAIGN_CONFIG.maxSendsPerRun));
 
   const scheduleOptions = useMemo(() => {
     const out: string[] = [];
@@ -274,6 +306,7 @@ const EmailSequencesAdmin: React.FC = () => {
       try {
         const updates: Record<string, string> = {};
         const enabledUpdates: Record<string, boolean> = {};
+        const campaignConfigUpdates: Record<string, CampaignConfig> = {};
         for (const seq of SEQUENCES) {
           if (!seq.scheduleConfigDocId) continue;
           const ref = doc(db, 'email-sequence-config', seq.scheduleConfigDocId);
@@ -286,9 +319,13 @@ const EmailSequencesAdmin: React.FC = () => {
               ? data?.enabled === true
               : data?.enabled !== false
             : seq.defaultScheduleEnabled === true;
+          if (seq.supportsCampaignConfig) {
+            campaignConfigUpdates[seq.id] = normalizeCampaignConfig(data);
+          }
         }
         setScheduleTimeById(updates);
         setScheduleEnabledById(enabledUpdates);
+        setCampaignConfigById(campaignConfigUpdates);
       } catch (_) {
         // Non-blocking; default values will display
       }
@@ -314,11 +351,18 @@ const EmailSequencesAdmin: React.FC = () => {
   const isScheduleEnabled = (seq: SequenceRow) =>
     scheduleEnabledById[seq.id] ?? (seq.defaultScheduleEnabled === true);
 
+  const getCampaignConfig = (seq: SequenceRow): CampaignConfig =>
+    campaignConfigById[seq.id] || DEFAULT_CAMPAIGN_CONFIG;
+
   const openScheduleModal = (seq: SequenceRow) => {
     setScheduleEditingSequence(seq);
     const existing = scheduleTimeById[seq.id] || '14:00';
+    const campaignConfig = getCampaignConfig(seq);
     setScheduleTimeDraft(existing);
     setScheduleEnabledDraft(isScheduleEnabled(seq));
+    setDelayHoursDraft(String(campaignConfig.delayHours));
+    setBatchLimitDraft(String(campaignConfig.batchLimit));
+    setMaxSendsPerRunDraft(String(campaignConfig.maxSendsPerRun));
     setIsScheduleModalOpen(true);
     setMessage(null);
   };
@@ -330,6 +374,33 @@ const EmailSequencesAdmin: React.FC = () => {
       setMessage({ type: 'error', text: 'Invalid time format' });
       return;
     }
+
+    let nextCampaignConfig: CampaignConfig | null = null;
+    if (scheduleEditingSequence.supportsCampaignConfig) {
+      const delayHours = parseIntegerDraft(delayHoursDraft);
+      const batchLimit = parseIntegerDraft(batchLimitDraft);
+      const maxSendsPerRun = parseIntegerDraft(maxSendsPerRunDraft);
+
+      if (!delayHours || delayHours < 1 || delayHours > 168) {
+        setMessage({ type: 'error', text: 'Delay must be between 1 and 168 hours.' });
+        return;
+      }
+      if (!batchLimit || batchLimit < 25 || batchLimit > 1000) {
+        setMessage({ type: 'error', text: 'Batch limit must be between 25 and 1000 users.' });
+        return;
+      }
+      if (!maxSendsPerRun || maxSendsPerRun < 1 || maxSendsPerRun > 500) {
+        setMessage({ type: 'error', text: 'Max sends per run must be between 1 and 500.' });
+        return;
+      }
+      if (maxSendsPerRun > batchLimit) {
+        setMessage({ type: 'error', text: 'Max sends per run cannot be higher than the batch limit.' });
+        return;
+      }
+
+      nextCampaignConfig = { delayHours, batchLimit, maxSendsPerRun };
+    }
+
     setSavingSchedule(true);
     try {
       const ref = doc(db, 'email-sequence-config', scheduleEditingSequence.scheduleConfigDocId);
@@ -338,6 +409,7 @@ const EmailSequencesAdmin: React.FC = () => {
         {
           id: scheduleEditingSequence.scheduleConfigDocId,
           ...(scheduleEditingSequence.supportsScheduleTime === false ? {} : { sendTimeUtc: t }),
+          ...(nextCampaignConfig || {}),
           enabled: scheduleEnabledDraft,
           updatedAt: serverTimestamp(),
         },
@@ -345,9 +417,14 @@ const EmailSequencesAdmin: React.FC = () => {
       );
       setScheduleTimeById((prev) => ({ ...prev, [scheduleEditingSequence.id]: t || prev[scheduleEditingSequence.id] || '14:00' }));
       setScheduleEnabledById((prev) => ({ ...prev, [scheduleEditingSequence.id]: scheduleEnabledDraft }));
+      if (nextCampaignConfig) {
+        setCampaignConfigById((prev) => ({ ...prev, [scheduleEditingSequence.id]: nextCampaignConfig }));
+      }
       setMessage({
         type: 'success',
-        text: `${scheduleEditingSequence.name} ${scheduleEnabledDraft ? 'enabled' : 'paused'}${scheduleEditingSequence.supportsScheduleTime === false ? '' : ` at ${t} UTC`}.`,
+        text: nextCampaignConfig
+          ? `${scheduleEditingSequence.name} ${scheduleEnabledDraft ? 'enabled' : 'paused'} with ${nextCampaignConfig.maxSendsPerRun} max sends per run.`
+          : `${scheduleEditingSequence.name} ${scheduleEnabledDraft ? 'enabled' : 'paused'}${scheduleEditingSequence.supportsScheduleTime === false ? '' : ` at ${t} UTC`}.`,
       });
       setIsScheduleModalOpen(false);
     } catch (e: any) {
@@ -584,6 +661,7 @@ const EmailSequencesAdmin: React.FC = () => {
                 <tbody className="divide-y divide-zinc-800">
                   {SEQUENCES.map((seq) => {
                     const scheduleEnabled = isScheduleEnabled(seq);
+                    const campaignConfig = getCampaignConfig(seq);
                     return (
                     <tr key={seq.id} className="hover:bg-zinc-900/30">
                       <td className="px-4 py-3 text-zinc-200 font-medium">{seq.name}</td>
@@ -606,6 +684,11 @@ const EmailSequencesAdmin: React.FC = () => {
                             <div className="text-xs text-zinc-500">
                               {seq.scheduleDescription || 'Scheduled automation'}
                             </div>
+                            {seq.supportsCampaignConfig ? (
+                              <div className="text-xs text-zinc-500">
+                                Delay: {campaignConfig.delayHours}h · Batch: {campaignConfig.batchLimit} · Max sends/run: {campaignConfig.maxSendsPerRun}
+                              </div>
+                            ) : null}
                             {seq.supportsScheduleTime !== false ? (
                               <div className="text-xs text-zinc-500">
                                 Send time: {(scheduleTimeById[seq.id] || '14:00').trim()} UTC
@@ -647,7 +730,7 @@ const EmailSequencesAdmin: React.FC = () => {
                                 title="Edit automation settings"
                               >
                                 <Clock className="w-4 h-4" />
-                                Settings
+                                {seq.supportsCampaignConfig ? 'Configure' : 'Settings'}
                               </button>
                             </>
                           ) : null}
@@ -827,6 +910,73 @@ const EmailSequencesAdmin: React.FC = () => {
                 <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
                   <div className="text-xs uppercase tracking-wider text-zinc-500 mb-1">Schedule</div>
                   <div className="text-sm text-zinc-300">{scheduleEditingSequence.scheduleDescription}</div>
+                </div>
+              ) : null}
+
+              {scheduleEditingSequence.supportsCampaignConfig ? (
+                <div className="rounded-xl border border-zinc-700 bg-zinc-900/70 p-4">
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div>
+                      <div className="text-sm font-semibold text-white">Campaign launch controls</div>
+                      <div className="text-xs text-zinc-500 mt-1">
+                        Use a small max-send cap for canaries, then increase it after the first run looks clean.
+                      </div>
+                    </div>
+                    <span className="rounded-full border border-[#d7ff00]/30 bg-[#d7ff00]/10 px-2.5 py-1 text-[11px] font-bold text-[#d7ff00]">
+                      Canary-safe
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-400 mb-2">Delay after onboarding</label>
+                      <div className="flex items-center rounded-xl border border-zinc-700 bg-zinc-950 focus-within:border-[#d7ff00]">
+                        <input
+                          type="number"
+                          min={1}
+                          max={168}
+                          step={1}
+                          value={delayHoursDraft}
+                          onChange={(e) => setDelayHoursDraft(e.target.value)}
+                          disabled={savingSchedule}
+                          className="w-full bg-transparent px-3 py-3 text-white outline-none"
+                        />
+                        <span className="pr-3 text-xs text-zinc-500">hours</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-400 mb-2">Users scanned/run</label>
+                      <input
+                        type="number"
+                        min={25}
+                        max={1000}
+                        step={1}
+                        value={batchLimitDraft}
+                        onChange={(e) => setBatchLimitDraft(e.target.value)}
+                        disabled={savingSchedule}
+                        className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-white outline-none focus:border-[#d7ff00]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-400 mb-2">Max sends/run</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={500}
+                        step={1}
+                        value={maxSendsPerRunDraft}
+                        onChange={(e) => setMaxSendsPerRunDraft(e.target.value)}
+                        disabled={savingSchedule}
+                        className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-white outline-none focus:border-[#d7ff00]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 rounded-lg border border-amber-700/40 bg-amber-900/20 px-3 py-2 text-xs text-amber-200">
+                    Recommended first launch: delay 24h, scan 50 users, max 5 sends per run.
+                  </div>
                 </div>
               ) : null}
 
