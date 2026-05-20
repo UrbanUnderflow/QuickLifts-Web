@@ -335,6 +335,12 @@ const adminCardsData = [
     link: "/admin/nutritionInsightLayer"
   },
   {
+    title: "Macra Cancel Reasons",
+    description: "Review saved Macra paywall cancellation reasons with user identity, selected plan, trigger, and raw funnel metadata.",
+    icon: <XCircle className="w-5 h-5" />,
+    link: "/admin/macraCancelReasons"
+  },
+  {
     title: "VC Database",
     description: "Manage venture capital prospects and investor relationships for fundraising.",
     icon: <Building2 className="w-5 h-5" />,

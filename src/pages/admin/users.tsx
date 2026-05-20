@@ -33,6 +33,9 @@ type User = {
   macraNotificationPreferences?: Record<string, any>;
   macraEmailPreferences?: Record<string, any>;
   macraOnboardingCompletedAt?: any;
+  macraLatestPaywallCancelFeedback?: Record<string, any> | null;
+  macraLatestPaywallCancelFeedbackAt?: any;
+  macraPaywallCancelFeedbackCount?: number;
   macraProfile?: Record<string, any> | null;
   macraProfileLoaded?: boolean;
   macraProfileLoadError?: string;
@@ -648,6 +651,9 @@ const UsersManagement: React.FC = () => {
         (user.username?.toLowerCase().includes(lowercaseTerm)) ||
         (user.id?.toLowerCase().includes(lowercaseTerm)) ||
         (user.registrationEntryPoint?.toLowerCase().includes(lowercaseTerm)) ||
+        (getMacraCancelFeedbackReason(user).toLowerCase().includes(lowercaseTerm)) ||
+        (getMacraCancelFeedback(user)?.reason?.toString().toLowerCase().includes(lowercaseTerm)) ||
+        (getMacraCancelFeedback(user)?.trigger?.toString().toLowerCase().includes(lowercaseTerm)) ||
         (getRegistrationOriginConfig(user).label.toLowerCase().includes(lowercaseTerm))
       );
     }
@@ -840,6 +846,32 @@ const UsersManagement: React.FC = () => {
     return isRecord(user.macraProfile) ? user.macraProfile[key] : undefined;
   };
 
+  const getMacraCancelFeedback = (user: User) => {
+    return isRecord(user.macraLatestPaywallCancelFeedback) ? user.macraLatestPaywallCancelFeedback : null;
+  };
+
+  const getMacraCancelFeedbackReason = (user: User) => {
+    const feedback = getMacraCancelFeedback(user);
+    if (!feedback) return 'Not submitted';
+    return feedback.reasonLabel || titleizeValue(feedback.reason);
+  };
+
+  const getMacraCancelFeedbackCapturedAt = (user: User) => {
+    const feedback = getMacraCancelFeedback(user);
+    return feedback?.capturedAt || user.macraLatestPaywallCancelFeedbackAt;
+  };
+
+  const getMacraCancelFeedbackSummary = (user: User) => {
+    const feedback = getMacraCancelFeedback(user);
+    if (!feedback) return 'Not submitted';
+
+    const reason = getMacraCancelFeedbackReason(user);
+    const trigger = titleizeValue(feedback.trigger);
+    const plan = titleizeValue(feedback.selectedPlanPeriod);
+    const capturedAt = formatDate(getMacraCancelFeedbackCapturedAt(user));
+    return `${reason} · ${trigger} · ${plan} · ${capturedAt}`;
+  };
+
   const sanitizeClipboardCell = (value: any) => {
     if (value === undefined || value === null) return '';
     return String(value).replace(/\t/g, ' ').replace(/\r?\n/g, ' ').trim();
@@ -870,6 +902,11 @@ const UsersManagement: React.FC = () => {
       'Diet',
       'Biggest Struggle',
       'Macro Targets',
+      'Paywall Cancel Reason',
+      'Paywall Cancel Trigger',
+      'Paywall Cancel Plan',
+      'Paywall Cancel Captured At',
+      'Paywall Cancel Feedback Count',
       'Macra Completed At',
       'Profile Updated',
     ];
@@ -902,6 +939,11 @@ const UsersManagement: React.FC = () => {
         titleizeValue(getMacraProfileValue(user, 'dietaryPreference')),
         titleizeValue(getMacraProfileValue(user, 'biggestStruggle')),
         formatMacroTargets(getPersonalMacros(user)),
+        getMacraCancelFeedbackReason(user),
+        titleizeValue(getMacraCancelFeedback(user)?.trigger),
+        titleizeValue(getMacraCancelFeedback(user)?.selectedPlanPeriod),
+        formatDate(getMacraCancelFeedbackCapturedAt(user)),
+        user.macraPaywallCancelFeedbackCount || '',
         formatDate(user.macraOnboardingCompletedAt),
         formatDate(getMacraProfileValue(user, 'updatedAt') || user.updatedAt),
       ];
@@ -1781,6 +1823,7 @@ const UsersManagement: React.FC = () => {
             {renderDetailValue('Completed', formatBooleanLabel(user.hasCompletedMacraOnboarding))}
             {renderDetailValue('Completed At', formatDate(user.macraOnboardingCompletedAt))}
             {renderDetailValue('Profile Updated', formatDate(macraProfile?.updatedAt || user.updatedAt))}
+            {renderDetailValue('Latest Paywall Cancel Reason', getMacraCancelFeedbackSummary(user))}
           </div>
 
           <div className="space-y-3">
@@ -3672,7 +3715,7 @@ const UsersManagement: React.FC = () => {
                   </button>
                 </div>
                       <div className="overflow-x-auto">
-                <table className={`w-full min-w-[2200px] bg-[#262a30] rounded-lg overflow-hidden ${isBatchDeleting ? 'opacity-60 pointer-events-none' : ''}`}>
+                <table className={`w-full min-w-[2400px] bg-[#262a30] rounded-lg overflow-hidden ${isBatchDeleting ? 'opacity-60 pointer-events-none' : ''}`}>
                           <thead>
                             <tr className="border-b border-gray-700">
                       {/* Conditional Checkbox Header */}
@@ -3713,9 +3756,10 @@ const UsersManagement: React.FC = () => {
 	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Goal</th>
 	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Plan Inputs</th>
 	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Struggle</th>
-	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Targets</th>
-	                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Profile Timing</th>
-	                        <th className="py-3 px-4 text-center text-gray-300 font-medium">Admin Actions</th>
+		                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Targets</th>
+		                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Profile Timing</th>
+		                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Cancel Reason</th>
+		                        <th className="py-3 px-4 text-center text-gray-300 font-medium">Admin Actions</th>
 	                        <th className="py-3 px-4 text-center text-gray-300 font-medium">View</th>
                             </tr>
                           </thead>
@@ -3854,17 +3898,33 @@ const UsersManagement: React.FC = () => {
 	                                {formatMacroTargets(getPersonalMacros(user))}
 	                              </div>
 	                            </td>
-	                            <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-	                              {shouldLoadMacraProfile(user) ? (
-	                                <div className="text-xs leading-5">
-	                                  <div>Done {formatCompactDate(user.macraOnboardingCompletedAt)}</div>
-	                                  <div className="text-gray-500">Updated {formatCompactDate(getMacraProfileValue(user, 'updatedAt') || user.updatedAt)}</div>
-	                                </div>
-	                              ) : (
-	                                <span className="text-xs text-gray-500">Not Macra</span>
-	                              )}
-	                            </td>
-	                            <td className="py-3 px-4 border-b border-gray-700 text-center">
+		                            <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+		                              {shouldLoadMacraProfile(user) ? (
+		                                <div className="text-xs leading-5">
+		                                  <div>Done {formatCompactDate(user.macraOnboardingCompletedAt)}</div>
+		                                  <div className="text-gray-500">Updated {formatCompactDate(getMacraProfileValue(user, 'updatedAt') || user.updatedAt)}</div>
+		                                </div>
+		                              ) : (
+		                                <span className="text-xs text-gray-500">Not Macra</span>
+		                              )}
+		                            </td>
+		                            <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+		                              {getMacraCancelFeedback(user) ? (
+		                                <div className="max-w-[220px] text-xs leading-5">
+		                                  <div className="font-medium text-lime-300">{getMacraCancelFeedbackReason(user)}</div>
+		                                  <div className="text-gray-500">
+		                                    {titleizeValue(getMacraCancelFeedback(user)?.trigger)} · {titleizeValue(getMacraCancelFeedback(user)?.selectedPlanPeriod)}
+		                                  </div>
+		                                  <div className="text-gray-600">
+		                                    {formatCompactDate(getMacraCancelFeedbackCapturedAt(user))}
+		                                    {user.macraPaywallCancelFeedbackCount ? ` · ${user.macraPaywallCancelFeedbackCount} total` : ''}
+		                                  </div>
+		                                </div>
+		                              ) : (
+		                                <span className="text-xs text-gray-500">Not submitted</span>
+		                              )}
+		                            </td>
+		                            <td className="py-3 px-4 border-b border-gray-700 text-center">
 	                              <div className="flex gap-1 justify-center">
                               <button
                                 onClick={() => toggleAdminStatus(user)}
