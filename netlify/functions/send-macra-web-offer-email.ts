@@ -15,6 +15,10 @@ const {
   normalizePlan,
   signMacraOfferLink,
 } = require('./utils/macraStripe');
+const {
+  MACRA_MIXPANEL_EVENTS,
+  safeTrackMacraWebOfferEvent,
+} = require('./utils/mixpanelAnalytics');
 
 type SendResponse = {
   success: boolean;
@@ -283,6 +287,24 @@ export const handler: Handler = async (event) => {
         },
         { merge: true } as any
       );
+    }
+
+    if (!isTest && !sendResult.skipped) {
+      await safeTrackMacraWebOfferEvent({
+        eventName: MACRA_MIXPANEL_EVENTS.emailSent,
+        userId,
+        email: recipient.toEmail,
+        insertId: `macra-web-offer:email-sent:${sendResult.messageId || userId || recipient.toEmail}`,
+        properties: {
+          plan,
+          email_provider: 'brevo',
+          email_sequence_id: MACRA_WEB_OFFER_CAMPAIGN_ID,
+          brevo_message_id: sendResult.messageId || null,
+          recipient_email: recipient.toEmail,
+          recipient_name: recipient.toName || null,
+          is_test: false,
+        },
+      });
     }
 
     return {

@@ -7,11 +7,16 @@ const {
   readPulseCheckAttributionFromMetadata,
 } = require('./utils/pulsecheck-revenue');
 const {
+  isMacraWebOfferContext,
   isMacraSubscriptionContext,
   mapMacraPriceIdToPlanType,
   mapMacraPriceIdToSubscriptionType,
   markMacraWebOfferState,
 } = require('./utils/macraStripe');
+const {
+  MACRA_MIXPANEL_EVENTS,
+  safeTrackMacraWebOfferEvent,
+} = require('./utils/mixpanelAnalytics');
 
 // Subscription type mappings
 const SubscriptionType = {
@@ -164,6 +169,9 @@ exports.handler = async (event) => {
         break;
       case 'customer.subscription.deleted':
         await handleSubscriptionDeleted(stripeEvent.data.object);
+        break;
+      case 'invoice.paid':
+        await handleInvoicePaid(stripeEvent.data.object);
         break;
       case 'account.updated':
         await handleAccountUpdated(stripeEvent.data.object);
@@ -476,6 +484,110 @@ async function handleSubscriptionDeleted(subscription) {
   } catch (error) {
     console.error(`[Webhook] Error handling subscription deleted: ${error.message}`);
     throw error;
+  }
+}
+
+function getStripeObjectId(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  return value.id || null;
+}
+
+function eventKey(eventName) {
+  return String(eventName || 'event')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+async function getUserAnalyticsProfile(userId) {
+  if (!userId) return {};
+  try {
+    const userSnap = await db.collection('users').doc(userId).get();
+    if (!userSnap.exists) return {};
+    const data = userSnap.data() || {};
+    return {
+      email: data.email || null,
+      username: data.username || null,
+      displayName: data.displayName || null,
+    };
+  } catch (error) {
+    console.warn('[Webhook] Failed to load user analytics profile:', error?.message || error);
+    return {};
+  }
+}
+
+function resolveMacraPaidInvoiceEvent(invoice, subscription) {
+  const amountPaid = Number(invoice.amount_paid || 0);
+  if (amountPaid <= 0) return null;
+
+  const paidAtSec = Number(invoice.status_transitions?.paid_at || invoice.created || Math.floor(Date.now() / 1000));
+  const trialEndSec = Number(subscription?.trial_end || 0);
+  const billingReason = String(invoice.billing_reason || '').toLowerCase();
+  const paidNearTrialEnd = trialEndSec && Math.abs(paidAtSec - trialEndSec) <= 3 * 24 * 60 * 60;
+
+  if (paidNearTrialEnd) return MACRA_MIXPANEL_EVENTS.trialConverted;
+  if (billingReason === 'subscription_cycle') return MACRA_MIXPANEL_EVENTS.subscriptionRenewed;
+  if (billingReason === 'subscription_create') return MACRA_MIXPANEL_EVENTS.purchaseCompleted;
+  return MACRA_MIXPANEL_EVENTS.subscriptionRenewed;
+}
+
+async function handleInvoicePaid(invoice) {
+  console.log(`[Webhook] Processing invoice.paid event: ${invoice.id}`);
+
+  try {
+    const subscriptionId = getStripeObjectId(invoice.subscription);
+    if (!subscriptionId) return;
+
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const invoiceMetadata = {
+      ...(invoice.subscription_details?.metadata || {}),
+      ...(invoice.metadata || {}),
+    };
+    const sessionLike = { metadata: invoiceMetadata };
+    if (!isMacraWebOfferContext({ subscription, session: sessionLike })) return;
+
+    const eventName = resolveMacraPaidInvoiceEvent(invoice, subscription);
+    if (!eventName) return;
+
+    const metadata = {
+      ...(subscription.metadata || {}),
+      ...invoiceMetadata,
+    };
+    const userId = metadata.userId || (await getUserIdFromSubscription(subscription));
+    const profile = await getUserAnalyticsProfile(userId);
+    const price = subscription.items?.data?.[0]?.price || invoice.lines?.data?.[0]?.price || null;
+    const planType = mapPriceIdToPlanType(price?.id);
+    const amountPaid = Number(invoice.amount_paid || 0) / 100;
+
+    await safeTrackMacraWebOfferEvent({
+      eventName,
+      userId,
+      email: profile.email || invoice.customer_email || null,
+      insertId: `macra-web-offer:${eventKey(eventName)}:${invoice.id || subscriptionId}`,
+      properties: {
+        plan: metadata.checkoutPlan || (planType ? planType.replace(/^macra-/, '') : null),
+        subscription_status: subscription.status || null,
+        stripe_invoice_id: invoice.id,
+        stripe_subscription_id: subscriptionId,
+        stripe_customer_id: getStripeObjectId(invoice.customer || subscription.customer),
+        stripe_price_id: price?.id || null,
+        billing_reason: invoice.billing_reason || null,
+        amount_paid: amountPaid,
+        revenue: amountPaid,
+        currency: invoice.currency || price?.currency || null,
+        paid_at: invoice.status_transitions?.paid_at || null,
+        time: invoice.status_transitions?.paid_at || invoice.created || undefined,
+        trial_days: subscription.trial_end ? 30 : undefined,
+        trial_end: subscription.trial_end || null,
+        current_period_end: subscription.current_period_end || null,
+        checkout_source: metadata.checkoutSource || 'macra_retarget_email',
+        offer_id: metadata.offerId || null,
+        username: profile.username || null,
+      },
+    });
+  } catch (error) {
+    console.warn('[Webhook] invoice.paid Mixpanel tracking skipped:', error?.message || error);
   }
 }
 

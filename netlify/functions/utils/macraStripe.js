@@ -1,4 +1,8 @@
 const crypto = require('crypto');
+const {
+  MACRA_MIXPANEL_EVENTS,
+  safeTrackMacraWebOfferEvent,
+} = require('./mixpanelAnalytics');
 
 const MACRA_WEB_OFFER_CAMPAIGN_ID = 'macra-web-offer-24h-v1';
 
@@ -233,6 +237,85 @@ const getMacraBirthdateMs = async ({ db, userId, userData = {} }) => {
   return toMillis(userData.birthdate);
 };
 
+const getStripeId = (value) => {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  return value.id || null;
+};
+
+const getSubscriptionPrice = (subscription) => subscription?.items?.data?.[0]?.price || null;
+
+const getStripeAmount = (subscription) => {
+  const price = getSubscriptionPrice(subscription);
+  if (typeof price?.unit_amount === 'number') return price.unit_amount / 100;
+  if (typeof price?.unit_amount_decimal === 'string') {
+    const parsed = Number.parseFloat(price.unit_amount_decimal);
+    return Number.isFinite(parsed) ? parsed / 100 : null;
+  }
+  return null;
+};
+
+const getMixpanelEventForMacraOfferStage = ({ stage, subscription }) => {
+  if (stage === 'checkout_completed') return MACRA_MIXPANEL_EVENTS.checkoutCompleted;
+
+  if (stage === 'converted') {
+    const status = normalizeString(subscription?.status).toLowerCase();
+    const trialEndSec = Number(subscription?.trial_end || 0);
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (status === 'trialing' || (trialEndSec && trialEndSec > nowSec)) {
+      return MACRA_MIXPANEL_EVENTS.trialActivated;
+    }
+    if (status === 'active' && !trialEndSec) {
+      return MACRA_MIXPANEL_EVENTS.purchaseCompleted;
+    }
+    return null;
+  }
+
+  if (stage === 'subscription_deleted' || ['canceled', 'cancelled', 'incomplete_expired', 'unpaid'].includes(stage)) {
+    return MACRA_MIXPANEL_EVENTS.subscriptionCancelled;
+  }
+
+  return null;
+};
+
+const trackMacraWebOfferStage = async ({ userId, subscription, session, stage, plan }) => {
+  const eventName = getMixpanelEventForMacraOfferStage({ stage, subscription });
+  if (!eventName) return;
+
+  const metadata = {
+    ...(subscription?.metadata || {}),
+    ...(session?.metadata || {}),
+  };
+  const price = getSubscriptionPrice(subscription);
+  const subscriptionId = getStripeId(subscription);
+  const sessionId = getStripeId(session);
+  const sourceId = subscriptionId || sessionId || userId || `${stage}:${Date.now()}`;
+
+  await safeTrackMacraWebOfferEvent({
+    eventName,
+    userId,
+    email: session?.customer_email || session?.customer_details?.email || null,
+    insertId: `macra-web-offer:${stage}:${sourceId}`,
+    properties: {
+      plan,
+      trial_days: subscription?.trial_end ? 30 : undefined,
+      subscription_status: subscription?.status || null,
+      stripe_checkout_session_id: sessionId,
+      stripe_subscription_id: subscriptionId,
+      stripe_customer_id: getStripeId(subscription?.customer || session?.customer),
+      stripe_price_id: price?.id || session?.line_items?.data?.[0]?.price?.id || null,
+      price_amount: getStripeAmount(subscription),
+      currency: price?.currency || session?.currency || null,
+      current_period_end: subscription?.current_period_end || null,
+      trial_end: subscription?.trial_end || null,
+      checkout_auth_verified: normalizeString(metadata.checkoutAuthVerified).toLowerCase() === 'true',
+      checkout_source: normalizeString(metadata.checkoutSource) || 'macra_retarget_email',
+      campaign_id: normalizeString(metadata.campaignId) || MACRA_WEB_OFFER_CAMPAIGN_ID,
+      offer_id: normalizeString(metadata.offerId) || MACRA_WEB_OFFER_CAMPAIGN_ID,
+    },
+  });
+};
+
 const markMacraWebOfferState = async ({ db, admin, userId, subscription, session, stage, extra = {} }) => {
   if (!userId) return;
   const metadata = {
@@ -270,6 +353,8 @@ const markMacraWebOfferState = async ({ db, admin, userId, subscription, session
     { macraEmailSequenceState: stateUpdate },
     { merge: true }
   );
+
+  await trackMacraWebOfferStage({ userId, subscription, session, stage, plan });
 };
 
 module.exports = {

@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical, Settings2, Wallet, ClipboardCheck, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, XCircle, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical, Settings2, Wallet, ClipboardCheck, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useDispatch } from 'react-redux';
 import { toggleDevMode } from '../../redux/devModeSlice';
 import { initializeFirebase, isUsingDevFirebase } from '../../api/firebase/config';

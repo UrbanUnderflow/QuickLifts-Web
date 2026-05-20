@@ -11,6 +11,10 @@ const {
   resolveMacraPriceId,
   verifyMacraOfferLinkSignature,
 } = require('./utils/macraStripe');
+const {
+  MACRA_MIXPANEL_EVENTS,
+  safeTrackMacraWebOfferEvent,
+} = require('./utils/mixpanelAnalytics');
 
 const jsonHeaders = {
   'Content-Type': 'application/json',
@@ -306,6 +310,24 @@ exports.handler = async (event) => {
       },
       { merge: true }
     );
+
+    await safeTrackMacraWebOfferEvent({
+      eventName: MACRA_MIXPANEL_EVENTS.checkoutStarted,
+      userId,
+      email,
+      insertId: `macra-web-offer:checkout-started:${session.id}`,
+      properties: {
+        plan,
+        trial_days: 30,
+        stripe_checkout_session_id: session.id,
+        stripe_price_id: priceId,
+        stripe_customer_id: typeof session.customer === 'string' ? session.customer : session.customer?.id,
+        auth_required: requireAuth,
+        auth_verified: authVerified,
+        checkout_auth_verified: authVerified,
+        is_test_mode: isTestMode,
+      },
+    });
 
     return {
       statusCode: 302,

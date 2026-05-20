@@ -1,8 +1,14 @@
 import type { Handler } from '@netlify/functions';
 import { admin } from './config/firebase';
 
+const {
+  MACRA_MIXPANEL_EVENTS,
+  safeTrackMacraWebOfferEvent,
+} = require('./utils/mixpanelAnalytics');
+
 const db = admin.firestore();
 const PILOT_ATHLETE_COMMUNICATIONS_COLLECTION = 'pulsecheck-pilot-athlete-communications';
+const MACRA_WEB_OFFER_CAMPAIGN_ID = 'macra-web-offer-24h-v1';
 
 /**
  * Brevo Webhook Event Types:
@@ -30,6 +36,20 @@ interface BrevoWebhookEvent {
   link?: string; // For click events
   'X-Mailin-custom'?: string; // Custom headers we set (contains friendId, signingRequestId, emailRecordId)
 }
+
+const MACRA_BREVO_EVENT_TO_MIXPANEL: Partial<Record<BrevoWebhookEvent['event'], string>> = {
+  delivered: MACRA_MIXPANEL_EVENTS.emailDelivered,
+  opened: MACRA_MIXPANEL_EVENTS.emailOpened,
+  click: MACRA_MIXPANEL_EVENTS.emailClicked,
+};
+const MACRA_BREVO_ISSUE_EVENTS = new Set<BrevoWebhookEvent['event']>([
+  'soft_bounce',
+  'hard_bounce',
+  'blocked',
+  'deferred',
+  'spam',
+  'unsubscribe',
+]);
 
 const applyStatusUpdate = (
   updateData: Record<string, any>,
@@ -351,6 +371,7 @@ export const handler: Handler = async (event) => {
       let campaignId: string | null = null;
       let product: string | null = null;
       let userId: string | null = null;
+      let plan: string | null = null;
       
       if (webhookEvent['X-Mailin-custom']) {
         try {
@@ -364,6 +385,7 @@ export const handler: Handler = async (event) => {
           campaignId = custom.campaignId || null;
           product = custom.product || null;
           userId = custom.userId || null;
+          plan = custom.plan || null;
         } catch (e) {
           console.warn('[brevo-webhook] Failed to parse X-Mailin-custom:', e);
         }
@@ -382,6 +404,36 @@ export const handler: Handler = async (event) => {
           link,
           now,
         });
+
+        const mixpanelEventName =
+          MACRA_BREVO_EVENT_TO_MIXPANEL[eventType] ||
+          (MACRA_BREVO_ISSUE_EVENTS.has(eventType) ? MACRA_MIXPANEL_EVENTS.emailIssue : null);
+
+        if (mixpanelEventName) {
+          await safeTrackMacraWebOfferEvent({
+            eventName: mixpanelEventName,
+            userId,
+            email,
+            insertId: [
+              'macra-web-offer',
+              `email-${eventType}`,
+              messageId || userId,
+              webhookEvent.ts_event || webhookEvent.ts || webhookEvent.ts_epoch || Date.now(),
+              eventType === 'click' ? link || '' : '',
+            ].filter(Boolean).join(':'),
+            properties: {
+              plan,
+              email_provider: 'brevo',
+              email_sequence_id: emailSequenceId || MACRA_WEB_OFFER_CAMPAIGN_ID,
+              campaign_id: campaignId || MACRA_WEB_OFFER_CAMPAIGN_ID,
+              brevo_message_id: messageId || null,
+              brevo_event_type: eventType,
+              recipient_email: email || null,
+              clicked_link: eventType === 'click' ? link || null : null,
+              time: webhookEvent.ts_event || webhookEvent.ts || webhookEvent.ts_epoch || Math.floor(now.getTime() / 1000),
+            },
+          });
+        }
       }
 
       if (signingRequestId) {
