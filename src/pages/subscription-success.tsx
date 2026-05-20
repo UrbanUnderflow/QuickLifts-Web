@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useDispatch, useSelector } from 'react-redux';
+import { ArrowRight, CheckCircle2, Download } from 'lucide-react';
 import { RootState } from '../redux/store';
 import { useUser } from '../hooks/useUser';
 import { clearRoundIdRedirect, clearLoginRedirectPath } from '../redux/tempRedirectSlice';
@@ -8,6 +10,10 @@ import { isLocalhost } from '../utils/stripeKey';
 
 // Define verification status types
 type VerificationStatus = 'idle' | 'verifying' | 'verified' | 'error';
+
+const MACRA_WEB_OFFER_SOURCE = 'macra_web_offer_24h';
+const MACRA_APP_STORE_URL = 'https://apps.apple.com/us/app/macra-ai-calorie/id6463771067';
+const MACRA_OPEN_URL = 'macra://subscription/success';
 
 const singleQueryValue = (value: string | string[] | undefined) => {
   if (Array.isArray(value)) return value[0] || '';
@@ -44,6 +50,7 @@ const SubscriptionSuccessPage: React.FC = () => {
   const [countdown, setCountdown] = useState(5); // Countdown state (5 seconds)
   const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [verifiedAccountEmail, setVerifiedAccountEmail] = useState('');
   const [isLocal, setIsLocal] = useState(false);
 
   useEffect(() => {
@@ -55,7 +62,8 @@ const SubscriptionSuccessPage: React.FC = () => {
   const appReturnUrl = router.isReady ? singleQueryValue(router.query.appReturnUrl) : '';
   const source = router.isReady ? singleQueryValue(router.query.source) : '';
   const isCancelledReturn = router.isReady && singleQueryValue(router.query.cancelled) === '1';
-  const verificationUserId = currentUser?.id || queryUserId;
+  const isMacraWebOffer = source === MACRA_WEB_OFFER_SOURCE;
+  const verificationUserId = isMacraWebOffer ? queryUserId : currentUser?.id || queryUserId;
 
   useEffect(() => {
     if (!router.isReady || !isCancelledReturn) return;
@@ -145,6 +153,13 @@ const SubscriptionSuccessPage: React.FC = () => {
             throw new Error(errorData.message || `Verification failed with status: ${response.status}`);
           }
 
+          const verificationPayload = await response.json().catch(() => null);
+          const accountEmail =
+            typeof verificationPayload?.user?.email === 'string'
+              ? verificationPayload.user.email.trim()
+              : '';
+          setVerifiedAccountEmail(accountEmail);
+
           // Success!
           console.log('[SubscriptionSuccess] Verification successful.');
           setVerificationStatus('verified');
@@ -223,6 +238,7 @@ const SubscriptionSuccessPage: React.FC = () => {
 
   // Effect for countdown timer (only runs after verification)
   useEffect(() => {
+    if (isMacraWebOffer) return;
     if (verificationStatus !== 'verified' || countdown <= 0) return;
 
     const timerId = setInterval(() => {
@@ -230,10 +246,11 @@ const SubscriptionSuccessPage: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timerId);
-  }, [countdown, verificationStatus]);
+  }, [countdown, verificationStatus, isMacraWebOffer]);
 
   // Effect for redirecting (only runs after verification and countdown)
   useEffect(() => {
+    if (isMacraWebOffer) return;
     if (verificationStatus === 'verified' && countdown <= 0 && !appReturnUrl && verificationUserId && router.isReady) {
       const destination = '/'; // Always redirect to home
       console.log(`[SubscriptionSuccess] Verified, redirecting to home: ${destination}`);
@@ -252,7 +269,91 @@ const SubscriptionSuccessPage: React.FC = () => {
 
       router.replace(finalDestination);
     }
-  }, [appReturnUrl, verificationUserId, router, dispatch, countdown, verificationStatus, isLocal]);
+  }, [appReturnUrl, verificationUserId, router, dispatch, countdown, verificationStatus, isLocal, isMacraWebOffer]);
+
+  if (isMacraWebOffer && verificationStatus === 'verified' && !appReturnUrl) {
+    return (
+      <>
+        <Head>
+          <title>Macra Trial Activated | Macra</title>
+          <meta name="robots" content="noindex,nofollow" />
+        </Head>
+
+        <main className="relative min-h-screen overflow-hidden bg-[#060806] text-white">
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(224,254,16,0.12),transparent_34%,rgba(255,255,255,0.05)_68%,transparent)]" />
+          <div className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:linear-gradient(rgba(255,255,255,0.7)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.7)_1px,transparent_1px)] [background-size:44px_44px]" />
+
+          <section className="relative z-10 flex min-h-screen items-center justify-center px-5 py-10">
+            <div className="w-full max-w-3xl rounded-[28px] border border-white/[0.12] bg-black/[0.55] p-6 shadow-2xl backdrop-blur md:p-10">
+              <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-3xl border border-[#e0fe10]/40 bg-[#e0fe10]/10 shadow-[0_0_48px_rgba(224,254,16,0.24)]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/macra-icon.png" alt="Macra" className="h-14 w-14 rounded-2xl" />
+              </div>
+
+              <div className="mx-auto max-w-2xl text-center">
+                <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#e0fe10]/30 bg-[#e0fe10]/10 px-4 py-2 text-sm font-bold text-[#e0fe10]">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Trial activated
+                </div>
+
+                <h1 className="text-5xl font-black tracking-normal text-white sm:text-6xl">Success!</h1>
+                <p className="mt-5 text-2xl font-black leading-tight text-[#e0fe10] sm:text-3xl">
+                  Your 1-month free trial is active.
+                </p>
+                <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-zinc-300 sm:text-lg">
+                  Download the Macra app, then sign in using{' '}
+                  {verifiedAccountEmail ? (
+                    <span className="font-black text-white">{verifiedAccountEmail}</span>
+                  ) : (
+                    'the email attached to this trial'
+                  )}{' '}
+                  and you will be ready to use it.
+                </p>
+              </div>
+
+              <div className="mt-9 grid gap-3 sm:grid-cols-3">
+                {[
+                  'Free month applied',
+                  'Account ready',
+                  'Macra unlocked',
+                ].map((label) => (
+                  <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-4 text-center">
+                    <CheckCircle2 className="mx-auto mb-2 h-5 w-5 text-[#e0fe10]" />
+                    <p className="text-sm font-bold text-zinc-100">{label}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:justify-center">
+                <a
+                  href={MACRA_APP_STORE_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#e0fe10] px-6 py-4 text-base font-black text-black transition-colors hover:bg-[#cbed0e]"
+                >
+                  <Download className="h-5 w-5" />
+                  Download Macra
+                </a>
+                <a
+                  href={MACRA_OPEN_URL}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/[0.12] bg-white/[0.08] px-6 py-4 text-base font-black text-white transition-colors hover:bg-white/[0.13]"
+                >
+                  Open Macra
+                  <ArrowRight className="h-5 w-5" />
+                </a>
+              </div>
+
+              {isLocal && (
+                <div className="mx-auto mt-7 max-w-md rounded-full bg-yellow-500/20 px-4 py-2 text-center text-xs font-bold text-yellow-200">
+                  Test Mode: Using Stripe Test Environment
+                </div>
+              )}
+            </div>
+          </section>
+        </main>
+      </>
+    );
+  }
 
   // --- Render Logic ---
   const renderContent = () => {

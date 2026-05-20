@@ -413,7 +413,13 @@ const handler = async (event) => {
     // 7. Return success
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: 'Subscription verified and updated successfully.' }),
+      body: JSON.stringify({
+        message: 'Subscription verified and updated successfully.',
+        user: {
+          id: userId,
+          email: userData.email || null,
+        },
+      }),
     };
 
   } catch (error) {
