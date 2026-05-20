@@ -20,12 +20,21 @@ const {
 const DEFAULT_BATCH_LIMIT = 250;
 const DEFAULT_DELAY_HOURS = 24;
 const DEFAULT_MAX_SENDS_PER_RUN = 80;
+const DEFAULT_SCAN_EVERY_HOURS = 1;
+const DEFAULT_SEND_WINDOW_START_LOCAL = '09:00';
+const DEFAULT_SEND_WINDOW_END_LOCAL = '17:00';
+const DEFAULT_SEND_WINDOW_TIMEZONE = 'America/New_York';
 
 type Config = {
   enabled: boolean;
   delayHours: number;
   batchLimit: number;
   maxSendsPerRun: number;
+  scanEveryHours: number;
+  sendWindowStartLocal: string;
+  sendWindowEndLocal: string;
+  sendWindowTimezone: string;
+  lastScanAt?: any;
 };
 
 type SendResult = {
@@ -42,6 +51,94 @@ function hasMacraOrigin(data: Record<string, any>): boolean {
   return entryPoint === 'macra' || Boolean(data.hasCompletedMacraOnboarding);
 }
 
+function normalizeLocalTime(value: unknown, fallback: string): string {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!/^\d{2}:\d{2}$/.test(raw)) return fallback;
+
+  const [hourRaw, minuteRaw] = raw.split(':');
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return fallback;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return fallback;
+
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function normalizeTimezone(value: unknown): string {
+  const timezone = typeof value === 'string' && value.trim() ? value.trim() : DEFAULT_SEND_WINDOW_TIMEZONE;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date());
+    return timezone;
+  } catch {
+    return DEFAULT_SEND_WINDOW_TIMEZONE;
+  }
+}
+
+function minutesFromLocalTime(value: string): number {
+  const [hour, minute] = value.split(':').map(Number);
+  return hour * 60 + minute;
+}
+
+function getLocalTimeState(nowMs: number, timezone: string) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = formatter.formatToParts(new Date(nowMs));
+  const lookup = new Map(parts.map((part) => [part.type, part.value]));
+  const hour = Number(lookup.get('hour') || 0);
+  const minute = Number(lookup.get('minute') || 0);
+  const dateKey = `${lookup.get('year')}-${lookup.get('month')}-${lookup.get('day')}`;
+
+  return {
+    dateKey,
+    hour,
+    minute,
+    minutesSinceMidnight: hour * 60 + minute,
+    label: `${dateKey} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${timezone}`,
+  };
+}
+
+function isWithinSendWindow(args: {
+  nowMs: number;
+  startLocal: string;
+  endLocal: string;
+  timezone: string;
+}) {
+  const local = getLocalTimeState(args.nowMs, args.timezone);
+  const startMinutes = minutesFromLocalTime(args.startLocal);
+  const endMinutes = minutesFromLocalTime(args.endLocal);
+
+  const withinWindow =
+    startMinutes === endMinutes
+      ? true
+      : startMinutes < endMinutes
+        ? local.minutesSinceMidnight >= startMinutes && local.minutesSinceMidnight < endMinutes
+        : local.minutesSinceMidnight >= startMinutes || local.minutesSinceMidnight < endMinutes;
+
+  return { withinWindow, local };
+}
+
+function getScanFrequencyState(config: Config, nowMs: number) {
+  const lastScanMs = toMillis(config.lastScanAt);
+  if (!lastScanMs) {
+    return { due: true, lastScanMs: null, nextScanAt: null };
+  }
+
+  const intervalMs = config.scanEveryHours * 60 * 60 * 1000;
+  const nextScanAt = lastScanMs + intervalMs;
+  return {
+    due: nowMs >= nextScanAt,
+    lastScanMs,
+    nextScanAt,
+  };
+}
+
 async function loadConfig(): Promise<Config> {
   const db = await getFirestore();
   const snap = await db.collection('email-sequence-config').doc(MACRA_WEB_OFFER_CAMPAIGN_ID).get();
@@ -51,6 +148,11 @@ async function loadConfig(): Promise<Config> {
     delayHours: Math.max(1, Number(data.delayHours || DEFAULT_DELAY_HOURS) || DEFAULT_DELAY_HOURS),
     batchLimit: Math.max(25, Number(data.batchLimit || DEFAULT_BATCH_LIMIT) || DEFAULT_BATCH_LIMIT),
     maxSendsPerRun: Math.max(1, Number(data.maxSendsPerRun || DEFAULT_MAX_SENDS_PER_RUN) || DEFAULT_MAX_SENDS_PER_RUN),
+    scanEveryHours: Math.max(1, Number(data.scanEveryHours || DEFAULT_SCAN_EVERY_HOURS) || DEFAULT_SCAN_EVERY_HOURS),
+    sendWindowStartLocal: normalizeLocalTime(data.sendWindowStartLocal, DEFAULT_SEND_WINDOW_START_LOCAL),
+    sendWindowEndLocal: normalizeLocalTime(data.sendWindowEndLocal, DEFAULT_SEND_WINDOW_END_LOCAL),
+    sendWindowTimezone: normalizeTimezone(data.sendWindowTimezone),
+    lastScanAt: data.lastScanAt,
   };
 }
 
@@ -99,6 +201,47 @@ export const handler: Handler = async () => {
     }
 
     const nowMs = Date.now();
+    const sendWindowState = isWithinSendWindow({
+      nowMs,
+      startLocal: config.sendWindowStartLocal,
+      endLocal: config.sendWindowEndLocal,
+      timezone: config.sendWindowTimezone,
+    });
+
+    if (!sendWindowState.withinWindow) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          success: true,
+          windowBlocked: true,
+          scanned: 0,
+          sent: 0,
+          skipped: 0,
+          sendWindowStartLocal: config.sendWindowStartLocal,
+          sendWindowEndLocal: config.sendWindowEndLocal,
+          sendWindowTimezone: config.sendWindowTimezone,
+          localTime: sendWindowState.local.label,
+        }),
+      };
+    }
+
+    const scanFrequencyState = getScanFrequencyState(config, nowMs);
+    if (!scanFrequencyState.due) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          success: true,
+          frequencyBlocked: true,
+          scanned: 0,
+          sent: 0,
+          skipped: 0,
+          scanEveryHours: config.scanEveryHours,
+          lastScanAt: scanFrequencyState.lastScanMs ? new Date(scanFrequencyState.lastScanMs).toISOString() : null,
+          nextScanAt: scanFrequencyState.nextScanAt ? new Date(scanFrequencyState.nextScanAt).toISOString() : null,
+        }),
+      };
+    }
+
     const eligibleAfterMs = config.delayHours * 60 * 60 * 1000;
     const runId = `macra-web-offer-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -247,6 +390,24 @@ export const handler: Handler = async () => {
       }
     }
 
+    await db.collection('email-sequence-config').doc(MACRA_WEB_OFFER_CAMPAIGN_ID).set(
+      {
+        lastScanAt: new Date(nowMs),
+        lastScanCompletedAt: new Date(),
+        lastScanRunId: runId,
+        lastScanLocalTime: sendWindowState.local.label,
+        lastScanSummary: {
+          scanned,
+          claimed,
+          sent,
+          skipped,
+          errors,
+          skippedByReason,
+        },
+      },
+      { merge: true }
+    );
+
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -259,6 +420,11 @@ export const handler: Handler = async () => {
         skippedByReason,
         delayHours: config.delayHours,
         maxSendsPerRun: config.maxSendsPerRun,
+        scanEveryHours: config.scanEveryHours,
+        sendWindowStartLocal: config.sendWindowStartLocal,
+        sendWindowEndLocal: config.sendWindowEndLocal,
+        sendWindowTimezone: config.sendWindowTimezone,
+        localTime: sendWindowState.local.label,
       }),
     };
   } catch (error: any) {

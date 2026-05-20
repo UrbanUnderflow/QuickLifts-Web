@@ -30,19 +30,47 @@ type CampaignConfig = {
   delayHours: number;
   batchLimit: number;
   maxSendsPerRun: number;
+  scanEveryHours: number;
+  sendWindowStartLocal: string;
+  sendWindowEndLocal: string;
+  sendWindowTimezone: string;
 };
 
 const MACRA_WEB_OFFER_SEQUENCE_ID = 'macra-web-offer-24h-v1';
+const CAMPAIGN_SEND_WINDOW_TIMEZONE = 'America/New_York';
 const DEFAULT_CAMPAIGN_CONFIG: CampaignConfig = {
   delayHours: 24,
   batchLimit: 250,
   maxSendsPerRun: 80,
+  scanEveryHours: 1,
+  sendWindowStartLocal: '09:00',
+  sendWindowEndLocal: '17:00',
+  sendWindowTimezone: CAMPAIGN_SEND_WINDOW_TIMEZONE,
+};
+
+const normalizeLocalTime = (value: unknown, fallback: string) => {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!/^\d{2}:\d{2}$/.test(raw)) return fallback;
+
+  const [hourRaw, minuteRaw] = raw.split(':');
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return fallback;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return fallback;
+
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 };
 
 const normalizeCampaignConfig = (data: Record<string, any> = {}): CampaignConfig => ({
   delayHours: Math.max(1, Number(data.delayHours || DEFAULT_CAMPAIGN_CONFIG.delayHours) || DEFAULT_CAMPAIGN_CONFIG.delayHours),
   batchLimit: Math.max(25, Number(data.batchLimit || DEFAULT_CAMPAIGN_CONFIG.batchLimit) || DEFAULT_CAMPAIGN_CONFIG.batchLimit),
   maxSendsPerRun: Math.max(1, Number(data.maxSendsPerRun || DEFAULT_CAMPAIGN_CONFIG.maxSendsPerRun) || DEFAULT_CAMPAIGN_CONFIG.maxSendsPerRun),
+  scanEveryHours: Math.max(1, Number(data.scanEveryHours || DEFAULT_CAMPAIGN_CONFIG.scanEveryHours) || DEFAULT_CAMPAIGN_CONFIG.scanEveryHours),
+  sendWindowStartLocal: normalizeLocalTime(data.sendWindowStartLocal, DEFAULT_CAMPAIGN_CONFIG.sendWindowStartLocal),
+  sendWindowEndLocal: normalizeLocalTime(data.sendWindowEndLocal, DEFAULT_CAMPAIGN_CONFIG.sendWindowEndLocal),
+  sendWindowTimezone: typeof data.sendWindowTimezone === 'string' && data.sendWindowTimezone.trim()
+    ? data.sendWindowTimezone.trim()
+    : DEFAULT_CAMPAIGN_CONFIG.sendWindowTimezone,
 });
 
 const parseIntegerDraft = (value: string): number | null => {
@@ -51,6 +79,9 @@ const parseIntegerDraft = (value: string): number | null => {
   const parsed = Number(trimmed);
   return Number.isSafeInteger(parsed) ? parsed : null;
 };
+
+const hasCampaignControls = (seq: Pick<SequenceRow, 'id' | 'supportsCampaignConfig'> | null) =>
+  Boolean(seq?.supportsCampaignConfig || seq?.id === MACRA_WEB_OFFER_SEQUENCE_ID);
 
 const SEQUENCES: SequenceRow[] = [
   {
@@ -290,6 +321,9 @@ const EmailSequencesAdmin: React.FC = () => {
   const [delayHoursDraft, setDelayHoursDraft] = useState(String(DEFAULT_CAMPAIGN_CONFIG.delayHours));
   const [batchLimitDraft, setBatchLimitDraft] = useState(String(DEFAULT_CAMPAIGN_CONFIG.batchLimit));
   const [maxSendsPerRunDraft, setMaxSendsPerRunDraft] = useState(String(DEFAULT_CAMPAIGN_CONFIG.maxSendsPerRun));
+  const [scanEveryHoursDraft, setScanEveryHoursDraft] = useState(String(DEFAULT_CAMPAIGN_CONFIG.scanEveryHours));
+  const [sendWindowStartDraft, setSendWindowStartDraft] = useState(DEFAULT_CAMPAIGN_CONFIG.sendWindowStartLocal);
+  const [sendWindowEndDraft, setSendWindowEndDraft] = useState(DEFAULT_CAMPAIGN_CONFIG.sendWindowEndLocal);
 
   const scheduleOptions = useMemo(() => {
     const out: string[] = [];
@@ -319,7 +353,7 @@ const EmailSequencesAdmin: React.FC = () => {
               ? data?.enabled === true
               : data?.enabled !== false
             : seq.defaultScheduleEnabled === true;
-          if (seq.supportsCampaignConfig) {
+          if (hasCampaignControls(seq)) {
             campaignConfigUpdates[seq.id] = normalizeCampaignConfig(data);
           }
         }
@@ -363,6 +397,9 @@ const EmailSequencesAdmin: React.FC = () => {
     setDelayHoursDraft(String(campaignConfig.delayHours));
     setBatchLimitDraft(String(campaignConfig.batchLimit));
     setMaxSendsPerRunDraft(String(campaignConfig.maxSendsPerRun));
+    setScanEveryHoursDraft(String(campaignConfig.scanEveryHours));
+    setSendWindowStartDraft(campaignConfig.sendWindowStartLocal);
+    setSendWindowEndDraft(campaignConfig.sendWindowEndLocal);
     setIsScheduleModalOpen(true);
     setMessage(null);
   };
@@ -376,10 +413,13 @@ const EmailSequencesAdmin: React.FC = () => {
     }
 
     let nextCampaignConfig: CampaignConfig | null = null;
-    if (scheduleEditingSequence.supportsCampaignConfig) {
+    if (hasCampaignControls(scheduleEditingSequence)) {
       const delayHours = parseIntegerDraft(delayHoursDraft);
       const batchLimit = parseIntegerDraft(batchLimitDraft);
       const maxSendsPerRun = parseIntegerDraft(maxSendsPerRunDraft);
+      const scanEveryHours = parseIntegerDraft(scanEveryHoursDraft);
+      const sendWindowStartLocal = normalizeLocalTime(sendWindowStartDraft, '');
+      const sendWindowEndLocal = normalizeLocalTime(sendWindowEndDraft, '');
 
       if (!delayHours || delayHours < 1 || delayHours > 168) {
         setMessage({ type: 'error', text: 'Delay must be between 1 and 168 hours.' });
@@ -397,8 +437,24 @@ const EmailSequencesAdmin: React.FC = () => {
         setMessage({ type: 'error', text: 'Max sends per run cannot be higher than the batch limit.' });
         return;
       }
+      if (!scanEveryHours || scanEveryHours < 1 || scanEveryHours > 24) {
+        setMessage({ type: 'error', text: 'Scan frequency must be between 1 and 24 hours.' });
+        return;
+      }
+      if (!sendWindowStartLocal || !sendWindowEndLocal) {
+        setMessage({ type: 'error', text: 'Send window times must use HH:MM format.' });
+        return;
+      }
 
-      nextCampaignConfig = { delayHours, batchLimit, maxSendsPerRun };
+      nextCampaignConfig = {
+        delayHours,
+        batchLimit,
+        maxSendsPerRun,
+        scanEveryHours,
+        sendWindowStartLocal,
+        sendWindowEndLocal,
+        sendWindowTimezone: CAMPAIGN_SEND_WINDOW_TIMEZONE,
+      };
     }
 
     setSavingSchedule(true);
@@ -423,7 +479,7 @@ const EmailSequencesAdmin: React.FC = () => {
       setMessage({
         type: 'success',
         text: nextCampaignConfig
-          ? `${scheduleEditingSequence.name} ${scheduleEnabledDraft ? 'enabled' : 'paused'} with ${nextCampaignConfig.maxSendsPerRun} max sends per run.`
+          ? `${scheduleEditingSequence.name} ${scheduleEnabledDraft ? 'enabled' : 'paused'} with ${nextCampaignConfig.maxSendsPerRun} max sends per run every ${nextCampaignConfig.scanEveryHours}h.`
           : `${scheduleEditingSequence.name} ${scheduleEnabledDraft ? 'enabled' : 'paused'}${scheduleEditingSequence.supportsScheduleTime === false ? '' : ` at ${t} UTC`}.`,
       });
       setIsScheduleModalOpen(false);
@@ -662,6 +718,7 @@ const EmailSequencesAdmin: React.FC = () => {
                   {SEQUENCES.map((seq) => {
                     const scheduleEnabled = isScheduleEnabled(seq);
                     const campaignConfig = getCampaignConfig(seq);
+                    const showCampaignControls = hasCampaignControls(seq);
                     return (
                     <tr key={seq.id} className="hover:bg-zinc-900/30">
                       <td className="px-4 py-3 text-zinc-200 font-medium">{seq.name}</td>
@@ -684,10 +741,15 @@ const EmailSequencesAdmin: React.FC = () => {
                             <div className="text-xs text-zinc-500">
                               {seq.scheduleDescription || 'Scheduled automation'}
                             </div>
-                            {seq.supportsCampaignConfig ? (
-                              <div className="text-xs text-zinc-500">
-                                Delay: {campaignConfig.delayHours}h · Batch: {campaignConfig.batchLimit} · Max sends/run: {campaignConfig.maxSendsPerRun}
-                              </div>
+                            {showCampaignControls ? (
+                              <>
+                                <div className="text-xs text-zinc-500">
+                                  Delay: {campaignConfig.delayHours}h · Batch: {campaignConfig.batchLimit} · Max sends/run: {campaignConfig.maxSendsPerRun}
+                                </div>
+                                <div className="text-xs text-zinc-500">
+                                  Scan every {campaignConfig.scanEveryHours}h · Window: {campaignConfig.sendWindowStartLocal}-{campaignConfig.sendWindowEndLocal} Eastern
+                                </div>
+                              </>
                             ) : null}
                             {seq.supportsScheduleTime !== false ? (
                               <div className="text-xs text-zinc-500">
@@ -730,7 +792,7 @@ const EmailSequencesAdmin: React.FC = () => {
                                 title="Edit automation settings"
                               >
                                 <Clock className="w-4 h-4" />
-                                {seq.supportsCampaignConfig ? 'Configure' : 'Settings'}
+                                {showCampaignControls ? 'Configure' : 'Settings'}
                               </button>
                             </>
                           ) : null}
@@ -871,12 +933,12 @@ const EmailSequencesAdmin: React.FC = () => {
 
       {isScheduleModalOpen && scheduleEditingSequence && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-lg overflow-hidden">
+          <div className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-2xl max-h-[90vh] overflow-hidden">
             <div className="flex items-center justify-between p-6 border-b border-zinc-700">
               <div>
                 <h2 className="text-xl font-semibold text-white flex items-center gap-2">
                   <Clock className="w-5 h-5 text-zinc-300" />
-                  Automation settings
+                  {hasCampaignControls(scheduleEditingSequence) ? 'Configure campaign' : 'Automation settings'}
                 </h2>
                 <p className="text-sm text-zinc-400 mt-1">{scheduleEditingSequence.name}</p>
               </div>
@@ -889,7 +951,7 @@ const EmailSequencesAdmin: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 max-h-[calc(90vh-180px)] overflow-y-auto">
               <label className="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3">
                 <div>
                   <div className="text-sm font-medium text-white">Automation enabled</div>
@@ -913,7 +975,7 @@ const EmailSequencesAdmin: React.FC = () => {
                 </div>
               ) : null}
 
-              {scheduleEditingSequence.supportsCampaignConfig ? (
+              {hasCampaignControls(scheduleEditingSequence) ? (
                 <div className="rounded-xl border border-zinc-700 bg-zinc-900/70 p-4">
                   <div className="flex items-start justify-between gap-4 mb-4">
                     <div>
@@ -974,8 +1036,63 @@ const EmailSequencesAdmin: React.FC = () => {
                     </div>
                   </div>
 
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-400 mb-2">Scan frequency</label>
+                      <div className="flex items-center rounded-xl border border-zinc-700 bg-zinc-950 focus-within:border-[#d7ff00]">
+                        <input
+                          type="number"
+                          min={1}
+                          max={24}
+                          step={1}
+                          value={scanEveryHoursDraft}
+                          onChange={(e) => setScanEveryHoursDraft(e.target.value)}
+                          disabled={savingSchedule}
+                          className="w-full bg-transparent px-3 py-3 text-white outline-none"
+                        />
+                        <span className="pr-3 text-xs text-zinc-500">hours</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-400 mb-2">Window starts</label>
+                      <select
+                        value={sendWindowStartDraft}
+                        onChange={(e) => setSendWindowStartDraft(e.target.value)}
+                        disabled={savingSchedule}
+                        className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-white outline-none focus:border-[#d7ff00]"
+                      >
+                        {scheduleOptions.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-400 mb-2">Window ends</label>
+                      <select
+                        value={sendWindowEndDraft}
+                        onChange={(e) => setSendWindowEndDraft(e.target.value)}
+                        disabled={savingSchedule}
+                        className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-white outline-none focus:border-[#d7ff00]"
+                      >
+                        {scheduleOptions.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <p className="mt-3 text-xs leading-5 text-zinc-500">
+                    Send windows use Eastern time. If the start time is later than the end time, the window wraps overnight.
+                  </p>
+
                   <div className="mt-3 rounded-lg border border-amber-700/40 bg-amber-900/20 px-3 py-2 text-xs text-amber-200">
-                    Recommended first launch: delay 24h, scan 50 users, max 5 sends per run.
+                    Recommended first launch: delay 24h, scan 50 users, max 5 sends per run, scan every 3h during your preferred Eastern-time window.
                   </div>
                 </div>
               ) : null}
