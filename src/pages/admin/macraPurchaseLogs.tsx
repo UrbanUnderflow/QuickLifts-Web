@@ -47,6 +47,7 @@ type PurchaseLogRow = {
   userId?: string;
   email?: string;
   status?: 'attempted' | 'success' | 'failed' | 'canceled' | string;
+  purchaseStatus?: 'attempted' | 'success' | 'failed' | 'canceled' | string;
   plan?: PurchasePlan | string;
   source?: string;
   errorDomain?: string;
@@ -62,7 +63,9 @@ type PurchaseLogRow = {
   metadata?: Record<string, unknown>;
   cancelFeedbackMetadata?: Record<string, unknown>;
   createdAt?: FirestoreDateLike;
+  createdAtEpoch?: FirestoreDateLike;
   updatedAt?: FirestoreDateLike;
+  updatedAtEpoch?: FirestoreDateLike;
 };
 
 const PAGE_SIZE = 350;
@@ -192,6 +195,25 @@ const metadataChannel = (row: PurchaseLogRow) => {
     : String(value);
 };
 
+const rowStatus = (row: PurchaseLogRow) => row.status || row.purchaseStatus || 'unknown';
+
+const rowTimestampMs = (row: PurchaseLogRow) => (
+  toDate(row.createdAt)?.getTime()
+  ?? toDate(row.createdAtEpoch)?.getTime()
+  ?? toDate(row.updatedAt)?.getTime()
+  ?? toDate(row.updatedAtEpoch)?.getTime()
+  ?? 0
+);
+
+const purchaseLogDocsToRows = (docs: Array<{ id: string; data: () => unknown }>): PurchaseLogRow[] => (
+  docs
+    .map(docSnapshot => ({
+      id: docSnapshot.id,
+      ...(docSnapshot.data() as Omit<PurchaseLogRow, 'id'>),
+    }))
+    .sort((a, b) => rowTimestampMs(b) - rowTimestampMs(a))
+);
+
 const statusStyles = (status?: string) => {
   switch ((status || '').toLowerCase()) {
   case 'success':
@@ -227,16 +249,21 @@ const PurchaseLogsAdminPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
+      const logsCollection = collection(db, activeSource.collectionName);
       const logsQuery = query(
-        collection(db, activeSource.collectionName),
+        logsCollection,
         orderBy('createdAt', 'desc'),
         limit(PAGE_SIZE)
       );
       const snapshot = await getDocs(logsQuery);
-      setRows(snapshot.docs.map(docSnapshot => ({
-        id: docSnapshot.id,
-        ...(docSnapshot.data() as Omit<PurchaseLogRow, 'id'>),
-      })));
+      let nextRows = purchaseLogDocsToRows(snapshot.docs);
+
+      if (nextRows.length === 0) {
+        const fallbackSnapshot = await getDocs(query(logsCollection, limit(PAGE_SIZE)));
+        nextRows = purchaseLogDocsToRows(fallbackSnapshot.docs);
+      }
+
+      setRows(nextRows);
     } catch (err: any) {
       setError(err?.message || `Failed to load ${activeSource.label} purchase logs`);
     } finally {
@@ -252,20 +279,21 @@ const PurchaseLogsAdminPage: React.FC = () => {
   }, [loadRows]);
 
   const statusOptions = useMemo(() => {
-    const statuses = Array.from(new Set(rows.map(row => row.status).filter(Boolean))) as string[];
+    const statuses = Array.from(new Set(rows.map(rowStatus).filter(status => status !== 'unknown'))) as string[];
     return statuses.sort();
   }, [rows]);
 
   const filteredRows = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     return rows.filter(row => {
-      if (statusFilter !== 'all' && row.status !== statusFilter) return false;
+      const status = rowStatus(row);
+      if (statusFilter !== 'all' && status !== statusFilter) return false;
       if (!normalizedSearch) return true;
       const haystack = [
         row.id,
         row.userId,
         row.email,
-        row.status,
+        status,
         row.source,
         row.app,
         planLabel(row),
@@ -287,10 +315,10 @@ const PurchaseLogsAdminPage: React.FC = () => {
   }, [rows, search, statusFilter]);
 
   const stats = useMemo(() => {
-    const count = (status: string) => rows.filter(row => row.status === status).length;
+    const count = (status: string) => rows.filter(row => rowStatus(row) === status).length;
     const success = count('success');
     const failed = count('failed');
-    const canceled = rows.filter(row => row.status === 'canceled' || row.status === 'cancelled').length;
+    const canceled = rows.filter(row => rowStatus(row) === 'canceled' || rowStatus(row) === 'cancelled').length;
     const attempted = count('attempted');
     const completed = success + failed + canceled;
     return {
@@ -428,8 +456,14 @@ const PurchaseLogsAdminPage: React.FC = () => {
             ) : filteredRows.length === 0 ? (
               <div className="flex min-h-[260px] flex-col items-center justify-center text-center text-gray-400">
                 <ShoppingCart className="mb-3 h-10 w-10 text-gray-600" />
-                <p className="font-semibold text-gray-300">No matching purchase logs</p>
-                <p className="mt-1 text-sm">Adjust the search or filter to widen the table.</p>
+                <p className="font-semibold text-gray-300">
+                  {rows.length === 0 ? 'No purchase logs found' : 'No matching purchase logs'}
+                </p>
+                <p className="mt-1 text-sm">
+                  {rows.length === 0
+                    ? `No records were returned from ${activeSource.collectionName}.`
+                    : 'Adjust the search or filter to widen the table.'}
+                </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -447,16 +481,18 @@ const PurchaseLogsAdminPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#2b3037]">
-                    {filteredRows.map(row => (
+                    {filteredRows.map(row => {
+                      const status = rowStatus(row);
+                      return (
                       <tr key={row.id} className="transition hover:bg-[#22262d]">
                         <td className="px-4 py-4 align-top">
-                          <div className="font-medium text-gray-200">{formatDateTime(row.createdAt)}</div>
-                          <div className="mt-1 text-xs text-gray-500">Updated {formatDateTime(row.updatedAt)}</div>
+                          <div className="font-medium text-gray-200">{formatDateTime(row.createdAt || row.createdAtEpoch)}</div>
+                          <div className="mt-1 text-xs text-gray-500">Updated {formatDateTime(row.updatedAt || row.updatedAtEpoch)}</div>
                         </td>
                         <td className="px-4 py-4 align-top">
-                          <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyles(row.status)}`}>
-                            {row.status === 'success' ? <CheckCircle2 className="h-3 w-3" /> : row.status === 'failed' ? <XCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-                            {humanize(row.status)}
+                          <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyles(status)}`}>
+                            {status === 'success' ? <CheckCircle2 className="h-3 w-3" /> : status === 'failed' ? <XCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                            {humanize(status)}
                           </span>
                         </td>
                         <td className="px-4 py-4 align-top">
@@ -502,7 +538,8 @@ const PurchaseLogsAdminPage: React.FC = () => {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -516,8 +553,8 @@ const PurchaseLogsAdminPage: React.FC = () => {
               <div className="flex items-start justify-between border-b border-[#343941] p-5">
                 <div>
                   <p className="text-xs uppercase tracking-[0.18em] text-gray-500">Purchase log detail</p>
-                  <h2 className="mt-1 text-2xl font-bold text-white">{humanize(selectedRow.status)} · {planLabel(selectedRow)}</h2>
-                  <p className="mt-1 text-sm text-gray-400">{selectedRow.email || 'No email'} · {formatDateTime(selectedRow.createdAt)}</p>
+                  <h2 className="mt-1 text-2xl font-bold text-white">{humanize(rowStatus(selectedRow))} · {planLabel(selectedRow)}</h2>
+                  <p className="mt-1 text-sm text-gray-400">{selectedRow.email || 'No email'} · {formatDateTime(selectedRow.createdAt || selectedRow.createdAtEpoch)}</p>
                 </div>
                 <button
                   onClick={() => setSelectedRow(null)}
@@ -535,7 +572,7 @@ const PurchaseLogsAdminPage: React.FC = () => {
                   <DetailItem label="Collection" value={activeSource.collectionName} mono />
                   <DetailItem label="User ID" value={selectedRow.userId || 'Missing'} mono />
                   <DetailItem label="Email" value={selectedRow.email || 'No email saved'} />
-                  <DetailItem label="Status" value={humanize(selectedRow.status)} />
+                  <DetailItem label="Status" value={humanize(rowStatus(selectedRow))} />
                   <DetailItem label="Plan" value={`${planLabel(selectedRow)} · ${planMeta(selectedRow)}`} />
                   <DetailItem label="Source" value={selectedRow.source || 'Unknown'} />
                   <DetailItem label="Failure reason" value={humanize(selectedRow.failureReason)} />
