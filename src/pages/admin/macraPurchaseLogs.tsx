@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import {
@@ -27,15 +27,22 @@ type FirestoreDateLike = Timestamp | Date | number | string | { seconds?: number
 
 type PurchasePlan = {
   id?: string;
+  name?: string;
   packageId?: string;
+  packageIdentifier?: string;
+  productId?: string;
   title?: string;
   period?: string;
+  periodUnit?: string | number;
   price?: number | string;
   priceLabel?: string;
+  localizedPrice?: string;
   trialDays?: number;
+  hasTrial?: boolean;
+  provider?: string;
 };
 
-type MacraPurchaseLogRow = {
+type PurchaseLogRow = {
   id: string;
   userId?: string;
   email?: string;
@@ -59,7 +66,35 @@ type MacraPurchaseLogRow = {
 };
 
 const PAGE_SIZE = 350;
-const COLLECTION_NAME = 'Macra-purchase-logs';
+
+type PurchaseLogSourceID = 'macra' | 'pulseRitual';
+
+type PurchaseLogSource = {
+  id: PurchaseLogSourceID;
+  label: string;
+  shortLabel: string;
+  collectionName: string;
+  description: string;
+};
+
+const PURCHASE_LOG_SOURCES: PurchaseLogSource[] = [
+  {
+    id: 'macra',
+    label: 'Macra',
+    shortLabel: 'Macra',
+    collectionName: 'Macra-purchase-logs',
+    description: 'Macra purchase attempts, successes, failures, cancellations, and cancellation reasons.',
+  },
+  {
+    id: 'pulseRitual',
+    label: 'Pulse Ritual',
+    shortLabel: 'Ritual',
+    collectionName: 'PulseRitual-purchase-logs',
+    description: 'Pulse Ritual App Store and Stripe fallback purchase lifecycle records.',
+  },
+];
+
+const DEFAULT_SOURCE_ID: PurchaseLogSourceID = 'macra';
 
 const toDate = (value: FirestoreDateLike): Date | null => {
   if (!value) return null;
@@ -117,19 +152,44 @@ const normalizePlan = (plan?: PurchasePlan | string): PurchasePlan => {
   return plan;
 };
 
-const planLabel = (row: MacraPurchaseLogRow) => {
+const planLabel = (row: PurchaseLogRow) => {
   const plan = normalizePlan(row.plan);
-  return plan.title || plan.id || plan.packageId || 'Unknown plan';
+  return plan.title
+    || plan.name
+    || plan.id
+    || plan.productId
+    || plan.packageIdentifier
+    || plan.packageId
+    || 'Unknown plan';
 };
 
-const planMeta = (row: MacraPurchaseLogRow) => {
+const planMeta = (row: PurchaseLogRow) => {
   const plan = normalizePlan(row.plan);
   const parts = [
-    plan.period ? humanize(plan.period) : '',
-    plan.priceLabel || (plan.price ? `$${plan.price}` : ''),
-    plan.trialDays ? `${plan.trialDays} trial days` : '',
+    plan.period ? humanize(plan.period) : plan.periodUnit ? humanize(plan.periodUnit) : '',
+    plan.priceLabel || plan.localizedPrice || (plan.price ? `$${plan.price}` : ''),
+    plan.trialDays ? `${plan.trialDays} trial days` : plan.hasTrial ? 'Trial eligible' : '',
+    plan.provider ? humanize(plan.provider) : '',
   ].filter(Boolean);
   return parts.join(' · ') || 'No plan metadata';
+};
+
+const firstPresentMetadataValue = (...values: unknown[]) => (
+  values.find(value => value !== undefined && value !== null && value !== '')
+);
+
+const metadataChannel = (row: PurchaseLogRow) => {
+  const metadata = row.metadata || {};
+  const value = firstPresentMetadataValue(
+    metadata.purchase_channel,
+    metadata.channel,
+    metadata.checkoutProvider,
+    metadata.checkout_provider,
+    metadata.provider
+  );
+  return value === undefined || value === null || value === ''
+    ? 'unknown_channel'
+    : String(value);
 };
 
 const statusStyles = (status?: string) => {
@@ -148,39 +208,48 @@ const statusStyles = (status?: string) => {
   }
 };
 
-const MacraPurchaseLogsAdminPage: React.FC = () => {
-  const [rows, setRows] = useState<MacraPurchaseLogRow[]>([]);
+const PurchaseLogsAdminPage: React.FC = () => {
+  const [activeSourceId, setActiveSourceId] = useState<PurchaseLogSourceID>(DEFAULT_SOURCE_ID);
+  const [rows, setRows] = useState<PurchaseLogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedRow, setSelectedRow] = useState<MacraPurchaseLogRow | null>(null);
+  const [selectedRow, setSelectedRow] = useState<PurchaseLogRow | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const loadRows = async () => {
+  const activeSource = useMemo(
+    () => PURCHASE_LOG_SOURCES.find(source => source.id === activeSourceId) || PURCHASE_LOG_SOURCES[0],
+    [activeSourceId]
+  );
+
+  const loadRows = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const logsQuery = query(
-        collection(db, COLLECTION_NAME),
+        collection(db, activeSource.collectionName),
         orderBy('createdAt', 'desc'),
         limit(PAGE_SIZE)
       );
       const snapshot = await getDocs(logsQuery);
       setRows(snapshot.docs.map(docSnapshot => ({
         id: docSnapshot.id,
-        ...(docSnapshot.data() as Omit<MacraPurchaseLogRow, 'id'>),
+        ...(docSnapshot.data() as Omit<PurchaseLogRow, 'id'>),
       })));
     } catch (err: any) {
-      setError(err?.message || 'Failed to load Macra purchase logs');
+      setError(err?.message || `Failed to load ${activeSource.label} purchase logs`);
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeSource.collectionName, activeSource.label]);
 
   useEffect(() => {
+    setRows([]);
+    setSelectedRow(null);
+    setStatusFilter('all');
     loadRows();
-  }, []);
+  }, [loadRows]);
 
   const statusOptions = useMemo(() => {
     const statuses = Array.from(new Set(rows.map(row => row.status).filter(Boolean))) as string[];
@@ -198,8 +267,10 @@ const MacraPurchaseLogsAdminPage: React.FC = () => {
         row.email,
         row.status,
         row.source,
+        row.app,
         planLabel(row),
         planMeta(row),
+        metadataChannel(row),
         row.failureReason,
         row.errorDomain,
         row.errorCode,
@@ -245,7 +316,7 @@ const MacraPurchaseLogsAdminPage: React.FC = () => {
   return (
     <AdminRouteGuard>
       <Head>
-        <title>Macra Purchase Logs | Admin</title>
+        <title>Purchase Logs | Admin</title>
       </Head>
 
       <div className="min-h-screen bg-[#111317] text-white">
@@ -260,9 +331,11 @@ const MacraPurchaseLogsAdminPage: React.FC = () => {
                   <ShoppingCart className="h-6 w-6" />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold">Macra Purchase Logs</h1>
+                  <h1 className="text-3xl font-bold">Purchase Logs</h1>
                   <p className="mt-1 text-sm text-gray-400">
-                    Purchase lifecycle records from <span className="font-mono text-gray-300">{COLLECTION_NAME}</span>.
+                    {activeSource.description}
+                    {' '}
+                    <span className="font-mono text-gray-300">{activeSource.collectionName}</span>
                   </p>
                 </div>
               </div>
@@ -276,6 +349,26 @@ const MacraPurchaseLogsAdminPage: React.FC = () => {
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
+          </div>
+
+          <div className="mb-6 flex flex-wrap gap-2 rounded-xl border border-[#343941] bg-[#1a1e24] p-2">
+            {PURCHASE_LOG_SOURCES.map(source => {
+              const isActive = source.id === activeSourceId;
+              return (
+                <button
+                  key={source.id}
+                  type="button"
+                  onClick={() => setActiveSourceId(source.id)}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                    isActive
+                      ? 'bg-[#d7ff00] text-[#111317]'
+                      : 'text-gray-300 hover:bg-[#22262d] hover:text-white'
+                  }`}
+                >
+                  {source.label}
+                </button>
+              );
+            })}
           </div>
 
           <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
@@ -330,7 +423,7 @@ const MacraPurchaseLogsAdminPage: React.FC = () => {
             {loading ? (
               <div className="flex min-h-[260px] items-center justify-center text-gray-400">
                 <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
-                Loading Macra purchase logs...
+                Loading {activeSource.shortLabel} purchase logs...
               </div>
             ) : filteredRows.length === 0 ? (
               <div className="flex min-h-[260px] flex-col items-center justify-center text-center text-gray-400">
@@ -386,7 +479,7 @@ const MacraPurchaseLogsAdminPage: React.FC = () => {
                             {row.source || 'unknown'}
                           </span>
                           <p className="mt-2 font-mono text-[11px] text-gray-500">
-                            {String(row.metadata?.purchase_channel || 'unknown_channel')}
+                            {metadataChannel(row)}
                           </p>
                         </td>
                         <td className="px-4 py-4 align-top">
@@ -438,6 +531,8 @@ const MacraPurchaseLogsAdminPage: React.FC = () => {
               <div className="max-h-[calc(90vh-96px)] overflow-y-auto p-5">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <DetailItem label="Log ID" value={selectedRow.id} mono />
+                  <DetailItem label="Product" value={activeSource.label} />
+                  <DetailItem label="Collection" value={activeSource.collectionName} mono />
                   <DetailItem label="User ID" value={selectedRow.userId || 'Missing'} mono />
                   <DetailItem label="Email" value={selectedRow.email || 'No email saved'} />
                   <DetailItem label="Status" value={humanize(selectedRow.status)} />
@@ -496,4 +591,4 @@ const JsonBlock: React.FC<{ title: string; value: unknown }> = ({ title, value }
   </div>
 );
 
-export default MacraPurchaseLogsAdminPage;
+export default PurchaseLogsAdminPage;

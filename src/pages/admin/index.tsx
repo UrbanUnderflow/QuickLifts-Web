@@ -347,10 +347,10 @@ const adminCardsData = [
     link: "/admin/macraCancelReasons"
   },
   {
-    title: "Macra Purchase Logs",
-    description: "Review Macra purchase attempts, successes, failures, cancellations, error payloads, and selected cancellation reasons.",
+    title: "Purchase Logs",
+    description: "Review Macra and Pulse Ritual purchase attempts, successes, failures, cancellations, error payloads, and selected cancellation reasons.",
     icon: <Wallet className="w-5 h-5" />,
-    link: "/admin/macraPurchaseLogs"
+    link: "/admin/purchaseLogs"
   },
   {
     title: "VC Database",

@@ -86,6 +86,13 @@ service cloud.firestore {
       ];
     }
 
+    function isPurchaseLogCollection(collectionName) {
+      return collectionName in [
+        'Macra-purchase-logs',
+        'PulseRitual-purchase-logs'
+      ];
+    }
+
     function isLockedPrivateCollection(collectionName) {
       return collectionName in [
         'admin',
@@ -106,6 +113,7 @@ service cloud.firestore {
         'user-reports'
       ] || isAdminManagedPublicReadCollection(collectionName)
         || isAdminOnlyCollection(collectionName)
+        || isPurchaseLogCollection(collectionName)
         || isLockedPrivateCollection(collectionName);
     }
 
@@ -279,6 +287,17 @@ service cloud.firestore {
         && preservesOrValidlyUpdatesLegalAcceptance();
     }
 
+    function isOwnedPurchaseLogCreate() {
+      return isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+    }
+
+    function isOwnedPurchaseLogUpdate() {
+      return isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId;
+    }
+
     // North Star is writable only by authenticated admin humans through the UI.
     match /company-config/north-star {
       allow read: if true;
@@ -322,6 +341,23 @@ service cloud.firestore {
     // Internal admin workspaces, CRM data, campaign data, logs, and equity records.
     match /{collectionName}/{document=**} {
       allow read, create, update, delete: if isAdminOnlyCollection(collectionName)
+        && isAdminUser();
+    }
+
+    // Purchase observability. The apps write their own purchase attempts,
+    // successes, failures, cancellations, and cancel reasons; admins can review
+    // all product logs from the Purchase Logs admin page.
+    match /{collectionName}/{logId} {
+      allow read: if isPurchaseLogCollection(collectionName)
+        && (
+          isAdminUser()
+          || (isSignedIn() && resource.data.userId == request.auth.uid)
+        );
+      allow create: if isPurchaseLogCollection(collectionName)
+        && (isAdminUser() || isOwnedPurchaseLogCreate());
+      allow update: if isPurchaseLogCollection(collectionName)
+        && (isAdminUser() || isOwnedPurchaseLogUpdate());
+      allow delete: if isPurchaseLogCollection(collectionName)
         && isAdminUser();
     }
 
