@@ -11,6 +11,17 @@ const {
 const EMAIL_SEND_LOCK_COLLECTION = 'email-send-idempotency';
 const EMAIL_RECIPIENT_DAILY_COLLECTION = 'email-recipient-daily-limits';
 const EMAIL_LOG_COLLECTION = 'email-logs';
+const PERSONAL_SENDER_EMAIL = 'tre@fitwithpulse.ai';
+const DEFAULT_AUTOMATED_SENDER_EMAIL = 'hello@fitwithpulse.ai';
+
+function resolveAutomatedSenderEmail(configuredEmail) {
+  const normalizedEmail = String(configuredEmail || '').trim().toLowerCase();
+  if (!normalizedEmail || normalizedEmail === PERSONAL_SENDER_EMAIL) {
+    return DEFAULT_AUTOMATED_SENDER_EMAIL;
+  }
+
+  return normalizedEmail;
+}
 
 function getDb() {
   return getFirebaseAdminApp().firestore();
@@ -287,7 +298,7 @@ async function sendBrevoTransactionalEmail(args) {
     return { success: false, error: 'Missing recipient email' };
   }
 
-  const senderEmail = args.sender?.email || process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
+  const senderEmail = resolveAutomatedSenderEmail(args.sender?.email || process.env.BREVO_AUTOMATED_SENDER_EMAIL);
   const senderName = args.sender?.name || process.env.BREVO_SENDER_NAME || 'Pulse';
   const replyTo = args.replyTo || { email: senderEmail, name: senderName || 'Pulse Team' };
   const nowMs = Date.now();

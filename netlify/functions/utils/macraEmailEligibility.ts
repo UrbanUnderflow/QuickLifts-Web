@@ -1,6 +1,17 @@
 import { getFirestore } from './getServiceAccount';
 
 const { getMacraEmailEligibility } = require('./macraStripe');
+const PERSONAL_SENDER_EMAIL = 'tre@fitwithpulse.ai';
+const DEFAULT_MACRA_SENDER_EMAIL = 'hello@fitwithpulse.ai';
+
+function resolveMacraSenderEmail() {
+  const configuredEmail = String(process.env.MACRA_BREVO_SENDER_EMAIL || process.env.MACRA_EMAIL_SENDER_EMAIL || '').trim().toLowerCase();
+  if (!configuredEmail || configuredEmail === PERSONAL_SENDER_EMAIL) {
+    return DEFAULT_MACRA_SENDER_EMAIL;
+  }
+
+  return configuredEmail;
+}
 
 export type MacraEmailEligibilityResult = {
   eligible: boolean;
@@ -10,7 +21,7 @@ export type MacraEmailEligibilityResult = {
 };
 
 export const MACRA_EMAIL_SENDER = {
-  email: process.env.MACRA_BREVO_SENDER_EMAIL || process.env.MACRA_EMAIL_SENDER_EMAIL || 'hello@fitwithpulse.ai',
+  email: resolveMacraSenderEmail(),
   name: process.env.MACRA_BREVO_SENDER_NAME || process.env.MACRA_EMAIL_SENDER_NAME || 'Macra',
 };
 
