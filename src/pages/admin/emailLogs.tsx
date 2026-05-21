@@ -80,7 +80,7 @@ const formatTimestamp = (...values: unknown[]) => {
   return 'N/A';
 };
 
-const normalizeStatus = (status?: string) => (status || 'recorded').replace(/[_-]+/g, ' ');
+const normalizeStatus = (status?: string) => (status || 'unconfirmed').replace(/[_-]+/g, ' ');
 
 const getStatusClassName = (status?: string) => {
   switch ((status || '').toLowerCase()) {
