@@ -72,14 +72,14 @@ const PROBLEM_STATS = [
   {
     value: '10%',
     label: 'coach visibility',
-    detail: 'say something to a coach before it breaks.',
+    detail: 'tell a coach before the pressure becomes visible.',
     accent: COLORS.lime,
   },
 ] as const;
 
 const SOLUTION_PROOF_CHIPS = [
   {
-    label: 'Better than surveys',
+    label: 'Passive signal capture',
     title: 'Passive biometrics',
     detail: 'catch the signal before an athlete reports it.',
     accent: '#5B8DEF',
@@ -143,7 +143,7 @@ const COMPETITOR_CARDS = [
   {
     name: 'Calm',
     category: 'Mindfulness app',
-    detail: 'Breathwork, meditation, and calm.',
+    detail: 'Breathwork, meditation, and relaxation.',
     accent: COLORS.purple,
     icon: Wind,
     scaleLabel: 'User base',
@@ -440,7 +440,7 @@ const ATHLETE_SPOTLIGHT = {
   number: '#21',
   role: 'Pilot athlete spotlight',
   imageSrc: '/nakyala-cau.jpg',
-  quote: 'A live university athlete is how we anchor the product story, the care story, and the commercial story.',
+  quote: 'A current university athlete anchors the product story, the care story, and the commercial story.',
   quoteAttribution: 'Pulse Check × auntEDNA.ai Pilot Thesis',
   biometrics: [
     { label: 'HRV baseline', value: '62 ms', accent: COLORS.sky },
@@ -448,7 +448,7 @@ const ATHLETE_SPOTLIGHT = {
     { label: 'Nora check-ins', value: '14 / wk', accent: COLORS.pink },
   ],
   focus: [
-    { title: 'The Challenge', detail: 'The challenge often starts before a visible breakdown.', accent: COLORS.sky },
+    { title: 'The Challenge', detail: 'The challenge often starts before a visible pressure moment.', accent: COLORS.sky },
     { title: 'In-the-moment support', detail: 'Help needs to live inside the athlete flow.', accent: COLORS.lime },
     { title: 'Care if needed', detail: 'Escalation is available when the moment goes beyond coaching.', accent: COLORS.red },
   ],
@@ -1122,7 +1122,7 @@ const SceneMeetNakyala: React.FC = () => (
         <div className="text-[13px] leading-[1.45] text-zinc-300 md:text-[0.92rem]">
           <span className="font-semibold text-white">A real athlete journey inside a live university environment.</span>{' '}
           {ATHLETE_SPOTLIGHT.name}&apos;s story is what Pulse Check × auntEDNA.ai is built to support before, during, and
-          after the breakdown.
+          after the pressure moment.
         </div>
       </motion.div>
     </div>
@@ -1228,9 +1228,9 @@ const SceneSolution: React.FC = () => (
         >
           <SlideKicker>The solution</SlideKicker>
           <h1 className="mt-5 text-[2.8rem] font-black leading-[0.96] tracking-[-0.04em] text-white md:text-[3.8rem] xl:text-[4.2rem]">
-            <span className="text-zinc-500 line-through decoration-[#EC4899]/45 decoration-[2px]">They see it too late.</span>
+            <span className="text-zinc-300">Signals surface early.</span>
             <br />
-            <span className="text-[#E0FE10]">We see it first.</span>
+            <span className="text-[#E0FE10]">Pulse Check sees them first.</span>
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-[1.6] text-zinc-300 md:text-xl">
             Pulse Check turns athlete pressure signals into action, detecting the signal before it becomes a crisis,
@@ -1401,7 +1401,7 @@ const SceneSolution: React.FC = () => (
               <Zap className="h-4 w-4 fill-current" />
             </div>
             <div className="text-sm leading-[1.5] text-zinc-300 md:text-[0.96rem]">
-              <span className="font-semibold text-white">One continuous system</span> not three disconnected products stitched together.
+              <span className="font-semibold text-white">One continuous system</span> across detection, regulation, and care.
             </div>
           </motion.div>
         </div>
@@ -1667,8 +1667,8 @@ const SceneCheckIn: React.FC = () => {
               <Zap className="h-4 w-4 fill-current" />
             </div>
             <div className="text-sm leading-relaxed text-zinc-300">
-              <span className="font-semibold text-white">When regulation works, the athlete settles without leaving the flow.</span>{' '}
-              No survey. No coach interruption. No waiting room. The next slide shows what the system does when the moment goes beyond Nora.
+              <span className="font-semibold text-white">When regulation works, the athlete settles in the same flow.</span>{' '}
+              Support continues inside the athlete experience. The next slide shows what the system does when the moment goes beyond Nora.
             </div>
           </motion.div>
         </div>
@@ -1747,7 +1747,7 @@ const SceneClinicalRouting: React.FC = () => (
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.95 }}
             >
-              <span>Handoff initiated to signal layer</span>
+              <span>Clinical handoff initiated</span>
               <motion.span
                 className="text-[#F472B6]"
                 animate={{ x: [0, 4, 0] }}
@@ -1855,8 +1855,8 @@ const SceneClinicalRouting: React.FC = () => (
           <div className="grid gap-4 md:grid-cols-3">
             {[
               { title: 'Trigger', detail: 'Flagged chat context + biometric snapshot', accent: COLORS.lime },
-              { title: 'Decision', detail: 'Signal layer determines clinical routing', accent: COLORS.purple },
-              { title: 'Destination', detail: 'auntEDNA.ai chart seed + response path', accent: '#EC4899' },
+              { title: 'Decision', detail: 'Routing engine selects the clinical path', accent: COLORS.purple },
+              { title: 'Destination', detail: 'auntEDNA.ai intake context + response path', accent: '#EC4899' },
             ].map((card, index) => (
               <motion.div
                 key={card.title}
@@ -1906,7 +1906,7 @@ const SceneWelfareCheck: React.FC = () => {
             A clinician can immediately start the welfare check.
           </h1>
           <div className="mt-4 max-w-4xl text-2xl font-semibold leading-tight text-[#FB7185] md:text-4xl">
-            This is not just a score. It creates a live human response experience.
+            The score activates a live human response experience.
           </div>
           <div className="mt-7 grid gap-3">
             {[
@@ -1933,7 +1933,7 @@ const SceneWelfareCheck: React.FC = () => {
                   </div>
                   <div>
                     <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-purple-300">
-                      AuntEdna clinician dashboard
+                      auntEDNA.ai clinician dashboard
                     </div>
                     <div className="mt-1.5 text-2xl font-black leading-tight text-white">
                       K. Thompson · #52 · Linebacker
@@ -2156,7 +2156,7 @@ const SceneCompetitiveNarrative: React.FC = () => (
             <div className="relative">
               <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#00D4AA]">Unified here</div>
               <div className="mt-3 text-[2.4rem] font-black leading-[0.95] text-white md:text-[3.1rem]">
-                Pulse Check x auntEDNA.ai turns that stack into one system.
+                Pulse Check × auntEDNA.ai turns that stack into one system.
               </div>
 
               <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
@@ -2196,7 +2196,7 @@ const SceneCompetitiveProof: React.FC = () => (
           One platform. <span className="text-[#E0FE10]">End-to-end athlete support.</span>
         </h1>
         <div className="mt-3 text-xl font-medium text-zinc-300 md:text-2xl">
-          No other single product covers detection, regulation, clinical routing, and crisis escalation for athletes.
+          Pulse Check × auntEDNA.ai brings detection, regulation, clinical routing, and crisis escalation into one athlete workflow.
         </div>
       </div>
 
@@ -2261,9 +2261,9 @@ const SceneCompetitiveProof: React.FC = () => (
             <Zap className="h-5 w-5" />
           </div>
           <div className="text-sm leading-relaxed text-zinc-300 md:text-base">
-            <span className="font-bold text-white">No single competitor covers the full pipeline.</span> Athletes today
-            need multiple disconnected tools. Pulse Check x auntEDNA.ai is the system that owns the workflow from signal
-            detection through crisis escalation.
+            <span className="font-bold text-white">Pulse Check × auntEDNA.ai owns the full pipeline.</span> Athletes today
+            move across multiple disconnected tools. This system brings the workflow from signal detection through crisis
+            escalation into one place.
           </div>
         </div>
       </GlassCard>
@@ -2511,7 +2511,7 @@ const _SceneMarket: React.FC = () => {
           </h1>
 
           <p className="mb-8 max-w-[520px] text-[15px] leading-relaxed text-white/55">
-            We sit where performance tech, digital mental health, and connected care overlap. That full stack is why the TAM is $33B — not $5B.
+            We sit where performance tech, digital mental health, and connected care overlap. That full stack expands the TAM to $33B across the full adjacent market.
           </p>
 
           {/* TAM Hero card */}
@@ -2536,7 +2536,7 @@ const _SceneMarket: React.FC = () => {
               $33.34B
             </div>
             <p className="mt-2.5 text-[13px] leading-relaxed text-white/55">
-              <strong className="font-semibold text-white">Not a narrow point solution.</strong> Full TAM includes adjacent markets because we touch all three.
+              <strong className="font-semibold text-white">Full-stack market frame.</strong> TAM includes adjacent markets because we touch all three.
             </p>
           </div>
 
@@ -2917,10 +2917,10 @@ const SceneGTM: React.FC = () => (
       <div>
         <SlideKicker>Go-to-Market · Boston Corridor</SlideKicker>
         <h1 className="mt-4 text-[2.6rem] font-black leading-[1.05] tracking-tight text-white md:text-[3.2rem]">
-          Three prospective partners already in the <span style={{ color: COLORS.lime }}>pipeline.</span>
+          Three Boston-corridor relationships are already <span style={{ color: COLORS.lime }}>in motion.</span>
         </h1>
         <p className="mt-3 max-w-[780px] text-[15px] leading-relaxed text-white/55">
-          Boston-affiliated relationships are already active across every tier we care about — <strong className="font-medium text-white">campus, research, and pro.</strong> The wedge is visible.
+          Boston-affiliated relationships span the tiers we care about: <strong className="font-medium text-white">campus, research, and pro.</strong>
         </p>
       </div>
 
@@ -3096,7 +3096,7 @@ const SceneTeam: React.FC = () => (
           The right mix of performance, <span style={{ color: COLORS.lime }}>product, and care.</span>
         </h1>
         <p className="mt-2 max-w-[780px] text-[15px] leading-relaxed text-white/55">
-          Four operators, four lenses — elite athlete, operational muscle, clinical authority, and care coordination.
+          Four operators, four lenses: elite athlete, operating discipline, clinical authority, and care coordination.
         </p>
       </div>
 
@@ -3500,7 +3500,7 @@ const SceneSupporters: React.FC = () => (
       <div>
         <SlideKicker>Who Supports Us</SlideKicker>
         <h1 className="mt-3 text-[2.15rem] font-bold leading-[1.05] tracking-tight text-white md:text-[2.65rem]">
-          We are not building <span style={{ color: COLORS.lime }}>in isolation.</span>
+          We are building with <span style={{ color: COLORS.lime }}>institutional support.</span>
         </h1>
         <p className="mt-1.5 max-w-[780px] text-[13px] leading-relaxed text-white/55 md:text-[14px]">
           Institutional support already spans <strong className="font-medium text-white">sports, science, legal, startup, and venture.</strong>
@@ -3599,7 +3599,7 @@ const SceneSupporters: React.FC = () => (
         </div>
         <div className="text-[11px] leading-snug text-white/55 md:text-[12px]">
           <strong className="font-semibold text-white">Athletics, science, legal, startup, and venture.</strong>{' '}
-          The support around us is real — and already in motion.
+          Institutional backing is already in motion.
         </div>
       </motion.div>
     </div>
@@ -3656,17 +3656,17 @@ const SceneEvidence: React.FC = () => {
           <div className="max-w-2xl lg:pr-4">
             <div className="inline-flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.32em] text-[#E0FE10]">
               <span className="h-px w-10 bg-[#E0FE10]/30" />
-              <span>White Glove Precision</span>
+              <span>Sport-Specific Precision</span>
             </div>
             <h1 className="mt-5 text-5xl font-black uppercase leading-[0.9] tracking-[0.04em] text-white md:text-7xl">
-              <span className="text-white/45">Their AI sees </span>
-              <span className="text-[#E0FE10]">an athlete.</span>
+              <span className="text-white/45">Nora reads </span>
+              <span className="text-[#E0FE10]">the athlete</span>
               <br />
-              <span className="text-white/45">Nora sees </span>
-              <span className="text-[#00D4AA]">your athlete.</span>
+              <span className="text-white/45">inside the </span>
+              <span className="text-[#00D4AA]">sport context.</span>
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/65 md:text-xl">
-              Nora calibrates against the sport, the stress pattern, and the performance context, not just a generic wellness score.
+              Nora calibrates against the sport, the stress pattern, the performance context, and the athlete's biomarker shape.
             </p>
           </div>
 
@@ -3989,12 +3989,12 @@ const SceneSummary: React.FC = () => (
             letterSpacing: '-1px',
           }}
         >
-          <span className="text-white">An ecosystem where athletes can be</span>
+          <span className="text-white">An ecosystem where athletes can stay</span>
           <br />
           <span className="text-[#c8ff00]">high-performing </span>
-          <span className="text-white">without being</span>
+          <span className="text-white">and</span>
           <br />
-          <span className="text-[#EC4899]">hollowed out.</span>
+          <span className="text-[#EC4899]">fully supported.</span>
         </h1>
 
         {/* Thesis */}
@@ -4128,7 +4128,7 @@ const PulseAuntEdnaPitchPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Pulse Check x auntEDNA.ai Stakeholder Deck | Pulse Intelligence Labs</title>
+        <title>Pulse Check × auntEDNA.ai Stakeholder Deck | Pulse Intelligence Labs</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
@@ -4137,7 +4137,7 @@ const PulseAuntEdnaPitchPage: React.FC = () => {
         />
         <meta
           name="description"
-          content="Pitch presentation for Pulse Check x auntEDNA.ai, a mental performance-to-care platform for elite athletes."
+          content="Pitch presentation for Pulse Check × auntEDNA.ai, a mental performance-to-care platform for elite athletes."
         />
       </Head>
 
