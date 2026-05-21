@@ -681,7 +681,7 @@ export async function sendBrevoTransactionalEmail(args: {
     return { success: false, error: 'Missing recipient email' };
   }
 
-  const senderEmail = args.sender?.email || process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
+  const senderEmail = args.sender?.email || process.env.BREVO_AUTOMATED_SENDER_EMAIL || 'hello@fitwithpulse.ai';
   const senderName = args.sender?.name || process.env.BREVO_SENDER_NAME || 'Pulse';
   const nowMs = Date.now();
   const runId = `brevo-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;

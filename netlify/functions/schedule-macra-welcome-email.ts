@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import { getFirestore } from './utils/getServiceAccount';
 import { getBaseSiteUrl, loadScheduledSequenceConfig } from './utils/emailSequenceHelpers';
+import { evaluateMacraEmailEligibility } from './utils/macraEmailEligibility';
 
 /**
  * Safety-net sweeper for the Macra welcome email.
@@ -87,6 +88,19 @@ export const handler: Handler = async () => {
         continue;
       }
       if (!data.email) {
+        skipped++;
+        continue;
+      }
+
+      const ageEligibility = await evaluateMacraEmailEligibility({
+        db,
+        userId: doc.id,
+        userData: data,
+        nowMs: now,
+        sequenceId: SEQUENCE_ID,
+        markSkipped: true,
+      });
+      if (!ageEligibility.eligible) {
         skipped++;
         continue;
       }

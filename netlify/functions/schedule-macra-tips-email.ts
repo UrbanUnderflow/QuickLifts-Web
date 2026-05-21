@@ -8,6 +8,7 @@ import {
   releaseScheduledSequenceSend,
   toMillis,
 } from './utils/emailSequenceHelpers';
+import { evaluateMacraEmailEligibility } from './utils/macraEmailEligibility';
 
 /**
  * Scheduled Macra Tips Series
@@ -85,6 +86,19 @@ export const handler: Handler = async () => {
     for (const doc of snap.docs) {
       scanned++;
       const data = (doc.data() || {}) as Record<string, any>;
+      const ageEligibility = await evaluateMacraEmailEligibility({
+        db,
+        userId: doc.id,
+        userData: data,
+        nowMs,
+        sequenceId: SEQUENCE_ID,
+        markSkipped: true,
+      });
+      if (!ageEligibility.eligible) {
+        skipped++;
+        continue;
+      }
+
       const prefs = data.macraEmailPreferences || {};
       if (prefs.tipsSeries === false) {
         skipped++;

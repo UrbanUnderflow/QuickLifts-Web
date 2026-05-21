@@ -6,6 +6,7 @@ import {
   resolveSequenceTemplate,
   sendBrevoTransactionalEmail,
 } from './utils/emailSequenceHelpers';
+import { evaluateMacraEmailEligibility, MACRA_EMAIL_SENDER } from './utils/macraEmailEligibility';
 
 type SendResponse = {
   success: boolean;
@@ -78,6 +79,20 @@ export const handler: Handler = async (event) => {
       };
     }
 
+    const ageEligibility = await evaluateMacraEmailEligibility({
+      userId,
+      userData: recipient.userData,
+      sequenceId: 'macra-inactivity-winback-v1',
+      markSkipped: true,
+    });
+    if (!ageEligibility.eligible) {
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ success: true, skipped: true } satisfies SendResponse),
+      };
+    }
+
     const siteUrl = getBaseSiteUrl();
     const macraUrl = `${siteUrl}/macra`;
 
@@ -111,6 +126,8 @@ export const handler: Handler = async (event) => {
       subject: template.subject,
       htmlContent: template.html,
       tags: ['macra', 'macra-inactivity-winback', `days:${daysInactive}`, isTest ? 'test' : ''].filter(Boolean) as string[],
+      sender: MACRA_EMAIL_SENDER,
+      replyTo: MACRA_EMAIL_SENDER,
       scheduledAt,
       idempotencyKey,
       idempotencyMetadata: idempotencyKey

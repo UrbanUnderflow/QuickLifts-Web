@@ -237,6 +237,39 @@ const getMacraBirthdateMs = async ({ db, userId, userData = {} }) => {
   return toMillis(userData.birthdate);
 };
 
+const getMacraEmailEligibility = async ({ db, userId, userData = {}, nowMs = Date.now(), minAge = 18 }) => {
+  if (!userId) {
+    return { eligible: true, reason: null, age: null, birthdateMs: null };
+  }
+
+  const birthdateMs = await getMacraBirthdateMs({ db, userId, userData });
+  const age = ageFromBirthdateMs(birthdateMs, nowMs);
+  if (age === null) {
+    return {
+      eligible: false,
+      reason: 'age_unverified',
+      age: null,
+      birthdateMs: birthdateMs || null,
+    };
+  }
+
+  if (age < minAge) {
+    return {
+      eligible: false,
+      reason: 'under_18',
+      age,
+      birthdateMs: birthdateMs || null,
+    };
+  }
+
+  return {
+    eligible: true,
+    reason: null,
+    age,
+    birthdateMs: birthdateMs || null,
+  };
+};
+
 const getStripeId = (value) => {
   if (!value) return null;
   if (typeof value === 'string') return value;
@@ -361,6 +394,7 @@ module.exports = {
   ACTIVE_SUBSCRIPTION_TYPES,
   MACRA_WEB_OFFER_CAMPAIGN_ID,
   ageFromBirthdateMs,
+  getMacraEmailEligibility,
   getMacraBirthdateMs,
   hasActiveRootSubscription,
   hasActiveSubscriptionPlan,

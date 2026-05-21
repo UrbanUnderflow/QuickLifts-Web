@@ -1,126 +1,189 @@
 // netlify/functions/delete-user.js
 
-// --- Use shared configuration ---
-const { admin, db, headers } = require('./config/firebase'); // Assuming this exports initialized admin, db, and headers
+const { admin, db, headers } = require('./config/firebase');
 
-// --- Get auth instance from the shared admin instance ---
 const auth = admin.auth();
 
-exports.handler = async (event, context) => {
-  console.log('[delete-user] Function invoked.');
+function json(statusCode, payload, extraHeaders = {}) {
+  return {
+    statusCode,
+    headers: { ...headers, ...extraHeaders },
+    body: JSON.stringify(payload),
+  };
+}
 
-  // 1. Check HTTP Method & OPTIONS preflight
+function getHeader(event, name) {
+  const wanted = name.toLowerCase();
+  const found = Object.entries(event.headers || {}).find(([key]) => key.toLowerCase() === wanted);
+  return found ? found[1] : '';
+}
+
+async function verifyAdminRequest(event) {
+  const authHeader = String(getHeader(event, 'authorization') || '').trim();
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  if (!match) return null;
+
+  const decoded = await auth.verifyIdToken(match[1]);
+  const email = String(decoded.email || '').trim().toLowerCase();
+  const hasAdminClaim = decoded.admin === true || decoded.isAdmin === true || decoded.role === 'admin';
+  if (hasAdminClaim) {
+    return { uid: decoded.uid, email, source: 'claim' };
+  }
+
+  if (!email) return null;
+  const adminSnap = await db.collection('admin').doc(email).get();
+  if (!adminSnap.exists) return null;
+
+  return { uid: decoded.uid, email, source: 'admin_collection' };
+}
+
+function normalizeUsernameCandidates(userData) {
+  const raw = String(userData?.username || '').trim();
+  if (!raw) return [];
+
+  const normalized = raw.toLowerCase();
+  return Array.from(new Set([raw, normalized]));
+}
+
+async function deleteUsernameDocs(userId, userData) {
+  const usernames = normalizeUsernameCandidates(userData);
+  let deleted = 0;
+
+  for (const username of usernames) {
+    const usernameRef = db.collection('usernames').doc(username);
+    const usernameSnap = await usernameRef.get();
+    if (!usernameSnap.exists) continue;
+
+    const usernameData = usernameSnap.data() || {};
+    if (!usernameData.userId || usernameData.userId === userId) {
+      await usernameRef.delete();
+      deleted += 1;
+    }
+  }
+
+  return deleted;
+}
+
+async function deleteUserDoc(userDocRef) {
+  if (typeof db.recursiveDelete === 'function') {
+    await db.recursiveDelete(userDocRef);
+    return 'recursive';
+  }
+
+  await userDocRef.delete();
+  return 'document_only';
+}
+
+async function deleteAdminRecordForUser(userData) {
+  const email = String(userData?.email || '').trim().toLowerCase();
+  if (!email) return false;
+
+  const adminRef = db.collection('admin').doc(email);
+  const adminSnap = await adminRef.get();
+  if (!adminSnap.exists) return false;
+
+  await adminRef.delete();
+  return true;
+}
+
+async function writeDeleteAuditLog({ userId, userData, adminContext, authDeleted, firestoreDeleteMode, usernameDocsDeleted, adminRecordDeleted }) {
+  await db.collection('admin-audit-logs').add({
+    action: 'delete_user',
+    userId,
+    deletedUserEmail: userData?.email || null,
+    deletedUsername: userData?.username || null,
+    requestedByUid: adminContext.uid || null,
+    requestedByEmail: adminContext.email || null,
+    requestedBySource: adminContext.source || null,
+    authDeleted,
+    firestoreDeleteMode,
+    usernameDocsDeleted,
+    adminRecordDeleted,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
-      return { statusCode: 200, headers, body: '' };
+    return { statusCode: 200, headers, body: '' };
   }
+
   if (event.httpMethod !== 'POST') {
-    console.warn(`[delete-user] Method Not Allowed: ${event.httpMethod}`);
-    return {
-      statusCode: 405,
-      headers: { ...headers, Allow: 'POST' }, // Add Allow header
-      body: JSON.stringify({ success: false, message: 'Method Not Allowed' }),
-    };
+    return json(405, { success: false, message: 'Method Not Allowed' }, { Allow: 'POST' });
   }
 
-  // 2. TODO: Verify Admin Authentication (CRITICAL!)
-  //    - Get token from event.headers.authorization
-  //    - Verify using admin.auth().verifyIdToken()
-  //    - Check custom claims or admin list
-  console.warn('[delete-user] TODO: Implement admin authentication check!');
-  const isAdmin = true; // <<<--- !!! REPLACE WITH ACTUAL ADMIN CHECK !!!
-  if (!isAdmin) {
-      console.error('[delete-user] Unauthorized attempt.');
-      return {
-          statusCode: 403,
-          headers,
-          body: JSON.stringify({ success: false, message: 'Forbidden: Admin privileges required.' })
-      };
+  let adminContext;
+  try {
+    adminContext = await verifyAdminRequest(event);
+  } catch (error) {
+    console.error('[delete-user] Admin token verification failed:', error);
+    return json(401, { success: false, message: 'Unauthorized: could not verify admin session.' });
   }
 
-  // 3. Parse Request Body
+  if (!adminContext) {
+    return json(403, { success: false, message: 'Forbidden: Admin privileges required.' });
+  }
+
   let body;
   try {
-    body = JSON.parse(event.body || '{}'); // Added fallback for empty body
-  } catch (e) {
-    console.error('[delete-user] Error parsing request body:', e);
-    return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ success: false, message: 'Invalid request body.' })
-    };
-  }
-
-  const { userId } = body;
-
-  if (!userId) {
-    console.warn('[delete-user] Missing userId in request body.');
-    return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ success: false, message: 'Missing required parameter: userId' })
-    };
-  }
-
-  console.log(`[delete-user] Received request to delete user: ${userId}`);
-
-  // 4. Perform Deletion
-  try {
-    // 4a. Delete Firebase Auth user
-    console.log(`[delete-user] Attempting to delete Auth user: ${userId}`);
-    await auth.deleteUser(userId);
-    console.log(`[delete-user] Successfully deleted Auth user: ${userId}`);
-
-    // 4b. Delete Firestore user document
-    console.log(`[delete-user] Attempting to delete Firestore user document: users/${userId}`);
-    const userDocRef = db.collection('users').doc(userId);
-    await userDocRef.delete();
-    console.log(`[delete-user] Successfully deleted Firestore user document: users/${userId}`);
-
-    // 4c. TODO: Delete related data (optional but recommended)
-
-    console.log(`[delete-user] Successfully deleted user ${userId} from Auth and Firestore.`);
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({ success: true, message: `User ${userId} deleted successfully.` }),
-    };
-
+    body = JSON.parse(event.body || '{}');
   } catch (error) {
-    console.error(`[delete-user] Error deleting user ${userId}:`, error);
-
-    // Handle specific errors (e.g., user not found)
-    if (error.code === 'auth/user-not-found') {
-      console.warn(`[delete-user] Auth user ${userId} not found, attempting to delete Firestore doc anyway.`);
-      try {
-         const userDocRef = db.collection('users').doc(userId);
-         // Check if doc exists before deleting (optional, delete is idempotent)
-         // const docSnap = await userDocRef.get();
-         // if (docSnap.exists) {
-            await userDocRef.delete();
-            console.log(`[delete-user] Successfully deleted Firestore user document: users/${userId} (Auth user was already gone).`);
-         // } else {
-         //    console.log(`[delete-user] Firestore user document users/${userId} also not found.`);
-         // }
-         return {
-           statusCode: 200,
-           headers,
-           body: JSON.stringify({ success: true, message: `User ${userId} deleted (Auth record not found, Firestore doc deleted).` }),
-         };
-      } catch (fsError) {
-         console.error(`[delete-user] Error deleting Firestore user ${userId} after Auth user not found:`, fsError);
-         return {
-           statusCode: 500,
-           headers,
-           body: JSON.stringify({ success: false, message: `Failed to delete Firestore data for user ${userId}. Auth user may or may not exist. Error: ${fsError.message}` }),
-         };
-      }
-    }
-
-    // Generic error
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ success: false, message: `Failed to delete user ${userId}. Error: ${error.message}` }),
-    };
+    return json(400, { success: false, message: 'Invalid request body.' });
   }
-}; 
+
+  const userId = String(body.userId || '').trim();
+  if (!userId) {
+    return json(400, { success: false, message: 'Missing required parameter: userId' });
+  }
+
+  const userDocRef = db.collection('users').doc(userId);
+  const userSnap = await userDocRef.get();
+  const userData = userSnap.exists ? userSnap.data() || {} : {};
+
+  let authDeleted = false;
+  try {
+    await auth.deleteUser(userId);
+    authDeleted = true;
+  } catch (error) {
+    if (error.code !== 'auth/user-not-found') {
+      console.error(`[delete-user] Failed deleting Auth user ${userId}:`, error);
+      return json(500, {
+        success: false,
+        message: `Failed to delete Auth user ${userId}. Error: ${error.message}`,
+      });
+    }
+  }
+
+  try {
+    const usernameDocsDeleted = await deleteUsernameDocs(userId, userData);
+    const adminRecordDeleted = await deleteAdminRecordForUser(userData);
+    const firestoreDeleteMode = await deleteUserDoc(userDocRef);
+
+    await writeDeleteAuditLog({
+      userId,
+      userData,
+      adminContext,
+      authDeleted,
+      firestoreDeleteMode,
+      usernameDocsDeleted,
+      adminRecordDeleted,
+    }).catch((error) => {
+      console.warn('[delete-user] Failed to write audit log:', error);
+    });
+
+    return json(200, {
+      success: true,
+      message: `User ${userId} deleted successfully.`,
+      authDeleted,
+      firestoreDeleteMode,
+      usernameDocsDeleted,
+      adminRecordDeleted,
+    });
+  } catch (error) {
+    console.error(`[delete-user] Firestore cleanup failed for ${userId}:`, error);
+    return json(500, {
+      success: false,
+      message: `Deleted Auth user where possible, but Firestore cleanup failed for ${userId}. Error: ${error.message}`,
+    });
+  }
+};

@@ -9,6 +9,7 @@ import {
   resolveRecipient,
   sendBrevoTransactionalEmail,
 } from './utils/emailSequenceHelpers';
+import { evaluateMacraEmailEligibility, MACRA_EMAIL_SENDER } from './utils/macraEmailEligibility';
 
 type SendResponse = {
   success: boolean;
@@ -127,6 +128,20 @@ export const handler: Handler = async (event) => {
       };
     }
 
+    const ageEligibility = await evaluateMacraEmailEligibility({
+      userId,
+      userData: recipient.userData,
+      sequenceId: 'macra-welcome-v1',
+      markSkipped: true,
+    });
+    if (!ageEligibility.eligible) {
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ success: true, skipped: true } satisfies SendResponse),
+      };
+    }
+
     // Server-side idempotency: once sent, never resend outside of test mode.
     if (userId && !isTest) {
       try {
@@ -177,6 +192,8 @@ export const handler: Handler = async (event) => {
       subject,
       htmlContent: html,
       tags: ['macra', 'macra-welcome', isTest ? 'test' : null].filter(Boolean) as string[],
+      sender: MACRA_EMAIL_SENDER,
+      replyTo: MACRA_EMAIL_SENDER,
       idempotencyKey,
       bypassDailyRecipientLimit: true,
       idempotencyMetadata: idempotencyKey

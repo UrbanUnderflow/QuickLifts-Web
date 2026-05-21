@@ -9,6 +9,7 @@ import {
   resolveRecipient,
   sendBrevoTransactionalEmail,
 } from './utils/emailSequenceHelpers';
+import { evaluateMacraEmailEligibility, MACRA_EMAIL_SENDER } from './utils/macraEmailEligibility';
 
 const {
   MACRA_WEB_OFFER_CAMPAIGN_ID,
@@ -187,6 +188,20 @@ export const handler: Handler = async (event) => {
       };
     }
 
+    const ageEligibility = await evaluateMacraEmailEligibility({
+      userId,
+      userData: recipient.userData,
+      sequenceId: MACRA_WEB_OFFER_CAMPAIGN_ID,
+      markSkipped: true,
+    });
+    if (!ageEligibility.eligible) {
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ success: true, skipped: true } satisfies SendResponse),
+      };
+    }
+
     if (userId && !isTest) {
       const db = await getFirestore();
       const snap = await db.collection('users').doc(userId).get();
@@ -253,6 +268,8 @@ export const handler: Handler = async (event) => {
       htmlContent: html,
       tags: ['macra', 'macra-web-offer', 'retarget-24h', isTest ? 'test' : null].filter(Boolean) as string[],
       headers: { 'X-Mailin-custom': JSON.stringify(customHeader) },
+      sender: MACRA_EMAIL_SENDER,
+      replyTo: MACRA_EMAIL_SENDER,
       idempotencyKey,
       bypassDailyRecipientLimit: true,
       idempotencyMetadata: idempotencyKey
