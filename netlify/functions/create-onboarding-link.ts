@@ -2,6 +2,8 @@ import type { Handler } from '@netlify/functions';
 import { initAdmin } from './utils/getServiceAccount';
 import * as crypto from 'crypto';
 
+const { releaseDeletedAccountEmailSuppression } = require('./utils/emailSuppression');
+
 /**
  * create-onboarding-link
  *
@@ -183,6 +185,19 @@ export const handler: Handler = async (event) => {
         if (gender) userData.gender = gender;
 
         await db.collection('users').doc(uid).set(userData);
+
+        await releaseDeletedAccountEmailSuppression({
+            db,
+            admin,
+            email: userData.email,
+            userId: uid,
+            releaseReason: 'admin_onboarding_account_created',
+            metadata: {
+                source: 'create-onboarding-link',
+            },
+        }).catch((releaseError: any) => {
+            console.warn('[create-onboarding-link] Email suppression release skipped:', releaseError?.message || releaseError);
+        });
 
         // ── Generate a one-time onboarding token ─────────────────────────
         const token = crypto.randomBytes(48).toString('hex');

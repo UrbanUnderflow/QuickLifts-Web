@@ -1,6 +1,12 @@
 // netlify/functions/delete-user.js
 
 const { admin, db, headers } = require('./config/firebase');
+const {
+  cancelPendingBrevoTransactionalEmails,
+  releaseDeletedAccountEmailSuppression,
+  setBrevoContactEmailBlacklisted,
+  writeDeletedAccountEmailSuppression,
+} = require('./utils/emailSuppression');
 
 const auth = admin.auth();
 
@@ -86,7 +92,18 @@ async function deleteAdminRecordForUser(userData) {
   return true;
 }
 
-async function writeDeleteAuditLog({ userId, userData, adminContext, authDeleted, firestoreDeleteMode, usernameDocsDeleted, adminRecordDeleted }) {
+async function writeDeleteAuditLog({
+  userId,
+  userData,
+  adminContext,
+  authDeleted,
+  firestoreDeleteMode,
+  usernameDocsDeleted,
+  adminRecordDeleted,
+  emailSuppression,
+  brevoSuppression,
+  pendingEmailCancellation,
+}) {
   await db.collection('admin-audit-logs').add({
     action: 'delete_user',
     userId,
@@ -99,6 +116,9 @@ async function writeDeleteAuditLog({ userId, userData, adminContext, authDeleted
     firestoreDeleteMode,
     usernameDocsDeleted,
     adminRecordDeleted,
+    emailSuppression: emailSuppression || null,
+    brevoSuppression: brevoSuppression || null,
+    pendingEmailCancellation: pendingEmailCancellation || null,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 }
@@ -139,6 +159,64 @@ exports.handler = async (event) => {
   const userDocRef = db.collection('users').doc(userId);
   const userSnap = await userDocRef.get();
   const userData = userSnap.exists ? userSnap.data() || {} : {};
+  let authUserEmail = '';
+  try {
+    const authUserRecord = await auth.getUser(userId);
+    authUserEmail = authUserRecord.email || '';
+  } catch (error) {
+    if (error.code !== 'auth/user-not-found') {
+      console.warn(`[delete-user] Could not load Auth user ${userId} before deletion:`, error);
+    }
+  }
+
+  const deletionEmail = String(userData.email || authUserEmail || '').trim().toLowerCase();
+  const auditUserData = deletionEmail ? { ...userData, email: deletionEmail } : userData;
+  let emailSuppression = { created: false, reason: deletionEmail ? 'not_attempted' : 'missing_email' };
+  let brevoSuppression = { success: false, skipped: true, reason: deletionEmail ? 'not_attempted' : 'missing_email' };
+  let pendingEmailCancellation = { success: false, skipped: true, reason: deletionEmail ? 'not_attempted' : 'missing_email' };
+
+  if (deletionEmail) {
+    try {
+      emailSuppression = await writeDeletedAccountEmailSuppression({
+        db,
+        admin,
+        email: deletionEmail,
+        userId,
+        userData: auditUserData,
+        adminContext,
+      });
+    } catch (error) {
+      console.error(`[delete-user] Failed creating email suppression for ${userId}:`, error);
+      return json(500, {
+        success: false,
+        message: `Could not suppress ${deletionEmail} before deleting user ${userId}. Error: ${error.message}`,
+      });
+    }
+
+    brevoSuppression = await setBrevoContactEmailBlacklisted({
+      email: deletionEmail,
+      emailBlacklisted: true,
+    }).catch((error) => ({
+      success: false,
+      error: error?.message || String(error),
+    }));
+
+    if (!brevoSuppression.success) {
+      console.warn(`[delete-user] Brevo suppression did not complete for ${deletionEmail}:`, brevoSuppression);
+    }
+
+    pendingEmailCancellation = await cancelPendingBrevoTransactionalEmails({
+      db,
+      email: deletionEmail,
+    }).catch((error) => ({
+      success: false,
+      error: error?.message || String(error),
+    }));
+
+    if (!pendingEmailCancellation.success) {
+      console.warn(`[delete-user] Pending Brevo cancellation did not complete for ${deletionEmail}:`, pendingEmailCancellation);
+    }
+  }
 
   let authDeleted = false;
   try {
@@ -147,6 +225,21 @@ exports.handler = async (event) => {
   } catch (error) {
     if (error.code !== 'auth/user-not-found') {
       console.error(`[delete-user] Failed deleting Auth user ${userId}:`, error);
+      if (deletionEmail && emailSuppression.created) {
+        await releaseDeletedAccountEmailSuppression({
+          db,
+          admin,
+          email: deletionEmail,
+          userId,
+          releaseReason: 'auth_delete_failed',
+          metadata: {
+            source: 'delete-user',
+            error: error.message || String(error),
+          },
+        }).catch((releaseError) => {
+          console.warn('[delete-user] Failed to release email suppression after Auth delete failure:', releaseError);
+        });
+      }
       return json(500, {
         success: false,
         message: `Failed to delete Auth user ${userId}. Error: ${error.message}`,
@@ -161,12 +254,15 @@ exports.handler = async (event) => {
 
     await writeDeleteAuditLog({
       userId,
-      userData,
+      userData: auditUserData,
       adminContext,
       authDeleted,
       firestoreDeleteMode,
       usernameDocsDeleted,
       adminRecordDeleted,
+      emailSuppression,
+      brevoSuppression,
+      pendingEmailCancellation,
     }).catch((error) => {
       console.warn('[delete-user] Failed to write audit log:', error);
     });
@@ -178,6 +274,9 @@ exports.handler = async (event) => {
       firestoreDeleteMode,
       usernameDocsDeleted,
       adminRecordDeleted,
+      emailSuppression,
+      brevoSuppression,
+      pendingEmailCancellation,
     });
   } catch (error) {
     console.error(`[delete-user] Firestore cleanup failed for ${userId}:`, error);

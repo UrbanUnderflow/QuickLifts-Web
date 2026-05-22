@@ -8,6 +8,8 @@ import {
   shouldBlockRecipientDailyQuota,
 } from './emailSafety';
 
+const { shouldSuppressTransactionalEmail } = require('./emailSuppression');
+
 export type SequenceTemplate = {
   subject: string;
   html: string;
@@ -25,6 +27,8 @@ export type SequenceEmailSendResult = {
   success: boolean;
   messageId?: string;
   skipped?: boolean;
+  suppressed?: boolean;
+  suppressionReason?: string;
   error?: string;
 };
 
@@ -692,12 +696,38 @@ export async function sendBrevoTransactionalEmail(args: {
     return { success: false, error: 'Missing recipient email' };
   }
 
+  const dailyRecipientMetadata = args.dailyRecipientMetadata || args.idempotencyMetadata;
+  const suppressionResult = await shouldSuppressTransactionalEmail({
+    db: await getFirestore(),
+    admin: initAdmin(),
+    toEmail: args.toEmail,
+    headers: args.headers,
+    idempotencyMetadata: args.idempotencyMetadata,
+    dailyRecipientMetadata,
+  }).catch((error: any) => {
+    console.warn('[emailSequenceHelpers] Failed to check email suppression:', error);
+    return { suppressed: false, error: error?.message || String(error) };
+  });
+
+  if (suppressionResult?.suppressed) {
+    console.log('[emailSequenceHelpers] Skipping suppressed recipient:', {
+      toEmail: normalizeEmailAddress(args.toEmail),
+      reason: suppressionResult.reason,
+      suppressionId: suppressionResult.suppressionId,
+    });
+    return {
+      success: true,
+      skipped: true,
+      suppressed: true,
+      suppressionReason: suppressionResult.reason,
+    };
+  }
+
   const senderEmail = resolveAutomatedSenderEmail(args.sender?.email || process.env.BREVO_AUTOMATED_SENDER_EMAIL);
   const senderName = args.sender?.name || process.env.BREVO_SENDER_NAME || 'Pulse';
   const nowMs = Date.now();
   const runId = `brevo-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
   const dailyRecipientLimit = Math.max(1, Number(args.dailyRecipientLimit || 1) || 1);
-  const dailyRecipientMetadata = args.dailyRecipientMetadata || args.idempotencyMetadata;
 
   if (args.idempotencyKey) {
     const claimResult = await claimGlobalLock({

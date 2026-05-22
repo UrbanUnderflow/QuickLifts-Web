@@ -6,7 +6,7 @@ import { ProfileImage, SubscriptionType } from '../user';
 
 import { doc, getDoc, setDoc, updateDoc, documentId, collection, query, where, getDocs, limit, writeBatch, deleteDoc, addDoc, increment } from 'firebase/firestore';
 import { ref, deleteObject, getStorage } from 'firebase/storage';
-import { db } from '../config';
+import { auth, db } from '../config';
 
 import { store } from '../../../redux/store';
 import { setUser } from '../../../redux/userSlice';
@@ -58,6 +58,33 @@ class UserService {
     return new User(userId, userData);
   }
 
+  private async releaseDeletedEmailSuppression(userId: string, email: string): Promise<void> {
+    if (typeof window === 'undefined') return;
+
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const signedInUser = auth.currentUser;
+    if (!normalizedEmail || !signedInUser || signedInUser.uid !== userId) return;
+
+    try {
+      const idToken = await signedInUser.getIdToken(true);
+      const response = await fetch('/.netlify/functions/release-email-suppression', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ userId, email: normalizedEmail }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        console.warn('[UserService Create] Email suppression release skipped:', body?.message || response.status);
+      }
+    } catch (error) {
+      console.warn('[UserService Create] Email suppression release failed:', error);
+    }
+  }
+
   async createUser(userId: string, user: User | Record<string, unknown>): Promise<void> {
     const userRef = doc(db, 'users', userId);
     const existingUser = await getDoc(userRef);
@@ -69,6 +96,10 @@ class UserService {
     const userData = normalizeUserCreatePayload(user);
     console.log(`[UserService Create] Creating user ${userId} with data:`, JSON.parse(JSON.stringify(userData)));
     await setDoc(userRef, userData);
+
+    if (typeof userData.email === 'string') {
+      await this.releaseDeletedEmailSuppression(userId, userData.email);
+    }
   }
 
   async updateUser(userId: string, patch: Record<string, unknown>): Promise<void> {

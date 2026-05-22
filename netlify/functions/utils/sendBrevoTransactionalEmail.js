@@ -7,6 +7,7 @@ const {
   normalizeEmailAddress,
   shouldBlockRecipientDailyQuota,
 } = require('./emailSafety');
+const { shouldSuppressTransactionalEmail } = require('./emailSuppression');
 
 const EMAIL_SEND_LOCK_COLLECTION = 'email-send-idempotency';
 const EMAIL_RECIPIENT_DAILY_COLLECTION = 'email-recipient-daily-limits';
@@ -296,6 +297,33 @@ async function sendBrevoTransactionalEmail(args) {
 
   if (!args?.toEmail) {
     return { success: false, error: 'Missing recipient email' };
+  }
+
+  const suppressionResult = await shouldSuppressTransactionalEmail({
+    db: getDb(),
+    admin,
+    toEmail: args.toEmail,
+    userId: args.userId,
+    headers: args.headers,
+    idempotencyMetadata: args.idempotencyMetadata,
+    dailyRecipientMetadata: args.dailyRecipientMetadata,
+  }).catch((error) => {
+    console.warn('[sendBrevoTransactionalEmail] Failed to check email suppression:', error);
+    return { suppressed: false, error: error?.message || String(error) };
+  });
+
+  if (suppressionResult?.suppressed) {
+    console.log('[sendBrevoTransactionalEmail] Skipping suppressed recipient:', {
+      toEmail: normalizeEmailAddress(args.toEmail),
+      reason: suppressionResult.reason,
+      suppressionId: suppressionResult.suppressionId,
+    });
+    return {
+      success: true,
+      skipped: true,
+      suppressed: true,
+      suppressionReason: suppressionResult.reason,
+    };
   }
 
   const senderEmail = resolveAutomatedSenderEmail(args.sender?.email || process.env.BREVO_AUTOMATED_SENDER_EMAIL);
