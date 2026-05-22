@@ -26,6 +26,16 @@ type SequenceRow = {
   openInAdminLabel?: string;
 };
 
+type TemplatePreviewSource = 'none' | 'firestore' | 'default' | 'generic';
+
+type TemplatePreviewResponse = {
+  success?: boolean;
+  subject?: string;
+  html?: string;
+  source?: TemplatePreviewSource;
+  error?: string;
+};
+
 type CampaignConfig = {
   delayHours: number;
   batchLimit: number;
@@ -307,6 +317,7 @@ const EmailSequencesAdmin: React.FC = () => {
   const [templateSubject, setTemplateSubject] = useState('');
   const [templateHtml, setTemplateHtml] = useState('');
   const [templateLoadedFromFirestore, setTemplateLoadedFromFirestore] = useState(false);
+  const [templatePreviewSource, setTemplatePreviewSource] = useState<TemplatePreviewSource>('none');
 
   // Schedule config (daily send time)
   const [scheduleTimeById, setScheduleTimeById] = useState<Record<string, string>>({});
