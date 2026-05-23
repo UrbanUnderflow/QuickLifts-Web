@@ -67,6 +67,19 @@ type AggregateCsvPeriod = {
   preset: string;
   periodStart: string;
   periodEnd: string;
+  source?: string;
+};
+
+type AggregatePeriodSnapshot = {
+  id: string;
+  periodStart: string;
+  periodEnd: string;
+  importedAt?: unknown;
+  updatedAt?: unknown;
+  summary?: SummaryShape;
+  excludedFromRangeRollups?: boolean;
+  supersededBy?: string;
+  aggregateFingerprint?: string;
 };
 
 type SummaryShape = {
@@ -162,6 +175,89 @@ const normalizeDateOnly = (value: unknown): string => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return '';
   const parsed = new Date(`${text}T00:00:00.000Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === text ? text : '';
+};
+
+const dateOnlyFromMs = (millis: number): string =>
+  Number.isFinite(millis) && millis > 0 ? new Date(millis).toISOString().slice(0, 10) : '';
+
+const shiftDateOnly = (dateOnly: string, days: number): string => {
+  const baseMs = Date.parse(`${dateOnly}T00:00:00.000Z`);
+  if (!Number.isFinite(baseMs)) return '';
+  return new Date(baseMs + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+};
+
+const dateOnlyTokensFromText = (value: unknown): string[] => {
+  const text = normalizeString(value);
+  if (!text) return [];
+  const tokens: string[] = [];
+  const pushToken = (year: number, month: number, day: number) => {
+    const dateOnly = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    if (normalizeDateOnly(dateOnly)) tokens.push(dateOnly);
+  };
+
+  for (const match of text.matchAll(/\b(20\d{2})[-_/ .](\d{1,2})[-_/ .](\d{1,2})\b/g)) {
+    pushToken(Number(match[1]), Number(match[2]), Number(match[3]));
+  }
+  for (const match of text.matchAll(/\b(\d{1,2})[-_/ .](\d{1,2})[-_/ .](20\d{2})\b/g)) {
+    pushToken(Number(match[3]), Number(match[1]), Number(match[2]));
+  }
+
+  return Array.from(new Set(tokens)).sort();
+};
+
+const resolveAggregateCsvPeriod = (args: {
+  body: Record<string, any>;
+  csvFiles: UploadedCsvFile[];
+  minRowMs: number;
+  maxRowMs: number;
+}): AggregateCsvPeriod => {
+  const rowStart = dateOnlyFromMs(args.minRowMs);
+  const rowEnd = dateOnlyFromMs(args.maxRowMs);
+  if (rowStart && rowEnd) {
+    return {
+      docId: `macra_${rowStart}_${rowEnd}`,
+      preset: normalizeString(args.body.csvPeriodPreset || args.body.periodPreset || 'auto_row_dates') || 'auto_row_dates',
+      periodStart: rowStart <= rowEnd ? rowStart : rowEnd,
+      periodEnd: rowStart <= rowEnd ? rowEnd : rowStart,
+      source: 'row_dates',
+    };
+  }
+
+  const fileDateTokens = args.csvFiles.flatMap((file) => dateOnlyTokensFromText(file.name));
+  const uniqueFileDates = Array.from(new Set(fileDateTokens)).sort();
+  if (uniqueFileDates.length) {
+    const periodStart = uniqueFileDates[0];
+    const periodEnd = uniqueFileDates[uniqueFileDates.length - 1];
+    return {
+      docId: `macra_${periodStart}_${periodEnd}`,
+      preset: normalizeString(args.body.csvPeriodPreset || args.body.periodPreset || 'auto_file_name_dates') || 'auto_file_name_dates',
+      periodStart,
+      periodEnd,
+      source: 'file_name_dates',
+    };
+  }
+
+  const requestedStart = normalizeDateOnly(args.body.csvPeriodStart || args.body.periodStart || args.body.fromDate);
+  const requestedEnd = normalizeDateOnly(args.body.csvPeriodEnd || args.body.periodEnd || args.body.toDate);
+  if (requestedStart && requestedEnd) {
+    return {
+      docId: `macra_${requestedStart}_${requestedEnd}`,
+      preset: normalizeString(args.body.csvPeriodPreset || args.body.periodPreset || 'request_fallback') || 'request_fallback',
+      periodStart: requestedStart,
+      periodEnd: requestedEnd,
+      source: 'request_fallback',
+    };
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const periodStart = shiftDateOnly(today, -(DEFAULT_DAYS_BACK - 1));
+  return {
+    docId: `macra_${periodStart}_${today}`,
+    preset: 'auto_default_last_7_days',
+    periodStart,
+    periodEnd: today,
+    source: 'default_last_7_days',
+  };
 };
 
 const daysBetweenInclusive = (start: string, end: string): number => {
@@ -730,6 +826,116 @@ function stableRawRowId(row: NormalizedRow, report: ReportConfig, uploadKey = ''
   );
 }
 
+const aggregateDateMs = (dateOnly: string): number => {
+  const ms = Date.parse(`${dateOnly}T00:00:00.000Z`);
+  return Number.isFinite(ms) ? ms : 0;
+};
+
+const aggregatePeriodDays = (period: { periodStart: string; periodEnd: string }): number =>
+  daysBetweenInclusive(period.periodStart, period.periodEnd) || 0;
+
+const aggregatePeriodsOverlap = (
+  left: { periodStart: string; periodEnd: string },
+  right: { periodStart: string; periodEnd: string }
+): boolean => {
+  const leftStart = aggregateDateMs(left.periodStart);
+  const leftEnd = aggregateDateMs(left.periodEnd);
+  const rightStart = aggregateDateMs(right.periodStart);
+  const rightEnd = aggregateDateMs(right.periodEnd);
+  if (!leftStart || !leftEnd || !rightStart || !rightEnd) return false;
+  return leftStart <= rightEnd && rightStart <= leftEnd;
+};
+
+const aggregateTimestampMs = (value: unknown): number => {
+  if (!value) return 0;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  if (typeof value === 'object') {
+    const candidate = value as { toMillis?: () => number; toDate?: () => Date; seconds?: number; _seconds?: number };
+    if (typeof candidate.toMillis === 'function') {
+      const millis = candidate.toMillis();
+      return Number.isFinite(millis) ? millis : 0;
+    }
+    if (typeof candidate.toDate === 'function') {
+      const millis = candidate.toDate().getTime();
+      return Number.isFinite(millis) ? millis : 0;
+    }
+    const seconds = Number(candidate.seconds ?? candidate._seconds ?? 0);
+    return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 0;
+  }
+  return 0;
+};
+
+const aggregateImportMs = (snapshot: Pick<AggregatePeriodSnapshot, 'importedAt' | 'updatedAt'>): number => {
+  return aggregateTimestampMs(snapshot.importedAt) || aggregateTimestampMs(snapshot.updatedAt);
+};
+
+const aggregateSummaryFingerprint = (summary: Record<string, any> | null | undefined): string => {
+  const stableMap = (record: Record<string, any> | null | undefined) =>
+    Object.entries(record || {})
+      .map(([key, value]) => [key, Number(value || 0) || 0])
+      .filter(([key, value]) => Boolean(key) && Number(value) !== 0)
+      .sort(([a], [b]) => String(a).localeCompare(String(b)));
+
+  return hashRowKey(
+    JSON.stringify({
+      rows: Number(summary?.rows || 0) || 0,
+      eventsTotal: Number(summary?.events?.total || 0) || 0,
+      installsTotal: Number(summary?.installs?.total || 0) || 0,
+      reports: stableMap(summary?.reports),
+      eventsByName: stableMap(summary?.events?.byName),
+      eventsByMediaSource: stableMap(summary?.events?.byMediaSource),
+      installsByMediaSource: stableMap(summary?.installs?.byMediaSource),
+      installsByCampaign: stableMap(summary?.installs?.byCampaign),
+    })
+  );
+};
+
+const periodSnapshotFromFirestoreDoc = (snapshot: any): AggregatePeriodSnapshot | null => {
+  const data = snapshot.data() || {};
+  const periodStart = normalizeString(data.periodStart);
+  const periodEnd = normalizeString(data.periodEnd);
+  if (!periodStart || !periodEnd) return null;
+  return {
+    id: snapshot.id,
+    periodStart,
+    periodEnd,
+    importedAt: data.importedAt || null,
+    updatedAt: data.updatedAt || null,
+    summary: data.summary,
+    excludedFromRangeRollups: Boolean(data.excludedFromRangeRollups),
+    supersededBy: normalizeString(data.supersededBy),
+    aggregateFingerprint: normalizeString(data.aggregateFingerprint) || aggregateSummaryFingerprint(data.summary),
+  };
+};
+
+const selectActiveAggregatePeriodSnapshots = (periods: AggregatePeriodSnapshot[]): AggregatePeriodSnapshot[] => {
+  const candidates = periods
+    .filter((period) => period.periodStart && period.periodEnd && summaryHasData(period.summary))
+    .filter((period) => !period.excludedFromRangeRollups && !period.supersededBy)
+    .sort((a, b) => {
+      const spanDiff = aggregatePeriodDays(b) - aggregatePeriodDays(a);
+      if (spanDiff) return spanDiff;
+      const importedDiff = aggregateImportMs(b) - aggregateImportMs(a);
+      if (importedDiff) return importedDiff;
+      const eventsDiff = (Number(b.summary?.events?.total || 0) || 0) - (Number(a.summary?.events?.total || 0) || 0);
+      if (eventsDiff) return eventsDiff;
+      return a.id.localeCompare(b.id);
+    });
+
+  const selected: AggregatePeriodSnapshot[] = [];
+  candidates.forEach((candidate) => {
+    if (!selected.some((existing) => aggregatePeriodsOverlap(existing, candidate))) {
+      selected.push(candidate);
+    }
+  });
+
+  return selected.sort((a, b) => a.periodStart.localeCompare(b.periodStart));
+};
+
 async function filterNewRows(db: any, rows: Array<{ row: NormalizedRow; report: ReportConfig; rawRowId: string }>) {
   const uniqueRows = new Map<string, { row: NormalizedRow; report: ReportConfig; rawRowId: string }>();
   rows.forEach((row) => {
@@ -937,6 +1143,22 @@ async function persistAggregateCsvPeriodImport(args: {
   const now = FieldValue.serverTimestamp();
 
   finalizeSummary(summary);
+  const aggregateFingerprint = aggregateSummaryFingerprint(summary);
+  const existingPeriodDocsSnap = await db.collection(AGGREGATE_PERIOD_COLLECTION).where('product', '==', 'macra').get();
+  const existingPeriodSnapshots = existingPeriodDocsSnap.docs
+    .map(periodSnapshotFromFirestoreDoc)
+    .filter(Boolean) as AggregatePeriodSnapshot[];
+  const newPeriodSpan = aggregatePeriodDays(period);
+  const supersededPeriodIds = existingPeriodSnapshots
+    .filter((snapshot) => snapshot.id !== period.docId)
+    .filter((snapshot) => !snapshot.excludedFromRangeRollups && !snapshot.supersededBy)
+    .filter((snapshot) => aggregatePeriodsOverlap(snapshot, period))
+    .filter((snapshot) => {
+      const sameAggregateData = snapshot.aggregateFingerprint && snapshot.aggregateFingerprint === aggregateFingerprint;
+      const newCoversAtLeastAsMuch = newPeriodSpan >= aggregatePeriodDays(snapshot);
+      return sameAggregateData || newCoversAtLeastAsMuch;
+    })
+    .map((snapshot) => snapshot.id);
 
   const periodRef = db.collection(AGGREGATE_PERIOD_COLLECTION).doc(period.docId);
   const periodSnap = await periodRef.get();
@@ -948,19 +1170,41 @@ async function persistAggregateCsvPeriodImport(args: {
       source: 'csv_upload',
       importSource: 'aggregate_csv_upload',
       periodPreset: period.preset,
+      periodSource: period.source || 'request_fallback',
       periodStart: period.periodStart,
       periodEnd: period.periodEnd,
       latestRunId: runId,
       summary,
+      aggregateFingerprint,
       sourceFiles,
       uploadedRows,
       trialStarts: summaryEventCount(summary, MACRA_TRIAL_EVENT_NAMES),
+      supersedes: supersededPeriodIds,
+      supersededBy: null,
+      excludedFromRangeRollups: false,
       firstImportedAt: periodSnap.exists ? periodSnap.data()?.firstImportedAt || now : now,
       importedAt: now,
       updatedAt: now,
     },
     { merge: true }
   );
+
+  if (supersededPeriodIds.length) {
+    const batch = db.batch();
+    supersededPeriodIds.forEach((periodId) => {
+      batch.set(
+        db.collection(AGGREGATE_PERIOD_COLLECTION).doc(periodId),
+        {
+          supersededBy: period.docId,
+          supersededAt: now,
+          excludedFromRangeRollups: true,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    });
+    await batch.commit();
+  }
 
   await db.collection(IMPORT_RUN_COLLECTION).doc(runId).set({
     id: runId,
@@ -978,26 +1222,27 @@ async function persistAggregateCsvPeriodImport(args: {
   });
 
   const periodDocsSnap = await db.collection(AGGREGATE_PERIOD_COLLECTION).where('product', '==', 'macra').get();
-  const aggregateCsvPeriods = periodDocsSnap.docs
-    .map((snapshot: any) => {
-      const data = snapshot.data() || {};
-      const periodSummary = data.summary || {};
+  const activePeriodSnapshots = selectActiveAggregatePeriodSnapshots(
+    periodDocsSnap.docs.map(periodSnapshotFromFirestoreDoc).filter(Boolean) as AggregatePeriodSnapshot[]
+  );
+  const aggregateCsvPeriods = activePeriodSnapshots
+    .map((snapshot) => {
+      const periodSummary = snapshot.summary || {};
       return {
         id: snapshot.id,
-        periodStart: normalizeString(data.periodStart),
-        periodEnd: normalizeString(data.periodEnd),
+        periodStart: snapshot.periodStart,
+        periodEnd: snapshot.periodEnd,
         rows: Number(periodSummary.rows || 0) || 0,
         events: Number(periodSummary.events?.total || 0) || 0,
         installs: Number(periodSummary.installs?.total || 0) || 0,
         trialStarts: summaryEventCount(periodSummary, MACRA_TRIAL_EVENT_NAMES),
-        importedAt: data.importedAt || data.updatedAt || null,
+        importedAt: snapshot.importedAt || snapshot.updatedAt || null,
       };
     })
-    .filter((row: any) => row.periodStart && row.periodEnd)
     .sort((a: any, b: any) => a.periodStart.localeCompare(b.periodStart));
 
-  const periodSummaries = periodDocsSnap.docs
-    .map((snapshot: any) => snapshot.data()?.summary)
+  const periodSummaries = activePeriodSnapshots
+    .map((snapshot) => snapshot.summary)
     .filter(summaryHasData)
     .map((periodSummary: Record<string, any>) => mergeSummaryTotals({}, periodSummary as SummaryShape));
   const aggregateCsvSummary = mergeSummaryList(periodSummaries, {
@@ -1044,6 +1289,7 @@ async function persistAggregateCsvPeriodImport(args: {
     cumulativeSummary,
     aggregateCsvSummary,
     aggregateCsvPeriods,
+    supersededPeriodIds,
   };
 }
 
@@ -1126,27 +1372,19 @@ export const handler: Handler = async (event) => {
 
       const aggregateCsvUpload = allRows.some(({ row }) => isAggregatedPerformanceRow(row));
       if (aggregateCsvUpload) {
-        const periodStart = normalizeDateOnly(body.csvPeriodStart || body.periodStart || body.fromDate);
-        const periodEnd = normalizeDateOnly(body.csvPeriodEnd || body.periodEnd || body.toDate);
-        const periodPreset = normalizeString(body.csvPeriodPreset || body.periodPreset || 'custom') || 'custom';
-        if (!periodStart || !periodEnd) {
-          return json(400, { error: 'Choose the AppsFlyer CSV date range before uploading aggregate performance reports.' });
+        const period = resolveAggregateCsvPeriod({ body, csvFiles, minRowMs, maxRowMs });
+        if (!period.periodStart || !period.periodEnd) {
+          return json(400, { error: 'No AppsFlyer CSV date window could be inferred for the aggregate performance report.' });
         }
-        if (periodStart > periodEnd) {
+        if (period.periodStart > period.periodEnd) {
           return json(400, { error: 'AppsFlyer CSV start date must be on or before the end date.' });
         }
 
-        const period: AggregateCsvPeriod = {
-          docId: `macra_${periodStart}_${periodEnd}`,
-          preset: periodPreset,
-          periodStart,
-          periodEnd,
-        };
         const summary = createSummary({
           appId,
-          from: periodStart,
-          to: periodEnd,
-          daysBack: daysBetweenInclusive(periodStart, periodEnd),
+          from: period.periodStart,
+          to: period.periodEnd,
+          daysBack: daysBetweenInclusive(period.periodStart, period.periodEnd),
           maximumRows: allRows.length,
           timezone: 'aggregate_csv_period',
           importSource: 'aggregate_csv_upload',
@@ -1159,7 +1397,7 @@ export const handler: Handler = async (event) => {
         }
 
         const runId = `macra-appsflyer-csv-period-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-        const { cumulativeSummary, aggregateCsvSummary, aggregateCsvPeriods } = await persistAggregateCsvPeriodImport({
+        const { cumulativeSummary, aggregateCsvSummary, aggregateCsvPeriods, supersededPeriodIds } = await persistAggregateCsvPeriodImport({
           db: adminRequest.db,
           adminRequest,
           runId,
@@ -1180,6 +1418,7 @@ export const handler: Handler = async (event) => {
           uploadedRows: allRows.length,
           importedRows: allRows.length,
           duplicateRows: 0,
+          supersededPeriodIds,
           replacedPeriod: true,
         });
       }

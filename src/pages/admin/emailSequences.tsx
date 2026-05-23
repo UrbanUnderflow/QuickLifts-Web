@@ -1151,6 +1151,55 @@ const scoreboardTopEntriesFromMap = (source: Record<string, number>, limitCount 
 const appsFlyerAggregatePeriodFitsRange = (periodStart: string, periodEnd: string, range: MacraScoreboardDateRange): boolean =>
   Boolean(periodStart && periodEnd && periodStart >= range.start && periodEnd <= range.end);
 
+const aggregatePeriodDateMillis = (dateOnly: string): number => {
+  const parsed = Date.parse(`${dateOnly}T00:00:00.000Z`);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const aggregatePeriodDaySpan = (period: { periodStart: string; periodEnd: string }): number => {
+  const start = aggregatePeriodDateMillis(period.periodStart);
+  const end = aggregatePeriodDateMillis(period.periodEnd);
+  if (!start || !end || end < start) return 0;
+  return Math.round((end - start) / (24 * 60 * 60 * 1000)) + 1;
+};
+
+const aggregatePeriodsOverlap = (
+  left: { periodStart: string; periodEnd: string },
+  right: { periodStart: string; periodEnd: string }
+): boolean => {
+  const leftStart = aggregatePeriodDateMillis(left.periodStart);
+  const leftEnd = aggregatePeriodDateMillis(left.periodEnd);
+  const rightStart = aggregatePeriodDateMillis(right.periodStart);
+  const rightEnd = aggregatePeriodDateMillis(right.periodEnd);
+  if (!leftStart || !leftEnd || !rightStart || !rightEnd) return false;
+  return leftStart <= rightEnd && rightStart <= leftEnd;
+};
+
+const selectNonOverlappingAppsFlyerAggregatePeriods = <T extends { periodStart: string; periodEnd: string; importedAt?: unknown; summary?: Record<string, any> }>(
+  periods: T[]
+): T[] => {
+  const candidates = periods
+    .filter((period) => period.periodStart && period.periodEnd)
+    .sort((a, b) => {
+      const spanDiff = aggregatePeriodDaySpan(b) - aggregatePeriodDaySpan(a);
+      if (spanDiff) return spanDiff;
+      const importedDiff = (scoreMillis(b.importedAt) || 0) - (scoreMillis(a.importedAt) || 0);
+      if (importedDiff) return importedDiff;
+      const eventDiff = Number(getNestedValue(b.summary || {}, 'events.total') || 0) - Number(getNestedValue(a.summary || {}, 'events.total') || 0);
+      if (eventDiff) return eventDiff;
+      return a.periodStart.localeCompare(b.periodStart);
+    });
+
+  const selected: T[] = [];
+  candidates.forEach((candidate) => {
+    if (!selected.some((period) => aggregatePeriodsOverlap(period, candidate))) {
+      selected.push(candidate);
+    }
+  });
+
+  return selected.sort((a, b) => a.periodStart.localeCompare(b.periodStart));
+};
+
 const buildAppsFlyerAggregateSummaryForRange = (
   baseSummary: Record<string, any> | null,
   periodDocs: Record<string, any>[],
@@ -1158,7 +1207,7 @@ const buildAppsFlyerAggregateSummaryForRange = (
 ): Record<string, any> | null => {
   if (!baseSummary && !periodDocs.length) return null;
 
-  const selectedPeriods = periodDocs
+  const selectedPeriods = selectNonOverlappingAppsFlyerAggregatePeriods(periodDocs
     .map((period) => {
       const periodStart = normalizeScoreboardString(period.periodStart);
       const periodEnd = normalizeScoreboardString(period.periodEnd);
@@ -1169,10 +1218,11 @@ const buildAppsFlyerAggregateSummaryForRange = (
         periodEnd,
         importedAt: period.importedAt || period.updatedAt || null,
         summary,
+        supersededBy: normalizeScoreboardString(period.supersededBy),
+        excludedFromRangeRollups: Boolean(period.excludedFromRangeRollups),
       };
     })
-    .filter((period) => period.summary && appsFlyerAggregatePeriodFitsRange(period.periodStart, period.periodEnd, range))
-    .sort((a, b) => a.periodStart.localeCompare(b.periodStart));
+    .filter((period) => period.summary && !period.supersededBy && !period.excludedFromRangeRollups && appsFlyerAggregatePeriodFitsRange(period.periodStart, period.periodEnd, range)));
 
   const fallbackAggregateSummary = (baseSummary?.aggregateCsvSummary || {}) as Record<string, any>;
   if (!selectedPeriods.length && appsFlyerAggregatePeriodFitsRange(normalizeScoreboardString(fallbackAggregateSummary.from), normalizeScoreboardString(fallbackAggregateSummary.to), range)) {
@@ -1182,6 +1232,8 @@ const buildAppsFlyerAggregateSummaryForRange = (
       periodEnd: normalizeScoreboardString(fallbackAggregateSummary.to),
       importedAt: baseSummary?.importedAt || baseSummary?.updatedAt || null,
       summary: fallbackAggregateSummary,
+      supersededBy: '',
+      excludedFromRangeRollups: false,
     });
   }
 
@@ -2993,12 +3045,19 @@ const EmailSequencesAdmin: React.FC = () => {
       const duplicateRows = Number(json?.duplicateRows || json?.summary?.duplicateRows || 0);
       const uploadedEventActions = Number(getNestedValue(json?.summary || {}, 'events.total') || 0);
       const uploadedTrialStarts = appsFlyerSummaryEventCount(json?.summary || {}, MACRA_APPSFLYER_TRIAL_EVENT_NAMES);
-      const replacedPeriod = json?.replacedPeriod ? ` for ${appsFlyerCsvPeriodStart} to ${appsFlyerCsvPeriodEnd}` : '';
+      const supersededPeriodCount = Array.isArray(json?.supersededPeriodIds) ? json.supersededPeriodIds.length : 0;
+      const importedPeriodStart = normalizeScoreboardString(json?.aggregatePeriod?.periodStart) || appsFlyerCsvPeriodStart;
+      const importedPeriodEnd = normalizeScoreboardString(json?.aggregatePeriod?.periodEnd) || appsFlyerCsvPeriodEnd;
+      const importedPeriodSource = normalizeScoreboardString(json?.aggregatePeriod?.source);
+      const autoDetectedPeriod = importedPeriodSource && importedPeriodSource !== 'request_fallback';
+      const replacedPeriod = json?.replacedPeriod
+        ? ` for ${importedPeriodStart} to ${importedPeriodEnd}${autoDetectedPeriod ? ' (auto-detected)' : ''}`
+        : '';
       setMessage({
         type: 'success',
         text: `AppsFlyer CSV import complete${replacedPeriod}: ${importedRows} rows saved${duplicateRows ? `, ${duplicateRows} duplicate rows skipped` : ''}${
           uploadedEventActions ? `, ${uploadedEventActions} event actions counted${uploadedTrialStarts ? `, including ${uploadedTrialStarts} trial starts` : ''}` : ''
-        }.`,
+        }${supersededPeriodCount ? `, ${supersededPeriodCount} overlapping saved ${supersededPeriodCount === 1 ? 'snapshot' : 'snapshots'} excluded from duplicate totals` : ''}.`,
       });
       await loadMacraScoreboard();
     } catch (e: any) {
@@ -3823,7 +3882,7 @@ const EmailSequencesAdmin: React.FC = () => {
                     ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
                     : 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 cursor-pointer'
                     }`}
-                  title="Upload AppsFlyer CSV exports for the selected date range"
+                  title="Upload AppsFlyer CSV exports and merge them with saved coverage"
                 >
                   {uploadingAppsFlyerCsv ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   Upload CSV
