@@ -12,6 +12,7 @@ const SCOREBOARD_COLLECTION = 'appsflyer-scoreboards';
 const SCOREBOARD_DOC_ID = 'macra';
 const USER_ATTRIBUTION_COLLECTION = 'appsflyer-macra-users';
 const IMPORT_RUN_COLLECTION = 'appsflyer-import-runs';
+const RAW_ROW_COLLECTION = 'appsflyer-macra-raw-rows';
 const DEFAULT_DAYS_BACK = 7;
 const DEFAULT_MAXIMUM_ROWS = 50000;
 const MAX_DAYS_BACK = 31;
@@ -49,7 +50,46 @@ type ReportConfig = {
   eventNames?: string[];
 };
 
+type UploadedCsvFile = {
+  name?: string;
+  content?: string;
+  reportType?: ReportType;
+  organic?: boolean;
+};
+
 type NormalizedRow = Record<string, string>;
+
+type SummaryShape = {
+  appId: string;
+  from: string;
+  to: string;
+  daysBack: number;
+  maximumRows: number;
+  timezone: string;
+  tokenSource?: string;
+  importSource?: string;
+  rows: number;
+  duplicateRows: number;
+  reports: Record<string, number>;
+  installs: {
+    total: number;
+    organic: number;
+    nonOrganic: number;
+    byMediaSource: Record<string, number>;
+    byCampaign: Record<string, number>;
+  };
+  events: {
+    total: number;
+    byName: Record<string, number>;
+    byMediaSource: Record<string, number>;
+  };
+  matchedCustomerUserRows: number;
+  unmatchedRows: number;
+  importedUserDocs: number;
+  topMediaSources: Array<{ label: string; count: number }>;
+  topCampaigns: Array<{ label: string; count: number }>;
+  topEvents: Array<{ label: string; count: number }>;
+};
 
 type AttributionAggregate = {
   docId: string;
@@ -172,11 +212,119 @@ const bump = (target: Record<string, number>, key: string, amount = 1) => {
   target[normalized] = (target[normalized] || 0) + amount;
 };
 
+const mergeCountMaps = (base: Record<string, number> = {}, delta: Record<string, number> = {}) => {
+  const out = { ...base };
+  Object.entries(delta).forEach(([key, value]) => {
+    out[key] = (Number(out[key] || 0) || 0) + (Number(value || 0) || 0);
+  });
+  return out;
+};
+
 const topEntries = (record: Record<string, number>, limit = 8) =>
   Object.entries(record)
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
     .map(([label, count]) => ({ label, count }));
+
+const createSummary = (args: {
+  appId: string;
+  from: string;
+  to: string;
+  daysBack: number;
+  maximumRows: number;
+  timezone: string;
+  tokenSource?: string;
+  importSource: string;
+}): SummaryShape => ({
+  appId: args.appId,
+  from: args.from,
+  to: args.to,
+  daysBack: args.daysBack,
+  maximumRows: args.maximumRows,
+  timezone: args.timezone,
+  tokenSource: args.tokenSource || '',
+  importSource: args.importSource || '',
+  rows: 0,
+  duplicateRows: 0,
+  reports: {},
+  installs: {
+    total: 0,
+    organic: 0,
+    nonOrganic: 0,
+    byMediaSource: {},
+    byCampaign: {},
+  },
+  events: {
+    total: 0,
+    byName: {},
+    byMediaSource: {},
+  },
+  matchedCustomerUserRows: 0,
+  unmatchedRows: 0,
+  importedUserDocs: 0,
+  topMediaSources: [],
+  topCampaigns: [],
+  topEvents: [],
+});
+
+const addRowToSummary = (summary: SummaryShape, row: NormalizedRow, report: ReportConfig) => {
+  const customerUserId = getValue(row, ['customer_user_id', 'customer_userid', 'customer_id', 'app_user_id']);
+  const mediaSource = report.organic ? 'Organic' : getValue(row, ['media_source', 'pid', 'source']) || 'Unknown paid source';
+  const campaign = getValue(row, ['campaign', 'campaign_name', 'c']) || 'Unknown campaign';
+
+  if (customerUserId) summary.matchedCustomerUserRows += 1;
+  else summary.unmatchedRows += 1;
+
+  if (report.type === 'install') {
+    summary.installs.total += 1;
+    if (report.organic) summary.installs.organic += 1;
+    else summary.installs.nonOrganic += 1;
+    bump(summary.installs.byMediaSource, mediaSource);
+    bump(summary.installs.byCampaign, campaign);
+  } else {
+    const eventName = getValue(row, ['event_name']) || 'unknown_event';
+    summary.events.total += 1;
+    bump(summary.events.byName, eventName);
+    bump(summary.events.byMediaSource, mediaSource);
+  }
+};
+
+const finalizeSummary = (summary: SummaryShape) => {
+  summary.topMediaSources = topEntries(summary.installs.byMediaSource);
+  summary.topCampaigns = topEntries(summary.installs.byCampaign);
+  summary.topEvents = topEntries(summary.events.byName);
+  return summary;
+};
+
+const mergeSummaryTotals = (existing: Record<string, any>, delta: SummaryShape): SummaryShape => {
+  const merged = createSummary({
+    appId: delta.appId || normalizeString(existing.appId),
+    from: delta.from || normalizeString(existing.from),
+    to: delta.to || normalizeString(existing.to),
+    daysBack: Number(delta.daysBack || existing.daysBack || 0),
+    maximumRows: Number(delta.maximumRows || existing.maximumRows || 0),
+    timezone: delta.timezone || normalizeString(existing.timezone),
+    tokenSource: delta.tokenSource || normalizeString(existing.tokenSource),
+    importSource: delta.importSource || normalizeString(existing.importSource) || 'unknown',
+  });
+
+  merged.rows = (Number(existing.rows || 0) || 0) + delta.rows;
+  merged.duplicateRows = (Number(existing.duplicateRows || 0) || 0) + delta.duplicateRows;
+  merged.reports = mergeCountMaps(existing.reports || {}, delta.reports);
+  merged.installs.total = (Number(existing.installs?.total || 0) || 0) + delta.installs.total;
+  merged.installs.organic = (Number(existing.installs?.organic || 0) || 0) + delta.installs.organic;
+  merged.installs.nonOrganic = (Number(existing.installs?.nonOrganic || 0) || 0) + delta.installs.nonOrganic;
+  merged.installs.byMediaSource = mergeCountMaps(existing.installs?.byMediaSource || {}, delta.installs.byMediaSource);
+  merged.installs.byCampaign = mergeCountMaps(existing.installs?.byCampaign || {}, delta.installs.byCampaign);
+  merged.events.total = (Number(existing.events?.total || 0) || 0) + delta.events.total;
+  merged.events.byName = mergeCountMaps(existing.events?.byName || {}, delta.events.byName);
+  merged.events.byMediaSource = mergeCountMaps(existing.events?.byMediaSource || {}, delta.events.byMediaSource);
+  merged.matchedCustomerUserRows = (Number(existing.matchedCustomerUserRows || 0) || 0) + delta.matchedCustomerUserRows;
+  merged.unmatchedRows = (Number(existing.unmatchedRows || 0) || 0) + delta.unmatchedRows;
+  merged.importedUserDocs = Math.max(Number(existing.importedUserDocs || 0) || 0, delta.importedUserDocs);
+
+  return finalizeSummary(merged);
+};
 
 async function resolveAppsFlyerToken() {
   const envToken = normalizeString(
@@ -351,6 +499,106 @@ function mergeAttributionRow(args: {
   aggregateByDocId.set(docId, existing);
 }
 
+function inferUploadedReport(file: UploadedCsvFile, rows: NormalizedRow[], index: number): ReportConfig {
+  const name = normalizeString(file.name).toLowerCase();
+  const firstRow = rows[0] || {};
+  const type: ReportType =
+    file.reportType === 'install' || file.reportType === 'event'
+      ? file.reportType
+      : firstRow.event_name || name.includes('event') || name.includes('in_app')
+        ? 'event'
+        : 'install';
+  const organic =
+    typeof file.organic === 'boolean'
+      ? file.organic
+      : name.includes('organic') && !name.includes('non_organic') && !name.includes('non-organic') && !name.includes('non organic');
+  const keyPrefix = organic ? 'organic' : 'non_organic';
+  return {
+    key: `csv_${keyPrefix}_${type}_${index + 1}`,
+    path: 'csv_upload',
+    type,
+    organic,
+  };
+}
+
+function stableRawRowId(row: NormalizedRow, report: ReportConfig): string {
+  const eventName = report.type === 'event' ? getValue(row, ['event_name']) || 'unknown_event' : '';
+  const identity = getValue(row, ['customer_user_id', 'customer_userid', 'customer_id', 'app_user_id', 'appsflyer_id', 'apps_flyer_id', 'af_id']);
+  const occurredAt = getValue(row, ['event_time', 'event_time_selected_timezone', 'install_time', 'install_time_selected_timezone']);
+  const fallback = Object.keys(row)
+    .sort()
+    .map((key) => `${key}:${row[key]}`)
+    .join('|');
+  return hashRowKey(
+    JSON.stringify({
+      type: report.type,
+      organic: report.organic,
+      identity,
+      eventName,
+      occurredAt,
+      installTime: getValue(row, ['install_time', 'install_time_selected_timezone']),
+      mediaSource: getValue(row, ['media_source', 'pid', 'source']),
+      campaign: getValue(row, ['campaign', 'campaign_name', 'c']),
+      fallback: identity || occurredAt ? '' : fallback,
+    })
+  );
+}
+
+async function filterNewRows(db: any, rows: Array<{ row: NormalizedRow; report: ReportConfig; rawRowId: string }>) {
+  const uniqueRows = new Map<string, { row: NormalizedRow; report: ReportConfig; rawRowId: string }>();
+  rows.forEach((row) => {
+    if (!uniqueRows.has(row.rawRowId)) uniqueRows.set(row.rawRowId, row);
+  });
+
+  const deduped = Array.from(uniqueRows.values());
+  const newRows: Array<{ row: NormalizedRow; report: ReportConfig; rawRowId: string }> = [];
+  for (let i = 0; i < deduped.length; i += 300) {
+    const chunk = deduped.slice(i, i + 300);
+    const refs = chunk.map((row) => db.collection(RAW_ROW_COLLECTION).doc(row.rawRowId));
+    const snaps = refs.length ? await db.getAll(...refs) : [];
+    snaps.forEach((snap: any, index: number) => {
+      if (!snap.exists) newRows.push(chunk[index]);
+    });
+  }
+
+  return {
+    newRows,
+    duplicateRows: rows.length - newRows.length,
+  };
+}
+
+function pickLatestDateString(...values: unknown[]): string {
+  let latest = '';
+  let latestMs = 0;
+  values.forEach((value) => {
+    const text = normalizeString(value);
+    if (!text) return;
+    const parsed = Date.parse(text);
+    const ms = Number.isFinite(parsed) ? parsed : 0;
+    if (!latest || ms >= latestMs) {
+      latest = text;
+      latestMs = ms;
+    }
+  });
+  return latest;
+}
+
+function pickEarliestDateString(...values: unknown[]): string {
+  let earliest = '';
+  let earliestMs = 0;
+  values.forEach((value) => {
+    const text = normalizeString(value);
+    if (!text) return;
+    const parsed = Date.parse(text);
+    const ms = Number.isFinite(parsed) ? parsed : 0;
+    if (!earliest || (ms > 0 && (!earliestMs || ms < earliestMs))) {
+      earliest = text;
+      earliestMs = ms;
+    }
+  });
+  return earliest;
+}
+
 async function commitInChunks(db: any, writes: Array<{ ref: any; data: Record<string, any> }>) {
   const FieldValue = admin.firestore.FieldValue;
   for (let i = 0; i < writes.length; i += 450) {
@@ -369,6 +617,113 @@ async function commitInChunks(db: any, writes: Array<{ ref: any; data: Record<st
   }
 }
 
+async function persistImport(args: {
+  db: any;
+  adminRequest: any;
+  runId: string;
+  summary: SummaryShape;
+  aggregateByDocId: Map<string, AttributionAggregate>;
+  source: string;
+  rawRows?: Array<{ row: NormalizedRow; report: ReportConfig; rawRowId: string }>;
+}) {
+  const { db, adminRequest, runId, summary, aggregateByDocId, source, rawRows = [] } = args;
+  const FieldValue = admin.firestore.FieldValue;
+  const now = FieldValue.serverTimestamp();
+
+  const rawRowWrites = rawRows.map(({ row, report, rawRowId }) => ({
+    ref: db.collection(RAW_ROW_COLLECTION).doc(rawRowId),
+    data: {
+      id: rawRowId,
+      product: 'macra',
+      provider: 'appsflyer',
+      source,
+      reportKey: report.key,
+      reportType: report.type,
+      organic: report.organic,
+      row,
+      firstImportRunId: runId,
+      importRunIds: FieldValue.arrayUnion(runId),
+      createdAt: now,
+    },
+  }));
+
+  await commitInChunks(db, rawRowWrites);
+
+  const userWrites: Array<{ ref: any; data: Record<string, any> }> = [];
+  for (const aggregate of aggregateByDocId.values()) {
+    const ref = db.collection(USER_ATTRIBUTION_COLLECTION).doc(aggregate.docId);
+    const snap = await ref.get();
+    const existing = snap.exists ? snap.data() || {} : {};
+    const eventCounts = mergeCountMaps(existing.eventCounts || {}, aggregate.eventCounts);
+    const eventLatestAt = { ...(existing.eventLatestAt || {}) };
+    Object.entries(aggregate.eventLatestAt || {}).forEach(([eventName, latestAt]) => {
+      eventLatestAt[eventName] = pickLatestDateString(eventLatestAt[eventName], latestAt);
+    });
+
+    userWrites.push({
+      ref,
+      data: {
+        product: 'macra',
+        customerUserId: existing.customerUserId || aggregate.customerUserId || null,
+        appsFlyerId: existing.appsFlyerId || aggregate.appsFlyerId || null,
+        mediaSource: aggregate.mediaSource || existing.mediaSource || null,
+        campaign: aggregate.campaign || existing.campaign || null,
+        campaignId: aggregate.campaignId || existing.campaignId || null,
+        adset: aggregate.adset || existing.adset || null,
+        ad: aggregate.ad || existing.ad || null,
+        isOrganic: existing.isOrganic === undefined || existing.isOrganic === null ? aggregate.isOrganic : Boolean(existing.isOrganic && aggregate.isOrganic),
+        installTime: pickEarliestDateString(existing.installTime, aggregate.installTime) || null,
+        latestEventTime: pickLatestDateString(existing.latestEventTime, aggregate.latestEventTime) || null,
+        eventCounts,
+        eventLatestAt,
+        lastImportRunId: runId,
+        lastImportedRange: { from: summary.from, to: summary.to },
+        importRunIds: FieldValue.arrayUnion(runId),
+      },
+    });
+  }
+
+  await commitInChunks(db, userWrites);
+
+  summary.importedUserDocs = aggregateByDocId.size;
+  finalizeSummary(summary);
+
+  const scoreboardRef = db.collection(SCOREBOARD_COLLECTION).doc(SCOREBOARD_DOC_ID);
+  const scoreboardSnap = await scoreboardRef.get();
+  const existingScoreboard = scoreboardSnap.exists ? scoreboardSnap.data() || {} : {};
+  const cumulativeSummary = mergeSummaryTotals(existingScoreboard, summary);
+
+  await db.collection(IMPORT_RUN_COLLECTION).doc(runId).set({
+    id: runId,
+    product: 'macra',
+    provider: 'appsflyer',
+    source,
+    requestedBy: adminRequest.email || adminRequest.uid,
+    requestedByUid: adminRequest.uid,
+    requestedBySource: adminRequest.source,
+    summary,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await scoreboardRef.set(
+    {
+      id: SCOREBOARD_DOC_ID,
+      product: 'macra',
+      provider: 'appsflyer',
+      source,
+      latestRunId: runId,
+      latestRunSummary: summary,
+      ...cumulativeSummary,
+      importedAt: now,
+      updatedAt: now,
+    },
+    { merge: true }
+  );
+
+  return cumulativeSummary;
+}
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers, body: '' };
@@ -383,9 +738,81 @@ export const handler: Handler = async (event) => {
     if (!adminRequest) return json(401, { error: 'Admin authorization required' });
 
     const body = event.body ? JSON.parse(event.body) : {};
+    const appId = normalizeString(body.appId || process.env.APPSFLYER_MACRA_APP_ID || process.env.MACRA_APPSFLYER_APP_ID || MACRA_APPSFLYER_APP_ID);
+    if (body.mode === 'csv_upload' || Array.isArray(body.csvFiles)) {
+      const csvFiles = Array.isArray(body.csvFiles) ? (body.csvFiles as UploadedCsvFile[]) : [];
+      if (!csvFiles.length) {
+        return json(400, { error: 'Upload at least one AppsFlyer CSV file.' });
+      }
+
+      const allRows: Array<{ row: NormalizedRow; report: ReportConfig; rawRowId: string }> = [];
+      let minRowMs = 0;
+      let maxRowMs = 0;
+
+      csvFiles.forEach((file, index) => {
+        const content = normalizeString(file.content);
+        if (!content) return;
+        const rows = parseCsv(content);
+        const report = inferUploadedReport(file, rows, index);
+        rows.forEach((row) => {
+          const occurredAt = getValue(row, ['event_time', 'event_time_selected_timezone', 'install_time', 'install_time_selected_timezone']);
+          const occurredMs = Date.parse(occurredAt);
+          if (Number.isFinite(occurredMs)) {
+            minRowMs = minRowMs ? Math.min(minRowMs, occurredMs) : occurredMs;
+            maxRowMs = Math.max(maxRowMs, occurredMs);
+          }
+          allRows.push({ row, report, rawRowId: stableRawRowId(row, report) });
+        });
+      });
+
+      if (!allRows.length) {
+        return json(400, { error: 'No rows were found in the uploaded CSV file.' });
+      }
+
+      const { newRows, duplicateRows } = await filterNewRows(adminRequest.db, allRows);
+      const summary = createSummary({
+        appId,
+        from: normalizeString(body.from) || (minRowMs ? formatDateParam(new Date(minRowMs)) : ''),
+        to: normalizeString(body.to) || (maxRowMs ? formatDateParam(new Date(maxRowMs)) : formatDateParam(new Date())),
+        daysBack: parseInteger(body.daysBack, 0),
+        maximumRows: allRows.length,
+        timezone: normalizeString(body.timezone) || 'csv_upload',
+        importSource: 'csv_upload',
+      });
+      summary.duplicateRows = duplicateRows;
+
+      const aggregateByDocId = new Map<string, AttributionAggregate>();
+      for (const { row, report } of newRows) {
+        summary.rows += 1;
+        bump(summary.reports, report.key);
+        addRowToSummary(summary, row, report);
+        mergeAttributionRow({ aggregateByDocId, row, report });
+      }
+
+      const runId = `macra-appsflyer-csv-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+      const cumulativeSummary = await persistImport({
+        db: adminRequest.db,
+        adminRequest,
+        runId,
+        summary,
+        aggregateByDocId,
+        source: 'csv_upload',
+        rawRows: newRows,
+      });
+
+      return json(200, {
+        success: true,
+        runId,
+        summary,
+        cumulativeSummary,
+        uploadedRows: allRows.length,
+        importedRows: newRows.length,
+        duplicateRows,
+      });
+    }
+
     const tokenResolution = await resolveAppsFlyerToken();
     const token = tokenResolution.token;
-    const appId = normalizeString(body.appId || process.env.APPSFLYER_MACRA_APP_ID || process.env.MACRA_APPSFLYER_APP_ID || MACRA_APPSFLYER_APP_ID);
     if (!token) {
       return json(500, {
         error: 'Missing AppsFlyer raw-data API token. Set APPSFLYER_RAW_DATA_API_TOKEN in Netlify env, or create a Google Secret Manager secret named APPSFLYER_RAW_DATA_API_TOKEN.',
@@ -398,7 +825,17 @@ export const handler: Handler = async (event) => {
     const maximumRows = Math.max(1000, Math.min(1000000, parseInteger(body.maximumRows, DEFAULT_MAXIMUM_ROWS)));
     const reports = resolveReports(body);
     const runId = `macra-appsflyer-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-    const summary = {
+    const allRows: Array<{ row: NormalizedRow; report: ReportConfig; rawRowId: string }> = [];
+
+    for (const report of reports) {
+      const rows = await fetchAppsFlyerReport({ token, appId, report, from, to, maximumRows, timezone });
+      rows.forEach((row) => {
+        allRows.push({ row, report, rawRowId: stableRawRowId(row, report) });
+      });
+    }
+
+    const { newRows, duplicateRows } = await filterNewRows(adminRequest.db, allRows);
+    const summary = createSummary({
       appId,
       from,
       to,
@@ -406,115 +843,37 @@ export const handler: Handler = async (event) => {
       maximumRows,
       timezone,
       tokenSource: tokenResolution.source,
-      rows: 0,
-      reports: {} as Record<string, number>,
-      installs: {
-        total: 0,
-        organic: 0,
-        nonOrganic: 0,
-        byMediaSource: {} as Record<string, number>,
-        byCampaign: {} as Record<string, number>,
-      },
-      events: {
-        total: 0,
-        byName: {} as Record<string, number>,
-        byMediaSource: {} as Record<string, number>,
-      },
-      matchedCustomerUserRows: 0,
-      unmatchedRows: 0,
-      importedUserDocs: 0,
-      topMediaSources: [] as Array<{ label: string; count: number }>,
-      topCampaigns: [] as Array<{ label: string; count: number }>,
-      topEvents: [] as Array<{ label: string; count: number }>,
-    };
+      importSource: 'raw_data_pull_api_v2',
+    });
+    summary.duplicateRows = duplicateRows;
     const aggregateByDocId = new Map<string, AttributionAggregate>();
 
-    for (const report of reports) {
-      const rows = await fetchAppsFlyerReport({ token, appId, report, from, to, maximumRows, timezone });
-      summary.reports[report.key] = rows.length;
-      summary.rows += rows.length;
-
-      for (const row of rows) {
-        const customerUserId = getValue(row, ['customer_user_id', 'customer_userid', 'customer_id', 'app_user_id']);
-        const mediaSource = report.organic ? 'Organic' : getValue(row, ['media_source', 'pid', 'source']) || 'Unknown paid source';
-        const campaign = getValue(row, ['campaign', 'campaign_name', 'c']) || 'Unknown campaign';
-        if (customerUserId) summary.matchedCustomerUserRows += 1;
-        else summary.unmatchedRows += 1;
-
-        if (report.type === 'install') {
-          summary.installs.total += 1;
-          if (report.organic) summary.installs.organic += 1;
-          else summary.installs.nonOrganic += 1;
-          bump(summary.installs.byMediaSource, mediaSource);
-          bump(summary.installs.byCampaign, campaign);
-        } else {
-          const eventName = getValue(row, ['event_name']) || 'unknown_event';
-          summary.events.total += 1;
-          bump(summary.events.byName, eventName);
-          bump(summary.events.byMediaSource, mediaSource);
-        }
-
-        mergeAttributionRow({ aggregateByDocId, row, report });
-      }
+    for (const { row, report } of newRows) {
+      summary.rows += 1;
+      bump(summary.reports, report.key);
+      addRowToSummary(summary, row, report);
+      mergeAttributionRow({ aggregateByDocId, row, report });
     }
 
-    summary.importedUserDocs = aggregateByDocId.size;
-    summary.topMediaSources = topEntries(summary.installs.byMediaSource);
-    summary.topCampaigns = topEntries(summary.installs.byCampaign);
-    summary.topEvents = topEntries(summary.events.byName);
-
-    const db = adminRequest.db;
-    const FieldValue = admin.firestore.FieldValue;
-    const now = FieldValue.serverTimestamp();
-    const userWrites = Array.from(aggregateByDocId.values()).map((aggregate) => ({
-      ref: db.collection(USER_ATTRIBUTION_COLLECTION).doc(aggregate.docId),
-      data: {
-        product: 'macra',
-        customerUserId: aggregate.customerUserId || null,
-        appsFlyerId: aggregate.appsFlyerId || null,
-        mediaSource: aggregate.mediaSource || null,
-        campaign: aggregate.campaign || null,
-        campaignId: aggregate.campaignId || null,
-        adset: aggregate.adset || null,
-        ad: aggregate.ad || null,
-        isOrganic: aggregate.isOrganic,
-        installTime: aggregate.installTime || null,
-        latestEventTime: aggregate.latestEventTime || null,
-        eventCounts: aggregate.eventCounts,
-        eventLatestAt: aggregate.eventLatestAt,
-        lastImportRunId: runId,
-        lastImportedRange: { from, to },
-        importRunIds: FieldValue.arrayUnion(runId),
-      },
-    }));
-
-    await commitInChunks(db, userWrites);
-    await db.collection(IMPORT_RUN_COLLECTION).doc(runId).set({
-      id: runId,
-      product: 'macra',
-      provider: 'appsflyer',
-      requestedBy: adminRequest.email || adminRequest.uid,
-      requestedByUid: adminRequest.uid,
-      requestedBySource: adminRequest.source,
+    const cumulativeSummary = await persistImport({
+      db: adminRequest.db,
+      adminRequest,
+      runId,
       summary,
-      createdAt: now,
-      updatedAt: now,
+      aggregateByDocId,
+      source: 'raw_data_pull_api_v2',
+      rawRows: newRows,
     });
-    await db.collection(SCOREBOARD_COLLECTION).doc(SCOREBOARD_DOC_ID).set(
-      {
-        id: SCOREBOARD_DOC_ID,
-        product: 'macra',
-        provider: 'appsflyer',
-        source: 'raw_data_pull_api_v2',
-        latestRunId: runId,
-        ...summary,
-        importedAt: now,
-        updatedAt: now,
-      },
-      { merge: true }
-    );
 
-    return json(200, { success: true, runId, summary });
+    return json(200, {
+      success: true,
+      runId,
+      summary,
+      cumulativeSummary,
+      fetchedRows: allRows.length,
+      importedRows: newRows.length,
+      duplicateRows,
+    });
   } catch (error: any) {
     console.error('[sync-macra-appsflyer-raw-data] Failed:', error);
     return json(500, { error: error?.message || 'Failed to sync AppsFlyer raw data' });

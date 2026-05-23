@@ -23,6 +23,7 @@ import {
   ShoppingCart,
   Target,
   TrendingUp,
+  Upload,
 } from 'lucide-react';
 import { showToast } from '../../redux/toastSlice';
 import { useUser } from '../../hooks/useUser';
@@ -1641,6 +1642,7 @@ const EmailSequencesAdmin: React.FC = () => {
     purchaseLogCount: 0,
   });
   const [syncingAppsFlyer, setSyncingAppsFlyer] = useState(false);
+  const [uploadingAppsFlyerCsv, setUploadingAppsFlyerCsv] = useState(false);
 
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [activeSequence, setActiveSequence] = useState<SequenceRow | null>(null);
@@ -2298,6 +2300,58 @@ const EmailSequencesAdmin: React.FC = () => {
     }
   };
 
+  const uploadAppsFlyerCsvFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (!files.length) return;
+
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) {
+      setMessage({ type: 'error', text: 'Sign in again before uploading AppsFlyer CSV data.' });
+      return;
+    }
+
+    setUploadingAppsFlyerCsv(true);
+    setMessage(null);
+    try {
+      const csvFiles = await Promise.all(
+        files.map(async (file) => ({
+          name: file.name,
+          content: await file.text(),
+        }))
+      );
+      const idToken = await firebaseUser.getIdToken();
+      const response = await fetch('/.netlify/functions/sync-macra-appsflyer-raw-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          ...getFirebaseModeRequestHeaders(),
+        },
+        body: JSON.stringify({
+          mode: 'csv_upload',
+          csvFiles,
+        }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || json?.success === false) {
+        throw new Error(json?.error || `AppsFlyer CSV upload failed (HTTP ${response.status})`);
+      }
+
+      const importedRows = Number(json?.importedRows || json?.summary?.rows || 0);
+      const duplicateRows = Number(json?.duplicateRows || json?.summary?.duplicateRows || 0);
+      setMessage({
+        type: 'success',
+        text: `AppsFlyer CSV import complete: ${importedRows} new rows saved${duplicateRows ? `, ${duplicateRows} duplicate rows skipped` : ''}.`,
+      });
+      await loadMacraScoreboard();
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e?.message || 'Failed to upload AppsFlyer CSV data' });
+    } finally {
+      setUploadingAppsFlyerCsv(false);
+    }
+  };
+
   const sendMacraRetargetingNow = async (user: MacraScoreboardUser) => {
     const nextEmail = user.nextRetargetingEmail;
     if (!nextEmail) {
@@ -2799,6 +2853,26 @@ const EmailSequencesAdmin: React.FC = () => {
                   {copyingScoreboard ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
                   Copy report
                 </button>
+                <input
+                  id="macra-appsflyer-csv-upload"
+                  type="file"
+                  accept=".csv,text/csv"
+                  multiple
+                  className="hidden"
+                  onChange={uploadAppsFlyerCsvFiles}
+                  disabled={uploadingAppsFlyerCsv}
+                />
+                <label
+                  htmlFor="macra-appsflyer-csv-upload"
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${uploadingAppsFlyerCsv
+                    ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 cursor-pointer'
+                    }`}
+                  title="Upload AppsFlyer CSV exports into the cumulative scoreboard"
+                >
+                  {uploadingAppsFlyerCsv ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  Upload CSV
+                </label>
                 <button
                   type="button"
                   onClick={syncAppsFlyerRawData}
