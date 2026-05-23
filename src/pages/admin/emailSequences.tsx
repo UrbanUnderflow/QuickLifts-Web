@@ -247,12 +247,23 @@ const PREVIEW_TEMPLATE_VALUES: Record<string, string> = {
   teamName: 'PulseCheck Team',
   prizeAmount: '25',
   challengeTitle: 'May Challenge',
+  coachName: 'Coach Taylor',
   source: 'App',
   username: 'sample-user',
   milestone: '7',
+  completedCount: '4',
+  totalPlanned: '6',
   hoursRemaining: '24',
   eventTitle: 'Community Lift Night',
   tipTitle: 'Build one anchor meal',
+  resetLink: '#',
+  checkoutUrl: '#',
+  dashboardUrl: '#',
+  openAppUrl: '#',
+  gettingStartedUrl: '#',
+  roundUrl: '#',
+  clubUrl: '#',
+  macraUrl: '#',
   daysInactive: '3',
   macroSummary: '2,150 calories, 165g protein, 210g carbs, 65g fat',
   mealPlanLabel: '3 meals plus 1 snack built from your onboarding profile',
@@ -698,6 +709,9 @@ const buildDefaultEmailTemplate = (seq: SequenceRow, subjectOverride?: string, m
     source: 'generic',
   };
 };
+
+const buildEditableDefaultTemplate = (seq: SequenceRow, subjectOverride?: string): DefaultTemplatePreview =>
+  buildDefaultEmailTemplate(seq, subjectOverride, 'seed');
 
 const getPreviewSourceLabel = (source: TemplatePreviewSource) => {
   switch (source) {
@@ -1607,7 +1621,7 @@ const EmailSequencesAdmin: React.FC = () => {
     : defaultTemplatePreview.source;
   const previewSourceLabel = getPreviewSourceLabel(effectivePreviewSource);
   const previewSrcDoc = useMemo(() => {
-    if (templateHtml.trim()) return templateHtml;
+    if (templateHtml.trim()) return applyPreviewTemplateValues(templateHtml);
     return defaultTemplatePreview.html;
   }, [defaultTemplatePreview.html, templateHtml]);
 
@@ -1762,6 +1776,32 @@ const EmailSequencesAdmin: React.FC = () => {
 
   const scheduleConfigIsRetargeting = scheduleEditingSequence?.scheduleConfigDocId === MACRA_RETARGETING_SEQUENCE_CONFIG_ID;
 
+  const saveDefaultTemplateForSequence = async (seq: SequenceRow, subjectOverride?: string, docExists = false) => {
+    const ref = doc(db, 'email-templates', seq.templateDocId);
+    const seedTemplate = buildEditableDefaultTemplate(seq, subjectOverride);
+    const nextSubject = (subjectOverride || seedTemplate.subject || seq.defaultSubject).trim();
+    const seededBy = currentUser?.email || currentUser?.username || currentUser?.id || 'admin';
+
+    await setDoc(
+      ref,
+      {
+        id: seq.templateDocId,
+        sequenceId: seq.id,
+        subject: nextSubject,
+        html: seedTemplate.html,
+        seededFrom: 'email-sequences-admin',
+        seededFromSource: seedTemplate.source,
+        seededBy,
+        seededAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        ...(docExists ? {} : { createdAt: serverTimestamp() }),
+      },
+      { merge: true }
+    );
+
+    return { ...seedTemplate, subject: nextSubject };
+  };
+
   const loadTemplate = async (seq: SequenceRow) => {
     setLoadingTemplate(true);
     setTemplateLoadedFromFirestore(false);
@@ -1772,20 +1812,26 @@ const EmailSequencesAdmin: React.FC = () => {
       if (snap.exists()) {
         const data = snap.data() as any;
         const loadedHtml = (data?.html as string) || '';
-        setTemplateSubject((data?.subject as string) || seq.defaultSubject);
-        setTemplateHtml(loadedHtml);
-        setTemplateLoadedFromFirestore(Boolean(loadedHtml.trim()));
-        setTemplatePreviewSource(loadedHtml.trim() ? 'firestore' : 'default');
+        const loadedSubject = (data?.subject as string) || seq.defaultSubject;
+        const hasSavedHtml = Boolean(loadedHtml.trim());
+        const seededTemplate = hasSavedHtml ? null : await saveDefaultTemplateForSequence(seq, loadedSubject, true);
+        setTemplateSubject(loadedSubject);
+        setTemplateHtml(hasSavedHtml ? loadedHtml : seededTemplate?.html || '');
+        setTemplateLoadedFromFirestore(true);
+        setTemplatePreviewSource('firestore');
       } else {
-        // If not saved yet, start with defaults and let the function fallback render on send
-        setTemplateSubject(seq.defaultSubject);
-        setTemplateHtml('');
-        setTemplatePreviewSource('default');
+        const seededTemplate = await saveDefaultTemplateForSequence(seq);
+        setTemplateSubject(seededTemplate.subject || seq.defaultSubject);
+        setTemplateHtml(seededTemplate.html);
+        setTemplateLoadedFromFirestore(true);
+        setTemplatePreviewSource('firestore');
       }
     } catch (_e) {
-      setTemplateSubject(seq.defaultSubject);
-      setTemplateHtml('');
-      setTemplatePreviewSource('default');
+      const editableDefault = buildEditableDefaultTemplate(seq);
+      setTemplateSubject(editableDefault.subject || seq.defaultSubject);
+      setTemplateHtml(editableDefault.html);
+      setTemplateLoadedFromFirestore(false);
+      setTemplatePreviewSource(editableDefault.source);
       setMessage({ type: 'error', text: 'Failed to load email template' });
     } finally {
       setLoadingTemplate(false);
@@ -1796,7 +1842,6 @@ const EmailSequencesAdmin: React.FC = () => {
     setSeedingTemplates(true);
     setMessage(null);
 
-    const seededBy = currentUser?.email || currentUser?.username || currentUser?.id || 'admin';
     let created = 0;
     let repaired = 0;
     let skipped = 0;
@@ -1821,26 +1866,7 @@ const EmailSequencesAdmin: React.FC = () => {
           continue;
         }
 
-        const seedTemplate = buildDefaultEmailTemplate(seq, existingSubject || undefined, 'seed');
-        const nextSubject = existingSubject || seedTemplate.subject;
-        const nextHtml = existingHtml || seedTemplate.html;
-        await setDoc(
-          ref,
-          {
-            id: seq.templateDocId,
-            sequenceId: seq.id,
-            subject: nextSubject,
-            html: nextHtml,
-            seededFrom: 'email-sequences-admin',
-            seededFromSource: seedTemplate.source,
-            seededBy,
-            seededAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            ...(snap.exists() ? {} : { createdAt: serverTimestamp() }),
-          },
-          { merge: true }
-        );
-
+        await saveDefaultTemplateForSequence(seq, existingSubject || undefined, snap.exists());
         seededTemplateIds.push(seq.templateDocId);
         if (snap.exists()) {
           repaired += 1;
@@ -3040,7 +3066,7 @@ const EmailSequencesAdmin: React.FC = () => {
                 </h2>
                 <p className="text-sm text-zinc-400 mt-1">
                   {activeSequence.name}
-                  {templateLoadedFromFirestore ? ' • Saved template' : ' • Not saved yet (using default on send)'}
+                  {templateLoadedFromFirestore ? ' • Saved template' : ' • Default loaded for editing'}
                 </p>
               </div>
               <button
@@ -3117,7 +3143,7 @@ const EmailSequencesAdmin: React.FC = () => {
                         className="w-full h-[520px] px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#d7ff00] transition-colors resize-none font-mono text-xs"
                       />
                       <p className="text-xs text-zinc-500 mt-2">
-                        This HTML is what gets sent to users when saved. Leave it empty to keep using the send-function default.
+                        This HTML is what gets sent to users when saved. Defaults are loaded as an editable draft until you save a custom template.
                       </p>
                     </div>
                   </div>
@@ -3154,7 +3180,7 @@ const EmailSequencesAdmin: React.FC = () => {
                     </div>
                     {!hasTemplateHtml ? (
                       <p className="text-xs text-zinc-500">
-                        Previewing the default fallback. Paste custom HTML to override it.
+                        Previewing the default fallback. Add HTML to override it.
                       </p>
                     ) : null}
                     <div className="bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden">

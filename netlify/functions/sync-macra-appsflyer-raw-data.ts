@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import crypto from 'crypto';
+import { getSecretManagerSecret } from '../../src/lib/secretManager';
 
 const firebaseConfig = require('./config/firebase') as any;
 
@@ -14,6 +15,11 @@ const IMPORT_RUN_COLLECTION = 'appsflyer-import-runs';
 const DEFAULT_DAYS_BACK = 7;
 const DEFAULT_MAXIMUM_ROWS = 50000;
 const MAX_DAYS_BACK = 31;
+const APPSFLYER_SECRET_MANAGER_SECRET_NAMES = [
+  'APPSFLYER_RAW_DATA_API_TOKEN',
+  'appsflyer-raw-data-api-token',
+  'macra-appsflyer-raw-data-api-token',
+];
 
 const DEFAULT_MACRA_EVENT_NAMES = [
   'af_complete_registration',
@@ -171,6 +177,41 @@ const topEntries = (record: Record<string, number>, limit = 8) =>
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
     .map(([label, count]) => ({ label, count }));
+
+async function resolveAppsFlyerToken() {
+  const envToken = normalizeString(
+    process.env.APPSFLYER_RAW_DATA_API_TOKEN ||
+      process.env.APPSFLYER_API_TOKEN_V2 ||
+      process.env.APPSFLYER_API_TOKEN
+  );
+
+  if (envToken) {
+    return { token: envToken, source: 'netlify_env', errors: [] as string[] };
+  }
+
+  const configuredSecretNames = [
+    process.env.APPSFLYER_RAW_DATA_SECRET_NAME,
+    process.env.APPSFLYER_SECRET_MANAGER_SECRET_NAME,
+  ]
+    .map(normalizeString)
+    .filter(Boolean);
+  const secretNames = Array.from(new Set([...configuredSecretNames, ...APPSFLYER_SECRET_MANAGER_SECRET_NAMES]));
+  const errors: string[] = [];
+
+  for (const secretName of secretNames) {
+    try {
+      const secretValue = normalizeString(await getSecretManagerSecret(secretName));
+      if (secretValue) {
+        return { token: secretValue, source: `secret_manager:${secretName}`, errors };
+      }
+      errors.push(`${secretName}: empty secret payload`);
+    } catch (error: any) {
+      errors.push(`${secretName}: ${error?.message || 'failed to read secret'}`);
+    }
+  }
+
+  return { token: '', source: 'missing', errors };
+}
 
 async function verifyAdminRequest(event: any) {
   const authHeader = getHeader(event, 'authorization');
@@ -342,9 +383,15 @@ export const handler: Handler = async (event) => {
     if (!adminRequest) return json(401, { error: 'Admin authorization required' });
 
     const body = event.body ? JSON.parse(event.body) : {};
-    const token = normalizeString(process.env.APPSFLYER_RAW_DATA_API_TOKEN || process.env.APPSFLYER_API_TOKEN_V2 || process.env.APPSFLYER_API_TOKEN);
+    const tokenResolution = await resolveAppsFlyerToken();
+    const token = tokenResolution.token;
     const appId = normalizeString(body.appId || process.env.APPSFLYER_MACRA_APP_ID || process.env.MACRA_APPSFLYER_APP_ID || MACRA_APPSFLYER_APP_ID);
-    if (!token) return json(500, { error: 'Missing APPSFLYER_RAW_DATA_API_TOKEN or APPSFLYER_API_TOKEN_V2 in Netlify env.' });
+    if (!token) {
+      return json(500, {
+        error: 'Missing AppsFlyer raw-data API token. Set APPSFLYER_RAW_DATA_API_TOKEN in Netlify env, or create a Google Secret Manager secret named APPSFLYER_RAW_DATA_API_TOKEN.',
+        secretManagerErrors: tokenResolution.errors.slice(0, 3),
+      });
+    }
 
     const { from, to, daysBack } = resolveDateRange(body);
     const timezone = normalizeString(body.timezone) || '+00:00';
@@ -358,6 +405,7 @@ export const handler: Handler = async (event) => {
       daysBack,
       maximumRows,
       timezone,
+      tokenSource: tokenResolution.source,
       rows: 0,
       reports: {} as Record<string, number>,
       installs: {
