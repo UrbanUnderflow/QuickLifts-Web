@@ -100,6 +100,23 @@ type AppsFlyerAttributionDoc = Record<string, any> & {
   customerUserId?: string | null;
 };
 
+type MacraPurchaseLog = Record<string, any> & {
+  id: string;
+  userId?: string;
+  uid?: string;
+  authUid?: string;
+  appUserId?: string;
+  email?: string;
+  toEmail?: string;
+  recipientEmail?: string;
+  to?: string;
+  status?: string;
+  purchaseStatus?: string;
+  plan?: Record<string, any> | string;
+  metadata?: Record<string, any>;
+  cancelFeedbackMetadata?: Record<string, any>;
+};
+
 const EXPERIMENT_COLLECTION = 'macra-experiments';
 const EXPERIMENT_ID = 'macra_paywall_onboarding';
 const EXPERIMENT_RESULTS_COLLECTION = 'macra-experiment-results';
@@ -273,7 +290,7 @@ const getFirstNumber = (sources: Array<Record<string, any> | null | undefined>, 
   return null;
 };
 
-const inferAgeYears = (data: Record<string, any>, profile: Record<string, any> | null, purchaseLogs: Record<string, any>[] = []): number | null => {
+const inferAgeYears = (data: Record<string, any>, profile: Record<string, any> | null, purchaseLogs: MacraPurchaseLog[] = []): number | null => {
   const directAge = getFirstNumber([profile, data], [
     'ageYears',
     'age',
@@ -560,7 +577,7 @@ const ExperimentsPage: React.FC = () => {
         id: snapshot.id,
         data: (snapshot.data() || {}) as Record<string, any>,
       }));
-      const purchaseLogs = purchaseLogsSnapshot?.docs.map((snapshot) => ({
+      const purchaseLogs: MacraPurchaseLog[] = purchaseLogsSnapshot?.docs.map((snapshot) => ({
         id: snapshot.id,
         ...((snapshot.data() || {}) as Record<string, any>),
       })) || [];
