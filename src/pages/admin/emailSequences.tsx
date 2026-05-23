@@ -4,8 +4,9 @@ import { useDispatch } from 'react-redux';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { Mail, Send, Loader2, CheckCircle, AlertCircle, X, Edit3, Eye, Copy, Clock } from 'lucide-react';
+import { Mail, Send, Loader2, CheckCircle, AlertCircle, X, Edit3, Eye, Copy, Clock, FilePlus2 } from 'lucide-react';
 import { showToast } from '../../redux/toastSlice';
+import { useUser } from '../../hooks/useUser';
 
 type SequenceRow = {
   id: string;
@@ -26,14 +27,24 @@ type SequenceRow = {
   openInAdminLabel?: string;
 };
 
-type TemplatePreviewSource = 'none' | 'firestore' | 'default' | 'generic';
+type TemplatePreviewSource = 'none' | 'firestore' | 'draft' | 'default' | 'generic';
+type TemplateBuildMode = 'preview' | 'seed';
 
-type TemplatePreviewResponse = {
-  success?: boolean;
-  subject?: string;
-  html?: string;
-  source?: TemplatePreviewSource;
-  error?: string;
+type DefaultTemplatePreview = {
+  subject: string;
+  html: string;
+  source: Extract<TemplatePreviewSource, 'none' | 'default' | 'generic'>;
+};
+
+type MacraPreviewCopy = {
+  eyebrow: string;
+  headline: string;
+  intro: string;
+  proofTitle?: string;
+  proofBody: string;
+  ctaLabel: string;
+  ctaHref?: string;
+  contextRows?: Array<{ label: string; value: string }>;
 };
 
 type CampaignConfig = {
@@ -47,6 +58,7 @@ type CampaignConfig = {
 };
 
 const MACRA_WEB_OFFER_SEQUENCE_ID = 'macra-web-offer-24h-v1';
+const MACRA_RETARGETING_SEQUENCE_CONFIG_ID = 'macra-retargeting-v1';
 const CAMPAIGN_SEND_WINDOW_TIMEZONE = 'America/New_York';
 const DEFAULT_CAMPAIGN_CONFIG: CampaignConfig = {
   delayHours: 24,
@@ -90,8 +102,488 @@ const parseIntegerDraft = (value: string): number | null => {
   return Number.isSafeInteger(parsed) ? parsed : null;
 };
 
-const hasCampaignControls = (seq: Pick<SequenceRow, 'id' | 'supportsCampaignConfig'> | null) =>
-  Boolean(seq?.supportsCampaignConfig || seq?.id === MACRA_WEB_OFFER_SEQUENCE_ID);
+const hasCampaignControls = (seq: Pick<SequenceRow, 'id' | 'supportsCampaignConfig' | 'scheduleConfigDocId'> | null) =>
+  Boolean(
+    seq?.supportsCampaignConfig ||
+    seq?.id === MACRA_WEB_OFFER_SEQUENCE_ID ||
+    seq?.scheduleConfigDocId === MACRA_RETARGETING_SEQUENCE_CONFIG_ID
+  );
+
+const EMPTY_TEMPLATE_PREVIEW: DefaultTemplatePreview = { subject: '', html: '', source: 'none' };
+
+const PREVIEW_TEMPLATE_VALUES: Record<string, string> = {
+  firstName: 'Tremaine',
+  followerName: 'Jordan',
+  athleteName: 'Maya',
+  teamName: 'PulseCheck Team',
+  prizeAmount: '25',
+  challengeTitle: 'May Challenge',
+  source: 'App',
+  username: 'sample-user',
+  milestone: '7',
+  hoursRemaining: '24',
+  eventTitle: 'Community Lift Night',
+  tipTitle: 'Build one anchor meal',
+  daysInactive: '3',
+  macroSummary: '2,150 calories, 165g protein, 210g carbs, 65g fat',
+  mealPlanLabel: '3 meals plus 1 snack built from your onboarding profile',
+  biggestStruggleLabel: 'Evening cravings',
+  biggestStruggleProof: 'Keep a protein-first option ready before dinner.',
+};
+
+const MACRA_RETARGETING_PREVIEW_CONTEXT_ROWS = [
+  { label: 'Your target', value: '{{macroSummary}}' },
+  { label: 'Nora plan', value: '{{mealPlanLabel}}' },
+  { label: 'Coaching focus', value: '{{biggestStruggleLabel}}. {{biggestStruggleProof}}' },
+];
+
+const PULSE_PREVIEW_COPY_BY_SEQUENCE_ID: Record<string, MacraPreviewCopy> = {
+  'welcome-v1': {
+    eyebrow: 'Welcome',
+    headline: 'Welcome to Pulse, {{firstName}}.',
+    intro: 'Your account is ready. Set up your profile, find your first workout, and start building momentum inside Pulse.',
+    proofTitle: 'Start here',
+    proofBody: 'Open Pulse, finish your profile, and choose the next training action that fits your goal.',
+    ctaLabel: 'Open Pulse',
+    ctaHref: 'https://fitwithpulse.ai/dashboard',
+  },
+  'username-reminder-v1': {
+    eyebrow: 'Almost done',
+    headline: 'Finish setting up your Pulse account, {{firstName}}.',
+    intro: 'You are one step away from completing registration. Pick your username so your account is ready when you come back.',
+    proofTitle: 'Why it matters',
+    proofBody: 'Your username helps connect your workouts, challenge activity, and community profile in Pulse.',
+    ctaLabel: 'Finish setup',
+    ctaHref: 'https://fitwithpulse.ai',
+  },
+  'new-follower-v1': {
+    eyebrow: 'New follower',
+    headline: '{{followerName}} is now following you on Pulse.',
+    intro: 'Someone new is following your training activity. Open Pulse to view their profile and keep the connection moving.',
+    proofTitle: 'Stay connected',
+    proofBody: 'Followers help your workouts, challenges, and creator activity travel further through the Pulse community.',
+    ctaLabel: 'Open Pulse',
+    ctaHref: 'https://fitwithpulse.ai',
+  },
+  'coach-connection-v1': {
+    eyebrow: 'PulseCheck',
+    headline: '{{athleteName}} just connected with you on PulseCheck.',
+    intro: '{{coachName}}, you can now message this athlete and support their training progress from your coach dashboard.',
+    proofTitle: 'Next step',
+    proofBody: 'Review their profile, open the conversation, and help them keep their training moving.',
+    ctaLabel: 'View coach dashboard',
+    ctaHref: '{{dashboardUrl}}',
+  },
+  'pulsecheck-pilot-activation-v1': {
+    eyebrow: 'Access ready',
+    headline: '{{teamName}} access is ready in PulseCheck.',
+    intro: 'Your pilot access has been activated. Reopen the app to finish consent and complete setup.',
+    proofTitle: 'What to do now',
+    proofBody: 'Open PulseCheck, review the consent flow, and finish the remaining setup steps for your team experience.',
+    ctaLabel: 'Open PulseCheck',
+    ctaHref: '{{openAppUrl}}',
+  },
+  'winner-notification-v1': {
+    eyebrow: 'Challenge winner',
+    headline: 'You won ${{prizeAmount}} in {{challengeTitle}}!',
+    intro: 'Nice work, {{firstName}}. Your challenge result has been confirmed and your prize details are ready to review.',
+    proofTitle: 'Prize status',
+    proofBody: 'Open your dashboard to review challenge results, payout details, and next steps.',
+    ctaLabel: 'View results',
+    ctaHref: '{{dashboardUrl}}',
+  },
+  'approval-v1': {
+    eyebrow: 'Approved',
+    headline: "You're approved, {{firstName}}.",
+    intro: 'Welcome to Pulse Programming. You now have access to the Founding Coach experience.',
+    proofTitle: 'Start here',
+    proofBody: 'Download the app, complete your profile, create your first Move, Stack, and Round, then launch a challenge with your audience.',
+    ctaLabel: 'Open getting started guide',
+    ctaHref: '{{gettingStartedUrl}}',
+  },
+  'joined-round-no-workout-v1': {
+    eyebrow: 'Round reminder',
+    headline: 'Your Round is waiting, {{firstName}}.',
+    intro: 'You joined {{challengeTitle}} but have not started your first workout yet.',
+    proofTitle: 'Start with one session',
+    proofBody: 'Open the Round and complete your first workout. Momentum starts with one completed training session.',
+    ctaLabel: 'Start first workout',
+    ctaHref: '{{roundUrl}}',
+  },
+  'first-workout-celebration-v1': {
+    eyebrow: 'First workout complete',
+    headline: 'First workout complete. Huge win, {{firstName}}.',
+    intro: 'You just finished your first workout in {{challengeTitle}}.',
+    proofTitle: 'Next action',
+    proofBody: 'Lock in your next workout now while momentum is high, then review your progress on the dashboard.',
+    ctaLabel: 'Plan next workout',
+    ctaHref: '{{roundUrl}}',
+  },
+  'streak-milestone-v1': {
+    eyebrow: 'Streak milestone',
+    headline: '{{milestone}}-day streak unlocked.',
+    intro: '{{firstName}}, you hit a {{milestone}}-day consistency milestone in {{challengeTitle}}.',
+    proofTitle: 'Keep it alive',
+    proofBody: 'Open your Round and complete the next session while your rhythm is still fresh.',
+    ctaLabel: 'Keep streak going',
+    ctaHref: '{{roundUrl}}',
+  },
+  'challenge-ending-soon-v1': {
+    eyebrow: 'Challenge ending soon',
+    headline: '{{hoursRemaining}} hours left in {{challengeTitle}}.',
+    intro: '{{firstName}}, finish strong. You are at {{completedCount}}/{{totalPlanned}} planned workouts.',
+    proofTitle: 'Final push',
+    proofBody: 'Complete your next workout now, then keep momentum going with standalone workouts after this challenge.',
+    ctaLabel: 'Finish challenge strong',
+    ctaHref: '{{roundUrl}}',
+  },
+  'irl-event-analytics-report-v1': {
+    eyebrow: 'Event analytics',
+    headline: 'Your {{eventTitle}} analytics report is ready.',
+    intro: 'Your event has wrapped, and the attendance and engagement summary is ready to review.',
+    proofTitle: 'Inside the report',
+    proofBody: 'Review check-ins, attendance timing, platform breakdown, and share-driven activity from the event.',
+    ctaLabel: 'Open report',
+    ctaHref: '{{clubUrl}}',
+  },
+  'inactivity-winback-v1': {
+    eyebrow: 'Pulse check-in',
+    headline: "Let's get you back in motion, {{firstName}}.",
+    intro: 'It has been a few days since your last meaningful activity. Start small and rebuild the rhythm today.',
+    proofTitle: 'One useful action',
+    proofBody: 'Open Pulse, choose a workout, and complete one training session to get momentum back.',
+    ctaLabel: 'Open Pulse',
+    ctaHref: '{{dashboardUrl}}',
+  },
+  'password-reset-v1': {
+    eyebrow: 'Password reset',
+    headline: 'Reset your Pulse password.',
+    intro: 'Use the secure link below to choose a new password for your account.',
+    proofTitle: 'Security note',
+    proofBody: 'If you did not request this reset, you can ignore this email and your password will stay the same.',
+    ctaLabel: 'Reset password',
+    ctaHref: '{{resetLink}}',
+  },
+  'error-alerts-v1': {
+    eyebrow: 'Pulse error alert',
+    headline: '[Pulse Error Alert] {{source}} ({{username}})',
+    intro: 'A new app error was recorded and needs review.',
+    proofTitle: 'Review context',
+    proofBody: 'Open the error logs dashboard to inspect the source, user, and stack details.',
+    ctaLabel: 'Open error logs',
+    ctaHref: 'https://fitwithpulse.ai/admin/ErrorLogs',
+  },
+};
+
+const MACRA_PREVIEW_COPY_BY_SEQUENCE_ID: Record<string, MacraPreviewCopy> = {
+  'macra-welcome-v1': {
+    eyebrow: 'Plan ready',
+    headline: 'Welcome to Macra, {{firstName}}.',
+    intro: 'Your plan is live. Nora, your AI nutrition coach, is ready to help you hit your macros every day.',
+    proofTitle: 'Three ways to start strong',
+    proofBody: 'Log your first meal, ask Nora what to adjust, then check what is left for the day before dinner.',
+    ctaLabel: 'Open Macra',
+    ctaHref: 'https://fitwithpulse.ai/macra',
+  },
+  'macra-tips-v1': {
+    eyebrow: 'Nora tip',
+    headline: 'Build one anchor meal today, {{firstName}}.',
+    intro: 'A predictable breakfast or lunch makes the rest of the day easier to adjust. Nora can help you make that meal fit your target.',
+    proofTitle: 'Small wins compound',
+    proofBody: 'Once one meal is dialed in, Macra can show what is left for the day and help you avoid guessing later.',
+    ctaLabel: 'Open Macra',
+    ctaHref: '{{macraUrl}}',
+  },
+  'macra-inactivity-winback-v1': {
+    eyebrow: 'Macra check-in',
+    headline: "Nora's missing you, {{firstName}}.",
+    intro: 'It has been a few days since your last food log. You already have the plan, so the fastest way back is one simple meal entry.',
+    proofTitle: 'Pick the day back up',
+    proofBody: 'Log one meal and Nora can rebuild the rest of today around your remaining calories, protein, carbs, and fat.',
+    ctaLabel: 'Log a meal',
+    ctaHref: '{{macraUrl}}',
+  },
+  [MACRA_WEB_OFFER_SEQUENCE_ID]: {
+    eyebrow: 'One free month',
+    headline: 'Your Macra plan is ready, {{firstName}}.',
+    intro: 'You already built your nutrition profile. Start Macra today and your first month is free before the subscription renews.',
+    proofTitle: 'What Nora unlocks',
+    proofBody: 'Inside Macra, Nora helps turn your profile into targets, meal feedback, and daily coaching so you know exactly what to adjust next.',
+    ctaLabel: 'Start your free month',
+    ctaHref: '{{checkoutUrl}}',
+  },
+  'macra-paywall-cancel-trust-v1': {
+    eyebrow: 'Macra trial',
+    headline: 'No payment today, {{firstName}}. Apple confirms the details first.',
+    intro:
+      "You tapped to start Macra, then stopped before the trial began. The next screen is Apple's subscription sheet, where you can review the exact plan and renewal price before approving anything.",
+    proofTitle: 'What happens when you try again',
+    proofBody:
+      'Macra unlocks your target, scanner, meal plan, and Nora coaching after you confirm. If it is not the right fit, you can cancel from Apple Subscriptions before renewal.',
+    ctaLabel: 'Open Macra',
+    ctaHref: '{{macraUrl}}',
+    contextRows: MACRA_RETARGETING_PREVIEW_CONTEXT_ROWS,
+  },
+  'macra-web-offer-proof-v1': {
+    eyebrow: 'Your plan preview',
+    headline: '{{firstName}}, your Macra plan was built around your goal.',
+    intro:
+      'You already gave Macra enough context to build a useful starting point. Your targets, meal plan, and Nora coaching are meant to turn that goal into a clear food decision today.',
+    proofTitle: 'Why this is different from a blank food tracker',
+    proofBody:
+      'Macra starts from your profile instead of asking you to guess. Nora uses your target, plan, and saved meals to help you decide what fits next.',
+    ctaLabel: 'Review my plan',
+    ctaHref: '{{macraUrl}}',
+    contextRows: MACRA_RETARGETING_PREVIEW_CONTEXT_ROWS,
+  },
+  'macra-paywall-view-value-v1': {
+    eyebrow: 'One useful action',
+    headline: 'Start with one meal today, {{firstName}}.',
+    intro: 'You do not need a perfect tracking day to learn something useful. Scan one real meal and Macra will show how it fits your target.',
+    proofTitle: 'The first win is clarity',
+    proofBody: 'A single photo can turn guessing into calories, protein, carbs, and fat, then Nora can help with what to eat next.',
+    ctaLabel: 'Scan one meal',
+    ctaHref: '{{macraUrl}}',
+    contextRows: MACRA_RETARGETING_PREVIEW_CONTEXT_ROWS,
+  },
+  'macra-no-trial-7d-challenge-v1': {
+    eyebrow: '7-day check-in',
+    headline: 'Try Macra with one real meal, {{firstName}}.',
+    intro: 'No hard sell. Open Macra, scan one meal you were already going to eat, and see what Nora does with the numbers.',
+    proofTitle: 'One meal is enough to feel the loop',
+    proofBody: 'Macra turns the scan into a macro breakdown, compares it to your target, and helps you make the next food choice.',
+    ctaLabel: 'Try one meal',
+    ctaHref: '{{macraUrl}}',
+    contextRows: MACRA_RETARGETING_PREVIEW_CONTEXT_ROWS,
+  },
+  'macra-trial-no-activation-24h-v1': {
+    eyebrow: 'Trial active',
+    headline: 'Your trial is active, {{firstName}}. Start with one meal.',
+    intro: 'The fastest way to feel Macra is to log one meal now. Nora can coach the day better once she has a first signal.',
+    proofTitle: 'Start the trial with context',
+    proofBody: 'After your first meal, Macra can show what is left for the day and Nora can help you adjust before dinner.',
+    ctaLabel: 'Log my first meal',
+    ctaHref: '{{macraUrl}}',
+    contextRows: MACRA_RETARGETING_PREVIEW_CONTEXT_ROWS,
+  },
+};
+
+const escapePreviewHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const applyPreviewTemplateValues = (value: string) =>
+  value.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => PREVIEW_TEMPLATE_VALUES[key] || key);
+
+const renderTemplateValue = (value: string, mode: TemplateBuildMode) =>
+  mode === 'preview' ? applyPreviewTemplateValues(value) : value;
+
+const renderTemplateHref = (value: string | undefined, mode: TemplateBuildMode) =>
+  mode === 'preview' ? '#' : value || '#';
+
+const getPreviewSiteOrigin = () => {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+  return 'https://fitwithpulse.ai';
+};
+
+const buildMacraTemplateHtml = (seq: SequenceRow, copy: MacraPreviewCopy, subjectOverride?: string, mode: TemplateBuildMode = 'preview'): string => {
+  const subject = renderTemplateValue((subjectOverride || seq.defaultSubject).trim() || seq.defaultSubject, mode);
+  const logoUrl = `${getPreviewSiteOrigin()}/macra-icon.png`;
+  const headline = renderTemplateValue(copy.headline, mode);
+  const ctaHref = renderTemplateHref(copy.ctaHref, mode);
+  const contextRows = copy.contextRows || [];
+  const proofTitleHtml = copy.proofTitle
+    ? `<p style="margin:0 0 8px 0;font-size:13px;line-height:1.6;color:#ffffff;font-weight:800;">${escapePreviewHtml(copy.proofTitle)}</p>`
+    : '';
+  const contextHtml = contextRows.length
+    ? `<p style="margin:0;font-size:12px;line-height:1.8;color:#A1A1AA;">
+${contextRows
+  .map(
+    (row) => `
+                      <strong style="color:#E4E4E7;">${escapePreviewHtml(row.label)}:</strong> ${escapePreviewHtml(renderTemplateValue(row.value, mode))}<br />`
+  )
+  .join('')}                    </p>`
+    : '';
+  const proofBodyMargin = contextRows.length ? '0 0 12px 0' : '0';
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapePreviewHtml(subject)}</title>
+  </head>
+  <body style="margin:0;padding:0;background:#0a0a0b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0a0b;padding:24px 0;">
+      <tr>
+        <td align="center" style="padding:0 16px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="640" style="max-width:640px;width:100%;">
+            <tr>
+              <td style="padding:6px 8px 18px 8px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;">
+                  <tr>
+                    <td style="vertical-align:middle;padding-right:12px;">
+                      <img src="${escapePreviewHtml(logoUrl)}" width="44" height="44" alt="Macra" style="display:block;width:44px;height:44px;border-radius:12px;border:0;outline:none;text-decoration:none;" />
+                    </td>
+                    <td style="vertical-align:middle;font-weight:800;color:#ffffff;font-size:18px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;">Macra</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="border:1px solid rgba(255,255,255,0.08);background:#18181b;border-radius:20px;overflow:hidden;">
+                <div style="height:2px;background:linear-gradient(90deg, transparent, rgba(224,254,16,0.82), transparent);"></div>
+                <div style="padding:28px 24px 10px 24px;">
+                  <p style="margin:0 0 10px 0;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#E0FE10;font-weight:800;">${escapePreviewHtml(copy.eyebrow)}</p>
+                  <h1 style="margin:0 0 12px 0;font-size:29px;line-height:1.18;color:#ffffff;font-weight:900;">
+                    ${escapePreviewHtml(headline)}
+                  </h1>
+                  <p style="margin:0 0 18px 0;font-size:15px;line-height:1.7;color:#D4D4D8;">
+                    ${escapePreviewHtml(copy.intro)}
+                  </p>
+                  <a href="${escapePreviewHtml(ctaHref)}" style="display:inline-block;background:#E0FE10;color:#101113;text-decoration:none;padding:13px 18px;border-radius:12px;font-weight:900;font-size:14px;">
+                    ${escapePreviewHtml(copy.ctaLabel)}
+                  </a>
+                </div>
+                <div style="padding:18px 24px 26px 24px;">
+                  <div style="padding:16px;border-radius:16px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.06);">
+                    ${proofTitleHtml}
+                    <p style="margin:${proofBodyMargin};font-size:13px;line-height:1.7;color:#D4D4D8;">${escapePreviewHtml(copy.proofBody)}</p>
+                    ${contextHtml}
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 8px 0 8px;text-align:center;font-size:12px;line-height:1.6;color:#71717A;">
+                Sent by Macra &middot; A Pulse Intelligence Labs app<br />
+                Reply to this email if you do not want Macra emails.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+};
+
+const buildGenericTemplateHtml = (seq: SequenceRow, copy: MacraPreviewCopy, subjectOverride?: string, mode: TemplateBuildMode = 'preview'): string => {
+  const subject = renderTemplateValue((subjectOverride || seq.defaultSubject).trim() || seq.defaultSubject, mode);
+  const headline = renderTemplateValue(copy.headline, mode);
+  const intro = renderTemplateValue(copy.intro, mode);
+  const proofBody = renderTemplateValue(copy.proofBody, mode);
+  const ctaHref = renderTemplateHref(copy.ctaHref, mode);
+  const proofTitleHtml = copy.proofTitle
+    ? `<p style="margin:0 0 8px 0;font-size:13px;line-height:1.6;color:#ffffff;font-weight:800;">${escapePreviewHtml(copy.proofTitle)}</p>`
+    : '';
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapePreviewHtml(subject)}</title>
+  </head>
+  <body style="margin:0;padding:0;background:#0f1216;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#0f1216;padding:28px 0;">
+      <tr>
+        <td align="center" style="padding:0 16px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="620" style="max-width:620px;width:100%;background:#1a1e24;border:1px solid #2f3640;border-radius:16px;overflow:hidden;">
+            <tr>
+              <td style="padding:26px 24px;color:#f4f4f5;">
+                <p style="margin:0 0 8px 0;font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:#d7ff00;font-weight:800;">${escapePreviewHtml(copy.eyebrow)}</p>
+                <h1 style="margin:0 0 12px 0;font-size:26px;line-height:1.22;color:#ffffff;">${escapePreviewHtml(headline)}</h1>
+                <p style="margin:0 0 18px 0;font-size:14px;line-height:1.7;color:#d4d4d8;">
+                  ${escapePreviewHtml(intro)}
+                </p>
+                <div style="margin:0 0 18px 0;padding:14px 14px;border-radius:14px;background:rgba(0,0,0,0.32);border:1px solid rgba(255,255,255,0.06);">
+                  ${proofTitleHtml}
+                  <p style="margin:0;font-size:13px;line-height:1.7;color:#d4d4d8;">${escapePreviewHtml(proofBody)}</p>
+                </div>
+                <a href="${escapePreviewHtml(ctaHref)}" style="display:inline-block;background:#d7ff00;color:#101113;text-decoration:none;padding:12px 16px;border-radius:10px;font-weight:800;font-size:14px;">
+                  ${escapePreviewHtml(copy.ctaLabel)}
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+};
+
+const buildDefaultEmailTemplate = (seq: SequenceRow, subjectOverride?: string, mode: TemplateBuildMode = 'preview'): DefaultTemplatePreview => {
+  const subject = renderTemplateValue((subjectOverride || seq.defaultSubject).trim() || seq.defaultSubject, mode);
+  const macraCopy = MACRA_PREVIEW_COPY_BY_SEQUENCE_ID[seq.id];
+  if (macraCopy) {
+    return { subject, html: buildMacraTemplateHtml(seq, macraCopy, subjectOverride, mode), source: 'default' };
+  }
+  const pulseCopy = PULSE_PREVIEW_COPY_BY_SEQUENCE_ID[seq.id];
+  if (pulseCopy) {
+    return { subject, html: buildGenericTemplateHtml(seq, pulseCopy, subjectOverride, mode), source: 'default' };
+  }
+  if (seq.id.startsWith('macra-')) {
+    return {
+      subject,
+      html: buildMacraTemplateHtml(
+        seq,
+        {
+          eyebrow: 'Macra email',
+          headline: subjectOverride || seq.defaultSubject,
+          intro: 'No custom HTML is saved yet, so this preview shows a Macra-styled fallback for the send function.',
+          proofTitle: 'Fallback behavior',
+          proofBody: 'Real sends continue to use the send-function fallback until a custom template is saved here.',
+          ctaLabel: 'Open Macra',
+          ctaHref: 'https://fitwithpulse.ai/macra',
+        },
+        subjectOverride,
+        mode
+      ),
+      source: 'generic',
+    };
+  }
+  return {
+    subject,
+    html: buildGenericTemplateHtml(
+      seq,
+      {
+        eyebrow: 'Pulse email',
+        headline: subjectOverride || seq.defaultSubject,
+        intro: `No custom HTML is saved for ${seq.name} yet. Real sends will use the fallback built into its send function until custom HTML is saved here.`,
+        proofTitle: 'Fallback behavior',
+        proofBody: 'This generated seed gives the admin dashboard an editable starting point for the sequence.',
+        ctaLabel: 'Open Pulse',
+        ctaHref: 'https://fitwithpulse.ai',
+      },
+      subjectOverride,
+      mode
+    ),
+    source: 'generic',
+  };
+};
+
+const getPreviewSourceLabel = (source: TemplatePreviewSource) => {
+  switch (source) {
+    case 'firestore':
+      return 'Saved HTML';
+    case 'draft':
+      return 'Unsaved draft';
+    case 'default':
+      return 'Function default';
+    case 'generic':
+      return 'Generic fallback';
+    default:
+      return 'No preview';
+  }
+};
 
 const SEQUENCES: SequenceRow[] = [
   {
@@ -299,15 +791,20 @@ const SEQUENCES: SequenceRow[] = [
   {
     id: 'macra-paywall-cancel-trust-v1',
     name: 'Macra Retargeting 2 - Paywall Cancel Trust',
-    trigger: 'Planned trigger. Sends after the paywall CTA was pressed and Apple purchase was cancelled or no trial started. Trust-focused message explaining Apple confirmation, visible renewal price, and no payment today.',
+    trigger: 'Shared scheduler. Sends after the paywall CTA was pressed and Apple purchase was cancelled or no trial started. Trust-focused message explaining Apple confirmation, visible renewal price, and no payment today.',
     defaultSubject: 'No payment today - Apple confirms the details first',
     functionPath: '/.netlify/functions/send-macra-paywall-cancel-trust-email',
     templateDocId: 'macra-paywall-cancel-trust-v1',
+    scheduleConfigDocId: MACRA_RETARGETING_SEQUENCE_CONFIG_ID,
+    scheduleDescription: 'Netlify cron: hourly shared scheduler for Macra retargeting rows 2-6; sends the next eligible email for each user.',
+    supportsScheduleTime: false,
+    defaultScheduleEnabled: false,
+    supportsCampaignConfig: true,
   },
   {
     id: 'macra-web-offer-proof-v1',
     name: 'Macra Retargeting 3 - Offer Proof',
-    trigger: 'Planned trigger. Sends after the 24h web offer email is opened or clicked but no checkout starts. Proof-focused message using onboarding intent such as goal direction, biggest struggle, daily target, and meal plan count.',
+    trigger: 'Shared scheduler. Sends after the 24h web offer email is opened or clicked but no checkout starts. Proof-focused message using onboarding intent such as goal direction, biggest struggle, daily target, and meal plan count.',
     defaultSubject: 'Your Macra plan was built around your goal',
     functionPath: '/.netlify/functions/send-macra-web-offer-proof-email',
     templateDocId: 'macra-web-offer-proof-v1',
@@ -315,7 +812,7 @@ const SEQUENCES: SequenceRow[] = [
   {
     id: 'macra-paywall-view-value-v1',
     name: 'Macra Retargeting 4 - Paywall View Value',
-    trigger: 'Planned trigger. Sends after multiple paywall views with no CTA tap and no trial. Value-objection recovery focused on one useful meal scan instead of another price push.',
+    trigger: 'Shared scheduler. Sends after multiple paywall views with no CTA tap and no trial. Value-objection recovery focused on one useful meal scan instead of another price push.',
     defaultSubject: 'Start with one useful scan today',
     functionPath: '/.netlify/functions/send-macra-paywall-view-value-email',
     templateDocId: 'macra-paywall-view-value-v1',
@@ -323,7 +820,7 @@ const SEQUENCES: SequenceRow[] = [
   {
     id: 'macra-no-trial-7d-challenge-v1',
     name: 'Macra Retargeting 5 - 7d Meal Challenge',
-    trigger: 'Planned scheduled function. Sends 7 days after Macra onboarding when no trial/subscription exists and earlier retargeting did not convert. Softer one-real-meal challenge, no hard discount push.',
+    trigger: 'Shared scheduler. Sends 7 days after Macra onboarding when no trial/subscription exists and earlier retargeting did not convert. Softer one-real-meal challenge, no hard discount push.',
     defaultSubject: 'Try Macra with one real meal',
     functionPath: '/.netlify/functions/send-macra-no-trial-challenge-email',
     templateDocId: 'macra-no-trial-7d-challenge-v1',
@@ -331,7 +828,7 @@ const SEQUENCES: SequenceRow[] = [
   {
     id: 'macra-trial-no-activation-24h-v1',
     name: 'Macra Retargeting 6 - Trial Activation',
-    trigger: 'Planned trigger. Sends 24h after trial start when no first Macra activation event exists, such as a meal scan, meal log, label scan, or Ask Nora message. Activation email focused on the first useful action.',
+    trigger: 'Shared scheduler. Sends 24h after trial start when no first Macra activation event exists, such as a meal scan, meal log, label scan, or Ask Nora message. Activation email focused on the first useful action.',
     defaultSubject: 'Your Macra trial is active - start with one meal',
     functionPath: '/.netlify/functions/send-macra-trial-activation-email',
     templateDocId: 'macra-trial-no-activation-24h-v1',
@@ -340,7 +837,9 @@ const SEQUENCES: SequenceRow[] = [
 
 const EmailSequencesAdmin: React.FC = () => {
   const dispatch = useDispatch();
+  const currentUser = useUser();
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [seedingTemplates, setSeedingTemplates] = useState(false);
 
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [activeSequence, setActiveSequence] = useState<SequenceRow | null>(null);
@@ -418,10 +917,19 @@ const EmailSequencesAdmin: React.FC = () => {
     load();
   }, []);
 
+  const defaultTemplatePreview = useMemo(
+    () => (activeSequence ? buildDefaultEmailTemplate(activeSequence, templateSubject, 'preview') : EMPTY_TEMPLATE_PREVIEW),
+    [activeSequence, templateSubject]
+  );
+  const hasTemplateHtml = Boolean(templateHtml.trim());
+  const effectivePreviewSource: TemplatePreviewSource = hasTemplateHtml
+    ? templatePreviewSource
+    : defaultTemplatePreview.source;
+  const previewSourceLabel = getPreviewSourceLabel(effectivePreviewSource);
   const previewSrcDoc = useMemo(() => {
-    if (!templateHtml.trim()) return '';
-    return templateHtml;
-  }, [templateHtml]);
+    if (templateHtml.trim()) return templateHtml;
+    return defaultTemplatePreview.html;
+  }, [defaultTemplatePreview.html, templateHtml]);
 
   const openTestModal = (seq: SequenceRow) => {
     setActiveSequence(seq);
@@ -473,7 +981,12 @@ const EmailSequencesAdmin: React.FC = () => {
       const sendWindowEndLocal = normalizeLocalTime(sendWindowEndDraft, '');
 
       if (!delayHours || delayHours < 1 || delayHours > 168) {
-        setMessage({ type: 'error', text: 'Delay must be between 1 and 168 hours.' });
+        setMessage({
+          type: 'error',
+          text: scheduleEditingSequence.scheduleConfigDocId === MACRA_RETARGETING_SEQUENCE_CONFIG_ID
+            ? 'Cooldown must be between 1 and 168 hours.'
+            : 'Delay must be between 1 and 168 hours.',
+        });
         return;
       }
       if (!batchLimit || batchLimit < 25 || batchLimit > 1000) {
@@ -567,28 +1080,109 @@ const EmailSequencesAdmin: React.FC = () => {
     }
   };
 
+  const scheduleConfigIsRetargeting = scheduleEditingSequence?.scheduleConfigDocId === MACRA_RETARGETING_SEQUENCE_CONFIG_ID;
+
   const loadTemplate = async (seq: SequenceRow) => {
     setLoadingTemplate(true);
     setTemplateLoadedFromFirestore(false);
+    setTemplatePreviewSource('none');
     try {
       const ref = doc(db, 'email-templates', seq.templateDocId);
       const snap = await getDoc(ref);
       if (snap.exists()) {
         const data = snap.data() as any;
+        const loadedHtml = (data?.html as string) || '';
         setTemplateSubject((data?.subject as string) || seq.defaultSubject);
-        setTemplateHtml((data?.html as string) || '');
-        setTemplateLoadedFromFirestore(true);
+        setTemplateHtml(loadedHtml);
+        setTemplateLoadedFromFirestore(Boolean(loadedHtml.trim()));
+        setTemplatePreviewSource(loadedHtml.trim() ? 'firestore' : 'default');
       } else {
         // If not saved yet, start with defaults and let the function fallback render on send
         setTemplateSubject(seq.defaultSubject);
         setTemplateHtml('');
+        setTemplatePreviewSource('default');
       }
     } catch (_e) {
       setTemplateSubject(seq.defaultSubject);
       setTemplateHtml('');
+      setTemplatePreviewSource('default');
       setMessage({ type: 'error', text: 'Failed to load email template' });
     } finally {
       setLoadingTemplate(false);
+    }
+  };
+
+  const seedMissingTemplates = async () => {
+    setSeedingTemplates(true);
+    setMessage(null);
+
+    const seededBy = currentUser?.email || currentUser?.username || currentUser?.id || 'admin';
+    let created = 0;
+    let repaired = 0;
+    let skipped = 0;
+    let unsupported = 0;
+    const seededTemplateIds: string[] = [];
+
+    try {
+      for (const seq of SEQUENCES) {
+        if (seq.supportsTemplateEditing === false) {
+          unsupported += 1;
+          continue;
+        }
+
+        const ref = doc(db, 'email-templates', seq.templateDocId);
+        const snap = await getDoc(ref);
+        const data = snap.exists() ? ((snap.data() || {}) as any) : {};
+        const existingSubject = typeof data?.subject === 'string' ? data.subject.trim() : '';
+        const existingHtml = typeof data?.html === 'string' ? data.html.trim() : '';
+
+        if (existingSubject && existingHtml) {
+          skipped += 1;
+          continue;
+        }
+
+        const seedTemplate = buildDefaultEmailTemplate(seq, existingSubject || undefined, 'seed');
+        const nextSubject = existingSubject || seedTemplate.subject;
+        const nextHtml = existingHtml || seedTemplate.html;
+        await setDoc(
+          ref,
+          {
+            id: seq.templateDocId,
+            sequenceId: seq.id,
+            subject: nextSubject,
+            html: nextHtml,
+            seededFrom: 'email-sequences-admin',
+            seededFromSource: seedTemplate.source,
+            seededBy,
+            seededAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            ...(snap.exists() ? {} : { createdAt: serverTimestamp() }),
+          },
+          { merge: true }
+        );
+
+        seededTemplateIds.push(seq.templateDocId);
+        if (snap.exists()) {
+          repaired += 1;
+        } else {
+          created += 1;
+        }
+      }
+
+      const repairedText = repaired ? ` Repaired ${repaired} empty template${repaired === 1 ? '' : 's'}.` : '';
+      const unsupportedText = unsupported ? ` Skipped ${unsupported} non-editable sequence${unsupported === 1 ? '' : 's'}.` : '';
+      setMessage({
+        type: 'success',
+        text: `Seeded ${created} missing template${created === 1 ? '' : 's'}.${repairedText} ${skipped} already had saved HTML.${unsupportedText}`,
+      });
+
+      if (activeSequence && seededTemplateIds.includes(activeSequence.templateDocId)) {
+        await loadTemplate(activeSequence);
+      }
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e?.message || 'Failed to seed email templates' });
+    } finally {
+      setSeedingTemplates(false);
     }
   };
 
@@ -624,6 +1218,7 @@ const EmailSequencesAdmin: React.FC = () => {
         { merge: true }
       );
       setTemplateLoadedFromFirestore(true);
+      setTemplatePreviewSource('firestore');
       setMessage({ type: 'success', text: 'Template saved.' });
     } catch (e: any) {
       setMessage({ type: 'error', text: e?.message || 'Failed to save template' });
@@ -728,6 +1323,19 @@ const EmailSequencesAdmin: React.FC = () => {
               </h1>
               <p className="text-zinc-400 mt-1">See what emails get sent when, and send test emails.</p>
             </div>
+            <button
+              type="button"
+              onClick={seedMissingTemplates}
+              disabled={seedingTemplates}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${seedingTemplates
+                ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                : 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700'
+                }`}
+              title="Create Firestore templates for editable sequences that do not have saved HTML yet"
+            >
+              {seedingTemplates ? <Loader2 className="w-4 h-4 animate-spin" /> : <FilePlus2 className="w-4 h-4" />}
+              Seed missing templates
+            </button>
           </div>
 
           {message && (
@@ -1042,7 +1650,9 @@ const EmailSequencesAdmin: React.FC = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-zinc-400 mb-2">Delay after onboarding</label>
+                      <label className="block text-xs font-medium text-zinc-400 mb-2">
+                        {scheduleConfigIsRetargeting ? 'Cooldown between emails' : 'Delay after onboarding'}
+                      </label>
                       <div className="flex items-center rounded-xl border border-zinc-700 bg-zinc-950 focus-within:border-[#d7ff00]">
                         <input
                           type="number"
@@ -1143,7 +1753,9 @@ const EmailSequencesAdmin: React.FC = () => {
                   </p>
 
                   <div className="mt-3 rounded-lg border border-amber-700/40 bg-amber-900/20 px-3 py-2 text-xs text-amber-200">
-                    Recommended first launch: delay 24h, scan 50 users, max 5 sends per run, scan every 3h during your preferred Eastern-time window.
+                    {scheduleConfigIsRetargeting
+                      ? 'Recommended first launch: 24h cooldown, scan 50 users, max 5 sends per run, scan every 3h during your preferred Eastern-time window.'
+                      : 'Recommended first launch: delay 24h, scan 50 users, max 5 sends per run, scan every 3h during your preferred Eastern-time window.'}
                   </div>
                 </div>
               ) : null}
@@ -1281,31 +1893,43 @@ const EmailSequencesAdmin: React.FC = () => {
                       </div>
                       <textarea
                         value={templateHtml}
-                        onChange={(e) => setTemplateHtml(e.target.value)}
+                        onChange={(e) => {
+                          const nextHtml = e.target.value;
+                          setTemplateHtml(nextHtml);
+                          setTemplatePreviewSource(nextHtml.trim() ? 'draft' : 'default');
+                        }}
                         placeholder="Paste the full HTML email here (<!doctype html> ...)"
                         className="w-full h-[520px] px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#d7ff00] transition-colors resize-none font-mono text-xs"
                       />
                       <p className="text-xs text-zinc-500 mt-2">
-                        This HTML is what gets sent to users. Save to apply across real sends.
+                        This HTML is what gets sent to users when saved. Leave it empty to keep using the send-function default.
                       </p>
                     </div>
                   </div>
 
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-                        <Eye className="w-4 h-4" />
-                        Preview
-                      </h3>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+                          <Eye className="w-4 h-4" />
+                          Preview
+                        </h3>
+                        <span className={`text-[11px] font-semibold px-2 py-1 rounded-full border whitespace-nowrap ${hasTemplateHtml
+                          ? 'bg-blue-900/20 border-blue-700/60 text-blue-200'
+                          : 'bg-[#d7ff00]/10 border-[#d7ff00]/30 text-[#d7ff00]'
+                          }`}>
+                          {previewSourceLabel}
+                        </span>
+                      </div>
                       <a
-                        className="text-xs text-zinc-400 underline"
+                        className="shrink-0 text-xs text-zinc-400 underline"
                         href="#"
                         onClick={(e) => {
                           e.preventDefault();
                           const w = window.open('', '_blank');
                           if (w) {
                             w.document.open();
-                            w.document.write(previewSrcDoc || '<p>No HTML</p>');
+                            w.document.write(previewSrcDoc || '<p>No preview available</p>');
                             w.document.close();
                           }
                         }}
@@ -1313,10 +1937,15 @@ const EmailSequencesAdmin: React.FC = () => {
                         Open in new tab
                       </a>
                     </div>
+                    {!hasTemplateHtml ? (
+                      <p className="text-xs text-zinc-500">
+                        Previewing the default fallback. Paste custom HTML to override it.
+                      </p>
+                    ) : null}
                     <div className="bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden">
                       <iframe
                         title="Email preview"
-                        srcDoc={previewSrcDoc || '<p style=\"color:#999;font-family:Arial\">No HTML to preview</p>'}
+                        srcDoc={previewSrcDoc || '<p style=\"color:#999;font-family:Arial\">No preview available</p>'}
                         style={{ width: '100%', height: 640, border: 'none', background: '#0a0a0b' }}
                       />
                     </div>

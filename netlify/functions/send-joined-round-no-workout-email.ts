@@ -46,7 +46,7 @@ function renderFallbackHtml(args: { firstName: string; challengeTitle: string; r
                   You joined <strong>${args.challengeTitle}</strong> but have not started your first workout yet.
                 </p>
                 <p style="margin:0 0 16px 0;font-size:14px;line-height:1.7;color:#c4c4ca;">
-                  Tap below and knock out your first session. Momentum starts with one rep.
+                  Tap below and knock out your first session. Momentum starts with one completed training session.
                 </p>
                 <p style="margin:20px 0;">
                   <a href="${args.roundUrl}" style="display:inline-block;background:#e0fe10;color:#101113;text-decoration:none;padding:12px 16px;border-radius:10px;font-weight:700;">

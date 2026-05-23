@@ -584,3 +584,7 @@
 # Macra: web Stripe retargeting offer 24h after onboarding, adult users only
 [functions.schedule-macra-web-offer-email]
   schedule = "0 * * * *"  # Hourly
+
+# Macra: shared retargeting scheduler for paywall cancel, proof, value, 7-day, and trial activation lanes
+[functions.schedule-macra-retargeting-email]
+  schedule = "0 * * * *"  # Hourly
