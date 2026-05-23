@@ -937,6 +937,15 @@ const formatScoreboardAgo = (value: unknown): string => {
   return `${Math.max(1, Math.round(absMs / minuteMs))}m ${diffMs >= 0 ? 'ago' : 'from now'}`;
 };
 
+const getScoreboardSendUrgencyClass = (value: unknown): string => {
+  const millis = scoreMillis(value);
+  if (!millis) return 'text-zinc-500';
+  const minutesUntilSend = (millis - Date.now()) / (60 * 1000);
+  if (minutesUntilSend <= 30) return 'text-red-300 font-semibold';
+  if (minutesUntilSend < 12 * 60) return 'text-yellow-300 font-semibold';
+  return 'text-green-300 font-semibold';
+};
+
 const scoreboardMinutesFromLocalTime = (value: string): number => {
   const [hour, minute] = value.split(':').map(Number);
   return hour * 60 + minute;
@@ -3971,13 +3980,20 @@ const EmailSequencesAdmin: React.FC = () => {
                                   <div>
                                     <div className="font-medium text-zinc-200">{nextEmail.label}</div>
                                     <div className="text-xs text-zinc-500">
-                                      {nextEmail.status === 'pending'
-                                        ? 'Send already in progress'
-                                        : schedulerPaused
-                                          ? 'Scheduler paused'
-                                          : scheduledSendAt
-                                            ? `Sends ${formatScoreboardDate(scheduledSendAt)} · ${formatScoreboardAgo(scheduledSendAt)}`
-                                            : 'No scheduled send time'}
+                                      {nextEmail.status === 'pending' ? (
+                                        'Send already in progress'
+                                      ) : schedulerPaused ? (
+                                        'Scheduler paused'
+                                      ) : scheduledSendAt ? (
+                                        <>
+                                          <span>Sends {formatScoreboardDate(scheduledSendAt)} · </span>
+                                          <span className={getScoreboardSendUrgencyClass(scheduledSendAt)}>
+                                            {formatScoreboardAgo(scheduledSendAt)}
+                                          </span>
+                                        </>
+                                      ) : (
+                                        'No scheduled send time'
+                                      )}
                                     </div>
                                     <div className="mt-0.5 text-[11px] text-zinc-600">{nextEmail.reason}</div>
                                   </div>
