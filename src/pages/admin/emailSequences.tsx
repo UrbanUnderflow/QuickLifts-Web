@@ -153,6 +153,11 @@ type MacraScoreboardState = {
   purchaseLogCount: number;
 };
 
+type AppsFlyerAttributionDoc = Record<string, any> & {
+  id: string;
+  customerUserId?: string | null;
+};
+
 const MACRA_WEB_OFFER_SEQUENCE_ID = 'macra-web-offer-24h-v1';
 const MACRA_RETARGETING_SEQUENCE_CONFIG_ID = 'macra-retargeting-v1';
 const CAMPAIGN_SEND_WINDOW_TIMEZONE = 'America/New_York';
@@ -1732,7 +1737,7 @@ const EmailSequencesAdmin: React.FC = () => {
       };
 
       const loadAppsFlyerAttribution = async () => {
-        const byUserId: Record<string, Record<string, any> | null> = {};
+        const byUserId: Record<string, AppsFlyerAttributionDoc | null> = {};
         userDocs.forEach((user) => {
           byUserId[user.id] = null;
         });
@@ -1747,7 +1752,7 @@ const EmailSequencesAdmin: React.FC = () => {
               query(collection(db, 'appsflyer-macra-users'), where('customerUserId', 'in', userIds))
             );
             attributionSnap.docs.forEach((snapshot) => {
-              const data = { id: snapshot.id, ...((snapshot.data() || {}) as Record<string, any>) };
+              const data: AppsFlyerAttributionDoc = { id: snapshot.id, ...((snapshot.data() || {}) as Record<string, any>) };
               const customerUserId = normalizeScoreboardString(data.customerUserId);
               if (customerUserId) byUserId[customerUserId] = data;
             });
@@ -1762,7 +1767,7 @@ const EmailSequencesAdmin: React.FC = () => {
                 try {
                   const directSnap = await getDoc(doc(db, 'appsflyer-macra-users', user.id));
                   if (directSnap.exists()) {
-                    byUserId[user.id] = { id: directSnap.id, ...((directSnap.data() || {}) as Record<string, any>) };
+                    byUserId[user.id] = { id: directSnap.id, ...((directSnap.data() || {}) as Record<string, any>) } as AppsFlyerAttributionDoc;
                   }
                 } catch (error) {
                   console.warn('[EmailSequences] Failed to load direct AppsFlyer attribution for scoreboard', user.id, error);
