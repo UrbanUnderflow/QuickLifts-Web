@@ -169,17 +169,33 @@ type AppsFlyerAttributionDoc = Record<string, any> & {
   customerUserId?: string | null;
 };
 
-type AppsFlyerCsvPeriodPreset = 'yesterday' | 'custom' | 'initial_backfill';
+type MacraScoreboardRangePreset = 'last_7_days' | 'last_14_days' | 'last_30_days' | 'yesterday' | 'today';
+
+type MacraScoreboardDateRange = {
+  preset: MacraScoreboardRangePreset;
+  start: string;
+  end: string;
+  label: string;
+  daysBack: number;
+};
 
 const MACRA_WEB_OFFER_SEQUENCE_ID = 'macra-web-offer-24h-v1';
 const MACRA_RETARGETING_SEQUENCE_CONFIG_ID = 'macra-retargeting-v1';
 const CAMPAIGN_SEND_WINDOW_TIMEZONE = 'America/New_York';
-const MACRA_APPSFLYER_SCOREBOARD_DAYS_BACK = 30;
+const MACRA_APPSFLYER_SCOREBOARD_DAYS_BACK = 7;
 const MACRA_APPSFLYER_RAW_SYNC_ENABLED = false;
 const MACRA_SCOREBOARD_USER_LIMIT = 300;
 const MACRA_SCOREBOARD_LOG_LIMIT = 500;
 const MACRA_SCOREBOARD_PROFILE_CHUNK_SIZE = 40;
 const MACRA_SCOREBOARD_ATTRIBUTION_CHUNK_SIZE = 30;
+const MACRA_SCOREBOARD_DEFAULT_RANGE_PRESET: MacraScoreboardRangePreset = 'last_7_days';
+const MACRA_SCOREBOARD_RANGE_OPTIONS: Array<{ value: MacraScoreboardRangePreset; label: string; daysBack: number }> = [
+  { value: 'last_7_days', label: 'Last 7 days', daysBack: 7 },
+  { value: 'last_14_days', label: 'Last 14 days', daysBack: 14 },
+  { value: 'last_30_days', label: 'Last 30 days', daysBack: 30 },
+  { value: 'yesterday', label: 'Yesterday', daysBack: 1 },
+  { value: 'today', label: 'Today', daysBack: 1 },
+];
 const MACRA_RETARGETING_SEQUENCE_IDS = [
   MACRA_WEB_OFFER_SEQUENCE_ID,
   'macra-paywall-cancel-trust-v1',
@@ -1043,6 +1059,237 @@ const formatDateOnlyLabel = (value: unknown): string => {
     day: 'numeric',
     year: 'numeric',
   });
+};
+
+const buildMacraScoreboardDateRange = (preset: MacraScoreboardRangePreset): MacraScoreboardDateRange => {
+  const option = MACRA_SCOREBOARD_RANGE_OPTIONS.find((row) => row.value === preset) || MACRA_SCOREBOARD_RANGE_OPTIONS[0];
+  if (preset === 'today') {
+    const today = relativeDateInputValue(0);
+    return { preset, start: today, end: today, label: option.label, daysBack: option.daysBack };
+  }
+  if (preset === 'yesterday') {
+    const yesterday = relativeDateInputValue(-1);
+    return { preset, start: yesterday, end: yesterday, label: option.label, daysBack: option.daysBack };
+  }
+
+  const days = option.daysBack;
+  return {
+    preset,
+    start: relativeDateInputValue(-(days - 1)),
+    end: relativeDateInputValue(0),
+    label: option.label,
+    daysBack: days,
+  };
+};
+
+const formatMacraScoreboardRangeLabel = (range: MacraScoreboardDateRange): string => {
+  const start = formatDateOnlyLabel(range.start);
+  const end = formatDateOnlyLabel(range.end);
+  if (!start || !end) return range.label;
+  return range.start === range.end ? `${range.label} · ${start}` : `${range.label} · ${start} to ${end}`;
+};
+
+const dateOnlyStartMillis = (value: string): number | null => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const millis = new Date(`${value}T00:00:00`).getTime();
+  return Number.isFinite(millis) ? millis : null;
+};
+
+const dateOnlyEndMillis = (value: string): number | null => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const millis = new Date(`${value}T23:59:59.999`).getTime();
+  return Number.isFinite(millis) ? millis : null;
+};
+
+const scoreMillisInDateRange = (value: unknown, range: MacraScoreboardDateRange): boolean => {
+  const millis = scoreMillis(value);
+  const start = dateOnlyStartMillis(range.start);
+  const end = dateOnlyEndMillis(range.end);
+  return Boolean(millis && start !== null && end !== null && millis >= start && millis <= end);
+};
+
+const emailLogMillis = (log: Record<string, any>): number | null =>
+  maxScoreMillis(log.updatedAt, log.createdAt, log.sentAt, log.openedAt, log.clickedAt, log.lastClickAt, log.lastEventAt);
+
+const MACRA_SCOREBOARD_ACTIVITY_SIGNAL_KEYS: Array<keyof MacraScoreboardSignals> = [
+  'onboardingCompletedAt',
+  'paywallLastViewedAt',
+  'ctaTappedAt',
+  'checkoutStartedAt',
+  'appleCancelAt',
+  'webOfferSentAt',
+  'webOfferOpenedAt',
+  'webOfferCheckoutStartedAt',
+  'webOfferConvertedAt',
+  'webOfferPaidAt',
+  'stripeRetargetClickedAt',
+  'trialStartedAt',
+  'paidAt',
+  'appsFlyerTrialStartedAt',
+  'appsFlyerPurchaseAt',
+];
+
+const macraScoreboardUserHasDateRangeActivity = (user: MacraScoreboardUser, range: MacraScoreboardDateRange): boolean =>
+  MACRA_SCOREBOARD_ACTIVITY_SIGNAL_KEYS.some((key) => scoreMillisInDateRange(user.signals[key], range));
+
+const mergeScoreboardNumberMap = (target: Record<string, number>, source: Record<string, any> | null | undefined) => {
+  Object.entries(source || {}).forEach(([key, value]) => {
+    const count = Number(value || 0);
+    if (!key || !Number.isFinite(count) || count === 0) return;
+    target[key] = (target[key] || 0) + count;
+  });
+};
+
+const scoreboardTopEntriesFromMap = (source: Record<string, number>, limitCount = 8) =>
+  Object.entries(source)
+    .map(([label, count]) => ({ label, count }))
+    .filter((row) => row.label && Number.isFinite(row.count) && row.count > 0)
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+    .slice(0, limitCount);
+
+const appsFlyerAggregatePeriodFitsRange = (periodStart: string, periodEnd: string, range: MacraScoreboardDateRange): boolean =>
+  Boolean(periodStart && periodEnd && periodStart >= range.start && periodEnd <= range.end);
+
+const buildAppsFlyerAggregateSummaryForRange = (
+  baseSummary: Record<string, any> | null,
+  periodDocs: Record<string, any>[],
+  range: MacraScoreboardDateRange
+): Record<string, any> | null => {
+  if (!baseSummary && !periodDocs.length) return null;
+
+  const selectedPeriods = periodDocs
+    .map((period) => {
+      const periodStart = normalizeScoreboardString(period.periodStart);
+      const periodEnd = normalizeScoreboardString(period.periodEnd);
+      const summary = (period.summary || {}) as Record<string, any>;
+      return {
+        id: normalizeScoreboardString(period.id) || `${periodStart}_${periodEnd}`,
+        periodStart,
+        periodEnd,
+        importedAt: period.importedAt || period.updatedAt || null,
+        summary,
+      };
+    })
+    .filter((period) => period.summary && appsFlyerAggregatePeriodFitsRange(period.periodStart, period.periodEnd, range))
+    .sort((a, b) => a.periodStart.localeCompare(b.periodStart));
+
+  const fallbackAggregateSummary = (baseSummary?.aggregateCsvSummary || {}) as Record<string, any>;
+  if (!selectedPeriods.length && appsFlyerAggregatePeriodFitsRange(normalizeScoreboardString(fallbackAggregateSummary.from), normalizeScoreboardString(fallbackAggregateSummary.to), range)) {
+    selectedPeriods.push({
+      id: 'aggregateCsvSummary',
+      periodStart: normalizeScoreboardString(fallbackAggregateSummary.from),
+      periodEnd: normalizeScoreboardString(fallbackAggregateSummary.to),
+      importedAt: baseSummary?.importedAt || baseSummary?.updatedAt || null,
+      summary: fallbackAggregateSummary,
+    });
+  }
+
+  const eventsByName: Record<string, number> = {};
+  const eventMediaSources: Record<string, number> = {};
+  const installMediaSources: Record<string, number> = {};
+  const installCampaigns: Record<string, number> = {};
+  const reports: Record<string, number> = {};
+  let rows = 0;
+  let maximumRows = 0;
+  let duplicateRows = 0;
+  let importedUserDocs = 0;
+  let matchedCustomerUserRows = 0;
+  let unmatchedRows = 0;
+  let eventTotal = 0;
+  let installTotal = 0;
+  let organicInstalls = 0;
+  let nonOrganicInstalls = 0;
+  let latestImportedAt: unknown = null;
+  let appId = normalizeScoreboardString(baseSummary?.appId || getNestedValue(baseSummary || {}, 'aggregateCsvSummary.appId'));
+
+  selectedPeriods.forEach((period) => {
+    const summary = period.summary;
+    rows += Number(summary.rows || 0) || 0;
+    maximumRows += Number(summary.maximumRows || summary.rows || 0) || 0;
+    duplicateRows += Number(summary.duplicateRows || 0) || 0;
+    importedUserDocs += Number(summary.importedUserDocs || 0) || 0;
+    matchedCustomerUserRows += Number(summary.matchedCustomerUserRows || 0) || 0;
+    unmatchedRows += Number(summary.unmatchedRows || 0) || 0;
+    eventTotal += Number(getNestedValue(summary, 'events.total') || 0) || 0;
+    installTotal += Number(getNestedValue(summary, 'installs.total') || 0) || 0;
+    organicInstalls += Number(getNestedValue(summary, 'installs.organic') || 0) || 0;
+    nonOrganicInstalls += Number(getNestedValue(summary, 'installs.nonOrganic') || 0) || 0;
+    mergeScoreboardNumberMap(eventsByName, getNestedValue(summary, 'events.byName'));
+    mergeScoreboardNumberMap(eventMediaSources, getNestedValue(summary, 'events.byMediaSource'));
+    mergeScoreboardNumberMap(installMediaSources, getNestedValue(summary, 'installs.byMediaSource'));
+    mergeScoreboardNumberMap(installCampaigns, getNestedValue(summary, 'installs.byCampaign'));
+    mergeScoreboardNumberMap(reports, summary.reports);
+    appId = appId || normalizeScoreboardString(summary.appId);
+    if (period.importedAt && (!latestImportedAt || (scoreMillis(period.importedAt) || 0) > (scoreMillis(latestImportedAt) || 0))) {
+      latestImportedAt = period.importedAt;
+    }
+  });
+
+  const periodRows = selectedPeriods.map((period) => ({
+    id: period.id,
+    periodStart: period.periodStart,
+    periodEnd: period.periodEnd,
+    rows: Number(period.summary.rows || 0) || 0,
+    events: Number(getNestedValue(period.summary, 'events.total') || 0) || 0,
+    installs: Number(getNestedValue(period.summary, 'installs.total') || 0) || 0,
+    trialStarts: MACRA_APPSFLYER_TRIAL_EVENT_NAMES.reduce(
+      (total, eventName) => total + Number(getNestedValue(period.summary, `events.byName.${eventName}`) || 0),
+      0
+    ),
+    importedAt: period.importedAt,
+  }));
+  const coverageStart = periodRows[0]?.periodStart || range.start;
+  const coverageEnd = periodRows[periodRows.length - 1]?.periodEnd || range.end;
+  const topMediaSources = scoreboardTopEntriesFromMap(eventTotal ? eventMediaSources : installMediaSources);
+  const aggregateCsvSummary = {
+    id: 'macra',
+    product: 'macra',
+    provider: 'appsflyer',
+    source: 'csv_upload',
+    importSource: 'aggregate_csv_upload',
+    appId,
+    from: coverageStart,
+    to: coverageEnd,
+    rows,
+    maximumRows,
+    duplicateRows,
+    importedUserDocs,
+    matchedCustomerUserRows,
+    unmatchedRows,
+    tokenSource: '',
+    daysBack: range.daysBack,
+    timezone: 'aggregate_csv_periods',
+    reports,
+    installs: {
+      total: installTotal,
+      organic: organicInstalls,
+      nonOrganic: nonOrganicInstalls,
+      byMediaSource: installMediaSources,
+      byCampaign: installCampaigns,
+    },
+    events: {
+      total: eventTotal,
+      byName: eventsByName,
+      byMediaSource: eventMediaSources,
+    },
+    topMediaSources,
+    topCampaigns: scoreboardTopEntriesFromMap(installCampaigns),
+    topEvents: scoreboardTopEntriesFromMap(eventsByName),
+    importedAt: latestImportedAt,
+    updatedAt: latestImportedAt,
+  };
+
+  return {
+    ...aggregateCsvSummary,
+    rawCumulativeSummary: baseSummary?.rawCumulativeSummary || null,
+    latestRunId: baseSummary?.latestRunId || '',
+    latestRunSummary: selectedPeriods.length === 1 ? selectedPeriods[0].summary : aggregateCsvSummary,
+    aggregateCsvSummary,
+    aggregateCsvPeriods: periodRows,
+    aggregateCsvPeriodCount: periodRows.length,
+    aggregateCsvCoverageStart: periodRows.length ? coverageStart : null,
+    aggregateCsvCoverageEnd: periodRows.length ? coverageEnd : null,
+  };
 };
 
 const getFirstString = (sources: Array<Record<string, any> | null | undefined>, paths: string[]): string => {
@@ -1948,9 +2195,9 @@ const EmailSequencesAdmin: React.FC = () => {
   });
   const [syncingAppsFlyer, setSyncingAppsFlyer] = useState(false);
   const [uploadingAppsFlyerCsv, setUploadingAppsFlyerCsv] = useState(false);
-  const [appsFlyerCsvPeriodPreset, setAppsFlyerCsvPeriodPreset] = useState<AppsFlyerCsvPeriodPreset>('yesterday');
-  const [appsFlyerCsvPeriodStart, setAppsFlyerCsvPeriodStart] = useState(() => relativeDateInputValue(-1));
-  const [appsFlyerCsvPeriodEnd, setAppsFlyerCsvPeriodEnd] = useState(() => relativeDateInputValue(-1));
+  const [appsFlyerCsvPeriodPreset, setAppsFlyerCsvPeriodPreset] = useState<MacraScoreboardRangePreset>(MACRA_SCOREBOARD_DEFAULT_RANGE_PRESET);
+  const [appsFlyerCsvPeriodStart, setAppsFlyerCsvPeriodStart] = useState(() => buildMacraScoreboardDateRange(MACRA_SCOREBOARD_DEFAULT_RANGE_PRESET).start);
+  const [appsFlyerCsvPeriodEnd, setAppsFlyerCsvPeriodEnd] = useState(() => buildMacraScoreboardDateRange(MACRA_SCOREBOARD_DEFAULT_RANGE_PRESET).end);
 
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [activeSequence, setActiveSequence] = useState<SequenceRow | null>(null);
@@ -1962,6 +2209,21 @@ const EmailSequencesAdmin: React.FC = () => {
     const [copyingScoreboard, setCopyingScoreboard] = useState(false);
     const [sendingRetargetingNowUserId, setSendingRetargetingNowUserId] = useState<string | null>(null);
     const [runningRetargetingScheduler, setRunningRetargetingScheduler] = useState(false);
+
+  const selectedMacraScoreboardRange = useMemo<MacraScoreboardDateRange>(() => {
+    const option = MACRA_SCOREBOARD_RANGE_OPTIONS.find((row) => row.value === appsFlyerCsvPeriodPreset) || MACRA_SCOREBOARD_RANGE_OPTIONS[0];
+    return {
+      preset: appsFlyerCsvPeriodPreset,
+      start: appsFlyerCsvPeriodStart,
+      end: appsFlyerCsvPeriodEnd,
+      label: option.label,
+      daysBack: option.daysBack,
+    };
+  }, [appsFlyerCsvPeriodEnd, appsFlyerCsvPeriodPreset, appsFlyerCsvPeriodStart]);
+  const selectedMacraScoreboardRangeLabel = useMemo(
+    () => formatMacraScoreboardRangeLabel(selectedMacraScoreboardRange),
+    [selectedMacraScoreboardRange]
+  );
 
   // Template editing
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -1999,6 +2261,7 @@ const EmailSequencesAdmin: React.FC = () => {
   }, []);
 
   const loadMacraScoreboard = useCallback(async () => {
+    const activeRange = selectedMacraScoreboardRange;
     setMacraScoreboard((prev) => ({ ...prev, loading: true, error: '' }));
 
     try {
@@ -2006,10 +2269,20 @@ const EmailSequencesAdmin: React.FC = () => {
         getDoc(doc(db, 'email-sequence-config', MACRA_RETARGETING_SEQUENCE_CONFIG_ID)),
         getDocs(query(collection(db, 'users'), where('hasCompletedMacraOnboarding', '==', true), limit(MACRA_SCOREBOARD_USER_LIMIT))),
       ]);
-      const appsFlyerSummarySnap = await getDoc(doc(db, 'appsflyer-scoreboards', 'macra')).catch((error) => {
-        console.warn('[EmailSequences] Failed to load AppsFlyer scoreboard summary', error);
-        return null;
-      });
+      const [appsFlyerSummarySnap, appsFlyerAggregatePeriodsSnap] = await Promise.all([
+        getDoc(doc(db, 'appsflyer-scoreboards', 'macra')).catch((error) => {
+          console.warn('[EmailSequences] Failed to load AppsFlyer scoreboard summary', error);
+          return null;
+        }),
+        getDocs(query(collection(db, 'appsflyer-aggregate-periods'), where('product', '==', 'macra'))).catch((error) => {
+          console.warn('[EmailSequences] Failed to load AppsFlyer aggregate periods for selected range', error);
+          return null;
+        }),
+      ]);
+      const appsFlyerAggregatePeriodDocs = appsFlyerAggregatePeriodsSnap?.docs.map((snapshot) => ({
+        id: snapshot.id,
+        ...((snapshot.data() || {}) as Record<string, any>),
+      })) || [];
 
       const userDocs = usersSnap.docs.map((snapshot) => ({
         id: snapshot.id,
@@ -2115,10 +2388,16 @@ const EmailSequencesAdmin: React.FC = () => {
         loadRecentDocs('Macra-purchase-logs', 'createdAt', MACRA_SCOREBOARD_LOG_LIMIT),
       ]);
 
-      const users = userDocs.map((user) => {
+      const emailLogsInRange = emailLogs.filter((log) => scoreMillisInDateRange(emailLogMillis(log), activeRange));
+      const purchaseLogsInRange = purchaseLogs.filter(
+        (log) => scoreMillisInDateRange(purchaseLogMillis(log), activeRange) || scoreMillisInDateRange(purchaseLogStartedMillis(log), activeRange)
+      );
+      const appsFlyerBaseSummary = appsFlyerSummarySnap?.exists() ? ((appsFlyerSummarySnap.data() || {}) as Record<string, any>) : null;
+      const appsFlyerSummaryForRange = buildAppsFlyerAggregateSummaryForRange(appsFlyerBaseSummary, appsFlyerAggregatePeriodDocs, activeRange);
+      const allUsers = userDocs.map((user) => {
         const email = normalizeScoreboardString(user.data.email);
-        const userEmailLogs = emailLogs.filter((log) => matchesUserOrEmail(log, user.id, email));
-        const userPurchaseLogs = purchaseLogs.filter((log) => matchesUserOrEmail(log, user.id, email));
+        const userEmailLogs = emailLogsInRange.filter((log) => matchesUserOrEmail(log, user.id, email));
+        const userPurchaseLogs = purchaseLogsInRange.filter((log) => matchesUserOrEmail(log, user.id, email));
         return buildMacraScoreboardUser({
           id: user.id,
           data: user.data,
@@ -2129,17 +2408,18 @@ const EmailSequencesAdmin: React.FC = () => {
           purchaseLogs: userPurchaseLogs,
         });
       });
+      const users = allUsers.filter((user) => macraScoreboardUserHasDateRangeActivity(user, activeRange));
 
       setMacraScoreboard({
         loading: false,
         error: '',
         loadedAt: new Date(),
         config: configData,
-        appsFlyerSummary: appsFlyerSummarySnap?.exists() ? ((appsFlyerSummarySnap.data() || {}) as Record<string, any>) : null,
+        appsFlyerSummary: appsFlyerSummaryForRange,
         users,
         userLimit: MACRA_SCOREBOARD_USER_LIMIT,
-        emailLogCount: emailLogs.length,
-        purchaseLogCount: purchaseLogs.length,
+        emailLogCount: emailLogsInRange.length,
+        purchaseLogCount: purchaseLogsInRange.length,
       });
     } catch (e: any) {
       setMacraScoreboard((prev) => ({
@@ -2148,7 +2428,7 @@ const EmailSequencesAdmin: React.FC = () => {
         error: e?.message || 'Failed to load Macra retargeting scoreboard',
       }));
     }
-  }, []);
+  }, [selectedMacraScoreboardRange]);
 
   useEffect(() => {
     loadMacraScoreboard();
@@ -2633,7 +2913,7 @@ const EmailSequencesAdmin: React.FC = () => {
           ...getFirebaseModeRequestHeaders(),
         },
         body: JSON.stringify({
-          daysBack: MACRA_APPSFLYER_SCOREBOARD_DAYS_BACK,
+          daysBack: selectedMacraScoreboardRange.daysBack || MACRA_APPSFLYER_SCOREBOARD_DAYS_BACK,
           maximumRows: 50000,
         }),
       });
@@ -2654,16 +2934,11 @@ const EmailSequencesAdmin: React.FC = () => {
     }
   };
 
-  const updateAppsFlyerCsvPeriodPreset = (preset: AppsFlyerCsvPeriodPreset) => {
+  const updateAppsFlyerCsvPeriodPreset = (preset: MacraScoreboardRangePreset) => {
+    const nextRange = buildMacraScoreboardDateRange(preset);
     setAppsFlyerCsvPeriodPreset(preset);
-    if (preset === 'yesterday') {
-      const yesterday = relativeDateInputValue(-1);
-      setAppsFlyerCsvPeriodStart(yesterday);
-      setAppsFlyerCsvPeriodEnd(yesterday);
-    } else if (preset === 'initial_backfill') {
-      setAppsFlyerCsvPeriodStart(relativeDateInputValue(-7));
-      setAppsFlyerCsvPeriodEnd(relativeDateInputValue(-1));
-    }
+    setAppsFlyerCsvPeriodStart(nextRange.start);
+    setAppsFlyerCsvPeriodEnd(nextRange.end);
   };
 
     const uploadAppsFlyerCsvFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -2870,41 +3145,57 @@ const EmailSequencesAdmin: React.FC = () => {
         ? `${formatDateOnlyLabel(appsFlyerCoverageStart)} to ${formatDateOnlyLabel(appsFlyerCoverageEnd)} · ${appsFlyerAggregatePeriods.length} saved ${appsFlyerAggregatePeriods.length === 1 ? 'period' : 'periods'}`
         : 'No aggregate CSV periods saved';
     const count = (predicate: (user: MacraScoreboardUser) => boolean) => users.filter(predicate).length;
-    const onboardingCompleters = count((user) => user.signals.completedOnboarding);
-    const qualified = count((user) => user.isQualified);
+    const signalInRange = (value: unknown) => scoreMillisInDateRange(value, selectedMacraScoreboardRange);
+    const onboardingCompleters = count((user) => user.signals.completedOnboarding && signalInRange(user.signals.onboardingCompletedAt));
+    const qualified = count((user) => user.isQualified && signalInRange(user.signals.onboardingCompletedAt));
     const seriousPlanCompleters = count((user) =>
-      ['paid', 'trial_started', 'high_intent_recovery', 'serious_plan_completer'].includes(user.tier)
+      ['paid', 'trial_started', 'high_intent_recovery', 'serious_plan_completer'].includes(user.tier) &&
+      signalInRange(user.signals.onboardingCompletedAt)
     );
-    const highIntentRecovery = count((user) => user.tier === 'high_intent_recovery');
-    const qualifiedPaywallViews = count((user) => user.isQualified && user.signals.reachedPaywall);
-    const qualifiedCtaTaps = count((user) => user.isQualified && Boolean(user.signals.ctaTappedAt));
-    const qualifiedCheckoutStarts = count((user) => user.isQualified && Boolean(user.signals.checkoutStartedAt));
-    const qualifiedAppleCancels = count((user) => user.isQualified && Boolean(user.signals.appleCancelAt));
-    const qualifiedTrialStarts = count((user) => user.isQualified && Boolean(user.signals.trialStartedAt));
-    const qualifiedPaid = count((user) => user.isQualified && Boolean(user.signals.paidAt));
-    const qualifiedStripeClicks = count((user) => user.isQualified && Boolean(user.signals.stripeRetargetClickedAt));
+    const highIntentSignalInRange = (user: MacraScoreboardUser) =>
+      [
+        user.signals.ctaTappedAt,
+        user.signals.checkoutStartedAt,
+        user.signals.appleCancelAt,
+        user.signals.webOfferCheckoutStartedAt,
+        user.signals.stripeRetargetClickedAt,
+        user.signals.webOfferOpenedAt,
+        user.signals.paywallLastViewedAt,
+      ].some(signalInRange);
+    const highIntentRecovery = count((user) => user.tier === 'high_intent_recovery' && highIntentSignalInRange(user));
+    const qualifiedPaywallViews = count(
+      (user) => user.isQualified && user.signals.reachedPaywall && (signalInRange(user.signals.paywallLastViewedAt) || signalInRange(user.signals.onboardingCompletedAt))
+    );
+    const qualifiedCtaTaps = count((user) => user.isQualified && signalInRange(user.signals.ctaTappedAt));
+    const qualifiedCheckoutStarts = count((user) => user.isQualified && signalInRange(user.signals.checkoutStartedAt));
+    const qualifiedAppleCancels = count((user) => user.isQualified && signalInRange(user.signals.appleCancelAt));
+    const qualifiedTrialStarts = count((user) => user.isQualified && signalInRange(user.signals.trialStartedAt));
+    const qualifiedPaid = count((user) => user.isQualified && signalInRange(user.signals.paidAt));
+    const qualifiedStripeClicks = count((user) => user.isQualified && signalInRange(user.signals.stripeRetargetClickedAt));
     const appsFlyerQualifiedCtaLabel = appsFlyerIsAggregateCsv
       ? `${qualifiedCtaTaps} first-party qualified taps · ${appsFlyerCtaEvents} AppsFlyer aggregate events · ${appsFlyerCheckoutEvents} aggregate checkout starts`
       : `${qualifiedCtaTaps} matched qualified users · ${appsFlyerCtaEvents} AppsFlyer raw events · ${appsFlyerCheckoutEvents} checkout starts`;
     const appsFlyerQualifiedTrialLabel = appsFlyerIsAggregateCsv
       ? `${qualifiedTrialStarts} first-party qualified trial starts · ${appsFlyerStartTrialEvents} AppsFlyer aggregate events`
       : `${qualifiedTrialStarts} matched qualified users · ${appsFlyerStartTrialEvents} AppsFlyer raw events`;
-    const webOfferSentUsers = count((user) => user.isQualified && Boolean(user.signals.webOfferSentAt));
-    const webOfferOpenedUsers = count((user) => user.isQualified && Boolean(user.signals.webOfferOpenedAt));
-    const webOfferCheckoutStarts = count((user) => user.isQualified && Boolean(user.signals.webOfferCheckoutStartedAt));
-    const retargetingRecoveredUsers = count((user) => user.isQualified && Boolean(user.signals.webOfferConvertedAt || user.signals.webOfferPaidAt));
-    const retargetingTrialRedemptions = count((user) => user.isQualified && Boolean(user.signals.webOfferConvertedAt));
-    const retargetingPaidConversions = count((user) => user.isQualified && Boolean(user.signals.webOfferPaidAt));
+    const webOfferSentUsers = count((user) => user.isQualified && signalInRange(user.signals.webOfferSentAt));
+    const webOfferOpenedUsers = count((user) => user.isQualified && signalInRange(user.signals.webOfferOpenedAt));
+    const webOfferCheckoutStarts = count((user) => user.isQualified && signalInRange(user.signals.webOfferCheckoutStartedAt));
+    const retargetingRecoveredUsers = count(
+      (user) => user.isQualified && (signalInRange(user.signals.webOfferConvertedAt) || signalInRange(user.signals.webOfferPaidAt))
+    );
+    const retargetingTrialRedemptions = count((user) => user.isQualified && signalInRange(user.signals.webOfferConvertedAt));
+    const retargetingPaidConversions = count((user) => user.isQualified && signalInRange(user.signals.webOfferPaidAt));
     const retargetingRecoveredRevenue = users.reduce(
-      (total, user) => total + (user.isQualified ? user.signals.webOfferPaidAmount || 0 : 0),
+      (total, user) => total + (user.isQualified && signalInRange(user.signals.webOfferPaidAt) ? user.signals.webOfferPaidAmount || 0 : 0),
       0
     );
     const recoveryPool = users
-      .filter((user) => user.isQualified && user.isHighIntent && !user.signals.trialStartedAt && !user.signals.paidAt)
+      .filter((user) => user.isQualified && user.isHighIntent && highIntentSignalInRange(user) && !user.signals.trialStartedAt && !user.signals.paidAt)
       .sort((a, b) => (b.signals.latestIntentAt || 0) - (a.signals.latestIntentAt || 0))
       .slice(0, 10);
     const recoveredUsers = users
-      .filter((user) => user.isQualified && (user.signals.webOfferConvertedAt || user.signals.webOfferPaidAt))
+      .filter((user) => user.isQualified && (signalInRange(user.signals.webOfferConvertedAt) || signalInRange(user.signals.webOfferPaidAt)))
       .sort((a, b) => Math.max(b.signals.webOfferPaidAt || 0, b.signals.webOfferConvertedAt || 0) - Math.max(a.signals.webOfferPaidAt || 0, a.signals.webOfferConvertedAt || 0))
       .slice(0, 12);
 
@@ -3005,7 +3296,7 @@ const EmailSequencesAdmin: React.FC = () => {
       appsFlyerCoverageLabel,
       appsFlyerPaywallFunnelRows,
     };
-  }, [macraScoreboard.appsFlyerSummary, macraScoreboard.config, macraScoreboard.users]);
+  }, [macraScoreboard.appsFlyerSummary, macraScoreboard.config, macraScoreboard.users, selectedMacraScoreboardRange]);
 
   const macraMetricCards = [
     {
@@ -3096,11 +3387,15 @@ const EmailSequencesAdmin: React.FC = () => {
   const macraFunnelRows = [
     {
       label: 'All installs',
-      value: macraScoreboardSummary.appsFlyerInstalls || (macraScoreboard.appsFlyerSummary ? 'Upload install report' : 'Upload CSV'),
+      value:
+        macraScoreboardSummary.appsFlyerInstalls ||
+        (macraScoreboard.appsFlyerSummary && macraScoreboardSummary.appsFlyerAggregatePeriods.length ? 'Upload install report' : 'Upload CSV'),
       sublabel: macraScoreboard.appsFlyerSummary
         ? macraScoreboardSummary.appsFlyerInstalls
           ? `${macraScoreboardSummary.appsFlyerNonOrganicInstalls} paid · ${macraScoreboardSummary.appsFlyerOrganicInstalls} organic`
-          : 'Current AppsFlyer upload has event aggregates, not install rows'
+          : macraScoreboardSummary.appsFlyerAggregatePeriods.length
+            ? 'Current AppsFlyer upload has event aggregates, not install rows'
+            : 'No aggregate CSV periods saved for this range'
         : 'Acquisition quality source',
     },
     {
@@ -3230,6 +3525,13 @@ const EmailSequencesAdmin: React.FC = () => {
         loadedUserLimit: macraScoreboard.userLimit,
         emailLogCount: macraScoreboard.emailLogCount,
         purchaseLogCount: macraScoreboard.purchaseLogCount,
+        dateRange: {
+          preset: selectedMacraScoreboardRange.preset,
+          label: selectedMacraScoreboardRangeLabel,
+          start: selectedMacraScoreboardRange.start,
+          end: selectedMacraScoreboardRange.end,
+          daysBack: selectedMacraScoreboardRange.daysBack,
+        },
         headlineMetrics: macraMetricCards.map((card) => ({
           label: card.label,
           value: card.value,
@@ -3462,6 +3764,7 @@ const EmailSequencesAdmin: React.FC = () => {
               <div className="flex flex-wrap items-center justify-end gap-3">
                 <div className="hidden text-right text-xs text-zinc-500 sm:block">
                   <div>Loaded {macraScoreboard.users.length} user{macraScoreboard.users.length === 1 ? '' : 's'}</div>
+                  <div>{selectedMacraScoreboardRangeLabel}</div>
                   <div>
                     {macraScoreboard.loadedAt ? `Refreshed ${formatScoreboardAgo(macraScoreboard.loadedAt)}` : 'Waiting for first load'}
                   </div>
@@ -3482,34 +3785,21 @@ const EmailSequencesAdmin: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1.5">
                   <select
                     value={appsFlyerCsvPeriodPreset}
-                    onChange={(event) => updateAppsFlyerCsvPeriodPreset(event.target.value as AppsFlyerCsvPeriodPreset)}
+                    onChange={(event) => updateAppsFlyerCsvPeriodPreset(event.target.value as MacraScoreboardRangePreset)}
                     className="h-8 rounded-md border border-zinc-700 bg-zinc-950 px-2 text-xs text-zinc-200 outline-none focus:border-[#d7ff00]"
-                    aria-label="AppsFlyer CSV range"
+                    aria-label="Macra scoreboard date range"
                   >
-                    <option value="yesterday">Yesterday</option>
-                    <option value="custom">Custom range</option>
-                    <option value="initial_backfill">Initial backfill</option>
+                    {MACRA_SCOREBOARD_RANGE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
-                  <input
-                    type="date"
-                    value={appsFlyerCsvPeriodStart}
-                    onChange={(event) => {
-                      setAppsFlyerCsvPeriodPreset('custom');
-                      setAppsFlyerCsvPeriodStart(event.target.value);
-                    }}
-                    className="h-8 rounded-md border border-zinc-700 bg-zinc-950 px-2 text-xs text-zinc-200 outline-none focus:border-[#d7ff00]"
-                    aria-label="AppsFlyer CSV start date"
-                  />
-                  <input
-                    type="date"
-                    value={appsFlyerCsvPeriodEnd}
-                    onChange={(event) => {
-                      setAppsFlyerCsvPeriodPreset('custom');
-                      setAppsFlyerCsvPeriodEnd(event.target.value);
-                    }}
-                    className="h-8 rounded-md border border-zinc-700 bg-zinc-950 px-2 text-xs text-zinc-200 outline-none focus:border-[#d7ff00]"
-                    aria-label="AppsFlyer CSV end date"
-                  />
+                  <div className="flex h-8 items-center rounded-md border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-400">
+                    {appsFlyerCsvPeriodStart === appsFlyerCsvPeriodEnd
+                      ? formatDateOnlyLabel(appsFlyerCsvPeriodStart)
+                      : `${formatDateOnlyLabel(appsFlyerCsvPeriodStart)} to ${formatDateOnlyLabel(appsFlyerCsvPeriodEnd)}`}
+                  </div>
                 </div>
                 <input
                   id="macra-appsflyer-csv-upload"
