@@ -24,6 +24,26 @@ const DEFAULT_SEND_WINDOW_START_LOCAL = '09:00';
 const DEFAULT_SEND_WINDOW_END_LOCAL = '17:00';
 const DEFAULT_SEND_WINDOW_TIMEZONE = 'America/New_York';
 
+const buildDefaultConfigDoc = () => ({
+  id: CONFIG_ID,
+  enabled: true,
+  batchLimit: DEFAULT_BATCH_LIMIT,
+  maxSendsPerRun: 25,
+  scanEveryHours: DEFAULT_SCAN_EVERY_HOURS,
+  cooldownHours: DEFAULT_COOLDOWN_HOURS,
+  delayHours: DEFAULT_COOLDOWN_HOURS,
+  paywallCancelDelayHours: 1,
+  webOfferProofDelayHours: 4,
+  paywallViewDelayHours: 24,
+  paywallViewMinCount: 2,
+  noTrialDelayHours: 168,
+  trialActivationDelayHours: 24,
+  sendWindowStartLocal: DEFAULT_SEND_WINDOW_START_LOCAL,
+  sendWindowEndLocal: DEFAULT_SEND_WINDOW_END_LOCAL,
+  sendWindowTimezone: DEFAULT_SEND_WINDOW_TIMEZONE,
+  schedulerAutoseeded: true,
+});
+
 type Config = {
   enabled: boolean;
   batchLimit: number;
@@ -287,10 +307,23 @@ function cancelFeedbackAnchorMs(data: Record<string, any>): number | null {
 }
 
 async function loadConfig(db: any): Promise<Config> {
-  const snap = await db.collection('email-sequence-config').doc(CONFIG_ID).get();
-  const data = (snap.exists ? snap.data() || {} : {}) as Record<string, any>;
+  const ref = db.collection('email-sequence-config').doc(CONFIG_ID);
+  const snap = await ref.get();
+  let data = (snap.exists ? snap.data() || {} : {}) as Record<string, any>;
+  if (!snap.exists) {
+    data = buildDefaultConfigDoc();
+    await ref.set(
+      {
+        ...data,
+        seededFrom: 'schedule-macra-retargeting-email',
+        seededAt: new Date(),
+        updatedAt: new Date(),
+      },
+      { merge: true }
+    );
+  }
   return {
-    enabled: data.enabled === true,
+    enabled: data.enabled !== false,
     batchLimit: Math.max(25, Number(data.batchLimit || DEFAULT_BATCH_LIMIT) || DEFAULT_BATCH_LIMIT),
     maxSendsPerRun: Math.max(1, Number(data.maxSendsPerRun || DEFAULT_MAX_SENDS_PER_RUN) || DEFAULT_MAX_SENDS_PER_RUN),
     scanEveryHours: Math.max(1, Number(data.scanEveryHours || DEFAULT_SCAN_EVERY_HOURS) || DEFAULT_SCAN_EVERY_HOURS),
@@ -793,6 +826,314 @@ async function handleManualSendNow(event: any, body: Record<string, any>) {
   });
 }
 
+async function runRetargetingScheduler(args: {
+  db: any;
+  config: Config;
+  force?: boolean;
+  manualRun?: {
+    requestedBy: string;
+    requestedByUid: string;
+    requestedBySource: string;
+    requestedAt: Date;
+  };
+}) {
+  const { db, config } = args;
+  const manual = Boolean(args.manualRun);
+  const forced = Boolean(args.force);
+
+  if (!config.enabled) {
+    return jsonResponse(200, {
+      success: true,
+      disabled: true,
+      scanned: 0,
+      sent: 0,
+      skipped: 0,
+      manual,
+      forced,
+    });
+  }
+
+  const nowMs = Date.now();
+  const sendWindowState = isWithinSendWindow({
+    nowMs,
+    startLocal: config.sendWindowStartLocal,
+    endLocal: config.sendWindowEndLocal,
+    timezone: config.sendWindowTimezone,
+  });
+
+  if (!forced && !sendWindowState.withinWindow) {
+    return jsonResponse(200, {
+      success: true,
+      windowBlocked: true,
+      scanned: 0,
+      sent: 0,
+      skipped: 0,
+      sendWindowStartLocal: config.sendWindowStartLocal,
+      sendWindowEndLocal: config.sendWindowEndLocal,
+      sendWindowTimezone: config.sendWindowTimezone,
+      localTime: sendWindowState.local.label,
+      manual,
+      forced,
+    });
+  }
+
+  const scanFrequencyState = getScanFrequencyState(config, nowMs);
+  if (!forced && !scanFrequencyState.due) {
+    return jsonResponse(200, {
+      success: true,
+      frequencyBlocked: true,
+      scanned: 0,
+      sent: 0,
+      skipped: 0,
+      scanEveryHours: config.scanEveryHours,
+      lastScanAt: scanFrequencyState.lastScanMs ? new Date(scanFrequencyState.lastScanMs).toISOString() : null,
+      nextScanAt: scanFrequencyState.nextScanAt ? new Date(scanFrequencyState.nextScanAt).toISOString() : null,
+      manual,
+      forced,
+    });
+  }
+
+  const runId = `macra-retargeting-${manual ? 'manual-' : ''}${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
+  const userBatch = await loadUserBatch(db, config);
+
+  const skippedByReason: Record<string, number> = {};
+  const sentBySequence: Record<string, number> = {};
+  const bumpSkip = (reason: string) => {
+    skippedByReason[reason] = (skippedByReason[reason] || 0) + 1;
+  };
+  const bumpSent = (sequenceId: string) => {
+    sentBySequence[sequenceId] = (sentBySequence[sequenceId] || 0) + 1;
+  };
+
+  let scanned = 0;
+  let claimed = 0;
+  let sent = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (const doc of userBatch.docs) {
+    scanned += 1;
+
+    if (sent >= config.maxSendsPerRun) {
+      bumpSkip('run_send_limit');
+      skipped += 1;
+      continue;
+    }
+
+    const data = (doc.data() || {}) as Record<string, any>;
+    const state = (data.macraEmailSequenceState || {}) as Record<string, any>;
+    const email = normalizeEmail(data.email);
+
+    if (data.hasCompletedMacraOnboarding !== true) {
+      bumpSkip('macra_onboarding_not_complete');
+      skipped += 1;
+      continue;
+    }
+    if (!hasMacraOrigin(data)) {
+      bumpSkip('not_macra_origin');
+      skipped += 1;
+      continue;
+    }
+    if (!email) {
+      bumpSkip('missing_email');
+      skipped += 1;
+      continue;
+    }
+
+    const prefs = data.macraEmailPreferences || {};
+    if (prefs.retargeting === false) {
+      bumpSkip('retargeting_pref_off');
+      skipped += 1;
+      continue;
+    }
+
+    const ageEligibility = await evaluateMacraEmailEligibility({
+      db,
+      userId: doc.id,
+      userData: data,
+      nowMs,
+      sequenceId: CONFIG_ID,
+      markSkipped: true,
+    });
+    if (!ageEligibility.eligible) {
+      bumpSkip(ageEligibility.reason || 'age_ineligible');
+      skipped += 1;
+      continue;
+    }
+
+    const { match, skipReason } = await chooseRule({
+      db,
+      userId: doc.id,
+      data,
+      state,
+      config,
+      nowMs,
+    });
+    if (!match) {
+      bumpSkip(skipReason);
+      skipped += 1;
+      continue;
+    }
+
+    const pendingField = `macraEmailSequenceState.${match.rule.stateKey}Pending`;
+    const dedupeKey = buildEmailDedupeKey([match.rule.sequenceId, doc.id]);
+    const didClaim = await claimScheduledSequenceSend({
+      docRef: doc.ref,
+      pendingField,
+      completionFields: [
+        `macraEmailSequenceState.${match.rule.stateKey}SentAt`,
+        `macraEmailSequenceState.${match.rule.stateKey}SkippedAt`,
+      ],
+      dedupeKey,
+      runId,
+      nowMs,
+      metadata: {
+        sequence: match.rule.sequenceId,
+        userId: doc.id,
+        email,
+        reason: match.reason,
+        ...(args.manualRun
+          ? {
+              manualRun: true,
+              requestedBy: args.manualRun.requestedBy,
+              requestedByUid: args.manualRun.requestedByUid,
+              requestedBySource: args.manualRun.requestedBySource,
+            }
+          : {}),
+      },
+    });
+
+    if (!didClaim) {
+      bumpSkip('claim_blocked');
+      skipped += 1;
+      continue;
+    }
+
+    claimed += 1;
+    try {
+      const result = await sendRetargetingEmail({ rule: match.rule, userId: doc.id });
+      await finalizeScheduledSequenceSend({
+        docRef: doc.ref,
+        pendingField,
+        resultField: result.skipped
+          ? `macraEmailSequenceState.${match.rule.stateKey}SkippedAt`
+          : `macraEmailSequenceState.${match.rule.stateKey}SentAt`,
+        dedupeKey,
+        runId,
+        markSent: !result.skipped,
+        updateFields: {
+          [`macraEmailSequenceState.${match.rule.stateKey}Status`]: result.skipped ? 'skipped:send_idempotent' : 'sent',
+          [`macraEmailSequenceState.${match.rule.stateKey}EmailMessageId`]: result.messageId || null,
+          [`macraEmailSequenceState.${match.rule.stateKey}ScheduledReason`]: match.reason,
+          [`macraEmailSequenceState.${match.rule.stateKey}EligibilityAnchorAt`]: new Date(match.anchorMs),
+          [`macraEmailSequenceState.${match.rule.stateKey}DueAt`]: new Date(match.dueAtMs),
+          [`macraEmailSequenceState.${match.rule.stateKey}LastUpdatedAt`]: new Date(),
+          ...(args.manualRun
+            ? {
+                [`macraEmailSequenceState.${match.rule.stateKey}ManualSchedulerRun`]: args.manualRun,
+              }
+            : {}),
+          ...(match.metadata
+            ? {
+                [`macraEmailSequenceState.${match.rule.stateKey}SchedulerMetadata`]: match.metadata,
+              }
+            : {}),
+        },
+      });
+
+      if (result.skipped) {
+        bumpSkip('send_idempotent');
+        skipped += 1;
+      } else {
+        bumpSent(match.rule.sequenceId);
+        sent += 1;
+      }
+    } catch (error: any) {
+      errors += 1;
+      await releaseScheduledSequenceSend({
+        docRef: doc.ref,
+        pendingField,
+        dedupeKey,
+        runId,
+      });
+      console.warn('[schedule-macra-retargeting-email] Failed for user', doc.id, match.rule.sequenceId, error?.message || error);
+    }
+  }
+
+  await db.collection('email-sequence-config').doc(CONFIG_ID).set(
+    {
+      lastScanAt: new Date(nowMs),
+      lastScanCompletedAt: new Date(),
+      lastScanCursorUserId: userBatch.nextCursorUserId,
+      lastScanWrapped: userBatch.wrapped,
+      lastScanRunId: runId,
+      lastScanLocalTime: sendWindowState.local.label,
+      lastScanTriggeredBy: manual ? 'manual' : 'cron',
+      lastScanForced: forced,
+      ...(args.manualRun
+        ? {
+            lastManualScanAt: args.manualRun.requestedAt,
+            lastManualScanRequestedBy: args.manualRun.requestedBy,
+            lastManualScanRequestedByUid: args.manualRun.requestedByUid,
+            lastManualScanRequestedBySource: args.manualRun.requestedBySource,
+          }
+        : {}),
+      lastScanSummary: {
+        scanned,
+        claimed,
+        sent,
+        skipped,
+        errors,
+        skippedByReason,
+        sentBySequence,
+        manual,
+        forced,
+      },
+    },
+    { merge: true }
+  );
+
+  return jsonResponse(200, {
+    success: true,
+    scanned,
+    claimed,
+    sent,
+    skipped,
+    errors,
+    skippedByReason,
+    sentBySequence,
+    maxSendsPerRun: config.maxSendsPerRun,
+    scanEveryHours: config.scanEveryHours,
+    cooldownHours: config.cooldownHours,
+    sendWindowStartLocal: config.sendWindowStartLocal,
+    sendWindowEndLocal: config.sendWindowEndLocal,
+    sendWindowTimezone: config.sendWindowTimezone,
+    localTime: sendWindowState.local.label,
+    runId,
+    manual,
+    forced,
+  });
+}
+
+async function handleManualSchedulerRun(event: any, body: Record<string, any>) {
+  const db = await getFirestore();
+  const adminRequest = await verifyAdminRequest(event, db);
+  if (!adminRequest) return jsonResponse(401, { success: false, error: 'Admin authorization required' });
+
+  const config = await loadConfig(db);
+  return await runRetargetingScheduler({
+    db,
+    config,
+    force: body?.force !== false,
+    manualRun: {
+      requestedBy: adminRequest.email || adminRequest.uid,
+      requestedByUid: adminRequest.uid,
+      requestedBySource: adminRequest.source,
+      requestedAt: new Date(),
+    },
+  });
+}
+
 export const handler: Handler = async (event) => {
   try {
     if (event.httpMethod === 'OPTIONS') {
@@ -803,259 +1144,15 @@ export const handler: Handler = async (event) => {
     if (event.httpMethod === 'POST' && body?.action === 'sendNow') {
       return await handleManualSendNow(event, body);
     }
+    if (event.httpMethod === 'POST' && (body?.action === 'runNow' || body?.action === 'runSchedulerNow')) {
+      return await handleManualSchedulerRun(event, body);
+    }
 
     const db = await getFirestore();
     const config = await loadConfig(db);
-
-    if (!config.enabled) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ success: true, disabled: true, scanned: 0, sent: 0, skipped: 0 }),
-      };
-    }
-
-    const nowMs = Date.now();
-    const sendWindowState = isWithinSendWindow({
-      nowMs,
-      startLocal: config.sendWindowStartLocal,
-      endLocal: config.sendWindowEndLocal,
-      timezone: config.sendWindowTimezone,
-    });
-
-    if (!sendWindowState.withinWindow) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          success: true,
-          windowBlocked: true,
-          scanned: 0,
-          sent: 0,
-          skipped: 0,
-          sendWindowStartLocal: config.sendWindowStartLocal,
-          sendWindowEndLocal: config.sendWindowEndLocal,
-          sendWindowTimezone: config.sendWindowTimezone,
-          localTime: sendWindowState.local.label,
-        }),
-      };
-    }
-
-    const scanFrequencyState = getScanFrequencyState(config, nowMs);
-    if (!scanFrequencyState.due) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          success: true,
-          frequencyBlocked: true,
-          scanned: 0,
-          sent: 0,
-          skipped: 0,
-          scanEveryHours: config.scanEveryHours,
-          lastScanAt: scanFrequencyState.lastScanMs ? new Date(scanFrequencyState.lastScanMs).toISOString() : null,
-          nextScanAt: scanFrequencyState.nextScanAt ? new Date(scanFrequencyState.nextScanAt).toISOString() : null,
-        }),
-      };
-    }
-
-    const runId = `macra-retargeting-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
-    const userBatch = await loadUserBatch(db, config);
-
-    const skippedByReason: Record<string, number> = {};
-    const sentBySequence: Record<string, number> = {};
-    const bumpSkip = (reason: string) => {
-      skippedByReason[reason] = (skippedByReason[reason] || 0) + 1;
-    };
-    const bumpSent = (sequenceId: string) => {
-      sentBySequence[sequenceId] = (sentBySequence[sequenceId] || 0) + 1;
-    };
-
-    let scanned = 0;
-    let claimed = 0;
-    let sent = 0;
-    let skipped = 0;
-    let errors = 0;
-
-    for (const doc of userBatch.docs) {
-      scanned += 1;
-
-      if (sent >= config.maxSendsPerRun) {
-        bumpSkip('run_send_limit');
-        skipped += 1;
-        continue;
-      }
-
-      const data = (doc.data() || {}) as Record<string, any>;
-      const state = (data.macraEmailSequenceState || {}) as Record<string, any>;
-      const email = normalizeEmail(data.email);
-
-      if (data.hasCompletedMacraOnboarding !== true) {
-        bumpSkip('macra_onboarding_not_complete');
-        skipped += 1;
-        continue;
-      }
-      if (!hasMacraOrigin(data)) {
-        bumpSkip('not_macra_origin');
-        skipped += 1;
-        continue;
-      }
-      if (!email) {
-        bumpSkip('missing_email');
-        skipped += 1;
-        continue;
-      }
-
-      const prefs = data.macraEmailPreferences || {};
-      if (prefs.retargeting === false) {
-        bumpSkip('retargeting_pref_off');
-        skipped += 1;
-        continue;
-      }
-
-      const ageEligibility = await evaluateMacraEmailEligibility({
-        db,
-        userId: doc.id,
-        userData: data,
-        nowMs,
-        sequenceId: CONFIG_ID,
-        markSkipped: true,
-      });
-      if (!ageEligibility.eligible) {
-        bumpSkip(ageEligibility.reason || 'age_ineligible');
-        skipped += 1;
-        continue;
-      }
-
-      const { match, skipReason } = await chooseRule({
-        db,
-        userId: doc.id,
-        data,
-        state,
-        config,
-        nowMs,
-      });
-      if (!match) {
-        bumpSkip(skipReason);
-        skipped += 1;
-        continue;
-      }
-
-      const pendingField = `macraEmailSequenceState.${match.rule.stateKey}Pending`;
-      const dedupeKey = buildEmailDedupeKey([match.rule.sequenceId, doc.id]);
-      const didClaim = await claimScheduledSequenceSend({
-        docRef: doc.ref,
-        pendingField,
-        completionFields: [
-          `macraEmailSequenceState.${match.rule.stateKey}SentAt`,
-          `macraEmailSequenceState.${match.rule.stateKey}SkippedAt`,
-        ],
-        dedupeKey,
-        runId,
-        nowMs,
-        metadata: {
-          sequence: match.rule.sequenceId,
-          userId: doc.id,
-          email,
-          reason: match.reason,
-        },
-      });
-
-      if (!didClaim) {
-        bumpSkip('claim_blocked');
-        skipped += 1;
-        continue;
-      }
-
-      claimed += 1;
-      try {
-        const result = await sendRetargetingEmail({ rule: match.rule, userId: doc.id });
-        await finalizeScheduledSequenceSend({
-          docRef: doc.ref,
-          pendingField,
-          resultField: result.skipped
-            ? `macraEmailSequenceState.${match.rule.stateKey}SkippedAt`
-            : `macraEmailSequenceState.${match.rule.stateKey}SentAt`,
-          dedupeKey,
-          runId,
-          markSent: !result.skipped,
-          updateFields: {
-            [`macraEmailSequenceState.${match.rule.stateKey}Status`]: result.skipped ? 'skipped:send_idempotent' : 'sent',
-            [`macraEmailSequenceState.${match.rule.stateKey}EmailMessageId`]: result.messageId || null,
-            [`macraEmailSequenceState.${match.rule.stateKey}ScheduledReason`]: match.reason,
-            [`macraEmailSequenceState.${match.rule.stateKey}EligibilityAnchorAt`]: new Date(match.anchorMs),
-            [`macraEmailSequenceState.${match.rule.stateKey}DueAt`]: new Date(match.dueAtMs),
-            [`macraEmailSequenceState.${match.rule.stateKey}LastUpdatedAt`]: new Date(),
-            ...(match.metadata
-              ? {
-                  [`macraEmailSequenceState.${match.rule.stateKey}SchedulerMetadata`]: match.metadata,
-                }
-              : {}),
-          },
-        });
-
-        if (result.skipped) {
-          bumpSkip('send_idempotent');
-          skipped += 1;
-        } else {
-          bumpSent(match.rule.sequenceId);
-          sent += 1;
-        }
-      } catch (error: any) {
-        errors += 1;
-        await releaseScheduledSequenceSend({
-          docRef: doc.ref,
-          pendingField,
-          dedupeKey,
-          runId,
-        });
-        console.warn('[schedule-macra-retargeting-email] Failed for user', doc.id, match.rule.sequenceId, error?.message || error);
-      }
-    }
-
-    await db.collection('email-sequence-config').doc(CONFIG_ID).set(
-      {
-        lastScanAt: new Date(nowMs),
-        lastScanCompletedAt: new Date(),
-        lastScanCursorUserId: userBatch.nextCursorUserId,
-        lastScanWrapped: userBatch.wrapped,
-        lastScanRunId: runId,
-        lastScanLocalTime: sendWindowState.local.label,
-        lastScanSummary: {
-          scanned,
-          claimed,
-          sent,
-          skipped,
-          errors,
-          skippedByReason,
-          sentBySequence,
-        },
-      },
-      { merge: true }
-    );
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        success: true,
-        scanned,
-        claimed,
-        sent,
-        skipped,
-        errors,
-        skippedByReason,
-        sentBySequence,
-        maxSendsPerRun: config.maxSendsPerRun,
-        scanEveryHours: config.scanEveryHours,
-        cooldownHours: config.cooldownHours,
-        sendWindowStartLocal: config.sendWindowStartLocal,
-        sendWindowEndLocal: config.sendWindowEndLocal,
-        sendWindowTimezone: config.sendWindowTimezone,
-        localTime: sendWindowState.local.label,
-      }),
-    };
+    return await runRetargetingScheduler({ db, config });
   } catch (error: any) {
     console.error('[schedule-macra-retargeting-email] Fatal error:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ success: false, error: error?.message || 'Internal error' }),
-    };
+    return jsonResponse(500, { success: false, error: error?.message || 'Internal error' });
   }
 };

@@ -532,6 +532,76 @@ function resolveMacraPaidInvoiceEvent(invoice, subscription) {
   return MACRA_MIXPANEL_EVENTS.subscriptionRenewed;
 }
 
+async function persistMacraWebOfferPaidInvoice({ invoice, subscription, userId, profile, metadata, price, planType, eventName }) {
+  if (!userId || !invoice?.id) return;
+
+  const paidAtSec = Number(invoice.status_transitions?.paid_at || invoice.created || Math.floor(Date.now() / 1000));
+  const paidAtMs = paidAtSec * 1000;
+  const paidAtTimestamp = admin.firestore.Timestamp.fromMillis(paidAtMs);
+  const amountPaid = Number(invoice.amount_paid || 0) / 100;
+  const currency = invoice.currency || price?.currency || null;
+  const subscriptionId = getStripeObjectId(subscription);
+  const customerId = getStripeObjectId(invoice.customer || subscription?.customer);
+  const normalizedPlan = metadata.checkoutPlan || (planType ? planType.replace(/^macra-/, '') : null);
+  const status = eventName === MACRA_MIXPANEL_EVENTS.trialConverted ? 'paid_after_trial' : 'paid';
+
+  await db.collection('users').doc(userId).set(
+    {
+      macraEmailSequenceState: {
+        webOffer24hPaidAt: paidAtTimestamp,
+        webOffer24hPaidInvoiceId: invoice.id,
+        webOffer24hPaidAmount: amountPaid,
+        webOffer24hPaidCurrency: currency,
+        webOffer24hPaidBillingReason: invoice.billing_reason || null,
+        webOffer24hStatus: status,
+        webOffer24hLastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+    },
+    { merge: true }
+  );
+
+  await db.collection('Macra-purchase-logs').doc(`stripe_${invoice.id}`).set(
+    {
+      userId,
+      email: profile?.email || invoice.customer_email || null,
+      status: 'success',
+      purchaseStatus: 'success',
+      source: 'macra_retarget_email',
+      app: 'macra',
+      platform: 'web',
+      provider: 'stripe',
+      plan: {
+        id: planType || normalizedPlan || null,
+        title: normalizedPlan || planType || 'Macra web offer',
+        productId: price?.id || null,
+        period: normalizedPlan || null,
+        price: amountPaid,
+        priceLabel: amountPaid ? `$${amountPaid.toFixed(2).replace(/\.00$/, '')}` : null,
+        trialDays: null,
+        provider: 'stripe',
+      },
+      metadata: {
+        checkout_source: metadata.checkoutSource || 'macra_retarget_email',
+        campaignId: metadata.campaignId || null,
+        offerId: metadata.offerId || null,
+        stripe_invoice_id: invoice.id,
+        stripe_subscription_id: subscriptionId,
+        stripe_customer_id: customerId,
+        stripe_price_id: price?.id || null,
+        billing_reason: invoice.billing_reason || null,
+        amount_paid: amountPaid,
+        currency,
+        macra_web_offer_event: eventName,
+      },
+      createdAt: paidAtTimestamp,
+      createdAtEpoch: paidAtMs,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAtEpoch: Date.now(),
+    },
+    { merge: true }
+  );
+}
+
 async function handleInvoicePaid(invoice) {
   console.log(`[Webhook] Processing invoice.paid event: ${invoice.id}`);
 
@@ -586,8 +656,19 @@ async function handleInvoicePaid(invoice) {
         username: profile.username || null,
       },
     });
+
+    await persistMacraWebOfferPaidInvoice({
+      invoice,
+      subscription,
+      userId,
+      profile,
+      metadata,
+      price,
+      planType,
+      eventName,
+    });
   } catch (error) {
-    console.warn('[Webhook] invoice.paid Mixpanel tracking skipped:', error?.message || error);
+    console.warn('[Webhook] invoice.paid Macra web offer tracking skipped:', error?.message || error);
   }
 }
 

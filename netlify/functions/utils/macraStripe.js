@@ -372,6 +372,19 @@ const markMacraWebOfferState = async ({ db, admin, userId, subscription, session
 
   if (session?.id) stateUpdate.webOffer24hCheckoutSessionId = session.id;
   if (subscription?.id) stateUpdate.webOffer24hStripeSubscriptionId = subscription.id;
+  const price = getSubscriptionPrice(subscription) || session?.line_items?.data?.[0]?.price || null;
+  if (price?.id) stateUpdate.webOffer24hStripePriceId = price.id;
+  const priceAmount = getStripeAmount(subscription);
+  if (priceAmount !== null) stateUpdate.webOffer24hPriceAmount = priceAmount;
+  if (price?.currency) stateUpdate.webOffer24hPriceCurrency = price.currency;
+  if (subscription?.trial_end) {
+    const trialEndSec = Number(subscription.trial_end || 0);
+    const trialStartSec = Number(subscription.trial_start || subscription.start_date || 0);
+    stateUpdate.webOffer24hTrialEndAt = admin.firestore.Timestamp.fromMillis(trialEndSec * 1000);
+    stateUpdate.webOffer24hTrialDays = trialStartSec && trialEndSec > trialStartSec
+      ? Math.max(1, Math.round((trialEndSec - trialStartSec) / (24 * 60 * 60)))
+      : 30;
+  }
   const customerId = subscription?.customer || session?.customer;
   if (customerId) {
     stateUpdate.webOffer24hStripeCustomerId =

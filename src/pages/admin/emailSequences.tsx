@@ -98,7 +98,16 @@ type MacraScoreboardSignals = {
   paywallLastViewedAt: number | null;
   ctaTappedAt: number | null;
   appleCancelAt: number | null;
+  webOfferSentAt: number | null;
   webOfferOpenedAt: number | null;
+  webOfferCheckoutStartedAt: number | null;
+  webOfferConvertedAt: number | null;
+  webOfferTrialEndAt: number | null;
+  webOfferTrialDays: number | null;
+  webOfferPaidAt: number | null;
+  webOfferPaidAmount: number | null;
+  webOfferPaidCurrency: string;
+  webOfferPlan: string;
   stripeRetargetClickedAt: number | null;
   trialStartedAt: number | null;
   paidAt: number | null;
@@ -177,6 +186,25 @@ const MACRA_RETARGETING_SEQUENCE_IDS = [
   'macra-no-trial-7d-challenge-v1',
   'macra-trial-no-activation-24h-v1',
 ];
+const MACRA_APPSFLYER_PAYWALL_EVENT_NAMES = ['macra_onboarding_paywall_reached', 'macra_paywall_viewed_standalone'];
+const MACRA_APPSFLYER_PLAN_LOADED_EVENT_NAMES = ['macra_subscription_plans_loaded'];
+const MACRA_APPSFLYER_PLAN_SELECTED_EVENT_NAMES = ['macra_subscription_plan_selected'];
+const MACRA_APPSFLYER_CTA_EVENT_NAMES = [
+  'macra_paywall_primary_button_pressed',
+  'macra_paywall_cta_pressed',
+  'macra_paywall_cta_tapped',
+  'macra_paywall_cta_clicked',
+];
+const MACRA_APPSFLYER_CHECKOUT_EVENT_NAMES = [
+  'af_initiated_checkout',
+  'macra_subscription_web_checkout_started',
+  'macra_subscription_checkout_started',
+];
+const MACRA_APPSFLYER_PURCHASE_CANCEL_EVENT_NAMES = [
+  'macra_subscription_purchase_cancelled',
+  'macra_subscription_purchase_canceled',
+];
+const MACRA_APPSFLYER_PURCHASE_FAILED_EVENT_NAMES = ['macra_subscription_purchase_failed'];
 const MACRA_APPSFLYER_TRIAL_EVENT_NAMES = ['af_start_trial', 'start_trial', 'trial_started', 'macra_trial_started'];
 const MACRA_APPSFLYER_PURCHASE_EVENT_NAMES = ['af_subscribe', 'af_purchase', 'subscribe', 'purchase', 'macra_subscription_started'];
 const MACRA_RETARGETING_SENT_STATE_FIELDS = [
@@ -271,6 +299,26 @@ const DEFAULT_CAMPAIGN_CONFIG: CampaignConfig = {
   sendWindowEndLocal: '17:00',
   sendWindowTimezone: CAMPAIGN_SEND_WINDOW_TIMEZONE,
 };
+
+const buildMacraRetargetingSchedulerDefaultConfig = () => ({
+  id: MACRA_RETARGETING_SEQUENCE_CONFIG_ID,
+  enabled: true,
+  delayHours: 24,
+  cooldownHours: 24,
+  batchLimit: MACRA_SCOREBOARD_USER_LIMIT,
+  maxSendsPerRun: 25,
+  scanEveryHours: 1,
+  paywallCancelDelayHours: 1,
+  webOfferProofDelayHours: 4,
+  paywallViewDelayHours: 24,
+  paywallViewMinCount: 2,
+  noTrialDelayHours: 168,
+  trialActivationDelayHours: 24,
+  sendWindowStartLocal: DEFAULT_CAMPAIGN_CONFIG.sendWindowStartLocal,
+  sendWindowEndLocal: DEFAULT_CAMPAIGN_CONFIG.sendWindowEndLocal,
+  sendWindowTimezone: CAMPAIGN_SEND_WINDOW_TIMEZONE,
+  schedulerAutoseeded: true,
+});
 
 const normalizeLocalTime = (value: unknown, fallback: string) => {
   const raw = typeof value === 'string' ? value.trim() : '';
@@ -952,6 +1000,19 @@ const estimateMacraScheduledSendAt = (
 const formatScoreboardPercent = (value: number, denominator: number): string =>
   denominator > 0 ? `${Math.round((value / denominator) * 100)}%` : '0%';
 
+const formatScoreboardMoney = (amount: number | null | undefined, currency = 'USD'): string => {
+  if (amount === null || amount === undefined || !Number.isFinite(amount)) return 'No paid invoice';
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: (currency || 'USD').toUpperCase(),
+      maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
+    }).format(amount);
+  } catch (_error) {
+    return `$${amount.toFixed(amount % 1 === 0 ? 0 : 2)}`;
+  }
+};
+
 const formatDateInputValue = (date: Date): string => {
   const pad = (value: number) => String(value).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -1061,6 +1122,32 @@ const matchesUserOrEmail = (row: Record<string, any>, userId: string, email: str
   return Boolean(email && rowEmail && rowEmail.toLowerCase() === email.toLowerCase());
 };
 
+const purchaseLogIsRetargetingOffer = (log: Record<string, any>): boolean => {
+  const metadata = (log.metadata || {}) as Record<string, any>;
+  const source = normalizeScoreboardString(
+    log.source ||
+      metadata.source ||
+      metadata.checkout_source ||
+      metadata.checkoutSource ||
+      metadata.purchase_channel ||
+      metadata.channel
+  ).toLowerCase();
+  const campaignId = normalizeScoreboardString(
+    log.campaignId ||
+      log.offerId ||
+      metadata.campaignId ||
+      metadata.campaign_id ||
+      metadata.offerId ||
+      metadata.offer_id
+  );
+  return (
+    source.includes('macra_retarget') ||
+    source.includes('macra_web_offer') ||
+    source.includes('web_offer') ||
+    campaignId === MACRA_WEB_OFFER_SEQUENCE_ID
+  );
+};
+
 const appsFlyerEventCount = (appsFlyer: Record<string, any> | null | undefined, eventNames: string[]): number =>
   eventNames.reduce((total, eventName) => total + (scoreNumber(getNestedValue(appsFlyer, `eventCounts.${eventName}`)) || 0), 0);
 
@@ -1136,6 +1223,7 @@ const buildMacraScoreboardUser = (args: {
     status: normalizePurchaseStatus(log.purchaseStatus || log.status),
     millis: purchaseLogMillis(log),
   }));
+  const retargetingStatuses = statuses.filter((row) => purchaseLogIsRetargetingOffer(row.log));
   const latestAttemptedAt = maxScoreMillis(
     ...statuses
       .filter((row) => row.status === 'attempted' || row.status === 'started' || row.status === 'initiated')
@@ -1156,6 +1244,10 @@ const buildMacraScoreboardUser = (args: {
       .filter((row) => purchaseStatusIsSuccess(row.status) && (positiveScoreNumber(getNestedValue(row.log, 'plan.trialDays')) || row.status.includes('trial')))
       .map((row) => row.millis)
   );
+  const latestRetargetingPaidStatus = retargetingStatuses
+    .filter((row) => purchaseStatusIsSuccess(row.status) && !positiveScoreNumber(getNestedValue(row.log, 'plan.trialDays')) && !row.status.includes('trial'))
+    .sort((a, b) => (b.millis || 0) - (a.millis || 0))[0];
+  const latestRetargetingPaidAt = latestRetargetingPaidStatus?.millis || null;
 
   const ageYears = inferAgeYears(data, profile, purchaseLogs);
   const completedOnboarding = data.hasCompletedMacraOnboarding === true;
@@ -1264,6 +1356,26 @@ const buildMacraScoreboardUser = (args: {
       ['sentAt', 'createdAt', 'updatedAt']
     )
   );
+  const webOfferCheckoutStartedAt = maxScoreMillis(state.webOffer24hCheckoutStartedAt);
+  const webOfferConvertedAt = maxScoreMillis(state.webOffer24hConvertedAt, state.webOffer24hCheckoutCompletedAt);
+  const webOfferTrialEndAt = maxScoreMillis(state.webOffer24hTrialEndAt, webOfferConvertedAt ? data.trialEndDate : null);
+  const webOfferTrialDays = positiveScoreNumber(state.webOffer24hTrialDays) || (webOfferConvertedAt ? 30 : null);
+  const latestRetargetingPaidLog = (latestRetargetingPaidStatus?.log || {}) as Record<string, any>;
+  const webOfferPaidAt = maxScoreMillis(state.webOffer24hPaidAt, state.webOffer24hFirstPaidAt, latestRetargetingPaidAt);
+  const webOfferPaidAmount =
+    positiveScoreNumber(state.webOffer24hPaidAmount) ||
+    positiveScoreNumber(getNestedValue(latestRetargetingPaidLog, 'metadata.amount_paid')) ||
+    positiveScoreNumber(getNestedValue(latestRetargetingPaidLog, 'plan.price'));
+  const webOfferPaidCurrency = normalizeScoreboardString(
+    state.webOffer24hPaidCurrency ||
+      getNestedValue(latestRetargetingPaidLog, 'metadata.currency') ||
+      state.webOffer24hPriceCurrency
+  ).toUpperCase();
+  const webOfferPlan =
+    normalizeScoreboardString(state.webOffer24hPlan) ||
+    normalizeScoreboardString(getNestedValue(latestRetargetingPaidLog, 'plan.period')) ||
+    normalizeScoreboardString(getNestedValue(latestRetargetingPaidLog, 'plan.title')) ||
+    normalizeScoreboardString(getNestedValue(latestRetargetingPaidLog, 'plan.id'));
   const stripeRetargetClickedAt = maxScoreMillis(
     state.webOffer24hClickedAt,
     state.webOfferProofClickedAt,
@@ -1285,7 +1397,7 @@ const buildMacraScoreboardUser = (args: {
   const trialStartedAt = maxScoreMillis(
     data.trialStartDate,
     data.macraTrialStartedAt,
-    state.webOffer24hConvertedAt,
+    webOfferConvertedAt,
     appsFlyerTrialStartedAt,
     latestTrialSucceededAt,
     rootTrialing && trialEndAt ? trialEndAt - 30 * 24 * 60 * 60 * 1000 : null
@@ -1301,6 +1413,7 @@ const buildMacraScoreboardUser = (args: {
   const paidAt = maxScoreMillis(
     data.subscriptionStartedAt,
     data.macraSubscriptionStartedAt,
+    webOfferPaidAt,
     appsFlyerPurchaseAt,
     activeSubscriptionFlag && !rootTrialing ? data.updatedAt : null,
     latestSucceededAt && latestSucceededAt !== latestTrialSucceededAt ? latestSucceededAt : null
@@ -1310,6 +1423,7 @@ const buildMacraScoreboardUser = (args: {
     trialStartedAt,
     appleCancelAt,
     ctaTappedAt,
+    webOfferCheckoutStartedAt,
     stripeRetargetClickedAt,
     webOfferOpenedAt,
     paywallLastViewedAt,
@@ -1330,7 +1444,7 @@ const buildMacraScoreboardUser = (args: {
   if (!hasMacroTarget) disqualifiers.push('missing_macro_target');
   if (!reachedPaywall) disqualifiers.push('no_paywall_signal');
 
-  const highIntent = Boolean(ctaTappedAt || appleCancelAt || stripeRetargetClickedAt || webOfferOpenedAt || paywallViewCount >= 2);
+  const highIntent = Boolean(ctaTappedAt || appleCancelAt || webOfferCheckoutStartedAt || stripeRetargetClickedAt || webOfferOpenedAt || paywallViewCount >= 2);
   const seriousPlanCompleter =
     completedOnboarding &&
     ageYears !== null &&
@@ -1350,7 +1464,9 @@ const buildMacraScoreboardUser = (args: {
   else if (completedOnboarding || profile) tier = 'onboarding_completer';
 
   let suggestedLane = '24h web offer';
-  if (paidAt) suggestedLane = 'Converted';
+  if (webOfferPaidAt) suggestedLane = 'Paid after offer';
+  else if (webOfferConvertedAt) suggestedLane = 'Offer redeemed';
+  else if (paidAt) suggestedLane = 'Converted';
   else if (trialStartedAt) suggestedLane = 'Trial activation';
   else if (appleCancelAt || ctaTappedAt) suggestedLane = 'Apple trust recovery';
   else if (stripeRetargetClickedAt || webOfferOpenedAt) suggestedLane = 'Proof follow-up';
@@ -1374,7 +1490,7 @@ const buildMacraScoreboardUser = (args: {
     });
     if (paywallCancelNext) return paywallCancelNext;
 
-    const webOfferProofNext = webOfferSentAt && webOfferEngagedAt && !state.webOffer24hCheckoutStartedAt && !state.webOffer24hConvertedAt
+    const webOfferProofNext = webOfferSentAt && webOfferEngagedAt && !webOfferCheckoutStartedAt && !webOfferConvertedAt
       ? buildMacraNextRetargetingEmail({
           step: MACRA_RETARGETING_FUNNEL_STEPS.webOfferProof,
           state,
@@ -1425,7 +1541,16 @@ const buildMacraScoreboardUser = (args: {
     paywallLastViewedAt,
     ctaTappedAt,
     appleCancelAt,
+    webOfferSentAt,
     webOfferOpenedAt,
+    webOfferCheckoutStartedAt,
+    webOfferConvertedAt,
+    webOfferTrialEndAt,
+    webOfferTrialDays,
+    webOfferPaidAt,
+    webOfferPaidAmount,
+    webOfferPaidCurrency,
+    webOfferPlan,
     stripeRetargetClickedAt,
     trialStartedAt,
     paidAt,
@@ -1739,8 +1864,9 @@ const EmailSequencesAdmin: React.FC = () => {
   const [testUserId, setTestUserId] = useState('');
   const [lastTestCheckoutUrl, setLastTestCheckoutUrl] = useState('');
   const [sending, setSending] = useState(false);
-  const [copyingScoreboard, setCopyingScoreboard] = useState(false);
-  const [sendingRetargetingNowUserId, setSendingRetargetingNowUserId] = useState<string | null>(null);
+    const [copyingScoreboard, setCopyingScoreboard] = useState(false);
+    const [sendingRetargetingNowUserId, setSendingRetargetingNowUserId] = useState<string | null>(null);
+    const [runningRetargetingScheduler, setRunningRetargetingScheduler] = useState(false);
 
   // Template editing
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -1794,7 +1920,25 @@ const EmailSequencesAdmin: React.FC = () => {
         id: snapshot.id,
         data: (snapshot.data() || {}) as Record<string, any>,
       }));
-      const configData = configSnap.exists() ? ((configSnap.data() || {}) as Record<string, any>) : null;
+      let configData = configSnap.exists() ? ((configSnap.data() || {}) as Record<string, any>) : null;
+      if (!configSnap.exists()) {
+        const seededConfig = buildMacraRetargetingSchedulerDefaultConfig();
+        try {
+          await setDoc(
+            doc(db, 'email-sequence-config', MACRA_RETARGETING_SEQUENCE_CONFIG_ID),
+            {
+              ...seededConfig,
+              seededFrom: 'email-sequences-admin',
+              seededAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+          configData = seededConfig;
+        } catch (error) {
+          console.warn('[EmailSequences] Failed to seed Macra retargeting scheduler config', error);
+        }
+      }
 
       const loadRecentDocs = async (collectionName: string, orderField: string, rowLimit: number) => {
         try {
@@ -1922,17 +2066,32 @@ const EmailSequencesAdmin: React.FC = () => {
         const updates: Record<string, string> = {};
         const enabledUpdates: Record<string, boolean> = {};
         const campaignConfigUpdates: Record<string, CampaignConfig> = {};
-        for (const seq of SEQUENCES) {
-          if (!seq.scheduleConfigDocId) continue;
-          const ref = doc(db, 'email-sequence-config', seq.scheduleConfigDocId);
-          const snap = await getDoc(ref);
-          const data = snap.exists() ? ((snap.data() || {}) as any) : {};
-          const time = (data?.sendTimeUtc as string) || '';
-          updates[seq.id] = (time || '14:00').trim();
-          enabledUpdates[seq.id] = snap.exists()
-            ? seq.defaultScheduleEnabled === false
-              ? data?.enabled === true
-              : data?.enabled !== false
+          for (const seq of SEQUENCES) {
+            if (!seq.scheduleConfigDocId) continue;
+            const ref = doc(db, 'email-sequence-config', seq.scheduleConfigDocId);
+            const snap = await getDoc(ref);
+            let scheduleDocExists = snap.exists();
+            let data = snap.exists() ? ((snap.data() || {}) as any) : {};
+            if (!snap.exists() && seq.scheduleConfigDocId === MACRA_RETARGETING_SEQUENCE_CONFIG_ID) {
+              data = buildMacraRetargetingSchedulerDefaultConfig();
+              await setDoc(
+                ref,
+                {
+                  ...data,
+                  seededFrom: 'email-sequences-admin',
+                  seededAt: serverTimestamp(),
+                  updatedAt: serverTimestamp(),
+                },
+                { merge: true }
+              );
+              scheduleDocExists = true;
+            }
+            const time = (data?.sendTimeUtc as string) || '';
+            updates[seq.id] = (time || '14:00').trim();
+            enabledUpdates[seq.id] = scheduleDocExists
+              ? seq.defaultScheduleEnabled === false
+                ? data?.enabled === true
+                : data?.enabled !== false
             : seq.defaultScheduleEnabled === true;
           if (hasCampaignControls(seq)) {
             campaignConfigUpdates[seq.id] = normalizeCampaignConfig(data);
@@ -2002,7 +2161,7 @@ const EmailSequencesAdmin: React.FC = () => {
       return;
     }
 
-    let nextCampaignConfig: CampaignConfig | null = null;
+      let nextCampaignConfig: (CampaignConfig & Record<string, any>) | null = null;
     if (hasCampaignControls(scheduleEditingSequence)) {
       const delayHours = parseIntegerDraft(delayHoursDraft);
       const batchLimit = parseIntegerDraft(batchLimitDraft);
@@ -2041,10 +2200,11 @@ const EmailSequencesAdmin: React.FC = () => {
         return;
       }
 
-      nextCampaignConfig = {
-        delayHours,
-        batchLimit,
-        maxSendsPerRun,
+        nextCampaignConfig = {
+          delayHours,
+          ...(scheduleConfigIsRetargeting ? { cooldownHours: delayHours } : {}),
+          batchLimit,
+          maxSendsPerRun,
         scanEveryHours,
         sendWindowStartLocal,
         sendWindowEndLocal,
@@ -2400,9 +2560,9 @@ const EmailSequencesAdmin: React.FC = () => {
     }
   };
 
-  const uploadAppsFlyerCsvFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-    event.target.value = '';
+    const uploadAppsFlyerCsvFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.target.files || []);
+      event.target.value = '';
     if (!files.length) return;
 
     const firebaseUser = auth.currentUser;
@@ -2462,11 +2622,54 @@ const EmailSequencesAdmin: React.FC = () => {
     } catch (e: any) {
       setMessage({ type: 'error', text: e?.message || 'Failed to upload AppsFlyer CSV data' });
     } finally {
-      setUploadingAppsFlyerCsv(false);
-    }
-  };
+        setUploadingAppsFlyerCsv(false);
+      }
+    };
 
-  const sendMacraRetargetingNow = async (user: MacraScoreboardUser) => {
+    const runMacraRetargetingSchedulerNow = async () => {
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) {
+        setMessage({ type: 'error', text: 'Sign in again before running the retargeting scheduler.' });
+        return;
+      }
+
+      setRunningRetargetingScheduler(true);
+      setMessage(null);
+      try {
+        const idToken = await firebaseUser.getIdToken();
+        const response = await fetch('/.netlify/functions/schedule-macra-retargeting-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+            ...getFirebaseModeRequestHeaders(),
+          },
+          body: JSON.stringify({
+            action: 'runNow',
+            force: true,
+          }),
+        });
+        const json = await response.json().catch(() => ({}));
+        if (!response.ok || json?.success === false) {
+          throw new Error(json?.error || `Scheduler run failed (HTTP ${response.status})`);
+        }
+
+        const messageText = json?.disabled
+          ? 'Macra retargeting scheduler is paused.'
+          : `Macra retargeting scheduler verified: ${Number(json?.sent || 0)} sent, ${Number(json?.skipped || 0)} skipped, ${Number(json?.errors || 0)} errors.`;
+        setMessage({ type: json?.disabled ? 'info' : 'success', text: messageText });
+        dispatch(showToast({ message: messageText, type: json?.disabled ? 'info' : 'success' }));
+        await loadMacraScoreboard();
+      } catch (e: any) {
+        const errorMessage = e?.message || 'Failed to run Macra retargeting scheduler';
+        setMessage({ type: 'error', text: errorMessage });
+        dispatch(showToast({ message: errorMessage, type: 'error', duration: 5000 }));
+      } finally {
+        setRunningRetargetingScheduler(false);
+      }
+    };
+
+    const sendMacraRetargetingNow = async (user: MacraScoreboardUser) => {
     const nextEmail = user.nextRetargetingEmail;
     if (!nextEmail) {
       setMessage({ type: 'error', text: 'No retargeting email is available for this user yet.' });
@@ -2523,6 +2726,13 @@ const EmailSequencesAdmin: React.FC = () => {
     const appsFlyerOrganicInstalls = Number(getNestedValue(appsFlyerSummary, 'installs.organic') || 0);
     const appsFlyerNonOrganicInstalls = Number(getNestedValue(appsFlyerSummary, 'installs.nonOrganic') || 0);
     const appsFlyerEvents = Number(getNestedValue(appsFlyerSummary, 'events.total') || 0);
+    const appsFlyerPaywallEvents = appsFlyerSummaryEventCount(appsFlyerSummary, MACRA_APPSFLYER_PAYWALL_EVENT_NAMES);
+    const appsFlyerPlanLoadedEvents = appsFlyerSummaryEventCount(appsFlyerSummary, MACRA_APPSFLYER_PLAN_LOADED_EVENT_NAMES);
+    const appsFlyerPlanSelectedEvents = appsFlyerSummaryEventCount(appsFlyerSummary, MACRA_APPSFLYER_PLAN_SELECTED_EVENT_NAMES);
+    const appsFlyerCtaEvents = appsFlyerSummaryEventCount(appsFlyerSummary, MACRA_APPSFLYER_CTA_EVENT_NAMES);
+    const appsFlyerCheckoutEvents = appsFlyerSummaryEventCount(appsFlyerSummary, MACRA_APPSFLYER_CHECKOUT_EVENT_NAMES);
+    const appsFlyerPurchaseCancelEvents = appsFlyerSummaryEventCount(appsFlyerSummary, MACRA_APPSFLYER_PURCHASE_CANCEL_EVENT_NAMES);
+    const appsFlyerPurchaseFailedEvents = appsFlyerSummaryEventCount(appsFlyerSummary, MACRA_APPSFLYER_PURCHASE_FAILED_EVENT_NAMES);
     const appsFlyerStartTrialEvents = appsFlyerSummaryEventCount(appsFlyerSummary, MACRA_APPSFLYER_TRIAL_EVENT_NAMES);
     const appsFlyerSubscribeEvents = appsFlyerSummaryEventCount(appsFlyerSummary, ['af_subscribe', 'subscribe']);
     const appsFlyerPurchaseEvents = appsFlyerSummaryEventCount(appsFlyerSummary, ['af_purchase', 'purchase']);
@@ -2566,10 +2776,23 @@ const EmailSequencesAdmin: React.FC = () => {
     const qualifiedTrialStarts = count((user) => user.isQualified && Boolean(user.signals.trialStartedAt));
     const qualifiedPaid = count((user) => user.isQualified && Boolean(user.signals.paidAt));
     const qualifiedStripeClicks = count((user) => user.isQualified && Boolean(user.signals.stripeRetargetClickedAt));
+    const webOfferSentUsers = count((user) => Boolean(user.signals.webOfferSentAt));
+    const webOfferCheckoutStarts = count((user) => Boolean(user.signals.webOfferCheckoutStartedAt));
+    const retargetingRecoveredUsers = count((user) => Boolean(user.signals.webOfferConvertedAt || user.signals.webOfferPaidAt));
+    const retargetingTrialRedemptions = count((user) => Boolean(user.signals.webOfferConvertedAt));
+    const retargetingPaidConversions = count((user) => Boolean(user.signals.webOfferPaidAt));
+    const retargetingRecoveredRevenue = users.reduce(
+      (total, user) => total + (user.signals.webOfferPaidAmount || 0),
+      0
+    );
     const recoveryPool = users
       .filter((user) => user.isHighIntent && !user.signals.trialStartedAt && !user.signals.paidAt)
       .sort((a, b) => (b.signals.latestIntentAt || 0) - (a.signals.latestIntentAt || 0))
       .slice(0, 10);
+    const recoveredUsers = users
+      .filter((user) => user.signals.webOfferConvertedAt || user.signals.webOfferPaidAt)
+      .sort((a, b) => Math.max(b.signals.webOfferPaidAt || 0, b.signals.webOfferConvertedAt || 0) - Math.max(a.signals.webOfferPaidAt || 0, a.signals.webOfferConvertedAt || 0))
+      .slice(0, 12);
 
     const tierRows = MACRA_TIER_ORDER.map((tier) => ({
       tier,
@@ -2593,11 +2816,22 @@ const EmailSequencesAdmin: React.FC = () => {
       .slice(0, 8);
 
     const lastScanSummary = (macraScoreboard.config?.lastScanSummary || {}) as Record<string, any>;
-    const sentBySequence = Object.entries((lastScanSummary.sentBySequence || {}) as Record<string, number>)
-      .sort((a, b) => Number(b[1]) - Number(a[1]));
+    const sentBySequence = Object.entries((lastScanSummary.sentBySequence || {}) as Record<string, number>).sort(
+      (a, b) => Number(b[1]) - Number(a[1])
+    );
     const skippedByReason = Object.entries((lastScanSummary.skippedByReason || {}) as Record<string, number>)
       .sort((a, b) => Number(b[1]) - Number(a[1]))
       .slice(0, 6);
+    const appsFlyerPaywallFunnelRows = [
+      { label: 'Paywall reached', value: appsFlyerPaywallEvents, sublabel: 'Onboarding or standalone paywall views' },
+      { label: 'Plans loaded', value: appsFlyerPlanLoadedEvents, sublabel: 'StoreKit plan sheet ready' },
+      { label: 'Plan selected', value: appsFlyerPlanSelectedEvents, sublabel: 'Plan choice before Apple confirmation' },
+      { label: 'Primary button pressed', value: appsFlyerCtaEvents, sublabel: 'AppsFlyer CTA tap events' },
+      { label: 'Checkout started', value: appsFlyerCheckoutEvents, sublabel: 'AppsFlyer checkout initiation events' },
+      { label: 'Purchase cancelled', value: appsFlyerPurchaseCancelEvents, sublabel: 'Apple sheet cancelled' },
+      { label: 'Purchase failed', value: appsFlyerPurchaseFailedEvents, sublabel: 'StoreKit purchase failure events' },
+      { label: 'Trial starts', value: appsFlyerStartTrialEvents, sublabel: 'AppsFlyer trial start events' },
+    ].filter((row) => row.value > 0 || macraScoreboard.appsFlyerSummary);
 
     return {
       users,
@@ -2611,7 +2845,14 @@ const EmailSequencesAdmin: React.FC = () => {
       qualifiedTrialStarts,
       qualifiedPaid,
       qualifiedStripeClicks,
+      webOfferSentUsers,
+      webOfferCheckoutStarts,
+      retargetingRecoveredUsers,
+      retargetingTrialRedemptions,
+      retargetingPaidConversions,
+      retargetingRecoveredRevenue,
       recoveryPool,
+      recoveredUsers,
       tierRows,
       disqualifierRows,
       lastScanSummary,
@@ -2621,6 +2862,13 @@ const EmailSequencesAdmin: React.FC = () => {
       appsFlyerOrganicInstalls,
       appsFlyerNonOrganicInstalls,
       appsFlyerEvents,
+      appsFlyerPaywallEvents,
+      appsFlyerPlanLoadedEvents,
+      appsFlyerPlanSelectedEvents,
+      appsFlyerCtaEvents,
+      appsFlyerCheckoutEvents,
+      appsFlyerPurchaseCancelEvents,
+      appsFlyerPurchaseFailedEvents,
       appsFlyerStartTrialEvents,
       appsFlyerSubscribeEvents,
       appsFlyerPurchaseEvents,
@@ -2637,6 +2885,7 @@ const EmailSequencesAdmin: React.FC = () => {
       appsFlyerEventIdentityLabel,
       appsFlyerTopSourceUnit,
       appsFlyerCoverageLabel,
+      appsFlyerPaywallFunnelRows,
     };
   }, [macraScoreboard.appsFlyerSummary, macraScoreboard.config, macraScoreboard.users]);
 
@@ -2663,19 +2912,41 @@ const EmailSequencesAdmin: React.FC = () => {
       tone: 'text-amber-300',
     },
     {
+      label: 'Retargeting recoveries',
+      value: macraScoreboardSummary.retargetingRecoveredUsers,
+      sublabel: `${macraScoreboardSummary.retargetingTrialRedemptions} 30-day offer redemptions · ${macraScoreboardSummary.retargetingPaidConversions} paid after trial`,
+      icon: CheckCircle,
+      tone: 'text-lime-300',
+    },
+    {
+      label: 'Paid plan conversions',
+      value: Math.max(
+        macraScoreboardSummary.qualifiedPaid,
+        macraScoreboardSummary.retargetingPaidConversions,
+        macraScoreboardSummary.appsFlyerSubscribeEvents + macraScoreboardSummary.appsFlyerPurchaseEvents
+      ),
+      sublabel: `${macraScoreboardSummary.retargetingPaidConversions} paid after web offer · ${macraScoreboardSummary.appsFlyerSubscribeEvents + macraScoreboardSummary.appsFlyerPurchaseEvents} AppsFlyer subscribe/purchase events · ${formatScoreboardMoney(macraScoreboardSummary.retargetingRecoveredRevenue)}`,
+      icon: ShoppingCart,
+      tone: 'text-green-300',
+    },
+    {
       label: 'Qualified paywall views',
       value: macraScoreboardSummary.qualifiedPaywallViews,
       sublabel: 'Explicit or inferred from completed onboarding',
       icon: Eye,
       tone: 'text-blue-300',
     },
-    {
-      label: 'Qualified CTA taps',
-      value: macraScoreboardSummary.qualifiedCtaTaps,
-      sublabel: `${formatScoreboardPercent(macraScoreboardSummary.qualifiedCtaTaps, macraScoreboardSummary.qualifiedPaywallViews)} of qualified paywall users`,
-      icon: MousePointerClick,
-      tone: 'text-sky-300',
-    },
+      {
+        label: 'Paywall CTA taps',
+        value: macraScoreboard.appsFlyerSummary
+          ? Math.max(macraScoreboardSummary.qualifiedCtaTaps, macraScoreboardSummary.appsFlyerCtaEvents)
+          : macraScoreboardSummary.qualifiedCtaTaps,
+        sublabel: macraScoreboard.appsFlyerSummary
+          ? `${macraScoreboardSummary.qualifiedCtaTaps} matched qualified users · ${macraScoreboardSummary.appsFlyerCtaEvents} ${macraScoreboardSummary.appsFlyerEventSourceLabel} · ${macraScoreboardSummary.appsFlyerCheckoutEvents} checkout starts`
+          : `${formatScoreboardPercent(macraScoreboardSummary.qualifiedCtaTaps, macraScoreboardSummary.qualifiedPaywallViews)} of qualified paywall users`,
+        icon: MousePointerClick,
+        tone: 'text-sky-300',
+      },
     {
       label: 'Qualified Apple cancels',
       value: macraScoreboardSummary.qualifiedAppleCancels,
@@ -2723,13 +2994,39 @@ const EmailSequencesAdmin: React.FC = () => {
       value: macraScoreboardSummary.seriousPlanCompleters,
       sublabel: `${formatScoreboardPercent(macraScoreboardSummary.seriousPlanCompleters, macraScoreboardSummary.onboardingCompleters)} of onboarding completers`,
     },
-    {
-      label: 'CTA / cancel users',
-      value: macraScoreboardSummary.highIntentRecovery,
-      sublabel: 'Highest-intent recovery audience',
-    },
-    {
-      label: 'Trial starts',
+      {
+        label: 'High-intent recovery',
+        value: macraScoreboardSummary.highIntentRecovery,
+        sublabel: 'Highest-intent recovery audience',
+      },
+      {
+        label: 'Paywall CTA taps',
+        value: macraScoreboard.appsFlyerSummary
+          ? Math.max(macraScoreboardSummary.qualifiedCtaTaps, macraScoreboardSummary.appsFlyerCtaEvents)
+          : macraScoreboardSummary.qualifiedCtaTaps,
+        sublabel: macraScoreboard.appsFlyerSummary
+          ? `${macraScoreboardSummary.qualifiedCtaTaps} matched qualified · ${macraScoreboardSummary.appsFlyerCtaEvents} ${macraScoreboardSummary.appsFlyerEventSourceLabel}`
+          : `${formatScoreboardPercent(macraScoreboardSummary.qualifiedCtaTaps, macraScoreboardSummary.qualifiedPaywallViews)} of qualified paywall users`,
+      },
+      {
+        label: 'Checkout starts',
+        value: macraScoreboard.appsFlyerSummary ? macraScoreboardSummary.appsFlyerCheckoutEvents : 'Upload AppsFlyer events',
+        sublabel: macraScoreboard.appsFlyerSummary
+          ? `${formatScoreboardPercent(macraScoreboardSummary.appsFlyerCheckoutEvents, macraScoreboardSummary.appsFlyerCtaEvents)} of AppsFlyer CTA taps`
+          : 'AppsFlyer aggregate event check',
+      },
+      {
+        label: 'Web offer checkout starts',
+        value: macraScoreboardSummary.webOfferCheckoutStarts,
+        sublabel: `${formatScoreboardPercent(macraScoreboardSummary.webOfferCheckoutStarts, macraScoreboardSummary.webOfferSentUsers || macraScoreboardSummary.qualifiedStripeClicks)} of matched retargeting offer users`,
+      },
+      {
+        label: 'Retargeting recoveries',
+        value: macraScoreboardSummary.retargetingRecoveredUsers,
+        sublabel: `${formatScoreboardPercent(macraScoreboardSummary.retargetingRecoveredUsers, macraScoreboardSummary.webOfferCheckoutStarts)} of matched web offer checkout starts`,
+      },
+      {
+        label: 'Trial starts',
       value: macraScoreboard.appsFlyerSummary
         ? Math.max(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.appsFlyerStartTrialEvents)
         : macraScoreboardSummary.qualifiedTrialStarts,
@@ -2739,8 +3036,8 @@ const EmailSequencesAdmin: React.FC = () => {
     },
     {
       label: 'Paid users',
-      value: macraScoreboardSummary.qualifiedPaid,
-      sublabel: `${formatScoreboardPercent(macraScoreboardSummary.qualifiedPaid, macraScoreboardSummary.seriousPlanCompleters)} of serious plan completers`,
+      value: Math.max(macraScoreboardSummary.qualifiedPaid, macraScoreboardSummary.retargetingPaidConversions),
+      sublabel: `${macraScoreboardSummary.retargetingPaidConversions} paid after offer · ${formatScoreboardPercent(macraScoreboardSummary.qualifiedPaid, macraScoreboardSummary.seriousPlanCompleters)} of serious plan completers`,
     },
   ];
 
@@ -2790,7 +3087,12 @@ const EmailSequencesAdmin: React.FC = () => {
       paywallLastViewedAtIso: user.signals.paywallLastViewedAt ? new Date(user.signals.paywallLastViewedAt).toISOString() : null,
       ctaTappedAtIso: user.signals.ctaTappedAt ? new Date(user.signals.ctaTappedAt).toISOString() : null,
       appleCancelAtIso: user.signals.appleCancelAt ? new Date(user.signals.appleCancelAt).toISOString() : null,
+      webOfferSentAtIso: user.signals.webOfferSentAt ? new Date(user.signals.webOfferSentAt).toISOString() : null,
       webOfferOpenedAtIso: user.signals.webOfferOpenedAt ? new Date(user.signals.webOfferOpenedAt).toISOString() : null,
+      webOfferCheckoutStartedAtIso: user.signals.webOfferCheckoutStartedAt ? new Date(user.signals.webOfferCheckoutStartedAt).toISOString() : null,
+      webOfferConvertedAtIso: user.signals.webOfferConvertedAt ? new Date(user.signals.webOfferConvertedAt).toISOString() : null,
+      webOfferTrialEndAtIso: user.signals.webOfferTrialEndAt ? new Date(user.signals.webOfferTrialEndAt).toISOString() : null,
+      webOfferPaidAtIso: user.signals.webOfferPaidAt ? new Date(user.signals.webOfferPaidAt).toISOString() : null,
       stripeRetargetClickedAtIso: user.signals.stripeRetargetClickedAt ? new Date(user.signals.stripeRetargetClickedAt).toISOString() : null,
       trialStartedAtIso: user.signals.trialStartedAt ? new Date(user.signals.trialStartedAt).toISOString() : null,
       paidAtIso: user.signals.paidAt ? new Date(user.signals.paidAt).toISOString() : null,
@@ -2818,14 +3120,19 @@ const EmailSequencesAdmin: React.FC = () => {
           sublabel: card.sublabel,
         })),
         funnel: macraFunnelRows,
-        rates: {
-          qualifiedOnboardingRate: formatScoreboardPercent(macraScoreboardSummary.qualified, macraScoreboardSummary.onboardingCompleters),
-          seriousPlanCompleterRate: formatScoreboardPercent(macraScoreboardSummary.seriousPlanCompleters, macraScoreboardSummary.onboardingCompleters),
-          qualifiedCtaTapRate: formatScoreboardPercent(macraScoreboardSummary.qualifiedCtaTaps, macraScoreboardSummary.qualifiedPaywallViews),
-          qualifiedTrialStartRate: formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.qualified),
-          trialStartRateFromSeriousPlan: formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.seriousPlanCompleters),
-          paidRateFromSeriousPlan: formatScoreboardPercent(macraScoreboardSummary.qualifiedPaid, macraScoreboardSummary.seriousPlanCompleters),
-        },
+          rates: {
+            qualifiedOnboardingRate: formatScoreboardPercent(macraScoreboardSummary.qualified, macraScoreboardSummary.onboardingCompleters),
+            seriousPlanCompleterRate: formatScoreboardPercent(macraScoreboardSummary.seriousPlanCompleters, macraScoreboardSummary.onboardingCompleters),
+            qualifiedCtaTapRate: formatScoreboardPercent(macraScoreboardSummary.qualifiedCtaTaps, macraScoreboardSummary.qualifiedPaywallViews),
+            appsFlyerCtaTapRate: formatScoreboardPercent(macraScoreboardSummary.appsFlyerCtaEvents, macraScoreboardSummary.appsFlyerPaywallEvents),
+            appsFlyerCheckoutStartRate: formatScoreboardPercent(macraScoreboardSummary.appsFlyerCheckoutEvents, macraScoreboardSummary.appsFlyerCtaEvents),
+            webOfferCheckoutStartRate: formatScoreboardPercent(macraScoreboardSummary.webOfferCheckoutStarts, macraScoreboardSummary.webOfferSentUsers || macraScoreboardSummary.qualifiedStripeClicks),
+            retargetingRecoveryRate: formatScoreboardPercent(macraScoreboardSummary.retargetingRecoveredUsers, macraScoreboardSummary.webOfferCheckoutStarts),
+            retargetingPaidRate: formatScoreboardPercent(macraScoreboardSummary.retargetingPaidConversions, macraScoreboardSummary.retargetingTrialRedemptions),
+            qualifiedTrialStartRate: formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.qualified),
+            trialStartRateFromSeriousPlan: formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.seriousPlanCompleters),
+            paidRateFromSeriousPlan: formatScoreboardPercent(macraScoreboardSummary.qualifiedPaid, macraScoreboardSummary.seriousPlanCompleters),
+          },
         buckets: {
           seriousVsCuriosity: macraScoreboardSummary.tierRows,
           qualificationGaps: macraScoreboardSummary.disqualifierRows,
@@ -2839,24 +3146,42 @@ const EmailSequencesAdmin: React.FC = () => {
           sentBySequence: Object.fromEntries(macraScoreboardSummary.sentBySequence),
           skippedByReason: Object.fromEntries(macraScoreboardSummary.skippedByReason),
         },
+        recovery: {
+          webOfferSentUsers: macraScoreboardSummary.webOfferSentUsers,
+          webOfferCheckoutStarts: macraScoreboardSummary.webOfferCheckoutStarts,
+          recoveredUsers: macraScoreboardSummary.retargetingRecoveredUsers,
+          trialRedemptions: macraScoreboardSummary.retargetingTrialRedemptions,
+          paidConversions: macraScoreboardSummary.retargetingPaidConversions,
+          paidRevenue: macraScoreboardSummary.retargetingRecoveredRevenue,
+          paidRevenueLabel: formatScoreboardMoney(macraScoreboardSummary.retargetingRecoveredRevenue),
+        },
         appsFlyer: {
           summary: macraScoreboard.appsFlyerSummary,
           importSource: macraScoreboardSummary.appsFlyerImportSource,
           isAggregateCsv: macraScoreboardSummary.appsFlyerIsAggregateCsv,
           installs: macraScoreboardSummary.appsFlyerInstalls,
           organicInstalls: macraScoreboardSummary.appsFlyerOrganicInstalls,
-          nonOrganicInstalls: macraScoreboardSummary.appsFlyerNonOrganicInstalls,
-          events: macraScoreboardSummary.appsFlyerEvents,
-          startTrialEvents: macraScoreboardSummary.appsFlyerStartTrialEvents,
-          subscribeEvents: macraScoreboardSummary.appsFlyerSubscribeEvents,
-          purchaseEvents: macraScoreboardSummary.appsFlyerPurchaseEvents,
-          matchedCustomerUserRows: macraScoreboardSummary.appsFlyerMatchedRows,
+            nonOrganicInstalls: macraScoreboardSummary.appsFlyerNonOrganicInstalls,
+            events: macraScoreboardSummary.appsFlyerEvents,
+            paywallEvents: macraScoreboardSummary.appsFlyerPaywallEvents,
+            planLoadedEvents: macraScoreboardSummary.appsFlyerPlanLoadedEvents,
+            planSelectedEvents: macraScoreboardSummary.appsFlyerPlanSelectedEvents,
+            ctaEvents: macraScoreboardSummary.appsFlyerCtaEvents,
+            checkoutEvents: macraScoreboardSummary.appsFlyerCheckoutEvents,
+            purchaseCancelEvents: macraScoreboardSummary.appsFlyerPurchaseCancelEvents,
+            purchaseFailedEvents: macraScoreboardSummary.appsFlyerPurchaseFailedEvents,
+            startTrialEvents: macraScoreboardSummary.appsFlyerStartTrialEvents,
+            subscribeEvents: macraScoreboardSummary.appsFlyerSubscribeEvents,
+            purchaseEvents: macraScoreboardSummary.appsFlyerPurchaseEvents,
+            paywallIntentFunnel: macraScoreboardSummary.appsFlyerPaywallFunnelRows,
+            matchedCustomerUserRows: macraScoreboardSummary.appsFlyerMatchedRows,
           topMediaSources: macraScoreboardSummary.appsFlyerTopMediaSources,
           topCampaigns: macraScoreboardSummary.appsFlyerTopCampaigns,
           topEvents: macraScoreboardSummary.appsFlyerTopEvents,
           aggregateCoverage: macraScoreboardSummary.appsFlyerCoverageLabel,
           aggregatePeriods: macraScoreboardSummary.appsFlyerAggregatePeriods,
         },
+        recoveredPeople: macraScoreboardSummary.recoveredUsers.map(buildScoreboardUserExport),
         highestIntentRecoveryPool: macraScoreboardSummary.recoveryPool.map(buildScoreboardUserExport),
         loadedUsers: macraScoreboard.users.map(buildScoreboardUserExport),
       });
@@ -3122,23 +3447,50 @@ const EmailSequencesAdmin: React.FC = () => {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-zinc-800 bg-[#1a1e24] overflow-hidden">
-                <div className="border-b border-zinc-800 px-4 py-3">
-                  <h3 className="text-sm font-semibold text-zinc-200">Scheduler Last Run</h3>
-                </div>
-                <div className="p-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <div className="text-xs text-zinc-500">Completed</div>
-                      <div className="mt-1 text-zinc-200">
-                        {formatScoreboardDate(macraScoreboard.config?.lastScanCompletedAt || macraScoreboard.config?.lastScanAt)}
+                <div className="rounded-lg border border-zinc-800 bg-[#1a1e24] overflow-hidden">
+                  <div className="flex flex-col gap-2 border-b border-zinc-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 className="text-sm font-semibold text-zinc-200">Scheduler Last Run</h3>
+                    <button
+                      onClick={runMacraRetargetingSchedulerNow}
+                      disabled={runningRetargetingScheduler}
+                      className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                        runningRetargetingScheduler
+                          ? 'bg-zinc-800 text-zinc-400'
+                          : 'border border-[#d7ff00]/40 bg-[#d7ff00]/10 text-[#d7ff00] hover:bg-[#d7ff00]/20'
+                      }`}
+                      title="Run the shared Macra retargeting scheduler now"
+                    >
+                      {runningRetargetingScheduler ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                      Run now
+                    </button>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <div className="text-xs text-zinc-500">Status</div>
+                        <div className={macraScoreboard.config?.enabled === false ? 'mt-1 text-amber-300' : 'mt-1 text-green-300'}>
+                          {macraScoreboard.config?.enabled === false ? 'Paused' : 'Enabled'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-zinc-500">Completed</div>
+                        <div className="mt-1 text-zinc-200">
+                          {formatScoreboardDate(macraScoreboard.config?.lastScanCompletedAt || macraScoreboard.config?.lastScanAt)}
+                        </div>
                       </div>
                     </div>
-                    <div>
-                      <div className="text-xs text-zinc-500">Local time</div>
-                      <div className="mt-1 text-zinc-200">{macraScoreboard.config?.lastScanLocalTime || 'Not seen'}</div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <div className="text-xs text-zinc-500">Local time</div>
+                        <div className="mt-1 text-zinc-200">{macraScoreboard.config?.lastScanLocalTime || 'Not seen'}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-zinc-500">Send cap</div>
+                        <div className="mt-1 text-zinc-200">
+                          {Number(macraScoreboard.config?.maxSendsPerRun || DEFAULT_CAMPAIGN_CONFIG.maxSendsPerRun)} per run
+                        </div>
+                      </div>
                     </div>
-                  </div>
                   <div className="grid grid-cols-5 gap-2">
                     {['scanned', 'claimed', 'sent', 'skipped', 'errors'].map((key) => (
                       <div key={key} className="rounded-lg bg-zinc-950/70 px-2 py-2 text-center">
@@ -3193,7 +3545,7 @@ const EmailSequencesAdmin: React.FC = () => {
                   ) : null}
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 xl:grid-cols-5">
+                <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-lg bg-zinc-950/60 p-3">
                   <div className="text-xs uppercase tracking-wider text-zinc-500">
                     {macraScoreboardSummary.appsFlyerIsAggregateCsv ? 'Install rows' : 'Raw installs'}
@@ -3212,15 +3564,38 @@ const EmailSequencesAdmin: React.FC = () => {
                     {macraScoreboardSummary.appsFlyerEventIdentityLabel}
                   </div>
                 </div>
-                <div className="rounded-lg bg-zinc-950/60 p-3">
-                  <div className="text-xs uppercase tracking-wider text-zinc-500">{macraScoreboardSummary.appsFlyerTrialCardLabel}</div>
-                  <div className="mt-2 text-2xl font-bold text-white">{macraScoreboardSummary.appsFlyerStartTrialEvents}</div>
-                  <div className="mt-1 text-xs text-zinc-500">
-                    {macraScoreboardSummary.appsFlyerSubscribeEvents + macraScoreboardSummary.appsFlyerPurchaseEvents} subscribe or purchase events
+                  <div className="rounded-lg bg-zinc-950/60 p-3">
+                    <div className="text-xs uppercase tracking-wider text-zinc-500">{macraScoreboardSummary.appsFlyerTrialCardLabel}</div>
+                    <div className="mt-2 text-2xl font-bold text-white">{macraScoreboardSummary.appsFlyerStartTrialEvents}</div>
+                    <div className="mt-1 text-xs text-zinc-500">
+                      {macraScoreboardSummary.appsFlyerSubscribeEvents + macraScoreboardSummary.appsFlyerPurchaseEvents} subscribe or purchase events
+                    </div>
                   </div>
-                </div>
-                <div className="rounded-lg bg-zinc-950/60 p-3">
-                  <div className="text-xs uppercase tracking-wider text-zinc-500">Top source</div>
+                  <div className="rounded-lg bg-zinc-950/60 p-3">
+                    <div className="text-xs uppercase tracking-wider text-zinc-500">Paywall CTA taps</div>
+                    <div className="mt-2 text-2xl font-bold text-white">{macraScoreboardSummary.appsFlyerCtaEvents}</div>
+                    <div className="mt-1 text-xs text-zinc-500">
+                      {formatScoreboardPercent(macraScoreboardSummary.appsFlyerCtaEvents, macraScoreboardSummary.appsFlyerPaywallEvents)} of paywall events
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-zinc-950/60 p-3">
+                    <div className="text-xs uppercase tracking-wider text-zinc-500">Checkout starts</div>
+                    <div className="mt-2 text-2xl font-bold text-white">{macraScoreboardSummary.appsFlyerCheckoutEvents}</div>
+                    <div className="mt-1 text-xs text-zinc-500">
+                      {formatScoreboardPercent(macraScoreboardSummary.appsFlyerCheckoutEvents, macraScoreboardSummary.appsFlyerCtaEvents)} of CTA taps
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-zinc-950/60 p-3">
+                    <div className="text-xs uppercase tracking-wider text-zinc-500">Cancel or failed</div>
+                    <div className="mt-2 text-2xl font-bold text-white">
+                      {macraScoreboardSummary.appsFlyerPurchaseCancelEvents + macraScoreboardSummary.appsFlyerPurchaseFailedEvents}
+                    </div>
+                    <div className="mt-1 text-xs text-zinc-500">
+                      {macraScoreboardSummary.appsFlyerPurchaseCancelEvents} cancelled · {macraScoreboardSummary.appsFlyerPurchaseFailedEvents} failed
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-zinc-950/60 p-3">
+                    <div className="text-xs uppercase tracking-wider text-zinc-500">Top source</div>
                   <div className="mt-2 text-lg font-bold text-white">
                     {macraScoreboardSummary.appsFlyerTopMediaSources[0]?.label || 'Not imported'}
                   </div>
@@ -3242,9 +3617,25 @@ const EmailSequencesAdmin: React.FC = () => {
                       ? `${macraScoreboardSummary.appsFlyerTopEvents[0].count} events`
                       : 'In-app events from AppsFlyer'}
                   </div>
+                  </div>
                 </div>
-              </div>
-              {macraScoreboardSummary.appsFlyerTopCampaigns.length ? (
+                {macraScoreboardSummary.appsFlyerPaywallFunnelRows.length ? (
+                  <div className="border-t border-zinc-800 px-4 py-3">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">Paywall intent funnel</div>
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+                      {macraScoreboardSummary.appsFlyerPaywallFunnelRows.map((row) => (
+                        <div key={row.label} className="rounded-lg border border-zinc-800 bg-black/20 px-3 py-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-xs font-medium text-zinc-400">{row.label}</span>
+                            <span className="text-sm font-bold text-white">{row.value}</span>
+                          </div>
+                          <div className="mt-1 text-[11px] text-zinc-500">{row.sublabel}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {macraScoreboardSummary.appsFlyerTopCampaigns.length ? (
                 <div className="border-t border-zinc-800 px-4 py-3">
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">Top campaigns</div>
                   <div className="flex flex-wrap gap-2">
@@ -3256,7 +3647,82 @@ const EmailSequencesAdmin: React.FC = () => {
                   </div>
                 </div>
               ) : null}
-            </div>
+	            </div>
+
+	            <div className="mt-4 rounded-lg border border-zinc-800 bg-[#1a1e24] overflow-hidden">
+	              <div className="flex flex-col gap-1 border-b border-zinc-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+	                <h3 className="text-sm font-semibold text-zinc-200">Recovered From Retargeting</h3>
+	                <div className="text-xs text-zinc-500">
+	                  {macraScoreboardSummary.retargetingTrialRedemptions} offer redemptions · {macraScoreboardSummary.retargetingPaidConversions} paid after trial
+	                </div>
+	              </div>
+	              <div className="overflow-x-auto">
+	                <table className="w-full min-w-[1120px] text-sm">
+	                  <thead className="bg-zinc-900/70">
+	                    <tr>
+	                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">User</th>
+	                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Recovery status</th>
+	                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Offer activity</th>
+	                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Plan</th>
+	                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Paid invoice</th>
+	                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Latest signal</th>
+	                    </tr>
+	                  </thead>
+	                  <tbody className="divide-y divide-zinc-800">
+	                    {macraScoreboardSummary.recoveredUsers.length ? (
+	                      macraScoreboardSummary.recoveredUsers.map((user) => {
+	                        const offerActivity = [
+	                          user.signals.webOfferSentAt ? `Sent ${formatScoreboardAgo(user.signals.webOfferSentAt)}` : '',
+	                          user.signals.stripeRetargetClickedAt ? `Clicked ${formatScoreboardAgo(user.signals.stripeRetargetClickedAt)}` : '',
+	                          user.signals.webOfferCheckoutStartedAt ? `Checkout ${formatScoreboardAgo(user.signals.webOfferCheckoutStartedAt)}` : '',
+	                          user.signals.webOfferConvertedAt ? `Redeemed ${formatScoreboardAgo(user.signals.webOfferConvertedAt)}` : '',
+	                        ].filter(Boolean);
+	                        const statusLabel = user.signals.webOfferPaidAt ? 'Paid after trial' : '30-day offer redeemed';
+	                        return (
+	                          <tr key={user.id} className="hover:bg-zinc-900/30">
+	                            <td className="px-4 py-3">
+	                              <div className="font-medium text-zinc-100">{user.displayName}</div>
+	                              <div className="text-xs text-zinc-500">{user.email || user.id}</div>
+	                            </td>
+	                            <td className="px-4 py-3">
+	                              <span className={`inline-flex w-max whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${
+	                                user.signals.webOfferPaidAt
+	                                  ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
+	                                  : 'border-lime-400/30 bg-lime-400/10 text-lime-200'
+	                              }`}>
+	                                {statusLabel}
+	                              </span>
+	                            </td>
+	                            <td className="px-4 py-3 text-zinc-400">{offerActivity.join(' · ') || 'Recovered from offer link'}</td>
+	                            <td className="px-4 py-3 text-zinc-300">
+	                              {user.signals.webOfferPlan ? titleizeScoreboardToken(user.signals.webOfferPlan) : 'Macra web offer'}
+	                              {user.signals.webOfferTrialDays ? (
+	                                <div className="mt-0.5 text-xs text-zinc-500">{user.signals.webOfferTrialDays}-day trial</div>
+	                              ) : null}
+	                            </td>
+	                            <td className="px-4 py-3 text-zinc-300">
+	                              <div>{formatScoreboardMoney(user.signals.webOfferPaidAmount, user.signals.webOfferPaidCurrency || 'USD')}</div>
+	                              {user.signals.webOfferPaidAt ? (
+	                                <div className="mt-0.5 text-xs text-zinc-500">{formatScoreboardDate(user.signals.webOfferPaidAt)}</div>
+	                              ) : null}
+	                            </td>
+	                            <td className="px-4 py-3 text-xs text-zinc-500">
+	                              {formatScoreboardDate(Math.max(user.signals.webOfferPaidAt || 0, user.signals.webOfferConvertedAt || 0))}
+	                            </td>
+	                          </tr>
+	                        );
+	                      })
+	                    ) : (
+	                      <tr>
+	                        <td className="px-4 py-5 text-sm text-zinc-500" colSpan={6}>
+	                          {macraScoreboard.loading ? 'Loading recovered users...' : 'No retargeting recoveries found in the loaded cohort yet.'}
+	                        </td>
+	                      </tr>
+	                    )}
+	                  </tbody>
+	                </table>
+	              </div>
+	            </div>
 
             <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div className="rounded-lg border border-zinc-800 bg-[#1a1e24] overflow-hidden">
