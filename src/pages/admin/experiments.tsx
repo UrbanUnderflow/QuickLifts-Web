@@ -95,6 +95,11 @@ type ExperimentResultsSnapshot = {
   configSnapshot: ExperimentDocument;
 };
 
+type AppsFlyerAttributionDoc = Record<string, any> & {
+  id: string;
+  customerUserId?: string | null;
+};
+
 const EXPERIMENT_COLLECTION = 'macra-experiments';
 const EXPERIMENT_ID = 'macra_paywall_onboarding';
 const EXPERIMENT_RESULTS_COLLECTION = 'macra-experiment-results';
@@ -594,7 +599,7 @@ const ExperimentsPage: React.FC = () => {
             query(collection(db, 'appsflyer-macra-users'), where('customerUserId', 'in', userIds))
           );
           attributionSnapshot.docs.forEach((snapshot) => {
-            const data = { id: snapshot.id, ...((snapshot.data() || {}) as Record<string, any>) };
+            const data: AppsFlyerAttributionDoc = { id: snapshot.id, ...((snapshot.data() || {}) as Record<string, any>) };
             const customerUserId = normalizeString(data.customerUserId);
             if (customerUserId) appsFlyerByUserId[customerUserId] = data;
           });
