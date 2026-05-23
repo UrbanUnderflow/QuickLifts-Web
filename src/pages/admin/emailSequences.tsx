@@ -159,6 +159,8 @@ type AppsFlyerAttributionDoc = Record<string, any> & {
   customerUserId?: string | null;
 };
 
+type AppsFlyerCsvPeriodPreset = 'yesterday' | 'custom' | 'initial_backfill';
+
 const MACRA_WEB_OFFER_SEQUENCE_ID = 'macra-web-offer-24h-v1';
 const MACRA_RETARGETING_SEQUENCE_CONFIG_ID = 'macra-retargeting-v1';
 const CAMPAIGN_SEND_WINDOW_TIMEZONE = 'America/New_York';
@@ -887,6 +889,27 @@ const formatScoreboardAgo = (value: unknown): string => {
 
 const formatScoreboardPercent = (value: number, denominator: number): string =>
   denominator > 0 ? `${Math.round((value / denominator) * 100)}%` : '0%';
+
+const formatDateInputValue = (date: Date): string => {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+const relativeDateInputValue = (offsetDays: number): string => {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  return formatDateInputValue(date);
+};
+
+const formatDateOnlyLabel = (value: unknown): string => {
+  const text = normalizeScoreboardString(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return '';
+  return new Date(`${text}T12:00:00`).toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
 
 const getFirstString = (sources: Array<Record<string, any> | null | undefined>, paths: string[]): string => {
   for (const source of sources) {
@@ -1643,6 +1666,9 @@ const EmailSequencesAdmin: React.FC = () => {
   });
   const [syncingAppsFlyer, setSyncingAppsFlyer] = useState(false);
   const [uploadingAppsFlyerCsv, setUploadingAppsFlyerCsv] = useState(false);
+  const [appsFlyerCsvPeriodPreset, setAppsFlyerCsvPeriodPreset] = useState<AppsFlyerCsvPeriodPreset>('yesterday');
+  const [appsFlyerCsvPeriodStart, setAppsFlyerCsvPeriodStart] = useState(() => relativeDateInputValue(-1));
+  const [appsFlyerCsvPeriodEnd, setAppsFlyerCsvPeriodEnd] = useState(() => relativeDateInputValue(-1));
 
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [activeSequence, setActiveSequence] = useState<SequenceRow | null>(null);
@@ -2300,6 +2326,18 @@ const EmailSequencesAdmin: React.FC = () => {
     }
   };
 
+  const updateAppsFlyerCsvPeriodPreset = (preset: AppsFlyerCsvPeriodPreset) => {
+    setAppsFlyerCsvPeriodPreset(preset);
+    if (preset === 'yesterday') {
+      const yesterday = relativeDateInputValue(-1);
+      setAppsFlyerCsvPeriodStart(yesterday);
+      setAppsFlyerCsvPeriodEnd(yesterday);
+    } else if (preset === 'initial_backfill') {
+      setAppsFlyerCsvPeriodStart(relativeDateInputValue(-7));
+      setAppsFlyerCsvPeriodEnd(relativeDateInputValue(-1));
+    }
+  };
+
   const uploadAppsFlyerCsvFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     event.target.value = '';
@@ -2308,6 +2346,11 @@ const EmailSequencesAdmin: React.FC = () => {
     const firebaseUser = auth.currentUser;
     if (!firebaseUser) {
       setMessage({ type: 'error', text: 'Sign in again before uploading AppsFlyer CSV data.' });
+      return;
+    }
+
+    if (!appsFlyerCsvPeriodStart || !appsFlyerCsvPeriodEnd || appsFlyerCsvPeriodStart > appsFlyerCsvPeriodEnd) {
+      setMessage({ type: 'error', text: 'Choose a valid AppsFlyer CSV date range before uploading.' });
       return;
     }
 
@@ -2332,6 +2375,9 @@ const EmailSequencesAdmin: React.FC = () => {
         body: JSON.stringify({
           mode: 'csv_upload',
           csvFiles,
+          csvPeriodPreset: appsFlyerCsvPeriodPreset,
+          csvPeriodStart: appsFlyerCsvPeriodStart,
+          csvPeriodEnd: appsFlyerCsvPeriodEnd,
         }),
       });
       const json = await response.json().catch(() => ({}));
@@ -2343,9 +2389,10 @@ const EmailSequencesAdmin: React.FC = () => {
       const duplicateRows = Number(json?.duplicateRows || json?.summary?.duplicateRows || 0);
       const uploadedEventActions = Number(getNestedValue(json?.summary || {}, 'events.total') || 0);
       const uploadedTrialStarts = appsFlyerSummaryEventCount(json?.summary || {}, MACRA_APPSFLYER_TRIAL_EVENT_NAMES);
+      const replacedPeriod = json?.replacedPeriod ? ` for ${appsFlyerCsvPeriodStart} to ${appsFlyerCsvPeriodEnd}` : '';
       setMessage({
         type: 'success',
-        text: `AppsFlyer CSV import complete: ${importedRows} new rows saved${duplicateRows ? `, ${duplicateRows} duplicate rows skipped` : ''}${
+        text: `AppsFlyer CSV import complete${replacedPeriod}: ${importedRows} rows saved${duplicateRows ? `, ${duplicateRows} duplicate rows skipped` : ''}${
           uploadedEventActions ? `, ${uploadedEventActions} event actions counted${uploadedTrialStarts ? `, including ${uploadedTrialStarts} trial starts` : ''}` : ''
         }.`,
       });
@@ -2421,12 +2468,16 @@ const EmailSequencesAdmin: React.FC = () => {
     const appsFlyerTopMediaSources = Array.isArray(appsFlyerSummary.topMediaSources) ? appsFlyerSummary.topMediaSources : [];
     const appsFlyerTopCampaigns = Array.isArray(appsFlyerSummary.topCampaigns) ? appsFlyerSummary.topCampaigns : [];
     const appsFlyerTopEvents = Array.isArray(appsFlyerSummary.topEvents) ? appsFlyerSummary.topEvents : [];
+    const appsFlyerAggregatePeriods = Array.isArray(appsFlyerSummary.aggregateCsvPeriods) ? appsFlyerSummary.aggregateCsvPeriods : [];
     const appsFlyerImportSource = normalizeScoreboardString(
       appsFlyerSummary.importSource || appsFlyerSummary.source || getNestedValue(appsFlyerSummary, 'latestRunSummary.importSource')
     );
     const appsFlyerReportKeys = Object.keys((appsFlyerSummary.reports || {}) as Record<string, any>);
     const appsFlyerIsAggregateCsv =
-      appsFlyerImportSource === 'csv_upload' && appsFlyerReportKeys.some((key) => key.includes('csv_aggregate_'));
+      Boolean(appsFlyerSummary.aggregateCsvSummary) ||
+      appsFlyerImportSource === 'aggregate_csv_upload' ||
+      appsFlyerImportSource === 'layered_raw_and_aggregate_csv' ||
+      appsFlyerReportKeys.some((key) => key.includes('csv_aggregate_'));
     const appsFlyerEventSourceLabel = appsFlyerIsAggregateCsv ? 'AppsFlyer aggregate events' : 'AppsFlyer raw events';
     const appsFlyerEventCardLabel = appsFlyerIsAggregateCsv ? 'Aggregate events' : 'Raw events';
     const appsFlyerTrialCardLabel = appsFlyerIsAggregateCsv ? 'Aggregate trial starts' : 'Raw trial starts';
@@ -2434,6 +2485,12 @@ const EmailSequencesAdmin: React.FC = () => {
       ? 'Aggregate rows do not include customer user IDs'
       : `${appsFlyerMatchedRows} rows had a customer user ID`;
     const appsFlyerTopSourceUnit = appsFlyerInstalls ? 'installs' : 'events';
+    const appsFlyerCoverageStart = normalizeScoreboardString(appsFlyerSummary.aggregateCsvCoverageStart);
+    const appsFlyerCoverageEnd = normalizeScoreboardString(appsFlyerSummary.aggregateCsvCoverageEnd);
+    const appsFlyerCoverageLabel =
+      appsFlyerAggregatePeriods.length && appsFlyerCoverageStart && appsFlyerCoverageEnd
+        ? `${formatDateOnlyLabel(appsFlyerCoverageStart)} to ${formatDateOnlyLabel(appsFlyerCoverageEnd)} · ${appsFlyerAggregatePeriods.length} saved ${appsFlyerAggregatePeriods.length === 1 ? 'period' : 'periods'}`
+        : 'No aggregate CSV periods saved';
     const count = (predicate: (user: MacraScoreboardUser) => boolean) => users.filter(predicate).length;
     const onboardingCompleters = count((user) => user.signals.completedOnboarding);
     const qualified = count((user) => user.isQualified);
@@ -2509,6 +2566,7 @@ const EmailSequencesAdmin: React.FC = () => {
       appsFlyerTopMediaSources,
       appsFlyerTopCampaigns,
       appsFlyerTopEvents,
+      appsFlyerAggregatePeriods,
       appsFlyerImportSource,
       appsFlyerIsAggregateCsv,
       appsFlyerEventSourceLabel,
@@ -2516,6 +2574,7 @@ const EmailSequencesAdmin: React.FC = () => {
       appsFlyerTrialCardLabel,
       appsFlyerEventIdentityLabel,
       appsFlyerTopSourceUnit,
+      appsFlyerCoverageLabel,
     };
   }, [macraScoreboard.appsFlyerSummary, macraScoreboard.config, macraScoreboard.users]);
 
@@ -2733,6 +2792,8 @@ const EmailSequencesAdmin: React.FC = () => {
           topMediaSources: macraScoreboardSummary.appsFlyerTopMediaSources,
           topCampaigns: macraScoreboardSummary.appsFlyerTopCampaigns,
           topEvents: macraScoreboardSummary.appsFlyerTopEvents,
+          aggregateCoverage: macraScoreboardSummary.appsFlyerCoverageLabel,
+          aggregatePeriods: macraScoreboardSummary.appsFlyerAggregatePeriods,
         },
         highestIntentRecoveryPool: macraScoreboardSummary.recoveryPool.map(buildScoreboardUserExport),
         loadedUsers: macraScoreboard.users.map(buildScoreboardUserExport),
@@ -2862,7 +2923,7 @@ const EmailSequencesAdmin: React.FC = () => {
                   Qualified-user lens for onboarding completers, paywall intent, recovery, trials, and paid conversion.
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-end gap-3">
                 <div className="hidden text-right text-xs text-zinc-500 sm:block">
                   <div>Loaded {macraScoreboard.users.length} user{macraScoreboard.users.length === 1 ? '' : 's'}</div>
                   <div>
@@ -2882,6 +2943,38 @@ const EmailSequencesAdmin: React.FC = () => {
                   {copyingScoreboard ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
                   Copy report
                 </button>
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1.5">
+                  <select
+                    value={appsFlyerCsvPeriodPreset}
+                    onChange={(event) => updateAppsFlyerCsvPeriodPreset(event.target.value as AppsFlyerCsvPeriodPreset)}
+                    className="h-8 rounded-md border border-zinc-700 bg-zinc-950 px-2 text-xs text-zinc-200 outline-none focus:border-[#d7ff00]"
+                    aria-label="AppsFlyer CSV range"
+                  >
+                    <option value="yesterday">Yesterday</option>
+                    <option value="custom">Custom range</option>
+                    <option value="initial_backfill">Initial backfill</option>
+                  </select>
+                  <input
+                    type="date"
+                    value={appsFlyerCsvPeriodStart}
+                    onChange={(event) => {
+                      setAppsFlyerCsvPeriodPreset('custom');
+                      setAppsFlyerCsvPeriodStart(event.target.value);
+                    }}
+                    className="h-8 rounded-md border border-zinc-700 bg-zinc-950 px-2 text-xs text-zinc-200 outline-none focus:border-[#d7ff00]"
+                    aria-label="AppsFlyer CSV start date"
+                  />
+                  <input
+                    type="date"
+                    value={appsFlyerCsvPeriodEnd}
+                    onChange={(event) => {
+                      setAppsFlyerCsvPeriodPreset('custom');
+                      setAppsFlyerCsvPeriodEnd(event.target.value);
+                    }}
+                    className="h-8 rounded-md border border-zinc-700 bg-zinc-950 px-2 text-xs text-zinc-200 outline-none focus:border-[#d7ff00]"
+                    aria-label="AppsFlyer CSV end date"
+                  />
+                </div>
                 <input
                   id="macra-appsflyer-csv-upload"
                   type="file"
@@ -2897,7 +2990,7 @@ const EmailSequencesAdmin: React.FC = () => {
                     ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
                     : 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 cursor-pointer'
                     }`}
-                  title="Upload AppsFlyer CSV exports into the cumulative scoreboard"
+                  title="Upload AppsFlyer CSV exports for the selected date range"
                 >
                   {uploadingAppsFlyerCsv ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   Upload CSV
@@ -3027,10 +3120,15 @@ const EmailSequencesAdmin: React.FC = () => {
             <div className="mt-4 rounded-lg border border-zinc-800 bg-[#1a1e24] overflow-hidden">
               <div className="flex flex-col gap-1 border-b border-zinc-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <h3 className="text-sm font-semibold text-zinc-200">AppsFlyer Acquisition Backfill</h3>
-                <div className="text-xs text-zinc-500">
-                  {macraScoreboard.appsFlyerSummary?.importedAt
-                    ? `Imported ${formatScoreboardAgo(macraScoreboard.appsFlyerSummary.importedAt)}`
-                    : 'No AppsFlyer import yet'}
+                <div className="text-right text-xs text-zinc-500">
+                  <div>
+                    {macraScoreboard.appsFlyerSummary?.importedAt
+                      ? `Imported ${formatScoreboardAgo(macraScoreboard.appsFlyerSummary.importedAt)}`
+                      : 'No AppsFlyer import yet'}
+                  </div>
+                  {macraScoreboardSummary.appsFlyerIsAggregateCsv ? (
+                    <div>{macraScoreboardSummary.appsFlyerCoverageLabel}</div>
+                  ) : null}
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 xl:grid-cols-5">

@@ -13,6 +13,7 @@ const SCOREBOARD_DOC_ID = 'macra';
 const USER_ATTRIBUTION_COLLECTION = 'appsflyer-macra-users';
 const IMPORT_RUN_COLLECTION = 'appsflyer-import-runs';
 const RAW_ROW_COLLECTION = 'appsflyer-macra-raw-rows';
+const AGGREGATE_PERIOD_COLLECTION = 'appsflyer-aggregate-periods';
 const DEFAULT_DAYS_BACK = 7;
 const DEFAULT_MAXIMUM_ROWS = 50000;
 const MAX_DAYS_BACK = 31;
@@ -39,6 +40,7 @@ const DEFAULT_MACRA_EVENT_NAMES = [
   'af_subscribe',
   'af_purchase',
 ];
+const MACRA_TRIAL_EVENT_NAMES = ['af_start_trial', 'start_trial', 'trial_started', 'macra_trial_started'];
 
 type ReportType = 'install' | 'event';
 
@@ -59,6 +61,13 @@ type UploadedCsvFile = {
 };
 
 type NormalizedRow = Record<string, string>;
+
+type AggregateCsvPeriod = {
+  docId: string;
+  preset: string;
+  periodStart: string;
+  periodEnd: string;
+};
 
 type SummaryShape = {
   appId: string;
@@ -146,6 +155,20 @@ const parseReportNumber = (value: unknown): number => {
   const cleaned = normalizeString(value).replace(/[$,%]/g, '').replace(/,/g, '');
   const parsed = Number(cleaned);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const normalizeDateOnly = (value: unknown): string => {
+  const text = normalizeString(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return '';
+  const parsed = new Date(`${text}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === text ? text : '';
+};
+
+const daysBetweenInclusive = (start: string, end: string): number => {
+  const startMs = Date.parse(`${start}T00:00:00.000Z`);
+  const endMs = Date.parse(`${end}T00:00:00.000Z`);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return 0;
+  return Math.round((endMs - startMs) / (24 * 60 * 60 * 1000)) + 1;
 };
 
 const formatDateParam = (date: Date): string => {
@@ -353,6 +376,116 @@ const mergeSummaryTotals = (existing: Record<string, any>, delta: SummaryShape):
   merged.matchedCustomerUserRows = (Number(existing.matchedCustomerUserRows || 0) || 0) + delta.matchedCustomerUserRows;
   merged.unmatchedRows = (Number(existing.unmatchedRows || 0) || 0) + delta.unmatchedRows;
   merged.importedUserDocs = Math.max(Number(existing.importedUserDocs || 0) || 0, delta.importedUserDocs);
+
+  return finalizeSummary(merged);
+};
+
+const summaryHasData = (summary: Record<string, any> | null | undefined): boolean =>
+  Boolean(
+    summary &&
+      ((Number(summary.rows || 0) || 0) > 0 ||
+        (Number(summary.installs?.total || 0) || 0) > 0 ||
+        (Number(summary.events?.total || 0) || 0) > 0)
+  );
+
+const cloneSummary = (summary: Record<string, any> | null | undefined): SummaryShape | null =>
+  summaryHasData(summary) ? mergeSummaryTotals({}, summary as SummaryShape) : null;
+
+const summaryEventCount = (summary: Record<string, any> | null | undefined, eventNames: string[]): number =>
+  eventNames.reduce((total, eventName) => total + (Number(summary?.events?.byName?.[eventName] || 0) || 0), 0);
+
+const getRawCumulativeSummary = (scoreboard: Record<string, any>): SummaryShape | null => {
+  const explicitRaw = cloneSummary(scoreboard.rawCumulativeSummary);
+  if (explicitRaw) return explicitRaw;
+  if (scoreboard.aggregateCsvSummary || looksLikeLegacyAggregateCsvInstallImport(scoreboard)) return null;
+  return cloneSummary(scoreboard);
+};
+
+const mergeSummaryList = (summaries: SummaryShape[], seed: {
+  appId: string;
+  importSource: string;
+  timezone: string;
+}): SummaryShape => {
+  let merged = createSummary({
+    appId: seed.appId,
+    from: '',
+    to: '',
+    daysBack: 0,
+    maximumRows: 0,
+    timezone: seed.timezone,
+    importSource: seed.importSource,
+  });
+
+  summaries.forEach((summary) => {
+    merged = mergeSummaryTotals(merged, summary);
+  });
+
+  const fromValues = summaries.map((summary) => normalizeString(summary.from)).filter(Boolean).sort();
+  const toValues = summaries.map((summary) => normalizeString(summary.to)).filter(Boolean).sort();
+  merged.from = fromValues[0] || '';
+  merged.to = toValues[toValues.length - 1] || '';
+  merged.daysBack = merged.from && merged.to ? daysBetweenInclusive(merged.from.slice(0, 10), merged.to.slice(0, 10)) : merged.daysBack;
+  merged.importSource = seed.importSource;
+  merged.timezone = seed.timezone;
+
+  return finalizeSummary(merged);
+};
+
+const buildLayeredScoreboardSummary = (args: {
+  appId: string;
+  rawSummary: Record<string, any> | null | undefined;
+  aggregateSummary: Record<string, any> | null | undefined;
+}): SummaryShape => {
+  const rawSummary = cloneSummary(args.rawSummary);
+  const aggregateSummary = cloneSummary(args.aggregateSummary);
+
+  if (!rawSummary && aggregateSummary) return aggregateSummary;
+  if (rawSummary && !aggregateSummary) return rawSummary;
+  if (!rawSummary && !aggregateSummary) {
+    return createSummary({
+      appId: args.appId,
+      from: '',
+      to: '',
+      daysBack: 0,
+      maximumRows: 0,
+      timezone: '',
+      importSource: 'empty',
+    });
+  }
+
+  const raw = rawSummary as SummaryShape;
+  const aggregate = aggregateSummary as SummaryShape;
+  const fromValues = [normalizeString(raw.from), normalizeString(aggregate.from)].filter(Boolean).sort();
+  const toValues = [normalizeString(raw.to), normalizeString(aggregate.to)].filter(Boolean).sort();
+  const merged = createSummary({
+    appId: args.appId,
+    from: fromValues[0] || '',
+    to: toValues[toValues.length - 1] || '',
+    daysBack: Math.max(Number(raw.daysBack || 0), Number(aggregate.daysBack || 0)),
+    maximumRows: (Number(raw.maximumRows || 0) || 0) + (Number(aggregate.maximumRows || 0) || 0),
+    timezone: 'mixed',
+    tokenSource: raw.tokenSource,
+    importSource: 'layered_raw_and_aggregate_csv',
+  });
+
+  merged.rows = (Number(raw.rows || 0) || 0) + (Number(aggregate.rows || 0) || 0);
+  merged.duplicateRows = (Number(raw.duplicateRows || 0) || 0) + (Number(aggregate.duplicateRows || 0) || 0);
+  merged.reports = mergeCountMaps(raw.reports || {}, aggregate.reports || {});
+  merged.installs = {
+    total: Number(raw.installs?.total || 0) || 0,
+    organic: Number(raw.installs?.organic || 0) || 0,
+    nonOrganic: Number(raw.installs?.nonOrganic || 0) || 0,
+    byMediaSource: { ...(raw.installs?.byMediaSource || {}) },
+    byCampaign: { ...(raw.installs?.byCampaign || {}) },
+  };
+  merged.events = {
+    total: Number(aggregate.events?.total || 0) || 0,
+    byName: { ...(aggregate.events?.byName || {}) },
+    byMediaSource: { ...(aggregate.events?.byMediaSource || {}) },
+  };
+  merged.matchedCustomerUserRows = Number(raw.matchedCustomerUserRows || 0) || 0;
+  merged.unmatchedRows = Number(raw.unmatchedRows || 0) || 0;
+  merged.importedUserDocs = Number(raw.importedUserDocs || 0) || 0;
 
   return finalizeSummary(merged);
 };
@@ -747,7 +880,14 @@ async function persistImport(args: {
   const resetLegacyAggregateCsvImport =
     source === 'csv_upload' && looksLikeLegacyAggregateCsvInstallImport(existingScoreboardRaw);
   const existingScoreboard = resetLegacyAggregateCsvImport ? {} : existingScoreboardRaw;
-  const cumulativeSummary = mergeSummaryTotals(existingScoreboard, summary);
+  const existingRawSummary = getRawCumulativeSummary(existingScoreboard);
+  const rawCumulativeSummary = mergeSummaryTotals(existingRawSummary || {}, summary);
+  const aggregateCsvSummary = cloneSummary(existingScoreboard.aggregateCsvSummary);
+  const cumulativeSummary = buildLayeredScoreboardSummary({
+    appId: summary.appId,
+    rawSummary: rawCumulativeSummary,
+    aggregateSummary: aggregateCsvSummary,
+  });
 
   await db.collection(IMPORT_RUN_COLLECTION).doc(runId).set({
     id: runId,
@@ -771,6 +911,8 @@ async function persistImport(args: {
       latestRunId: runId,
       latestRunSummary: summary,
       ...cumulativeSummary,
+      rawCumulativeSummary,
+      aggregateCsvSummary: aggregateCsvSummary || null,
       legacyAggregateCsvInstallImportResetAt: resetLegacyAggregateCsvImport ? now : existingScoreboardRaw.legacyAggregateCsvInstallImportResetAt || null,
       importedAt: now,
       updatedAt: now,
@@ -779,6 +921,130 @@ async function persistImport(args: {
   );
 
   return cumulativeSummary;
+}
+
+async function persistAggregateCsvPeriodImport(args: {
+  db: any;
+  adminRequest: any;
+  runId: string;
+  summary: SummaryShape;
+  period: AggregateCsvPeriod;
+  sourceFiles: Array<Record<string, any>>;
+  uploadedRows: number;
+}) {
+  const { db, adminRequest, runId, summary, period, sourceFiles, uploadedRows } = args;
+  const FieldValue = admin.firestore.FieldValue;
+  const now = FieldValue.serverTimestamp();
+
+  finalizeSummary(summary);
+
+  const periodRef = db.collection(AGGREGATE_PERIOD_COLLECTION).doc(period.docId);
+  const periodSnap = await periodRef.get();
+  await periodRef.set(
+    {
+      id: period.docId,
+      product: 'macra',
+      provider: 'appsflyer',
+      source: 'csv_upload',
+      importSource: 'aggregate_csv_upload',
+      periodPreset: period.preset,
+      periodStart: period.periodStart,
+      periodEnd: period.periodEnd,
+      latestRunId: runId,
+      summary,
+      sourceFiles,
+      uploadedRows,
+      trialStarts: summaryEventCount(summary, MACRA_TRIAL_EVENT_NAMES),
+      firstImportedAt: periodSnap.exists ? periodSnap.data()?.firstImportedAt || now : now,
+      importedAt: now,
+      updatedAt: now,
+    },
+    { merge: true }
+  );
+
+  await db.collection(IMPORT_RUN_COLLECTION).doc(runId).set({
+    id: runId,
+    product: 'macra',
+    provider: 'appsflyer',
+    source: 'csv_upload',
+    importSource: 'aggregate_csv_upload',
+    requestedBy: adminRequest.email || adminRequest.uid,
+    requestedByUid: adminRequest.uid,
+    requestedBySource: adminRequest.source,
+    aggregatePeriod: period,
+    summary,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const periodDocsSnap = await db.collection(AGGREGATE_PERIOD_COLLECTION).where('product', '==', 'macra').get();
+  const aggregateCsvPeriods = periodDocsSnap.docs
+    .map((snapshot: any) => {
+      const data = snapshot.data() || {};
+      const periodSummary = data.summary || {};
+      return {
+        id: snapshot.id,
+        periodStart: normalizeString(data.periodStart),
+        periodEnd: normalizeString(data.periodEnd),
+        rows: Number(periodSummary.rows || 0) || 0,
+        events: Number(periodSummary.events?.total || 0) || 0,
+        installs: Number(periodSummary.installs?.total || 0) || 0,
+        trialStarts: summaryEventCount(periodSummary, MACRA_TRIAL_EVENT_NAMES),
+        importedAt: data.importedAt || data.updatedAt || null,
+      };
+    })
+    .filter((row: any) => row.periodStart && row.periodEnd)
+    .sort((a: any, b: any) => a.periodStart.localeCompare(b.periodStart));
+
+  const periodSummaries = periodDocsSnap.docs
+    .map((snapshot: any) => snapshot.data()?.summary)
+    .filter(summaryHasData)
+    .map((periodSummary: Record<string, any>) => mergeSummaryTotals({}, periodSummary as SummaryShape));
+  const aggregateCsvSummary = mergeSummaryList(periodSummaries, {
+    appId: summary.appId,
+    importSource: 'aggregate_csv_upload',
+    timezone: 'aggregate_csv_periods',
+  });
+
+  const scoreboardRef = db.collection(SCOREBOARD_COLLECTION).doc(SCOREBOARD_DOC_ID);
+  const scoreboardSnap = await scoreboardRef.get();
+  const existingScoreboardRaw = scoreboardSnap.exists ? scoreboardSnap.data() || {} : {};
+  const rawCumulativeSummary = getRawCumulativeSummary(existingScoreboardRaw);
+  const cumulativeSummary = buildLayeredScoreboardSummary({
+    appId: summary.appId,
+    rawSummary: rawCumulativeSummary,
+    aggregateSummary: aggregateCsvSummary,
+  });
+
+  await scoreboardRef.set(
+    {
+      id: SCOREBOARD_DOC_ID,
+      product: 'macra',
+      provider: 'appsflyer',
+      source: 'csv_upload',
+      latestRunId: runId,
+      latestRunSummary: summary,
+      ...cumulativeSummary,
+      rawCumulativeSummary: rawCumulativeSummary || null,
+      aggregateCsvSummary,
+      aggregateCsvPeriods,
+      aggregateCsvPeriodCount: aggregateCsvPeriods.length,
+      aggregateCsvCoverageStart: aggregateCsvSummary.from || null,
+      aggregateCsvCoverageEnd: aggregateCsvSummary.to || null,
+      legacyAggregateCsvInstallImportResetAt: looksLikeLegacyAggregateCsvInstallImport(existingScoreboardRaw)
+        ? now
+        : existingScoreboardRaw.legacyAggregateCsvInstallImportResetAt || null,
+      importedAt: now,
+      updatedAt: now,
+    },
+    { merge: true }
+  );
+
+  return {
+    cumulativeSummary,
+    aggregateCsvSummary,
+    aggregateCsvPeriods,
+  };
 }
 
 export const handler: Handler = async (event) => {
@@ -803,6 +1069,7 @@ export const handler: Handler = async (event) => {
       }
 
       const allRows: Array<{ row: NormalizedRow; report: ReportConfig; rawRowId: string }> = [];
+      const sourceFiles: Array<Record<string, any>> = [];
       let minRowMs = 0;
       let maxRowMs = 0;
 
@@ -811,10 +1078,12 @@ export const handler: Handler = async (event) => {
         if (!content) return;
         const rows = parseCsv(content);
         const report = inferUploadedReport(file, rows, index);
+        const isAggregatePerformance = isAggregatedPerformanceReport(rows);
         const uploadKey = [normalizeString(file.name) || `upload_${index + 1}`, String(file.lastModified || '')]
           .filter(Boolean)
           .join(':');
         let activeMediaSource = '';
+        let importedFileRows = 0;
         rows.forEach((row) => {
           const aggregatePerformanceRow = isAggregatedPerformanceRow(row);
           const mediaSource = getValue(row, ['media_source', 'pid', 'source']);
@@ -838,11 +1107,81 @@ export const handler: Handler = async (event) => {
             maxRowMs = Math.max(maxRowMs, occurredMs);
           }
           allRows.push({ row: normalizedRow, report, rawRowId: stableRawRowId(normalizedRow, report, uploadKey) });
+          importedFileRows += 1;
+        });
+        sourceFiles.push({
+          name: normalizeString(file.name) || `CSV ${index + 1}`,
+          lastModified: file.lastModified || null,
+          parsedRows: rows.length,
+          importedRows: importedFileRows,
+          reportKey: report.key,
+          reportType: report.type,
+          aggregatePerformance: isAggregatePerformance,
         });
       });
 
       if (!allRows.length) {
         return json(400, { error: 'No rows were found in the uploaded CSV file.' });
+      }
+
+      const aggregateCsvUpload = allRows.some(({ row }) => isAggregatedPerformanceRow(row));
+      if (aggregateCsvUpload) {
+        const periodStart = normalizeDateOnly(body.csvPeriodStart || body.periodStart || body.fromDate);
+        const periodEnd = normalizeDateOnly(body.csvPeriodEnd || body.periodEnd || body.toDate);
+        const periodPreset = normalizeString(body.csvPeriodPreset || body.periodPreset || 'custom') || 'custom';
+        if (!periodStart || !periodEnd) {
+          return json(400, { error: 'Choose the AppsFlyer CSV date range before uploading aggregate performance reports.' });
+        }
+        if (periodStart > periodEnd) {
+          return json(400, { error: 'AppsFlyer CSV start date must be on or before the end date.' });
+        }
+
+        const period: AggregateCsvPeriod = {
+          docId: `macra_${periodStart}_${periodEnd}`,
+          preset: periodPreset,
+          periodStart,
+          periodEnd,
+        };
+        const summary = createSummary({
+          appId,
+          from: periodStart,
+          to: periodEnd,
+          daysBack: daysBetweenInclusive(periodStart, periodEnd),
+          maximumRows: allRows.length,
+          timezone: 'aggregate_csv_period',
+          importSource: 'aggregate_csv_upload',
+        });
+
+        for (const { row, report } of allRows) {
+          summary.rows += 1;
+          bump(summary.reports, report.key);
+          addRowToSummary(summary, row, report);
+        }
+
+        const runId = `macra-appsflyer-csv-period-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+        const { cumulativeSummary, aggregateCsvSummary, aggregateCsvPeriods } = await persistAggregateCsvPeriodImport({
+          db: adminRequest.db,
+          adminRequest,
+          runId,
+          summary,
+          period,
+          sourceFiles,
+          uploadedRows: allRows.length,
+        });
+
+        return json(200, {
+          success: true,
+          runId,
+          summary,
+          cumulativeSummary,
+          aggregateCsvSummary,
+          aggregateCsvPeriods,
+          aggregatePeriod: period,
+          uploadedRows: allRows.length,
+          importedRows: allRows.length,
+          duplicateRows: 0,
+          replacedPeriod: true,
+        });
       }
 
       const { newRows, duplicateRows } = await filterNewRows(adminRequest.db, allRows);
