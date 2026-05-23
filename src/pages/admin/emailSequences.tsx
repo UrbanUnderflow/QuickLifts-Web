@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import { useDispatch } from 'react-redux';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
+import { EmailLogsSurface } from './emailLogs';
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { auth, db, getFirebaseModeRequestHeaders } from '../../api/firebase/config';
 import {
@@ -2180,7 +2181,7 @@ const EmailSequencesAdmin: React.FC = () => {
   const dispatch = useDispatch();
   const currentUser = useUser();
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
-  const [activeAdminTab, setActiveAdminTab] = useState<'scoreboard' | 'sequences'>('scoreboard');
+  const [activeAdminTab, setActiveAdminTab] = useState<'scoreboard' | 'sequences' | 'logs'>('scoreboard');
   const [seedingTemplates, setSeedingTemplates] = useState(false);
   const [macraScoreboard, setMacraScoreboard] = useState<MacraScoreboardState>({
     loading: false,
@@ -3670,6 +3671,12 @@ const EmailSequencesAdmin: React.FC = () => {
       icon: Mail,
       detail: `${SEQUENCES.length} rows`,
     },
+    {
+      id: 'logs' as const,
+      label: 'Email log',
+      icon: Clock,
+      detail: 'sent activity',
+    },
   ];
 
   return (
@@ -4357,6 +4364,10 @@ const EmailSequencesAdmin: React.FC = () => {
               </div>
             </div>
           </section>
+          ) : null}
+
+          {activeAdminTab === 'logs' ? (
+            <EmailLogsSurface embedded />
           ) : null}
 
           {activeAdminTab === 'sequences' ? (

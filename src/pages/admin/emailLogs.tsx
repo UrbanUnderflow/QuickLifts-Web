@@ -107,7 +107,11 @@ const getStatusClassName = (status?: string) => {
 const getPrimaryTimestamp = (log: EmailLog) =>
   formatTimestamp(log.lastEventAt, log.updatedAt, log.sentAt, log.createdAt);
 
-const EmailLogsPage: React.FC = () => {
+type EmailLogsSurfaceProps = {
+  embedded?: boolean;
+};
+
+export const EmailLogsSurface: React.FC<EmailLogsSurfaceProps> = ({ embedded = false }) => {
   const [logs, setLogs] = useState<EmailLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -177,13 +181,7 @@ const EmailLogsPage: React.FC = () => {
   }, [logs]);
 
   return (
-    <AdminRouteGuard>
-      <Head>
-        <title>Email Logs | Pulse Admin</title>
-      </Head>
-
-      <main className="min-h-screen bg-[#111417] text-white px-4 py-10">
-        <div className="mx-auto max-w-7xl">
+    <div className={embedded ? 'w-full' : 'mx-auto max-w-7xl'}>
           <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <h1 className="flex items-center gap-3 text-2xl font-black">
@@ -352,7 +350,19 @@ const EmailLogsPage: React.FC = () => {
               )}
             </aside>
           </div>
-        </div>
+    </div>
+  );
+};
+
+const EmailLogsPage: React.FC = () => {
+  return (
+    <AdminRouteGuard>
+      <Head>
+        <title>Email Logs | Pulse Admin</title>
+      </Head>
+
+      <main className="min-h-screen bg-[#111417] text-white px-4 py-10">
+        <EmailLogsSurface />
       </main>
     </AdminRouteGuard>
   );
