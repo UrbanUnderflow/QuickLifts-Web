@@ -130,6 +130,12 @@ const adminCardsData = [
     link: "/admin/pulsecheckPilotDashboard"
   },
   {
+    title: "Experiments",
+    description: "Control Macra onboarding and paywall feature flags, rollout weights, and variant parameters from Firestore.",
+    icon: <FlaskConical className="w-5 h-5" />,
+    link: "/admin/experiments"
+  },
+  {
 
     title: "Virtual Office",
     description: "Live status board for agents with animated desks and typing state.",
