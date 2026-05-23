@@ -1,10 +1,29 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import { useDispatch } from 'react-redux';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { Mail, Send, Loader2, CheckCircle, AlertCircle, X, Edit3, Eye, Copy, Clock, FilePlus2 } from 'lucide-react';
+import {
+  Mail,
+  Send,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  X,
+  Edit3,
+  Eye,
+  Copy,
+  Clock,
+  FilePlus2,
+  Activity,
+  MousePointerClick,
+  RefreshCw,
+  ShieldAlert,
+  ShoppingCart,
+  Target,
+  TrendingUp,
+} from 'lucide-react';
 import { showToast } from '../../redux/toastSlice';
 import { useUser } from '../../hooks/useUser';
 
@@ -57,9 +76,118 @@ type CampaignConfig = {
   sendWindowTimezone: string;
 };
 
+type MacraScoreboardTier =
+  | 'paid'
+  | 'trial_started'
+  | 'high_intent_recovery'
+  | 'serious_plan_completer'
+  | 'onboarding_completer'
+  | 'curiosity'
+  | 'excluded';
+
+type MacraScoreboardSignals = {
+  ageYears: number | null;
+  completedOnboarding: boolean;
+  hasProfile: boolean;
+  hasRealisticGoal: boolean;
+  hasMacroTarget: boolean;
+  reachedPaywall: boolean;
+  explicitPaywallSignal: boolean;
+  paywallViewCount: number;
+  paywallLastViewedAt: number | null;
+  ctaTappedAt: number | null;
+  appleCancelAt: number | null;
+  webOfferOpenedAt: number | null;
+  stripeRetargetClickedAt: number | null;
+  trialStartedAt: number | null;
+  paidAt: number | null;
+  onboardingCompletedAt: number | null;
+  latestIntentAt: number | null;
+  currentWeightKg: number | null;
+  goalWeightKg: number | null;
+  goalDirection: string;
+  pace: string;
+  activityLevel: string;
+  biggestStruggle: string;
+  macroCalories: number | null;
+};
+
+type MacraScoreboardUser = {
+  id: string;
+  email: string;
+  displayName: string;
+  tier: MacraScoreboardTier;
+  tierLabel: string;
+  isQualified: boolean;
+  isHighIntent: boolean;
+  suggestedLane: string;
+  disqualifiers: string[];
+  signals: MacraScoreboardSignals;
+};
+
+type MacraScoreboardState = {
+  loading: boolean;
+  error: string;
+  loadedAt: Date | null;
+  config: Record<string, any> | null;
+  users: MacraScoreboardUser[];
+  userLimit: number;
+  emailLogCount: number;
+  purchaseLogCount: number;
+};
+
 const MACRA_WEB_OFFER_SEQUENCE_ID = 'macra-web-offer-24h-v1';
 const MACRA_RETARGETING_SEQUENCE_CONFIG_ID = 'macra-retargeting-v1';
 const CAMPAIGN_SEND_WINDOW_TIMEZONE = 'America/New_York';
+const MACRA_SCOREBOARD_USER_LIMIT = 300;
+const MACRA_SCOREBOARD_LOG_LIMIT = 500;
+const MACRA_SCOREBOARD_PROFILE_CHUNK_SIZE = 40;
+const MACRA_RETARGETING_SEQUENCE_IDS = [
+  MACRA_WEB_OFFER_SEQUENCE_ID,
+  'macra-paywall-cancel-trust-v1',
+  'macra-web-offer-proof-v1',
+  'macra-paywall-view-value-v1',
+  'macra-no-trial-7d-challenge-v1',
+  'macra-trial-no-activation-24h-v1',
+];
+const MACRA_QUALIFIED_TIERS = new Set<MacraScoreboardTier>([
+  'paid',
+  'trial_started',
+  'high_intent_recovery',
+  'serious_plan_completer',
+]);
+const MACRA_TIER_LABELS: Record<MacraScoreboardTier, string> = {
+  paid: 'Paid',
+  trial_started: 'Trial started',
+  high_intent_recovery: 'High-intent recovery',
+  serious_plan_completer: 'Serious plan completer',
+  onboarding_completer: 'Onboarding completer',
+  curiosity: 'Curiosity / incomplete',
+  excluded: 'Excluded',
+};
+const MACRA_TIER_ORDER: MacraScoreboardTier[] = [
+  'paid',
+  'trial_started',
+  'high_intent_recovery',
+  'serious_plan_completer',
+  'onboarding_completer',
+  'curiosity',
+  'excluded',
+];
+const MACRA_DISQUALIFIER_LABELS: Record<string, string> = {
+  under_18: 'Under 18',
+  missing_age: 'Missing age',
+  missing_profile: 'Missing Macra profile',
+  missing_goal_weight: 'Missing goal weight',
+  missing_current_weight: 'Missing current weight',
+  unrealistic_goal: 'Unrealistic goal data',
+  missing_goal_direction: 'Missing goal direction',
+  missing_pace: 'Missing pace',
+  missing_activity_level: 'Missing activity level',
+  missing_biggest_struggle: 'Missing biggest struggle',
+  missing_macro_target: 'Missing macro target',
+  no_paywall_signal: 'No paywall signal',
+};
 const DEFAULT_CAMPAIGN_CONFIG: CampaignConfig = {
   delayHours: 24,
   batchLimit: 250,
@@ -585,6 +713,454 @@ const getPreviewSourceLabel = (source: TemplatePreviewSource) => {
   }
 };
 
+const getNestedValue = (source: Record<string, any> | null | undefined, path: string): any => {
+  if (!source || !path) return undefined;
+  return path.split('.').reduce<any>((acc, part) => (acc === null || acc === undefined ? undefined : acc[part]), source);
+};
+
+const normalizeScoreboardString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const titleizeScoreboardToken = (value: string): string =>
+  value
+    .replace(/[_-]+/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const scoreNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const positiveScoreNumber = (value: unknown): number | null => {
+  const parsed = scoreNumber(value);
+  return parsed && parsed > 0 ? parsed : null;
+};
+
+const scoreMillis = (value: unknown): number | null => {
+  if (!value) return null;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value <= 0) return null;
+    return value < 10000000000 ? value * 1000 : value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (value instanceof Date) {
+    const millis = value.getTime();
+    return Number.isFinite(millis) ? millis : null;
+  }
+  if (typeof (value as any)?.toMillis === 'function') {
+    const millis = (value as any).toMillis();
+    return Number.isFinite(millis) ? millis : null;
+  }
+  if (typeof (value as any)?.toDate === 'function') {
+    const millis = (value as any).toDate().getTime();
+    return Number.isFinite(millis) ? millis : null;
+  }
+  if (typeof (value as any)?.seconds === 'number') {
+    const millis = (value as any).seconds * 1000 + Math.round(((value as any).nanoseconds || 0) / 1000000);
+    return Number.isFinite(millis) ? millis : null;
+  }
+  return null;
+};
+
+const maxScoreMillis = (...values: unknown[]): number | null => {
+  const millis = values
+    .map(scoreMillis)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  return millis.length ? Math.max(...millis) : null;
+};
+
+const formatScoreboardDate = (value: unknown): string => {
+  const millis = scoreMillis(value);
+  if (!millis) return 'Not seen';
+  return new Date(millis).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
+const formatScoreboardAgo = (value: unknown): string => {
+  const millis = scoreMillis(value);
+  if (!millis) return 'No timestamp';
+  const diffMs = Date.now() - millis;
+  const absMs = Math.abs(diffMs);
+  const dayMs = 24 * 60 * 60 * 1000;
+  const hourMs = 60 * 60 * 1000;
+  const minuteMs = 60 * 1000;
+  if (absMs >= dayMs) return `${Math.round(absMs / dayMs)}d ${diffMs >= 0 ? 'ago' : 'from now'}`;
+  if (absMs >= hourMs) return `${Math.round(absMs / hourMs)}h ${diffMs >= 0 ? 'ago' : 'from now'}`;
+  return `${Math.max(1, Math.round(absMs / minuteMs))}m ${diffMs >= 0 ? 'ago' : 'from now'}`;
+};
+
+const formatScoreboardPercent = (value: number, denominator: number): string =>
+  denominator > 0 ? `${Math.round((value / denominator) * 100)}%` : '0%';
+
+const getFirstString = (sources: Array<Record<string, any> | null | undefined>, paths: string[]): string => {
+  for (const source of sources) {
+    for (const path of paths) {
+      const value = path.includes('.') ? getNestedValue(source, path) : source?.[path];
+      const normalized = normalizeScoreboardString(value);
+      if (normalized) return normalized;
+    }
+  }
+  return '';
+};
+
+const getFirstNumber = (sources: Array<Record<string, any> | null | undefined>, paths: string[]): number | null => {
+  for (const source of sources) {
+    for (const path of paths) {
+      const value = path.includes('.') ? getNestedValue(source, path) : source?.[path];
+      const parsed = scoreNumber(value);
+      if (parsed !== null) return parsed;
+    }
+  }
+  return null;
+};
+
+const getFirstMillis = (sources: Array<Record<string, any> | null | undefined>, paths: string[]): number | null => {
+  for (const source of sources) {
+    for (const path of paths) {
+      const value = path.includes('.') ? getNestedValue(source, path) : source?.[path];
+      const millis = scoreMillis(value);
+      if (millis) return millis;
+    }
+  }
+  return null;
+};
+
+const inferAgeYears = (data: Record<string, any>, profile: Record<string, any> | null, purchaseLogs: Record<string, any>[]): number | null => {
+  const directAge = getFirstNumber([profile, data], [
+    'ageYears',
+    'age',
+    'macraAgeYears',
+    'macraProfile.ageYears',
+    'macraProfile.age',
+  ]);
+  if (directAge !== null && directAge >= 0 && directAge < 120) return Math.floor(directAge);
+
+  for (const log of purchaseLogs) {
+    const metadataAge = getFirstNumber([log], ['metadata.age_years', 'cancelFeedbackMetadata.age_years']);
+    if (metadataAge !== null && metadataAge >= 0 && metadataAge < 120) return Math.floor(metadataAge);
+  }
+
+  const birthdateMs = getFirstMillis([profile, data], [
+    'birthdate',
+    'dateOfBirth',
+    'dob',
+    'macraProfile.birthdate',
+    'macraProfile.dateOfBirth',
+  ]);
+  if (!birthdateMs) return null;
+
+  const ageMs = Date.now() - birthdateMs;
+  const ageYears = Math.floor(ageMs / (365.25 * 24 * 60 * 60 * 1000));
+  return ageYears >= 0 && ageYears < 120 ? ageYears : null;
+};
+
+const latestEmailMillis = (logs: Record<string, any>[], predicate: (log: Record<string, any>) => boolean, fields: string[]): number | null =>
+  maxScoreMillis(
+    ...logs
+      .filter(predicate)
+      .flatMap((log) => fields.map((field) => (field.includes('.') ? getNestedValue(log, field) : log[field])))
+  );
+
+const purchaseLogMillis = (log: Record<string, any>): number | null =>
+  maxScoreMillis(log.updatedAtEpoch, log.createdAtEpoch, log.updatedAt, log.createdAt, log.sentAt, log.lastEventAt);
+
+const normalizePurchaseStatus = (value: unknown): string => normalizeScoreboardString(value).toLowerCase();
+
+const purchaseStatusIsSuccess = (status: string): boolean =>
+  ['success', 'succeeded', 'paid', 'active', 'trial_started', 'trialing'].includes(status);
+
+const purchaseStatusIsCanceled = (status: string): boolean =>
+  ['canceled', 'cancelled', 'user_cancelled', 'abandoned'].includes(status);
+
+const matchesUserOrEmail = (row: Record<string, any>, userId: string, email: string): boolean => {
+  const rowUserId = normalizeScoreboardString(row.userId || row.uid || row.authUid || row.appUserId);
+  if (rowUserId && rowUserId === userId) return true;
+
+  const rowEmail = normalizeScoreboardString(row.email || row.toEmail || row.recipientEmail || row.to);
+  return Boolean(email && rowEmail && rowEmail.toLowerCase() === email.toLowerCase());
+};
+
+const buildMacraScoreboardUser = (args: {
+  id: string;
+  data: Record<string, any>;
+  profile: Record<string, any> | null;
+  emailLogs: Record<string, any>[];
+  purchaseLogs: Record<string, any>[];
+}): MacraScoreboardUser => {
+  const { id, data, profile, emailLogs, purchaseLogs } = args;
+  const profileSources = [profile, data.macraProfile, getNestedValue(data, 'macra.profile'), data];
+  const email = normalizeScoreboardString(data.email);
+  const displayName = getFirstString([data], ['firstName', 'displayName', 'username', 'name']) || email || id;
+  const state = (data.macraEmailSequenceState || {}) as Record<string, any>;
+  const retargetingLogs = emailLogs.filter((log) => {
+    const sequenceId = normalizeScoreboardString(log.sequenceId || log.campaignId || log.templateId);
+    const product = normalizeScoreboardString(log.product || log.app).toLowerCase();
+    return product === 'macra' || sequenceId.startsWith('macra-') || MACRA_RETARGETING_SEQUENCE_IDS.includes(sequenceId);
+  });
+
+  const statuses = purchaseLogs.map((log) => ({
+    log,
+    status: normalizePurchaseStatus(log.purchaseStatus || log.status),
+    millis: purchaseLogMillis(log),
+  }));
+  const latestAttemptedAt = maxScoreMillis(
+    ...statuses
+      .filter((row) => row.status === 'attempted' || row.status === 'started' || row.status === 'initiated')
+      .map((row) => row.millis)
+  );
+  const latestCanceledAt = maxScoreMillis(
+    ...statuses
+      .filter((row) => purchaseStatusIsCanceled(row.status))
+      .map((row) => row.millis)
+  );
+  const latestSucceededAt = maxScoreMillis(
+    ...statuses
+      .filter((row) => purchaseStatusIsSuccess(row.status))
+      .map((row) => row.millis)
+  );
+  const latestTrialSucceededAt = maxScoreMillis(
+    ...statuses
+      .filter((row) => purchaseStatusIsSuccess(row.status) && (positiveScoreNumber(getNestedValue(row.log, 'plan.trialDays')) || row.status.includes('trial')))
+      .map((row) => row.millis)
+  );
+
+  const ageYears = inferAgeYears(data, profile, purchaseLogs);
+  const completedOnboarding = data.hasCompletedMacraOnboarding === true;
+  const onboardingCompletedAt = getFirstMillis([data], ['macraOnboardingCompletedAt', 'createdAt', 'updatedAt']);
+  const currentWeightKg = getFirstNumber(profileSources, ['currentWeightKg']);
+  const goalWeightKg = getFirstNumber(profileSources, ['goalWeightKg']);
+  const goalDirection = getFirstString(profileSources, ['goalDirection']);
+  const pace = getFirstString(profileSources, ['pace']);
+  const activityLevel = getFirstString(profileSources, ['activityLevel']);
+  const biggestStruggle = getFirstString(profileSources, ['biggestStruggle']);
+  const currentWeightRealistic = currentWeightKg !== null && currentWeightKg >= 35 && currentWeightKg <= 250;
+  const goalWeightRealistic = goalWeightKg !== null && goalWeightKg >= 35 && goalWeightKg <= 250;
+  const goalDeltaKg = currentWeightKg !== null && goalWeightKg !== null ? Math.abs(goalWeightKg - currentWeightKg) : null;
+  const hasRealisticGoal =
+    currentWeightRealistic &&
+    goalWeightRealistic &&
+    goalDeltaKg !== null &&
+    goalDeltaKg <= Math.max(80, (currentWeightKg || 0) * 0.55) &&
+    Boolean(goalDirection && pace && activityLevel && biggestStruggle);
+
+  const macroCalories = getFirstNumber([data, profile], [
+    'macros.personal.calories',
+    'macroTargets.calories',
+    'macraMacroTargets.calories',
+    'planMacros.calories',
+    'dailyCalorieTarget',
+    'calorieTarget',
+    'targetCalories',
+  ]);
+  const macroProtein = getFirstNumber([data, profile], [
+    'macros.personal.protein',
+    'macroTargets.protein',
+    'macraMacroTargets.protein',
+    'planMacros.protein',
+    'proteinGrams',
+    'targetProtein',
+  ]);
+  const macroCarbs = getFirstNumber([data, profile], [
+    'macros.personal.carbs',
+    'macroTargets.carbs',
+    'macraMacroTargets.carbs',
+    'planMacros.carbs',
+    'carbsGrams',
+    'targetCarbs',
+  ]);
+  const macroFat = getFirstNumber([data, profile], [
+    'macros.personal.fat',
+    'macroTargets.fat',
+    'macraMacroTargets.fat',
+    'planMacros.fat',
+    'fatGrams',
+    'targetFat',
+  ]);
+  const hasMacroTarget = Boolean(
+    (macroCalories !== null && macroCalories >= 900 && macroCalories <= 6000) ||
+      [macroProtein, macroCarbs, macroFat].filter((value) => value !== null && value > 0).length >= 2
+  );
+
+  const paywallViewCount = Math.max(
+    scoreNumber(data.macraPaywallViewCount) || 0,
+    scoreNumber(getNestedValue(data, 'macraPaywall.viewCount')) || 0,
+    scoreNumber(getNestedValue(data, 'macraAnalytics.paywallViewCount')) || 0,
+    scoreNumber(state.paywallViewCount) || 0,
+    scoreNumber(getNestedValue(state, 'paywallView.count')) || 0
+  );
+  const paywallLastViewedAt = maxScoreMillis(
+    data.macraLatestPaywallViewedAt,
+    data.macraPaywallViewedAt,
+    data.macraOnboardingPaywallReachedAt,
+    data.macraPaywallReachedAt,
+    getNestedValue(data, 'macraPaywall.lastViewedAt'),
+    getNestedValue(data, 'macraAnalytics.lastPaywallViewedAt'),
+    state.paywallViewedAt,
+    state.paywallLastViewedAt,
+    getNestedValue(state, 'paywallView.lastViewedAt')
+  );
+  const explicitPaywallSignal = Boolean(paywallViewCount > 0 || paywallLastViewedAt);
+  const reachedPaywall = Boolean(explicitPaywallSignal || completedOnboarding);
+  const ctaTappedAt = maxScoreMillis(
+    data.macraPaywallCtaTappedAt,
+    data.macraPaywallPrimaryButtonPressedAt,
+    getNestedValue(data, 'macraPaywall.ctaTappedAt'),
+    getNestedValue(data, 'macraAnalytics.paywallPrimaryButtonPressedAt'),
+    state.paywallCtaTappedAt,
+    state.paywallPrimaryButtonPressedAt,
+    latestAttemptedAt
+  );
+  const appleCancelAt = maxScoreMillis(
+    data.macraLatestPaywallCancelFeedbackAt,
+    getNestedValue(data, 'macraLatestPaywallCancelFeedback.capturedAt'),
+    latestCanceledAt
+  );
+  const webOfferOpenedAt = maxScoreMillis(
+    state.webOffer24hOpenedAt,
+    latestEmailMillis(
+      retargetingLogs,
+      (log) => normalizeScoreboardString(log.sequenceId || log.campaignId) === MACRA_WEB_OFFER_SEQUENCE_ID,
+      ['openedAt', 'lastEventAt', 'updatedAt']
+    )
+  );
+  const stripeRetargetClickedAt = maxScoreMillis(
+    state.webOffer24hClickedAt,
+    state.webOfferProofClickedAt,
+    latestEmailMillis(
+      retargetingLogs,
+      (log) => {
+        const sequenceId = normalizeScoreboardString(log.sequenceId || log.campaignId);
+        return sequenceId === MACRA_WEB_OFFER_SEQUENCE_ID || sequenceId === 'macra-web-offer-proof-v1';
+      },
+      ['clickedAt', 'lastClickAt', 'lastEventAt']
+    )
+  );
+  const trialEndAt = scoreMillis(data.trialEndDate);
+  const rootTrialing = Boolean(data.isTrialing && trialEndAt && trialEndAt > Date.now());
+  const trialStartedAt = maxScoreMillis(
+    data.trialStartDate,
+    data.macraTrialStartedAt,
+    state.webOffer24hConvertedAt,
+    latestTrialSucceededAt,
+    rootTrialing && trialEndAt ? trialEndAt - 30 * 24 * 60 * 60 * 1000 : null
+  );
+  const subscriptionStatus = normalizeScoreboardString(data.subscriptionStatus || data.macraSubscriptionStatus || data.revenueCatStatus).toLowerCase();
+  const activeSubscriptionFlag = Boolean(
+    data.isSubscribed ||
+      data.hasActiveSubscription ||
+      data.macraSubscriptionActive ||
+      data.hasMacraPlus ||
+      ['active', 'paid', 'subscribed', 'premium'].includes(subscriptionStatus)
+  );
+  const paidAt = maxScoreMillis(
+    data.subscriptionStartedAt,
+    data.macraSubscriptionStartedAt,
+    activeSubscriptionFlag && !rootTrialing ? data.updatedAt : null,
+    latestSucceededAt && latestSucceededAt !== latestTrialSucceededAt ? latestSucceededAt : null
+  );
+  const latestIntentAt = maxScoreMillis(
+    paidAt,
+    trialStartedAt,
+    appleCancelAt,
+    ctaTappedAt,
+    stripeRetargetClickedAt,
+    webOfferOpenedAt,
+    paywallLastViewedAt,
+    onboardingCompletedAt
+  );
+
+  const disqualifiers: string[] = [];
+  if (ageYears !== null && ageYears < 18) disqualifiers.push('under_18');
+  if (ageYears === null) disqualifiers.push('missing_age');
+  if (!profile) disqualifiers.push('missing_profile');
+  if (currentWeightKg === null) disqualifiers.push('missing_current_weight');
+  if (goalWeightKg === null) disqualifiers.push('missing_goal_weight');
+  if ((currentWeightKg !== null && !currentWeightRealistic) || (goalWeightKg !== null && !goalWeightRealistic)) disqualifiers.push('unrealistic_goal');
+  if (!goalDirection) disqualifiers.push('missing_goal_direction');
+  if (!pace) disqualifiers.push('missing_pace');
+  if (!activityLevel) disqualifiers.push('missing_activity_level');
+  if (!biggestStruggle) disqualifiers.push('missing_biggest_struggle');
+  if (!hasMacroTarget) disqualifiers.push('missing_macro_target');
+  if (!reachedPaywall) disqualifiers.push('no_paywall_signal');
+
+  const highIntent = Boolean(ctaTappedAt || appleCancelAt || stripeRetargetClickedAt || webOfferOpenedAt || paywallViewCount >= 2);
+  const seriousPlanCompleter =
+    completedOnboarding &&
+    ageYears !== null &&
+    ageYears >= 18 &&
+    Boolean(profile) &&
+    hasRealisticGoal &&
+    hasMacroTarget &&
+    reachedPaywall;
+  const excluded = disqualifiers.includes('under_18') || disqualifiers.includes('unrealistic_goal');
+
+  let tier: MacraScoreboardTier = 'curiosity';
+  if (paidAt) tier = 'paid';
+  else if (trialStartedAt) tier = 'trial_started';
+  else if (excluded) tier = 'excluded';
+  else if (seriousPlanCompleter && highIntent) tier = 'high_intent_recovery';
+  else if (seriousPlanCompleter) tier = 'serious_plan_completer';
+  else if (completedOnboarding || profile) tier = 'onboarding_completer';
+
+  let suggestedLane = '24h web offer';
+  if (paidAt) suggestedLane = 'Converted';
+  else if (trialStartedAt) suggestedLane = 'Trial activation';
+  else if (appleCancelAt || ctaTappedAt) suggestedLane = 'Apple trust recovery';
+  else if (stripeRetargetClickedAt || webOfferOpenedAt) suggestedLane = 'Proof follow-up';
+  else if (paywallViewCount >= 2) suggestedLane = 'Paywall value email';
+  else if (onboardingCompletedAt && Date.now() - onboardingCompletedAt >= 7 * 24 * 60 * 60 * 1000) suggestedLane = '7-day meal challenge';
+
+  const signals: MacraScoreboardSignals = {
+    ageYears,
+    completedOnboarding,
+    hasProfile: Boolean(profile),
+    hasRealisticGoal,
+    hasMacroTarget,
+    reachedPaywall,
+    explicitPaywallSignal,
+    paywallViewCount,
+    paywallLastViewedAt,
+    ctaTappedAt,
+    appleCancelAt,
+    webOfferOpenedAt,
+    stripeRetargetClickedAt,
+    trialStartedAt,
+    paidAt,
+    onboardingCompletedAt,
+    latestIntentAt,
+    currentWeightKg,
+    goalWeightKg,
+    goalDirection,
+    pace,
+    activityLevel,
+    biggestStruggle,
+    macroCalories,
+  };
+
+  return {
+    id,
+    email,
+    displayName,
+    tier,
+    tierLabel: MACRA_TIER_LABELS[tier],
+    isQualified: MACRA_QUALIFIED_TIERS.has(tier),
+    isHighIntent: highIntent,
+    suggestedLane,
+    disqualifiers,
+    signals,
+  };
+};
+
 const SEQUENCES: SequenceRow[] = [
   {
     id: 'welcome-v1',
@@ -840,6 +1416,16 @@ const EmailSequencesAdmin: React.FC = () => {
   const currentUser = useUser();
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [seedingTemplates, setSeedingTemplates] = useState(false);
+  const [macraScoreboard, setMacraScoreboard] = useState<MacraScoreboardState>({
+    loading: false,
+    error: '',
+    loadedAt: null,
+    config: null,
+    users: [],
+    userLimit: MACRA_SCOREBOARD_USER_LIMIT,
+    emailLogCount: 0,
+    purchaseLogCount: 0,
+  });
 
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [activeSequence, setActiveSequence] = useState<SequenceRow | null>(null);
@@ -883,6 +1469,92 @@ const EmailSequencesAdmin: React.FC = () => {
     }
     return out;
   }, []);
+
+  const loadMacraScoreboard = useCallback(async () => {
+    setMacraScoreboard((prev) => ({ ...prev, loading: true, error: '' }));
+
+    try {
+      const [configSnap, usersSnap] = await Promise.all([
+        getDoc(doc(db, 'email-sequence-config', MACRA_RETARGETING_SEQUENCE_CONFIG_ID)),
+        getDocs(query(collection(db, 'users'), where('hasCompletedMacraOnboarding', '==', true), limit(MACRA_SCOREBOARD_USER_LIMIT))),
+      ]);
+
+      const userDocs = usersSnap.docs.map((snapshot) => ({
+        id: snapshot.id,
+        data: (snapshot.data() || {}) as Record<string, any>,
+      }));
+
+      const loadRecentDocs = async (collectionName: string, orderField: string, rowLimit: number) => {
+        try {
+          const snap = await getDocs(query(collection(db, collectionName), orderBy(orderField, 'desc'), limit(rowLimit)));
+          return snap.docs.map((snapshot) => ({ id: snapshot.id, ...((snapshot.data() || {}) as Record<string, any>) }));
+        } catch (error) {
+          console.warn(`[EmailSequences] Failed to load ${collectionName} for Macra scoreboard`, error);
+          return [] as Record<string, any>[];
+        }
+      };
+
+      const loadProfiles = async () => {
+        const entries: Array<[string, Record<string, any> | null]> = [];
+        for (let i = 0; i < userDocs.length; i += MACRA_SCOREBOARD_PROFILE_CHUNK_SIZE) {
+          const chunk = userDocs.slice(i, i + MACRA_SCOREBOARD_PROFILE_CHUNK_SIZE);
+          const resolved = await Promise.all(
+            chunk.map(async (user) => {
+              try {
+                const profileSnap = await getDoc(doc(db, 'users', user.id, 'macra', 'profile'));
+                return [user.id, profileSnap.exists() ? ((profileSnap.data() || {}) as Record<string, any>) : null] as [string, Record<string, any> | null];
+              } catch (error) {
+                console.warn('[EmailSequences] Failed to load Macra profile for scoreboard', user.id, error);
+                return [user.id, null] as [string, Record<string, any> | null];
+              }
+            })
+          );
+          entries.push(...resolved);
+        }
+        return Object.fromEntries(entries) as Record<string, Record<string, any> | null>;
+      };
+
+      const [profileByUserId, emailLogs, purchaseLogs] = await Promise.all([
+        loadProfiles(),
+        loadRecentDocs('email-logs', 'updatedAt', MACRA_SCOREBOARD_LOG_LIMIT),
+        loadRecentDocs('Macra-purchase-logs', 'createdAt', MACRA_SCOREBOARD_LOG_LIMIT),
+      ]);
+
+      const users = userDocs.map((user) => {
+        const email = normalizeScoreboardString(user.data.email);
+        const userEmailLogs = emailLogs.filter((log) => matchesUserOrEmail(log, user.id, email));
+        const userPurchaseLogs = purchaseLogs.filter((log) => matchesUserOrEmail(log, user.id, email));
+        return buildMacraScoreboardUser({
+          id: user.id,
+          data: user.data,
+          profile: profileByUserId[user.id] || null,
+          emailLogs: userEmailLogs,
+          purchaseLogs: userPurchaseLogs,
+        });
+      });
+
+      setMacraScoreboard({
+        loading: false,
+        error: '',
+        loadedAt: new Date(),
+        config: configSnap.exists() ? ((configSnap.data() || {}) as Record<string, any>) : null,
+        users,
+        userLimit: MACRA_SCOREBOARD_USER_LIMIT,
+        emailLogCount: emailLogs.length,
+        purchaseLogCount: purchaseLogs.length,
+      });
+    } catch (e: any) {
+      setMacraScoreboard((prev) => ({
+        ...prev,
+        loading: false,
+        error: e?.message || 'Failed to load Macra retargeting scoreboard',
+      }));
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMacraScoreboard();
+  }, [loadMacraScoreboard]);
 
   useEffect(() => {
     // Load schedule times for sequences that support scheduling (UTC time)
@@ -1306,6 +1978,166 @@ const EmailSequencesAdmin: React.FC = () => {
   };
 
   const activeTestRequiresUserId = activeSequence?.id === 'macra-web-offer-24h-v1';
+  const macraScoreboardSummary = useMemo(() => {
+    const users = macraScoreboard.users;
+    const count = (predicate: (user: MacraScoreboardUser) => boolean) => users.filter(predicate).length;
+    const onboardingCompleters = count((user) => user.signals.completedOnboarding);
+    const qualified = count((user) => user.isQualified);
+    const seriousPlanCompleters = count((user) =>
+      ['paid', 'trial_started', 'high_intent_recovery', 'serious_plan_completer'].includes(user.tier)
+    );
+    const highIntentRecovery = count((user) => user.tier === 'high_intent_recovery');
+    const qualifiedPaywallViews = count((user) => user.isQualified && user.signals.reachedPaywall);
+    const qualifiedCtaTaps = count((user) => user.isQualified && Boolean(user.signals.ctaTappedAt));
+    const qualifiedAppleCancels = count((user) => user.isQualified && Boolean(user.signals.appleCancelAt));
+    const qualifiedTrialStarts = count((user) => user.isQualified && Boolean(user.signals.trialStartedAt));
+    const qualifiedPaid = count((user) => user.isQualified && Boolean(user.signals.paidAt));
+    const qualifiedStripeClicks = count((user) => user.isQualified && Boolean(user.signals.stripeRetargetClickedAt));
+    const recoveryPool = users
+      .filter((user) => user.isHighIntent && !user.signals.trialStartedAt && !user.signals.paidAt)
+      .sort((a, b) => (b.signals.latestIntentAt || 0) - (a.signals.latestIntentAt || 0))
+      .slice(0, 10);
+
+    const tierRows = MACRA_TIER_ORDER.map((tier) => ({
+      tier,
+      label: MACRA_TIER_LABELS[tier],
+      count: count((user) => user.tier === tier),
+    })).filter((row) => row.count > 0);
+
+    const disqualifierCounts = users.reduce<Record<string, number>>((acc, user) => {
+      user.disqualifiers.forEach((key) => {
+        acc[key] = (acc[key] || 0) + 1;
+      });
+      return acc;
+    }, {});
+    const disqualifierRows = Object.entries(disqualifierCounts)
+      .map(([key, value]) => ({
+        key,
+        label: MACRA_DISQUALIFIER_LABELS[key] || titleizeScoreboardToken(key),
+        count: value,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const lastScanSummary = (macraScoreboard.config?.lastScanSummary || {}) as Record<string, any>;
+    const sentBySequence = Object.entries((lastScanSummary.sentBySequence || {}) as Record<string, number>)
+      .sort((a, b) => Number(b[1]) - Number(a[1]));
+    const skippedByReason = Object.entries((lastScanSummary.skippedByReason || {}) as Record<string, number>)
+      .sort((a, b) => Number(b[1]) - Number(a[1]))
+      .slice(0, 6);
+
+    return {
+      users,
+      onboardingCompleters,
+      qualified,
+      seriousPlanCompleters,
+      highIntentRecovery,
+      qualifiedPaywallViews,
+      qualifiedCtaTaps,
+      qualifiedAppleCancels,
+      qualifiedTrialStarts,
+      qualifiedPaid,
+      qualifiedStripeClicks,
+      recoveryPool,
+      tierRows,
+      disqualifierRows,
+      lastScanSummary,
+      sentBySequence,
+      skippedByReason,
+    };
+  }, [macraScoreboard.config, macraScoreboard.users]);
+
+  const macraMetricCards = [
+    {
+      label: 'Qualified onboarding completions',
+      value: macraScoreboardSummary.qualified,
+      sublabel: `${formatScoreboardPercent(macraScoreboardSummary.qualified, macraScoreboardSummary.onboardingCompleters)} of loaded completers`,
+      icon: Target,
+      tone: 'text-[#d7ff00]',
+    },
+    {
+      label: 'Serious plan completers',
+      value: macraScoreboardSummary.seriousPlanCompleters,
+      sublabel: 'Adult, realistic goal, macros, paywall',
+      icon: TrendingUp,
+      tone: 'text-emerald-300',
+    },
+    {
+      label: 'High-intent recovery pool',
+      value: macraScoreboardSummary.highIntentRecovery,
+      sublabel: 'CTA, cancel, click, open, or repeat paywall view',
+      icon: ShieldAlert,
+      tone: 'text-amber-300',
+    },
+    {
+      label: 'Qualified paywall views',
+      value: macraScoreboardSummary.qualifiedPaywallViews,
+      sublabel: 'Explicit or inferred from completed onboarding',
+      icon: Eye,
+      tone: 'text-blue-300',
+    },
+    {
+      label: 'Qualified CTA taps',
+      value: macraScoreboardSummary.qualifiedCtaTaps,
+      sublabel: `${formatScoreboardPercent(macraScoreboardSummary.qualifiedCtaTaps, macraScoreboardSummary.qualifiedPaywallViews)} of qualified paywall users`,
+      icon: MousePointerClick,
+      tone: 'text-sky-300',
+    },
+    {
+      label: 'Qualified Apple cancels',
+      value: macraScoreboardSummary.qualifiedAppleCancels,
+      sublabel: 'Trust-recovery audience',
+      icon: AlertCircle,
+      tone: 'text-orange-300',
+    },
+    {
+      label: 'Qualified trial starts',
+      value: macraScoreboardSummary.qualifiedTrialStarts,
+      sublabel: `${formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.qualified)} of qualified users`,
+      icon: CheckCircle,
+      tone: 'text-green-300',
+    },
+    {
+      label: 'Stripe retarget clicks',
+      value: macraScoreboardSummary.qualifiedStripeClicks,
+      sublabel: 'Qualified web offer or proof clicks',
+      icon: ShoppingCart,
+      tone: 'text-violet-300',
+    },
+  ];
+
+  const macraFunnelRows = [
+    {
+      label: 'All installs',
+      value: 'AppsFlyer',
+      sublabel: 'Acquisition quality source',
+    },
+    {
+      label: 'Onboarding completers',
+      value: macraScoreboardSummary.onboardingCompleters,
+      sublabel: `${macraScoreboard.users.length >= macraScoreboard.userLimit ? `Latest ${macraScoreboard.userLimit}` : 'Loaded'} Macra users`,
+    },
+    {
+      label: 'Serious plan completers',
+      value: macraScoreboardSummary.seriousPlanCompleters,
+      sublabel: `${formatScoreboardPercent(macraScoreboardSummary.seriousPlanCompleters, macraScoreboardSummary.onboardingCompleters)} of onboarding completers`,
+    },
+    {
+      label: 'CTA / cancel users',
+      value: macraScoreboardSummary.highIntentRecovery,
+      sublabel: 'Highest-intent recovery audience',
+    },
+    {
+      label: 'Trial starts',
+      value: macraScoreboardSummary.qualifiedTrialStarts,
+      sublabel: `${formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.seriousPlanCompleters)} of serious plan completers`,
+    },
+    {
+      label: 'Paid users',
+      value: macraScoreboardSummary.qualifiedPaid,
+      sublabel: `${formatScoreboardPercent(macraScoreboardSummary.qualifiedPaid, macraScoreboardSummary.seriousPlanCompleters)} of serious plan completers`,
+    },
+  ];
 
   return (
     <AdminRouteGuard>
@@ -1314,7 +2146,7 @@ const EmailSequencesAdmin: React.FC = () => {
       </Head>
 
       <div className="min-h-screen bg-[#111417] text-white py-10 px-4">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -1357,6 +2189,247 @@ const EmailSequencesAdmin: React.FC = () => {
               </div>
             </div>
           )}
+
+          <section className="mb-8">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-[#d7ff00]" />
+                  Macra Retargeting Scoreboard
+                </h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Qualified-user lens for onboarding completers, paywall intent, recovery, trials, and paid conversion.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="hidden text-right text-xs text-zinc-500 sm:block">
+                  <div>Loaded {macraScoreboard.users.length} user{macraScoreboard.users.length === 1 ? '' : 's'}</div>
+                  <div>
+                    {macraScoreboard.loadedAt ? `Refreshed ${formatScoreboardAgo(macraScoreboard.loadedAt)}` : 'Waiting for first load'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadMacraScoreboard}
+                  disabled={macraScoreboard.loading}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${macraScoreboard.loading
+                    ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700'
+                    }`}
+                >
+                  {macraScoreboard.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            {macraScoreboard.error ? (
+              <div className="mb-4 rounded-lg border border-red-800 bg-red-900/20 p-4 text-sm text-red-300">
+                {macraScoreboard.error}
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              {macraMetricCards.map((card) => {
+                const Icon = card.icon;
+                return (
+                  <div key={card.label} className="rounded-lg border border-zinc-800 bg-[#1a1e24] p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">{card.label}</p>
+                      <Icon className={`h-4 w-4 ${card.tone}`} />
+                    </div>
+                    <div className="text-2xl font-bold text-white">{card.value}</div>
+                    <div className="mt-1 text-xs text-zinc-500">{card.sublabel}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 xl:grid-cols-3 gap-4">
+              <div className="xl:col-span-2 rounded-lg border border-zinc-800 bg-[#1a1e24] overflow-hidden">
+                <div className="border-b border-zinc-800 px-4 py-3">
+                  <h3 className="text-sm font-semibold text-zinc-200">Cohort Funnel</h3>
+                </div>
+                <div className="divide-y divide-zinc-800">
+                  {macraFunnelRows.map((row) => (
+                    <div key={row.label} className="grid grid-cols-1 gap-1 px-4 py-3 sm:grid-cols-[180px_1fr_220px] sm:items-center">
+                      <div className="text-sm font-medium text-zinc-300">{row.label}</div>
+                      <div className="text-xl font-bold text-white">{row.value}</div>
+                      <div className="text-xs text-zinc-500 sm:text-right">{row.sublabel}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-zinc-800 bg-[#1a1e24] overflow-hidden">
+                <div className="border-b border-zinc-800 px-4 py-3">
+                  <h3 className="text-sm font-semibold text-zinc-200">Scheduler Last Run</h3>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <div className="text-xs text-zinc-500">Completed</div>
+                      <div className="mt-1 text-zinc-200">
+                        {formatScoreboardDate(macraScoreboard.config?.lastScanCompletedAt || macraScoreboard.config?.lastScanAt)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-zinc-500">Local time</div>
+                      <div className="mt-1 text-zinc-200">{macraScoreboard.config?.lastScanLocalTime || 'Not seen'}</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-5 gap-2">
+                    {['scanned', 'claimed', 'sent', 'skipped', 'errors'].map((key) => (
+                      <div key={key} className="rounded-lg bg-zinc-950/70 px-2 py-2 text-center">
+                        <div className="text-sm font-bold text-white">{Number(macraScoreboardSummary.lastScanSummary[key] || 0)}</div>
+                        <div className="mt-1 text-[10px] uppercase tracking-wider text-zinc-500">{key}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="rounded-lg border border-zinc-800 bg-black/20 p-3">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">Sent by sequence</div>
+                    {macraScoreboardSummary.sentBySequence.length ? (
+                      <div className="space-y-1.5">
+                        {macraScoreboardSummary.sentBySequence.map(([sequenceId, value]) => (
+                          <div key={sequenceId} className="flex items-center justify-between gap-3 text-xs">
+                            <span className="truncate text-zinc-400">{sequenceId}</span>
+                            <span className="font-semibold text-zinc-200">{String(value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-zinc-500">No sends recorded in the latest summary.</div>
+                    )}
+                  </div>
+                  {macraScoreboardSummary.skippedByReason.length ? (
+                    <div className="rounded-lg border border-zinc-800 bg-black/20 p-3">
+                      <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">Top skips</div>
+                      <div className="space-y-1.5">
+                        {macraScoreboardSummary.skippedByReason.map(([reason, value]) => (
+                          <div key={reason} className="flex items-center justify-between gap-3 text-xs">
+                            <span className="truncate text-zinc-400">{titleizeScoreboardToken(reason)}</span>
+                            <span className="font-semibold text-zinc-200">{String(value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="rounded-lg border border-zinc-800 bg-[#1a1e24] overflow-hidden">
+                <div className="border-b border-zinc-800 px-4 py-3">
+                  <h3 className="text-sm font-semibold text-zinc-200">Serious vs Curiosity Buckets</h3>
+                </div>
+                <div className="divide-y divide-zinc-800">
+                  {macraScoreboardSummary.tierRows.length ? (
+                    macraScoreboardSummary.tierRows.map((row) => (
+                      <div key={row.tier} className="flex items-center justify-between gap-3 px-4 py-3">
+                        <div>
+                          <div className="text-sm font-medium text-zinc-200">{row.label}</div>
+                          <div className="text-xs text-zinc-500">{formatScoreboardPercent(row.count, macraScoreboard.users.length)} of loaded users</div>
+                        </div>
+                        <div className="text-lg font-bold text-white">{row.count}</div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="px-4 py-5 text-sm text-zinc-500">
+                      {macraScoreboard.loading ? 'Loading cohorts...' : 'No Macra users loaded yet.'}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-zinc-800 bg-[#1a1e24] overflow-hidden">
+                <div className="border-b border-zinc-800 px-4 py-3">
+                  <h3 className="text-sm font-semibold text-zinc-200">Qualification Gaps</h3>
+                </div>
+                <div className="divide-y divide-zinc-800">
+                  {macraScoreboardSummary.disqualifierRows.length ? (
+                    macraScoreboardSummary.disqualifierRows.map((row) => (
+                      <div key={row.key} className="flex items-center justify-between gap-3 px-4 py-3">
+                        <div className="text-sm text-zinc-300">{row.label}</div>
+                        <div className="text-sm font-bold text-zinc-100">{row.count}</div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="px-4 py-5 text-sm text-zinc-500">
+                      {macraScoreboard.loading ? 'Loading gaps...' : 'No qualification gaps in the loaded cohort.'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-zinc-800 bg-[#1a1e24] overflow-hidden">
+              <div className="flex flex-col gap-1 border-b border-zinc-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="text-sm font-semibold text-zinc-200">Highest-Intent Recovery Pool</h3>
+                <div className="text-xs text-zinc-500">
+                  Email logs loaded: {macraScoreboard.emailLogCount} · Purchase logs loaded: {macraScoreboard.purchaseLogCount}
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px] text-sm">
+                  <thead className="bg-zinc-900/70">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">User</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Bucket</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Intent</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Suggested lane</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Profile</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800">
+                    {macraScoreboardSummary.recoveryPool.length ? (
+                      macraScoreboardSummary.recoveryPool.map((user) => {
+                        const intentSignals = [
+                          user.signals.appleCancelAt ? `Apple cancel ${formatScoreboardAgo(user.signals.appleCancelAt)}` : '',
+                          user.signals.ctaTappedAt ? `CTA tap ${formatScoreboardAgo(user.signals.ctaTappedAt)}` : '',
+                          user.signals.stripeRetargetClickedAt ? `Stripe click ${formatScoreboardAgo(user.signals.stripeRetargetClickedAt)}` : '',
+                          user.signals.webOfferOpenedAt ? `Offer open ${formatScoreboardAgo(user.signals.webOfferOpenedAt)}` : '',
+                          user.signals.paywallViewCount >= 2 ? `${user.signals.paywallViewCount} paywall views` : '',
+                        ].filter(Boolean);
+                        return (
+                          <tr key={user.id} className="hover:bg-zinc-900/30">
+                            <td className="px-4 py-3">
+                              <div className="font-medium text-zinc-100">{user.displayName}</div>
+                              <div className="text-xs text-zinc-500">{user.email || user.id}</div>
+                            </td>
+                            <td className="px-4 py-3 text-zinc-300">{user.tierLabel}</td>
+                            <td className="px-4 py-3 text-zinc-400">
+                              {intentSignals.length ? intentSignals.join(' · ') : 'No recent intent signal'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="rounded-full border border-[#d7ff00]/30 bg-[#d7ff00]/10 px-2.5 py-1 text-xs font-semibold text-[#d7ff00]">
+                                {user.suggestedLane}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-zinc-400">
+                              <div>
+                                {user.signals.goalDirection ? titleizeScoreboardToken(user.signals.goalDirection) : 'Goal unknown'}
+                                {user.signals.macroCalories ? ` · ${Math.round(user.signals.macroCalories)} cal` : ''}
+                              </div>
+                              <div className="text-xs text-zinc-500">
+                                {user.signals.biggestStruggle ? titleizeScoreboardToken(user.signals.biggestStruggle) : 'Struggle unknown'}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-6 text-center text-sm text-zinc-500">
+                          {macraScoreboard.loading ? 'Loading recovery pool...' : 'No high-intent, unconverted users in the loaded cohort.'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
 
           <div className="bg-[#1a1e24] rounded-xl border border-zinc-800 overflow-hidden">
             <div className="p-4 border-b border-zinc-800">
