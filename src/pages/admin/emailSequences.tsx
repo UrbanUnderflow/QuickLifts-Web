@@ -101,6 +101,10 @@ type MacraScoreboardSignals = {
   stripeRetargetClickedAt: number | null;
   trialStartedAt: number | null;
   paidAt: number | null;
+  appsFlyerTrialStartedAt: number | null;
+  appsFlyerPurchaseAt: number | null;
+  appsFlyerStartTrialEvents: number;
+  appsFlyerPurchaseEvents: number;
   onboardingCompletedAt: number | null;
   latestIntentAt: number | null;
   currentWeightKg: number | null;
@@ -112,6 +116,17 @@ type MacraScoreboardSignals = {
   macroCalories: number | null;
 };
 
+type MacraNextRetargetingEmail = {
+  sequenceId: string;
+  stateKey: string;
+  label: string;
+  reason: string;
+  dueAt: number;
+  anchorAt: number;
+  status: 'ready' | 'scheduled' | 'pending';
+  canSendNow: boolean;
+};
+
 type MacraScoreboardUser = {
   id: string;
   email: string;
@@ -121,6 +136,7 @@ type MacraScoreboardUser = {
   isQualified: boolean;
   isHighIntent: boolean;
   suggestedLane: string;
+  nextRetargetingEmail: MacraNextRetargetingEmail | null;
   disqualifiers: string[];
   signals: MacraScoreboardSignals;
 };
@@ -140,9 +156,11 @@ type MacraScoreboardState = {
 const MACRA_WEB_OFFER_SEQUENCE_ID = 'macra-web-offer-24h-v1';
 const MACRA_RETARGETING_SEQUENCE_CONFIG_ID = 'macra-retargeting-v1';
 const CAMPAIGN_SEND_WINDOW_TIMEZONE = 'America/New_York';
+const MACRA_APPSFLYER_SCOREBOARD_DAYS_BACK = 30;
 const MACRA_SCOREBOARD_USER_LIMIT = 300;
 const MACRA_SCOREBOARD_LOG_LIMIT = 500;
 const MACRA_SCOREBOARD_PROFILE_CHUNK_SIZE = 40;
+const MACRA_SCOREBOARD_ATTRIBUTION_CHUNK_SIZE = 30;
 const MACRA_RETARGETING_SEQUENCE_IDS = [
   MACRA_WEB_OFFER_SEQUENCE_ID,
   'macra-paywall-cancel-trust-v1',
@@ -151,6 +169,53 @@ const MACRA_RETARGETING_SEQUENCE_IDS = [
   'macra-no-trial-7d-challenge-v1',
   'macra-trial-no-activation-24h-v1',
 ];
+const MACRA_APPSFLYER_TRIAL_EVENT_NAMES = ['af_start_trial', 'start_trial', 'trial_started', 'macra_trial_started'];
+const MACRA_APPSFLYER_PURCHASE_EVENT_NAMES = ['af_subscribe', 'af_purchase', 'subscribe', 'purchase', 'macra_subscription_started'];
+const MACRA_RETARGETING_SENT_STATE_FIELDS = [
+  'webOffer24hSentAt',
+  'paywallCancelTrustSentAt',
+  'webOfferProofSentAt',
+  'paywallViewValueSentAt',
+  'noTrial7dChallengeSentAt',
+  'trialNoActivation24hSentAt',
+];
+const MACRA_RETARGETING_FUNNEL_STEPS = {
+  paywallCancelTrust: {
+    sequenceId: 'macra-paywall-cancel-trust-v1',
+    stateKey: 'paywallCancelTrust',
+    label: 'Apple trust recovery',
+    delayField: 'paywallCancelDelayHours',
+    defaultDelayHours: 1,
+  },
+  webOfferProof: {
+    sequenceId: 'macra-web-offer-proof-v1',
+    stateKey: 'webOfferProof',
+    label: 'Proof follow-up',
+    delayField: 'webOfferProofDelayHours',
+    defaultDelayHours: 4,
+  },
+  paywallViewValue: {
+    sequenceId: 'macra-paywall-view-value-v1',
+    stateKey: 'paywallViewValue',
+    label: 'Paywall value email',
+    delayField: 'paywallViewDelayHours',
+    defaultDelayHours: 24,
+  },
+  noTrial7dChallenge: {
+    sequenceId: 'macra-no-trial-7d-challenge-v1',
+    stateKey: 'noTrial7dChallenge',
+    label: '7-day meal challenge',
+    delayField: 'noTrialDelayHours',
+    defaultDelayHours: 168,
+  },
+  trialActivation: {
+    sequenceId: 'macra-trial-no-activation-24h-v1',
+    stateKey: 'trialNoActivation24h',
+    label: 'Trial activation',
+    delayField: 'trialActivationDelayHours',
+    defaultDelayHours: 24,
+  },
+};
 const MACRA_QUALIFIED_TIERS = new Set<MacraScoreboardTier>([
   'paid',
   'trial_started',
@@ -905,14 +970,66 @@ const matchesUserOrEmail = (row: Record<string, any>, userId: string, email: str
   return Boolean(email && rowEmail && rowEmail.toLowerCase() === email.toLowerCase());
 };
 
+const appsFlyerEventCount = (appsFlyer: Record<string, any> | null | undefined, eventNames: string[]): number =>
+  eventNames.reduce((total, eventName) => total + (scoreNumber(getNestedValue(appsFlyer, `eventCounts.${eventName}`)) || 0), 0);
+
+const appsFlyerLatestEventAt = (appsFlyer: Record<string, any> | null | undefined, eventNames: string[]): number | null =>
+  maxScoreMillis(...eventNames.map((eventName) => getNestedValue(appsFlyer, `eventLatestAt.${eventName}`)));
+
+const appsFlyerSummaryEventCount = (appsFlyerSummary: Record<string, any>, eventNames: string[]): number =>
+  eventNames.reduce((total, eventName) => total + Number(getNestedValue(appsFlyerSummary, `events.byName.${eventName}`) || 0), 0);
+
+const macraRetargetingDelayHours = (config: Record<string, any> | null | undefined, delayField: string, fallback: number): number => {
+  const value = scoreNumber(config?.[delayField]);
+  return value !== null && value >= 0 ? value : fallback;
+};
+
+const macraRetargetingRuleResolved = (state: Record<string, any>, stateKey: string): boolean =>
+  Boolean(state[`${stateKey}SentAt`] || state[`${stateKey}SkippedAt`]);
+
+const macraRetargetingRulePending = (state: Record<string, any>, stateKey: string): boolean =>
+  Boolean(getNestedValue(state, `${stateKey}Pending.runId`) || state[`${stateKey}Pending`]);
+
+const buildMacraNextRetargetingEmail = (args: {
+  step: typeof MACRA_RETARGETING_FUNNEL_STEPS[keyof typeof MACRA_RETARGETING_FUNNEL_STEPS];
+  state: Record<string, any>;
+  config: Record<string, any> | null | undefined;
+  anchorAt: number | null;
+  reason: string;
+  latestRetargetingSentAt: number | null;
+  nowMs: number;
+}): MacraNextRetargetingEmail | null => {
+  if (!args.anchorAt || macraRetargetingRuleResolved(args.state, args.step.stateKey)) return null;
+
+  const delayHours = macraRetargetingDelayHours(args.config, args.step.delayField, args.step.defaultDelayHours);
+  const cooldownHours = Math.max(0, macraRetargetingDelayHours(args.config, 'cooldownHours', 24));
+  const dueByRule = args.anchorAt + delayHours * 60 * 60 * 1000;
+  const dueByCooldown = args.latestRetargetingSentAt ? args.latestRetargetingSentAt + cooldownHours * 60 * 60 * 1000 : 0;
+  const dueAt = Math.max(dueByRule, dueByCooldown);
+  const pending = macraRetargetingRulePending(args.state, args.step.stateKey);
+
+  return {
+    sequenceId: args.step.sequenceId,
+    stateKey: args.step.stateKey,
+    label: args.step.label,
+    reason: args.reason,
+    dueAt,
+    anchorAt: args.anchorAt,
+    status: pending ? 'pending' : dueAt <= args.nowMs ? 'ready' : 'scheduled',
+    canSendNow: !pending,
+  };
+};
+
 const buildMacraScoreboardUser = (args: {
   id: string;
   data: Record<string, any>;
   profile: Record<string, any> | null;
+  appsFlyer: Record<string, any> | null;
+  config: Record<string, any> | null;
   emailLogs: Record<string, any>[];
   purchaseLogs: Record<string, any>[];
 }): MacraScoreboardUser => {
-  const { id, data, profile, emailLogs, purchaseLogs } = args;
+  const { id, data, profile, appsFlyer, config, emailLogs, purchaseLogs } = args;
   const profileSources = [profile, data.macraProfile, getNestedValue(data, 'macra.profile'), data];
   const email = normalizeScoreboardString(data.email);
   const displayName = getFirstString([data], ['firstName', 'displayName', 'username', 'name']) || email || id;
@@ -1048,6 +1165,14 @@ const buildMacraScoreboardUser = (args: {
       ['openedAt', 'lastEventAt', 'updatedAt']
     )
   );
+  const webOfferSentAt = maxScoreMillis(
+    state.webOffer24hSentAt,
+    latestEmailMillis(
+      retargetingLogs,
+      (log) => normalizeScoreboardString(log.sequenceId || log.campaignId) === MACRA_WEB_OFFER_SEQUENCE_ID,
+      ['sentAt', 'createdAt', 'updatedAt']
+    )
+  );
   const stripeRetargetClickedAt = maxScoreMillis(
     state.webOffer24hClickedAt,
     state.webOfferProofClickedAt,
@@ -1060,12 +1185,17 @@ const buildMacraScoreboardUser = (args: {
       ['clickedAt', 'lastClickAt', 'lastEventAt']
     )
   );
+  const appsFlyerStartTrialEvents = appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_TRIAL_EVENT_NAMES);
+  const appsFlyerPurchaseEvents = appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_PURCHASE_EVENT_NAMES);
+  const appsFlyerTrialStartedAt = appsFlyerLatestEventAt(appsFlyer, MACRA_APPSFLYER_TRIAL_EVENT_NAMES);
+  const appsFlyerPurchaseAt = appsFlyerLatestEventAt(appsFlyer, MACRA_APPSFLYER_PURCHASE_EVENT_NAMES);
   const trialEndAt = scoreMillis(data.trialEndDate);
   const rootTrialing = Boolean(data.isTrialing && trialEndAt && trialEndAt > Date.now());
   const trialStartedAt = maxScoreMillis(
     data.trialStartDate,
     data.macraTrialStartedAt,
     state.webOffer24hConvertedAt,
+    appsFlyerTrialStartedAt,
     latestTrialSucceededAt,
     rootTrialing && trialEndAt ? trialEndAt - 30 * 24 * 60 * 60 * 1000 : null
   );
@@ -1080,6 +1210,7 @@ const buildMacraScoreboardUser = (args: {
   const paidAt = maxScoreMillis(
     data.subscriptionStartedAt,
     data.macraSubscriptionStartedAt,
+    appsFlyerPurchaseAt,
     activeSubscriptionFlag && !rootTrialing ? data.updatedAt : null,
     latestSucceededAt && latestSucceededAt !== latestTrialSucceededAt ? latestSucceededAt : null
   );
@@ -1135,6 +1266,62 @@ const buildMacraScoreboardUser = (args: {
   else if (paywallViewCount >= 2) suggestedLane = 'Paywall value email';
   else if (onboardingCompletedAt && Date.now() - onboardingCompletedAt >= 7 * 24 * 60 * 60 * 1000) suggestedLane = '7-day meal challenge';
 
+  const nowMs = Date.now();
+  const latestRetargetingSentAt = maxScoreMillis(...MACRA_RETARGETING_SENT_STATE_FIELDS.map((field) => state[field]));
+  const webOfferEngagedAt = maxScoreMillis(state.webOffer24hClickedAt, state.webOffer24hOpenedAt, stripeRetargetClickedAt, webOfferOpenedAt);
+  const nextRetargetingEmail = (() => {
+    if (paidAt || trialStartedAt || excluded || ageYears === null || data.macraEmailPreferences?.retargeting === false) return null;
+
+    const paywallCancelNext = buildMacraNextRetargetingEmail({
+      step: MACRA_RETARGETING_FUNNEL_STEPS.paywallCancelTrust,
+      state,
+      config,
+      anchorAt: maxScoreMillis(appleCancelAt, ctaTappedAt),
+      reason: appleCancelAt ? 'Apple sheet cancelled' : 'CTA tapped, no trial',
+      latestRetargetingSentAt,
+      nowMs,
+    });
+    if (paywallCancelNext) return paywallCancelNext;
+
+    const webOfferProofNext = webOfferSentAt && webOfferEngagedAt && !state.webOffer24hCheckoutStartedAt && !state.webOffer24hConvertedAt
+      ? buildMacraNextRetargetingEmail({
+          step: MACRA_RETARGETING_FUNNEL_STEPS.webOfferProof,
+          state,
+          config,
+          anchorAt: webOfferEngagedAt,
+          reason: state.webOffer24hClickedAt || stripeRetargetClickedAt ? 'Offer clicked, no checkout' : 'Offer opened, no checkout',
+          latestRetargetingSentAt,
+          nowMs,
+        })
+      : null;
+    if (webOfferProofNext) return webOfferProofNext;
+
+    const paywallViewMinCount = Math.max(1, scoreNumber(config?.paywallViewMinCount) || 2);
+    const paywallViewNext =
+      paywallViewCount >= paywallViewMinCount && paywallLastViewedAt && !latestAttemptedAt && !latestCanceledAt && !latestSucceededAt
+        ? buildMacraNextRetargetingEmail({
+            step: MACRA_RETARGETING_FUNNEL_STEPS.paywallViewValue,
+            state,
+            config,
+            anchorAt: paywallLastViewedAt,
+            reason: `${paywallViewCount} paywall views, no CTA`,
+            latestRetargetingSentAt,
+            nowMs,
+          })
+        : null;
+    if (paywallViewNext) return paywallViewNext;
+
+    return buildMacraNextRetargetingEmail({
+      step: MACRA_RETARGETING_FUNNEL_STEPS.noTrial7dChallenge,
+      state,
+      config,
+      anchorAt: onboardingCompletedAt,
+      reason: 'No trial after onboarding',
+      latestRetargetingSentAt,
+      nowMs,
+    });
+  })();
+
   const signals: MacraScoreboardSignals = {
     ageYears,
     completedOnboarding,
@@ -1151,6 +1338,10 @@ const buildMacraScoreboardUser = (args: {
     stripeRetargetClickedAt,
     trialStartedAt,
     paidAt,
+    appsFlyerTrialStartedAt,
+    appsFlyerPurchaseAt,
+    appsFlyerStartTrialEvents,
+    appsFlyerPurchaseEvents,
     onboardingCompletedAt,
     latestIntentAt,
     currentWeightKg,
@@ -1171,6 +1362,7 @@ const buildMacraScoreboardUser = (args: {
     isQualified: MACRA_QUALIFIED_TIERS.has(tier),
     isHighIntent: highIntent,
     suggestedLane,
+    nextRetargetingEmail,
     disqualifiers,
     signals,
   };
@@ -1430,6 +1622,7 @@ const EmailSequencesAdmin: React.FC = () => {
   const dispatch = useDispatch();
   const currentUser = useUser();
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [activeAdminTab, setActiveAdminTab] = useState<'scoreboard' | 'sequences'>('scoreboard');
   const [seedingTemplates, setSeedingTemplates] = useState(false);
   const [macraScoreboard, setMacraScoreboard] = useState<MacraScoreboardState>({
     loading: false,
@@ -1451,6 +1644,8 @@ const EmailSequencesAdmin: React.FC = () => {
   const [testUserId, setTestUserId] = useState('');
   const [lastTestCheckoutUrl, setLastTestCheckoutUrl] = useState('');
   const [sending, setSending] = useState(false);
+  const [copyingScoreboard, setCopyingScoreboard] = useState(false);
+  const [sendingRetargetingNowUserId, setSendingRetargetingNowUserId] = useState<string | null>(null);
 
   // Template editing
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -1504,6 +1699,7 @@ const EmailSequencesAdmin: React.FC = () => {
         id: snapshot.id,
         data: (snapshot.data() || {}) as Record<string, any>,
       }));
+      const configData = configSnap.exists() ? ((configSnap.data() || {}) as Record<string, any>) : null;
 
       const loadRecentDocs = async (collectionName: string, orderField: string, rowLimit: number) => {
         try {
@@ -1535,8 +1731,52 @@ const EmailSequencesAdmin: React.FC = () => {
         return Object.fromEntries(entries) as Record<string, Record<string, any> | null>;
       };
 
-      const [profileByUserId, emailLogs, purchaseLogs] = await Promise.all([
+      const loadAppsFlyerAttribution = async () => {
+        const byUserId: Record<string, Record<string, any> | null> = {};
+        userDocs.forEach((user) => {
+          byUserId[user.id] = null;
+        });
+
+        for (let i = 0; i < userDocs.length; i += MACRA_SCOREBOARD_ATTRIBUTION_CHUNK_SIZE) {
+          const chunk = userDocs.slice(i, i + MACRA_SCOREBOARD_ATTRIBUTION_CHUNK_SIZE);
+          const userIds = chunk.map((user) => user.id).filter(Boolean);
+          if (!userIds.length) continue;
+
+          try {
+            const attributionSnap = await getDocs(
+              query(collection(db, 'appsflyer-macra-users'), where('customerUserId', 'in', userIds))
+            );
+            attributionSnap.docs.forEach((snapshot) => {
+              const data = { id: snapshot.id, ...((snapshot.data() || {}) as Record<string, any>) };
+              const customerUserId = normalizeScoreboardString(data.customerUserId);
+              if (customerUserId) byUserId[customerUserId] = data;
+            });
+          } catch (error) {
+            console.warn('[EmailSequences] Failed to load AppsFlyer attribution chunk for scoreboard', error);
+          }
+
+          await Promise.all(
+            chunk
+              .filter((user) => !byUserId[user.id])
+              .map(async (user) => {
+                try {
+                  const directSnap = await getDoc(doc(db, 'appsflyer-macra-users', user.id));
+                  if (directSnap.exists()) {
+                    byUserId[user.id] = { id: directSnap.id, ...((directSnap.data() || {}) as Record<string, any>) };
+                  }
+                } catch (error) {
+                  console.warn('[EmailSequences] Failed to load direct AppsFlyer attribution for scoreboard', user.id, error);
+                }
+              })
+          );
+        }
+
+        return byUserId;
+      };
+
+      const [profileByUserId, appsFlyerByUserId, emailLogs, purchaseLogs] = await Promise.all([
         loadProfiles(),
+        loadAppsFlyerAttribution(),
         loadRecentDocs('email-logs', 'updatedAt', MACRA_SCOREBOARD_LOG_LIMIT),
         loadRecentDocs('Macra-purchase-logs', 'createdAt', MACRA_SCOREBOARD_LOG_LIMIT),
       ]);
@@ -1549,6 +1789,8 @@ const EmailSequencesAdmin: React.FC = () => {
           id: user.id,
           data: user.data,
           profile: profileByUserId[user.id] || null,
+          appsFlyer: appsFlyerByUserId[user.id] || null,
+          config: configData,
           emailLogs: userEmailLogs,
           purchaseLogs: userPurchaseLogs,
         });
@@ -1558,7 +1800,7 @@ const EmailSequencesAdmin: React.FC = () => {
         loading: false,
         error: '',
         loadedAt: new Date(),
-        config: configSnap.exists() ? ((configSnap.data() || {}) as Record<string, any>) : null,
+        config: configData,
         appsFlyerSummary: appsFlyerSummarySnap?.exists() ? ((appsFlyerSummarySnap.data() || {}) as Record<string, any>) : null,
         users,
         userLimit: MACRA_SCOREBOARD_USER_LIMIT,
@@ -2030,7 +2272,7 @@ const EmailSequencesAdmin: React.FC = () => {
           ...getFirebaseModeRequestHeaders(),
         },
         body: JSON.stringify({
-          daysBack: 7,
+          daysBack: MACRA_APPSFLYER_SCOREBOARD_DAYS_BACK,
           maximumRows: 50000,
         }),
       });
@@ -2051,6 +2293,55 @@ const EmailSequencesAdmin: React.FC = () => {
     }
   };
 
+  const sendMacraRetargetingNow = async (user: MacraScoreboardUser) => {
+    const nextEmail = user.nextRetargetingEmail;
+    if (!nextEmail) {
+      setMessage({ type: 'error', text: 'No retargeting email is available for this user yet.' });
+      return;
+    }
+
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) {
+      setMessage({ type: 'error', text: 'Sign in again before sending a retargeting email.' });
+      return;
+    }
+
+    setSendingRetargetingNowUserId(user.id);
+    setMessage(null);
+    try {
+      const idToken = await firebaseUser.getIdToken();
+      const response = await fetch('/.netlify/functions/schedule-macra-retargeting-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          ...getFirebaseModeRequestHeaders(),
+        },
+        body: JSON.stringify({
+          action: 'sendNow',
+          userId: user.id,
+        }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || json?.success === false) {
+        throw new Error(json?.error || `Send now failed (HTTP ${response.status})`);
+      }
+
+      const messageText = json?.skipped
+        ? `${nextEmail.label} was skipped: ${json?.reason || 'already handled'}.`
+        : `${nextEmail.label} sent to ${user.email || user.displayName}.`;
+      setMessage({ type: json?.skipped ? 'info' : 'success', text: messageText });
+      dispatch(showToast({ message: messageText, type: json?.skipped ? 'info' : 'success' }));
+      await loadMacraScoreboard();
+    } catch (e: any) {
+      const errorMessage = e?.message || 'Failed to send retargeting email now';
+      setMessage({ type: 'error', text: errorMessage });
+      dispatch(showToast({ message: errorMessage, type: 'error', duration: 5000 }));
+    } finally {
+      setSendingRetargetingNowUserId(null);
+    }
+  };
+
   const activeTestRequiresUserId = activeSequence?.id === 'macra-web-offer-24h-v1';
   const macraScoreboardSummary = useMemo(() => {
     const users = macraScoreboard.users;
@@ -2059,6 +2350,9 @@ const EmailSequencesAdmin: React.FC = () => {
     const appsFlyerOrganicInstalls = Number(getNestedValue(appsFlyerSummary, 'installs.organic') || 0);
     const appsFlyerNonOrganicInstalls = Number(getNestedValue(appsFlyerSummary, 'installs.nonOrganic') || 0);
     const appsFlyerEvents = Number(getNestedValue(appsFlyerSummary, 'events.total') || 0);
+    const appsFlyerStartTrialEvents = appsFlyerSummaryEventCount(appsFlyerSummary, MACRA_APPSFLYER_TRIAL_EVENT_NAMES);
+    const appsFlyerSubscribeEvents = appsFlyerSummaryEventCount(appsFlyerSummary, ['af_subscribe', 'subscribe']);
+    const appsFlyerPurchaseEvents = appsFlyerSummaryEventCount(appsFlyerSummary, ['af_purchase', 'purchase']);
     const appsFlyerMatchedRows = Number(appsFlyerSummary.matchedCustomerUserRows || 0);
     const appsFlyerTopMediaSources = Array.isArray(appsFlyerSummary.topMediaSources) ? appsFlyerSummary.topMediaSources : [];
     const appsFlyerTopCampaigns = Array.isArray(appsFlyerSummary.topCampaigns) ? appsFlyerSummary.topCampaigns : [];
@@ -2131,6 +2425,9 @@ const EmailSequencesAdmin: React.FC = () => {
       appsFlyerOrganicInstalls,
       appsFlyerNonOrganicInstalls,
       appsFlyerEvents,
+      appsFlyerStartTrialEvents,
+      appsFlyerSubscribeEvents,
+      appsFlyerPurchaseEvents,
       appsFlyerMatchedRows,
       appsFlyerTopMediaSources,
       appsFlyerTopCampaigns,
@@ -2182,9 +2479,13 @@ const EmailSequencesAdmin: React.FC = () => {
       tone: 'text-orange-300',
     },
     {
-      label: 'Qualified trial starts',
-      value: macraScoreboardSummary.qualifiedTrialStarts,
-      sublabel: `${formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.qualified)} of qualified users`,
+      label: 'Trial starts',
+      value: macraScoreboard.appsFlyerSummary
+        ? Math.max(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.appsFlyerStartTrialEvents)
+        : macraScoreboardSummary.qualifiedTrialStarts,
+      sublabel: macraScoreboard.appsFlyerSummary
+        ? `${macraScoreboardSummary.qualifiedTrialStarts} matched qualified users · ${macraScoreboardSummary.appsFlyerStartTrialEvents} AppsFlyer raw events`
+        : `${formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.qualified)} of qualified users · sync AppsFlyer for raw events`,
       icon: CheckCircle,
       tone: 'text-green-300',
     },
@@ -2222,13 +2523,165 @@ const EmailSequencesAdmin: React.FC = () => {
     },
     {
       label: 'Trial starts',
-      value: macraScoreboardSummary.qualifiedTrialStarts,
-      sublabel: `${formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.seriousPlanCompleters)} of serious plan completers`,
+      value: macraScoreboard.appsFlyerSummary
+        ? Math.max(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.appsFlyerStartTrialEvents)
+        : macraScoreboardSummary.qualifiedTrialStarts,
+      sublabel: macraScoreboard.appsFlyerSummary
+        ? `${macraScoreboardSummary.qualifiedTrialStarts} matched qualified · ${macraScoreboardSummary.appsFlyerStartTrialEvents} AppsFlyer raw events`
+        : `${formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.seriousPlanCompleters)} of serious plan completers`,
     },
     {
       label: 'Paid users',
       value: macraScoreboardSummary.qualifiedPaid,
       sublabel: `${formatScoreboardPercent(macraScoreboardSummary.qualifiedPaid, macraScoreboardSummary.seriousPlanCompleters)} of serious plan completers`,
+    },
+  ];
+
+  const serializeScoreboardValue = (value: any): any => {
+    if (value === null || value === undefined) return value;
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') return value;
+    if (typeof value === 'function') return undefined;
+    if (typeof value?.toDate === 'function') {
+      try {
+        return value.toDate().toISOString();
+      } catch (_error) {
+        return String(value);
+      }
+    }
+    if (Array.isArray(value)) return value.map(serializeScoreboardValue);
+    if (typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value)
+          .map(([key, nestedValue]) => [key, serializeScoreboardValue(nestedValue)])
+          .filter(([, nestedValue]) => nestedValue !== undefined)
+      );
+    }
+    return String(value);
+  };
+
+  const buildScoreboardUserExport = (user: MacraScoreboardUser, index: number) => ({
+    row: index + 1,
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    tier: user.tier,
+    tierLabel: user.tierLabel,
+    isQualified: user.isQualified,
+    isHighIntent: user.isHighIntent,
+    suggestedLane: user.suggestedLane,
+    nextRetargetingEmail: user.nextRetargetingEmail
+      ? {
+          ...user.nextRetargetingEmail,
+          dueAtIso: new Date(user.nextRetargetingEmail.dueAt).toISOString(),
+          anchorAtIso: new Date(user.nextRetargetingEmail.anchorAt).toISOString(),
+        }
+      : null,
+    disqualifiers: user.disqualifiers.map((key) => MACRA_DISQUALIFIER_LABELS[key] || titleizeScoreboardToken(key)),
+    signals: {
+      ...user.signals,
+      paywallLastViewedAtIso: user.signals.paywallLastViewedAt ? new Date(user.signals.paywallLastViewedAt).toISOString() : null,
+      ctaTappedAtIso: user.signals.ctaTappedAt ? new Date(user.signals.ctaTappedAt).toISOString() : null,
+      appleCancelAtIso: user.signals.appleCancelAt ? new Date(user.signals.appleCancelAt).toISOString() : null,
+      webOfferOpenedAtIso: user.signals.webOfferOpenedAt ? new Date(user.signals.webOfferOpenedAt).toISOString() : null,
+      stripeRetargetClickedAtIso: user.signals.stripeRetargetClickedAt ? new Date(user.signals.stripeRetargetClickedAt).toISOString() : null,
+      trialStartedAtIso: user.signals.trialStartedAt ? new Date(user.signals.trialStartedAt).toISOString() : null,
+      paidAtIso: user.signals.paidAt ? new Date(user.signals.paidAt).toISOString() : null,
+      appsFlyerTrialStartedAtIso: user.signals.appsFlyerTrialStartedAt ? new Date(user.signals.appsFlyerTrialStartedAt).toISOString() : null,
+      appsFlyerPurchaseAtIso: user.signals.appsFlyerPurchaseAt ? new Date(user.signals.appsFlyerPurchaseAt).toISOString() : null,
+      onboardingCompletedAtIso: user.signals.onboardingCompletedAt ? new Date(user.signals.onboardingCompletedAt).toISOString() : null,
+      latestIntentAtIso: user.signals.latestIntentAt ? new Date(user.signals.latestIntentAt).toISOString() : null,
+    },
+  });
+
+  const copyMacraScoreboardReport = async () => {
+    setCopyingScoreboard(true);
+    try {
+      const payload = serializeScoreboardValue({
+        reportType: 'macra-retargeting-scoreboard',
+        generatedAt: new Date().toISOString(),
+        refreshedAt: macraScoreboard.loadedAt,
+        loadedUserCount: macraScoreboard.users.length,
+        loadedUserLimit: macraScoreboard.userLimit,
+        emailLogCount: macraScoreboard.emailLogCount,
+        purchaseLogCount: macraScoreboard.purchaseLogCount,
+        headlineMetrics: macraMetricCards.map((card) => ({
+          label: card.label,
+          value: card.value,
+          sublabel: card.sublabel,
+        })),
+        funnel: macraFunnelRows,
+        rates: {
+          qualifiedOnboardingRate: formatScoreboardPercent(macraScoreboardSummary.qualified, macraScoreboardSummary.onboardingCompleters),
+          seriousPlanCompleterRate: formatScoreboardPercent(macraScoreboardSummary.seriousPlanCompleters, macraScoreboardSummary.onboardingCompleters),
+          qualifiedCtaTapRate: formatScoreboardPercent(macraScoreboardSummary.qualifiedCtaTaps, macraScoreboardSummary.qualifiedPaywallViews),
+          qualifiedTrialStartRate: formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.qualified),
+          trialStartRateFromSeriousPlan: formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.seriousPlanCompleters),
+          paidRateFromSeriousPlan: formatScoreboardPercent(macraScoreboardSummary.qualifiedPaid, macraScoreboardSummary.seriousPlanCompleters),
+        },
+        buckets: {
+          seriousVsCuriosity: macraScoreboardSummary.tierRows,
+          qualificationGaps: macraScoreboardSummary.disqualifierRows,
+        },
+        scheduler: {
+          config: macraScoreboard.config,
+          lastScanCompletedAt: macraScoreboard.config?.lastScanCompletedAt || macraScoreboard.config?.lastScanAt || null,
+          lastScanCompletedAtLabel: formatScoreboardDate(macraScoreboard.config?.lastScanCompletedAt || macraScoreboard.config?.lastScanAt),
+          lastScanLocalTime: macraScoreboard.config?.lastScanLocalTime || null,
+          lastScanSummary: macraScoreboardSummary.lastScanSummary,
+          sentBySequence: Object.fromEntries(macraScoreboardSummary.sentBySequence),
+          skippedByReason: Object.fromEntries(macraScoreboardSummary.skippedByReason),
+        },
+        appsFlyer: {
+          summary: macraScoreboard.appsFlyerSummary,
+          installs: macraScoreboardSummary.appsFlyerInstalls,
+          organicInstalls: macraScoreboardSummary.appsFlyerOrganicInstalls,
+          nonOrganicInstalls: macraScoreboardSummary.appsFlyerNonOrganicInstalls,
+          events: macraScoreboardSummary.appsFlyerEvents,
+          startTrialEvents: macraScoreboardSummary.appsFlyerStartTrialEvents,
+          subscribeEvents: macraScoreboardSummary.appsFlyerSubscribeEvents,
+          purchaseEvents: macraScoreboardSummary.appsFlyerPurchaseEvents,
+          matchedCustomerUserRows: macraScoreboardSummary.appsFlyerMatchedRows,
+          topMediaSources: macraScoreboardSummary.appsFlyerTopMediaSources,
+          topCampaigns: macraScoreboardSummary.appsFlyerTopCampaigns,
+          topEvents: macraScoreboardSummary.appsFlyerTopEvents,
+        },
+        highestIntentRecoveryPool: macraScoreboardSummary.recoveryPool.map(buildScoreboardUserExport),
+        loadedUsers: macraScoreboard.users.map(buildScoreboardUserExport),
+      });
+      const report = [
+        'Macra Retargeting Scoreboard Export',
+        `Generated: ${new Date().toLocaleString()}`,
+        `Loaded users: ${macraScoreboard.users.length}`,
+        '',
+        '```json',
+        JSON.stringify(payload, null, 2),
+        '```',
+      ].join('\n');
+
+      await navigator.clipboard.writeText(report);
+      setMessage({ type: 'success', text: 'Macra scoreboard report copied to clipboard.' });
+      dispatch(showToast({ message: 'Macra scoreboard report copied.', type: 'success' }));
+    } catch (_error) {
+      setMessage({ type: 'error', text: 'Failed to copy Macra scoreboard report.' });
+    } finally {
+      setCopyingScoreboard(false);
+    }
+  };
+
+  const canCopyMacraScoreboard = Boolean(macraScoreboard.loadedAt || macraScoreboard.users.length || macraScoreboard.appsFlyerSummary);
+  const adminTabs = [
+    {
+      id: 'scoreboard' as const,
+      label: 'Macra scoreboard',
+      icon: Activity,
+      detail: `${macraScoreboard.users.length} loaded`,
+    },
+    {
+      id: 'sequences' as const,
+      label: 'Email sequences',
+      icon: Mail,
+      detail: `${SEQUENCES.length} rows`,
     },
   ];
 
@@ -2240,7 +2693,7 @@ const EmailSequencesAdmin: React.FC = () => {
 
       <div className="min-h-screen bg-[#111417] text-white py-10 px-4">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between gap-4 mb-8">
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-2">
                 <Mail className="w-7 h-7 text-[#d7ff00]" />
@@ -2248,19 +2701,21 @@ const EmailSequencesAdmin: React.FC = () => {
               </h1>
               <p className="text-zinc-400 mt-1">See what emails get sent when, and send test emails.</p>
             </div>
-            <button
-              type="button"
-              onClick={seedMissingTemplates}
-              disabled={seedingTemplates}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${seedingTemplates
-                ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                : 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700'
-                }`}
-              title="Create Firestore templates for editable sequences that do not have saved HTML yet"
-            >
-              {seedingTemplates ? <Loader2 className="w-4 h-4 animate-spin" /> : <FilePlus2 className="w-4 h-4" />}
-              Seed missing templates
-            </button>
+            {activeAdminTab === 'sequences' ? (
+              <button
+                type="button"
+                onClick={seedMissingTemplates}
+                disabled={seedingTemplates}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${seedingTemplates
+                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700'
+                  }`}
+                title="Create Firestore templates for editable sequences that do not have saved HTML yet"
+              >
+                {seedingTemplates ? <Loader2 className="w-4 h-4 animate-spin" /> : <FilePlus2 className="w-4 h-4" />}
+                Seed missing templates
+              </button>
+            ) : null}
           </div>
 
           {message && (
@@ -2283,6 +2738,31 @@ const EmailSequencesAdmin: React.FC = () => {
             </div>
           )}
 
+          <div className="mb-6 flex flex-wrap gap-2 border-b border-zinc-800 pb-3">
+            {adminTabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeAdminTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveAdminTab(tab.id)}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isActive
+                    ? 'bg-[#d7ff00] text-black'
+                    : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800 border border-zinc-800'
+                    }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{tab.label}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] ${isActive ? 'bg-black/10 text-black/70' : 'bg-zinc-950 text-zinc-500'}`}>
+                    {tab.detail}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {activeAdminTab === 'scoreboard' ? (
           <section className="mb-8">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
@@ -2301,6 +2781,19 @@ const EmailSequencesAdmin: React.FC = () => {
                     {macraScoreboard.loadedAt ? `Refreshed ${formatScoreboardAgo(macraScoreboard.loadedAt)}` : 'Waiting for first load'}
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={copyMacraScoreboardReport}
+                  disabled={copyingScoreboard || !canCopyMacraScoreboard}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${copyingScoreboard || !canCopyMacraScoreboard
+                    ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700'
+                    }`}
+                  title="Copy Macra scoreboard report"
+                >
+                  {copyingScoreboard ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                  Copy report
+                </button>
                 <button
                   type="button"
                   onClick={syncAppsFlyerRawData}
@@ -2432,7 +2925,7 @@ const EmailSequencesAdmin: React.FC = () => {
                     : 'No API import yet'}
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 xl:grid-cols-5">
                 <div className="rounded-lg bg-zinc-950/60 p-3">
                   <div className="text-xs uppercase tracking-wider text-zinc-500">Raw installs</div>
                   <div className="mt-2 text-2xl font-bold text-white">{macraScoreboardSummary.appsFlyerInstalls}</div>
@@ -2445,6 +2938,13 @@ const EmailSequencesAdmin: React.FC = () => {
                   <div className="mt-2 text-2xl font-bold text-white">{macraScoreboardSummary.appsFlyerEvents}</div>
                   <div className="mt-1 text-xs text-zinc-500">
                     {macraScoreboardSummary.appsFlyerMatchedRows} rows had a customer user ID
+                  </div>
+                </div>
+                <div className="rounded-lg bg-zinc-950/60 p-3">
+                  <div className="text-xs uppercase tracking-wider text-zinc-500">Raw trial starts</div>
+                  <div className="mt-2 text-2xl font-bold text-white">{macraScoreboardSummary.appsFlyerStartTrialEvents}</div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {macraScoreboardSummary.appsFlyerSubscribeEvents + macraScoreboardSummary.appsFlyerPurchaseEvents} subscribe or purchase events
                   </div>
                 </div>
                 <div className="rounded-lg bg-zinc-950/60 p-3">
@@ -2539,13 +3039,14 @@ const EmailSequencesAdmin: React.FC = () => {
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-sm">
+                <table className="w-full min-w-[1150px] text-sm">
                   <thead className="bg-zinc-900/70">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">User</th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Bucket</th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Intent</th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Suggested lane</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Next email</th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Profile</th>
                     </tr>
                   </thead>
@@ -2559,6 +3060,8 @@ const EmailSequencesAdmin: React.FC = () => {
                           user.signals.webOfferOpenedAt ? `Offer open ${formatScoreboardAgo(user.signals.webOfferOpenedAt)}` : '',
                           user.signals.paywallViewCount >= 2 ? `${user.signals.paywallViewCount} paywall views` : '',
                         ].filter(Boolean);
+                        const nextEmail = user.nextRetargetingEmail;
+                        const isSendingNow = sendingRetargetingNowUserId === user.id;
                         return (
                           <tr key={user.id} className="hover:bg-zinc-900/30">
                             <td className="px-4 py-3">
@@ -2574,6 +3077,41 @@ const EmailSequencesAdmin: React.FC = () => {
                                 {user.suggestedLane}
                               </span>
                             </td>
+                            <td className="px-4 py-3">
+                              {nextEmail ? (
+                                <div className="flex flex-col gap-2">
+                                  <div>
+                                    <div className="font-medium text-zinc-200">{nextEmail.label}</div>
+                                    <div className="text-xs text-zinc-500">
+                                      {nextEmail.status === 'pending'
+                                        ? 'Send already in progress'
+                                        : nextEmail.status === 'ready'
+                                          ? `Ready now · eligible since ${formatScoreboardDate(nextEmail.dueAt)}`
+                                          : `Scheduled ${formatScoreboardDate(nextEmail.dueAt)} · ${formatScoreboardAgo(nextEmail.dueAt)}`}
+                                    </div>
+                                    <div className="mt-0.5 text-[11px] text-zinc-600">{nextEmail.reason}</div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => sendMacraRetargetingNow(user)}
+                                    disabled={!nextEmail.canSendNow || isSendingNow}
+                                    className={`inline-flex w-fit items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors ${!nextEmail.canSendNow || isSendingNow
+                                      ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                                      : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
+                                      }`}
+                                  >
+                                    {isSendingNow ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                                    Send now
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="text-xs text-zinc-500">
+                                  {user.tier === 'excluded' || user.disqualifiers.includes('missing_age')
+                                    ? 'Not eligible for retargeting email'
+                                    : 'No remaining retargeting email'}
+                                </div>
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-zinc-400">
                               <div>
                                 {user.signals.goalDirection ? titleizeScoreboardToken(user.signals.goalDirection) : 'Goal unknown'}
@@ -2588,7 +3126,7 @@ const EmailSequencesAdmin: React.FC = () => {
                       })
                     ) : (
                       <tr>
-                        <td colSpan={5} className="px-4 py-6 text-center text-sm text-zinc-500">
+                        <td colSpan={6} className="px-4 py-6 text-center text-sm text-zinc-500">
                           {macraScoreboard.loading ? 'Loading recovery pool...' : 'No high-intent, unconverted users in the loaded cohort.'}
                         </td>
                       </tr>
@@ -2598,7 +3136,9 @@ const EmailSequencesAdmin: React.FC = () => {
               </div>
             </div>
           </section>
+          ) : null}
 
+          {activeAdminTab === 'sequences' ? (
           <div className="bg-[#1a1e24] rounded-xl border border-zinc-800 overflow-hidden">
             <div className="p-4 border-b border-zinc-800">
               <h2 className="text-lg font-semibold">Sequence List</h2>
@@ -2723,6 +3263,7 @@ const EmailSequencesAdmin: React.FC = () => {
               </table>
             </div>
           </div>
+          ) : null}
         </div>
       </div>
 

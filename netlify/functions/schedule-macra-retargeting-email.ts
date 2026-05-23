@@ -69,6 +69,7 @@ type RuleMatch = {
   rule: Rule;
   reason: string;
   anchorMs: number;
+  dueAtMs: number;
   metadata?: Record<string, any>;
 };
 
@@ -238,6 +239,10 @@ function isRuleResolved(state: Record<string, any>, rule: Rule): boolean {
 
 function hasRecentEnoughAnchor(anchorMs: number | null, nowMs: number, delayHours: number): boolean {
   return Boolean(anchorMs && nowMs - anchorMs >= delayHours * 60 * 60 * 1000);
+}
+
+function dueAtFromAnchor(anchorMs: number, delayHours: number): number {
+  return anchorMs + delayHours * 60 * 60 * 1000;
 }
 
 function hasMacraOrigin(data: Record<string, any>): boolean {
@@ -449,12 +454,14 @@ async function chooseRule(args: {
   state: Record<string, any>;
   config: Config;
   nowMs: number;
+  allowEarly?: boolean;
+  ignoreCooldown?: boolean;
 }): Promise<{ match: RuleMatch | null; skipReason: string }> {
   const { db, userId, data, state, config, nowMs } = args;
   const subscriptionState = await loadSubscriptionState(db, userId, data, state, nowMs);
   const purchaseSignals = await loadPurchaseSignals(db, userId);
   const latestSentMs = latestRetargetingSentMs(state);
-  if (latestSentMs && nowMs - latestSentMs < config.cooldownHours * 60 * 60 * 1000) {
+  if (!args.ignoreCooldown && latestSentMs && nowMs - latestSentMs < config.cooldownHours * 60 * 60 * 1000) {
     return { match: null, skipReason: 'cooldown' };
   }
 
@@ -463,7 +470,7 @@ async function chooseRule(args: {
       return { match: null, skipReason: 'trial_activation_resolved' };
     }
     const trialAnchorMs = maxMillis(subscriptionState.anchorMs, purchaseSignals.latestTrialSucceededAt);
-    if (!trialAnchorMs || !hasRecentEnoughAnchor(trialAnchorMs, nowMs, config.trialActivationDelayHours)) {
+    if (!trialAnchorMs || (!args.allowEarly && !hasRecentEnoughAnchor(trialAnchorMs, nowMs, config.trialActivationDelayHours))) {
       return { match: null, skipReason: 'active_not_trial_activation_due' };
     }
     if (!subscriptionState.rootTrialing && !purchaseSignals.latestTrialSucceededAt && !state.webOffer24hConvertedAt) {
@@ -478,6 +485,7 @@ async function chooseRule(args: {
         rule: RULES.trialActivation,
         reason: 'trial_no_activation',
         anchorMs: trialAnchorMs,
+        dueAtMs: dueAtFromAnchor(trialAnchorMs, config.trialActivationDelayHours),
         metadata: {
           trialAnchorAt: new Date(trialAnchorMs),
           subscriptionDocActive: subscriptionState.subscriptionDocActive,
@@ -491,17 +499,18 @@ async function chooseRule(args: {
     return { match: null, skipReason: 'historical_trial_or_subscription' };
   }
 
-  const cancelAnchor = maxMillis(cancelFeedbackAnchorMs(data), purchaseSignals.latestCanceledAt);
+  const cancelAnchor = maxMillis(cancelFeedbackAnchorMs(data), purchaseSignals.latestCanceledAt, purchaseSignals.latestAttemptedAt);
   if (
     !isRuleResolved(state, RULES.paywallCancelTrust) &&
     cancelAnchor &&
-    hasRecentEnoughAnchor(cancelAnchor, nowMs, config.paywallCancelDelayHours)
+    (args.allowEarly || hasRecentEnoughAnchor(cancelAnchor, nowMs, config.paywallCancelDelayHours))
   ) {
     return {
       match: {
         rule: RULES.paywallCancelTrust,
         reason: 'purchase_cancelled_or_cta_abandoned',
         anchorMs: cancelAnchor,
+        dueAtMs: dueAtFromAnchor(cancelAnchor, config.paywallCancelDelayHours),
         metadata: {
           cancelReason: purchaseSignals.latestCancelReason || getNestedValue(data, 'macraLatestPaywallCancelFeedback.reason') || null,
         },
@@ -517,13 +526,14 @@ async function chooseRule(args: {
     webOfferEngagedAt &&
     !state.webOffer24hCheckoutStartedAt &&
     !state.webOffer24hConvertedAt &&
-    hasRecentEnoughAnchor(webOfferEngagedAt, nowMs, config.webOfferProofDelayHours)
+    (args.allowEarly || hasRecentEnoughAnchor(webOfferEngagedAt, nowMs, config.webOfferProofDelayHours))
   ) {
     return {
       match: {
         rule: RULES.webOfferProof,
         reason: state.webOffer24hClickedAt ? 'web_offer_clicked_no_checkout' : 'web_offer_opened_no_checkout',
         anchorMs: webOfferEngagedAt,
+        dueAtMs: dueAtFromAnchor(webOfferEngagedAt, config.webOfferProofDelayHours),
       },
       skipReason: '',
     };
@@ -534,7 +544,7 @@ async function chooseRule(args: {
     !isRuleResolved(state, RULES.paywallViewValue) &&
     paywallView.count >= config.paywallViewMinCount &&
     paywallView.lastViewedAt &&
-    hasRecentEnoughAnchor(paywallView.lastViewedAt, nowMs, config.paywallViewDelayHours) &&
+    (args.allowEarly || hasRecentEnoughAnchor(paywallView.lastViewedAt, nowMs, config.paywallViewDelayHours)) &&
     !purchaseSignals.latestAttemptedAt &&
     !purchaseSignals.latestCanceledAt &&
     !purchaseSignals.latestSucceededAt
@@ -544,6 +554,7 @@ async function chooseRule(args: {
         rule: RULES.paywallViewValue,
         reason: 'repeat_paywall_views_no_cta',
         anchorMs: paywallView.lastViewedAt,
+        dueAtMs: dueAtFromAnchor(paywallView.lastViewedAt, config.paywallViewDelayHours),
         metadata: {
           paywallViewCount: paywallView.count,
         },
@@ -556,13 +567,14 @@ async function chooseRule(args: {
   if (
     !isRuleResolved(state, RULES.noTrial7dChallenge) &&
     onboardedAt &&
-    hasRecentEnoughAnchor(onboardedAt, nowMs, config.noTrialDelayHours)
+    (args.allowEarly || hasRecentEnoughAnchor(onboardedAt, nowMs, config.noTrialDelayHours))
   ) {
     return {
       match: {
         rule: RULES.noTrial7dChallenge,
         reason: 'seven_day_no_trial',
         anchorMs: onboardedAt,
+        dueAtMs: dueAtFromAnchor(onboardedAt, config.noTrialDelayHours),
       },
       skipReason: '',
     };
@@ -571,8 +583,227 @@ async function chooseRule(args: {
   return { match: null, skipReason: 'no_rule_due' };
 }
 
-export const handler: Handler = async () => {
+const RESPONSE_HEADERS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-PulseCheck-Firebase-Mode, X-Force-Dev-Firebase, X-PulseCheck-Dev-Firebase',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+};
+
+const jsonResponse = (statusCode: number, payload: Record<string, any>) => ({
+  statusCode,
+  headers: RESPONSE_HEADERS,
+  body: JSON.stringify(payload),
+});
+
+function getHeader(event: any, name: string): string {
+  const wanted = name.toLowerCase();
+  const found = Object.entries(event?.headers || {}).find(([key]) => key.toLowerCase() === wanted);
+  return found ? String(found[1] || '') : '';
+}
+
+async function verifyAdminRequest(event: any, db: any) {
+  const authHeader = getHeader(event, 'authorization');
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  if (!match) return null;
+
+  const admin = initAdmin();
+  const decoded = await admin.auth().verifyIdToken(match[1]);
+  const email = normalizeEmail(decoded.email).toLowerCase();
+  const hasAdminClaim = decoded.admin === true || decoded.isAdmin === true || decoded.role === 'admin';
+  if (hasAdminClaim) return { uid: decoded.uid, email, source: 'claim' };
+
+  if (!email) return null;
+  const adminSnap = await db.collection('admin').doc(email).get();
+  if (!adminSnap.exists) return null;
+
+  return { uid: decoded.uid, email, source: 'admin_collection' };
+}
+
+async function sendMatchedRetargetingRule(args: {
+  userSnap: any;
+  email: string;
+  match: RuleMatch;
+  runId: string;
+  nowMs: number;
+  manualMetadata?: Record<string, any>;
+}) {
+  const doc = args.userSnap;
+  const match = args.match;
+  const pendingField = `macraEmailSequenceState.${match.rule.stateKey}Pending`;
+  const dedupeKey = buildEmailDedupeKey([match.rule.sequenceId, doc.id]);
+  const didClaim = await claimScheduledSequenceSend({
+    docRef: doc.ref,
+    pendingField,
+    completionFields: [
+      `macraEmailSequenceState.${match.rule.stateKey}SentAt`,
+      `macraEmailSequenceState.${match.rule.stateKey}SkippedAt`,
+    ],
+    dedupeKey,
+    runId: args.runId,
+    nowMs: args.nowMs,
+    metadata: {
+      sequence: match.rule.sequenceId,
+      userId: doc.id,
+      email: args.email,
+      reason: match.reason,
+      dueAt: new Date(match.dueAtMs),
+      ...(args.manualMetadata || {}),
+    },
+  });
+
+  if (!didClaim) {
+    return { claimed: false, result: null as SendResult | null };
+  }
+
   try {
+    const result = await sendRetargetingEmail({ rule: match.rule, userId: doc.id });
+    await finalizeScheduledSequenceSend({
+      docRef: doc.ref,
+      pendingField,
+      resultField: result.skipped
+        ? `macraEmailSequenceState.${match.rule.stateKey}SkippedAt`
+        : `macraEmailSequenceState.${match.rule.stateKey}SentAt`,
+      dedupeKey,
+      runId: args.runId,
+      markSent: !result.skipped,
+      updateFields: {
+        [`macraEmailSequenceState.${match.rule.stateKey}Status`]: result.skipped ? 'skipped:send_idempotent' : 'sent',
+        [`macraEmailSequenceState.${match.rule.stateKey}EmailMessageId`]: result.messageId || null,
+        [`macraEmailSequenceState.${match.rule.stateKey}ScheduledReason`]: match.reason,
+        [`macraEmailSequenceState.${match.rule.stateKey}EligibilityAnchorAt`]: new Date(match.anchorMs),
+        [`macraEmailSequenceState.${match.rule.stateKey}DueAt`]: new Date(match.dueAtMs),
+        [`macraEmailSequenceState.${match.rule.stateKey}LastUpdatedAt`]: new Date(),
+        ...(args.manualMetadata
+          ? {
+              [`macraEmailSequenceState.${match.rule.stateKey}ManualSend`]: args.manualMetadata,
+            }
+          : {}),
+        ...(match.metadata
+          ? {
+              [`macraEmailSequenceState.${match.rule.stateKey}SchedulerMetadata`]: match.metadata,
+            }
+          : {}),
+      },
+    });
+
+    return { claimed: true, result };
+  } catch (error) {
+    await releaseScheduledSequenceSend({
+      docRef: doc.ref,
+      pendingField,
+      dedupeKey,
+      runId: args.runId,
+    });
+    throw error;
+  }
+}
+
+async function handleManualSendNow(event: any, body: Record<string, any>) {
+  const db = await getFirestore();
+  const adminRequest = await verifyAdminRequest(event, db);
+  if (!adminRequest) return jsonResponse(401, { success: false, error: 'Admin authorization required' });
+
+  const userId = String(body.userId || '').trim();
+  if (!userId) return jsonResponse(400, { success: false, error: 'userId is required' });
+
+  const userSnap = await db.collection('users').doc(userId).get();
+  if (!userSnap.exists) return jsonResponse(404, { success: false, error: 'User not found' });
+
+  const data = (userSnap.data() || {}) as Record<string, any>;
+  const state = (data.macraEmailSequenceState || {}) as Record<string, any>;
+  const email = normalizeEmail(data.email);
+
+  if (data.hasCompletedMacraOnboarding !== true) {
+    return jsonResponse(200, { success: true, skipped: true, reason: 'macra_onboarding_not_complete' });
+  }
+  if (!hasMacraOrigin(data)) {
+    return jsonResponse(200, { success: true, skipped: true, reason: 'not_macra_origin' });
+  }
+  if (!email) {
+    return jsonResponse(200, { success: true, skipped: true, reason: 'missing_email' });
+  }
+
+  const prefs = data.macraEmailPreferences || {};
+  if (prefs.retargeting === false) {
+    return jsonResponse(200, { success: true, skipped: true, reason: 'retargeting_pref_off' });
+  }
+
+  const nowMs = Date.now();
+  const config = await loadConfig(db);
+  const ageEligibility = await evaluateMacraEmailEligibility({
+    db,
+    userId,
+    userData: data,
+    nowMs,
+    sequenceId: CONFIG_ID,
+    markSkipped: true,
+  });
+  if (!ageEligibility.eligible) {
+    return jsonResponse(200, { success: true, skipped: true, reason: ageEligibility.reason || 'age_ineligible' });
+  }
+
+  const { match, skipReason } = await chooseRule({
+    db,
+    userId,
+    data,
+    state,
+    config,
+    nowMs,
+    allowEarly: true,
+    ignoreCooldown: true,
+  });
+
+  if (!match) {
+    return jsonResponse(200, { success: true, skipped: true, reason: skipReason || 'no_rule_available' });
+  }
+
+  const runId = `macra-retargeting-manual-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
+  const { claimed, result } = await sendMatchedRetargetingRule({
+    userSnap,
+    email,
+    match,
+    runId,
+    nowMs,
+    manualMetadata: {
+      mode: 'send_now',
+      requestedBy: adminRequest.email || adminRequest.uid,
+      requestedByUid: adminRequest.uid,
+      requestedBySource: adminRequest.source,
+      requestedAt: new Date(nowMs),
+    },
+  });
+
+  if (!claimed) {
+    return jsonResponse(409, {
+      success: false,
+      error: 'This email is already sent or currently in progress for this user.',
+      sequenceId: match.rule.sequenceId,
+    });
+  }
+
+  return jsonResponse(200, {
+    success: true,
+    skipped: Boolean(result?.skipped),
+    messageId: result?.messageId || null,
+    sequenceId: match.rule.sequenceId,
+    reason: match.reason,
+    dueAt: new Date(match.dueAtMs).toISOString(),
+    sentEarly: nowMs < match.dueAtMs,
+  });
+}
+
+export const handler: Handler = async (event) => {
+  try {
+    if (event.httpMethod === 'OPTIONS') {
+      return { statusCode: 204, headers: RESPONSE_HEADERS, body: '' };
+    }
+
+    const body = event.body ? JSON.parse(event.body) : {};
+    if (event.httpMethod === 'POST' && body?.action === 'sendNow') {
+      return await handleManualSendNow(event, body);
+    }
+
     const db = await getFirestore();
     const config = await loadConfig(db);
 
@@ -750,6 +981,7 @@ export const handler: Handler = async () => {
             [`macraEmailSequenceState.${match.rule.stateKey}EmailMessageId`]: result.messageId || null,
             [`macraEmailSequenceState.${match.rule.stateKey}ScheduledReason`]: match.reason,
             [`macraEmailSequenceState.${match.rule.stateKey}EligibilityAnchorAt`]: new Date(match.anchorMs),
+            [`macraEmailSequenceState.${match.rule.stateKey}DueAt`]: new Date(match.dueAtMs),
             [`macraEmailSequenceState.${match.rule.stateKey}LastUpdatedAt`]: new Date(),
             ...(match.metadata
               ? {
