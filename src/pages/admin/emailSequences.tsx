@@ -1550,6 +1550,7 @@ const buildMacraNextRetargetingEmail = (args: {
   const dueByCooldown = args.latestRetargetingSentAt ? args.latestRetargetingSentAt + cooldownHours * 60 * 60 * 1000 : 0;
   const dueAt = Math.max(dueByRule, dueByCooldown);
   const pending = macraRetargetingRulePending(args.state, args.step.stateKey);
+  const ready = !pending && dueAt <= args.nowMs;
 
   return {
     sequenceId: args.step.sequenceId,
@@ -1558,8 +1559,8 @@ const buildMacraNextRetargetingEmail = (args: {
     reason: args.reason,
     dueAt,
     anchorAt: args.anchorAt,
-    status: pending ? 'pending' : dueAt <= args.nowMs ? 'ready' : 'scheduled',
-    canSendNow: !pending,
+    status: pending ? 'pending' : ready ? 'ready' : 'scheduled',
+    canSendNow: ready,
   };
 };
 

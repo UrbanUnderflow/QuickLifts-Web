@@ -1060,7 +1060,20 @@ async function runRetargetingScheduler(args: {
     }
   }
 
-  await db.collection('email-sequence-config').doc(CONFIG_ID).set(
+  const configRef = db.collection('email-sequence-config').doc(CONFIG_ID);
+  const lastScanSummary = {
+    scanned,
+    claimed,
+    sent,
+    skipped,
+    errors,
+    skippedByReason,
+    sentBySequence,
+    manual,
+    forced,
+  };
+
+  await configRef.set(
     {
       lastScanAt: new Date(nowMs),
       lastScanCompletedAt: new Date(),
@@ -1078,20 +1091,10 @@ async function runRetargetingScheduler(args: {
             lastManualScanRequestedBySource: args.manualRun.requestedBySource,
           }
         : {}),
-      lastScanSummary: {
-        scanned,
-        claimed,
-        sent,
-        skipped,
-        errors,
-        skippedByReason,
-        sentBySequence,
-        manual,
-        forced,
-      },
     },
     { merge: true }
   );
+  await configRef.update({ lastScanSummary });
 
   return jsonResponse(200, {
     success: true,
