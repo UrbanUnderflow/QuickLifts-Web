@@ -887,6 +887,68 @@ const formatScoreboardAgo = (value: unknown): string => {
   return `${Math.max(1, Math.round(absMs / minuteMs))}m ${diffMs >= 0 ? 'ago' : 'from now'}`;
 };
 
+const scoreboardMinutesFromLocalTime = (value: string): number => {
+  const [hour, minute] = value.split(':').map(Number);
+  return hour * 60 + minute;
+};
+
+const getScoreboardLocalMinutes = (millis: number, timezone: string): number => {
+  const safeTimezone = timezone || CAMPAIGN_SEND_WINDOW_TIMEZONE;
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: safeTimezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    });
+    const parts = formatter.formatToParts(new Date(millis));
+    const lookup = new Map(parts.map((part) => [part.type, part.value]));
+    return Number(lookup.get('hour') || 0) * 60 + Number(lookup.get('minute') || 0);
+  } catch (_error) {
+    return getScoreboardLocalMinutes(millis, CAMPAIGN_SEND_WINDOW_TIMEZONE);
+  }
+};
+
+const isWithinScoreboardSendWindow = (millis: number, config: CampaignConfig): boolean => {
+  const localMinutes = getScoreboardLocalMinutes(millis, config.sendWindowTimezone);
+  const startMinutes = scoreboardMinutesFromLocalTime(config.sendWindowStartLocal);
+  const endMinutes = scoreboardMinutesFromLocalTime(config.sendWindowEndLocal);
+
+  if (startMinutes === endMinutes) return true;
+  if (startMinutes < endMinutes) return localMinutes >= startMinutes && localMinutes < endMinutes;
+  return localMinutes >= startMinutes || localMinutes < endMinutes;
+};
+
+const roundUpToNextHourlySchedulerRun = (millis: number): number => {
+  const date = new Date(millis);
+  if (date.getMinutes() || date.getSeconds() || date.getMilliseconds()) {
+    date.setHours(date.getHours() + 1, 0, 0, 0);
+  } else {
+    date.setMinutes(0, 0, 0);
+  }
+  return date.getTime();
+};
+
+const estimateMacraScheduledSendAt = (
+  nextEmail: MacraNextRetargetingEmail,
+  rawConfig: Record<string, any> | null | undefined
+): number | null => {
+  if (nextEmail.status === 'pending' || rawConfig?.enabled === false) return null;
+
+  const campaignConfig = normalizeCampaignConfig(rawConfig || {});
+  const hourMs = 60 * 60 * 1000;
+  const lastScanAt = scoreMillis(rawConfig?.lastScanAt || rawConfig?.lastScanCompletedAt);
+  const frequencyReadyAt = lastScanAt ? lastScanAt + campaignConfig.scanEveryHours * hourMs : 0;
+  let candidate = roundUpToNextHourlySchedulerRun(Math.max(Date.now(), nextEmail.dueAt, frequencyReadyAt));
+
+  for (let i = 0; i < 24 * 14; i += 1) {
+    if (isWithinScoreboardSendWindow(candidate, campaignConfig)) return candidate;
+    candidate += hourMs;
+  }
+
+  return candidate;
+};
+
 const formatScoreboardPercent = (value: number, denominator: number): string =>
   denominator > 0 ? `${Math.round((value / denominator) * 100)}%` : '0%';
 
@@ -3249,7 +3311,7 @@ const EmailSequencesAdmin: React.FC = () => {
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1150px] text-sm">
+                <table className="w-full min-w-[1350px] text-sm">
                   <thead className="bg-zinc-900/70">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">User</th>
@@ -3257,6 +3319,7 @@ const EmailSequencesAdmin: React.FC = () => {
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Intent</th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400 whitespace-nowrap">Suggested lane</th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Next email</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400 whitespace-nowrap">Eligible since</th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Profile</th>
                     </tr>
                   </thead>
@@ -3272,6 +3335,8 @@ const EmailSequencesAdmin: React.FC = () => {
                         ].filter(Boolean);
                         const nextEmail = user.nextRetargetingEmail;
                         const isSendingNow = sendingRetargetingNowUserId === user.id;
+                        const scheduledSendAt = nextEmail ? estimateMacraScheduledSendAt(nextEmail, macraScoreboard.config) : null;
+                        const schedulerPaused = Boolean(nextEmail && macraScoreboard.config?.enabled === false);
                         return (
                           <tr key={user.id} className="hover:bg-zinc-900/30">
                             <td className="px-4 py-3">
@@ -3295,9 +3360,11 @@ const EmailSequencesAdmin: React.FC = () => {
                                     <div className="text-xs text-zinc-500">
                                       {nextEmail.status === 'pending'
                                         ? 'Send already in progress'
-                                        : nextEmail.status === 'ready'
-                                          ? `Ready now · eligible since ${formatScoreboardDate(nextEmail.dueAt)}`
-                                          : `Scheduled ${formatScoreboardDate(nextEmail.dueAt)} · ${formatScoreboardAgo(nextEmail.dueAt)}`}
+                                        : schedulerPaused
+                                          ? 'Scheduler paused'
+                                          : scheduledSendAt
+                                            ? `Sends ${formatScoreboardDate(scheduledSendAt)} · ${formatScoreboardAgo(scheduledSendAt)}`
+                                            : 'No scheduled send time'}
                                     </div>
                                     <div className="mt-0.5 text-[11px] text-zinc-600">{nextEmail.reason}</div>
                                   </div>
@@ -3322,6 +3389,16 @@ const EmailSequencesAdmin: React.FC = () => {
                                 </div>
                               )}
                             </td>
+                            <td className="px-4 py-3 text-xs text-zinc-500">
+                              {nextEmail ? (
+                                <div>
+                                  <div>{formatScoreboardDate(nextEmail.dueAt)}</div>
+                                  <div className="mt-0.5 text-[11px] text-zinc-600">{formatScoreboardAgo(nextEmail.dueAt)}</div>
+                                </div>
+                              ) : (
+                                'Not eligible'
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-zinc-400">
                               <div>
                                 {user.signals.goalDirection ? titleizeScoreboardToken(user.signals.goalDirection) : 'Goal unknown'}
@@ -3336,7 +3413,7 @@ const EmailSequencesAdmin: React.FC = () => {
                       })
                     ) : (
                       <tr>
-                        <td colSpan={6} className="px-4 py-6 text-center text-sm text-zinc-500">
+                        <td colSpan={7} className="px-4 py-6 text-center text-sm text-zinc-500">
                           {macraScoreboard.loading ? 'Loading recovery pool...' : 'No high-intent, unconverted users in the loaded cohort.'}
                         </td>
                       </tr>
