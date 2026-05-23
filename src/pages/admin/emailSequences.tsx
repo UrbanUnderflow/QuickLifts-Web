@@ -2841,7 +2841,7 @@ const EmailSequencesAdmin: React.FC = () => {
       </Head>
 
       <div className="min-h-screen bg-[#111417] text-white py-10 px-4">
-        <div className="max-w-7xl mx-auto">
+        <div className="w-full max-w-6xl mx-auto lg:max-w-none">
           <div className="flex items-center justify-between gap-4 mb-8">
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -3255,7 +3255,7 @@ const EmailSequencesAdmin: React.FC = () => {
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">User</th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Bucket</th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Intent</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Suggested lane</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400 whitespace-nowrap">Suggested lane</th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Next email</th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-400">Profile</th>
                     </tr>
@@ -3283,7 +3283,7 @@ const EmailSequencesAdmin: React.FC = () => {
                               {intentSignals.length ? intentSignals.join(' · ') : 'No recent intent signal'}
                             </td>
                             <td className="px-4 py-3">
-                              <span className="rounded-full border border-[#d7ff00]/30 bg-[#d7ff00]/10 px-2.5 py-1 text-xs font-semibold text-[#d7ff00]">
+                              <span className="inline-flex w-max whitespace-nowrap rounded-full border border-[#d7ff00]/30 bg-[#d7ff00]/10 px-2.5 py-1 text-xs font-semibold text-[#d7ff00]">
                                 {user.suggestedLane}
                               </span>
                             </td>

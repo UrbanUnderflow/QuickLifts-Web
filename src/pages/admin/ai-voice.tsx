@@ -884,6 +884,42 @@ const MACRA_ONBOARDING_NARRATION_CUES: MacraOnboardingNarrationCue[] = [
     prompt: 'Welcome to Macra. I am Nora. I will help turn your goal into numbers, meals, and decisions you can actually follow.',
   },
   {
+    cueKey: 'primary_focus',
+    label: 'Primary Focus',
+    stepIndex: 2,
+    prompt: 'Before the numbers, tell me what you want food to help with most. I will use that to shape the plan around your real life.',
+  },
+  {
+    cueKey: 'primary_focus_selection_loseBodyFat',
+    label: 'Primary Focus · Lose Body Fat',
+    stepIndex: 2,
+    prompt: "Good. I'll shape the plan around: lose body fat.",
+  },
+  {
+    cueKey: 'primary_focus_selection_buildMuscle',
+    label: 'Primary Focus · Build Muscle',
+    stepIndex: 2,
+    prompt: "Good. I'll shape the plan around: build muscle.",
+  },
+  {
+    cueKey: 'primary_focus_selection_eatConsistently',
+    label: 'Primary Focus · Eat Consistently',
+    stepIndex: 2,
+    prompt: "Good. I'll shape the plan around: eat with more consistency.",
+  },
+  {
+    cueKey: 'primary_focus_selection_stopGuessing',
+    label: 'Primary Focus · Stop Guessing',
+    stepIndex: 2,
+    prompt: "Good. I'll shape the plan around: stop guessing what fits.",
+  },
+  {
+    cueKey: 'primary_focus_selection_supportTraining',
+    label: 'Primary Focus · Support Training',
+    stepIndex: 2,
+    prompt: "Good. I'll shape the plan around: support training days.",
+  },
+  {
     cueKey: 'meet_nora',
     label: 'Meet Nora',
     stepIndex: 2,
