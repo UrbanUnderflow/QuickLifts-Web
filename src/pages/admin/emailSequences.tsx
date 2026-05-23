@@ -3,7 +3,7 @@ import Head from 'next/head';
 import { useDispatch } from 'react-redux';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
-import { db } from '../../api/firebase/config';
+import { auth, db, getFirebaseModeRequestHeaders } from '../../api/firebase/config';
 import {
   Mail,
   Send,
@@ -130,6 +130,7 @@ type MacraScoreboardState = {
   error: string;
   loadedAt: Date | null;
   config: Record<string, any> | null;
+  appsFlyerSummary: Record<string, any> | null;
   users: MacraScoreboardUser[];
   userLimit: number;
   emailLogCount: number;
@@ -1421,11 +1422,13 @@ const EmailSequencesAdmin: React.FC = () => {
     error: '',
     loadedAt: null,
     config: null,
+    appsFlyerSummary: null,
     users: [],
     userLimit: MACRA_SCOREBOARD_USER_LIMIT,
     emailLogCount: 0,
     purchaseLogCount: 0,
   });
+  const [syncingAppsFlyer, setSyncingAppsFlyer] = useState(false);
 
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [activeSequence, setActiveSequence] = useState<SequenceRow | null>(null);
@@ -1478,6 +1481,10 @@ const EmailSequencesAdmin: React.FC = () => {
         getDoc(doc(db, 'email-sequence-config', MACRA_RETARGETING_SEQUENCE_CONFIG_ID)),
         getDocs(query(collection(db, 'users'), where('hasCompletedMacraOnboarding', '==', true), limit(MACRA_SCOREBOARD_USER_LIMIT))),
       ]);
+      const appsFlyerSummarySnap = await getDoc(doc(db, 'appsflyer-scoreboards', 'macra')).catch((error) => {
+        console.warn('[EmailSequences] Failed to load AppsFlyer scoreboard summary', error);
+        return null;
+      });
 
       const userDocs = usersSnap.docs.map((snapshot) => ({
         id: snapshot.id,
@@ -1538,6 +1545,7 @@ const EmailSequencesAdmin: React.FC = () => {
         error: '',
         loadedAt: new Date(),
         config: configSnap.exists() ? ((configSnap.data() || {}) as Record<string, any>) : null,
+        appsFlyerSummary: appsFlyerSummarySnap?.exists() ? ((appsFlyerSummarySnap.data() || {}) as Record<string, any>) : null,
         users,
         userLimit: MACRA_SCOREBOARD_USER_LIMIT,
         emailLogCount: emailLogs.length,
@@ -1977,9 +1985,58 @@ const EmailSequencesAdmin: React.FC = () => {
     setMessage({ type: 'success', text: 'Generated offer link copied to clipboard.' });
   };
 
+  const syncAppsFlyerRawData = async () => {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) {
+      setMessage({ type: 'error', text: 'Sign in again before syncing AppsFlyer data.' });
+      return;
+    }
+
+    setSyncingAppsFlyer(true);
+    setMessage(null);
+    try {
+      const idToken = await firebaseUser.getIdToken();
+      const response = await fetch('/.netlify/functions/sync-macra-appsflyer-raw-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          ...getFirebaseModeRequestHeaders(),
+        },
+        body: JSON.stringify({
+          daysBack: 7,
+          maximumRows: 50000,
+        }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(json?.error || `AppsFlyer sync failed (HTTP ${response.status})`);
+      }
+      const summary = json?.summary || {};
+      setMessage({
+        type: 'success',
+        text: `AppsFlyer sync complete: ${Number(summary?.installs?.total || 0)} installs and ${Number(summary?.events?.total || 0)} events imported.`,
+      });
+      await loadMacraScoreboard();
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e?.message || 'Failed to sync AppsFlyer raw data' });
+    } finally {
+      setSyncingAppsFlyer(false);
+    }
+  };
+
   const activeTestRequiresUserId = activeSequence?.id === 'macra-web-offer-24h-v1';
   const macraScoreboardSummary = useMemo(() => {
     const users = macraScoreboard.users;
+    const appsFlyerSummary = macraScoreboard.appsFlyerSummary || {};
+    const appsFlyerInstalls = Number(getNestedValue(appsFlyerSummary, 'installs.total') || 0);
+    const appsFlyerOrganicInstalls = Number(getNestedValue(appsFlyerSummary, 'installs.organic') || 0);
+    const appsFlyerNonOrganicInstalls = Number(getNestedValue(appsFlyerSummary, 'installs.nonOrganic') || 0);
+    const appsFlyerEvents = Number(getNestedValue(appsFlyerSummary, 'events.total') || 0);
+    const appsFlyerMatchedRows = Number(appsFlyerSummary.matchedCustomerUserRows || 0);
+    const appsFlyerTopMediaSources = Array.isArray(appsFlyerSummary.topMediaSources) ? appsFlyerSummary.topMediaSources : [];
+    const appsFlyerTopCampaigns = Array.isArray(appsFlyerSummary.topCampaigns) ? appsFlyerSummary.topCampaigns : [];
+    const appsFlyerTopEvents = Array.isArray(appsFlyerSummary.topEvents) ? appsFlyerSummary.topEvents : [];
     const count = (predicate: (user: MacraScoreboardUser) => boolean) => users.filter(predicate).length;
     const onboardingCompleters = count((user) => user.signals.completedOnboarding);
     const qualified = count((user) => user.isQualified);
@@ -2044,8 +2101,16 @@ const EmailSequencesAdmin: React.FC = () => {
       lastScanSummary,
       sentBySequence,
       skippedByReason,
+      appsFlyerInstalls,
+      appsFlyerOrganicInstalls,
+      appsFlyerNonOrganicInstalls,
+      appsFlyerEvents,
+      appsFlyerMatchedRows,
+      appsFlyerTopMediaSources,
+      appsFlyerTopCampaigns,
+      appsFlyerTopEvents,
     };
-  }, [macraScoreboard.config, macraScoreboard.users]);
+  }, [macraScoreboard.appsFlyerSummary, macraScoreboard.config, macraScoreboard.users]);
 
   const macraMetricCards = [
     {
@@ -2109,8 +2174,10 @@ const EmailSequencesAdmin: React.FC = () => {
   const macraFunnelRows = [
     {
       label: 'All installs',
-      value: 'AppsFlyer',
-      sublabel: 'Acquisition quality source',
+      value: macraScoreboardSummary.appsFlyerInstalls || 'Sync AppsFlyer',
+      sublabel: macraScoreboard.appsFlyerSummary
+        ? `${macraScoreboardSummary.appsFlyerNonOrganicInstalls} paid · ${macraScoreboardSummary.appsFlyerOrganicInstalls} organic`
+        : 'Acquisition quality source',
     },
     {
       label: 'Onboarding completers',
@@ -2208,6 +2275,18 @@ const EmailSequencesAdmin: React.FC = () => {
                     {macraScoreboard.loadedAt ? `Refreshed ${formatScoreboardAgo(macraScoreboard.loadedAt)}` : 'Waiting for first load'}
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={syncAppsFlyerRawData}
+                  disabled={syncingAppsFlyer}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${syncingAppsFlyer
+                    ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                    : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
+                    }`}
+                >
+                  {syncingAppsFlyer ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
+                  Sync AppsFlyer
+                </button>
                 <button
                   type="button"
                   onClick={loadMacraScoreboard}
@@ -2316,6 +2395,69 @@ const EmailSequencesAdmin: React.FC = () => {
                   ) : null}
                 </div>
               </div>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-zinc-800 bg-[#1a1e24] overflow-hidden">
+              <div className="flex flex-col gap-1 border-b border-zinc-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="text-sm font-semibold text-zinc-200">AppsFlyer Acquisition Backfill</h3>
+                <div className="text-xs text-zinc-500">
+                  {macraScoreboard.appsFlyerSummary?.importedAt
+                    ? `Imported ${formatScoreboardAgo(macraScoreboard.appsFlyerSummary.importedAt)}`
+                    : 'No API import yet'}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-4">
+                <div className="rounded-lg bg-zinc-950/60 p-3">
+                  <div className="text-xs uppercase tracking-wider text-zinc-500">Raw installs</div>
+                  <div className="mt-2 text-2xl font-bold text-white">{macraScoreboardSummary.appsFlyerInstalls}</div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {macraScoreboardSummary.appsFlyerNonOrganicInstalls} paid · {macraScoreboardSummary.appsFlyerOrganicInstalls} organic
+                  </div>
+                </div>
+                <div className="rounded-lg bg-zinc-950/60 p-3">
+                  <div className="text-xs uppercase tracking-wider text-zinc-500">Raw events</div>
+                  <div className="mt-2 text-2xl font-bold text-white">{macraScoreboardSummary.appsFlyerEvents}</div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {macraScoreboardSummary.appsFlyerMatchedRows} rows had a customer user ID
+                  </div>
+                </div>
+                <div className="rounded-lg bg-zinc-950/60 p-3">
+                  <div className="text-xs uppercase tracking-wider text-zinc-500">Top source</div>
+                  <div className="mt-2 text-lg font-bold text-white">
+                    {macraScoreboardSummary.appsFlyerTopMediaSources[0]?.label || 'Not imported'}
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {macraScoreboardSummary.appsFlyerTopMediaSources[0]?.count
+                      ? `${macraScoreboardSummary.appsFlyerTopMediaSources[0].count} installs`
+                      : 'Sync AppsFlyer to populate'}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-zinc-950/60 p-3">
+                  <div className="text-xs uppercase tracking-wider text-zinc-500">Top event</div>
+                  <div className="mt-2 text-lg font-bold text-white">
+                    {macraScoreboardSummary.appsFlyerTopEvents[0]?.label
+                      ? titleizeScoreboardToken(macraScoreboardSummary.appsFlyerTopEvents[0].label)
+                      : 'Not imported'}
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {macraScoreboardSummary.appsFlyerTopEvents[0]?.count
+                      ? `${macraScoreboardSummary.appsFlyerTopEvents[0].count} events`
+                      : 'Raw in-app events from AppsFlyer'}
+                  </div>
+                </div>
+              </div>
+              {macraScoreboardSummary.appsFlyerTopCampaigns.length ? (
+                <div className="border-t border-zinc-800 px-4 py-3">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">Top campaigns</div>
+                  <div className="flex flex-wrap gap-2">
+                    {macraScoreboardSummary.appsFlyerTopCampaigns.slice(0, 6).map((campaign: any) => (
+                      <span key={campaign.label} className="rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300">
+                        {campaign.label}: {campaign.count}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
