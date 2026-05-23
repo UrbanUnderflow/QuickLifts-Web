@@ -2317,6 +2317,7 @@ const EmailSequencesAdmin: React.FC = () => {
       const csvFiles = await Promise.all(
         files.map(async (file) => ({
           name: file.name,
+          lastModified: file.lastModified,
           content: await file.text(),
         }))
       );
@@ -2340,9 +2341,13 @@ const EmailSequencesAdmin: React.FC = () => {
 
       const importedRows = Number(json?.importedRows || json?.summary?.rows || 0);
       const duplicateRows = Number(json?.duplicateRows || json?.summary?.duplicateRows || 0);
+      const uploadedEventActions = Number(getNestedValue(json?.summary || {}, 'events.total') || 0);
+      const uploadedTrialStarts = appsFlyerSummaryEventCount(json?.summary || {}, MACRA_APPSFLYER_TRIAL_EVENT_NAMES);
       setMessage({
         type: 'success',
-        text: `AppsFlyer CSV import complete: ${importedRows} new rows saved${duplicateRows ? `, ${duplicateRows} duplicate rows skipped` : ''}.`,
+        text: `AppsFlyer CSV import complete: ${importedRows} new rows saved${duplicateRows ? `, ${duplicateRows} duplicate rows skipped` : ''}${
+          uploadedEventActions ? `, ${uploadedEventActions} event actions counted${uploadedTrialStarts ? `, including ${uploadedTrialStarts} trial starts` : ''}` : ''
+        }.`,
       });
       await loadMacraScoreboard();
     } catch (e: any) {
@@ -2416,6 +2421,19 @@ const EmailSequencesAdmin: React.FC = () => {
     const appsFlyerTopMediaSources = Array.isArray(appsFlyerSummary.topMediaSources) ? appsFlyerSummary.topMediaSources : [];
     const appsFlyerTopCampaigns = Array.isArray(appsFlyerSummary.topCampaigns) ? appsFlyerSummary.topCampaigns : [];
     const appsFlyerTopEvents = Array.isArray(appsFlyerSummary.topEvents) ? appsFlyerSummary.topEvents : [];
+    const appsFlyerImportSource = normalizeScoreboardString(
+      appsFlyerSummary.importSource || appsFlyerSummary.source || getNestedValue(appsFlyerSummary, 'latestRunSummary.importSource')
+    );
+    const appsFlyerReportKeys = Object.keys((appsFlyerSummary.reports || {}) as Record<string, any>);
+    const appsFlyerIsAggregateCsv =
+      appsFlyerImportSource === 'csv_upload' && appsFlyerReportKeys.some((key) => key.includes('csv_aggregate_'));
+    const appsFlyerEventSourceLabel = appsFlyerIsAggregateCsv ? 'AppsFlyer aggregate events' : 'AppsFlyer raw events';
+    const appsFlyerEventCardLabel = appsFlyerIsAggregateCsv ? 'Aggregate events' : 'Raw events';
+    const appsFlyerTrialCardLabel = appsFlyerIsAggregateCsv ? 'Aggregate trial starts' : 'Raw trial starts';
+    const appsFlyerEventIdentityLabel = appsFlyerIsAggregateCsv
+      ? 'Aggregate rows do not include customer user IDs'
+      : `${appsFlyerMatchedRows} rows had a customer user ID`;
+    const appsFlyerTopSourceUnit = appsFlyerInstalls ? 'installs' : 'events';
     const count = (predicate: (user: MacraScoreboardUser) => boolean) => users.filter(predicate).length;
     const onboardingCompleters = count((user) => user.signals.completedOnboarding);
     const qualified = count((user) => user.isQualified);
@@ -2491,6 +2509,13 @@ const EmailSequencesAdmin: React.FC = () => {
       appsFlyerTopMediaSources,
       appsFlyerTopCampaigns,
       appsFlyerTopEvents,
+      appsFlyerImportSource,
+      appsFlyerIsAggregateCsv,
+      appsFlyerEventSourceLabel,
+      appsFlyerEventCardLabel,
+      appsFlyerTrialCardLabel,
+      appsFlyerEventIdentityLabel,
+      appsFlyerTopSourceUnit,
     };
   }, [macraScoreboard.appsFlyerSummary, macraScoreboard.config, macraScoreboard.users]);
 
@@ -2543,8 +2568,8 @@ const EmailSequencesAdmin: React.FC = () => {
         ? Math.max(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.appsFlyerStartTrialEvents)
         : macraScoreboardSummary.qualifiedTrialStarts,
       sublabel: macraScoreboard.appsFlyerSummary
-        ? `${macraScoreboardSummary.qualifiedTrialStarts} matched qualified users · ${macraScoreboardSummary.appsFlyerStartTrialEvents} AppsFlyer raw events`
-        : `${formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.qualified)} of qualified users · sync AppsFlyer for raw events`,
+        ? `${macraScoreboardSummary.qualifiedTrialStarts} matched qualified users · ${macraScoreboardSummary.appsFlyerStartTrialEvents} ${macraScoreboardSummary.appsFlyerEventSourceLabel}`
+        : `${formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.qualified)} of qualified users · sync or upload AppsFlyer events`,
       icon: CheckCircle,
       tone: 'text-green-300',
     },
@@ -2560,9 +2585,11 @@ const EmailSequencesAdmin: React.FC = () => {
   const macraFunnelRows = [
     {
       label: 'All installs',
-      value: macraScoreboardSummary.appsFlyerInstalls || 'Sync AppsFlyer',
+      value: macraScoreboardSummary.appsFlyerInstalls || (macraScoreboard.appsFlyerSummary ? 'Upload install report' : 'Sync AppsFlyer'),
       sublabel: macraScoreboard.appsFlyerSummary
-        ? `${macraScoreboardSummary.appsFlyerNonOrganicInstalls} paid · ${macraScoreboardSummary.appsFlyerOrganicInstalls} organic`
+        ? macraScoreboardSummary.appsFlyerInstalls
+          ? `${macraScoreboardSummary.appsFlyerNonOrganicInstalls} paid · ${macraScoreboardSummary.appsFlyerOrganicInstalls} organic`
+          : 'Current AppsFlyer upload has event aggregates, not install rows'
         : 'Acquisition quality source',
     },
     {
@@ -2586,7 +2613,7 @@ const EmailSequencesAdmin: React.FC = () => {
         ? Math.max(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.appsFlyerStartTrialEvents)
         : macraScoreboardSummary.qualifiedTrialStarts,
       sublabel: macraScoreboard.appsFlyerSummary
-        ? `${macraScoreboardSummary.qualifiedTrialStarts} matched qualified · ${macraScoreboardSummary.appsFlyerStartTrialEvents} AppsFlyer raw events`
+        ? `${macraScoreboardSummary.qualifiedTrialStarts} matched qualified · ${macraScoreboardSummary.appsFlyerStartTrialEvents} ${macraScoreboardSummary.appsFlyerEventSourceLabel}`
         : `${formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.seriousPlanCompleters)} of serious plan completers`,
     },
     {
@@ -2693,6 +2720,8 @@ const EmailSequencesAdmin: React.FC = () => {
         },
         appsFlyer: {
           summary: macraScoreboard.appsFlyerSummary,
+          importSource: macraScoreboardSummary.appsFlyerImportSource,
+          isAggregateCsv: macraScoreboardSummary.appsFlyerIsAggregateCsv,
           installs: macraScoreboardSummary.appsFlyerInstalls,
           organicInstalls: macraScoreboardSummary.appsFlyerOrganicInstalls,
           nonOrganicInstalls: macraScoreboardSummary.appsFlyerNonOrganicInstalls,
@@ -3001,26 +3030,30 @@ const EmailSequencesAdmin: React.FC = () => {
                 <div className="text-xs text-zinc-500">
                   {macraScoreboard.appsFlyerSummary?.importedAt
                     ? `Imported ${formatScoreboardAgo(macraScoreboard.appsFlyerSummary.importedAt)}`
-                    : 'No API import yet'}
+                    : 'No AppsFlyer import yet'}
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 xl:grid-cols-5">
                 <div className="rounded-lg bg-zinc-950/60 p-3">
-                  <div className="text-xs uppercase tracking-wider text-zinc-500">Raw installs</div>
+                  <div className="text-xs uppercase tracking-wider text-zinc-500">
+                    {macraScoreboardSummary.appsFlyerIsAggregateCsv ? 'Install rows' : 'Raw installs'}
+                  </div>
                   <div className="mt-2 text-2xl font-bold text-white">{macraScoreboardSummary.appsFlyerInstalls}</div>
                   <div className="mt-1 text-xs text-zinc-500">
-                    {macraScoreboardSummary.appsFlyerNonOrganicInstalls} paid · {macraScoreboardSummary.appsFlyerOrganicInstalls} organic
+                    {macraScoreboardSummary.appsFlyerIsAggregateCsv
+                      ? 'Aggregate performance CSV does not include install rows'
+                      : `${macraScoreboardSummary.appsFlyerNonOrganicInstalls} paid · ${macraScoreboardSummary.appsFlyerOrganicInstalls} organic`}
                   </div>
                 </div>
                 <div className="rounded-lg bg-zinc-950/60 p-3">
-                  <div className="text-xs uppercase tracking-wider text-zinc-500">Raw events</div>
+                  <div className="text-xs uppercase tracking-wider text-zinc-500">{macraScoreboardSummary.appsFlyerEventCardLabel}</div>
                   <div className="mt-2 text-2xl font-bold text-white">{macraScoreboardSummary.appsFlyerEvents}</div>
                   <div className="mt-1 text-xs text-zinc-500">
-                    {macraScoreboardSummary.appsFlyerMatchedRows} rows had a customer user ID
+                    {macraScoreboardSummary.appsFlyerEventIdentityLabel}
                   </div>
                 </div>
                 <div className="rounded-lg bg-zinc-950/60 p-3">
-                  <div className="text-xs uppercase tracking-wider text-zinc-500">Raw trial starts</div>
+                  <div className="text-xs uppercase tracking-wider text-zinc-500">{macraScoreboardSummary.appsFlyerTrialCardLabel}</div>
                   <div className="mt-2 text-2xl font-bold text-white">{macraScoreboardSummary.appsFlyerStartTrialEvents}</div>
                   <div className="mt-1 text-xs text-zinc-500">
                     {macraScoreboardSummary.appsFlyerSubscribeEvents + macraScoreboardSummary.appsFlyerPurchaseEvents} subscribe or purchase events
@@ -3033,7 +3066,7 @@ const EmailSequencesAdmin: React.FC = () => {
                   </div>
                   <div className="mt-1 text-xs text-zinc-500">
                     {macraScoreboardSummary.appsFlyerTopMediaSources[0]?.count
-                      ? `${macraScoreboardSummary.appsFlyerTopMediaSources[0].count} installs`
+                      ? `${macraScoreboardSummary.appsFlyerTopMediaSources[0].count} ${macraScoreboardSummary.appsFlyerTopSourceUnit}`
                       : 'Sync AppsFlyer to populate'}
                   </div>
                 </div>
@@ -3047,7 +3080,7 @@ const EmailSequencesAdmin: React.FC = () => {
                   <div className="mt-1 text-xs text-zinc-500">
                     {macraScoreboardSummary.appsFlyerTopEvents[0]?.count
                       ? `${macraScoreboardSummary.appsFlyerTopEvents[0].count} events`
-                      : 'Raw in-app events from AppsFlyer'}
+                      : 'In-app events from AppsFlyer'}
                   </div>
                 </div>
               </div>

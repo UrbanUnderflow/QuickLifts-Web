@@ -53,6 +53,7 @@ type ReportConfig = {
 type UploadedCsvFile = {
   name?: string;
   content?: string;
+  lastModified?: number;
   reportType?: ReportType;
   organic?: boolean;
 };
@@ -141,6 +142,12 @@ const parseInteger = (value: unknown, fallback: number): number => {
   return Number.isFinite(parsed) ? Math.floor(parsed) : fallback;
 };
 
+const parseReportNumber = (value: unknown): number => {
+  const cleaned = normalizeString(value).replace(/[$,%]/g, '').replace(/,/g, '');
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const formatDateParam = (date: Date): string => {
   const pad = (value: number) => String(value).padStart(2, '0');
   return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`;
@@ -212,6 +219,15 @@ const bump = (target: Record<string, number>, key: string, amount = 1) => {
   target[normalized] = (target[normalized] || 0) + amount;
 };
 
+const hasNormalizedColumn = (row: NormalizedRow, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(row, key);
+
+const isAggregatedPerformanceRow = (row: NormalizedRow): boolean =>
+  hasNormalizedColumn(row, 'in_apps_events') && hasNormalizedColumn(row, 'number_of_actions');
+
+const isAggregatedPerformanceReport = (rows: NormalizedRow[]): boolean =>
+  rows.some(isAggregatedPerformanceRow);
+
 const mergeCountMaps = (base: Record<string, number> = {}, delta: Record<string, number> = {}) => {
   const out = { ...base };
   Object.entries(delta).forEach(([key, value]) => {
@@ -271,6 +287,19 @@ const addRowToSummary = (summary: SummaryShape, row: NormalizedRow, report: Repo
   const customerUserId = getValue(row, ['customer_user_id', 'customer_userid', 'customer_id', 'app_user_id']);
   const mediaSource = report.organic ? 'Organic' : getValue(row, ['media_source', 'pid', 'source']) || 'Unknown paid source';
   const campaign = getValue(row, ['campaign', 'campaign_name', 'c']) || 'Unknown campaign';
+  const aggregateEventName = getValue(row, ['in_apps_events']);
+
+  if (report.type === 'event' && isAggregatedPerformanceRow(row)) {
+    if (!aggregateEventName) return;
+
+    const actionCount = Math.max(0, Math.round(parseReportNumber(row.number_of_actions)));
+    if (!actionCount) return;
+
+    summary.events.total += actionCount;
+    bump(summary.events.byName, aggregateEventName, actionCount);
+    bump(summary.events.byMediaSource, mediaSource, actionCount);
+    return;
+  }
 
   if (customerUserId) summary.matchedCustomerUserRows += 1;
   else summary.unmatchedRows += 1;
@@ -290,7 +319,9 @@ const addRowToSummary = (summary: SummaryShape, row: NormalizedRow, report: Repo
 };
 
 const finalizeSummary = (summary: SummaryShape) => {
-  summary.topMediaSources = topEntries(summary.installs.byMediaSource);
+  summary.topMediaSources = topEntries(
+    summary.installs.total ? summary.installs.byMediaSource : summary.events.byMediaSource
+  );
   summary.topCampaigns = topEntries(summary.installs.byCampaign);
   summary.topEvents = topEntries(summary.events.byName);
   return summary;
@@ -324,6 +355,23 @@ const mergeSummaryTotals = (existing: Record<string, any>, delta: SummaryShape):
   merged.importedUserDocs = Math.max(Number(existing.importedUserDocs || 0) || 0, delta.importedUserDocs);
 
   return finalizeSummary(merged);
+};
+
+const looksLikeLegacyAggregateCsvInstallImport = (scoreboard: Record<string, any>): boolean => {
+  const installTotal = Number(scoreboard.installs?.total || 0) || 0;
+  const eventTotal = Number(scoreboard.events?.total || 0) || 0;
+  const rowTotal = Number(scoreboard.rows || 0) || 0;
+  const reports = Object.keys(scoreboard.reports || {});
+  const source = normalizeString(scoreboard.source || scoreboard.importSource || scoreboard.latestRunSummary?.importSource);
+
+  return (
+    source === 'csv_upload' &&
+    installTotal > 0 &&
+    eventTotal === 0 &&
+    rowTotal === installTotal &&
+    reports.some((key) => key.startsWith('csv_')) &&
+    !reports.some((key) => key.includes('_event_'))
+  );
 };
 
 async function resolveAppsFlyerToken() {
@@ -502,10 +550,11 @@ function mergeAttributionRow(args: {
 function inferUploadedReport(file: UploadedCsvFile, rows: NormalizedRow[], index: number): ReportConfig {
   const name = normalizeString(file.name).toLowerCase();
   const firstRow = rows[0] || {};
+  const isAggregatePerformance = isAggregatedPerformanceReport(rows);
   const type: ReportType =
     file.reportType === 'install' || file.reportType === 'event'
       ? file.reportType
-      : firstRow.event_name || name.includes('event') || name.includes('in_app')
+      : firstRow.event_name || firstRow.in_apps_events || isAggregatePerformance || name.includes('event') || name.includes('in_app')
         ? 'event'
         : 'install';
   const organic =
@@ -514,15 +563,16 @@ function inferUploadedReport(file: UploadedCsvFile, rows: NormalizedRow[], index
       : name.includes('organic') && !name.includes('non_organic') && !name.includes('non-organic') && !name.includes('non organic');
   const keyPrefix = organic ? 'organic' : 'non_organic';
   return {
-    key: `csv_${keyPrefix}_${type}_${index + 1}`,
+    key: `csv_${isAggregatePerformance ? 'aggregate_' : ''}${keyPrefix}_${type}_${index + 1}`,
     path: 'csv_upload',
     type,
     organic,
   };
 }
 
-function stableRawRowId(row: NormalizedRow, report: ReportConfig): string {
-  const eventName = report.type === 'event' ? getValue(row, ['event_name']) || 'unknown_event' : '';
+function stableRawRowId(row: NormalizedRow, report: ReportConfig, uploadKey = ''): string {
+  const isAggregate = isAggregatedPerformanceRow(row);
+  const eventName = report.type === 'event' ? getValue(row, ['event_name', 'in_apps_events']) || 'unknown_event' : '';
   const identity = getValue(row, ['customer_user_id', 'customer_userid', 'customer_id', 'app_user_id', 'appsflyer_id', 'apps_flyer_id', 'af_id']);
   const occurredAt = getValue(row, ['event_time', 'event_time_selected_timezone', 'install_time', 'install_time_selected_timezone']);
   const fallback = Object.keys(row)
@@ -539,6 +589,9 @@ function stableRawRowId(row: NormalizedRow, report: ReportConfig): string {
       installTime: getValue(row, ['install_time', 'install_time_selected_timezone']),
       mediaSource: getValue(row, ['media_source', 'pid', 'source']),
       campaign: getValue(row, ['campaign', 'campaign_name', 'c']),
+      uploadKey: isAggregate ? uploadKey : '',
+      aggregateActionCount: isAggregate ? parseReportNumber(row.number_of_actions) : 0,
+      aggregateUniqueUsers: isAggregate ? parseReportNumber(row.unique_users) : 0,
       fallback: identity || occurredAt ? '' : fallback,
     })
   );
@@ -690,7 +743,10 @@ async function persistImport(args: {
 
   const scoreboardRef = db.collection(SCOREBOARD_COLLECTION).doc(SCOREBOARD_DOC_ID);
   const scoreboardSnap = await scoreboardRef.get();
-  const existingScoreboard = scoreboardSnap.exists ? scoreboardSnap.data() || {} : {};
+  const existingScoreboardRaw = scoreboardSnap.exists ? scoreboardSnap.data() || {} : {};
+  const resetLegacyAggregateCsvImport =
+    source === 'csv_upload' && looksLikeLegacyAggregateCsvInstallImport(existingScoreboardRaw);
+  const existingScoreboard = resetLegacyAggregateCsvImport ? {} : existingScoreboardRaw;
   const cumulativeSummary = mergeSummaryTotals(existingScoreboard, summary);
 
   await db.collection(IMPORT_RUN_COLLECTION).doc(runId).set({
@@ -715,6 +771,7 @@ async function persistImport(args: {
       latestRunId: runId,
       latestRunSummary: summary,
       ...cumulativeSummary,
+      legacyAggregateCsvInstallImportResetAt: resetLegacyAggregateCsvImport ? now : existingScoreboardRaw.legacyAggregateCsvInstallImportResetAt || null,
       importedAt: now,
       updatedAt: now,
     },
@@ -754,14 +811,33 @@ export const handler: Handler = async (event) => {
         if (!content) return;
         const rows = parseCsv(content);
         const report = inferUploadedReport(file, rows, index);
+        const uploadKey = [normalizeString(file.name) || `upload_${index + 1}`, String(file.lastModified || '')]
+          .filter(Boolean)
+          .join(':');
+        let activeMediaSource = '';
         rows.forEach((row) => {
-          const occurredAt = getValue(row, ['event_time', 'event_time_selected_timezone', 'install_time', 'install_time_selected_timezone']);
+          const aggregatePerformanceRow = isAggregatedPerformanceRow(row);
+          const mediaSource = getValue(row, ['media_source', 'pid', 'source']);
+          if (mediaSource) activeMediaSource = mediaSource;
+
+          const eventName = getValue(row, ['event_name', 'in_apps_events']);
+          if (aggregatePerformanceRow && !eventName) return;
+
+          const normalizedRow = aggregatePerformanceRow
+            ? {
+                ...row,
+                media_source: mediaSource || activeMediaSource,
+                event_name: eventName,
+              }
+            : row;
+
+          const occurredAt = getValue(normalizedRow, ['event_time', 'event_time_selected_timezone', 'install_time', 'install_time_selected_timezone']);
           const occurredMs = Date.parse(occurredAt);
           if (Number.isFinite(occurredMs)) {
             minRowMs = minRowMs ? Math.min(minRowMs, occurredMs) : occurredMs;
             maxRowMs = Math.max(maxRowMs, occurredMs);
           }
-          allRows.push({ row, report, rawRowId: stableRawRowId(row, report) });
+          allRows.push({ row: normalizedRow, report, rawRowId: stableRawRowId(normalizedRow, report, uploadKey) });
         });
       });
 
