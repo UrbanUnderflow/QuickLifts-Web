@@ -170,7 +170,7 @@ type AppsFlyerAttributionDoc = Record<string, any> & {
   customerUserId?: string | null;
 };
 
-type MacraScoreboardRangePreset = 'last_7_days' | 'last_14_days' | 'last_30_days' | 'yesterday' | 'today';
+type MacraScoreboardRangePreset = 'last_7_days' | 'last_14_days' | 'last_30_days' | 'yesterday' | 'today' | 'custom';
 
 type MacraScoreboardDateRange = {
   preset: MacraScoreboardRangePreset;
@@ -196,6 +196,7 @@ const MACRA_SCOREBOARD_RANGE_OPTIONS: Array<{ value: MacraScoreboardRangePreset;
   { value: 'last_30_days', label: 'Last 30 days', daysBack: 30 },
   { value: 'yesterday', label: 'Yesterday', daysBack: 1 },
   { value: 'today', label: 'Today', daysBack: 1 },
+  { value: 'custom', label: 'Custom', daysBack: 0 },
 ];
 const MACRA_RETARGETING_SEQUENCE_IDS = [
   MACRA_WEB_OFFER_SEQUENCE_ID,
@@ -1062,8 +1063,26 @@ const formatDateOnlyLabel = (value: unknown): string => {
   });
 };
 
+const dateOnlyDaySpan = (start: string, end: string): number => {
+  const startMs = Date.parse(`${start}T00:00:00.000Z`);
+  const endMs = Date.parse(`${end}T00:00:00.000Z`);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return 0;
+  return Math.round((endMs - startMs) / (24 * 60 * 60 * 1000)) + 1;
+};
+
+const dateOnlyDays = (start: string, end: string): string[] => {
+  const startMs = Date.parse(`${start}T00:00:00.000Z`);
+  const days = Math.min(366, dateOnlyDaySpan(start, end));
+  if (!Number.isFinite(startMs) || days <= 0) return [];
+  return Array.from({ length: days }, (_value, index) => new Date(startMs + index * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+};
+
 const buildMacraScoreboardDateRange = (preset: MacraScoreboardRangePreset): MacraScoreboardDateRange => {
   const option = MACRA_SCOREBOARD_RANGE_OPTIONS.find((row) => row.value === preset) || MACRA_SCOREBOARD_RANGE_OPTIONS[0];
+  if (preset === 'custom') {
+    const defaultRange = buildMacraScoreboardDateRange(MACRA_SCOREBOARD_DEFAULT_RANGE_PRESET);
+    return { ...defaultRange, preset, label: option.label };
+  }
   if (preset === 'today') {
     const today = relativeDateInputValue(0);
     return { preset, start: today, end: today, label: option.label, daysBack: option.daysBack };
@@ -1157,10 +1176,7 @@ const aggregatePeriodDateMillis = (dateOnly: string): number => {
 };
 
 const aggregatePeriodDaySpan = (period: { periodStart: string; periodEnd: string }): number => {
-  const start = aggregatePeriodDateMillis(period.periodStart);
-  const end = aggregatePeriodDateMillis(period.periodEnd);
-  if (!start || !end || end < start) return 0;
-  return Math.round((end - start) / (24 * 60 * 60 * 1000)) + 1;
+  return dateOnlyDaySpan(period.periodStart, period.periodEnd);
 };
 
 const aggregatePeriodsOverlap = (
@@ -1207,7 +1223,7 @@ const buildAppsFlyerAggregateSummaryForRange = (
 ): Record<string, any> | null => {
   if (!baseSummary && !periodDocs.length) return null;
 
-  const selectedPeriods = selectNonOverlappingAppsFlyerAggregatePeriods(periodDocs
+  const fittingPeriods = periodDocs
     .map((period) => {
       const periodStart = normalizeScoreboardString(period.periodStart);
       const periodEnd = normalizeScoreboardString(period.periodEnd);
@@ -1222,7 +1238,12 @@ const buildAppsFlyerAggregateSummaryForRange = (
         excludedFromRangeRollups: Boolean(period.excludedFromRangeRollups),
       };
     })
-    .filter((period) => period.summary && !period.supersededBy && !period.excludedFromRangeRollups && appsFlyerAggregatePeriodFitsRange(period.periodStart, period.periodEnd, range)));
+    .filter((period) => period.summary && !period.supersededBy && !period.excludedFromRangeRollups && appsFlyerAggregatePeriodFitsRange(period.periodStart, period.periodEnd, range));
+  const rangeDates = dateOnlyDays(range.start, range.end);
+  const dailyPeriods = fittingPeriods.filter((period) => period.periodStart === period.periodEnd);
+  const dailyDateSet = new Set(dailyPeriods.map((period) => period.periodStart));
+  const hasCompleteDailyCoverage = Boolean(rangeDates.length && rangeDates.every((date) => dailyDateSet.has(date)));
+  const selectedPeriods = selectNonOverlappingAppsFlyerAggregatePeriods(hasCompleteDailyCoverage ? dailyPeriods : fittingPeriods);
 
   const fallbackAggregateSummary = (baseSummary?.aggregateCsvSummary || {}) as Record<string, any>;
   if (!selectedPeriods.length && appsFlyerAggregatePeriodFitsRange(normalizeScoreboardString(fallbackAggregateSummary.from), normalizeScoreboardString(fallbackAggregateSummary.to), range)) {
@@ -1282,6 +1303,7 @@ const buildAppsFlyerAggregateSummaryForRange = (
     id: period.id,
     periodStart: period.periodStart,
     periodEnd: period.periodEnd,
+    granularity: period.periodStart === period.periodEnd ? 'daily' : 'range',
     rows: Number(period.summary.rows || 0) || 0,
     events: Number(getNestedValue(period.summary, 'events.total') || 0) || 0,
     installs: Number(getNestedValue(period.summary, 'installs.total') || 0) || 0,
@@ -1337,6 +1359,154 @@ const buildAppsFlyerAggregateSummaryForRange = (
     rawCumulativeSummary: baseSummary?.rawCumulativeSummary || null,
     latestRunId: baseSummary?.latestRunId || '',
     latestRunSummary: selectedPeriods.length === 1 ? selectedPeriods[0].summary : aggregateCsvSummary,
+    aggregateCsvSummary,
+    aggregateCsvPeriods: periodRows,
+    aggregateCsvPeriodCount: periodRows.length,
+    aggregateCsvCoverageStart: periodRows.length ? coverageStart : null,
+    aggregateCsvCoverageEnd: periodRows.length ? coverageEnd : null,
+  };
+};
+
+const rawAppsFlyerEventDate = (doc: Record<string, any>): string =>
+  normalizeScoreboardString(doc.eventDate || getNestedValue(doc, 'row.date'));
+
+const rawAppsFlyerEventName = (doc: Record<string, any>): string =>
+  normalizeScoreboardString(doc.eventName || getNestedValue(doc, 'row.event_name') || getNestedValue(doc, 'row.in_apps_events') || 'unknown_event');
+
+const rawAppsFlyerActionCount = (doc: Record<string, any>): number => {
+  const topLevelCount = Number(doc.actionCount || 0);
+  if (Number.isFinite(topLevelCount) && topLevelCount > 0) return topLevelCount;
+  const rowActionCount = Number(getNestedValue(doc, 'row.number_of_actions') || 0);
+  if (Number.isFinite(rowActionCount) && rowActionCount > 0) return rowActionCount;
+  return 1;
+};
+
+const buildAppsFlyerRawRowsSummaryForRange = (
+  baseSummary: Record<string, any> | null,
+  rawRows: Record<string, any>[],
+  range: MacraScoreboardDateRange
+): Record<string, any> | null => {
+  const rowsInRange = rawRows.filter((doc) => {
+    if (doc.excludedFromRangeRollups || doc.supersededBy) return false;
+    const eventDate = rawAppsFlyerEventDate(doc);
+    return eventDate && eventDate >= range.start && eventDate <= range.end;
+  });
+  if (!rowsInRange.length) return null;
+
+  const eventsByName: Record<string, number> = {};
+  const eventMediaSources: Record<string, number> = {};
+  const installMediaSources: Record<string, number> = {};
+  const installCampaigns: Record<string, number> = {};
+  const reports: Record<string, number> = {};
+  const dateRows: Record<string, { rows: number; events: number; installs: number; trialStarts: number }> = {};
+  let eventTotal = 0;
+  let installTotal = 0;
+  let organicInstalls = 0;
+  let nonOrganicInstalls = 0;
+  let matchedCustomerUserRows = 0;
+  let unmatchedRows = 0;
+  let latestImportedAt: unknown = null;
+  const appId = normalizeScoreboardString(baseSummary?.appId || getNestedValue(baseSummary || {}, 'latestRunSummary.appId') || 'id6463771067');
+
+  rowsInRange.forEach((doc) => {
+    const eventDate = rawAppsFlyerEventDate(doc);
+    const reportType = normalizeScoreboardString(doc.reportType);
+    const reportKey = normalizeScoreboardString(doc.reportKey) || 'raw_row';
+    const actionCount = reportType === 'install' ? 1 : rawAppsFlyerActionCount(doc);
+    const mediaSource =
+      normalizeScoreboardString(doc.mediaSource || getNestedValue(doc, 'row.media_source') || getNestedValue(doc, 'row.pid') || getNestedValue(doc, 'row.source')) ||
+      'Unknown paid source';
+    const campaign =
+      normalizeScoreboardString(doc.campaign || getNestedValue(doc, 'row.campaign') || getNestedValue(doc, 'row.campaign_name') || getNestedValue(doc, 'row.c')) ||
+      'Unknown campaign';
+    const eventName = rawAppsFlyerEventName(doc);
+    const dateRow = dateRows[eventDate] || { rows: 0, events: 0, installs: 0, trialStarts: 0 };
+
+    dateRow.rows += 1;
+    mergeScoreboardNumberMap(reports, { [reportKey]: 1 });
+    if (doc.customerUserId || getNestedValue(doc, 'row.customer_user_id') || getNestedValue(doc, 'row.customer_userid')) matchedCustomerUserRows += 1;
+    else unmatchedRows += 1;
+
+    if (reportType === 'install') {
+      installTotal += 1;
+      if (doc.organic) organicInstalls += 1;
+      else nonOrganicInstalls += 1;
+      mergeScoreboardNumberMap(installMediaSources, { [mediaSource]: 1 });
+      mergeScoreboardNumberMap(installCampaigns, { [campaign]: 1 });
+      dateRow.installs += 1;
+    } else {
+      eventTotal += actionCount;
+      mergeScoreboardNumberMap(eventsByName, { [eventName]: actionCount });
+      mergeScoreboardNumberMap(eventMediaSources, { [mediaSource]: actionCount });
+      dateRow.events += actionCount;
+      if (MACRA_APPSFLYER_TRIAL_EVENT_NAMES.includes(eventName)) dateRow.trialStarts += actionCount;
+    }
+
+    dateRows[eventDate] = dateRow;
+    const importedAt = doc.updatedAt || doc.importedAt || doc.createdAt;
+    if (importedAt && (!latestImportedAt || (scoreMillis(importedAt) || 0) > (scoreMillis(latestImportedAt) || 0))) {
+      latestImportedAt = importedAt;
+    }
+  });
+
+  const periodRows = Object.entries(dateRows)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([date, row]) => ({
+      id: `raw_${date}`,
+      periodStart: date,
+      periodEnd: date,
+      granularity: 'raw_daily',
+      rows: row.rows,
+      events: row.events,
+      installs: row.installs,
+      trialStarts: row.trialStarts,
+      importedAt: latestImportedAt,
+    }));
+  const coverageStart = periodRows[0]?.periodStart || range.start;
+  const coverageEnd = periodRows[periodRows.length - 1]?.periodEnd || range.end;
+  const aggregateCsvSummary = {
+    id: 'macra',
+    product: 'macra',
+    provider: 'appsflyer',
+    source: 'raw_rows',
+    importSource: 'raw_row_rollup',
+    appId,
+    from: coverageStart,
+    to: coverageEnd,
+    rows: rowsInRange.length,
+    maximumRows: rowsInRange.length,
+    duplicateRows: 0,
+    importedUserDocs: 0,
+    matchedCustomerUserRows,
+    unmatchedRows,
+    tokenSource: '',
+    daysBack: range.daysBack,
+    timezone: 'raw_row_event_dates',
+    reports,
+    installs: {
+      total: installTotal,
+      organic: organicInstalls,
+      nonOrganic: nonOrganicInstalls,
+      byMediaSource: installMediaSources,
+      byCampaign: installCampaigns,
+    },
+    events: {
+      total: eventTotal,
+      byName: eventsByName,
+      byMediaSource: eventMediaSources,
+    },
+    topMediaSources: scoreboardTopEntriesFromMap(eventTotal ? eventMediaSources : installMediaSources),
+    topCampaigns: scoreboardTopEntriesFromMap(installCampaigns),
+    topEvents: scoreboardTopEntriesFromMap(eventsByName),
+    importedAt: latestImportedAt,
+    updatedAt: latestImportedAt,
+  };
+
+  return {
+    ...aggregateCsvSummary,
+    rawCumulativeSummary: baseSummary?.rawCumulativeSummary || null,
+    latestRunId: baseSummary?.latestRunId || '',
+    latestRunSummary: aggregateCsvSummary,
     aggregateCsvSummary,
     aggregateCsvPeriods: periodRows,
     aggregateCsvPeriodCount: periodRows.length,
@@ -2266,12 +2436,13 @@ const EmailSequencesAdmin: React.FC = () => {
 
   const selectedMacraScoreboardRange = useMemo<MacraScoreboardDateRange>(() => {
     const option = MACRA_SCOREBOARD_RANGE_OPTIONS.find((row) => row.value === appsFlyerCsvPeriodPreset) || MACRA_SCOREBOARD_RANGE_OPTIONS[0];
+    const customDaysBack = dateOnlyDaySpan(appsFlyerCsvPeriodStart, appsFlyerCsvPeriodEnd) || 1;
     return {
       preset: appsFlyerCsvPeriodPreset,
       start: appsFlyerCsvPeriodStart,
       end: appsFlyerCsvPeriodEnd,
       label: option.label,
-      daysBack: option.daysBack,
+      daysBack: appsFlyerCsvPeriodPreset === 'custom' ? customDaysBack : option.daysBack,
     };
   }, [appsFlyerCsvPeriodEnd, appsFlyerCsvPeriodPreset, appsFlyerCsvPeriodStart]);
   const selectedMacraScoreboardRangeLabel = useMemo(
@@ -2323,7 +2494,7 @@ const EmailSequencesAdmin: React.FC = () => {
         getDoc(doc(db, 'email-sequence-config', MACRA_RETARGETING_SEQUENCE_CONFIG_ID)),
         getDocs(query(collection(db, 'users'), where('hasCompletedMacraOnboarding', '==', true), limit(MACRA_SCOREBOARD_USER_LIMIT))),
       ]);
-      const [appsFlyerSummarySnap, appsFlyerAggregatePeriodsSnap] = await Promise.all([
+      const [appsFlyerSummarySnap, appsFlyerAggregatePeriodsSnap, appsFlyerRawRowsSnap] = await Promise.all([
         getDoc(doc(db, 'appsflyer-scoreboards', 'macra')).catch((error) => {
           console.warn('[EmailSequences] Failed to load AppsFlyer scoreboard summary', error);
           return null;
@@ -2332,8 +2503,27 @@ const EmailSequencesAdmin: React.FC = () => {
           console.warn('[EmailSequences] Failed to load AppsFlyer aggregate periods for selected range', error);
           return null;
         }),
+        getDocs(
+          query(
+            collection(db, 'appsflyer-macra-raw-rows'),
+            where('product', '==', 'macra'),
+            where('eventDate', '>=', activeRange.start),
+            where('eventDate', '<=', activeRange.end),
+            limit(5000)
+          )
+        ).catch(async (error) => {
+          console.warn('[EmailSequences] Failed to load AppsFlyer raw rows by date for selected range; falling back to local filtering', error);
+          return getDocs(query(collection(db, 'appsflyer-macra-raw-rows'), where('product', '==', 'macra'), limit(5000))).catch((fallbackError) => {
+            console.warn('[EmailSequences] Failed to load AppsFlyer raw rows fallback for selected range', fallbackError);
+            return null;
+          });
+        }),
       ]);
       const appsFlyerAggregatePeriodDocs = appsFlyerAggregatePeriodsSnap?.docs.map((snapshot) => ({
+        id: snapshot.id,
+        ...((snapshot.data() || {}) as Record<string, any>),
+      })) || [];
+      const appsFlyerRawRowDocs = appsFlyerRawRowsSnap?.docs.map((snapshot) => ({
         id: snapshot.id,
         ...((snapshot.data() || {}) as Record<string, any>),
       })) || [];
@@ -2447,7 +2637,9 @@ const EmailSequencesAdmin: React.FC = () => {
         (log) => scoreMillisInDateRange(purchaseLogMillis(log), activeRange) || scoreMillisInDateRange(purchaseLogStartedMillis(log), activeRange)
       );
       const appsFlyerBaseSummary = appsFlyerSummarySnap?.exists() ? ((appsFlyerSummarySnap.data() || {}) as Record<string, any>) : null;
-      const appsFlyerSummaryForRange = buildAppsFlyerAggregateSummaryForRange(appsFlyerBaseSummary, appsFlyerAggregatePeriodDocs, activeRange);
+      const appsFlyerRawSummaryForRange = buildAppsFlyerRawRowsSummaryForRange(appsFlyerBaseSummary, appsFlyerRawRowDocs, activeRange);
+      const appsFlyerPeriodSummaryForRange = buildAppsFlyerAggregateSummaryForRange(appsFlyerBaseSummary, appsFlyerAggregatePeriodDocs, activeRange);
+      const appsFlyerSummaryForRange = appsFlyerRawSummaryForRange || appsFlyerPeriodSummaryForRange;
       const allUsers = userDocs.map((user) => {
         const email = normalizeScoreboardString(user.data.email);
         const userEmailLogs = emailLogsInRange.filter((log) => matchesUserOrEmail(log, user.id, email));
@@ -2989,15 +3181,16 @@ const EmailSequencesAdmin: React.FC = () => {
   };
 
   const updateAppsFlyerCsvPeriodPreset = (preset: MacraScoreboardRangePreset) => {
-    const nextRange = buildMacraScoreboardDateRange(preset);
     setAppsFlyerCsvPeriodPreset(preset);
+    if (preset === 'custom') return;
+    const nextRange = buildMacraScoreboardDateRange(preset);
     setAppsFlyerCsvPeriodStart(nextRange.start);
     setAppsFlyerCsvPeriodEnd(nextRange.end);
   };
 
-    const uploadAppsFlyerCsvFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(event.target.files || []);
-      event.target.value = '';
+  const uploadAppsFlyerCsvFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
     if (!files.length) return;
 
     const firebaseUser = auth.currentUser;
@@ -3013,6 +3206,19 @@ const EmailSequencesAdmin: React.FC = () => {
 
     setUploadingAppsFlyerCsv(true);
     setMessage(null);
+    const uploadLogLabel = `[Macra AppsFlyer CSV Upload] ${new Date().toISOString()}`;
+    console.groupCollapsed(uploadLogLabel);
+    console.info('Request context', {
+      selectedRange: selectedMacraScoreboardRange,
+      clientToday: relativeDateInputValue(0),
+      clientYesterday: relativeDateInputValue(-1),
+      files: files.map((file) => ({
+        name: file.name,
+        size: file.size,
+        lastModified: file.lastModified,
+        lastModifiedIso: Number.isFinite(file.lastModified) ? new Date(file.lastModified).toISOString() : null,
+      })),
+    });
     try {
       const csvFiles = await Promise.all(
         files.map(async (file) => ({
@@ -3035,9 +3241,19 @@ const EmailSequencesAdmin: React.FC = () => {
           csvPeriodPreset: appsFlyerCsvPeriodPreset,
           csvPeriodStart: appsFlyerCsvPeriodStart,
           csvPeriodEnd: appsFlyerCsvPeriodEnd,
+          clientToday: relativeDateInputValue(0),
+          clientYesterday: relativeDateInputValue(-1),
         }),
       });
       const json = await response.json().catch(() => ({}));
+      console.info('Response status', { ok: response.ok, status: response.status, statusText: response.statusText });
+      console.info('Response diagnostics', json?.uploadDiagnostics || json);
+      if (Array.isArray(json?.uploadDiagnostics?.eventDateDistribution)) {
+        console.table(json.uploadDiagnostics.eventDateDistribution);
+      }
+      if (Array.isArray(json?.uploadDiagnostics?.topUploadedEvents)) {
+        console.table(json.uploadDiagnostics.topUploadedEvents);
+      }
       if (!response.ok || json?.success === false) {
         throw new Error(json?.error || `AppsFlyer CSV upload failed (HTTP ${response.status})`);
       }
@@ -3047,6 +3263,10 @@ const EmailSequencesAdmin: React.FC = () => {
       const uploadedEventActions = Number(getNestedValue(json?.summary || {}, 'events.total') || 0);
       const uploadedTrialStarts = appsFlyerSummaryEventCount(json?.summary || {}, MACRA_APPSFLYER_TRIAL_EVENT_NAMES);
       const supersededPeriodCount = Array.isArray(json?.supersededPeriodIds) ? json.supersededPeriodIds.length : 0;
+      const mergedPeriodCount = Number(json?.persistedPeriodCount || json?.aggregatePeriods?.length || 0);
+      const dateGranularity = normalizeScoreboardString(json?.dateGranularity);
+      const rawRowsPersisted = Number(json?.uploadDiagnostics?.rawRowsPersisted || 0);
+      const rawRowsRetired = Number(json?.uploadDiagnostics?.rawRowsRetired || 0);
       const importedPeriodStart = normalizeScoreboardString(json?.aggregatePeriod?.periodStart) || appsFlyerCsvPeriodStart;
       const importedPeriodEnd = normalizeScoreboardString(json?.aggregatePeriod?.periodEnd) || appsFlyerCsvPeriodEnd;
       const importedPeriodSource = normalizeScoreboardString(json?.aggregatePeriod?.source);
@@ -3056,19 +3276,21 @@ const EmailSequencesAdmin: React.FC = () => {
         : '';
       setMessage({
         type: 'success',
-        text: `AppsFlyer CSV import complete${replacedPeriod}: ${importedRows} rows saved${duplicateRows ? `, ${duplicateRows} duplicate rows skipped` : ''}${
+        text: `AppsFlyer CSV import complete${replacedPeriod}: ${importedRows} rows merged${rawRowsPersisted ? ` as ${rawRowsPersisted} dated raw event row${rawRowsPersisted === 1 ? '' : 's'}${rawRowsRetired ? `, ${rawRowsRetired} older raw row${rawRowsRetired === 1 ? '' : 's'} retired` : ''}` : mergedPeriodCount ? ` into ${mergedPeriodCount} saved ${dateGranularity === 'daily' ? 'daily bucket' : 'coverage bucket'}${mergedPeriodCount === 1 ? '' : 's'}` : ''}${duplicateRows ? `, ${duplicateRows} duplicate rows skipped` : ''}${
           uploadedEventActions ? `, ${uploadedEventActions} event actions counted${uploadedTrialStarts ? `, including ${uploadedTrialStarts} trial starts` : ''}` : ''
-        }${supersededPeriodCount ? `, ${supersededPeriodCount} overlapping saved ${supersededPeriodCount === 1 ? 'snapshot' : 'snapshots'} excluded from duplicate totals` : ''}.`,
+        }${supersededPeriodCount ? `, ${supersededPeriodCount} overlapping saved coverage ${supersededPeriodCount === 1 ? 'window was' : 'windows were'} retired from totals` : ''}.`,
       });
       await loadMacraScoreboard();
     } catch (e: any) {
+      console.error('Upload failed', e);
       setMessage({ type: 'error', text: e?.message || 'Failed to upload AppsFlyer CSV data' });
     } finally {
-        setUploadingAppsFlyerCsv(false);
-      }
-    };
+      console.groupEnd();
+      setUploadingAppsFlyerCsv(false);
+    }
+  };
 
-    const runMacraRetargetingSchedulerNow = async () => {
+  const runMacraRetargetingSchedulerNow = async () => {
       const firebaseUser = auth.currentUser;
       if (!firebaseUser) {
         setMessage({ type: 'error', text: 'Sign in again before running the retargeting scheduler.' });
@@ -3862,11 +4084,31 @@ const EmailSequencesAdmin: React.FC = () => {
                       </option>
                     ))}
                   </select>
-                  <div className="flex h-8 items-center rounded-md border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-400">
-                    {appsFlyerCsvPeriodStart === appsFlyerCsvPeriodEnd
-                      ? formatDateOnlyLabel(appsFlyerCsvPeriodStart)
-                      : `${formatDateOnlyLabel(appsFlyerCsvPeriodStart)} to ${formatDateOnlyLabel(appsFlyerCsvPeriodEnd)}`}
-                  </div>
+                  {appsFlyerCsvPeriodPreset === 'custom' ? (
+                    <div className="flex flex-wrap items-center gap-1">
+                      <input
+                        type="date"
+                        value={appsFlyerCsvPeriodStart}
+                        onChange={(event) => setAppsFlyerCsvPeriodStart(event.target.value)}
+                        className="h-8 rounded-md border border-zinc-700 bg-zinc-950 px-2 text-xs text-zinc-200 outline-none focus:border-[#d7ff00]"
+                        aria-label="Scoreboard start date"
+                      />
+                      <span className="px-1 text-xs text-zinc-500">to</span>
+                      <input
+                        type="date"
+                        value={appsFlyerCsvPeriodEnd}
+                        onChange={(event) => setAppsFlyerCsvPeriodEnd(event.target.value)}
+                        className="h-8 rounded-md border border-zinc-700 bg-zinc-950 px-2 text-xs text-zinc-200 outline-none focus:border-[#d7ff00]"
+                        aria-label="Scoreboard end date"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-8 items-center rounded-md border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-400">
+                      {appsFlyerCsvPeriodStart === appsFlyerCsvPeriodEnd
+                        ? formatDateOnlyLabel(appsFlyerCsvPeriodStart)
+                        : `${formatDateOnlyLabel(appsFlyerCsvPeriodStart)} to ${formatDateOnlyLabel(appsFlyerCsvPeriodEnd)}`}
+                    </div>
+                  )}
                 </div>
                 <input
                   id="macra-appsflyer-csv-upload"

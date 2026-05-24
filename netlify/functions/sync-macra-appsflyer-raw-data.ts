@@ -82,6 +82,12 @@ type AggregatePeriodSnapshot = {
   aggregateFingerprint?: string;
 };
 
+type AggregatePeriodImport = {
+  period: AggregateCsvPeriod;
+  summary: SummaryShape;
+  uploadedRows: number;
+};
+
 type SummaryShape = {
   appId: string;
   from: string;
@@ -205,6 +211,34 @@ const dateOnlyTokensFromText = (value: unknown): string[] => {
   return Array.from(new Set(tokens)).sort();
 };
 
+const dateOnlyFromText = (value: unknown): string => {
+  const text = normalizeString(value);
+  if (!text) return '';
+
+  const direct = normalizeDateOnly(text);
+  if (direct) return direct;
+
+  const token = dateOnlyTokensFromText(text)[0];
+  if (token) return token;
+
+  const parsed = Date.parse(text);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString().slice(0, 10) : '';
+};
+
+const aggregateRowDateOnly = (row: NormalizedRow): string =>
+  dateOnlyFromText(
+    getValue(row, [
+      'date',
+      'day',
+      'event_date',
+      'install_date',
+      'event_time',
+      'event_time_selected_timezone',
+      'install_time',
+      'install_time_selected_timezone',
+    ])
+  );
+
 const resolveAggregateCsvPeriod = (args: {
   body: Record<string, any>;
   csvFiles: UploadedCsvFile[];
@@ -225,7 +259,7 @@ const resolveAggregateCsvPeriod = (args: {
 
   const fileDateTokens = args.csvFiles.flatMap((file) => dateOnlyTokensFromText(file.name));
   const uniqueFileDates = Array.from(new Set(fileDateTokens)).sort();
-  if (uniqueFileDates.length) {
+  if (uniqueFileDates.length > 1) {
     const periodStart = uniqueFileDates[0];
     const periodEnd = uniqueFileDates[uniqueFileDates.length - 1];
     return {
@@ -239,7 +273,9 @@ const resolveAggregateCsvPeriod = (args: {
 
   const requestedStart = normalizeDateOnly(args.body.csvPeriodStart || args.body.periodStart || args.body.fromDate);
   const requestedEnd = normalizeDateOnly(args.body.csvPeriodEnd || args.body.periodEnd || args.body.toDate);
-  if (requestedStart && requestedEnd) {
+  const requestedPreset = normalizeString(args.body.csvPeriodPreset || args.body.periodPreset);
+  const explicitRequest = requestedPreset === 'custom' || requestedPreset === 'today' || requestedPreset === 'yesterday';
+  if (requestedStart && requestedEnd && explicitRequest) {
     return {
       docId: `macra_${requestedStart}_${requestedEnd}`,
       preset: normalizeString(args.body.csvPeriodPreset || args.body.periodPreset || 'request_fallback') || 'request_fallback',
@@ -250,13 +286,13 @@ const resolveAggregateCsvPeriod = (args: {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const periodStart = shiftDateOnly(today, -(DEFAULT_DAYS_BACK - 1));
+  const periodStart = normalizeDateOnly(args.body.clientYesterday || args.body.csvDefaultDate) || shiftDateOnly(today, -1);
   return {
-    docId: `macra_${periodStart}_${today}`,
-    preset: 'auto_default_last_7_days',
+    docId: `macra_${periodStart}_${periodStart}`,
+    preset: 'auto_yesterday_upload',
     periodStart,
-    periodEnd: today,
-    source: 'default_last_7_days',
+    periodEnd: periodStart,
+    source: 'auto_yesterday',
   };
 };
 
@@ -265,6 +301,15 @@ const daysBetweenInclusive = (start: string, end: string): number => {
   const endMs = Date.parse(`${end}T00:00:00.000Z`);
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return 0;
   return Math.round((endMs - startMs) / (24 * 60 * 60 * 1000)) + 1;
+};
+
+const dateOnlyRange = (start: string, end: string): string[] => {
+  const startMs = Date.parse(`${start}T00:00:00.000Z`);
+  const endMs = Date.parse(`${end}T00:00:00.000Z`);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return [];
+
+  const days = Math.min(366, Math.round((endMs - startMs) / (24 * 60 * 60 * 1000)) + 1);
+  return Array.from({ length: days }, (_value, index) => new Date(startMs + index * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
 };
 
 const formatDateParam = (date: Date): string => {
@@ -435,6 +480,83 @@ const addRowToSummary = (summary: SummaryShape, row: NormalizedRow, report: Repo
     bump(summary.events.byName, eventName);
     bump(summary.events.byMediaSource, mediaSource);
   }
+};
+
+const rowDateSourceLabel = (period: AggregateCsvPeriod, hasRowDates: boolean): string => {
+  if (hasRowDates) return 'row_dates_daily';
+  if (period.periodStart === period.periodEnd) return 'single_day_request_daily';
+  return period.source || 'request_fallback';
+};
+
+const buildAggregatePeriodImports = (args: {
+  appId: string;
+  rows: Array<{ row: NormalizedRow; report: ReportConfig; rawRowId: string }>;
+  period: AggregateCsvPeriod;
+  fallbackSummary: SummaryShape;
+}): { periodImports: AggregatePeriodImport[]; dateGranularity: 'daily' | 'period'; datedRows: number } => {
+  const periodDayCount = daysBetweenInclusive(args.period.periodStart, args.period.periodEnd);
+  const summariesByDate = new Map<string, SummaryShape>();
+  const uploadedRowsByDate = new Map<string, number>();
+  let datedRows = 0;
+
+  args.rows.forEach(({ row, report }) => {
+    const rowDate = aggregateRowDateOnly(row);
+    if (rowDate) datedRows += 1;
+
+    const targetDate = rowDate || (periodDayCount === 1 ? args.period.periodStart : '');
+    if (!targetDate) return;
+
+    const summary =
+      summariesByDate.get(targetDate) ||
+      createSummary({
+        appId: args.appId,
+        from: targetDate,
+        to: targetDate,
+        daysBack: 1,
+        maximumRows: 0,
+        timezone: 'aggregate_csv_day',
+        importSource: 'aggregate_csv_upload',
+      });
+
+    summary.rows += 1;
+    summary.maximumRows += 1;
+    bump(summary.reports, report.key);
+    addRowToSummary(summary, row, report);
+    summariesByDate.set(targetDate, summary);
+    uploadedRowsByDate.set(targetDate, (uploadedRowsByDate.get(targetDate) || 0) + 1);
+  });
+
+  if (summariesByDate.size) {
+    return {
+      periodImports: Array.from(summariesByDate.entries())
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([date, summary]) => ({
+          period: {
+            docId: `macra_${date}_${date}`,
+            preset: args.period.preset,
+            periodStart: date,
+            periodEnd: date,
+            source: rowDateSourceLabel(args.period, datedRows > 0),
+          },
+          summary: finalizeSummary(summary),
+          uploadedRows: uploadedRowsByDate.get(date) || summary.rows,
+        })),
+      dateGranularity: 'daily',
+      datedRows,
+    };
+  }
+
+  return {
+    periodImports: [
+      {
+        period: args.period,
+        summary: args.fallbackSummary,
+        uploadedRows: args.rows.length,
+      },
+    ],
+    dateGranularity: 'period',
+    datedRows,
+  };
 };
 
 const finalizeSummary = (summary: SummaryShape) => {
@@ -826,6 +948,72 @@ function stableRawRowId(row: NormalizedRow, report: ReportConfig, uploadKey = ''
   );
 }
 
+const rawRowEventName = (row: NormalizedRow, report: ReportConfig): string =>
+  report.type === 'event' ? getValue(row, ['event_name', 'in_apps_events']) || 'unknown_event' : '';
+
+const rawRowMediaSource = (row: NormalizedRow, report: ReportConfig): string =>
+  report.organic ? 'Organic' : getValue(row, ['media_source', 'pid', 'source']) || 'Unknown paid source';
+
+const rawRowCampaign = (row: NormalizedRow): string => getValue(row, ['campaign', 'campaign_name', 'c']) || 'Unknown campaign';
+
+const rawRowEventDate = (row: NormalizedRow): string => {
+  const rowDate = aggregateRowDateOnly(row);
+  if (rowDate) return rowDate;
+
+  const occurredAt = getValue(row, ['event_time', 'event_time_selected_timezone', 'install_time', 'install_time_selected_timezone']);
+  return dateOnlyFromText(occurredAt);
+};
+
+const rawRowEventTime = (row: NormalizedRow): string => {
+  const occurredAt = getValue(row, ['event_time', 'event_time_selected_timezone', 'install_time', 'install_time_selected_timezone']);
+  if (occurredAt) return occurredAt;
+
+  const dateOnly = rawRowEventDate(row);
+  return dateOnly ? `${dateOnly}T12:00:00.000Z` : '';
+};
+
+const rawRowActionCount = (row: NormalizedRow): number => {
+  if (!isAggregatedPerformanceRow(row)) return 1;
+  return Math.max(0, parseReportNumber(row.number_of_actions));
+};
+
+const stableAggregateRawRowId = (row: NormalizedRow, report: ReportConfig): string =>
+  hashRowKey(
+    JSON.stringify({
+      source: 'aggregate_csv_upload',
+      type: report.type,
+      organic: report.organic,
+      eventDate: rawRowEventDate(row),
+      eventName: rawRowEventName(row, report),
+      mediaSource: rawRowMediaSource(row, report),
+      campaign: rawRowCampaign(row),
+    })
+  );
+
+const rawRowMetadata = (row: NormalizedRow, report: ReportConfig): Record<string, any> => {
+  const eventDate = rawRowEventDate(row);
+  const eventTime = rawRowEventTime(row);
+  const parsedEventTime = Date.parse(eventTime);
+  const aggregatePerformance = isAggregatedPerformanceRow(row);
+  const customerUserId = getValue(row, ['customer_user_id', 'customer_userid', 'customer_id', 'app_user_id']);
+  const appsFlyerId = getValue(row, ['appsflyer_id', 'apps_flyer_id', 'af_id']);
+
+  return {
+    aggregatePerformance,
+    eventName: rawRowEventName(row, report) || null,
+    eventDate: eventDate || null,
+    eventTime: eventTime || null,
+    eventTimestampMs: Number.isFinite(parsedEventTime) ? parsedEventTime : null,
+    actionCount: rawRowActionCount(row),
+    uniqueUsers: aggregatePerformance ? Math.max(0, parseReportNumber(row.unique_users)) : 0,
+    mediaSource: rawRowMediaSource(row, report),
+    campaign: rawRowCampaign(row),
+    campaignId: getValue(row, ['campaign_id', 'af_c_id']) || null,
+    customerUserId: customerUserId || null,
+    appsFlyerId: appsFlyerId || null,
+  };
+};
+
 const aggregateDateMs = (dateOnly: string): number => {
   const ms = Date.parse(`${dateOnly}T00:00:00.000Z`);
   return Number.isFinite(ms) ? ms : 0;
@@ -1032,8 +1220,10 @@ async function persistImport(args: {
       reportKey: report.key,
       reportType: report.type,
       organic: report.organic,
+      ...rawRowMetadata(row, report),
       row,
       firstImportRunId: runId,
+      lastImportRunId: runId,
       importRunIds: FieldValue.arrayUnion(runId),
       createdAt: now,
     },
@@ -1129,65 +1319,144 @@ async function persistImport(args: {
   return cumulativeSummary;
 }
 
+async function persistRawRowsOnly(args: {
+  db: any;
+  runId: string;
+  source: string;
+  rawRows: Array<{ row: NormalizedRow; report: ReportConfig; rawRowId: string }>;
+  replaceDates?: string[];
+}) {
+  const { db, runId, source, rawRows, replaceDates = [] } = args;
+  const FieldValue = admin.firestore.FieldValue;
+  const now = FieldValue.serverTimestamp();
+  const incomingRawRowIds = new Set(rawRows.map((rawRow) => rawRow.rawRowId));
+  const rawRowWrites = rawRows.map(({ row, report, rawRowId }) => ({
+    ref: db.collection(RAW_ROW_COLLECTION).doc(rawRowId),
+    data: {
+      id: rawRowId,
+      product: 'macra',
+      provider: 'appsflyer',
+      source,
+      reportKey: report.key,
+      reportType: report.type,
+      organic: report.organic,
+      ...rawRowMetadata(row, report),
+      excludedFromRangeRollups: false,
+      supersededBy: null,
+      row,
+      firstImportRunId: runId,
+      lastImportRunId: runId,
+      importRunIds: FieldValue.arrayUnion(runId),
+      createdAt: now,
+    },
+  }));
+
+  await commitInChunks(db, rawRowWrites);
+
+  let retiredRawRows = 0;
+  for (const dateOnly of Array.from(new Set(replaceDates)).filter(Boolean)) {
+    const existingForDateSnap = await db.collection(RAW_ROW_COLLECTION).where('eventDate', '==', dateOnly).get();
+    const staleWrites = existingForDateSnap.docs
+      .filter((snapshot: any) => !incomingRawRowIds.has(snapshot.id))
+      .filter((snapshot: any) => {
+        const data = snapshot.data() || {};
+        return data.product === 'macra' && data.source === source && !data.excludedFromRangeRollups;
+      })
+      .map((snapshot: any) => ({
+        ref: snapshot.ref,
+        data: {
+          excludedFromRangeRollups: true,
+          supersededBy: runId,
+          retiredAt: now,
+        },
+      }));
+    retiredRawRows += staleWrites.length;
+    await commitInChunks(db, staleWrites);
+  }
+
+  return {
+    persistedRawRows: rawRows.length,
+    retiredRawRows,
+  };
+}
+
 async function persistAggregateCsvPeriodImport(args: {
   db: any;
   adminRequest: any;
   runId: string;
   summary: SummaryShape;
   period: AggregateCsvPeriod;
+  periodImports: AggregatePeriodImport[];
   sourceFiles: Array<Record<string, any>>;
   uploadedRows: number;
+  dateGranularity: 'daily' | 'period';
 }) {
-  const { db, adminRequest, runId, summary, period, sourceFiles, uploadedRows } = args;
+  const { db, adminRequest, runId, summary, period, periodImports, sourceFiles, uploadedRows, dateGranularity } = args;
   const FieldValue = admin.firestore.FieldValue;
   const now = FieldValue.serverTimestamp();
 
   finalizeSummary(summary);
-  const aggregateFingerprint = aggregateSummaryFingerprint(summary);
+  const runAggregateFingerprint = aggregateSummaryFingerprint(summary);
   const existingPeriodDocsSnap = await db.collection(AGGREGATE_PERIOD_COLLECTION).where('product', '==', 'macra').get();
   const existingPeriodSnapshots = existingPeriodDocsSnap.docs
     .map(periodSnapshotFromFirestoreDoc)
     .filter(Boolean) as AggregatePeriodSnapshot[];
-  const newPeriodSpan = aggregatePeriodDays(period);
+  const importedDocIds = new Set(periodImports.map((periodImport) => periodImport.period.docId));
+  const importedDailyDates = new Set(
+    periodImports
+      .map((periodImport) => periodImport.period)
+      .filter((periodImport) => periodImport.periodStart === periodImport.periodEnd)
+      .map((periodImport) => periodImport.periodStart)
+  );
   const supersededPeriodIds = existingPeriodSnapshots
-    .filter((snapshot) => snapshot.id !== period.docId)
+    .filter((snapshot) => !importedDocIds.has(snapshot.id))
     .filter((snapshot) => !snapshot.excludedFromRangeRollups && !snapshot.supersededBy)
-    .filter((snapshot) => aggregatePeriodsOverlap(snapshot, period))
+    .filter((snapshot) => periodImports.some((periodImport) => aggregatePeriodsOverlap(snapshot, periodImport.period)))
     .filter((snapshot) => {
-      const sameAggregateData = snapshot.aggregateFingerprint && snapshot.aggregateFingerprint === aggregateFingerprint;
-      const newCoversAtLeastAsMuch = newPeriodSpan >= aggregatePeriodDays(snapshot);
-      return sameAggregateData || newCoversAtLeastAsMuch;
+      const sameAggregateData = snapshot.aggregateFingerprint && snapshot.aggregateFingerprint === runAggregateFingerprint;
+      const dailyImportFullyCoversSnapshot =
+        importedDailyDates.size > 0 &&
+        aggregatePeriodDays(snapshot) > 1 &&
+        dateOnlyRange(snapshot.periodStart, snapshot.periodEnd).every((date) => importedDailyDates.has(date));
+      return sameAggregateData || dailyImportFullyCoversSnapshot;
     })
     .map((snapshot) => snapshot.id);
+  const supersededById = periodImports.length === 1 ? periodImports[0].period.docId : runId;
 
-  const periodRef = db.collection(AGGREGATE_PERIOD_COLLECTION).doc(period.docId);
-  const periodSnap = await periodRef.get();
-  await periodRef.set(
-    {
-      id: period.docId,
-      product: 'macra',
-      provider: 'appsflyer',
-      source: 'csv_upload',
-      importSource: 'aggregate_csv_upload',
-      periodPreset: period.preset,
-      periodSource: period.source || 'request_fallback',
-      periodStart: period.periodStart,
-      periodEnd: period.periodEnd,
-      latestRunId: runId,
-      summary,
-      aggregateFingerprint,
-      sourceFiles,
-      uploadedRows,
-      trialStarts: summaryEventCount(summary, MACRA_TRIAL_EVENT_NAMES),
-      supersedes: supersededPeriodIds,
-      supersededBy: null,
-      excludedFromRangeRollups: false,
-      firstImportedAt: periodSnap.exists ? periodSnap.data()?.firstImportedAt || now : now,
-      importedAt: now,
-      updatedAt: now,
-    },
-    { merge: true }
-  );
+  for (const periodImport of periodImports) {
+    finalizeSummary(periodImport.summary);
+    const periodRef = db.collection(AGGREGATE_PERIOD_COLLECTION).doc(periodImport.period.docId);
+    const periodSnap = await periodRef.get();
+    await periodRef.set(
+      {
+        id: periodImport.period.docId,
+        product: 'macra',
+        provider: 'appsflyer',
+        source: 'csv_upload',
+        importSource: 'aggregate_csv_upload',
+        periodPreset: periodImport.period.preset,
+        periodSource: periodImport.period.source || 'request_fallback',
+        periodStart: periodImport.period.periodStart,
+        periodEnd: periodImport.period.periodEnd,
+        periodGranularity: periodImport.period.periodStart === periodImport.period.periodEnd ? 'daily' : 'range',
+        sourcePeriodStart: period.periodStart,
+        sourcePeriodEnd: period.periodEnd,
+        latestRunId: runId,
+        summary: periodImport.summary,
+        aggregateFingerprint: aggregateSummaryFingerprint(periodImport.summary),
+        sourceFiles,
+        uploadedRows: periodImport.uploadedRows,
+        trialStarts: summaryEventCount(periodImport.summary, MACRA_TRIAL_EVENT_NAMES),
+        supersedes: supersededPeriodIds,
+        supersededBy: null,
+        excludedFromRangeRollups: false,
+        firstImportedAt: periodSnap.exists ? periodSnap.data()?.firstImportedAt || now : now,
+        importedAt: now,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+  }
 
   if (supersededPeriodIds.length) {
     const batch = db.batch();
@@ -1195,7 +1464,7 @@ async function persistAggregateCsvPeriodImport(args: {
       batch.set(
         db.collection(AGGREGATE_PERIOD_COLLECTION).doc(periodId),
         {
-          supersededBy: period.docId,
+          supersededBy: supersededById,
           supersededAt: now,
           excludedFromRangeRollups: true,
           updatedAt: now,
@@ -1216,6 +1485,17 @@ async function persistAggregateCsvPeriodImport(args: {
     requestedByUid: adminRequest.uid,
     requestedBySource: adminRequest.source,
     aggregatePeriod: period,
+    aggregatePeriods: periodImports.map((periodImport) => ({
+      id: periodImport.period.docId,
+      periodStart: periodImport.period.periodStart,
+      periodEnd: periodImport.period.periodEnd,
+      granularity: periodImport.period.periodStart === periodImport.period.periodEnd ? 'daily' : 'range',
+      rows: periodImport.summary.rows,
+      events: periodImport.summary.events.total,
+      installs: periodImport.summary.installs.total,
+    })),
+    dateGranularity,
+    uploadedRows,
     summary,
     createdAt: now,
     updatedAt: now,
@@ -1236,6 +1516,7 @@ async function persistAggregateCsvPeriodImport(args: {
         events: Number(periodSummary.events?.total || 0) || 0,
         installs: Number(periodSummary.installs?.total || 0) || 0,
         trialStarts: summaryEventCount(periodSummary, MACRA_TRIAL_EVENT_NAMES),
+        granularity: snapshot.periodStart === snapshot.periodEnd ? 'daily' : 'range',
         importedAt: snapshot.importedAt || snapshot.updatedAt || null,
       };
     })
@@ -1276,6 +1557,7 @@ async function persistAggregateCsvPeriodImport(args: {
       aggregateCsvPeriodCount: aggregateCsvPeriods.length,
       aggregateCsvCoverageStart: aggregateCsvSummary.from || null,
       aggregateCsvCoverageEnd: aggregateCsvSummary.to || null,
+      aggregateCsvDateGranularity: dateGranularity,
       legacyAggregateCsvInstallImportResetAt: looksLikeLegacyAggregateCsvInstallImport(existingScoreboardRaw)
         ? now
         : existingScoreboardRaw.legacyAggregateCsvInstallImportResetAt || null,
@@ -1290,6 +1572,7 @@ async function persistAggregateCsvPeriodImport(args: {
     aggregateCsvSummary,
     aggregateCsvPeriods,
     supersededPeriodIds,
+    persistedPeriodCount: periodImports.length,
   };
 }
 
@@ -1329,11 +1612,14 @@ export const handler: Handler = async (event) => {
           .filter(Boolean)
           .join(':');
         let activeMediaSource = '';
+        let activeAggregateDate = '';
         let importedFileRows = 0;
         rows.forEach((row) => {
           const aggregatePerformanceRow = isAggregatedPerformanceRow(row);
           const mediaSource = getValue(row, ['media_source', 'pid', 'source']);
           if (mediaSource) activeMediaSource = mediaSource;
+          const aggregateDate = aggregateRowDateOnly(row);
+          if (aggregateDate) activeAggregateDate = aggregateDate;
 
           const eventName = getValue(row, ['event_name', 'in_apps_events']);
           if (aggregatePerformanceRow && !eventName) return;
@@ -1341,13 +1627,15 @@ export const handler: Handler = async (event) => {
           const normalizedRow = aggregatePerformanceRow
             ? {
                 ...row,
+                date: aggregateDate || activeAggregateDate || row.date,
                 media_source: mediaSource || activeMediaSource,
                 event_name: eventName,
               }
             : row;
 
+          const rowDate = aggregateRowDateOnly(normalizedRow);
           const occurredAt = getValue(normalizedRow, ['event_time', 'event_time_selected_timezone', 'install_time', 'install_time_selected_timezone']);
-          const occurredMs = Date.parse(occurredAt);
+          const occurredMs = Date.parse(rowDate ? `${rowDate}T00:00:00.000Z` : occurredAt);
           if (Number.isFinite(occurredMs)) {
             minRowMs = minRowMs ? Math.min(minRowMs, occurredMs) : occurredMs;
             maxRowMs = Math.max(maxRowMs, occurredMs);
@@ -1379,32 +1667,98 @@ export const handler: Handler = async (event) => {
         if (period.periodStart > period.periodEnd) {
           return json(400, { error: 'AppsFlyer CSV start date must be on or before the end date.' });
         }
+        const periodIsSingleDay = period.periodStart === period.periodEnd;
+        const aggregateRows = allRows.map(({ row, report }) => {
+          const aggregatePerformanceRow = isAggregatedPerformanceRow(row);
+          const rowDate = aggregateRowDateOnly(row);
+          const assignedDate = rowDate || (aggregatePerformanceRow && periodIsSingleDay ? period.periodStart : '');
+          const assignedEventTime = assignedDate
+            ? getValue(row, ['event_time', 'event_time_selected_timezone', 'install_time', 'install_time_selected_timezone']) || `${assignedDate}T12:00:00.000Z`
+            : '';
+          const normalizedRow =
+            aggregatePerformanceRow && assignedDate
+              ? {
+                  ...row,
+                  date: assignedDate,
+                  event_time: assignedEventTime,
+                }
+              : row;
+
+          return {
+            row: normalizedRow,
+            report,
+            rawRowId: aggregatePerformanceRow ? stableAggregateRawRowId(normalizedRow, report) : stableRawRowId(normalizedRow, report),
+          };
+        });
 
         const summary = createSummary({
           appId,
           from: period.periodStart,
           to: period.periodEnd,
           daysBack: daysBetweenInclusive(period.periodStart, period.periodEnd),
-          maximumRows: allRows.length,
+          maximumRows: aggregateRows.length,
           timezone: 'aggregate_csv_period',
           importSource: 'aggregate_csv_upload',
         });
 
-        for (const { row, report } of allRows) {
+        for (const { row, report } of aggregateRows) {
           summary.rows += 1;
           bump(summary.reports, report.key);
           addRowToSummary(summary, row, report);
         }
+        const { periodImports, dateGranularity, datedRows } = buildAggregatePeriodImports({
+          appId,
+          rows: aggregateRows,
+          period,
+          fallbackSummary: summary,
+        });
 
         const runId = `macra-appsflyer-csv-period-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-        const { cumulativeSummary, aggregateCsvSummary, aggregateCsvPeriods, supersededPeriodIds } = await persistAggregateCsvPeriodImport({
+        const eventDateDistribution = Object.entries(
+          aggregateRows.reduce((out, { row }) => {
+            const eventDate = rawRowEventDate(row) || 'missing_date';
+            out[eventDate] = (out[eventDate] || 0) + 1;
+            return out;
+          }, {} as Record<string, number>)
+        )
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([date, rows]) => ({ date, rows }));
+        const rawRowDates = eventDateDistribution.map((row) => row.date).filter((date) => date !== 'missing_date');
+        const rawRowPersistence = await persistRawRowsOnly({
+          db: adminRequest.db,
+          runId,
+          source: 'aggregate_csv_upload',
+          rawRows: aggregateRows,
+          replaceDates: rawRowDates,
+        });
+        const topUploadedEvents = topEntries(summary.events.byName, 12);
+        const uploadDiagnostics = {
+          mode: 'aggregate_csv_upload',
+          period,
+          periodSource: period.source || '',
+          autoAssignedYesterday: period.source === 'auto_yesterday',
+          clientYesterday: normalizeDateOnly(body.clientYesterday) || null,
+          uploadedRows: aggregateRows.length,
+          rawRowsPersisted: rawRowPersistence.persistedRawRows,
+          rawRowsRetired: rawRowPersistence.retiredRawRows,
+          datedRows,
+          dateGranularity,
+          eventDateDistribution,
+          topUploadedEvents,
+          sourceFiles,
+          rawRowCollection: RAW_ROW_COLLECTION,
+        };
+        console.log('[sync-macra-appsflyer-raw-data] Aggregate CSV upload diagnostics', uploadDiagnostics);
+        const { cumulativeSummary, aggregateCsvSummary, aggregateCsvPeriods, supersededPeriodIds, persistedPeriodCount } = await persistAggregateCsvPeriodImport({
           db: adminRequest.db,
           adminRequest,
           runId,
           summary,
           period,
+          periodImports,
           sourceFiles,
-          uploadedRows: allRows.length,
+          uploadedRows: aggregateRows.length,
+          dateGranularity,
         });
 
         return json(200, {
@@ -1415,10 +1769,23 @@ export const handler: Handler = async (event) => {
           aggregateCsvSummary,
           aggregateCsvPeriods,
           aggregatePeriod: period,
-          uploadedRows: allRows.length,
-          importedRows: allRows.length,
+          aggregatePeriods: periodImports.map((periodImport) => ({
+            id: periodImport.period.docId,
+            periodStart: periodImport.period.periodStart,
+            periodEnd: periodImport.period.periodEnd,
+            granularity: periodImport.period.periodStart === periodImport.period.periodEnd ? 'daily' : 'range',
+            rows: periodImport.summary.rows,
+            events: periodImport.summary.events.total,
+            installs: periodImport.summary.installs.total,
+          })),
+          dateGranularity,
+          datedRows,
+          uploadDiagnostics,
+          uploadedRows: aggregateRows.length,
+          importedRows: aggregateRows.length,
           duplicateRows: 0,
           supersededPeriodIds,
+          persistedPeriodCount,
           replacedPeriod: true,
         });
       }
