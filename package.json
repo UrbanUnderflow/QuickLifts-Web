@@ -138,6 +138,7 @@
     "pulsecheckdemo:audio": "node scripts/generate-pulsecheckdemo-audio.js",
     "pulsecheckdemo:audio:ab": "node scripts/generate-pulsecheckdemo-audio.js --sample-only --all-profiles",
     "deck:export:pulse-auntedna": "node scripts/export-pulse-auntedna-pitch-deck.cjs",
+    "deck:export:pil-pepperdine": "node scripts/export-pulse-pil-pepperdine-pitch-deck.cjs",
     "system-overview:validate": "node scripts/validate-system-overview-content.js",
     "seed:pulsecheck-sports": "tsx scripts/seed-pulsecheck-sports.ts",
     "seed:pulsecheck-sports:apply": "tsx scripts/seed-pulsecheck-sports.ts --apply",

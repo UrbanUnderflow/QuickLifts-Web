@@ -3267,6 +3267,7 @@ const EmailSequencesAdmin: React.FC = () => {
       const dateGranularity = normalizeScoreboardString(json?.dateGranularity);
       const rawRowsPersisted = Number(json?.uploadDiagnostics?.rawRowsPersisted || 0);
       const rawRowsRetired = Number(json?.uploadDiagnostics?.rawRowsRetired || 0);
+      const uploadedTrialStartLabel = uploadedTrialStarts === 1 ? 'trial start' : 'trial starts';
       const importedPeriodStart = normalizeScoreboardString(json?.aggregatePeriod?.periodStart) || appsFlyerCsvPeriodStart;
       const importedPeriodEnd = normalizeScoreboardString(json?.aggregatePeriod?.periodEnd) || appsFlyerCsvPeriodEnd;
       const importedPeriodSource = normalizeScoreboardString(json?.aggregatePeriod?.source);
@@ -3277,7 +3278,7 @@ const EmailSequencesAdmin: React.FC = () => {
       setMessage({
         type: 'success',
         text: `AppsFlyer CSV import complete${replacedPeriod}: ${importedRows} rows merged${rawRowsPersisted ? ` as ${rawRowsPersisted} dated raw event row${rawRowsPersisted === 1 ? '' : 's'}${rawRowsRetired ? `, ${rawRowsRetired} older raw row${rawRowsRetired === 1 ? '' : 's'} retired` : ''}` : mergedPeriodCount ? ` into ${mergedPeriodCount} saved ${dateGranularity === 'daily' ? 'daily bucket' : 'coverage bucket'}${mergedPeriodCount === 1 ? '' : 's'}` : ''}${duplicateRows ? `, ${duplicateRows} duplicate rows skipped` : ''}${
-          uploadedEventActions ? `, ${uploadedEventActions} event actions counted${uploadedTrialStarts ? `, including ${uploadedTrialStarts} trial starts` : ''}` : ''
+          uploadedEventActions ? `, ${uploadedEventActions} event actions counted${uploadedTrialStarts ? `, including ${uploadedTrialStarts} ${uploadedTrialStartLabel}` : ''}` : ''
         }${supersededPeriodCount ? `, ${supersededPeriodCount} overlapping saved coverage ${supersededPeriodCount === 1 ? 'window was' : 'windows were'} retired from totals` : ''}.`,
       });
       await loadMacraScoreboard();
@@ -3458,9 +3459,12 @@ const EmailSequencesAdmin: React.FC = () => {
     const appsFlyerQualifiedCtaLabel = appsFlyerIsAggregateCsv
       ? `${qualifiedCtaTaps} first-party qualified taps · ${appsFlyerCtaEvents} AppsFlyer aggregate events · ${appsFlyerCheckoutEvents} aggregate checkout starts`
       : `${qualifiedCtaTaps} matched qualified users · ${appsFlyerCtaEvents} AppsFlyer raw events · ${appsFlyerCheckoutEvents} checkout starts`;
+    const qualifiedTrialStartUnit = qualifiedTrialStarts === 1 ? 'trial start' : 'trial starts';
+    const appsFlyerTrialEventUnit = appsFlyerStartTrialEvents === 1 ? 'event' : 'events';
+    const matchedQualifiedUserUnit = qualifiedTrialStarts === 1 ? 'user' : 'users';
     const appsFlyerQualifiedTrialLabel = appsFlyerIsAggregateCsv
-      ? `${qualifiedTrialStarts} first-party qualified trial starts · ${appsFlyerStartTrialEvents} AppsFlyer aggregate events`
-      : `${qualifiedTrialStarts} matched qualified users · ${appsFlyerStartTrialEvents} AppsFlyer raw events`;
+      ? `${qualifiedTrialStarts} first-party qualified ${qualifiedTrialStartUnit} · ${appsFlyerStartTrialEvents} AppsFlyer aggregate ${appsFlyerTrialEventUnit}`
+      : `${qualifiedTrialStarts} matched qualified ${matchedQualifiedUserUnit} · ${appsFlyerStartTrialEvents} AppsFlyer raw ${appsFlyerTrialEventUnit}`;
     const webOfferSentUsers = count((user) => user.isQualified && signalInRange(user.signals.webOfferSentAt));
     const webOfferOpenedUsers = count((user) => user.isQualified && signalInRange(user.signals.webOfferOpenedAt));
     const webOfferCheckoutStarts = count((user) => user.isQualified && signalInRange(user.signals.webOfferCheckoutStartedAt));
@@ -3518,7 +3522,11 @@ const EmailSequencesAdmin: React.FC = () => {
       { label: 'Checkout started', value: appsFlyerCheckoutEvents, sublabel: 'AppsFlyer checkout initiation events' },
       { label: 'Purchase cancelled', value: appsFlyerPurchaseCancelEvents, sublabel: 'Apple sheet cancelled' },
       { label: 'Purchase failed', value: appsFlyerPurchaseFailedEvents, sublabel: 'StoreKit purchase failure events' },
-      { label: 'Trial starts', value: appsFlyerStartTrialEvents, sublabel: 'AppsFlyer trial start events' },
+      {
+        label: 'Trial starts',
+        value: appsFlyerStartTrialEvents,
+        sublabel: `AppsFlyer trial start ${appsFlyerTrialEventUnit}`,
+      },
     ].filter((row) => row.value > 0 || macraScoreboard.appsFlyerSummary);
 
     return {

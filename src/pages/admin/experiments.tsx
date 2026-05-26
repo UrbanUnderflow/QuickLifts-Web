@@ -22,7 +22,7 @@ import { useUser } from '../../hooks/useUser';
 
 type ExperimentParameterMap = {
   macra_paywall_default_plan: 'annual' | 'monthly';
-  macra_paywall_layout_variant: 'trial_confidence_control' | 'trial_confidence';
+  macra_paywall_layout_variant: 'trial_confidence_control' | 'trial_confidence' | 'hard_paywall_value';
   onboarding_experience_variant: 'standard' | 'nora_guided';
 };
 
@@ -133,7 +133,7 @@ const DEFAULT_EXPERIMENT: ExperimentDocument = {
   description: 'Controls Macra onboarding and paywall treatments from Firestore-backed experiment config.',
   isEnabled: true,
   assignmentSalt: 'macra-paywall-onboarding-2026-05',
-  primaryMetric: 'trial_start',
+  primaryMetric: 'paid_conversion',
   owner: 'Macra',
   variants: [
     {
@@ -169,6 +169,18 @@ const DEFAULT_EXPERIMENT: ExperimentDocument = {
       parameters: {
         macra_paywall_default_plan: 'annual',
         macra_paywall_layout_variant: 'trial_confidence',
+        onboarding_experience_variant: 'nora_guided',
+      },
+    },
+    {
+      id: 'variant_c',
+      name: 'Hard paywall value',
+      description: 'Monthly-first value paywall with Nora guided onboarding, focused on paid conversion instead of free-trial starts.',
+      isEnabled: false,
+      weight: 0,
+      parameters: {
+        macra_paywall_default_plan: 'monthly',
+        macra_paywall_layout_variant: 'hard_paywall_value',
         onboarding_experience_variant: 'nora_guided',
       },
     },
@@ -833,15 +845,22 @@ const ExperimentsPage: React.FC = () => {
         if (paidAt || appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_PURCHASE_EVENT_NAMES) > 0) variantResult.paidConversions += 1;
       });
 
+      const usesPaidPrimaryMetric = ['paid_conversion', 'paid_conversions', 'paid'].includes(
+        normalizeString(experiment.primaryMetric).toLowerCase()
+      );
       const variantRows = Array.from(resultByVariantId.values()).map((variantResult) => ({
         ...variantResult,
         trialRate: variantResult.assignments ? variantResult.trialStarts / variantResult.assignments : 0,
         paidRate: variantResult.assignments ? variantResult.paidConversions / variantResult.assignments : 0,
       }));
-      const baselineRate = variantRows.find((row) => row.variantId === 'baseline')?.trialRate || variantRows[0]?.trialRate || 0;
+      const rateForPrimaryMetric = (row: ExperimentVariantResult) => (
+        usesPaidPrimaryMetric ? row.paidRate : row.trialRate
+      );
+      const baselineRow = variantRows.find((row) => row.variantId === 'baseline') || variantRows[0];
+      const baselineRate = baselineRow ? rateForPrimaryMetric(baselineRow) : 0;
       const variantsWithLift = variantRows.map((row) => ({
         ...row,
-        liftVsBaseline: row.variantId === 'baseline' || !baselineRate ? null : (row.trialRate - baselineRate) / baselineRate,
+        liftVsBaseline: row.variantId === 'baseline' || !baselineRate ? null : (rateForPrimaryMetric(row) - baselineRate) / baselineRate,
       }));
       const assignedUsers = exactAssignments + inferredAssignments;
       const exactShare = assignedUsers ? exactAssignments / assignedUsers : 0;
@@ -1104,9 +1123,18 @@ const ExperimentResultsPanel: React.FC<{
   onBackfill: () => void;
   backfilling: boolean;
 }> = ({ results, onBackfill, backfilling }) => {
+  const primaryMetric = normalizeString(results?.configSnapshot?.primaryMetric).toLowerCase();
+  const usesPaidPrimaryMetric = ['paid_conversion', 'paid_conversions', 'paid'].includes(primaryMetric || 'paid_conversion');
+  const primaryMetricLabel = usesPaidPrimaryMetric ? 'paid conversion' : 'trial start';
+  const primaryMetricRate = (variant: ExperimentVariantResult) => (
+    usesPaidPrimaryMetric ? variant.paidRate : variant.trialRate
+  );
+  const primaryMetricCount = (variant: ExperimentVariantResult) => (
+    usesPaidPrimaryMetric ? variant.paidConversions : variant.trialStarts
+  );
   const bestVariant = results?.variants
     .filter((variant) => variant.assignments > 0)
-    .sort((left, right) => right.trialRate - left.trialRate)[0];
+    .sort((left, right) => primaryMetricRate(right) - primaryMetricRate(left))[0];
 
   if (!results) {
     return (
@@ -1162,7 +1190,11 @@ const ExperimentResultsPanel: React.FC<{
           <ResultMetric label="Exact assignments" value={results.exactAssignments} sublabel={formatPercent(results.exactAssignments, results.assignedUsers)} />
           <ResultMetric label="Inferred assignments" value={results.inferredAssignments} sublabel={formatPercent(results.inferredAssignments, results.assignedUsers)} />
           <ResultMetric label="Unknown users" value={results.unknownAssignments} sublabel="Not assigned to a variant" />
-          <ResultMetric label="Best trial rate" value={bestVariant ? formatPercent(bestVariant.trialStarts, bestVariant.assignments) : '0%'} sublabel={bestVariant?.variantName || 'No data'} />
+          <ResultMetric
+            label={`Best ${primaryMetricLabel} rate`}
+            value={bestVariant ? formatPercent(primaryMetricCount(bestVariant), bestVariant.assignments) : '0%'}
+            sublabel={bestVariant?.variantName || 'No data'}
+          />
         </div>
 
         <div className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -1216,7 +1248,7 @@ const ExperimentResultsPanel: React.FC<{
           <Users className="h-5 w-5 text-[#E0FE10]" />
           <div>
             <h2 className="text-lg font-black">Variant Performance</h2>
-            <p className="text-sm text-zinc-400">Primary metric: trial starts from assigned Macra onboarding users.</p>
+            <p className="text-sm text-zinc-400">Primary metric: {primaryMetricLabel}s from assigned Macra onboarding users.</p>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -1232,8 +1264,9 @@ const ExperimentResultsPanel: React.FC<{
                 <th className="px-4 py-3 text-right">Cancels</th>
                 <th className="px-4 py-3 text-right">Trials</th>
                 <th className="px-4 py-3 text-right">Trial rate</th>
-                <th className="px-4 py-3 text-right">Lift</th>
                 <th className="px-4 py-3 text-right">Paid</th>
+                <th className="px-4 py-3 text-right">Paid rate</th>
+                <th className="px-4 py-3 text-right">Lift</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800">
@@ -1254,10 +1287,11 @@ const ExperimentResultsPanel: React.FC<{
                   <td className="px-4 py-4 text-right">{variant.appleCancels}</td>
                   <td className="px-4 py-4 text-right font-semibold text-white">{variant.trialStarts}</td>
                   <td className="px-4 py-4 text-right">{formatPercent(variant.trialStarts, variant.assignments)}</td>
+                  <td className="px-4 py-4 text-right">{variant.paidConversions}</td>
+                  <td className="px-4 py-4 text-right">{formatPercent(variant.paidConversions, variant.assignments)}</td>
                   <td className={`px-4 py-4 text-right font-semibold ${variant.liftVsBaseline && variant.liftVsBaseline > 0 ? 'text-emerald-300' : variant.liftVsBaseline && variant.liftVsBaseline < 0 ? 'text-red-300' : 'text-zinc-400'}`}>
                     {formatSignedPercent(variant.liftVsBaseline)}
                   </td>
-                  <td className="px-4 py-4 text-right">{variant.paidConversions}</td>
                 </tr>
               ))}
             </tbody>
@@ -1388,6 +1422,7 @@ const VariantEditor: React.FC<VariantEditorProps> = ({ variant, onUpdate, onPara
         >
           <option value="trial_confidence_control">Control</option>
           <option value="trial_confidence">Trial prep compact</option>
+          <option value="hard_paywall_value">Hard paywall value</option>
         </select>
       </Field>
       <Field label="Onboarding variant">
