@@ -12,9 +12,11 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const EXPORT_DIR = path.join(ROOT_DIR, 'exports', 'pulse-pil-pepperdine-pitch');
 const SLIDES_DIR = path.join(EXPORT_DIR, 'slides');
 const OUTPUT_PDF = path.join(EXPORT_DIR, 'Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf');
-const TOTAL_SLIDES = 21;
+const PUBLIC_PDF = path.join(ROOT_DIR, 'public', 'Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf');
+const TOTAL_SLIDES = 22;
 const VIEWPORT = { width: 2048, height: 1152 };
 const DEVICE_SCALE_FACTOR = 2;
+const EXTERNAL_BASE_URL = process.env.PULSE_DECK_BASE_URL?.replace(/\/$/, '') || null;
 
 const slideHoldMs = new Map([
   [6, 8200],
@@ -34,7 +36,7 @@ const findFreePort = () =>
     });
   });
 
-const waitForServer = async (url, timeoutMs = 120000) => {
+const waitForServer = async (url, timeoutMs = 240000) => {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < timeoutMs) {
@@ -127,21 +129,22 @@ const buildPdf = () => {
   }
 
   fs.writeFileSync(OUTPUT_PDF, Buffer.from(pdf.output('arraybuffer')));
+  fs.copyFileSync(OUTPUT_PDF, PUBLIC_PDF);
 };
 
 const exportDeck = async () => {
   fs.rmSync(SLIDES_DIR, { recursive: true, force: true });
   fs.mkdirSync(SLIDES_DIR, { recursive: true });
 
-  const port = await findFreePort();
-  const baseUrl = `http://127.0.0.1:${port}`;
-  const server = startNextServer(port);
+  const port = EXTERNAL_BASE_URL ? null : await findFreePort();
+  const baseUrl = EXTERNAL_BASE_URL || `http://127.0.0.1:${port}`;
+  const server = EXTERNAL_BASE_URL ? null : startNextServer(port);
 
   let browser;
 
   const cleanup = async () => {
     if (browser) await browser.close().catch(() => {});
-    if (!server.killed) server.kill('SIGTERM');
+    if (server && !server.killed) server.kill('SIGTERM');
   };
 
   process.on('SIGINT', async () => {
@@ -160,7 +163,7 @@ const exportDeck = async () => {
     });
     const page = await context.newPage();
 
-    await page.goto(`${baseUrl}/pulse-pil-pepperdine-pitch`, { waitUntil: 'networkidle', timeout: 120000 });
+    await page.goto(`${baseUrl}/pulse-pil-pepperdine-pitch`, { waitUntil: 'domcontentloaded', timeout: 120000 });
     await page.addStyleTag({
       content: `
         html, body, #__next { width: 100% !important; height: 100% !important; margin: 0 !important; background: #05070b !important; }
@@ -197,6 +200,7 @@ const exportDeck = async () => {
 
     const stats = fs.statSync(OUTPUT_PDF);
     console.log(`PDF written: ${OUTPUT_PDF}`);
+    console.log(`Public download: ${PUBLIC_PDF}`);
     console.log(`Size: ${(stats.size / 1024 / 1024).toFixed(1)} MB`);
   } catch (error) {
     await cleanup();

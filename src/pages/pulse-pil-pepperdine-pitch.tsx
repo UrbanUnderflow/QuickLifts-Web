@@ -4,9 +4,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowLeft,
   ArrowRight,
-  Bell,
   Brain,
   CheckCircle2,
+  Download,
   Globe,
   GraduationCap,
   Landmark,
@@ -21,7 +21,8 @@ import {
   Zap,
 } from 'lucide-react';
 
-const TOTAL_SLIDES = 21;
+const TOTAL_SLIDES = 22;
+const PDF_DOWNLOAD_PATH = '/Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf';
 
 const SLIDE_META = [
   { label: 'Title', eyebrow: 'Slide 1' },
@@ -39,12 +40,13 @@ const SLIDE_META = [
   { label: 'Building Blocks', eyebrow: 'Slide 13' },
   { label: 'Market', eyebrow: 'Slide 14' },
   { label: 'Beachhead', eyebrow: 'Slide 15' },
-  { label: 'Revenue Plan', eyebrow: 'Slide 16' },
-  { label: 'Go-To-Market', eyebrow: 'Slide 17' },
-  { label: 'Team', eyebrow: 'Slide 18' },
-  { label: 'Portfolio Context', eyebrow: 'Slide 19' },
-  { label: 'Who Supports Us', eyebrow: 'Slide 20' },
-  { label: 'Summary', eyebrow: 'Slide 21' },
+  { label: 'Path to $100M', eyebrow: 'Slide 16' },
+  { label: 'Capital Ladder', eyebrow: 'Slide 17' },
+  { label: 'Go-To-Market', eyebrow: 'Slide 18' },
+  { label: 'Team', eyebrow: 'Slide 19' },
+  { label: 'Portfolio Context', eyebrow: 'Slide 20' },
+  { label: 'Who Supports Us', eyebrow: 'Slide 21' },
+  { label: 'Summary', eyebrow: 'Slide 22' },
 ] as const;
 
 const transition = { duration: 0.6, ease: [0.22, 1, 0.36, 1] as const };
@@ -160,7 +162,7 @@ const SOLUTION_STAGES = [
   {
     number: '2',
     title: 'Regulate',
-    detail: 'Nora intervenes in-chat to help the athlete settle in real time.',
+    detail: 'Nora requests a chat with the athlete to help settle their state in real time.',
     tagLead: 'In-flow',
     tagValue: 'AI Coach',
     accent: COLORS.lime,
@@ -292,7 +294,7 @@ const BUILDING_BLOCK_TIERS = [
   {
     tier: 'Segment 4',
     name: 'Professional Team',
-    detail: 'New England Patriots (3rd meeting post-draft)',
+    detail: 'New England Patriots (initial conversations had)',
     price: '$500K',
     unit: 'avg annual contract',
     example: '~55 roster + practice squad',
@@ -302,7 +304,7 @@ const BUILDING_BLOCK_TIERS = [
   {
     tier: 'Segment 5',
     name: 'Federation / NGB',
-    detail: 'USATF, NASCAR, or USA Gymnastics',
+    detail: 'USATF or USA Soccer',
     price: '$750K',
     unit: 'avg annual contract',
     example: 'National team + development pipeline',
@@ -365,13 +367,13 @@ const BEACHHEAD_MARKET_SEGMENTS = [
   },
   {
     title: 'Professional team',
-    detail: 'Patriots lane re-engages after the draft.',
+    detail: 'Patriots initial conversations had.',
     value: '$500K',
     accent: '#F59E0B',
   },
   {
     title: 'Federation / NGB',
-    detail: 'USATF, NASCAR, or USA Gymnastics.',
+    detail: 'USATF or USA Soccer.',
     value: '$750K',
     accent: '#EF4444',
   },
@@ -379,38 +381,79 @@ const BEACHHEAD_MARKET_SEGMENTS = [
 
 const BEACHHEAD_TOTAL = '~$3.0M';
 
-const REVENUE_RAMP = [
+const PATH_PHASE_ONE = [
   {
-    year: '2026',
-    revenue: '$25K',
-    label: 'Pilot revenue',
-    detail: 'First paid signal and LAUNCH-backed fundability foundation.',
-    accent: COLORS.sky,
-    height: '12%',
+    label: 'D2 / D3',
+    count: '3-4',
+    detail: 'Fastest close, volume play',
+    revenue: '$225-300K',
+    accent: '#6EE7B7',
   },
   {
-    year: '2027',
-    revenue: '$1.5M',
-    label: 'Institutional wedge',
-    detail: 'University and team contracts convert the beachhead pipeline.',
-    accent: COLORS.lime,
-    height: '34%',
+    label: 'Mid-Major',
+    count: '6-7',
+    detail: 'Hampton, Clark Atlanta + new',
+    revenue: '$900K-$1.05M',
+    accent: '#5B8DEF',
   },
   {
-    year: '2028',
-    revenue: '$4.5M',
-    label: 'Segment expansion',
-    detail: 'Broader school, pro team, and federation coverage.',
-    accent: COLORS.teal,
-    height: '62%',
+    label: 'Power Four',
+    count: '1',
+    detail: 'ACC via Marques Zak',
+    revenue: '$400K',
+    accent: '#A855F7',
   },
   {
-    year: '2029',
-    revenue: '$12M',
-    label: 'Scale stage',
-    detail: 'Repeatable institutional sales motion with portfolio infrastructure leverage.',
-    accent: COLORS.pink,
-    height: '100%',
+    label: 'Pro Team',
+    count: '1',
+    detail: 'Initial conversations had',
+    revenue: '$500K',
+    accent: '#F59E0B',
+  },
+  {
+    label: 'Federation',
+    count: '1',
+    detail: 'USATF or USA Soccer',
+    revenue: '$750K',
+    accent: '#EF4444',
+  },
+] as const;
+
+const PATH_PHASE_TWO = [
+  {
+    label: '+ D2 / D3',
+    count: '+9',
+    detail: 'Conference bundles',
+    revenue: '$1.7M',
+    accent: '#6EE7B7',
+  },
+  {
+    label: '+ Power Four',
+    count: '+7',
+    detail: 'Expand to 7 more P4',
+    revenue: '$2.8M',
+    accent: '#A855F7',
+  },
+  {
+    label: '+ Pro Teams',
+    count: '+11',
+    detail: 'NFL, NBA, MLS - Westbrook and Patriots pathways',
+    revenue: '$5.5M',
+    accent: '#F59E0B',
+  },
+  {
+    label: '+ NGBs',
+    count: '+7',
+    detail: 'Remaining federations',
+    revenue: '$5.25M',
+    accent: '#EF4444',
+  },
+  {
+    label: 'League + Intl',
+    count: '2',
+    detail: 'NFL / NFLPA + World Athletics',
+    revenue: '$67M',
+    accent: '#EC4899',
   },
 ] as const;
 
@@ -444,44 +487,90 @@ const ATHLETE_SPOTLIGHT = {
   ],
 } as const;
 
-const TEAM_CORE = [
+const MANAGEMENT_TEAM = [
   {
     name: 'Tremaine Grant',
-    role: 'CEO & Founder',
+    role: 'Founder & CEO',
     imageSrc: '/TremaineFounder.jpg',
-    tags: [
-      { label: 'D1 Athlete', className: 'bg-blue-600/30 text-blue-300' },
-      { label: 'Biotech', className: 'bg-emerald-600/30 text-emerald-300' },
-      { label: 'Engineer', className: 'bg-orange-600/30 text-orange-300' },
+    imagePosition: 'center 12%',
+    accent: COLORS.lime,
+    schoolChip: { label: 'Florida State', background: '#782F40', color: '#CEB888', border: '#CEB88866' },
+    summary: 'Computer science background with 20 years software engineering across consumer, health, data, and AI product systems.',
+    credentials: [
+      'D1 athlete at FSU',
+      'Clinical research: IQVIA + Clinical Inc',
+      'Pfizer, Eli Lilly, Medpace, Dexcom program exposure',
+      'Founder University Cohort 11',
+      'Prior founder: Bulk to 200K+ downloads',
     ],
   },
   {
     name: 'Bobby Nweke',
     role: 'Chief of Staff',
     imageSrc: '/bobbyAdvisor.jpg',
-    tags: [
-      { label: 'TED', className: 'bg-red-600/30 text-red-300' },
-      { label: 'Harvard', className: 'bg-[#A51C30]/30 text-red-200' },
-      { label: 'TFA', className: 'bg-red-700/30 text-red-200' },
-    ],
-  },
-  {
-    name: 'Lola Oluwaladun',
-    role: 'Design Lead',
-    imageSrc: '/lola.jpg',
-    tags: [
-      { label: 'Figma', className: 'bg-purple-600/30 text-purple-300' },
-      { label: 'UX/UI', className: 'bg-purple-600/30 text-purple-300' },
-      { label: 'Branding', className: 'bg-violet-600/30 text-violet-300' },
+    imagePosition: 'center 15%',
+    accent: COLORS.sky,
+    schoolChip: { label: 'Harvard', background: '#A51C30', color: '#FFFFFF', border: '#FFFFFF33' },
+    summary: '10 years in human performance across training, athletics, education, and executive communication.',
+    credentials: [
+      'Personal trainer, athlete, and educator',
+      'Teach For America alumnus',
+      'Former principal',
+      'TED executive speaking coach',
+      'Builds operating rhythm across product, people, and partnerships',
     ],
   },
 ] as const;
 
+const HEAD_OF_DESIGN = {
+  name: 'Lola Oluwaladun',
+  role: 'Head of Design',
+  imageSrc: '/lola.jpg',
+  imagePosition: 'center 20%',
+  accent: COLORS.purple,
+  summary: 'Owns product experience, visual systems, and athlete-facing UX across the Pulse portfolio.',
+  tags: ['Figma', 'UX/UI', 'Branding'],
+} as const;
+
 const TEAM_ADVISORS = [
-  { name: 'Marques Zak', role: 'CMO @ ACC', imageSrc: '/zak.jpg' },
-  { name: 'Valerie Alexander', role: 'Fortune 500 Consultant', imageSrc: '/Val.jpg' },
-  { name: 'DeRay Mckesson', role: 'Campaign Zero', imageSrc: '/Deray.png' },
-  { name: 'Erik Edwards', role: 'Partner @ Cooley', imageSrc: '/ErikEdwards.png' },
+  { name: 'Marques Zak', role: 'CMO @ ACC', detail: 'Power-conference access and institutional marketing', imageSrc: '/zak.jpg', imagePosition: 'center top' },
+  { name: 'Valerie Alexander', role: 'Fortune 500 Consultant', detail: 'Enterprise strategy, IPO Attorney, and executive advisory', imageSrc: '/Val.jpg', imagePosition: 'center top' },
+  { name: 'DeRay Mckesson', role: 'Campaign Zero', detail: 'Movement building, public systems, and civic trust', imageSrc: '/Deray.png', imagePosition: 'center top' },
+  { name: 'Erik Edwards', role: 'Partner @ Cooley', detail: 'Venture legal strategy and company formation', imageSrc: '/ErikEdwards.png', imagePosition: 'center top' },
+] as const;
+
+const TEAM_STRATEGIC_PARTNERS = [
+  {
+    name: 'AuntEDNA.ai',
+    role: 'Clinical pathway partner',
+    detail: 'Escalation, clinician workflow, and care-routing infrastructure for Pulse Check.',
+    accent: COLORS.pink,
+    people: [
+      { name: 'Jelanna Salas Olivera', role: 'CEO', imageSrc: '/jelanna.jpg' },
+      { name: 'Dr. Tracey Hathoway', role: 'COO', imageSrc: '/dr-tracey-basketball.jpeg' },
+    ],
+  },
+  {
+    name: 'Polar',
+    role: 'Hardware partner',
+    detail: 'Wearable signal partner for heart rate, exertion, and recovery context.',
+    accent: COLORS.sky,
+  },
+  {
+    name: 'Cooley LLP',
+    role: 'Legal counsel',
+    detail: 'Venture counsel and company infrastructure.',
+    accent: COLORS.pink,
+  },
+] as const;
+
+const TEAM_INVESTORS = [
+  {
+    name: 'LAUNCH',
+    role: 'Investor',
+    detail: 'Jason Calacanis network, Founder University Cohort 11, and $25K unconverted note.',
+    accent: COLORS.lime,
+  },
 ] as const;
 
 const SPORT_PRECISION_MAP = [
@@ -783,14 +872,16 @@ const SceneTitle: React.FC = () => (
             {[
               { label: 'Pre-Seed Ask', value: '$1.4M', detail: '$10M pre-money', color: COLORS.lime },
               { label: 'Founder', value: 'Tremaine Grant', detail: 'Founder & CEO', color: COLORS.sky },
-              { label: 'Application Company', value: 'PIL', detail: 'Pulse Check flagship', color: COLORS.pink },
+              { label: 'Flagship product', value: 'Pulse Check', detail: '', color: COLORS.pink },
             ].map((item) => (
               <div key={item.label} className="rounded-2xl border border-white/10 bg-black/35 px-5 py-4 text-left backdrop-blur-xl">
                 <div className="text-[9px] font-bold uppercase tracking-[0.24em]" style={{ color: item.color }}>
                   {item.label}
                 </div>
                 <div className="mt-2 text-2xl font-black leading-none text-white md:text-3xl">{item.value}</div>
-                <div className="mt-2 text-xs font-medium uppercase tracking-[0.16em] text-white/38">{item.detail}</div>
+                {item.detail ? (
+                  <div className="mt-2 text-xs font-medium uppercase tracking-[0.16em] text-white/38">{item.detail}</div>
+                ) : null}
               </div>
             ))}
           </motion.div>
@@ -837,9 +928,8 @@ const ScenePILThesis: React.FC = () => (
           Pulse Intelligence Labs turns body, mind, nutrition, and program context into measurable performance systems.
         </p>
 
-        <div className="mt-8 grid gap-3 sm:grid-cols-3">
+        <div className="mt-8 grid max-w-xs gap-3">
           {[
-            { value: '0', label: 'roadmap distractions', accent: COLORS.sky },
             { value: '1', label: 'shared infrastructure', accent: COLORS.pink },
           ].map((item) => (
             <div key={item.label} className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
@@ -881,14 +971,13 @@ const ScenePILThesis: React.FC = () => (
           <div className="grid gap-4 p-5 md:grid-cols-[0.55fr_1.45fr] md:p-6">
             <div>
               <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#E0FE10]">Shared core</div>
-              <div className="mt-2 text-2xl font-black leading-tight text-white">Nora + identity + health data + admin rails</div>
+              <div className="mt-2 text-2xl font-black leading-tight text-white">Nora + identity + health data</div>
             </div>
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-3">
               {[
                 { label: 'AI coach', value: 'Nora', accent: COLORS.lime },
                 { label: 'Shared user', value: 'Identity', accent: COLORS.sky },
                 { label: 'Signals', value: 'Health data', accent: COLORS.pink },
-                { label: 'Operations', value: 'Admin rails', accent: COLORS.teal },
               ].map((item) => (
                 <div key={item.label} className="rounded-xl border border-white/8 bg-white/[0.03] p-4">
                   <div className="text-[9px] font-bold uppercase tracking-[0.2em]" style={{ color: item.accent }}>
@@ -911,7 +1000,7 @@ const SceneFlagshipThesis: React.FC = () => (
       <div>
         <SlideKicker>Flagship focus</SlideKicker>
         <h1 className="mt-5 text-5xl font-black leading-[0.94] text-white md:text-7xl">
-          Pulse Check is the highest-value application of the PIL stack.
+          Pulse Check is our primary focus and clearest path to a $100M company.
         </h1>
         <p className="mt-5 max-w-3xl text-xl leading-relaxed text-zinc-300 md:text-2xl">
           Institutional buyers, proprietary sports context, and a clear clinical pathway make Pulse Check the flagship
@@ -1158,10 +1247,10 @@ const SceneMeetNakyala: React.FC = () => (
 
 const SceneProblem: React.FC = () => (
   <SceneFrame accent={COLORS.red}>
-    <div className="relative h-full min-h-[42rem] overflow-hidden">
+    <div className="relative box-border h-full min-h-[42rem] overflow-hidden pt-8 md:pt-10">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_20%,rgba(251,113,133,0.14),transparent_24%),radial-gradient(circle_at_56%_46%,rgba(224,254,16,0.08),transparent_20%),radial-gradient(circle_at_82%_30%,rgba(56,189,248,0.12),transparent_26%)]" />
 
-      <div className="relative z-10 flex h-full flex-col gap-10">
+      <div className="relative z-10 flex h-full flex-col gap-8 md:gap-10">
         <div className="grid gap-8 xl:grid-cols-[0.82fr_1.18fr] xl:items-start">
           <div className="max-w-5xl">
             <SlideKicker>The problem</SlideKicker>
@@ -1487,87 +1576,18 @@ const SceneCheckIn: React.FC = () => {
               Pulse Check catches the athlete <span className="text-[#00D4AA]">before the spiral.</span>
             </h1>
             <div className="mt-4 max-w-5xl text-lg leading-relaxed text-zinc-300 md:text-xl">
-              A passive check-in fires at game-day timing. Nora opens the conversation, detects the signal, and{' '}
-              <span className="font-medium text-[#E0FE10]">regulates in real time</span> all inside the athlete flow.
+              A passive check-in fires at game-day timing. Nora requests a chat, detects the signal, and{' '}
+              <span className="font-medium text-[#E0FE10]">helps regulate in real time</span> all inside the athlete flow.
             </div>
           </div>
 
           <motion.div
-            className="mt-8 grid min-h-0 flex-1 items-center gap-6 xl:grid-cols-[auto_auto_minmax(38rem,54rem)] xl:justify-start"
+            className="mt-8 grid min-h-0 flex-1 items-stretch gap-6 xl:grid-cols-[minmax(48rem,1.35fr)_minmax(24rem,0.65fr)]"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.25 }}
           >
-            <div className="flex flex-col items-center gap-4 xl:items-start">
-              <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#00D4AA]">Step 1 · The trigger</div>
-              <div className="relative w-full max-w-[230px] rounded-[28px] border border-white/12 bg-[#18181c] p-3 shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
-                <div className="absolute left-1/2 top-3 h-1 w-16 -translate-x-1/2 rounded-full bg-white/15" />
-                <div className="min-h-[320px] rounded-[20px] bg-gradient-to-b from-[#0a0a0c] to-[#0f0f12] px-4 pb-5 pt-7">
-                  <div className="mb-5 flex items-center justify-between text-[10px] font-medium text-white/70">
-                    <span>6:47</span>
-                    <div className="flex items-center gap-1.5">
-                      <div className="flex items-end gap-[1.5px]">
-                        <span className="h-[3px] w-[2px] rounded-[1px] bg-white/70" />
-                        <span className="h-[5px] w-[2px] rounded-[1px] bg-white/70" />
-                        <span className="h-[7px] w-[2px] rounded-[1px] bg-white/70" />
-                        <span className="h-[9px] w-[2px] rounded-[1px] bg-white/70" />
-                      </div>
-                      <span className="relative h-[10px] w-5 rounded-[2px] border border-white/70 p-[1px] after:absolute after:right-[-3px] after:top-[2px] after:h-1 after:w-[2px] after:rounded-r-sm after:bg-white/70">
-                        <span className="block h-full w-[80%] rounded-[1px] bg-white/70" />
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="text-center">
-                    <div className="text-[10px] uppercase tracking-[0.28em] text-white/24">Saturday · March 2</div>
-                    <div className="mt-2 font-['Bebas_Neue'] text-[4rem] leading-none text-white">6:47</div>
-                    <div className="mt-2 text-[10px] font-bold uppercase tracking-[0.3em] text-[#E0FE10]">Game Day</div>
-                  </div>
-
-                  <motion.div
-                    className="mt-8 flex gap-3 rounded-[14px] border border-[#E0FE10]/20 bg-[#E0FE10]/8 p-3"
-                    animate={{
-                      boxShadow: ['0 0 0 0 rgba(224,254,16,0.2)', '0 0 0 6px rgba(224,254,16,0)', '0 0 0 0 rgba(224,254,16,0)'],
-                    }}
-                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', delay: 1.1 }}
-                  >
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#E0FE10] text-black">
-                      <Bell className="h-3.5 w-3.5" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center justify-between gap-3 text-[9px] font-bold uppercase tracking-[0.14em]">
-                        <span className="text-[#E0FE10]">Pulse Check</span>
-                        <span className="font-medium tracking-[0.12em] text-white/25">now</span>
-                      </div>
-                      <div className="mt-1.5 text-[11.5px] font-medium leading-[1.35] text-white">
-                        Good morning. Time for your check-in with Nora.
-                      </div>
-                    </div>
-                  </motion.div>
-                </div>
-              </div>
-            </div>
-
-            <motion.div
-              className="hidden items-center gap-3 xl:flex"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6, delay: 0.75 }}
-            >
-              <div className="relative h-px w-10 bg-gradient-to-r from-[#00D4AA]/50 to-[#E0FE10]/50 before:absolute before:left-0 before:top-1/2 before:h-1 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-[#00D4AA] before:shadow-[0_0_6px_rgba(0,212,170,0.45)] after:absolute after:right-0 after:top-1/2 after:h-1 after:w-1 after:-translate-y-1/2 after:rounded-full after:bg-[#E0FE10] after:shadow-[0_0_6px_rgba(224,254,16,0.45)]" />
-              <motion.div
-                className="text-sm text-[#E0FE10]"
-                animate={{ x: [0, 4, 0], opacity: [0.5, 1, 0.5] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                →
-              </motion.div>
-              <div className="max-w-[4.25rem] text-center text-[9px] font-bold uppercase leading-relaxed tracking-[0.2em] text-zinc-500">
-                Athlete taps in
-              </div>
-            </motion.div>
-
-            <div className="w-full max-w-[54rem] justify-self-start rounded-[20px] border border-white/8 bg-white/[0.02] p-5 md:p-6">
+            <div className="flex w-full flex-col rounded-[20px] border border-white/8 bg-white/[0.02] p-5 md:p-6">
               <div className="flex items-center gap-3 border-b border-white/8 pb-4">
                 <div className="relative flex h-9 w-9 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#00D4AA] to-[#E0FE10] font-['Bebas_Neue'] text-base text-black after:absolute after:bottom-[-2px] after:right-[-2px] after:h-[10px] after:w-[10px] after:rounded-full after:border-2 after:border-[#0a0a0b] after:bg-[#00D4AA]">
                   N
@@ -1682,6 +1702,65 @@ const SceneCheckIn: React.FC = () => {
                 </AnimatePresence>
               </div>
             </div>
+
+            <motion.div
+              className="hidden h-full rounded-[20px] border border-white/8 bg-white/[0.025] p-5 xl:block"
+              initial={{ opacity: 0, x: 18 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.65, delay: 0.65 }}
+            >
+              <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#E0FE10]">What is happening</div>
+              <div className="mt-4 grid gap-3">
+                {[
+                  {
+                    step: '01',
+                    title: 'Game-day prompt',
+                    detail: 'Pulse Check reaches the athlete before staff can see the pressure building.',
+                    accent: COLORS.teal,
+                  },
+                  {
+                    step: '02',
+                    title: 'Athlete opts into the chat',
+                    detail: 'Nora requests a conversation and reads the check-in signal in context.',
+                    accent: COLORS.lime,
+                  },
+                  {
+                    step: '03',
+                    title: 'State regulation starts immediately',
+                    detail: 'Nora guides a short breathing cycle and watches the biometric trend move.',
+                    accent: COLORS.pink,
+                  },
+                ].map((item, index) => (
+                  <motion.div
+                    key={item.step}
+                    className="rounded-2xl border border-white/8 bg-black/20 p-4"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.45, delay: 0.78 + index * 0.1 }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border font-['Bebas_Neue'] text-xl leading-none"
+                        style={{ borderColor: `${item.accent}55`, color: item.accent, background: `${item.accent}12` }}
+                      >
+                        {item.step}
+                      </div>
+                      <div className="text-base font-black leading-tight text-white">{item.title}</div>
+                    </div>
+                    <div className="mt-3 text-sm leading-relaxed text-zinc-400">{item.detail}</div>
+                  </motion.div>
+                ))}
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-[#E0FE10]/15 bg-[#E0FE10]/10 p-4">
+                <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#E0FE10]">Outcome</div>
+                <div className="mt-2 text-2xl font-black leading-tight text-white">Support happens before escalation.</div>
+                <div className="mt-3 text-sm leading-relaxed text-zinc-300">
+                  If the athlete settles, the moment stays lightweight. If the signal worsens, the next slide shows how
+                  Pulse Check routes the context to the clinical pathway.
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
 
           <motion.div
@@ -1718,72 +1797,96 @@ const SceneClinicalRouting: React.FC = () => (
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 gap-7 xl:grid-cols-[minmax(400px,440px)_minmax(0,1fr)]">
         <motion.div
-          className="relative flex min-h-[32rem] flex-col overflow-hidden rounded-[18px] border border-white/8 bg-white/[0.03] p-5"
+          className="relative mx-auto flex w-full max-w-[440px] flex-col"
           initial={{ opacity: 0, x: -16 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.7, delay: 0.2 }}
         >
-          <div className="absolute left-0 right-0 top-0 h-[2px] bg-purple-400/70" />
-          <div className="mb-4 flex items-center gap-3 border-b border-white/8 pb-4">
-            <div className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-gradient-to-br from-[#00D4AA] to-[#E0FE10] font-['Bebas_Neue'] text-[15px] text-black">
-              N
+          <div className="mb-3 flex items-center justify-between px-2">
+            <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#F472B6]">
+              Nora in-chat app experience
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-bold text-white">Nora</div>
-              <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[#00D4AA]">Mental Performance AI</div>
+            <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[9px] font-bold uppercase tracking-[0.18em] text-white/45">
+              Athlete view
             </div>
-            <div className="text-[10px] text-zinc-500">2:14 AM</div>
           </div>
 
-          <div className="flex flex-1 flex-col gap-3">
-            <motion.div
-              className="max-w-[92%] rounded-[12px] border border-[#E0FE10]/10 bg-[#E0FE10]/5 px-4 py-3 text-[12.5px] leading-relaxed text-white"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35 }}
-            >
-              You&apos;re up late. How are you feeling tonight?
-            </motion.div>
-
-            <motion.div
-              className="ml-auto max-w-[92%] rounded-[12px] border border-[#EC4899]/20 bg-[#EC4899]/8 px-4 py-3 text-[12.5px] leading-relaxed text-white"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.55 }}
-            >
-              I don&apos;t feel happy anymore. I feel empty inside. I don&apos;t know why I&apos;m still doing this.
-              <div className="mt-3 flex items-center gap-2 border-t border-dashed border-[#EC4899]/20 pt-2 text-[8px] font-bold uppercase tracking-[0.18em] text-[#F472B6]">
-                <span className="h-[5px] w-[5px] rounded-full bg-[#F472B6] shadow-[0_0_8px_rgba(244,114,182,0.7)]" />
-                Critical signal detected
+          <div className="relative h-[34.5rem] w-full overflow-hidden rounded-[42px] border-2 border-zinc-700/70 bg-[#0a0a0b] shadow-[0_28px_90px_rgba(0,0,0,0.55)]">
+            <div className="absolute left-1/2 top-0 z-20 h-6 w-32 -translate-x-1/2 rounded-b-2xl bg-black" />
+            <div className="relative flex h-full flex-col bg-gradient-to-b from-[#111113] to-[#050505]">
+              <div className="flex items-center justify-between px-8 pb-2 pt-4 text-[11px] font-semibold text-white">
+                <span>T-Mobile</span>
+                <span className="text-white/45">2:14 AM</span>
+                <div className="relative h-2.5 w-5 rounded-sm border border-white/60">
+                  <div className="absolute inset-[2px] rounded-[1px] bg-green-400" />
+                </div>
               </div>
-            </motion.div>
 
-            <motion.div
-              className="max-w-[92%] rounded-[12px] border border-[#E0FE10]/10 bg-[#E0FE10]/5 px-4 py-3 text-[12.5px] leading-relaxed text-white"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.75 }}
-            >
-              I hear you. This is beyond what I should handle alone. Connecting you with someone trained to help right now.
-            </motion.div>
+              <div className="flex min-h-0 flex-1 flex-col px-7 pb-7 pt-5">
+                <div className="mb-4 flex items-center gap-3 border-b border-white/15 pb-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[11px] bg-gradient-to-br from-[#00D4AA] to-[#E0FE10] font-['Bebas_Neue'] text-[18px] text-black">
+                    N
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-base font-black leading-tight text-white">Nora</div>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.22em] leading-snug text-[#00D4AA]">
+                      Mental Performance AI
+                    </div>
+                  </div>
+                </div>
 
-            <motion.div
-              className="mt-auto flex items-center gap-3 rounded-[10px] border border-purple-400/15 bg-gradient-to-r from-purple-400/10 to-pink-400/10 px-4 py-3 text-sm font-medium text-white"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.95 }}
-            >
-              <span>Handoff initiated to signal layer</span>
-              <motion.span
-                className="text-[#F472B6]"
-                animate={{ x: [0, 4, 0] }}
-                transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                →
-              </motion.span>
-            </motion.div>
+                <div className="flex flex-1 flex-col gap-3">
+                  <motion.div
+                    className="max-w-[88%] rounded-[15px] border border-[#E0FE10]/12 bg-[#E0FE10]/6 px-4 py-3 text-[15px] leading-relaxed text-white"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.35 }}
+                  >
+                    You&apos;re up late. How are you feeling tonight?
+                  </motion.div>
+
+                  <motion.div
+                    className="ml-auto max-w-[88%] rounded-[15px] border border-[#EC4899]/30 bg-[#EC4899]/8 px-4 py-3 text-[15px] leading-relaxed text-white"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.55 }}
+                  >
+                    I don&apos;t feel happy anymore. I feel empty inside. I don&apos;t know why I&apos;m still doing this.
+                    <div className="mt-3 flex items-center gap-2 border-t border-dashed border-[#EC4899]/30 pt-2 text-[8px] font-bold uppercase tracking-[0.18em] text-[#F472B6]">
+                      <span className="h-[5px] w-[5px] rounded-full bg-[#F472B6] shadow-[0_0_8px_rgba(244,114,182,0.7)]" />
+                      Critical signal detected
+                    </div>
+                  </motion.div>
+
+                  <motion.div
+                    className="max-w-[88%] rounded-[15px] border border-[#E0FE10]/12 bg-[#E0FE10]/6 px-4 py-3 text-[15px] leading-relaxed text-white"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.75 }}
+                  >
+                    I hear you. This is beyond what I should handle alone. Connecting you with someone trained to help right now.
+                  </motion.div>
+
+                  <motion.div
+                    className="mt-auto flex items-center justify-between gap-3 rounded-[14px] border border-purple-400/20 bg-gradient-to-r from-purple-400/12 to-pink-400/12 px-4 py-3 text-[15px] font-semibold leading-tight text-white"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.95 }}
+                  >
+                    <span>Clinical pathway handoff initiated</span>
+                    <motion.span
+                      className="text-xl text-[#F472B6]"
+                      animate={{ x: [0, 4, 0] }}
+                      transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+                    >
+                      →
+                    </motion.span>
+                  </motion.div>
+                </div>
+              </div>
+            </div>
           </div>
         </motion.div>
 
@@ -2604,15 +2707,221 @@ const SceneBeachhead: React.FC = () => (
 
 const SceneHundredMPath: React.FC = () => (
   <SceneFrame accent={COLORS.lime}>
+    <div className="relative h-full min-h-[42rem] overflow-hidden">
+      <div className="pointer-events-none absolute -right-[6%] top-[-10%] h-[28rem] w-[28rem] rounded-full bg-[#E0FE10]/10 blur-3xl" />
+      <div className="pointer-events-none absolute -left-[6%] bottom-[-22%] h-[24rem] w-[24rem] rounded-full bg-[#00D4AA]/8 blur-3xl" />
+
+      <div className="relative z-10 flex h-full flex-col">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-4xl">
+            <SlideKicker>Revenue roadmap</SlideKicker>
+            <h1 className="mt-5 text-5xl font-black leading-[0.94] text-white md:text-6xl">
+              A visible path to <span className="text-[#E0FE10]">$100M ARR.</span>
+            </h1>
+            <div className="mt-4 max-w-3xl text-lg leading-relaxed text-zinc-300 md:text-xl">
+              Phased contract roadmap. Prove Pulse Check in every segment, then scale with proof points.
+            </div>
+          </div>
+
+          <motion.div
+            className="text-left lg:text-right"
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.9, delay: 0.25 }}
+          >
+            <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500">5-year target</div>
+            <div className="mt-2 text-7xl font-black leading-none text-[#E0FE10] drop-shadow-[0_0_34px_rgba(224,254,16,0.22)] md:text-[5.8rem]">
+              $100M+
+            </div>
+            <div className="mt-2 text-[11px] font-medium uppercase tracking-[0.24em] text-zinc-400">Annual recurring revenue</div>
+          </motion.div>
+        </div>
+
+        <div className="relative mt-8 flex min-h-0 flex-1 flex-col">
+          <div className="relative flex min-h-0 flex-1 flex-col gap-8 pb-16 lg:flex-row lg:items-end lg:gap-4">
+            <div className="pointer-events-none absolute inset-x-0 bottom-16 hidden h-px bg-gradient-to-r from-transparent via-white/14 to-transparent lg:block" />
+
+            <div className="pointer-events-none absolute inset-x-0 bottom-16 top-0 hidden lg:block">
+              <svg viewBox="0 0 1000 400" preserveAspectRatio="none" className="h-full w-full">
+                <defs>
+                  <linearGradient id="path-arr-curve" x1="0" x2="1" y1="0" y2="0">
+                    <stop offset="0%" stopColor="#00D4AA" stopOpacity="0.2" />
+                    <stop offset="50%" stopColor="#c8ff00" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#c8ff00" stopOpacity="0.5" />
+                  </linearGradient>
+                  <linearGradient id="path-arr-fill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#c8ff00" stopOpacity="0.08" />
+                    <stop offset="100%" stopColor="#c8ff00" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+
+                <path
+                  d="M 0 380 Q 200 370, 300 340 Q 500 280, 700 140 Q 850 60, 1000 20 L 1000 400 L 0 400 Z"
+                  fill="url(#path-arr-fill)"
+                />
+                <motion.path
+                  d="M 0 380 Q 200 370, 300 340 Q 500 280, 700 140 Q 850 60, 1000 20"
+                  fill="none"
+                  stroke="url(#path-arr-curve)"
+                  strokeWidth="2"
+                  strokeDasharray="4 8"
+                  opacity="0.72"
+                  animate={{ strokeDashoffset: [0, -18] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+                />
+                <motion.circle
+                  cx="1000"
+                  cy="20"
+                  r="6"
+                  fill="#c8ff00"
+                  animate={{ r: [6, 10, 6], opacity: [0.6, 1, 0.6] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                />
+              </svg>
+            </div>
+
+            <motion.div
+              className="relative z-10 flex min-h-0 flex-1 flex-col lg:pr-2"
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.35 }}
+            >
+              <div className="text-[10px] font-medium uppercase tracking-[0.24em] text-zinc-500">Years 1-2</div>
+              <div className="mt-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_8px_rgba(52,211,153,0.45)]" />
+                  <span>Prove it</span>
+                </div>
+                <div className="font-black tracking-[0.03em] text-emerald-300">
+                  <span className="text-[1.7rem] leading-none">~$3M</span>
+                  <span className="ml-2 text-[11px] font-medium uppercase tracking-[0.22em] text-zinc-500">ARR</span>
+                </div>
+              </div>
+              <div className="mt-3 max-w-lg text-sm leading-relaxed text-zinc-400">
+                Land anchor contracts across every segment. Validate product, build case studies, establish credibility.
+              </div>
+
+              <div className="mt-5 flex flex-1 flex-col justify-end gap-2">
+                {PATH_PHASE_ONE.map((item, index) => (
+                  <motion.div
+                    key={item.label}
+                    className="grid grid-cols-[18px_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-[10px] border border-white/8 bg-white/[0.02] px-3 py-2.5 transition-all duration-300 hover:translate-x-[2px] hover:border-white/14 hover:bg-white/[0.04]"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.5 + index * 0.05, duration: 0.45 }}
+                  >
+                    <span className="mx-auto h-2 w-2 rounded-full" style={{ background: item.accent, boxShadow: `0 0 6px ${item.accent}` }} />
+                    <span className="min-w-0 text-sm font-semibold text-white">
+                      {item.label}
+                      <span className="ml-2 text-[11px] font-normal text-zinc-500">{item.detail}</span>
+                    </span>
+                    <span className="text-right font-black tracking-[0.04em] text-white">{item.count}</span>
+                    <span className="min-w-[5.5rem] text-right text-lg font-black tracking-[0.03em]" style={{ color: item.accent }}>
+                      {item.revenue}
+                    </span>
+                  </motion.div>
+                ))}
+              </div>
+
+              <div className="mt-4 flex items-center justify-between rounded-md border-l-2 border-emerald-300 bg-gradient-to-r from-white/[0.04] to-transparent px-4 py-3">
+                <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-400">12-14 contracts</div>
+                <div className="font-black tracking-[0.03em] text-emerald-300">~$3.0M ARR</div>
+              </div>
+            </motion.div>
+
+            <div className="relative z-10 hidden w-24 shrink-0 flex-col items-center justify-end pb-10 lg:flex">
+              <motion.div
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 text-[#E0FE10]"
+                animate={{ scale: [1, 1.05, 1], boxShadow: ['0 0 0 0 rgba(224,254,16,0.3)', '0 0 0 8px rgba(224,254,16,0)', '0 0 0 0 rgba(224,254,16,0)'] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <ArrowRight className="h-4 w-4" />
+              </motion.div>
+              <div className="mt-3 max-w-[5rem] text-center text-[9px] font-semibold uppercase leading-relaxed tracking-[0.22em] text-zinc-500">
+                Proof points unlock scale
+              </div>
+            </div>
+
+            <motion.div
+              className="relative z-10 flex min-h-0 flex-[2.2] flex-col lg:pl-2"
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.55 }}
+            >
+              <div className="text-[10px] font-medium uppercase tracking-[0.24em] text-zinc-500">Years 3-5</div>
+              <div className="mt-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="inline-flex items-center gap-2 rounded-full border border-[#E0FE10]/20 bg-[#E0FE10]/10 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[#E0FE10]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#E0FE10] shadow-[0_0_8px_rgba(224,254,16,0.45)]" />
+                  <span>Scale</span>
+                </div>
+                <div className="font-black tracking-[0.03em] text-[#E0FE10]">
+                  <span className="text-[1.7rem] leading-none">$100M+</span>
+                  <span className="ml-2 text-[11px] font-medium uppercase tracking-[0.22em] text-zinc-500">Target ARR</span>
+                </div>
+              </div>
+              <div className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400">
+                Expand across segments. Close league-wide deals. Enter international federation market.
+              </div>
+
+              <div className="mt-5 flex flex-1 flex-col justify-end gap-2">
+                {PATH_PHASE_TWO.map((item, index) => (
+                  <motion.div
+                    key={item.label}
+                    className="grid grid-cols-[18px_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-[10px] border border-white/8 bg-white/[0.02] px-3 py-2.5 transition-all duration-300 hover:translate-x-[2px] hover:border-white/14 hover:bg-white/[0.04]"
+                    style={
+                      item.label === 'League + Intl'
+                        ? { background: 'linear-gradient(90deg, rgba(236,72,153,0.06), transparent)', borderColor: 'rgba(236,72,153,0.2)' }
+                        : undefined
+                    }
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.72 + index * 0.05, duration: 0.45 }}
+                  >
+                    <span className="mx-auto h-2 w-2 rounded-full" style={{ background: item.accent, boxShadow: `0 0 6px ${item.accent}` }} />
+                    <span className="min-w-0 text-sm font-semibold text-white">
+                      {item.label}
+                      <span className="ml-2 text-[11px] font-normal text-zinc-500">{item.detail}</span>
+                    </span>
+                    <span className="text-right font-black tracking-[0.04em] text-white">{item.count}</span>
+                    <span className="min-w-[5.5rem] text-right text-lg font-black tracking-[0.03em]" style={{ color: item.accent }}>
+                      {item.revenue}
+                    </span>
+                  </motion.div>
+                ))}
+              </div>
+
+              <div className="mt-4 flex items-center justify-between rounded-md border-l-2 border-[#E0FE10] bg-gradient-to-r from-white/[0.04] to-transparent px-4 py-3">
+                <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-400">~50 contracts</div>
+                <div className="font-black tracking-[0.03em] text-[#E0FE10]">$100M+ ARR</div>
+              </div>
+            </motion.div>
+          </div>
+
+          <div className="pointer-events-none absolute inset-x-0 bottom-4 hidden justify-between px-6 lg:flex">
+            {['Year 1', 'Year 2', 'Year 3', 'Year 4', 'Year 5'].map((year) => (
+              <div key={year} className="flex flex-col items-center gap-1 text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">
+                <span className="h-2 w-px bg-white/18" />
+                <span>{year}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </SceneFrame>
+);
+
+const SceneCapitalPlan: React.FC = () => (
+  <SceneFrame accent={COLORS.sky}>
     <div className="grid min-h-[42rem] content-center gap-7">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-5xl">
           <SlideKicker>Revenue + capital plan</SlideKicker>
           <h1 className="mt-5 text-5xl font-black leading-[0.94] text-white md:text-6xl">
-            The Pepperdine plan is a disciplined ramp to <span className="text-[#E0FE10]">$12M revenue.</span>
+            The Pepperdine Plan: <span className="text-[#E0FE10]">Disciplined Capital Ladder.</span>
           </h1>
           <p className="mt-4 max-w-4xl text-xl leading-relaxed text-zinc-300 md:text-2xl">
-            Form-aligned forecast, ask, valuation, and financing ladder in one view.
+            Current ask, valuation, financing sequence, and use of funds.
           </p>
         </div>
 
@@ -2625,85 +2934,101 @@ const SceneHundredMPath: React.FC = () => (
         </GlassCard>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
-        <GlassCard accentColor={COLORS.lime}>
+      <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+        <GlassCard accentColor={COLORS.sky}>
           <div className="p-6 md:p-7">
-            <div className="mb-5 flex items-center justify-between">
+            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#E0FE10]">Revenue ramp</div>
-                <div className="mt-1 text-2xl font-black text-white">$25K → $1.5M → $4.5M → $12M</div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#38BDF8]">Capital ladder</div>
+                <div className="mt-1 text-2xl font-black text-white">$1.4M → $5M → $12M → $25M</div>
               </div>
-              <div className="hidden rounded-full border border-[#E0FE10]/20 bg-[#E0FE10]/10 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#E0FE10] md:block">
-                2026-2029
+              <div className="rounded-full border border-[#38BDF8]/20 bg-[#38BDF8]/10 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#38BDF8]">
+                Pre-Seed to Series B
               </div>
             </div>
 
-            <div className="grid min-h-[26rem] items-end gap-4 md:grid-cols-4">
-              {REVENUE_RAMP.map((item, index) => (
+            <div className="relative mt-8 grid gap-4 md:grid-cols-4">
+              <div className="pointer-events-none absolute left-[7%] right-[7%] top-9 hidden h-px bg-gradient-to-r from-[#E0FE10]/60 via-[#38BDF8]/45 to-[#F472B6]/60 md:block" />
+              {CAPITAL_LADDER.map((round, index) => (
                 <motion.div
-                  key={item.year}
-                  className="flex h-full flex-col justify-end"
-                  initial={{ opacity: 0, y: 22 }}
+                  key={round.round}
+                  className="relative z-10 rounded-2xl border border-white/10 bg-black/25 p-5"
+                  initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.12 * index }}
+                  transition={{ delay: 0.1 + index * 0.08 }}
                 >
-                  <div className="mb-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="text-[9px] font-bold uppercase tracking-[0.2em]" style={{ color: item.accent }}>
-                      {item.label}
-                    </div>
-                    <div className="mt-2 text-sm leading-snug text-zinc-400">{item.detail}</div>
+                  <div
+                    className="flex h-16 w-16 items-center justify-center rounded-full border border-white/10 font-['Bebas_Neue'] text-3xl"
+                    style={{ background: `${round.accent}18`, color: round.accent, boxShadow: `0 0 22px ${round.accent}18` }}
+                  >
+                    {index + 1}
                   </div>
-                  <div className="relative flex min-h-[13rem] items-end rounded-2xl border border-white/10 bg-black/25 p-3">
-                    <div
-                      className="w-full rounded-xl"
-                      style={{
-                        height: item.height,
-                        minHeight: '2.4rem',
-                        background: `linear-gradient(180deg, ${item.accent}, ${item.accent}44)`,
-                        boxShadow: `0 0 26px ${item.accent}25`,
-                      }}
-                    />
+                  <div className="mt-6 text-lg font-black text-white">{round.round}</div>
+                  <div className="mt-2 font-['Bebas_Neue'] text-5xl leading-none" style={{ color: round.accent }}>
+                    {round.amount}
                   </div>
-                  <div className="mt-3 flex items-end justify-between gap-3">
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">{item.year}</div>
-                      <div className="mt-1 text-3xl font-black leading-none text-white">{item.revenue}</div>
-                    </div>
-                  </div>
+                  <div className="mt-3 text-[10px] font-bold uppercase tracking-[0.18em] text-white/35">{round.timing}</div>
+                  <div className="mt-2 min-h-[2.75rem] text-sm leading-snug text-zinc-400">{round.note}</div>
                 </motion.div>
+              ))}
+            </div>
+
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
+              {[
+                { label: 'Now', value: '$1.4M Pre-Seed', accent: COLORS.lime },
+                { label: 'After beachhead proof', value: '$5M Seed', accent: COLORS.sky },
+                { label: 'Scale capital', value: '$12M Series A + $25M Series B', accent: COLORS.pink },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-zinc-500">{item.label}</div>
+                  <div className="mt-2 text-base font-black" style={{ color: item.accent }}>
+                    {item.value}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
         </GlassCard>
 
-        <div className="grid gap-4">
-          <GlassCard accentColor={COLORS.sky}>
-            <div className="p-5 md:p-6">
-              <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#38BDF8]">Capital ladder</div>
-              <div className="mt-4 grid gap-3">
-                {CAPITAL_LADDER.map((round, index) => (
+        <div className="grid gap-5">
+          <GlassCard accentColor={COLORS.lime}>
+            <div className="p-6 md:p-7">
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#E0FE10]">Use of funds</div>
+                  <div className="mt-1 text-2xl font-black text-white">$1.4M Pre-Seed allocation</div>
+                </div>
+                <div className="rounded-full border border-[#E0FE10]/20 bg-[#E0FE10]/10 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#E0FE10]">
+                  What it funds
+                </div>
+              </div>
+              <div className="mt-4 grid gap-2">
+                {[
+                  { label: 'Head of Engineering', amount: '~$200K', detail: 'Own product velocity, platform reliability, and data systems.', accent: COLORS.sky },
+                  { label: 'Head of Partnerships', amount: '~$150K', detail: 'Convert schools, teams, federations, and strategic partners.', accent: COLORS.teal },
+                  { label: 'Head of Athlete Performance Science', amount: '~$150K', detail: 'Lead applied sport science and athlete outcomes.', accent: COLORS.purple },
+                  { label: 'R&D and hardware', amount: '~$500K', detail: 'Deepen the Sports Intelligence Layer, using AI to personalize data reads per athlete and sport.', accent: COLORS.lime },
+                  { label: 'GTM and marketing', amount: '~$150K', detail: 'Support beachhead launches, institutional proof, and sales material.', accent: COLORS.pink },
+                  { label: 'Operating runway', amount: '~$250K', detail: 'Existing team salaries, legal, finance, software, and operating infrastructure.', accent: COLORS.orange },
+                ].map((item, index) => (
                   <motion.div
-                    key={round.round}
-                    className="grid grid-cols-[auto_1fr] gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4"
-                    initial={{ opacity: 0, x: 12 }}
+                    key={item.label}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] p-3"
+                    initial={{ opacity: 0, x: 14 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.18 + index * 0.08 }}
+                    transition={{ delay: 0.25 + index * 0.06 }}
                   >
-                    <div
-                      className="flex h-10 w-10 items-center justify-center rounded-full font-['Bebas_Neue'] text-lg"
-                      style={{ background: `${round.accent}16`, color: round.accent }}
-                    >
-                      {index + 1}
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-sm font-black text-white">{round.round}</div>
-                        <div className="text-2xl font-black leading-none" style={{ color: round.accent }}>
-                          {round.amount}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span className="mt-1.5 h-2.5 w-2.5 flex-none rounded-full" style={{ background: item.accent, boxShadow: `0 0 10px ${item.accent}66` }} />
+                        <div className="min-w-0">
+                          <div className="text-sm font-black leading-tight text-white">{item.label}</div>
+                          <div className="mt-1 text-xs leading-snug text-zinc-400">{item.detail}</div>
                         </div>
                       </div>
-                      <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-white/35">{round.timing}</div>
-                      <div className="mt-1 text-sm text-zinc-400">{round.note}</div>
+                      <div className="flex-none text-right text-base font-black" style={{ color: item.accent }}>
+                        {item.amount}
+                      </div>
                     </div>
                   </motion.div>
                 ))}
@@ -2712,12 +3037,19 @@ const SceneHundredMPath: React.FC = () => (
           </GlassCard>
 
           <GlassCard accentColor={COLORS.lime}>
-            <div className="p-5 md:p-6">
-              <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#E0FE10]">Use of funds</div>
-              <div className="mt-3 grid gap-2 text-sm font-semibold text-white">
-                {['Institutional sales', 'Sports Intelligence Layer', 'Pulse Check product depth', 'Clinical pathway integration'].map((item) => (
-                  <div key={item} className="rounded-xl border border-white/8 bg-white/[0.03] px-4 py-3">
-                    {item}
+            <div className="p-6 md:p-7">
+              <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#E0FE10]">Milestones to next round</div>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {[
+                  { value: '$3M', label: 'visible ARR beachhead', accent: COLORS.lime },
+                  { value: 'Patent', label: 'file non-provisional', accent: COLORS.sky },
+                  { value: 'VR', label: 'ship training integration', accent: COLORS.pink },
+                ].map((milestone) => (
+                  <div key={milestone.label} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="text-2xl font-black leading-none" style={{ color: milestone.accent }}>
+                      {milestone.value}
+                    </div>
+                    <div className="mt-2 text-[10px] font-bold uppercase tracking-[0.16em] leading-snug text-white/55">{milestone.label}</div>
                   </div>
                 ))}
               </div>
@@ -2759,8 +3091,8 @@ const GTM_NODES = [
     icon: '🏆',
     name: 'New England Patriots',
     type: 'NFL · Professional',
-    statusBold: '3rd meeting',
-    statusDetail: 'post-draft',
+    statusBold: 'Initial conversations',
+    statusDetail: 'professional team lane',
     accent: '#FF6B35',
     accentDim: 'rgba(255,107,53,0.12)',
     accentBorder: 'rgba(255,107,53,0.25)',
@@ -2770,8 +3102,8 @@ const GTM_NODES = [
 
 const GTM_ADDITIONAL_PILOTS = [
   { school: 'Clark Atlanta University', meta: 'Atlanta, GA · HBCU · Active pilot' },
-  { school: 'Hampton University', meta: 'Hampton, VA · HBCU · Active pilot' },
-  { school: 'UMES', meta: 'Princess Anne, MD · HBCU · Active pilot' },
+  { school: 'DePaul University', meta: 'Chicago, IL · Initial conversations had for pilot' },
+  { school: 'UMES', meta: 'Princess Anne, MD · HBCU · Final pilot-pricing negotiations' },
 ] as const;
 
 const SceneGTM: React.FC = () => (
@@ -2965,85 +3297,215 @@ const SceneGTM: React.FC = () => (
 const SceneTeam: React.FC = () => (
   <SceneFrame accent={COLORS.lime}>
     <motion.div
-      className="mx-auto flex min-h-[42rem] w-full max-w-6xl flex-col justify-center"
+      className="mx-auto grid min-h-[42rem] w-full max-w-7xl content-center gap-4"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={transition}
     >
-      <div className="mb-10 text-center">
-        <SlideKicker>Strong Team</SlideKicker>
-        <h1 className="mt-5 text-5xl font-black leading-[0.94] text-white md:text-7xl">
-          Who&apos;s building <span className="text-[#E0FE10] italic">Pulse</span>?
+      <div className="max-w-6xl">
+        <SlideKicker>Management team strength</SlideKicker>
+        <h1 className="mt-4 text-4xl font-black leading-[0.96] text-white md:text-5xl">
+          Built by operators who know <span className="text-[#E0FE10]">software, athletes, and clinical trust.</span>
         </h1>
+        <p className="mt-3 max-w-4xl text-lg leading-relaxed text-zinc-300">
+          Pulse Intelligence Labs pairs founder-led product depth with human-performance operations, institutional advisors,
+          clinical pathway partners, and venture backing.
+        </p>
       </div>
 
-      <div className="mx-auto mb-8 grid w-full max-w-[50rem] grid-cols-[1fr_auto_1fr] grid-rows-[auto_48px_auto_48px_auto] items-center justify-items-center">
-        {TEAM_CORE.map((member, index) => {
-          const placement =
-            index === 0
-              ? 'col-start-2 row-start-1'
-              : index === 1
-                ? 'col-start-2 row-start-3'
-                : 'col-start-2 row-start-5';
-          const imageSize =
-            index === 0
-              ? 'h-36 w-36 md:h-44 md:w-44'
-              : index === 1
-                ? 'h-32 w-32 md:h-40 md:w-40'
-                : 'h-28 w-28 md:h-36 md:w-36';
-
-          return (
+      <div className="grid items-start gap-4 xl:grid-cols-[1.12fr_0.88fr]">
+        <div className="grid gap-4">
+          {MANAGEMENT_TEAM.map((member, index) => (
             <motion.div
               key={member.name}
-              className={`${placement} relative z-10 w-60 text-center md:w-72`}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.12 + index * 0.1 }}
+              className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-4"
+              style={{
+                boxShadow: `0 0 0 1px ${member.accent}10, 0 18px 60px rgba(0,0,0,0.24)`,
+              }}
+              initial={{ opacity: 0, x: -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.12 + index * 0.12, duration: 0.55 }}
             >
-              <div className="relative mb-3">
-                <div className={`mx-auto overflow-hidden rounded-full border-2 border-[#E0FE10] ring-4 ring-[#E0FE10]/20 ring-offset-2 ring-offset-black ${imageSize}`}>
-                  <img src={member.imageSrc} alt={member.name} className="h-full w-full object-cover" />
+              <div className="absolute inset-x-0 top-0 h-[2px]" style={{ background: member.accent }} />
+              <div className="grid gap-4 md:grid-cols-[7.25rem_1fr]">
+                <div>
+                  <div
+                    className="h-28 w-28 overflow-hidden rounded-2xl border-2 bg-white/[0.04]"
+                    style={{ borderColor: `${member.accent}66` }}
+                  >
+                    <img
+                      src={member.imageSrc}
+                      alt={member.name}
+                      className="h-full w-full object-cover"
+                      style={{ objectPosition: member.imagePosition }}
+                    />
+                  </div>
+                </div>
+
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="text-xl font-black leading-none text-white md:text-2xl">{member.name}</h3>
+                    <span
+                      className="rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em]"
+                      style={{ borderColor: `${member.accent}33`, background: `${member.accent}12`, color: member.accent }}
+                    >
+                      {member.role}
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    <span
+                      className="inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em]"
+                      style={{
+                        background: member.schoolChip.background,
+                        borderColor: member.schoolChip.border,
+                        color: member.schoolChip.color,
+                      }}
+                    >
+                      {member.schoolChip.label}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-300 md:text-[15px]">{member.summary}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {member.credentials.map((credential) => (
+                      <div key={credential} className="rounded-lg border border-white/8 bg-black/20 px-3 py-1.5 text-[12px] font-semibold leading-snug text-white md:text-[13px]">
+                        {credential}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <h4 className="text-lg font-bold text-white md:text-xl">{member.name}</h4>
-              <p className="mb-2 text-base font-medium text-[#E0FE10]">{member.role}</p>
-              <div className="flex flex-wrap justify-center gap-1.5">
-                {member.tags.map((tag) => (
-                  <span key={tag.label} className={`rounded px-2.5 py-1 text-xs font-semibold ${tag.className}`}>
-                    {tag.label}
-                  </span>
-                ))}
-              </div>
             </motion.div>
-          );
-        })}
+          ))}
 
-        <div className="col-start-2 row-start-2 h-full w-px bg-gradient-to-b from-[#E0FE10]/70 to-[#E0FE10]/25" />
-        <div className="col-start-2 row-start-4 h-full w-px bg-gradient-to-b from-[#E0FE10]/70 to-[#E0FE10]/25" />
-      </div>
-
-      <div className="my-8 flex items-center gap-4">
-        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-zinc-600 to-transparent" />
-        <span className="text-sm font-medium uppercase tracking-wider text-zinc-400">Advisors</span>
-        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-zinc-600 to-transparent" />
-      </div>
-
-      <div className="flex flex-wrap justify-center gap-6 md:gap-12">
-        {TEAM_ADVISORS.map((advisor, index) => (
           <motion.div
-            key={advisor.name}
-            className="w-24 text-center md:w-28"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.45 + index * 0.08 }}
+            className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-4"
+            style={{
+              boxShadow: `0 0 0 1px ${HEAD_OF_DESIGN.accent}10, 0 18px 60px rgba(0,0,0,0.2)`,
+            }}
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.42, duration: 0.55 }}
           >
-            <div className="mx-auto mb-2 h-16 w-16 overflow-hidden rounded-full border-2 border-zinc-600 md:h-20 md:w-20">
-              <img src={advisor.imageSrc} alt={advisor.name} className="h-full w-full object-cover" />
+            <div className="absolute inset-x-0 top-0 h-[2px]" style={{ background: HEAD_OF_DESIGN.accent }} />
+            <div className="grid items-center gap-4 md:grid-cols-[5.25rem_1fr]">
+              <div
+                className="h-20 w-20 overflow-hidden rounded-2xl border-2 bg-white/[0.04]"
+                style={{ borderColor: `${HEAD_OF_DESIGN.accent}66` }}
+              >
+                <img
+                  src={HEAD_OF_DESIGN.imageSrc}
+                  alt={HEAD_OF_DESIGN.name}
+                  className="h-full w-full object-cover"
+                  style={{ objectPosition: HEAD_OF_DESIGN.imagePosition }}
+                />
+              </div>
+
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h3 className="text-xl font-black leading-none text-white md:text-2xl">{HEAD_OF_DESIGN.name}</h3>
+                  <span
+                    className="rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em]"
+                    style={{ borderColor: `${HEAD_OF_DESIGN.accent}33`, background: `${HEAD_OF_DESIGN.accent}12`, color: HEAD_OF_DESIGN.accent }}
+                  >
+                    {HEAD_OF_DESIGN.role}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-300">{HEAD_OF_DESIGN.summary}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {HEAD_OF_DESIGN.tags.map((tag) => (
+                    <div key={tag} className="rounded-lg border border-purple-300/20 bg-purple-400/10 px-3 py-1.5 text-[12px] font-semibold leading-snug text-purple-200">
+                      {tag}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-            <h4 className="text-sm font-semibold text-white">{advisor.name}</h4>
-            <p className="text-xs text-zinc-400">{advisor.role}</p>
           </motion.div>
-        ))}
+        </div>
+
+        <div className="grid gap-4">
+          <motion.div
+            className="rounded-2xl border border-white/10 bg-white/[0.035] p-4"
+            initial={{ opacity: 0, x: 16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.22, duration: 0.55 }}
+          >
+            <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#E0FE10]">Advisors</div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {TEAM_ADVISORS.map((advisor, index) => (
+                <motion.div
+                  key={advisor.name}
+                  className="grid grid-cols-[3.25rem_1fr] items-center gap-3 rounded-xl border border-white/8 bg-black/20 p-2"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.28 + index * 0.05 }}
+                >
+                  <div className="h-12 w-12 overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
+                    <img
+                      src={advisor.imageSrc}
+                      alt={advisor.name}
+                      className="h-full w-full object-cover"
+                      style={{ objectPosition: advisor.imagePosition }}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-black leading-tight text-white">{advisor.name}</div>
+                    <div className="mt-0.5 text-[9px] font-bold uppercase leading-tight tracking-[0.12em] text-[#E0FE10]">{advisor.role}</div>
+                    <div className="mt-1 text-[11px] leading-snug text-zinc-400">{advisor.detail}</div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+
+          <motion.div
+            className="rounded-2xl border border-white/10 bg-white/[0.035] p-4"
+            initial={{ opacity: 0, x: 16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.32, duration: 0.55 }}
+          >
+            <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#38BDF8]">Partners + investors</div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {[...TEAM_STRATEGIC_PARTNERS, ...TEAM_INVESTORS].map((partner, index) => (
+                <motion.div
+                  key={partner.name}
+                  className="rounded-xl border border-white/8 bg-black/20 p-3"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.38 + index * 0.06 }}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="mt-1 h-2.5 w-2.5 rounded-full" style={{ background: partner.accent, boxShadow: `0 0 10px ${partner.accent}66` }} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-base font-black text-white">{partner.name}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: partner.accent }}>
+                          {partner.role}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs leading-snug text-zinc-400">{partner.detail}</div>
+                      {'people' in partner ? (
+                        <div className="mt-2 grid gap-2">
+                          {partner.people.map((person) => (
+                            <div key={person.name} className="flex items-center gap-2 rounded-lg border border-white/8 bg-white/[0.03] px-2 py-1.5">
+                              <div className="h-8 w-8 overflow-hidden rounded-lg border border-white/10">
+                                <img src={person.imageSrc} alt={person.name} className="h-full w-full object-cover" />
+                              </div>
+                              <div>
+                                <div className="text-[11px] font-bold leading-tight text-white">{person.name}</div>
+                                <div className="text-[9px] leading-tight text-zinc-500">{person.role}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        </div>
       </div>
     </motion.div>
   </SceneFrame>
@@ -3095,7 +3557,7 @@ const ScenePortfolioContext: React.FC = () => (
                   'Nora AI conversation layer',
                   'Shared identity record',
                   'Health and wearable context',
-                  'Admin and provisioning rails',
+                  'Program setup workflows',
                   'Signal scoring patterns',
                   'Investor-ready product velocity',
                 ].map((item) => (
@@ -3129,11 +3591,35 @@ const ScenePortfolioContext: React.FC = () => (
 
 const SUPPORTERS_V2 = [
   {
+    key: 'auntedna',
+    category: 'Clinical Pathway',
+    categoryColor: '#EC4899',
+    topBar: '#EC4899',
+    colSpan: 'xl:col-span-4',
+    description: '<strong>Strategic clinical pathway partner</strong> for escalation and care routing',
+  },
+  {
+    key: 'polar',
+    category: 'Hardware',
+    categoryColor: '#38BDF8',
+    topBar: '#38BDF8',
+    colSpan: 'xl:col-span-4',
+    description: '<strong>Wearable hardware partner</strong> for biometric and recovery signals',
+  },
+  {
+    key: 'cooley',
+    category: 'Legal Counsel',
+    categoryColor: '#EC4899',
+    topBar: '#8B1E41',
+    colSpan: 'xl:col-span-4',
+    description: '<strong>Legal and venture infrastructure</strong> for company formation and financing',
+  },
+  {
     key: 'ncaa',
     category: 'Sports Institution',
     categoryColor: '#5B8DEF',
     topBar: '#004B87',
-    colSpan: 'xl:col-span-5',
+    colSpan: 'xl:col-span-4',
     description: '<strong>College athletics ecosystem credibility</strong> — direct institutional alignment',
   },
   {
@@ -3142,27 +3628,19 @@ const SUPPORTERS_V2 = [
     categoryColor: '#3B82F6',
     topBar: '#00447C',
     colSpan: 'xl:col-span-4',
-    description: '<strong>Conference-level sports medicine</strong> — Marques Zak, CMO',
+    description: '<strong>Conference-level marketing and institutional access</strong>',
   },
   {
     key: 'nsf',
     category: 'Scientific',
     categoryColor: '#60A5FA',
     topBar: '#2563EB',
-    colSpan: 'xl:col-span-3',
+    colSpan: 'xl:col-span-4',
     description: '<strong>Research validation</strong>',
   },
   {
-    key: 'cooley',
-    category: 'Legal',
-    categoryColor: '#EC4899',
-    topBar: '#8B1E41',
-    colSpan: 'xl:col-span-3',
-    description: '<strong>Legal & venture infrastructure</strong> — Erik Edwards',
-  },
-  {
     key: 'aws',
-    category: 'Infrastructure',
+    category: 'Venture Network',
     categoryColor: '#FF9900',
     topBar: '#FF9900',
     colSpan: 'xl:col-span-3',
@@ -3174,7 +3652,7 @@ const SUPPORTERS_V2 = [
     categoryColor: '#00D4AA',
     topBar: '#00D4AA',
     colSpan: 'xl:col-span-3',
-    description: '<strong>Founder network</strong> & support',
+    description: '<strong>Founder network</strong> and support',
   },
   {
     key: 'launch',
@@ -3182,96 +3660,37 @@ const SUPPORTERS_V2 = [
     categoryColor: '#c8ff00',
     topBar: '#c8ff00',
     colSpan: 'xl:col-span-3',
-    description: '<strong>Investor adjacency</strong> & ecosystem',
+    description: '<strong>Investor backing</strong> and Founder University network',
   },
   {
-    key: 'kelley',
+    key: 'harvard',
     category: 'Academic',
-    categoryColor: '#990000',
-    topBar: '#990000',
-    colSpan: 'xl:col-span-4',
-    description: '<strong>MSIS Program · HOPE Digital Project</strong> — Indiana University',
-  },
-  {
-    key: 'army',
-    category: 'Military',
-    categoryColor: '#4B5320',
-    topBar: '#4B5320',
-    colSpan: 'xl:col-span-4',
-    description: '<strong>Service-connected credibility</strong> — leadership and discipline',
-  },
-  {
-    key: 'stanford-biz',
-    category: 'Academic',
-    categoryColor: '#8C1515',
-    topBar: '#8C1515',
-    colSpan: 'xl:col-span-4',
-    description: '<strong>Graduate School of Business</strong> — Stanford University',
-  },
-] as const;
-
-const BOARD_ADVISORS = [
-  {
-    name: 'Marques Zak',
-    role: 'CMO @ ACC',
-    accent: '#3B82F6',
-    imageSrc: '/zak.jpg',
-    imagePosition: 'center top',
-    imageFit: 'cover',
-  },
-  {
-    name: 'Valerie Alexander',
-    role: 'Fortune 500 Consultant, IP Attorney',
-    accent: '#A855F7',
-    imageSrc: '/Val.jpg',
-    imagePosition: 'center top',
-    imageFit: 'cover',
-  },
-  {
-    name: 'DeRay Mckesson',
-    role: 'Campaign Zero, Activist',
-    accent: '#38BDF8',
-    imageSrc: '/Deray.png',
-    imagePosition: 'center top',
-    imageFit: 'cover',
-  },
-  {
-    name: 'Erik Edwards',
-    role: 'Partner @ Cooley',
-    accent: '#EC4899',
-    imageSrc: '/ErikEdwards.png',
-    imagePosition: 'center top',
-    imageFit: 'cover',
-  },
-  {
-    name: 'Evan Poncelet',
-    role: 'Lead Partner @ Venture Black',
-    accent: '#10B981',
-    imageSrc: '/evan-poncelet.jpeg',
-    imagePosition: 'center 18%',
-    imageFit: 'cover',
-  },
-  {
-    name: 'Garin Varis',
-    role: 'Retired Patriots Player, Attorney',
-    accent: '#FF6B35',
-    imageSrc: '/garin-varis.webp',
-    imagePosition: 'center 24%',
-    imageFit: 'contain',
-  },
-  {
-    name: 'Dr. Malikia Johnson',
-    role: 'Director of Counseling, Council Lead of Clinical Directors — East Coast',
-    accent: '#F59E0B',
-    imageSrc: '/malkia-advisor.png',
-    imagePosition: 'center 18%',
-    imageFit: 'cover',
+    categoryColor: '#A51C30',
+    topBar: '#A51C30',
+    colSpan: 'xl:col-span-3',
+    description: '<strong>Harvard Graduate School of Education</strong> — HGSE network and education leadership',
   },
 ] as const;
 
 /* Typographic logo renderers per supporter key */
 const SupporterLogo: React.FC<{ supporterKey: string }> = ({ supporterKey }) => {
   switch (supporterKey) {
+    case 'auntedna':
+      return (
+        <div>
+          <div className="text-[34px] font-black leading-none tracking-tight text-white">
+            Aunt<span className="text-[#EC4899]">EDNA</span><span className="text-xl text-white/50">.ai</span>
+          </div>
+          <div className="mt-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-[#EC4899]">Clinical pathway</div>
+        </div>
+      );
+    case 'polar':
+      return (
+        <div>
+          <div className="text-[36px] font-black uppercase leading-none tracking-[0.08em] text-white">Polar</div>
+          <div className="mt-1.5 h-[3px] w-20 rounded-full bg-[#38BDF8]" />
+        </div>
+      );
     case 'ncaa':
       return (
         <div className="text-[44px] font-black leading-none tracking-tight text-white" style={{ letterSpacing: '-1px' }}>
@@ -3338,65 +3757,27 @@ const SupporterLogo: React.FC<{ supporterKey: string }> = ({ supporterKey }) => 
           <div className="text-[32px] font-black leading-none text-white" style={{ letterSpacing: '-1px' }}>
             LAUNCH<span className="ml-1 align-super text-sm text-[#c8ff00]">▲</span>
           </div>
-          <div className="mt-1.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-white/30">Jason Calacanis</div>
+          <div className="mt-1.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-white/30">Founder University</div>
         </div>
       );
-    case 'kelley':
+    case 'harvard':
       return (
         <div className="flex items-center gap-4">
           <div
             className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl border-2 text-2xl font-black text-white"
             style={{
-              borderColor: '#990000',
-              background: 'linear-gradient(135deg, #990000, #7A0000)',
+              borderColor: '#A51C30',
+              background: 'linear-gradient(135deg, #A51C30, #6F1222)',
               fontFamily: "'Playfair Display', serif",
             }}
           >
-            IU
+            H
           </div>
           <div>
             <div className="text-[28px] font-black leading-none tracking-tight text-white" style={{ letterSpacing: '-0.5px' }}>
-              KELLEY
+              Harvard
             </div>
-            <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.15em] text-white/55">School of Business · Indiana University</div>
-          </div>
-        </div>
-      );
-    case 'army':
-      return (
-        <div className="flex items-center gap-3">
-          <div
-            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-black text-white"
-            style={{
-              borderColor: '#C5A84A',
-              background: 'radial-gradient(circle, #4B5320, #2D3310)',
-              boxShadow: 'inset 0 0 10px rgba(197,168,74,0.2)',
-            }}
-          >
-            US
-          </div>
-          <div>
-            <div className="text-[22px] font-black uppercase leading-none tracking-wide text-white">U.S. Army</div>
-            <div className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.15em] text-white/55">United States Army</div>
-          </div>
-        </div>
-      );
-    case 'stanford-biz':
-      return (
-        <div className="flex items-center gap-3">
-          <div
-            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border-2 text-xl font-black text-white"
-            style={{
-              borderColor: '#8C1515',
-              background: 'linear-gradient(135deg, #8C1515, #5E0E0E)',
-              fontFamily: "'Playfair Display', serif",
-            }}
-          >
-            S
-          </div>
-          <div>
-            <div className="text-[20px] font-black leading-none tracking-tight text-white" style={{ letterSpacing: '-0.5px' }}>Stanford</div>
-            <div className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-white/55">Graduate School of Business</div>
+            <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.15em] text-white/55">HGSE</div>
           </div>
         </div>
       );
@@ -3407,27 +3788,27 @@ const SupporterLogo: React.FC<{ supporterKey: string }> = ({ supporterKey }) => 
 
 const SceneSupporters: React.FC = () => (
   <SceneFrame accent={COLORS.lime}>
-    <div className="flex h-full min-h-0 flex-col justify-start gap-3">
+    <div className="flex h-full min-h-0 flex-col justify-center gap-5">
       {/* Header */}
       <div>
         <SlideKicker>Who Supports Us</SlideKicker>
         <h1 className="mt-3 text-[2.15rem] font-bold leading-[1.05] tracking-tight text-white md:text-[2.65rem]">
           We are not building <span style={{ color: COLORS.lime }}>in isolation.</span>
         </h1>
-        <p className="mt-1.5 max-w-[780px] text-[13px] leading-relaxed text-white/55 md:text-[14px]">
-          Institutional support already spans <strong className="font-medium text-white">sports, science, legal, startup, and venture.</strong>
+        <p className="mt-1.5 max-w-[880px] text-[13px] leading-relaxed text-white/55 md:text-[14px]">
+          Strategic support already spans <strong className="font-medium text-white">clinical pathway, hardware, legal, capital, institutional access, infrastructure, and research.</strong>
         </p>
       </div>
 
       {/* Logo Wall */}
-      <div className="grid flex-1 grid-cols-1 gap-2.5 md:grid-cols-6 xl:grid-cols-12" style={{ minHeight: 0, gridAutoRows: '1fr' }}>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-6 xl:grid-cols-12">
         {SUPPORTERS_V2.map((s, index) => (
           <motion.div
             key={s.key}
-            className={`relative flex flex-col justify-between overflow-hidden rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-4 transition-all duration-300 hover:-translate-y-[3px] hover:border-white/[0.14] md:col-span-3 ${s.colSpan}`}
+            className={`relative flex min-h-[8.9rem] flex-col justify-between overflow-hidden rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-4 transition-all duration-300 hover:-translate-y-[3px] hover:border-white/[0.14] md:col-span-3 ${s.colSpan}`}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 + index * 0.1, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ delay: 0.12 + index * 0.06, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
           >
             {/* Accent top bar */}
             <div className="absolute left-0 right-0 top-0 h-[2px] opacity-60" style={{ background: s.topBar }} />
@@ -3452,49 +3833,6 @@ const SceneSupporters: React.FC = () => (
         ))}
       </div>
 
-      {/* ── BOARD OF ADVISORS ── */}
-      <motion.div
-        className="rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-4"
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.85, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <div className="mb-3 flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#E0FE10]" style={{ boxShadow: '0 0 6px rgba(224,254,16,0.4)' }} />
-          <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#E0FE10]">Board of Advisors</span>
-        </div>
-        <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
-          {BOARD_ADVISORS.map((advisor, index) => (
-            <motion.div
-              key={advisor.name}
-              className="flex items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.14]"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.95 + index * 0.08, duration: 0.5 }}
-            >
-              <div
-                className="h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl border-2 bg-white/[0.04]"
-                style={{ borderColor: `${advisor.accent}55` }}
-              >
-                <img
-                  src={advisor.imageSrc}
-                  alt={advisor.name}
-                  className="h-full w-full"
-                  style={{
-                    objectFit: advisor.imageFit,
-                    objectPosition: advisor.imagePosition,
-                  }}
-                />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[12px] font-bold leading-tight text-white">{advisor.name}</div>
-                <div className="text-[9px] leading-snug tracking-wide" style={{ color: advisor.accent }}>{advisor.role}</div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </motion.div>
-
       {/* Footer */}
       <motion.div
         className="flex items-center gap-3 rounded-xl border px-4 py-3"
@@ -3510,7 +3848,7 @@ const SceneSupporters: React.FC = () => (
           <Zap className="h-3.5 w-3.5 text-[#0a0a0b]" />
         </div>
         <div className="text-[11px] leading-snug text-white/55 md:text-[12px]">
-          <strong className="font-semibold text-white">Athletics, science, legal, startup, and venture.</strong>{' '}
+          <strong className="font-semibold text-white">Clinical, hardware, legal, capital, and institutional infrastructure.</strong>{' '}
           The support around us is real — and already in motion.
         </div>
       </motion.div>
@@ -3908,8 +4246,6 @@ const SceneSummary: React.FC = () => (
         <div className="flex flex-col gap-1.5 text-[12px] text-white/55 md:flex-row md:flex-wrap md:items-center md:gap-x-4">
           <span><strong className="font-semibold text-white">Tremaine Grant</strong> · tre@fitwithpulse.ai</span>
           <span className="hidden text-white/18 md:inline">|</span>
-          <span><strong className="font-semibold text-white">Bobby Nweke</strong> · bobby@fitwithpulse.ai</span>
-          <span className="hidden text-white/18 md:inline">|</span>
           <span><strong className="font-semibold text-white">Pulse Intelligence Labs</strong> · Pepperdine MFC 2026</span>
         </div>
       </div>
@@ -3981,10 +4317,11 @@ const PulsePILPepperdinePitchPage: React.FC = () => {
     if (slide === 13) return <SceneMarket />;
     if (slide === 14) return <SceneBeachhead />;
     if (slide === 15) return <SceneHundredMPath />;
-    if (slide === 16) return <SceneGTM />;
-    if (slide === 17) return <SceneTeam />;
-    if (slide === 18) return <ScenePortfolioContext />;
-    if (slide === 19) return <SceneSupporters />;
+    if (slide === 16) return <SceneCapitalPlan />;
+    if (slide === 17) return <SceneGTM />;
+    if (slide === 18) return <SceneTeam />;
+    if (slide === 19) return <ScenePortfolioContext />;
+    if (slide === 20) return <SceneSupporters />;
     return <SceneSummary />;
   }, [slide]);
 
@@ -4030,7 +4367,9 @@ const PulsePILPepperdinePitchPage: React.FC = () => {
                   height: stageDimension,
                 }}
               >
-                <AnimatePresence mode="wait">{scene}</AnimatePresence>
+                <div className="relative h-full w-full">
+                  <AnimatePresence mode="wait">{scene}</AnimatePresence>
+                </div>
               </div>
             </div>
           </main>
@@ -4057,15 +4396,26 @@ const PulsePILPepperdinePitchPage: React.FC = () => {
               ))}
             </div>
 
-            <button
-              type="button"
-              onClick={goNext}
-              disabled={slide === TOTAL_SLIDES - 1}
-              className="inline-flex items-center gap-2 rounded-full bg-[#E0FE10] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#d1ef15] disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              Next
-              <ArrowRight className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <a
+                href={PDF_DOWNLOAD_PATH}
+                download="Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf"
+                className="inline-flex items-center gap-2 rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-4 py-2 text-sm font-semibold text-[#E0FE10] transition hover:bg-[#E0FE10]/15"
+              >
+                <Download className="h-4 w-4" />
+                <span className="hidden sm:inline">PDF</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={goNext}
+                disabled={slide === TOTAL_SLIDES - 1}
+                className="inline-flex items-center gap-2 rounded-full bg-[#E0FE10] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#d1ef15] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Next
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
           </footer>
         </div>
       </div>
