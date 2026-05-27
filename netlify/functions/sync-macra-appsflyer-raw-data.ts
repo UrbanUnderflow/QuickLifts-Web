@@ -112,6 +112,11 @@ type SummaryShape = {
     byName: Record<string, number>;
     byMediaSource: Record<string, number>;
   };
+  revenue: {
+    total: number;
+    byEventName: Record<string, number>;
+    byMediaSource: Record<string, number>;
+  };
   matchedCustomerUserRows: number;
   unmatchedRows: number;
   importedUserDocs: number;
@@ -273,9 +278,7 @@ const resolveAggregateCsvPeriod = (args: {
 
   const requestedStart = normalizeDateOnly(args.body.csvPeriodStart || args.body.periodStart || args.body.fromDate);
   const requestedEnd = normalizeDateOnly(args.body.csvPeriodEnd || args.body.periodEnd || args.body.toDate);
-  const requestedPreset = normalizeString(args.body.csvPeriodPreset || args.body.periodPreset);
-  const explicitRequest = requestedPreset === 'custom' || requestedPreset === 'today' || requestedPreset === 'yesterday';
-  if (requestedStart && requestedEnd && explicitRequest) {
+  if (requestedStart && requestedEnd) {
     return {
       docId: `macra_${requestedStart}_${requestedEnd}`,
       preset: normalizeString(args.body.csvPeriodPreset || args.body.periodPreset || 'request_fallback') || 'request_fallback',
@@ -439,6 +442,11 @@ const createSummary = (args: {
     byName: {},
     byMediaSource: {},
   },
+  revenue: {
+    total: 0,
+    byEventName: {},
+    byMediaSource: {},
+  },
   matchedCustomerUserRows: 0,
   unmatchedRows: 0,
   importedUserDocs: 0,
@@ -452,6 +460,13 @@ const addRowToSummary = (summary: SummaryShape, row: NormalizedRow, report: Repo
   const mediaSource = report.organic ? 'Organic' : getValue(row, ['media_source', 'pid', 'source']) || 'Unknown paid source';
   const campaign = getValue(row, ['campaign', 'campaign_name', 'c']) || 'Unknown campaign';
   const aggregateEventName = getValue(row, ['in_apps_events']);
+  const revenue = parseReportNumber(getValue(row, ['revenue', 'event_revenue', 'af_revenue']));
+  const addRevenue = (eventName: string) => {
+    if (!revenue) return;
+    summary.revenue.total += revenue;
+    bump(summary.revenue.byEventName, eventName || 'unknown_event', revenue);
+    bump(summary.revenue.byMediaSource, mediaSource, revenue);
+  };
 
   if (report.type === 'event' && isAggregatedPerformanceRow(row)) {
     if (!aggregateEventName) return;
@@ -462,6 +477,7 @@ const addRowToSummary = (summary: SummaryShape, row: NormalizedRow, report: Repo
     summary.events.total += actionCount;
     bump(summary.events.byName, aggregateEventName, actionCount);
     bump(summary.events.byMediaSource, mediaSource, actionCount);
+    addRevenue(aggregateEventName);
     return;
   }
 
@@ -479,6 +495,7 @@ const addRowToSummary = (summary: SummaryShape, row: NormalizedRow, report: Repo
     summary.events.total += 1;
     bump(summary.events.byName, eventName);
     bump(summary.events.byMediaSource, mediaSource);
+    addRevenue(eventName);
   }
 };
 
@@ -591,6 +608,9 @@ const mergeSummaryTotals = (existing: Record<string, any>, delta: SummaryShape):
   merged.events.total = (Number(existing.events?.total || 0) || 0) + delta.events.total;
   merged.events.byName = mergeCountMaps(existing.events?.byName || {}, delta.events.byName);
   merged.events.byMediaSource = mergeCountMaps(existing.events?.byMediaSource || {}, delta.events.byMediaSource);
+  merged.revenue.total = (Number(existing.revenue?.total || 0) || 0) + (Number(delta.revenue?.total || 0) || 0);
+  merged.revenue.byEventName = mergeCountMaps(existing.revenue?.byEventName || {}, delta.revenue?.byEventName || {});
+  merged.revenue.byMediaSource = mergeCountMaps(existing.revenue?.byMediaSource || {}, delta.revenue?.byMediaSource || {});
   merged.matchedCustomerUserRows = (Number(existing.matchedCustomerUserRows || 0) || 0) + delta.matchedCustomerUserRows;
   merged.unmatchedRows = (Number(existing.unmatchedRows || 0) || 0) + delta.unmatchedRows;
   merged.importedUserDocs = Math.max(Number(existing.importedUserDocs || 0) || 0, delta.importedUserDocs);
@@ -700,6 +720,11 @@ const buildLayeredScoreboardSummary = (args: {
     total: Number(aggregate.events?.total || 0) || 0,
     byName: { ...(aggregate.events?.byName || {}) },
     byMediaSource: { ...(aggregate.events?.byMediaSource || {}) },
+  };
+  merged.revenue = {
+    total: Number(aggregate.revenue?.total || 0) || 0,
+    byEventName: { ...(aggregate.revenue?.byEventName || {}) },
+    byMediaSource: { ...(aggregate.revenue?.byMediaSource || {}) },
   };
   merged.matchedCustomerUserRows = Number(raw.matchedCustomerUserRows || 0) || 0;
   merged.unmatchedRows = Number(raw.unmatchedRows || 0) || 0;
@@ -1076,6 +1101,9 @@ const aggregateSummaryFingerprint = (summary: Record<string, any> | null | undef
       reports: stableMap(summary?.reports),
       eventsByName: stableMap(summary?.events?.byName),
       eventsByMediaSource: stableMap(summary?.events?.byMediaSource),
+      revenueTotal: Number(summary?.revenue?.total || 0) || 0,
+      revenueByEventName: stableMap(summary?.revenue?.byEventName),
+      revenueByMediaSource: stableMap(summary?.revenue?.byMediaSource),
       installsByMediaSource: stableMap(summary?.installs?.byMediaSource),
       installsByCampaign: stableMap(summary?.installs?.byCampaign),
     })
@@ -1724,6 +1752,14 @@ export const handler: Handler = async (event) => {
           .sort(([left], [right]) => left.localeCompare(right))
           .map(([date, rows]) => ({ date, rows }));
         const rawRowDates = eventDateDistribution.map((row) => row.date).filter((date) => date !== 'missing_date');
+        const missingDateRows = eventDateDistribution.find((row) => row.date === 'missing_date')?.rows || 0;
+        const parsedDateRows = aggregateRows.length - missingDateRows;
+        const dateHandling =
+          parsedDateRows === aggregateRows.length
+            ? 'row_level_dates'
+            : period.periodStart === period.periodEnd
+              ? 'single_day_assigned'
+              : 'period_bucket_no_row_dates';
         const rawRowPersistence = await persistRawRowsOnly({
           db: adminRequest.db,
           runId,
@@ -1737,17 +1773,43 @@ export const handler: Handler = async (event) => {
           period,
           periodSource: period.source || '',
           autoAssignedYesterday: period.source === 'auto_yesterday',
+          requestedPeriod: {
+            preset: normalizeString(body.csvPeriodPreset || body.periodPreset) || null,
+            start: normalizeDateOnly(body.csvPeriodStart || body.periodStart || body.fromDate) || null,
+            end: normalizeDateOnly(body.csvPeriodEnd || body.periodEnd || body.toDate) || null,
+          },
           clientYesterday: normalizeDateOnly(body.clientYesterday) || null,
           uploadedRows: aggregateRows.length,
           rawRowsPersisted: rawRowPersistence.persistedRawRows,
           rawRowsRetired: rawRowPersistence.retiredRawRows,
           datedRows,
+          parsedDateRows,
+          missingDateRows,
           dateGranularity,
+          dateHandling,
           eventDateDistribution,
           topUploadedEvents,
+          revenueTotal: Number(summary.revenue?.total || 0) || 0,
+          topRevenueEvents: topEntries(summary.revenue?.byEventName || {}, 8),
+          eventSamples: aggregateRows.slice(0, 20).map(({ row, report }) => ({
+            eventDate: rawRowEventDate(row) || null,
+            eventTime: rawRowEventTime(row) || null,
+            eventName: rawRowEventName(row, report) || null,
+            mediaSource: rawRowMediaSource(row, report),
+            actions: rawRowActionCount(row),
+            uniqueUsers: Math.max(0, parseReportNumber(row.unique_users)),
+            revenue: parseReportNumber(row.revenue),
+          })),
           sourceFiles,
           rawRowCollection: RAW_ROW_COLLECTION,
         };
+        if (dateHandling === 'period_bucket_no_row_dates') {
+          console.warn('[sync-macra-appsflyer-raw-data] Aggregate CSV has no row-level dates; saved as a coverage bucket', {
+            period,
+            requestedPeriod: uploadDiagnostics.requestedPeriod,
+            uploadedRows: aggregateRows.length,
+          });
+        }
         console.log('[sync-macra-appsflyer-raw-data] Aggregate CSV upload diagnostics', uploadDiagnostics);
         const { cumulativeSummary, aggregateCsvSummary, aggregateCsvPeriods, supersededPeriodIds, persistedPeriodCount } = await persistAggregateCsvPeriodImport({
           db: adminRequest.db,
@@ -1820,6 +1882,29 @@ export const handler: Handler = async (event) => {
         source: 'csv_upload',
         rawRows: newRows,
       });
+      const eventDateDistribution = Object.entries(
+        allRows.reduce((out, { row }) => {
+          const eventDate = rawRowEventDate(row) || 'missing_date';
+          out[eventDate] = (out[eventDate] || 0) + 1;
+          return out;
+        }, {} as Record<string, number>)
+      )
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([date, rows]) => ({ date, rows }));
+      const uploadDiagnostics = {
+        mode: 'raw_csv_upload',
+        uploadedRows: allRows.length,
+        importedRows: newRows.length,
+        duplicateRows,
+        dateHandling: 'row_level_dates',
+        eventDateDistribution,
+        topUploadedEvents: topEntries(summary.events.byName, 12),
+        revenueTotal: Number(summary.revenue?.total || 0) || 0,
+        topRevenueEvents: topEntries(summary.revenue?.byEventName || {}, 8),
+        sourceFiles,
+        rawRowCollection: RAW_ROW_COLLECTION,
+      };
+      console.log('[sync-macra-appsflyer-raw-data] Raw CSV upload diagnostics', uploadDiagnostics);
 
       return json(200, {
         success: true,
@@ -1829,6 +1914,7 @@ export const handler: Handler = async (event) => {
         uploadedRows: allRows.length,
         importedRows: newRows.length,
         duplicateRows,
+        uploadDiagnostics,
       });
     }
 

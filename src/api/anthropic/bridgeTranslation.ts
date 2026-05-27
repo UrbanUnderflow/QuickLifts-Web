@@ -1,6 +1,6 @@
 // OpenAI ↔ Anthropic shape translators used by openai-bridge.ts dual-path.
 //
-// Limited to the request shapes Sport Intelligence callers actually send:
+// Limited to text-only request shapes that dual-path bridge callers send:
 // system + user messages, optional `response_format: json_object`. Image
 // content / function calling are not migrated through this route.
 //

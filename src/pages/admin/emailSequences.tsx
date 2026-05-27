@@ -2640,6 +2640,68 @@ const EmailSequencesAdmin: React.FC = () => {
       const appsFlyerRawSummaryForRange = buildAppsFlyerRawRowsSummaryForRange(appsFlyerBaseSummary, appsFlyerRawRowDocs, activeRange);
       const appsFlyerPeriodSummaryForRange = buildAppsFlyerAggregateSummaryForRange(appsFlyerBaseSummary, appsFlyerAggregatePeriodDocs, activeRange);
       const appsFlyerSummaryForRange = appsFlyerRawSummaryForRange || appsFlyerPeriodSummaryForRange;
+      const summarizeAppsFlyerDebugSummary = (summary: Record<string, any> | null) =>
+        summary
+          ? {
+              importSource: normalizeScoreboardString(summary.importSource || summary.source || getNestedValue(summary, 'latestRunSummary.importSource')),
+              from: normalizeScoreboardString(summary.from),
+              to: normalizeScoreboardString(summary.to),
+              rows: Number(summary.rows || 0) || 0,
+              events: Number(getNestedValue(summary, 'events.total') || 0) || 0,
+              revenue: Number(getNestedValue(summary, 'revenue.total') || 0) || 0,
+              aggregateCsvCoverageStart: normalizeScoreboardString(summary.aggregateCsvCoverageStart),
+              aggregateCsvCoverageEnd: normalizeScoreboardString(summary.aggregateCsvCoverageEnd),
+              aggregateCsvPeriodCount: Number(summary.aggregateCsvPeriodCount || 0) || 0,
+              topEvents: scoreboardTopEntriesFromMap((getNestedValue(summary, 'events.byName') || {}) as Record<string, number>),
+            }
+          : null;
+      const rawRowsByDate = Object.entries(
+        appsFlyerRawRowDocs.reduce((out, row) => {
+          const eventDate = rawAppsFlyerEventDate(row) || 'missing_date';
+          out[eventDate] = (out[eventDate] || 0) + 1;
+          return out;
+        }, {} as Record<string, number>)
+      )
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([date, rows]) => ({ date, rows }));
+      console.groupCollapsed(`[Macra Scoreboard AppsFlyer Debug] ${activeRange.label} · ${new Date().toISOString()}`);
+      console.info('Date range', activeRange);
+      console.info('Firestore docs loaded', {
+        aggregatePeriodDocs: appsFlyerAggregatePeriodDocs.length,
+        rawRowDocs: appsFlyerRawRowDocs.length,
+        users: userDocs.length,
+        emailLogs: emailLogsInRange.length,
+        purchaseLogs: purchaseLogsInRange.length,
+      });
+      console.info('Summary choice', {
+        selectedSource: appsFlyerRawSummaryForRange ? 'raw_rows' : appsFlyerPeriodSummaryForRange ? 'aggregate_periods' : 'none',
+        rawSummary: summarizeAppsFlyerDebugSummary(appsFlyerRawSummaryForRange),
+        aggregatePeriodSummary: summarizeAppsFlyerDebugSummary(appsFlyerPeriodSummaryForRange),
+        selectedSummary: summarizeAppsFlyerDebugSummary(appsFlyerSummaryForRange),
+      });
+      console.table(
+        appsFlyerAggregatePeriodDocs
+          .map((period) => ({
+            id: period.id,
+            periodStart: normalizeScoreboardString(period.periodStart),
+            periodEnd: normalizeScoreboardString(period.periodEnd),
+            periodGranularity: normalizeScoreboardString(period.periodGranularity),
+            periodSource: normalizeScoreboardString(period.periodSource),
+            excludedFromRangeRollups: Boolean(period.excludedFromRangeRollups),
+            supersededBy: normalizeScoreboardString(period.supersededBy),
+            rows: Number(getNestedValue(period, 'summary.rows') || 0) || 0,
+            events: Number(getNestedValue(period, 'summary.events.total') || 0) || 0,
+            revenue: Number(getNestedValue(period, 'summary.revenue.total') || 0) || 0,
+            fitsSelectedRange: appsFlyerAggregatePeriodFitsRange(
+              normalizeScoreboardString(period.periodStart),
+              normalizeScoreboardString(period.periodEnd),
+              activeRange
+            ),
+          }))
+          .slice(0, 80)
+      );
+      console.table(rawRowsByDate.slice(0, 80));
+      console.groupEnd();
       const allUsers = userDocs.map((user) => {
         const email = normalizeScoreboardString(user.data.email);
         const userEmailLogs = emailLogsInRange.filter((log) => matchesUserOrEmail(log, user.id, email));
@@ -3254,6 +3316,15 @@ const EmailSequencesAdmin: React.FC = () => {
       if (Array.isArray(json?.uploadDiagnostics?.topUploadedEvents)) {
         console.table(json.uploadDiagnostics.topUploadedEvents);
       }
+      if (Array.isArray(json?.uploadDiagnostics?.topRevenueEvents)) {
+        console.table(json.uploadDiagnostics.topRevenueEvents);
+      }
+      if (Array.isArray(json?.uploadDiagnostics?.eventSamples)) {
+        console.table(json.uploadDiagnostics.eventSamples);
+      }
+      if (Array.isArray(json?.aggregatePeriods)) {
+        console.table(json.aggregatePeriods);
+      }
       if (!response.ok || json?.success === false) {
         throw new Error(json?.error || `AppsFlyer CSV upload failed (HTTP ${response.status})`);
       }
@@ -3267,6 +3338,12 @@ const EmailSequencesAdmin: React.FC = () => {
       const dateGranularity = normalizeScoreboardString(json?.dateGranularity);
       const rawRowsPersisted = Number(json?.uploadDiagnostics?.rawRowsPersisted || 0);
       const rawRowsRetired = Number(json?.uploadDiagnostics?.rawRowsRetired || 0);
+      const dateHandling = normalizeScoreboardString(json?.uploadDiagnostics?.dateHandling);
+      const datedRawRowsPersisted = dateHandling === 'period_bucket_no_row_dates' ? 0 : rawRowsPersisted;
+      const noRowDatesNote =
+        dateHandling === 'period_bucket_no_row_dates'
+          ? ' No row-level AppsFlyer dates were found, so the upload was saved as one coverage bucket.'
+          : '';
       const uploadedTrialStartLabel = uploadedTrialStarts === 1 ? 'trial start' : 'trial starts';
       const importedPeriodStart = normalizeScoreboardString(json?.aggregatePeriod?.periodStart) || appsFlyerCsvPeriodStart;
       const importedPeriodEnd = normalizeScoreboardString(json?.aggregatePeriod?.periodEnd) || appsFlyerCsvPeriodEnd;
@@ -3277,9 +3354,9 @@ const EmailSequencesAdmin: React.FC = () => {
         : '';
       setMessage({
         type: 'success',
-        text: `AppsFlyer CSV import complete${replacedPeriod}: ${importedRows} rows merged${rawRowsPersisted ? ` as ${rawRowsPersisted} dated raw event row${rawRowsPersisted === 1 ? '' : 's'}${rawRowsRetired ? `, ${rawRowsRetired} older raw row${rawRowsRetired === 1 ? '' : 's'} retired` : ''}` : mergedPeriodCount ? ` into ${mergedPeriodCount} saved ${dateGranularity === 'daily' ? 'daily bucket' : 'coverage bucket'}${mergedPeriodCount === 1 ? '' : 's'}` : ''}${duplicateRows ? `, ${duplicateRows} duplicate rows skipped` : ''}${
+        text: `AppsFlyer CSV import complete${replacedPeriod}: ${importedRows} rows merged${datedRawRowsPersisted ? ` as ${datedRawRowsPersisted} dated raw event row${datedRawRowsPersisted === 1 ? '' : 's'}${rawRowsRetired ? `, ${rawRowsRetired} older raw row${rawRowsRetired === 1 ? '' : 's'} retired` : ''}` : mergedPeriodCount ? ` into ${mergedPeriodCount} saved ${dateGranularity === 'daily' ? 'daily bucket' : 'coverage bucket'}${mergedPeriodCount === 1 ? '' : 's'}` : ''}${duplicateRows ? `, ${duplicateRows} duplicate rows skipped` : ''}${
           uploadedEventActions ? `, ${uploadedEventActions} event actions counted${uploadedTrialStarts ? `, including ${uploadedTrialStarts} ${uploadedTrialStartLabel}` : ''}` : ''
-        }${supersededPeriodCount ? `, ${supersededPeriodCount} overlapping saved coverage ${supersededPeriodCount === 1 ? 'window was' : 'windows were'} retired from totals` : ''}.`,
+        }${supersededPeriodCount ? `, ${supersededPeriodCount} overlapping saved coverage ${supersededPeriodCount === 1 ? 'window was' : 'windows were'} retired from totals` : ''}.${noRowDatesNote}`,
       });
       await loadMacraScoreboard();
     } catch (e: any) {
@@ -3391,6 +3468,7 @@ const EmailSequencesAdmin: React.FC = () => {
     const appsFlyerOrganicInstalls = Number(getNestedValue(appsFlyerSummary, 'installs.organic') || 0);
     const appsFlyerNonOrganicInstalls = Number(getNestedValue(appsFlyerSummary, 'installs.nonOrganic') || 0);
     const appsFlyerEvents = Number(getNestedValue(appsFlyerSummary, 'events.total') || 0);
+    const appsFlyerRevenue = Number(getNestedValue(appsFlyerSummary, 'revenue.total') || 0);
     const appsFlyerPaywallEvents = appsFlyerSummaryEventCount(appsFlyerSummary, MACRA_APPSFLYER_PAYWALL_EVENT_NAMES);
     const appsFlyerPlanLoadedEvents = appsFlyerSummaryEventCount(appsFlyerSummary, MACRA_APPSFLYER_PLAN_LOADED_EVENT_NAMES);
     const appsFlyerPlanSelectedEvents = appsFlyerSummaryEventCount(appsFlyerSummary, MACRA_APPSFLYER_PLAN_SELECTED_EVENT_NAMES);
@@ -3570,6 +3648,7 @@ const EmailSequencesAdmin: React.FC = () => {
       appsFlyerStartTrialEvents,
       appsFlyerSubscribeEvents,
       appsFlyerPurchaseEvents,
+      appsFlyerRevenue,
       appsFlyerMatchedRows,
       appsFlyerTopMediaSources,
       appsFlyerTopCampaigns,
@@ -3621,7 +3700,7 @@ const EmailSequencesAdmin: React.FC = () => {
     {
       label: 'Paid plan conversions',
       value: Math.max(macraScoreboardSummary.qualifiedPaid, macraScoreboardSummary.retargetingPaidConversions),
-      sublabel: `${macraScoreboardSummary.retargetingPaidConversions} paid after web offer · ${macraScoreboardSummary.appsFlyerSubscribeEvents + macraScoreboardSummary.appsFlyerPurchaseEvents} AppsFlyer subscribe/purchase events · ${formatScoreboardMoney(macraScoreboardSummary.retargetingRecoveredRevenue)}`,
+      sublabel: `${macraScoreboardSummary.retargetingPaidConversions} paid after web offer · ${macraScoreboardSummary.appsFlyerSubscribeEvents + macraScoreboardSummary.appsFlyerPurchaseEvents} AppsFlyer subscribe/purchase events · ${formatScoreboardMoney(macraScoreboardSummary.appsFlyerRevenue)} AppsFlyer revenue`,
       icon: ShoppingCart,
       tone: 'text-green-300',
     },
@@ -3894,6 +3973,7 @@ const EmailSequencesAdmin: React.FC = () => {
           firstPartyQualifiedTrialStarts: macraScoreboardSummary.qualifiedTrialStarts,
           trialEventGap: Math.max(0, macraScoreboardSummary.appsFlyerStartTrialEvents - macraScoreboardSummary.qualifiedTrialStarts),
           subscribeOrPurchaseEvents: macraScoreboardSummary.appsFlyerSubscribeEvents + macraScoreboardSummary.appsFlyerPurchaseEvents,
+          appsFlyerRevenue: macraScoreboardSummary.appsFlyerRevenue,
           firstPartyQualifiedPaidUsers: macraScoreboardSummary.qualifiedPaid,
           paidEventGap: Math.max(0, macraScoreboardSummary.appsFlyerSubscribeEvents + macraScoreboardSummary.appsFlyerPurchaseEvents - macraScoreboardSummary.qualifiedPaid),
         },
@@ -3915,6 +3995,7 @@ const EmailSequencesAdmin: React.FC = () => {
           startTrialEvents: macraScoreboardSummary.appsFlyerStartTrialEvents,
           subscribeEvents: macraScoreboardSummary.appsFlyerSubscribeEvents,
           purchaseEvents: macraScoreboardSummary.appsFlyerPurchaseEvents,
+          revenue: macraScoreboardSummary.appsFlyerRevenue,
           paywallIntentFunnel: macraScoreboardSummary.appsFlyerPaywallFunnelRows,
           matchedCustomerUserRows: macraScoreboardSummary.appsFlyerMatchedRows,
           topMediaSources: macraScoreboardSummary.appsFlyerTopMediaSources,

@@ -91,6 +91,17 @@ test('featureRouting — Macra full-cutover features have no fallbackProvider', 
   }
 });
 
+test('featureRouting — Macra client text analyzer uses Anthropic with OpenAI fallback', async () => {
+  const { routing } = await loadModules();
+  const config = routing.getFeatureRouting('macraMealNote');
+
+  assert.ok(config);
+  assert.equal(config.provider, 'anthropic');
+  assert.equal(config.fallbackProvider, 'openai');
+  assert.equal(config.maxTokens, 1500);
+  assert.equal(config.migrationModeId, 'macra-client-dual-path-v1');
+});
+
 test('featureRouting — PulseCheck dual-path features fall back to OpenAI', async () => {
   const { routing } = await loadModules();
   for (const featureId of [

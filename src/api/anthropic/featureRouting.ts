@@ -19,6 +19,7 @@ export type Provider = 'anthropic' | 'openai';
 // filter by which migration cohort the entry came from.
 export type MigrationModeId =
   | 'macra-full-cutover-v1'
+  | 'macra-client-dual-path-v1'
   | 'pulsecheck-dual-path-v1'
   | 'pulsecheck-translation-v1';
 
@@ -58,6 +59,18 @@ export const MACRA_DAILY_INSIGHT: FeatureRoutingConfig = {
   model: ANTHROPIC_MODEL_SONNET_4_6,
   maxTokens: 1200,
   migrationModeId: 'macra-full-cutover-v1',
+};
+
+// Macra iOS client bridge text analyzers. These still call the OpenAI-shaped
+// `/api/openai/v1/chat/completions` bridge, so the bridge translates the text
+// request to Anthropic first and falls back to OpenAI if needed.
+export const MACRA_MEAL_NOTE: FeatureRoutingConfig = {
+  featureId: 'macraMealNote',
+  provider: 'anthropic',
+  fallbackProvider: 'openai',
+  model: ANTHROPIC_MODEL_SONNET_4_6,
+  maxTokens: 1500,
+  migrationModeId: 'macra-client-dual-path-v1',
 };
 
 // PulseCheck dual-path features (Phase B+ Part 2 — to be wired in next step).
@@ -117,6 +130,7 @@ export const FEATURE_ROUTING_CONFIGS: FeatureRoutingConfig[] = [
   NORA_NUTRITION_CHAT,
   MACRA_MEAL_PLAN,
   MACRA_DAILY_INSIGHT,
+  MACRA_MEAL_NOTE,
   PULSECHECK_PROTOCOL_PRACTICE_EVAL,
   PULSECHECK_SPORT_INTELLIGENCE,
   PULSECHECK_PHASE_J_LIFT_SUMMARY_PARSE,
@@ -138,6 +152,7 @@ export const ANTHROPIC_FEATURE_LIMITS: Record<string, { maxTokens: number; model
   noraNutritionChat: { maxTokens: NORA_NUTRITION_CHAT.maxTokens, modelPattern: ANTHROPIC_MODEL_PATTERN },
   macraMealPlan: { maxTokens: MACRA_MEAL_PLAN.maxTokens, modelPattern: ANTHROPIC_MODEL_PATTERN },
   macraDailyInsight: { maxTokens: MACRA_DAILY_INSIGHT.maxTokens, modelPattern: ANTHROPIC_MODEL_PATTERN },
+  macraMealNote: { maxTokens: MACRA_MEAL_NOTE.maxTokens, modelPattern: ANTHROPIC_MODEL_PATTERN },
   pulsecheckProtocolPracticeEval: {
     maxTokens: PULSECHECK_PROTOCOL_PRACTICE_EVAL.maxTokens,
     modelPattern: ANTHROPIC_MODEL_PATTERN,
