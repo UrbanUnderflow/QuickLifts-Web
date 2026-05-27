@@ -1,9 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Head from 'next/head';
+import { GetServerSideProps } from 'next';
 import mixpanel from 'mixpanel-browser';
 
+const DEMO_TITLE = 'Pulse Check Tech Demo | Pulse Intelligence Labs';
+const DEMO_DESCRIPTION = 'A focused Pulse Check tech demo page for investors and reviewers.';
 const VIDEO_SRC = 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/webassets%2Fpulse-check-tech-demo.mp4?alt=media&token=de71c561-351d-459d-9d06-dc534b80d000';
 const VIDEO_DURATION_SECONDS = 1111;
+
+const resolveDemoHost = (host: string | undefined | string[]) => {
+  const normalizedHost = Array.isArray(host) ? host[0] ?? '' : host ?? '';
+  const hostName = normalizedHost.toLowerCase().split(':')[0];
+  return hostName === 'pulseintelligencelabs.com' || hostName === 'www.pulseintelligencelabs.com'
+    ? 'https://pulseintelligencelabs.com'
+    : 'https://fitwithpulse.ai';
+};
 
 const chapters = [
   {
@@ -201,7 +212,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
         <title>Pulse Check Tech Demo | Pulse Intelligence Labs</title>
         <meta
           name="description"
-          content="A focused Pulse Check tech demo page for investors and reviewers."
+          content={DEMO_DESCRIPTION}
         />
         <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
         <link rel="dns-prefetch" href="https://firebasestorage.googleapis.com" />
@@ -1452,6 +1463,31 @@ const PulseCheckTechDemoPage: React.FC = () => {
       `}</style>
     </>
   );
+};
+
+interface PulseCheckTechDemoPageProps {
+  ogMeta: {
+    title: string;
+    description: string;
+    image: string;
+    url: string;
+    type: string;
+  };
+}
+
+export const getServerSideProps: GetServerSideProps<PulseCheckTechDemoPageProps> = async ({ req }) => {
+  const origin = resolveDemoHost(req.headers.host);
+  return {
+    props: {
+      ogMeta: {
+        title: DEMO_TITLE,
+        description: DEMO_DESCRIPTION,
+        image: `${origin}/pil-og.png`,
+        url: `${origin}/pulse-check-tech-demo`,
+        type: 'article',
+      },
+    },
+  };
 };
 
 export default PulseCheckTechDemoPage;

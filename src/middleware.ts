@@ -33,11 +33,18 @@ export function middleware(request: NextRequest) {
   // Direct visits to /PIL or /PIL/* on that host get canonicalized back.
   if (PIL_HOSTS.has(host)) {
     const { pathname } = request.nextUrl;
+    // Keep the Pulse Check demo accessible directly on pulseintelligencelabs.com.
+    if (pathname === '/pulse-check-tech-demo') {
+      return NextResponse.next();
+    }
 
     // _next/data JSON requests for client-side navigation must follow the same prefix.
     const nextDataMatch = pathname.match(/^\/_next\/data\/([^/]+)\/(.+)\.json$/);
     if (nextDataMatch) {
       const [, buildId, dataPath] = nextDataMatch;
+      if (dataPath === 'pulse-check-tech-demo') {
+        return NextResponse.next();
+      }
       if (dataPath === 'PIL' || dataPath.startsWith('PIL/')) {
         return NextResponse.next();
       }
