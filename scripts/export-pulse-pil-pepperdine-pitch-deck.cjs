@@ -13,9 +13,12 @@ const EXPORT_DIR = path.join(ROOT_DIR, 'exports', 'pulse-pil-pepperdine-pitch');
 const SLIDES_DIR = path.join(EXPORT_DIR, 'slides');
 const OUTPUT_PDF = path.join(EXPORT_DIR, 'Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf');
 const PUBLIC_PDF = path.join(ROOT_DIR, 'public', 'Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf');
+const INVESTOR_DOCS_PDF = path.join(ROOT_DIR, 'public', 'investor-docs', 'Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf');
 const TOTAL_SLIDES = 22;
-const VIEWPORT = { width: 2048, height: 1152 };
-const DEVICE_SCALE_FACTOR = 2;
+const VIEWPORT = { width: 2730, height: 1536 };
+const DEVICE_SCALE_FACTOR = 1;
+const SLIDE_EXTENSION = 'jpg';
+const PDF_IMAGE_QUALITY = Number(process.env.PULSE_DECK_JPEG_QUALITY || 82);
 const EXTERNAL_BASE_URL = process.env.PULSE_DECK_BASE_URL?.replace(/\/$/, '') || null;
 
 const slideHoldMs = new Map([
@@ -114,22 +117,24 @@ const buildPdf = () => {
   for (let index = 0; index < TOTAL_SLIDES; index += 1) {
     if (index > 0) pdf.addPage([VIEWPORT.width, VIEWPORT.height], 'landscape');
 
-    const slidePath = path.join(SLIDES_DIR, `slide-${String(index + 1).padStart(2, '0')}.png`);
+    const slidePath = path.join(SLIDES_DIR, `slide-${String(index + 1).padStart(2, '0')}.${SLIDE_EXTENSION}`);
     const image = fs.readFileSync(slidePath).toString('base64');
     pdf.addImage(
-      `data:image/png;base64,${image}`,
-      'PNG',
+      `data:image/jpeg;base64,${image}`,
+      'JPEG',
       0,
       0,
       VIEWPORT.width,
       VIEWPORT.height,
       undefined,
-      'FAST',
+      'MEDIUM',
     );
   }
 
   fs.writeFileSync(OUTPUT_PDF, Buffer.from(pdf.output('arraybuffer')));
+  fs.mkdirSync(path.dirname(INVESTOR_DOCS_PDF), { recursive: true });
   fs.copyFileSync(OUTPUT_PDF, PUBLIC_PDF);
+  fs.copyFileSync(OUTPUT_PDF, INVESTOR_DOCS_PDF);
 };
 
 const exportDeck = async () => {
@@ -186,11 +191,12 @@ const exportDeck = async () => {
       await waitForAssets(page);
       await page.waitForTimeout(slideHoldMs.get(index) ?? 2200);
 
-      const slidePath = path.join(SLIDES_DIR, `slide-${String(index + 1).padStart(2, '0')}.png`);
+      const slidePath = path.join(SLIDES_DIR, `slide-${String(index + 1).padStart(2, '0')}.${SLIDE_EXTENSION}`);
       await page.screenshot({
         path: slidePath,
         fullPage: false,
-        type: 'png',
+        type: 'jpeg',
+        quality: PDF_IMAGE_QUALITY,
       });
       console.log(`Captured slide ${index + 1}/${TOTAL_SLIDES}`);
     }
@@ -201,6 +207,7 @@ const exportDeck = async () => {
     const stats = fs.statSync(OUTPUT_PDF);
     console.log(`PDF written: ${OUTPUT_PDF}`);
     console.log(`Public download: ${PUBLIC_PDF}`);
+    console.log(`Investor docs download: ${INVESTOR_DOCS_PDF}`);
     console.log(`Size: ${(stats.size / 1024 / 1024).toFixed(1)} MB`);
   } catch (error) {
     await cleanup();

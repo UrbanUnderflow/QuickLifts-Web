@@ -191,6 +191,12 @@ const adminCardsData = [
     link: "/admin/metrics"
   },
   {
+    title: "Pulse Check Tech Demo Analytics",
+    description: "Track reviewer visits, sources, email notification status, and individual page views for the tech demo page.",
+    icon: <BarChart2 className="w-5 h-5" />,
+    link: "/admin/pulseCheckTechDemoAnalytics"
+  },
+  {
     title: "Challenge Managment",
     description: "Oversee and manage ongoing rounds and their statuses.",
     icon: <Award className="w-5 h-5" />,

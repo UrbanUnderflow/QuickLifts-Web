@@ -44,7 +44,7 @@ const SLIDE_META = [
   { label: 'Capital Ladder', eyebrow: 'Slide 17' },
   { label: 'Go-To-Market', eyebrow: 'Slide 18' },
   { label: 'Team', eyebrow: 'Slide 19' },
-  { label: 'Portfolio Context', eyebrow: 'Slide 20' },
+  { label: 'AuntEDNA Partner', eyebrow: 'Slide 20' },
   { label: 'Who Supports Us', eyebrow: 'Slide 21' },
   { label: 'Summary', eyebrow: 'Slide 22' },
 ] as const;
@@ -437,7 +437,7 @@ const PATH_PHASE_TWO = [
   {
     label: '+ Pro Teams',
     count: '+11',
-    detail: 'NFL, NBA, MLS - Westbrook and Patriots pathways',
+    detail: 'NFL, NBA, MLS - Patriots pathway',
     revenue: '$5.5M',
     accent: '#F59E0B',
   },
@@ -547,7 +547,7 @@ const TEAM_STRATEGIC_PARTNERS = [
     accent: COLORS.pink,
     people: [
       { name: 'Jelanna Salas Olivera', role: 'CEO', imageSrc: '/jelanna.jpg' },
-      { name: 'Dr. Tracey Hathoway', role: 'COO', imageSrc: '/dr-tracey-basketball.jpeg' },
+      { name: 'Dr. Tracey Hathaway', role: 'COO', imageSrc: '/dr-tracey-basketball.jpeg' },
     ],
   },
   {
@@ -568,7 +568,7 @@ const TEAM_INVESTORS = [
   {
     name: 'LAUNCH',
     role: 'Investor',
-    detail: 'Jason Calacanis network, Founder University Cohort 11, and $25K unconverted note.',
+    detail: "Jason Calacanis's Fund and founder network.",
     accent: COLORS.lime,
   },
 ] as const;
@@ -854,7 +854,7 @@ const SceneTitle: React.FC = () => (
           </div>
 
           <motion.div
-            className="mx-auto mt-8 max-w-5xl text-lg leading-relaxed text-white/60 md:mt-9 md:text-[1.4rem]"
+            className="mx-auto mt-8 max-w-5xl text-xl leading-relaxed text-white/60 md:mt-9 md:text-[1.4rem]"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.9, delay: 0.9 }}
@@ -880,7 +880,7 @@ const SceneTitle: React.FC = () => (
                 </div>
                 <div className="mt-2 text-2xl font-black leading-none text-white md:text-3xl">{item.value}</div>
                 {item.detail ? (
-                  <div className="mt-2 text-xs font-medium uppercase tracking-[0.16em] text-white/38">{item.detail}</div>
+                  <div className="mt-2 text-xl font-medium uppercase tracking-[0.16em] text-white/38">{item.detail}</div>
                 ) : null}
               </div>
             ))}
@@ -930,7 +930,7 @@ const ScenePILThesis: React.FC = () => (
 
         <div className="mt-8 grid max-w-xs gap-3">
           {[
-            { value: '1', label: 'shared infrastructure', accent: COLORS.pink },
+            { value: '1', label: 'shared ecosystem', accent: COLORS.pink },
           ].map((item) => (
             <div key={item.label} className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
               <div className="font-['Bebas_Neue'] text-[4.5rem] leading-none" style={{ color: item.accent }}>
@@ -959,8 +959,10 @@ const ScenePILThesis: React.FC = () => (
                   <div className="mt-4 font-['Bebas_Neue'] text-[2.8rem] leading-none tracking-[0.02em] text-white">
                     {product.name}
                   </div>
-                  <div className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-white/35">{product.buyer}</div>
-                  <div className="mt-auto border-t border-white/8 pt-4 text-sm leading-relaxed text-zinc-400">{product.detail}</div>
+                  <div className="mt-2 text-[15px] leading-[1.55] font-bold uppercase tracking-[0.14em] text-white/45 md:text-xl">
+                    {product.buyer}
+                  </div>
+                  <div className="mt-auto border-t border-white/8 pt-4 text-xl leading-relaxed text-zinc-400">{product.detail}</div>
                 </div>
               </GlassCard>
             </motion.div>
@@ -983,7 +985,7 @@ const ScenePILThesis: React.FC = () => (
                   <div className="text-[9px] font-bold uppercase tracking-[0.2em]" style={{ color: item.accent }}>
                     {item.label}
                   </div>
-                  <div className="mt-2 text-lg font-black text-white">{item.value}</div>
+                  <div className="mt-2 text-xl font-black text-white">{item.value}</div>
                 </div>
               ))}
             </div>
@@ -1030,7 +1032,7 @@ const SceneFlagshipThesis: React.FC = () => (
                     </div>
                     <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.22em] text-white/35">{signal.label}</div>
                   </div>
-                  <div className="flex items-center text-lg font-semibold leading-snug text-white md:text-xl">{signal.detail}</div>
+                  <div className="flex items-center text-xl font-semibold leading-snug text-white md:text-xl">{signal.detail}</div>
                 </motion.div>
               ))}
             </div>
@@ -1038,7 +1040,7 @@ const SceneFlagshipThesis: React.FC = () => (
             <div className="relative mt-6 rounded-2xl border border-[#E0FE10]/15 bg-[#E0FE10]/8 p-5">
               <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#E0FE10]">Moat</div>
               <div className="mt-2 text-2xl font-black leading-tight text-white">Sports Intelligence Layer</div>
-              <div className="mt-2 text-sm leading-relaxed text-zinc-300">
+              <div className="mt-2 text-xl leading-relaxed text-zinc-300">
                 Sport-specific language, athlete biometrics, coach workflows, and strategic clinical partner routing compound into a
                 system competitors cannot match with a single wearable, analytics dashboard, or cognitive game library.
               </div>
@@ -1080,14 +1082,14 @@ const SceneMeetNakyala: React.FC = () => (
               {ATHLETE_SPOTLIGHT.name}.
             </h1>
 
-            <div className="mt-5 flex flex-wrap items-center gap-3 text-sm font-medium tracking-[0.03em] text-white/65 md:text-base">
+            <div className="mt-5 flex flex-wrap items-center gap-3 text-xl font-medium tracking-[0.03em] text-white/65 md:text-xl">
               <span className="font-semibold text-[#A855F7]">{ATHLETE_SPOTLIGHT.sport}</span>
               <span className="text-white/18">·</span>
               <span>{ATHLETE_SPOTLIGHT.position}</span>
               <span className="text-white/18">·</span>
               <span>{ATHLETE_SPOTLIGHT.number}</span>
             </div>
-            <div className="mt-2 text-sm tracking-[0.02em] text-white/38 md:text-base">
+            <div className="mt-2 text-xl tracking-[0.02em] text-white/38 md:text-xl">
               {ATHLETE_SPOTLIGHT.school} · {ATHLETE_SPOTLIGHT.conference}
             </div>
 
@@ -1177,7 +1179,7 @@ const SceneMeetNakyala: React.FC = () => (
 
               <div className="absolute right-5 top-5 flex items-center gap-2 rounded-full border border-[#A855F7]/30 bg-black/45 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[#A855F7] backdrop-blur-xl">
                 <span>Panthers</span>
-                <span className="font-['Bebas_Neue'] text-base tracking-[0.08em] text-white">{ATHLETE_SPOTLIGHT.number.replace('#', '')}</span>
+                <span className="font-['Bebas_Neue'] text-xl tracking-[0.08em] text-white">{ATHLETE_SPOTLIGHT.number.replace('#', '')}</span>
               </div>
 
               <div className="absolute bottom-5 left-5 right-5">
@@ -1348,7 +1350,7 @@ const SceneSolution: React.FC = () => (
             <br />
             <span className="text-[#E0FE10]">We see it first.</span>
           </h1>
-          <p className="mt-6 max-w-2xl text-lg leading-[1.6] text-zinc-300 md:text-xl">
+          <p className="mt-6 max-w-2xl text-xl leading-[1.6] text-zinc-300 md:text-xl">
             Pulse Check turns athlete pressure signals into action, detecting the signal before it becomes a crisis,
             regulating it in the moment, and routing to real care when the athlete needs more than coaching.
           </p>
@@ -1484,7 +1486,7 @@ const SceneSolution: React.FC = () => (
                   transition={{ duration: 0.55, delay: 1.05 + index * 0.16, ease: 'easeOut' }}
                 >
                   <div
-                    className="absolute -top-3 left-5 flex h-7 w-7 items-center justify-center rounded-full border bg-[#0a0a0b] font-['Bebas_Neue'] text-sm tracking-[0.06em]"
+                    className="absolute -top-3 left-5 flex h-7 w-7 items-center justify-center rounded-full border bg-[#0a0a0b] font-['Bebas_Neue'] text-xl tracking-[0.06em]"
                     style={{ borderColor: stage.accent, color: stage.accent, boxShadow: `0 0 14px ${stage.accent}44` }}
                   >
                     {stage.number}
@@ -1516,7 +1518,7 @@ const SceneSolution: React.FC = () => (
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E0FE10] text-black">
               <Zap className="h-4 w-4 fill-current" />
             </div>
-            <div className="text-sm leading-[1.5] text-zinc-300 md:text-[0.96rem]">
+            <div className="text-xl leading-[1.5] text-zinc-300 md:text-[0.96rem]">
               <span className="font-semibold text-white">One continuous system</span> not three disconnected products stitched together.
             </div>
           </motion.div>
@@ -1575,7 +1577,7 @@ const SceneCheckIn: React.FC = () => {
             <h1 className="mt-5 max-w-5xl text-5xl font-black leading-[0.94] text-white md:text-6xl">
               Pulse Check catches the athlete <span className="text-[#00D4AA]">before the spiral.</span>
             </h1>
-            <div className="mt-4 max-w-5xl text-lg leading-relaxed text-zinc-300 md:text-xl">
+            <div className="mt-4 max-w-5xl text-xl leading-relaxed text-zinc-300 md:text-xl">
               A passive check-in fires at game-day timing. Nora requests a chat, detects the signal, and{' '}
               <span className="font-medium text-[#E0FE10]">helps regulate in real time</span> all inside the athlete flow.
             </div>
@@ -1589,18 +1591,18 @@ const SceneCheckIn: React.FC = () => {
           >
             <div className="flex w-full flex-col rounded-[20px] border border-white/8 bg-white/[0.02] p-5 md:p-6">
               <div className="flex items-center gap-3 border-b border-white/8 pb-4">
-                <div className="relative flex h-9 w-9 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#00D4AA] to-[#E0FE10] font-['Bebas_Neue'] text-base text-black after:absolute after:bottom-[-2px] after:right-[-2px] after:h-[10px] after:w-[10px] after:rounded-full after:border-2 after:border-[#0a0a0b] after:bg-[#00D4AA]">
+                <div className="relative flex h-9 w-9 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#00D4AA] to-[#E0FE10] font-['Bebas_Neue'] text-xl text-black after:absolute after:bottom-[-2px] after:right-[-2px] after:h-[10px] after:w-[10px] after:rounded-full after:border-2 after:border-[#0a0a0b] after:bg-[#00D4AA]">
                   N
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-white">Nora</div>
+                  <div className="text-xl font-bold text-white">Nora</div>
                   <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[#00D4AA]">Mental Performance AI</div>
                 </div>
               </div>
 
               <div className="mt-4 flex min-h-0 flex-col gap-3">
                 <motion.div
-                  className="max-w-[85%] rounded-[12px] border border-[#E0FE10]/12 bg-[#E0FE10]/6 px-4 py-3 text-sm leading-relaxed text-zinc-200"
+                  className="max-w-[85%] rounded-[12px] border border-[#E0FE10]/12 bg-[#E0FE10]/6 px-4 py-3 text-xl leading-relaxed text-zinc-200"
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.55, duration: 0.4 }}
@@ -1610,7 +1612,7 @@ const SceneCheckIn: React.FC = () => {
                 </motion.div>
 
                 <motion.div
-                  className="ml-auto max-w-[70%] rounded-[12px] border border-[#5B8DEF]/15 bg-[#5B8DEF]/10 px-4 py-3 text-sm text-white"
+                  className="ml-auto max-w-[70%] rounded-[12px] border border-[#5B8DEF]/15 bg-[#5B8DEF]/10 px-4 py-3 text-xl text-white"
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.85, duration: 0.4 }}
@@ -1639,9 +1641,9 @@ const SceneCheckIn: React.FC = () => {
                   </motion.div>
 
                   <div>
-                    <div className="text-sm font-bold text-white">Box Breathing · Round 1</div>
+                    <div className="text-xl font-bold text-white">Box Breathing · Round 1</div>
                     <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Step 3 · The regulation</div>
-                    <div className="mt-2 text-xs leading-relaxed text-zinc-400">
+                    <div className="mt-2 text-xl leading-relaxed text-zinc-400">
                       Nora stays in the chat while the athlete completes one full breathing cycle.
                     </div>
                   </div>
@@ -1677,7 +1679,7 @@ const SceneCheckIn: React.FC = () => {
                     <>
                       <motion.div
                         key="nora-follow-up"
-                        className="max-w-[72%] rounded-[12px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-relaxed text-zinc-200"
+                        className="max-w-[72%] rounded-[12px] border border-white/10 bg-white/[0.03] px-4 py-3 text-xl leading-relaxed text-zinc-200"
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -8 }}
@@ -1689,7 +1691,7 @@ const SceneCheckIn: React.FC = () => {
 
                       <motion.div
                         key="athlete-follow-up"
-                        className="ml-auto max-w-[62%] rounded-[12px] border border-[#10B981]/18 bg-[#10B981]/10 px-4 py-3 text-sm font-medium text-white"
+                        className="ml-auto max-w-[62%] rounded-[12px] border border-[#10B981]/18 bg-[#10B981]/10 px-4 py-3 text-xl font-medium text-white"
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -8 }}
@@ -1745,9 +1747,9 @@ const SceneCheckIn: React.FC = () => {
                       >
                         {item.step}
                       </div>
-                      <div className="text-base font-black leading-tight text-white">{item.title}</div>
+                      <div className="text-xl font-black leading-tight text-white">{item.title}</div>
                     </div>
-                    <div className="mt-3 text-sm leading-relaxed text-zinc-400">{item.detail}</div>
+                    <div className="mt-3 text-xl leading-relaxed text-zinc-400">{item.detail}</div>
                   </motion.div>
                 ))}
               </div>
@@ -1755,7 +1757,7 @@ const SceneCheckIn: React.FC = () => {
               <div className="mt-4 rounded-2xl border border-[#E0FE10]/15 bg-[#E0FE10]/10 p-4">
                 <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#E0FE10]">Outcome</div>
                 <div className="mt-2 text-2xl font-black leading-tight text-white">Support happens before escalation.</div>
-                <div className="mt-3 text-sm leading-relaxed text-zinc-300">
+                <div className="mt-3 text-xl leading-relaxed text-zinc-300">
                   If the athlete settles, the moment stays lightweight. If the signal worsens, the next slide shows how
                   Pulse Check routes the context to the clinical pathway.
                 </div>
@@ -1772,7 +1774,7 @@ const SceneCheckIn: React.FC = () => {
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E0FE10] text-black">
               <Zap className="h-4 w-4 fill-current" />
             </div>
-            <div className="text-sm leading-relaxed text-zinc-300">
+            <div className="text-xl leading-relaxed text-zinc-300">
               <span className="font-semibold text-white">When regulation works, the athlete settles without leaving the flow.</span>{' '}
               No survey. No coach interruption. No waiting room. The next slide shows what the system does when the moment goes beyond Nora.
             </div>
@@ -1813,7 +1815,7 @@ const SceneClinicalRouting: React.FC = () => (
             </div>
           </div>
 
-          <div className="relative h-[34.5rem] w-full overflow-hidden rounded-[42px] border-2 border-zinc-700/70 bg-[#0a0a0b] shadow-[0_28px_90px_rgba(0,0,0,0.55)]">
+          <div className="relative h-[38rem] w-full overflow-hidden rounded-[42px] border-2 border-zinc-700/70 bg-[#0a0a0b] shadow-[0_28px_90px_rgba(0,0,0,0.55)]">
             <div className="absolute left-1/2 top-0 z-20 h-6 w-32 -translate-x-1/2 rounded-b-2xl bg-black" />
             <div className="relative flex h-full flex-col bg-gradient-to-b from-[#111113] to-[#050505]">
               <div className="flex items-center justify-between px-8 pb-2 pt-4 text-[11px] font-semibold text-white">
@@ -1830,7 +1832,7 @@ const SceneClinicalRouting: React.FC = () => (
                     N
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-base font-black leading-tight text-white">Nora</div>
+                    <div className="text-xl font-black leading-tight text-white">Nora</div>
                     <div className="text-[10px] font-semibold uppercase tracking-[0.22em] leading-snug text-[#00D4AA]">
                       Mental Performance AI
                     </div>
@@ -2088,10 +2090,10 @@ const SceneWelfareCheck: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="mt-6 text-lg font-semibold text-white">
+                <div className="mt-6 text-xl font-semibold text-white">
                   {connected ? `Connected • ${mins}:${secs.toString().padStart(2, '0')}` : 'Calling...'}
                 </div>
-                <div className="mt-2 text-sm text-zinc-400">
+                <div className="mt-2 text-xl text-zinc-400">
                   {connected ? '"Hey Doc, thanks for calling..."' : 'Immediate clinician outreach'}
                 </div>
               </div>
@@ -2149,7 +2151,7 @@ const SceneCompetitiveNarrative: React.FC = () => (
         <h1 className="mt-4 text-[2.9rem] font-black leading-[0.92] text-white md:text-[4.1rem]">
           Pulse Check owns the athlete-performance workflow competitors split apart.
         </h1>
-        <div className="mt-3 text-lg font-medium text-zinc-300 md:text-[1.35rem]">
+        <div className="mt-3 text-xl font-medium text-zinc-300 md:text-[1.35rem]">
           Catapult, WHOOP, and Lumos Labs each own a slice. Pulse Check ties signal, training, routing, and measurement
           into one institutional system.
         </div>
@@ -2180,16 +2182,16 @@ const SceneCompetitiveNarrative: React.FC = () => (
                         {card.category}
                       </div>
                       <div className="mt-1 text-2xl font-black leading-none text-white">{card.name}</div>
-                      <div className="mt-2 text-sm leading-snug text-zinc-400">{card.detail}</div>
+                      <div className="mt-2 text-xl leading-snug text-zinc-400">{card.detail}</div>
                     </div>
                     <div className="grid gap-2">
                       <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
                         <div className="text-[9px] font-semibold uppercase tracking-[0.22em] text-zinc-500">{card.scaleLabel}</div>
-                        <div className="mt-1 text-sm font-bold text-white">{card.scaleValue}</div>
+                        <div className="mt-1 text-xl font-bold text-white">{card.scaleValue}</div>
                       </div>
                       <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
                         <div className="text-[9px] font-semibold uppercase tracking-[0.22em] text-zinc-500">{card.costLabel}</div>
-                        <div className="mt-1 text-sm font-bold text-white">{card.costValue}</div>
+                        <div className="mt-1 text-xl font-bold text-white">{card.costValue}</div>
                       </div>
                     </div>
                   </div>
@@ -2230,7 +2232,7 @@ const SceneCompetitiveNarrative: React.FC = () => (
                   >
                     <div className="flex items-center gap-3">
                       <div className="h-2.5 w-2.5 rounded-full" style={{ background: item.accent, boxShadow: `0 0 10px ${item.accent}66` }} />
-                      <div className="text-base font-bold leading-tight text-white">{item.label}</div>
+                      <div className="text-xl font-bold leading-tight text-white">{item.label}</div>
                     </div>
                   </div>
                 ))}
@@ -2271,8 +2273,8 @@ const SceneCompetitiveProof: React.FC = () => (
                       <span className="h-2.5 w-2.5 rounded-full" style={{ background: card.accent }} />
                       {card.name}
                     </div>
-                    <div className="mt-2 text-[11px] text-zinc-500 md:text-xs">{card.scaleValue}</div>
-                    <div className="text-[11px] text-zinc-500 md:text-xs">{card.costValue}</div>
+                    <div className="mt-2 text-[11px] text-zinc-500 md:text-xl">{card.scaleValue}</div>
+                    <div className="text-[11px] text-zinc-500 md:text-xl">{card.costValue}</div>
                   </div>
                 </div>
               ))}
@@ -2289,7 +2291,7 @@ const SceneCompetitiveProof: React.FC = () => (
                     index !== COMPETITIVE_ROWS.length - 1 ? 'border-b border-white/8' : ''
                   } bg-white/[0.02] transition-colors hover:bg-white/[0.03]`}
                 >
-                  <div className="px-4 py-5 text-base font-semibold leading-snug text-white md:text-lg">{row.feature}</div>
+                  <div className="px-4 py-5 text-xl font-semibold leading-snug text-white md:text-xl">{row.feature}</div>
                   <div className="px-3 py-5">
                     <ComparisonCell status={row.catapult} accent={COLORS.orange} />
                   </div>
@@ -2314,7 +2316,7 @@ const SceneCompetitiveProof: React.FC = () => (
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#E0FE10] text-black">
             <Zap className="h-5.5 w-5.5" />
           </div>
-          <div className="text-base leading-relaxed text-zinc-300 md:text-lg">
+          <div className="text-xl leading-relaxed text-zinc-300 md:text-xl">
             <span className="font-bold text-white">No single competitor covers the full pipeline.</span> Athletes today
             need multiple disconnected tools. Pulse Check owns the workflow from performance signal to pressure training,
             strategic clinical handoff, and program-level measurement.
@@ -2359,12 +2361,12 @@ const SceneBuildingBlocks: React.FC = () => (
                     {tier.tier}
                   </div>
                   <div className="mt-3 text-3xl font-black leading-tight text-white">{tier.name}</div>
-                  <div className="mt-3 text-base leading-snug text-zinc-400">{tier.detail}</div>
+                  <div className="mt-3 text-xl leading-snug text-zinc-400">{tier.detail}</div>
 
                   <div className="mt-auto border-t border-white/8 pt-5">
                     <div className="text-5xl font-black leading-none text-[#E0FE10] md:text-6xl">{tier.price}</div>
                     <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-500">{tier.unit}</div>
-                    <div className="mt-4 text-sm italic leading-relaxed text-zinc-500">{tier.example}</div>
+                    <div className="mt-4 text-xl italic leading-relaxed text-zinc-500">{tier.example}</div>
                   </div>
                 </div>
               </GlassCard>
@@ -2678,7 +2680,7 @@ const SceneBeachhead: React.FC = () => (
                     Near-term lane
                   </div>
                   <div className="mt-3 text-3xl font-black leading-tight text-white">{segment.title}</div>
-                  <div className="mt-4 text-base leading-snug text-zinc-400">{segment.detail}</div>
+                  <div className="mt-4 text-xl leading-snug text-zinc-400">{segment.detail}</div>
                 </div>
                 <div className="mt-5 text-3xl font-black" style={{ color: segment.accent }}>
                   {segment.value}
@@ -2718,7 +2720,7 @@ const SceneHundredMPath: React.FC = () => (
             <h1 className="mt-5 text-5xl font-black leading-[0.94] text-white md:text-6xl">
               A visible path to <span className="text-[#E0FE10]">$100M ARR.</span>
             </h1>
-            <div className="mt-4 max-w-3xl text-lg leading-relaxed text-zinc-300 md:text-xl">
+            <div className="mt-4 max-w-3xl text-xl leading-relaxed text-zinc-300 md:text-xl">
               Phased contract roadmap. Prove Pulse Check in every segment, then scale with proof points.
             </div>
           </div>
@@ -2797,7 +2799,7 @@ const SceneHundredMPath: React.FC = () => (
                   <span className="ml-2 text-[11px] font-medium uppercase tracking-[0.22em] text-zinc-500">ARR</span>
                 </div>
               </div>
-              <div className="mt-3 max-w-lg text-sm leading-relaxed text-zinc-400">
+              <div className="mt-3 max-w-lg text-xl leading-relaxed text-zinc-400">
                 Land anchor contracts across every segment. Validate product, build case studies, establish credibility.
               </div>
 
@@ -2811,12 +2813,12 @@ const SceneHundredMPath: React.FC = () => (
                     transition={{ delay: 0.5 + index * 0.05, duration: 0.45 }}
                   >
                     <span className="mx-auto h-2 w-2 rounded-full" style={{ background: item.accent, boxShadow: `0 0 6px ${item.accent}` }} />
-                    <span className="min-w-0 text-sm font-semibold text-white">
+                    <span className="min-w-0 text-xl font-semibold text-white">
                       {item.label}
                       <span className="ml-2 text-[11px] font-normal text-zinc-500">{item.detail}</span>
                     </span>
                     <span className="text-right font-black tracking-[0.04em] text-white">{item.count}</span>
-                    <span className="min-w-[5.5rem] text-right text-lg font-black tracking-[0.03em]" style={{ color: item.accent }}>
+                    <span className="min-w-[5.5rem] text-right text-xl font-black tracking-[0.03em]" style={{ color: item.accent }}>
                       {item.revenue}
                     </span>
                   </motion.div>
@@ -2859,7 +2861,7 @@ const SceneHundredMPath: React.FC = () => (
                   <span className="ml-2 text-[11px] font-medium uppercase tracking-[0.22em] text-zinc-500">Target ARR</span>
                 </div>
               </div>
-              <div className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400">
+              <div className="mt-3 max-w-2xl text-xl leading-relaxed text-zinc-400">
                 Expand across segments. Close league-wide deals. Enter international federation market.
               </div>
 
@@ -2878,12 +2880,12 @@ const SceneHundredMPath: React.FC = () => (
                     transition={{ delay: 0.72 + index * 0.05, duration: 0.45 }}
                   >
                     <span className="mx-auto h-2 w-2 rounded-full" style={{ background: item.accent, boxShadow: `0 0 6px ${item.accent}` }} />
-                    <span className="min-w-0 text-sm font-semibold text-white">
+                    <span className="min-w-0 text-xl font-semibold text-white">
                       {item.label}
                       <span className="ml-2 text-[11px] font-normal text-zinc-500">{item.detail}</span>
                     </span>
                     <span className="text-right font-black tracking-[0.04em] text-white">{item.count}</span>
-                    <span className="min-w-[5.5rem] text-right text-lg font-black tracking-[0.03em]" style={{ color: item.accent }}>
+                    <span className="min-w-[5.5rem] text-right text-xl font-black tracking-[0.03em]" style={{ color: item.accent }}>
                       {item.revenue}
                     </span>
                   </motion.div>
@@ -2918,7 +2920,7 @@ const SceneCapitalPlan: React.FC = () => (
         <div className="max-w-5xl">
           <SlideKicker>Revenue + capital plan</SlideKicker>
           <h1 className="mt-5 text-5xl font-black leading-[0.94] text-white md:text-6xl">
-            The Pepperdine Plan: <span className="text-[#E0FE10]">Disciplined Capital Ladder.</span>
+            The capital plan: <span className="text-[#E0FE10]">From Pre-Seed to Series B.</span>
           </h1>
           <p className="mt-4 max-w-4xl text-xl leading-relaxed text-zinc-300 md:text-2xl">
             Current ask, valuation, financing sequence, and use of funds.
@@ -2963,12 +2965,12 @@ const SceneCapitalPlan: React.FC = () => (
                   >
                     {index + 1}
                   </div>
-                  <div className="mt-6 text-lg font-black text-white">{round.round}</div>
+                  <div className="mt-6 text-xl font-black text-white">{round.round}</div>
                   <div className="mt-2 font-['Bebas_Neue'] text-5xl leading-none" style={{ color: round.accent }}>
                     {round.amount}
                   </div>
                   <div className="mt-3 text-[10px] font-bold uppercase tracking-[0.18em] text-white/35">{round.timing}</div>
-                  <div className="mt-2 min-h-[2.75rem] text-sm leading-snug text-zinc-400">{round.note}</div>
+                  <div className="mt-2 min-h-[2.75rem] text-xl leading-snug text-zinc-400">{round.note}</div>
                 </motion.div>
               ))}
             </div>
@@ -2981,7 +2983,7 @@ const SceneCapitalPlan: React.FC = () => (
               ].map((item) => (
                 <div key={item.label} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
                   <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-zinc-500">{item.label}</div>
-                  <div className="mt-2 text-base font-black" style={{ color: item.accent }}>
+                  <div className="mt-2 text-xl font-black" style={{ color: item.accent }}>
                     {item.value}
                   </div>
                 </div>
@@ -3022,11 +3024,11 @@ const SceneCapitalPlan: React.FC = () => (
                       <div className="flex min-w-0 items-start gap-3">
                         <span className="mt-1.5 h-2.5 w-2.5 flex-none rounded-full" style={{ background: item.accent, boxShadow: `0 0 10px ${item.accent}66` }} />
                         <div className="min-w-0">
-                          <div className="text-sm font-black leading-tight text-white">{item.label}</div>
-                          <div className="mt-1 text-xs leading-snug text-zinc-400">{item.detail}</div>
+                          <div className="text-xl font-black leading-tight text-white">{item.label}</div>
+                          <div className="mt-1 text-xl leading-snug text-zinc-400">{item.detail}</div>
                         </div>
                       </div>
-                      <div className="flex-none text-right text-base font-black" style={{ color: item.accent }}>
+                      <div className="flex-none text-right text-xl font-black" style={{ color: item.accent }}>
                         {item.amount}
                       </div>
                     </div>
@@ -3243,7 +3245,7 @@ const SceneGTM: React.FC = () => (
         transition={{ delay: 0.9, duration: 0.6 }}
       >
         {/* "+2" label card */}
-        <div className="flex items-center gap-2.5 whitespace-nowrap rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3.5 text-xs font-medium tracking-wide text-white/55">
+        <div className="flex items-center gap-2.5 whitespace-nowrap rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3.5 text-xl font-medium tracking-wide text-white/55">
           <span className="text-2xl font-black leading-none tracking-wide text-[#E0FE10]" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>+3</span>
           <span>Additional active pilots outside Boston</span>
         </div>
@@ -3297,20 +3299,22 @@ const SceneGTM: React.FC = () => (
 const SceneTeam: React.FC = () => (
   <SceneFrame accent={COLORS.lime}>
     <motion.div
-      className="mx-auto grid min-h-[42rem] w-full max-w-7xl content-center gap-4"
+      className="mx-auto grid min-h-[42rem] w-full max-w-[92rem] content-center gap-4"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={transition}
     >
-      <div className="max-w-6xl">
+      <div className="w-full">
         <SlideKicker>Management team strength</SlideKicker>
-        <h1 className="mt-4 text-4xl font-black leading-[0.96] text-white md:text-5xl">
-          Built by operators who know <span className="text-[#E0FE10]">software, athletes, and clinical trust.</span>
-        </h1>
-        <p className="mt-3 max-w-4xl text-lg leading-relaxed text-zinc-300">
-          Pulse Intelligence Labs pairs founder-led product depth with human-performance operations, institutional advisors,
-          clinical pathway partners, and venture backing.
-        </p>
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_0.9fr] lg:items-start xl:items-end">
+          <h1 className="text-4xl font-black leading-[0.96] text-white md:text-5xl">
+            Built by operators who know <span className="text-[#E0FE10]">software, athletes, and clinical trust.</span>
+          </h1>
+          <div className="text-xl leading-relaxed text-zinc-300 md:text-xl">
+            Pulse Intelligence Labs pairs founder-led product depth with human-performance operations, institutional
+            advisors, clinical pathway partners, and venture backing.
+          </div>
+        </div>
       </div>
 
       <div className="grid items-start gap-4 xl:grid-cols-[1.12fr_0.88fr]">
@@ -3364,7 +3368,7 @@ const SceneTeam: React.FC = () => (
                       {member.schoolChip.label}
                     </span>
                   </div>
-                  <p className="mt-2 text-sm leading-relaxed text-zinc-300 md:text-[15px]">{member.summary}</p>
+                  <p className="mt-2 text-xl leading-relaxed text-zinc-300 md:text-[15px]">{member.summary}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {member.credentials.map((credential) => (
                       <div key={credential} className="rounded-lg border border-white/8 bg-black/20 px-3 py-1.5 text-[12px] font-semibold leading-snug text-white md:text-[13px]">
@@ -3410,7 +3414,7 @@ const SceneTeam: React.FC = () => (
                     {HEAD_OF_DESIGN.role}
                   </span>
                 </div>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-300">{HEAD_OF_DESIGN.summary}</p>
+                <p className="mt-2 text-xl leading-relaxed text-zinc-300">{HEAD_OF_DESIGN.summary}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {HEAD_OF_DESIGN.tags.map((tag) => (
                     <div key={tag} className="rounded-lg border border-purple-300/20 bg-purple-400/10 px-3 py-1.5 text-[12px] font-semibold leading-snug text-purple-200">
@@ -3449,7 +3453,7 @@ const SceneTeam: React.FC = () => (
                     />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-black leading-tight text-white">{advisor.name}</div>
+                    <div className="text-xl font-black leading-tight text-white">{advisor.name}</div>
                     <div className="mt-0.5 text-[9px] font-bold uppercase leading-tight tracking-[0.12em] text-[#E0FE10]">{advisor.role}</div>
                     <div className="mt-1 text-[11px] leading-snug text-zinc-400">{advisor.detail}</div>
                   </div>
@@ -3478,12 +3482,12 @@ const SceneTeam: React.FC = () => (
                     <span className="mt-1 h-2.5 w-2.5 rounded-full" style={{ background: partner.accent, boxShadow: `0 0 10px ${partner.accent}66` }} />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-base font-black text-white">{partner.name}</span>
+                        <span className="text-xl font-black text-white">{partner.name}</span>
                         <span className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: partner.accent }}>
                           {partner.role}
                         </span>
                       </div>
-                      <div className="mt-1 text-xs leading-snug text-zinc-400">{partner.detail}</div>
+                      <div className="mt-1 text-xl leading-snug text-zinc-400">{partner.detail}</div>
                       {'people' in partner ? (
                         <div className="mt-2 grid gap-2">
                           {partner.people.map((person) => (
@@ -3511,80 +3515,104 @@ const SceneTeam: React.FC = () => (
   </SceneFrame>
 );
 
-const ScenePortfolioContext: React.FC = () => (
-  <SceneFrame accent={COLORS.sky}>
+const SceneAuntEdnaPartnership: React.FC = () => (
+  <SceneFrame accent={COLORS.pink}>
     <div className="grid min-h-[42rem] content-center gap-7">
-      <div className="max-w-6xl">
-        <SlideKicker>Portfolio context</SlideKicker>
-        <h1 className="mt-5 text-5xl font-black leading-[0.94] text-white md:text-6xl">
-          Fit With Pulse and Macra prove velocity, <span className="text-[#E0FE10]">not distraction.</span>
-        </h1>
-        <p className="mt-4 max-w-4xl text-xl leading-relaxed text-zinc-300 md:text-2xl">
-          The portfolio shares infrastructure with Pulse Check. The pitch focus stays on the flagship institutional
-          opportunity.
-        </p>
-      </div>
+      <div className="grid gap-6 xl:grid-cols-[1.12fr_0.88fr] xl:items-end">
+        <div className="max-w-6xl">
+          <SlideKicker>Strategic clinical partner</SlideKicker>
+          <h1 className="mt-5 text-5xl font-black leading-[0.94] text-white md:text-6xl">
+            AuntEDNA.ai — <span className="text-[#F472B6]">Clinical pathway, validated.</span>
+          </h1>
+          <p className="mt-4 max-w-4xl text-xl leading-relaxed text-zinc-300 md:text-2xl">
+            For Pulse Check specifically, AuntEDNA strengthens clinical support, athlete adherence psychology, and implementation practices.
+          </p>
+        </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-        <GlassCard accentColor={COLORS.lime}>
-          <div className="grid gap-4 p-5 md:grid-cols-3 md:p-6">
-            {PIL_PRODUCTS.map((product, index) => (
-              <motion.div
-                key={product.name}
-                className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.12 * index }}
-              >
-                <div className="text-[9px] font-bold uppercase tracking-[0.22em]" style={{ color: product.accent }}>
-                  {product.name === 'Pulse Check' ? 'Flagship focus' : 'Shared infrastructure proof'}
+        <GlassCard accentColor={COLORS.pink}>
+          <div className="p-5 md:p-6">
+            <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#F472B6]">AuntEDNA.ai co-founders</div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {[
+                { name: 'Jelanna Salas Olivera', role: 'CEO', imageSrc: '/jelanna.jpg' },
+                { name: 'Dr. Tracey Hathaway', role: 'COO', imageSrc: '/dr-tracey-basketball.jpeg' },
+              ].map((person) => (
+                <div key={person.name} className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                  <div className="h-20 w-20 overflow-hidden rounded-2xl border border-[#F472B6]/25 bg-white/[0.04]">
+                    <img src={person.imageSrc} alt={person.name} className="h-full w-full object-cover" />
+                  </div>
+                  <div className="mt-4 text-xl font-black leading-tight text-white">{person.name}</div>
+                  <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#F472B6]">{person.role}</div>
                 </div>
-                <div className="mt-3 font-['Bebas_Neue'] text-[2.6rem] leading-none tracking-[0.02em] text-white">
-                  {product.name}
-                </div>
-                <div className="mt-3 text-sm leading-relaxed text-zinc-400">{product.detail}</div>
-              </motion.div>
-            ))}
+              ))}
+            </div>
           </div>
         </GlassCard>
-
-        <div className="grid gap-4">
-          <GlassCard accentColor={COLORS.sky}>
-            <div className="p-5 md:p-6">
-              <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#38BDF8]">What carries across</div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {[
-                  'Nora AI conversation layer',
-                  'Shared identity record',
-                  'Health and wearable context',
-                  'Program setup workflows',
-                  'Signal scoring patterns',
-                  'Investor-ready product velocity',
-                ].map((item) => (
-                  <div key={item} className="rounded-xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-white">
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </GlassCard>
-
-          <GlassCard accentColor={COLORS.lime}>
-            <div className="flex items-start gap-4 p-5 md:p-6">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#E0FE10] text-black">
-                <Zap className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="text-xl font-black text-white">One focus for this pitch: Pulse Check.</div>
-                <div className="mt-2 text-sm leading-relaxed text-zinc-400">
-                  Fit With Pulse and Macra show that PIL can ship across the stack; Pulse Check is where the highest-value
-                  buyer, deepest moat, and clearest near-term revenue converge.
-                </div>
-              </div>
-            </div>
-          </GlassCard>
-        </div>
       </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        {[
+          {
+            label: 'NSF Phase I Grant',
+            value: 'Independent validation',
+            detail: 'Awarded for clinical methodology validation through scientific peer review.',
+            accent: COLORS.sky,
+            icon: GraduationCap,
+          },
+          {
+            label: '80% Adherence',
+            value: '1,000+ athletes',
+            detail: 'Real-world student-athlete evidence on behavioral check-in protocols.',
+            accent: COLORS.lime,
+            icon: CheckCircle2,
+          },
+          {
+            label: 'R&D Data Partnership',
+            value: 'Shared research layer',
+            detail: 'Pulse Check models trained against the largest validated athlete mental health dataset in the category.',
+            accent: COLORS.pink,
+            icon: Brain,
+          },
+        ].map((card, index) => {
+          const Icon = card.icon;
+          return (
+            <motion.div
+              key={card.label}
+              className="relative min-h-[17rem] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-5"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.12 + index * 0.1, duration: 0.55 }}
+            >
+              <div className="absolute inset-x-0 top-0 h-[2px]" style={{ background: card.accent }} />
+              <div
+                className="flex h-12 w-12 items-center justify-center rounded-2xl border"
+                style={{ borderColor: `${card.accent}40`, background: `${card.accent}12`, color: card.accent }}
+              >
+                <Icon className="h-5 w-5" />
+              </div>
+              <div className="mt-5 text-[10px] font-bold uppercase tracking-[0.24em]" style={{ color: card.accent }}>
+                {card.label}
+              </div>
+              <div className="mt-3 text-3xl font-black leading-tight text-white">{card.value}</div>
+              <div className="mt-4 text-xl leading-relaxed text-zinc-400">{card.detail}</div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      <GlassCard accentColor={COLORS.lime}>
+        <div className="grid gap-4 p-5 md:grid-cols-[auto_1fr] md:p-6">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#E0FE10] text-black">
+            <Shield className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="text-xl font-black text-white">A defensible, integrated stack.</div>
+            <div className="mt-2 text-xl leading-relaxed text-zinc-300">
+              Clinical detection, scoring, and routing logic owned by PIL. Clinical pathway handoff handled by AuntEDNA.
+            </div>
+          </div>
+        </div>
+      </GlassCard>
     </div>
   </SceneFrame>
 );
@@ -3694,7 +3722,7 @@ const SupporterLogo: React.FC<{ supporterKey: string }> = ({ supporterKey }) => 
     case 'ncaa':
       return (
         <div className="text-[44px] font-black leading-none tracking-tight text-white" style={{ letterSpacing: '-1px' }}>
-          NCAA<span className="ml-0.5 align-super text-xs font-semibold text-white/30">®</span>
+          NCAA<span className="ml-0.5 align-super text-xl font-semibold text-white/30">®</span>
         </div>
       );
     case 'acc':
@@ -3710,7 +3738,7 @@ const SupporterLogo: React.FC<{ supporterKey: string }> = ({ supporterKey }) => 
       return (
         <div className="flex items-center gap-3">
           <div
-            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 border-[#60A5FA] text-lg font-black text-white"
+            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 border-[#60A5FA] text-xl font-black text-white"
             style={{
               background: 'radial-gradient(circle, #1E40AF, #0C2D6B)',
               fontFamily: "'Playfair Display', serif",
@@ -3755,7 +3783,7 @@ const SupporterLogo: React.FC<{ supporterKey: string }> = ({ supporterKey }) => 
       return (
         <div>
           <div className="text-[32px] font-black leading-none text-white" style={{ letterSpacing: '-1px' }}>
-            LAUNCH<span className="ml-1 align-super text-sm text-[#c8ff00]">▲</span>
+            LAUNCH<span className="ml-1 align-super text-xl text-[#c8ff00]">▲</span>
           </div>
           <div className="mt-1.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-white/30">Founder University</div>
         </div>
@@ -3915,7 +3943,7 @@ const SceneEvidence: React.FC = () => {
               <span className="text-white/45">Nora sees </span>
               <span className="text-[#00D4AA]">your athlete.</span>
             </h1>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/65 md:text-xl">
+            <p className="mt-6 max-w-xl text-xl leading-relaxed text-white/65 md:text-xl">
               Nora calibrates against the sport, the stress pattern, and the performance context, not just a generic wellness score.
             </p>
           </div>
@@ -4069,7 +4097,7 @@ const SceneEvidence: React.FC = () => {
                       </div>
                     </button>
                     <div
-                      className="pointer-events-none absolute left-1/2 top-full mt-4 -translate-x-1/2 whitespace-nowrap text-sm font-black uppercase tracking-[0.18em] md:text-base"
+                      className="pointer-events-none absolute left-1/2 top-full mt-4 -translate-x-1/2 whitespace-nowrap text-xl font-black uppercase tracking-[0.18em] md:text-xl"
                       style={{ color: isActive ? sport.accent : 'rgba(255,255,255,0.55)' }}
                     >
                       {sport.name}
@@ -4320,16 +4348,16 @@ const PulsePILPepperdinePitchPage: React.FC = () => {
     if (slide === 16) return <SceneCapitalPlan />;
     if (slide === 17) return <SceneGTM />;
     if (slide === 18) return <SceneTeam />;
-    if (slide === 19) return <ScenePortfolioContext />;
+    if (slide === 19) return <SceneAuntEdnaPartnership />;
     if (slide === 20) return <SceneSupporters />;
     return <SceneSummary />;
   }, [slide]);
 
   const footerReserve = viewport.width >= 768 ? 138 : 152;
-  const idealSlideHeight = viewport.width >= 1600 ? 1020 : viewport.width >= 1280 ? 1040 : 980;
+  const idealSlideHeight = viewport.width >= 1600 ? 980 : viewport.width >= 1280 ? 960 : 920;
   const stageScale =
     viewport.width >= 1024 && viewport.height > 0
-      ? Math.max(0.72, Math.min(1, (viewport.height - footerReserve) / idealSlideHeight))
+      ? Math.max(0.76, Math.min(1, (viewport.height - footerReserve) / idealSlideHeight))
       : 1;
   const stageDimension = `${100 / stageScale}%`;
 
@@ -4349,7 +4377,7 @@ const PulsePILPepperdinePitchPage: React.FC = () => {
         />
       </Head>
 
-      <div className="h-screen overflow-hidden bg-[#05070b] text-white">
+      <div className="deck-reading-boost h-screen overflow-hidden bg-[#05070b] text-white">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute left-[-10%] top-[-12%] h-[38rem] w-[38rem] rounded-full bg-[#E0FE10]/7 blur-3xl" />
           <div className="absolute right-[-8%] top-[12%] h-[30rem] w-[30rem] rounded-full bg-sky-500/8 blur-3xl" />
@@ -4379,7 +4407,7 @@ const PulsePILPepperdinePitchPage: React.FC = () => {
               type="button"
               onClick={goBack}
               disabled={slide === 0}
-              className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-35"
+              className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xl font-medium text-white transition hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-35"
             >
               <ArrowLeft className="h-4 w-4" />
               Previous
@@ -4400,7 +4428,7 @@ const PulsePILPepperdinePitchPage: React.FC = () => {
               <a
                 href={PDF_DOWNLOAD_PATH}
                 download="Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf"
-                className="inline-flex items-center gap-2 rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-4 py-2 text-sm font-semibold text-[#E0FE10] transition hover:bg-[#E0FE10]/15"
+                className="inline-flex items-center gap-2 rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-4 py-2 text-xl font-semibold text-[#E0FE10] transition hover:bg-[#E0FE10]/15"
               >
                 <Download className="h-4 w-4" />
                 <span className="hidden sm:inline">PDF</span>
@@ -4410,7 +4438,7 @@ const PulsePILPepperdinePitchPage: React.FC = () => {
                 type="button"
                 onClick={goNext}
                 disabled={slide === TOTAL_SLIDES - 1}
-                className="inline-flex items-center gap-2 rounded-full bg-[#E0FE10] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#d1ef15] disabled:cursor-not-allowed disabled:opacity-45"
+                className="inline-flex items-center gap-2 rounded-full bg-[#E0FE10] px-4 py-2 text-xl font-semibold text-black transition hover:bg-[#d1ef15] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Next
                 <ArrowRight className="h-4 w-4" />
@@ -4418,6 +4446,111 @@ const PulsePILPepperdinePitchPage: React.FC = () => {
             </div>
           </footer>
         </div>
+        <style jsx global>{`
+          .deck-reading-boost [class~='text-xl']:not([class*='leading']),
+          .deck-reading-boost [class~='text-[15px]']:not([class*='leading']),
+          .deck-reading-boost [class~='text-[14px]']:not([class*='leading']),
+          .deck-reading-boost [class~='text-[13px]']:not([class*='leading']),
+          .deck-reading-boost [class~='text-[12px]']:not([class*='leading']) {
+            font-size: clamp(1.2rem, 1.08rem + 0.22vw, 1.45rem) !important;
+          }
+
+          .deck-reading-boost [class~='text-xl'][class*='leading'],
+          .deck-reading-boost [class~='text-[15px]'][class*='leading'],
+          .deck-reading-boost [class~='text-[14px]'][class*='leading'],
+          .deck-reading-boost [class~='text-[13px]'][class*='leading'],
+          .deck-reading-boost [class~='text-[12px]'][class*='leading'],
+          .deck-reading-boost [class~='text-[0.92rem]'][class*='leading'],
+          .deck-reading-boost [class~='text-[0.94rem]'][class*='leading'],
+          .deck-reading-boost [class~='text-[0.95rem]'][class*='leading'],
+          .deck-reading-boost [class~='text-[0.96rem]'][class*='leading'],
+          .deck-reading-boost [class~='text-[0.98rem]'][class*='leading'] {
+            font-size: clamp(1.28rem, 1.14rem + 0.3vw, 1.62rem) !important;
+          }
+
+          .deck-reading-boost [class~='text-[11px]'][class*='leading'],
+          .deck-reading-boost [class~='text-[10.5px]'][class*='leading'],
+          .deck-reading-boost [class~='text-[10px]'][class*='leading'] {
+            font-size: clamp(1.14rem, 1.04rem + 0.14vw, 1.32rem) !important;
+          }
+
+          .deck-reading-boost [class~='text-[11px]']:not([class*='leading']),
+          .deck-reading-boost [class~='text-[10.5px]']:not([class*='leading']),
+          .deck-reading-boost [class~='text-[10px]']:not([class*='leading']) {
+            font-size: clamp(1.02rem, 0.92rem + 0.11vw, 1.18rem) !important;
+          }
+
+          .deck-reading-boost [class~='text-[9px]'][class*='leading'],
+          .deck-reading-boost [class~='text-[8px]'][class*='leading'],
+          .deck-reading-boost [class~='text-[7px]'][class*='leading'] {
+            font-size: clamp(1.02rem, 0.9rem + 0.11vw, 1.16rem) !important;
+          }
+
+          .deck-reading-boost [class~='text-[9px]']:not([class*='leading']),
+          .deck-reading-boost [class~='text-[8px]']:not([class*='leading']),
+          .deck-reading-boost [class~='text-[7px]']:not([class*='leading']) {
+            font-size: clamp(0.94rem, 0.84rem + 0.09vw, 1.08rem) !important;
+          }
+
+          .deck-reading-boost .close-thesis {
+            font-size: clamp(1.34rem, 1.2rem + 0.38vw, 1.74rem);
+          }
+
+          @media print {
+            .deck-reading-boost {
+              font-size: 115%;
+            }
+
+            .deck-reading-boost [class~='text-xl']:not([class*='leading']),
+            .deck-reading-boost [class~='text-[15px]']:not([class*='leading']),
+            .deck-reading-boost [class~='text-[14px]']:not([class*='leading']),
+            .deck-reading-boost [class~='text-[13px]']:not([class*='leading']),
+            .deck-reading-boost [class~='text-[12px]']:not([class*='leading']) {
+              font-size: clamp(1.3rem, 1.16rem + 0.24vw, 1.56rem) !important;
+            }
+
+            .deck-reading-boost [class~='text-xl'][class*='leading'],
+            .deck-reading-boost [class~='text-[15px]'][class*='leading'],
+            .deck-reading-boost [class~='text-[14px]'][class*='leading'],
+            .deck-reading-boost [class~='text-[13px]'][class*='leading'],
+            .deck-reading-boost [class~='text-[12px]'][class*='leading'],
+            .deck-reading-boost [class~='text-[0.92rem]'][class*='leading'],
+            .deck-reading-boost [class~='text-[0.94rem]'][class*='leading'],
+            .deck-reading-boost [class~='text-[0.95rem]'][class*='leading'],
+            .deck-reading-boost [class~='text-[0.96rem]'][class*='leading'],
+            .deck-reading-boost [class~='text-[0.98rem]'][class*='leading'] {
+              font-size: clamp(1.45rem, 1.3rem + 0.34vw, 1.75rem) !important;
+            }
+
+            .deck-reading-boost [class~='text-[11px]'][class*='leading'],
+            .deck-reading-boost [class~='text-[10.5px]'][class*='leading'],
+            .deck-reading-boost [class~='text-[10px]'][class*='leading'] {
+              font-size: clamp(1.24rem, 1.12rem + 0.16vw, 1.4rem) !important;
+            }
+
+            .deck-reading-boost [class~='text-[11px]']:not([class*='leading']),
+            .deck-reading-boost [class~='text-[10.5px]']:not([class*='leading']),
+            .deck-reading-boost [class~='text-[10px]']:not([class*='leading']) {
+              font-size: clamp(1.08rem, 0.98rem + 0.13vw, 1.22rem) !important;
+            }
+
+            .deck-reading-boost [class~='text-[9px]'][class*='leading'],
+            .deck-reading-boost [class~='text-[8px]'][class*='leading'],
+            .deck-reading-boost [class~='text-[7px]'][class*='leading'] {
+              font-size: clamp(1.12rem, 1rem + 0.12vw, 1.24rem) !important;
+            }
+
+            .deck-reading-boost [class~='text-[9px]']:not([class*='leading']),
+            .deck-reading-boost [class~='text-[8px]']:not([class*='leading']),
+            .deck-reading-boost [class~='text-[7px]']:not([class*='leading']) {
+              font-size: clamp(1.02rem, 0.92rem + 0.1vw, 1.16rem) !important;
+            }
+
+            .deck-reading-boost .close-thesis {
+              font-size: clamp(1.48rem, 1.32rem + 0.4vw, 1.82rem);
+            }
+          }
+        `}</style>
       </div>
     </>
   );

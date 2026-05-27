@@ -514,6 +514,16 @@ const ROUTE_ENTRIES: RouteEntry[] = [
     loadHandler: () => import("../../src/pages/api/pitch/record-view.ts"),
   },
   {
+    pattern: "/api/pulse-check-tech-demo/record-view",
+    loadHandler: () =>
+      import("../../src/pages/api/pulse-check-tech-demo/record-view.ts"),
+  },
+  {
+    pattern: "/api/pulse-check-tech-demo/analytics",
+    loadHandler: () =>
+      import("../../src/pages/api/pulse-check-tech-demo/analytics.ts"),
+  },
+  {
     pattern: "/api/pulsecheck/admin-activation/redeem",
     loadHandler: () =>
       import("../../src/pages/api/pulsecheck/admin-activation/redeem.ts"),

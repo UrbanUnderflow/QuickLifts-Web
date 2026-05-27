@@ -47,6 +47,7 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/auntedna': 'auntEDNA.ai — Pulse',
   '/pulse-auntedna-pitch': 'Pulse × auntEDNA.ai',
   '/pulse-pil-pepperdine-pitch': 'Pulse Intelligence Labs — Pepperdine MFC Pitch',
+  '/pulse-check-tech-demo': 'Pulse Check Tech Demo | Pulse Intelligence Labs',
   '/pulse-auntedna-stakeholder-deck': 'Pulse × auntEDNA.ai — Stakeholder Deck',
   '/pulsecheck': 'Pulse Check',
   '/morning-mobility-challenge': 'Morning Mobility — Pulse',

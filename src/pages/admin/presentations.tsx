@@ -81,6 +81,16 @@ const PRESENTATION_REGISTRY: PresentationLink[] = [
     description: 'Investor-facing presentation surface with access tracking and export support.',
   },
   {
+    id: 'pulse-pil-pepperdine-pitch',
+    title: 'Pepperdine MFC Pitch',
+    href: '/pulse-pil-pepperdine-pitch',
+    category: 'Presentation Decks',
+    typeLabel: 'Pitch deck',
+    accessLabel: 'Live route',
+    description:
+      'Pitch presentation for Pepperdine MFC 2026 with focus on traction, market, and the strategic capital narrative.',
+  },
+  {
     id: 'pulseintelligencelabs',
     title: 'Pulse Intelligence Labs Deck',
     href: '/pulseintelligencelabs',
