@@ -1760,13 +1760,16 @@ export const handler: Handler = async (event) => {
             : period.periodStart === period.periodEnd
               ? 'single_day_assigned'
               : 'period_bucket_no_row_dates';
-        const rawRowPersistence = await persistRawRowsOnly({
-          db: adminRequest.db,
-          runId,
-          source: 'aggregate_csv_upload',
-          rawRows: aggregateRows,
-          replaceDates: rawRowDates,
-        });
+        const rawRowPersistence =
+          dateHandling === 'period_bucket_no_row_dates'
+            ? { persistedRawRows: 0, retiredRawRows: 0 }
+            : await persistRawRowsOnly({
+                db: adminRequest.db,
+                runId,
+                source: 'aggregate_csv_upload',
+                rawRows: aggregateRows,
+                replaceDates: rawRowDates,
+              });
         const topUploadedEvents = topEntries(summary.events.byName, 12);
         const uploadDiagnostics = {
           mode: 'aggregate_csv_upload',
@@ -1852,6 +1855,125 @@ export const handler: Handler = async (event) => {
         });
       }
 
+      const eventDateDistribution = Object.entries(
+        allRows.reduce((out, { row }) => {
+          const eventDate = rawRowEventDate(row) || 'missing_date';
+          out[eventDate] = (out[eventDate] || 0) + 1;
+          return out;
+        }, {} as Record<string, number>)
+      )
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([date, rows]) => ({ date, rows }));
+      const missingDateRows = eventDateDistribution.find((row) => row.date === 'missing_date')?.rows || 0;
+      const parsedDateRows = allRows.length - missingDateRows;
+
+      if (!parsedDateRows) {
+        const period = resolveAggregateCsvPeriod({ body, csvFiles, minRowMs, maxRowMs });
+        if (!period.periodStart || !period.periodEnd) {
+          return json(400, { error: 'No AppsFlyer CSV date window could be inferred for the upload.' });
+        }
+        if (period.periodStart > period.periodEnd) {
+          return json(400, { error: 'AppsFlyer CSV start date must be on or before the end date.' });
+        }
+
+        const summary = createSummary({
+          appId,
+          from: period.periodStart,
+          to: period.periodEnd,
+          daysBack: daysBetweenInclusive(period.periodStart, period.periodEnd),
+          maximumRows: allRows.length,
+          timezone: 'csv_upload_period_bucket',
+          importSource: 'csv_upload_period_bucket',
+        });
+
+        for (const { row, report } of allRows) {
+          summary.rows += 1;
+          bump(summary.reports, report.key);
+          addRowToSummary(summary, row, report);
+        }
+
+        const runId = `macra-appsflyer-csv-period-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+        const periodImports = [{ period, summary, uploadedRows: allRows.length }];
+        const uploadDiagnostics = {
+          mode: 'csv_upload_period_bucket',
+          period,
+          periodSource: period.source || '',
+          requestedPeriod: {
+            preset: normalizeString(body.csvPeriodPreset || body.periodPreset) || null,
+            start: normalizeDateOnly(body.csvPeriodStart || body.periodStart || body.fromDate) || null,
+            end: normalizeDateOnly(body.csvPeriodEnd || body.periodEnd || body.toDate) || null,
+          },
+          clientYesterday: normalizeDateOnly(body.clientYesterday) || null,
+          uploadedRows: allRows.length,
+          importedRows: allRows.length,
+          duplicateRows: 0,
+          parsedDateRows,
+          missingDateRows,
+          dateGranularity: 'period',
+          dateHandling: 'period_bucket_no_row_dates',
+          eventDateDistribution,
+          topUploadedEvents: topEntries(summary.events.byName, 12),
+          revenueTotal: Number(summary.revenue?.total || 0) || 0,
+          topRevenueEvents: topEntries(summary.revenue?.byEventName || {}, 8),
+          eventSamples: allRows.slice(0, 20).map(({ row, report }) => ({
+            eventDate: rawRowEventDate(row) || null,
+            eventTime: rawRowEventTime(row) || null,
+            eventName: rawRowEventName(row, report) || null,
+            mediaSource: rawRowMediaSource(row, report),
+            actions: rawRowActionCount(row),
+            revenue: parseReportNumber(getValue(row, ['revenue', 'event_revenue', 'af_revenue'])),
+          })),
+          sourceFiles,
+          rawRowCollection: RAW_ROW_COLLECTION,
+        };
+        console.warn('[sync-macra-appsflyer-raw-data] CSV upload has no row-level dates; saved as a coverage bucket', {
+          period,
+          requestedPeriod: uploadDiagnostics.requestedPeriod,
+          uploadedRows: allRows.length,
+        });
+        console.log('[sync-macra-appsflyer-raw-data] CSV period bucket upload diagnostics', uploadDiagnostics);
+
+        const { cumulativeSummary, aggregateCsvSummary, aggregateCsvPeriods, supersededPeriodIds, persistedPeriodCount } =
+          await persistAggregateCsvPeriodImport({
+            db: adminRequest.db,
+            adminRequest,
+            runId,
+            summary,
+            period,
+            periodImports,
+            sourceFiles,
+            uploadedRows: allRows.length,
+            dateGranularity: 'period',
+          });
+
+        return json(200, {
+          success: true,
+          runId,
+          summary,
+          cumulativeSummary,
+          aggregateCsvSummary,
+          aggregateCsvPeriods,
+          aggregatePeriod: period,
+          aggregatePeriods: periodImports.map((periodImport) => ({
+            id: periodImport.period.docId,
+            periodStart: periodImport.period.periodStart,
+            periodEnd: periodImport.period.periodEnd,
+            granularity: periodImport.period.periodStart === periodImport.period.periodEnd ? 'daily' : 'range',
+            rows: periodImport.summary.rows,
+            events: periodImport.summary.events.total,
+            installs: periodImport.summary.installs.total,
+          })),
+          dateGranularity: 'period',
+          uploadDiagnostics,
+          uploadedRows: allRows.length,
+          importedRows: allRows.length,
+          duplicateRows: 0,
+          supersededPeriodIds,
+          persistedPeriodCount,
+          replacedPeriod: true,
+        });
+      }
+
       const { newRows, duplicateRows } = await filterNewRows(adminRequest.db, allRows);
       const summary = createSummary({
         appId,
@@ -1882,20 +2004,13 @@ export const handler: Handler = async (event) => {
         source: 'csv_upload',
         rawRows: newRows,
       });
-      const eventDateDistribution = Object.entries(
-        allRows.reduce((out, { row }) => {
-          const eventDate = rawRowEventDate(row) || 'missing_date';
-          out[eventDate] = (out[eventDate] || 0) + 1;
-          return out;
-        }, {} as Record<string, number>)
-      )
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([date, rows]) => ({ date, rows }));
       const uploadDiagnostics = {
         mode: 'raw_csv_upload',
         uploadedRows: allRows.length,
         importedRows: newRows.length,
         duplicateRows,
+        parsedDateRows,
+        missingDateRows,
         dateHandling: 'row_level_dates',
         eventDateDistribution,
         topUploadedEvents: topEntries(summary.events.byName, 12),

@@ -1401,6 +1401,9 @@ const buildAppsFlyerRawRowsSummaryForRange = (
 ): Record<string, any> | null => {
   const rowsInRange = rawRows.filter((doc) => {
     if (doc.excludedFromRangeRollups || doc.supersededBy) return false;
+    const source = normalizeScoreboardString(doc.source || doc.importSource);
+    const reportKey = normalizeScoreboardString(doc.reportKey);
+    if (source === 'aggregate_csv_upload' || Boolean(doc.aggregatePerformance) || reportKey.includes('csv_aggregate_')) return false;
     const eventDate = rawAppsFlyerEventDate(doc);
     return eventDate && eventDate >= range.start && eventDate <= range.end;
   });
