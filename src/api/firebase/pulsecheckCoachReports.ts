@@ -107,6 +107,16 @@ export interface CoachReportGameDayLookFor extends GameDayLookFor {
   id?: string;
 }
 
+export interface CoachReportAdherenceFollowUpAthlete {
+  athleteUserId?: string;
+  athleteName: string;
+  role?: string;
+  missedCheckins?: number;
+  missedMentalTrainings?: number;
+  followUpReason?: string;
+  lastCompletedLabel?: string;
+}
+
 export interface CoachReportAdherenceBlock {
   wearRate7d: number;
   noraCheckinCompletion7d: number;
@@ -114,6 +124,16 @@ export interface CoachReportAdherenceBlock {
   trainingOrNutritionCoverage7d: number;
   confidenceLabel: string;
   summary?: string;
+  overallAdherencePct?: number;
+  overallAdherenceRate?: number;
+  categoriesReady?: number;
+  categoriesTotal?: number;
+  athleteCount?: number;
+  completedCheckins?: number;
+  expectedCheckins?: number;
+  completedMentalTrainings?: number;
+  expectedMentalTrainings?: number;
+  followUpAthletes?: CoachReportAdherenceFollowUpAthlete[];
   deviceCoveragePct?: number;
   noraCompletionPct?: number;
   protocolSimulationCompletionPct?: number;
@@ -123,9 +143,17 @@ export interface CoachReportAdherenceBlock {
 export type CoachReportAdherenceSummary = CoachReportAdherenceBlock;
 export type CoachReportConfidenceLabel = 'Strong read' | 'Usable read' | 'Thin read' | 'Insufficient' | 'Holding back';
 
+export interface CoachReportTeamReadinessBlock {
+  score?: number;
+  label?: string;
+  trend?: string;
+  summary?: string;
+}
+
 export interface CoachReportCoachSurface {
   meta: CoachReportMeta;
   topLine: CoachReportTopLine;
+  teamReadiness?: CoachReportTeamReadinessBlock;
   dimensionState: Partial<ReportDimensionStateMap>;
   watchlist: CoachReportWatchlistEntry[];
   coachActions: CoachReportCoachAction[];
@@ -331,6 +359,9 @@ export const createEmptyCoachReportSurface = (input: {
       noraCheckinCompletion7d: 0,
       protocolOrSimCompletion7d: 0,
       trainingOrNutritionCoverage7d: 0,
+      overallAdherencePct: 0,
+      categoriesReady: 0,
+      categoriesTotal: 4,
       deviceCoveragePct: 0,
       noraCompletionPct: 0,
       protocolSimulationCompletionPct: 0,

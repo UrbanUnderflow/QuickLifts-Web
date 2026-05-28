@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions';
 import { admin, headers as corsHeaders } from './config/firebase';
+import { safeErrorBody } from './utils/safeErrorResponse';
 
 const JOB_COLLECTION = 'noraRoutineGenerationJobs';
 
@@ -44,7 +45,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 405,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Method Not Allowed' })
+      body: JSON.stringify(safeErrorBody('METHOD_NOT_ALLOWED', 'That request is not supported.'))
     };
   }
 
@@ -53,7 +54,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 401,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Unauthorized: Missing or invalid Firebase token' })
+      body: JSON.stringify(safeErrorBody('AUTH_REQUIRED', 'Please sign in again.'))
     };
   }
 
@@ -62,7 +63,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 400,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Missing jobId' })
+      body: JSON.stringify(safeErrorBody('BAD_REQUEST', 'That request could not be read.'))
     };
   }
 
@@ -71,7 +72,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 404,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Job not found' })
+      body: JSON.stringify(safeErrorBody('NOT_FOUND', 'That request could not be found.'))
     };
   }
 
@@ -80,7 +81,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 403,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Forbidden' })
+      body: JSON.stringify(safeErrorBody('REQUEST_NOT_ALLOWED', 'That request is not allowed.'))
     };
   }
 
@@ -94,7 +95,9 @@ export const handler: Handler = async (event) => {
       jobId,
       status: job.status || 'queued',
       result: job.status === 'succeeded' ? normalizeChatResultForSwift(job.result) : null,
-      errorMessage: job.status === 'failed' ? job.errorMessage || 'Routine generation failed.' : null
+      errorMessage: job.status === 'failed'
+        ? `${job.errorMessage || "We couldn't generate that routine right now. Try again in a moment."} Code: ${job.incidentId || job.errorCode || 'NORA_ROUTINE_GENERATION_FAILED'}.`
+        : null
     })
   };
 };

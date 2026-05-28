@@ -64,9 +64,21 @@ export interface AthleteAdherenceWindow {
   noraCheckinCompletion: number;
   protocolOrSimCompletion: number;
   trainingOrNutritionCoverage: number;
+  wearDays: number;
+  noraCheckinDays: number;
+  assignedMentalTrainingCount: number;
+  completedMentalTrainingCount: number;
+  missedCheckinDays: number;
+  missedMentalTrainingCount: number;
   /** Number of categories at or above READY_THRESHOLD (0–4). */
   categoriesReady: number;
   confidenceLabel: AdherenceConfidenceLabel;
+}
+
+export interface TeamAdherenceFollowUpAthlete {
+  athleteUserId: string;
+  missedCheckins: number;
+  missedMentalTrainings: number;
 }
 
 export interface TeamAdherenceSummary {
@@ -76,8 +88,14 @@ export interface TeamAdherenceSummary {
   noraCheckinCompletion: number;
   protocolOrSimCompletion: number;
   trainingOrNutritionCoverage: number;
+  overallAdherence: number;
+  expectedCheckins: number;
+  completedCheckins: number;
+  expectedMentalTrainings: number;
+  completedMentalTrainings: number;
   categoriesReady: number;
   confidenceLabel: AdherenceConfidenceLabel;
+  followUpAthletes: TeamAdherenceFollowUpAthlete[];
   /** Per-athlete breakdown for the reviewer pane. */
   athletes: AthleteAdherenceWindow[];
   athleteCount: number;
@@ -307,6 +325,12 @@ export const computeAthleteAdherence = async (
     noraCheckinCompletion,
     protocolOrSimCompletion,
     trainingOrNutritionCoverage,
+    wearDays,
+    noraCheckinDays: noraResult.totalDays,
+    assignedMentalTrainingCount: assignmentResult.assignedCount,
+    completedMentalTrainingCount: assignmentResult.completedCount,
+    missedCheckinDays: Math.max(0, expectedDays - noraResult.totalDays),
+    missedMentalTrainingCount: Math.max(0, assignmentResult.assignedCount - assignmentResult.completedCount),
     categoriesReady,
     confidenceLabel: confidenceLabelFromAdherence(categoriesReady),
   };
@@ -333,8 +357,14 @@ export const computeTeamAdherenceSummary = async (
       noraCheckinCompletion: 0,
       protocolOrSimCompletion: 0,
       trainingOrNutritionCoverage: 0,
+      overallAdherence: 0,
+      expectedCheckins: 0,
+      completedCheckins: 0,
+      expectedMentalTrainings: 0,
+      completedMentalTrainings: 0,
       categoriesReady: 0,
       confidenceLabel: 'Insufficient',
+      followUpAthletes: [],
       athletes: [],
       athleteCount: 0,
     };
@@ -348,6 +378,14 @@ export const computeTeamAdherenceSummary = async (
   const noraCheckinCompletion = meanRatio(athletes.map((a) => a.noraCheckinCompletion));
   const protocolOrSimCompletion = meanRatio(athletes.map((a) => a.protocolOrSimCompletion));
   const trainingOrNutritionCoverage = meanRatio(athletes.map((a) => a.trainingOrNutritionCoverage));
+  const expectedCheckins = athletes.length * window.expectedDays;
+  const completedCheckins = athletes.reduce((sum, athlete) => sum + athlete.noraCheckinDays, 0);
+  const expectedMentalTrainings = athletes.reduce((sum, athlete) => sum + athlete.assignedMentalTrainingCount, 0);
+  const completedMentalTrainings = athletes.reduce((sum, athlete) => sum + athlete.completedMentalTrainingCount, 0);
+  const adherenceDenominator = expectedCheckins + expectedMentalTrainings;
+  const overallAdherence = adherenceDenominator > 0
+    ? (completedCheckins + completedMentalTrainings) / adherenceDenominator
+    : 0;
 
   const categoriesReady = countReadyCategories({
     wearRate,
@@ -355,6 +393,17 @@ export const computeTeamAdherenceSummary = async (
     protocolOrSimCompletion,
     trainingOrNutritionCoverage,
   });
+  const followUpAthletes = athletes
+    .filter((athlete) => athlete.missedCheckinDays > 0 || athlete.missedMentalTrainingCount > 0)
+    .map((athlete) => ({
+      athleteUserId: athlete.athleteUserId,
+      missedCheckins: athlete.missedCheckinDays,
+      missedMentalTrainings: athlete.missedMentalTrainingCount,
+    }))
+    .sort((left, right) =>
+      (right.missedCheckins + right.missedMentalTrainings) - (left.missedCheckins + left.missedMentalTrainings)
+    )
+    .slice(0, 5);
 
   return {
     teamId,
@@ -363,8 +412,14 @@ export const computeTeamAdherenceSummary = async (
     noraCheckinCompletion,
     protocolOrSimCompletion,
     trainingOrNutritionCoverage,
+    overallAdherence,
+    expectedCheckins,
+    completedCheckins,
+    expectedMentalTrainings,
+    completedMentalTrainings,
     categoriesReady,
     confidenceLabel: confidenceLabelFromAdherence(categoriesReady),
+    followUpAthletes,
     athletes,
     athleteCount: athletes.length,
   };

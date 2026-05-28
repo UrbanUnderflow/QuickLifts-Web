@@ -10,6 +10,10 @@ import {
   NamedAthleteWatchEntry,
   ReportDimensionStateMap,
 } from './pulsecheckSportConfig';
+import type {
+  CoachReportAdherenceBlock,
+  CoachReportTeamReadinessBlock,
+} from './pulsecheckCoachReports';
 
 export interface CoachReportDemoMeta {
   weekLabel: string;
@@ -29,6 +33,8 @@ export interface CoachReportDemoExample {
     secondaryThread?: string;
   };
   dimensionState?: ReportDimensionStateMap;
+  teamReadiness?: CoachReportTeamReadinessBlock;
+  adherence?: CoachReportAdherenceBlock;
   watchlist: NamedAthleteWatchEntry[];
   coachActions: CoachActionCandidate[];
   gameDayLookFors?: GameDayLookFor[];
@@ -65,64 +71,106 @@ const SPORT_COLORS: Record<string, { primary: string; soft: string }> = {
   other: { primary: '#94A3B8', soft: 'rgba(148, 163, 184, 0.12)' },
 };
 
+const DEPAUL_BLUE = '#005EB8';
+const DEPAUL_BLUE_SOFT = 'rgba(0, 94, 184, 0.16)';
+const DEPAUL_RED = '#E31837';
+const DEPAUL_RED_SOFT = 'rgba(227, 24, 55, 0.16)';
+
 export const getSportColor = (sportId: string) => SPORT_COLORS[sportId] || SPORT_COLORS.other;
 
 export const COACH_REPORT_DEMO_EXAMPLES: Record<string, CoachReportDemoExample> = {
   basketball: {
     meta: {
-      weekLabel: 'Week of Apr 21 — Apr 27, 2026',
-      opponentOrEvent: 'at Riverside University',
-      competitionDate: 'Wednesday',
-      teamName: 'Pulse Demo Athletics · Men\'s Basketball',
-      ...SPORT_COLORS.basketball,
-      primarySportColor: SPORT_COLORS.basketball.primary,
-      primarySportColorSoft: SPORT_COLORS.basketball.soft,
+      weekLabel: 'Week of Feb 2 — Feb 8, 2026',
+      opponentOrEvent: 'Big East road week — at Marquette, vs St. John\'s',
+      competitionDate: 'Wednesday + Saturday',
+      teamName: 'DePaul University · Basketball',
+      primarySportColor: DEPAUL_BLUE,
+      primarySportColorSoft: DEPAUL_BLUE_SOFT,
     },
-    noteOpener: 'Quick read before Wednesday\'s game at Riverside — two of your guards are showing a recovery-and-check-in pattern worth watching.',
+    noteOpener: 'Quick read before the Big East road week — the guard group is playable, but the late-clock decision layer needs simple language and two athletes need adherence follow-up.',
     topLine: {
-      whatChanged: 'Johnson and Davis both show below-baseline recovery, and their Nora check-ins point to decision fatigue before Wednesday\'s game at Riverside.',
-      who: 'M. Johnson and T. Davis (point guards)',
-      firstAction: 'Use Tuesday\'s repeat-sprint exposure only as context. When the game gets late in the shot clock and the guards are tired or mentally cluttered, don\'t give them a bunch of coaching points. Give them one simple phrase they can use in that moment.',
-      secondaryThread: 'Separate thing — Davis reported role uncertainty in the last two check-ins. Worth a 5-minute one-on-one before Friday\'s shootaround. Make it about role, not film.',
+      whatChanged: 'Hart and Wallace are both below their usual recovery band, and the last three check-ins point to slower late-clock choices when fatigue stacks after travel.',
+      who: 'J. Hart and C. Wallace (primary ball handlers)',
+      firstAction: 'Use Tuesday\'s repeat-sprint exposure and Wednesday travel only as context. Late clock, give the guards one phrase: early action, simple read.',
+      secondaryThread: 'Separate thing — Wallace missed two assigned mental trainings this week. Quick private follow-up before Friday walkthrough so the missed work does not carry into the weekend.',
     },
     dimensionState: {
       focus: 'solid',
       composure: 'watch',
       decisioning: 'watch',
     },
+    teamReadiness: {
+      score: 78,
+      label: 'Mostly ready',
+      trend: 'Readiness is strong enough to keep the plan, with two guards below their usual recovery band.',
+      summary: 'Team readiness is being held up by the frontcourt; the main watch is late-clock guard composure after travel.',
+    },
+    adherence: {
+      wearRate7d: 0.91,
+      noraCheckinCompletion7d: 0.86,
+      protocolOrSimCompletion7d: 0.76,
+      trainingOrNutritionCoverage7d: 0.88,
+      overallAdherencePct: 0.82,
+      categoriesReady: 4,
+      categoriesTotal: 4,
+      athleteCount: 15,
+      completedCheckins: 90,
+      expectedCheckins: 105,
+      completedMentalTrainings: 57,
+      expectedMentalTrainings: 75,
+      confidenceLabel: 'Strong read',
+      summary: 'Adherence is strong enough for named follow-up. Check-ins are healthy; assigned mental trainings need a Friday nudge.',
+      followUpAthletes: [
+        {
+          athleteName: 'C. Wallace',
+          role: 'Guard',
+          missedCheckins: 1,
+          missedMentalTrainings: 2,
+          followUpReason: 'Role-clarity check-in is useful before the next report window.',
+        },
+        {
+          athleteName: 'E. Clark',
+          role: 'Wing',
+          missedCheckins: 2,
+          missedMentalTrainings: 1,
+          followUpReason: 'Daily signal is thin compared with the rest of the rotation.',
+        },
+      ],
+    },
     watchlist: [
       {
-        athleteName: 'M. Johnson',
+        athleteName: 'J. Hart',
         role: 'Point Guard',
-        whyMatters: 'Polar recovery has been below his usual for four straight days. In Nora\'s check-in, he described late-practice decisions as slower when fatigue shows up.',
-        coachMove: 'Use Tuesday\'s repeat-sprint exposure only as context. If Johnson looks tired or mentally cluttered late in the shot clock, keep the message simple and give him one phrase he can use right then.',
+        whyMatters: 'Recovery has been below his usual for four straight days. In the daily check-in, he described late-practice choices as slower when fatigue shows up.',
+        coachMove: 'Use Tuesday\'s repeat-sprint exposure only as context. If Hart looks tired or mentally cluttered late in the shot clock, keep the message simple: early action, simple read.',
         confidenceTier: 'stable',
-        evidenceRefs: ['Polar recovery is below his usual', 'Nora check-in: decisions feel slower under fatigue'],
+        evidenceRefs: ['recovery is below his usual', 'daily check-in: choices feel slower under fatigue'],
       },
       {
-        athleteName: 'T. Davis',
-        role: 'Point Guard',
-        whyMatters: 'Davis used lower-confidence language in the last two Nora check-ins and named role clarity as the thing he needs before the next game. Nothing dramatic; the pattern is there.',
-        coachMove: 'Five-minute check-in before Friday\'s shootaround. Make it about role, not film.',
+        athleteName: 'C. Wallace',
+        role: 'Guard',
+        whyMatters: 'Wallace used lower-confidence language in the last two daily check-ins, named role clarity as the thing he needs, and missed two assigned mental trainings. Nothing dramatic; the pattern is actionable.',
+        coachMove: 'Five-minute check-in before Friday walkthrough. Make it about role and the missed assigned mental trainings, not film.',
         confidenceTier: 'stable',
-        evidenceRefs: ['Nora check-in: confidence language dipped', 'athlete-reported role uncertainty'],
+        evidenceRefs: ['daily check-in: confidence language dipped', 'athlete-reported role uncertainty', 'two missed assigned mental trainings'],
       },
     ],
     coachActions: [
-      { action: 'If Johnson or Davis looks tired or mentally cluttered late in the shot clock, give one simple phrase instead of multiple corrections', appliesTo: 'Johnson and Davis', session: 'Tuesday repeat-sprint block' },
+      { action: 'If Hart or Wallace looks tired or mentally cluttered late in the shot clock, use one phrase: early action, simple read', appliesTo: 'Hart and Wallace', session: 'Tuesday repeat-sprint block' },
       { action: 'In walkthrough, practice the exact phrase guards should use when a possession feels rushed', appliesTo: 'starters and first-off-bench', session: 'Wednesday walkthrough' },
-      { action: 'Five-minute one-on-one about role expectations', appliesTo: 'T. Davis', session: 'Friday shootaround' },
+      { action: 'Five-minute one-on-one about role expectations and missed assigned mental trainings', appliesTo: 'C. Wallace', session: 'Friday walkthrough' },
     ],
     gameDayLookFors: [
       {
-        athleteOrUnit: 'M. Johnson',
+        athleteOrUnit: 'J. Hart',
         lookFor: 'flat or quiet during pre-game warm-ups',
-        ifThen: 'ask one short question about energy, then give him the same simple phrase before tip.',
+        ifThen: 'ask one short question about energy, then give him the same simple phrase before tip: early action, simple read.',
       },
       {
         athleteOrUnit: 'rotation guards',
         lookFor: 'late-clock reads slowing under second-half fatigue',
-        ifThen: 'tell them to breathe, scan, and start the action early instead of waiting until the clock gets tight.',
+        ifThen: 'tell them to start the action early instead of waiting until the clock gets tight.',
       },
       {
         athleteOrUnit: 'whole team',
@@ -130,7 +178,7 @@ export const COACH_REPORT_DEMO_EXAMPLES: Record<string, CoachReportDemoExample> 
         ifThen: 'at the timeout, keep it to one plain phrase: "next possession." Don\'t pile on coaching.',
       },
     ],
-    teamSynthesis: 'This is a back-to-back recovery week. The physical pattern tells us late-clock composure may be harder, so keep the coaching message simple in that moment: one late-clock phrase, not several corrections.',
+    teamSynthesis: 'This is a Big East travel-and-composure week. The physical pattern tells us late-clock guard choices may get noisy, so keep the coaching message simple: one late-clock phrase, not several corrections.',
     closer: 'We\'ll send the next one Sunday morning. Reply with questions — we read every one.',
   },
   golf: {
@@ -265,54 +313,98 @@ export const COACH_REPORT_DEMO_EXAMPLES: Record<string, CoachReportDemoExample> 
   },
   'track-field': {
     meta: {
-      weekLabel: 'Week of Apr 21 — Apr 27, 2026',
-      opponentOrEvent: 'Meet at Westbrook University',
+      weekLabel: 'Week of Apr 6 — Apr 12, 2026',
+      opponentOrEvent: 'Outdoor meet — Chicagoland Invite',
       competitionDate: 'Saturday',
-      teamName: 'Pulse Demo Athletics · Track & Field',
-      ...SPORT_COLORS['track-field'],
-      primarySportColor: SPORT_COLORS['track-field'].primary,
-      primarySportColorSoft: SPORT_COLORS['track-field'].soft,
+      teamName: 'DePaul University · Track & Field',
+      primarySportColor: DEPAUL_RED,
+      primarySportColorSoft: DEPAUL_RED_SOFT,
     },
-    noteOpener: 'Quick read going into Saturday\'s meet — Polar recovery and Nora check-ins point to meet-day arousal for the sprint group.',
+    noteOpener: 'Quick read going into Saturday\'s outdoor meet — readiness is uneven across the sprint group, and adherence follow-up is concentrated in two athletes.',
     topLine: {
-      whatChanged: 'Smith and Adams show below-baseline recovery and reported heavy legs in Nora check-ins before Saturday\'s meet at Westbrook University.',
-      who: 'D. Smith and J. Adams (sprinters — 100/200)',
-      firstAction: 'Use Tuesday\'s 4x200 and strength add-on only as context. If Smith says his legs feel flat before the 200, do not add a bunch of race thoughts. Give him one phrase for the start: drive for the first steps.',
-      secondaryThread: 'Separate thing — Peters reported missing the pre-practice meal two days running. If low energy comes up, keep the athlete message concrete and non-shaming.',
+      whatChanged: 'Smith and Adams show below-usual recovery and reported heavy-leg language before Saturday\'s Chicagoland Invite.',
+      who: 'D. Smith and J. Adams (sprints — 100/200)',
+      firstAction: 'Use Tuesday\'s 4x200 and lift only as context. If Smith says his legs feel flat before the 200, do not add a bunch of race thoughts. Give him one phrase for the start: drive the first steps.',
+      secondaryThread: 'Separate thing — Peters missed two daily check-ins and two assigned mental trainings. If low energy comes up, keep the athlete message concrete and non-shaming, then follow up privately after the meet.',
     },
     dimensionState: {
       focus: 'solid',
       composure: 'watch',
       decisioning: 'solid',
     },
+    teamReadiness: {
+      score: 69,
+      label: 'Uneven',
+      trend: 'Sprint readiness is lower than the distance group; no full-team alarm, but the line needs a simpler pre-race cue.',
+      summary: 'Team readiness is stable enough to compete, with the biggest watch in sprint arousal and fueling rhythm.',
+    },
+    adherence: {
+      wearRate7d: 0.87,
+      noraCheckinCompletion7d: 0.75,
+      protocolOrSimCompletion7d: 0.66,
+      trainingOrNutritionCoverage7d: 0.79,
+      overallAdherencePct: 0.71,
+      categoriesReady: 3,
+      categoriesTotal: 4,
+      athleteCount: 28,
+      completedCheckins: 147,
+      expectedCheckins: 196,
+      completedMentalTrainings: 92,
+      expectedMentalTrainings: 140,
+      confidenceLabel: 'Usable read',
+      summary: 'The read is usable, but assigned mental trainings are the soft spot. Follow-up should stay practical and private.',
+      followUpAthletes: [
+        {
+          athleteName: 'A. Peters',
+          role: 'Middle Distance · 800m',
+          missedCheckins: 2,
+          missedMentalTrainings: 2,
+          followUpReason: 'Fueling rhythm and daily signal are both thin before meet day.',
+        },
+        {
+          athleteName: 'J. Adams',
+          role: 'Sprints · 100m / 200m',
+          missedCheckins: 1,
+          missedMentalTrainings: 3,
+          followUpReason: 'Assigned mental trainings are slipping while readiness is below usual.',
+        },
+        {
+          athleteName: 'N. Brooks',
+          role: 'Jumps',
+          missedCheckins: 2,
+          missedMentalTrainings: 1,
+          followUpReason: 'Check-in pattern is thinner than the rest of the event group.',
+        },
+      ],
+    },
     watchlist: [
       {
         athleteName: 'D. Smith',
         role: 'Sprinter — 200m',
-        whyMatters: 'Polar recovery has been below his usual, and Smith used heavy-leg language in Nora\'s check-in. That points to meet-day arousal, not a sprint-plan decision.',
-        coachMove: 'Use Tuesday\'s 4x200 and strength add-on only as context. If Smith says his legs feel flat before the 200, do not add a bunch of race thoughts. Give him one phrase for the start: drive for the first steps.',
+        whyMatters: 'Recovery has been below his usual, and Smith used heavy-leg language in the daily check-in. That points to meet-day arousal, not a sprint-plan decision.',
+        coachMove: 'Use Tuesday\'s 4x200 and lift only as context. If Smith says his legs feel flat before the 200, do not add a bunch of race thoughts. Give him one phrase for the start: drive the first steps.',
         confidenceTier: 'stable',
-        evidenceRefs: ['Polar recovery is below his usual', 'Nora check-in: heavy-leg language'],
+        evidenceRefs: ['recovery is below his usual', 'daily check-in: heavy-leg language'],
       },
       {
         athleteName: 'A. Peters',
         role: 'Middle Distance — 800m',
-        whyMatters: 'Peters reported missing the pre-practice meal two days running and named low energy as the concern before Saturday. Keep this concrete and non-shaming.',
-        coachMove: 'If low energy comes up before the meet, keep the athlete-facing message concrete and non-shaming.',
+        whyMatters: 'Peters reported missing the pre-practice meal two days running, missed two daily check-ins, and named low energy as the concern before Saturday. Keep this concrete and non-shaming.',
+        coachMove: 'If low energy comes up before the meet, keep the athlete-facing message concrete and non-shaming. After the meet, follow up on missed check-ins and assigned mental trainings privately.',
         confidenceTier: 'stable',
-        evidenceRefs: ['Nora check-in: missed pre-practice meal', 'athlete-reported low-energy concern'],
+        evidenceRefs: ['daily check-in: missed pre-practice meal', 'athlete-reported low-energy concern', 'missed adherence tasks'],
       },
     ],
     coachActions: [
       { action: 'If a sprinter feels flat on meet day, give one start phrase instead of several race thoughts', appliesTo: 'D. Smith and J. Adams', session: 'Tuesday 4x200 session' },
-      { action: 'If Peters talks about low energy, keep the athlete message concrete and non-shaming', appliesTo: 'A. Peters', session: 'Friday afternoon before meet' },
+      { action: 'If Peters talks about low energy, keep the athlete message concrete and non-shaming, then follow up privately on missed daily work', appliesTo: 'A. Peters', session: 'Friday afternoon before meet' },
       { action: 'Use event-specific language and keep sprint and distance messages separate', appliesTo: 'sprinters and middle distance', session: 'Saturday meet warm-up' },
     ],
     gameDayLookFors: [
       {
         athleteOrUnit: 'D. Smith',
         lookFor: 'self-reports flat legs in warm-up or gets quiet on the line',
-        ifThen: 'give him one start phrase: "drive for the first steps."',
+        ifThen: 'give him one start phrase: "drive the first steps."',
       },
       {
         athleteOrUnit: 'A. Peters',
@@ -322,10 +414,10 @@ export const COACH_REPORT_DEMO_EXAMPLES: Record<string, CoachReportDemoExample> 
       {
         athleteOrUnit: 'sprinters as a group',
         lookFor: 'tight shoulders during strides or chatty in the call room',
-        ifThen: 'give each athlete one simple phrase for the line, such as "drive for the first steps" or "stand tall through the curve."',
+        ifThen: 'give each athlete one simple phrase for the line, such as "drive the first steps" or "stand tall through the curve."',
       },
     ],
-    teamSynthesis: 'This is a meet-day arousal and fueling-rhythm week. The physical pattern tells us some athletes may feel flat or over-wired before the race, so the coach message should be simple and event-specific.',
+    teamSynthesis: 'This is a meet-day arousal and fueling-rhythm week. The physical pattern tells us some athletes may feel flat or over-wired before the race, so the coach message should be simple, event-specific, and backed by private adherence follow-up.',
     closer: 'We\'ll send the next one Sunday morning. Reply with questions — we read every one.',
   },
   // Other sports get thin-read fallback for the demo until a coach-voice script is written.
@@ -526,25 +618,62 @@ export const COACH_REPORT_DEMO_EXAMPLES: Record<string, CoachReportDemoExample> 
   },
   softball: {
     meta: {
-      weekLabel: 'Week of Apr 21 — Apr 27, 2026',
-      opponentOrEvent: 'Conference tournament — three-game weekend',
+      weekLabel: 'Week of Apr 13 — Apr 19, 2026',
+      opponentOrEvent: 'Big East series — vs Villanova',
       competitionDate: 'Friday — Sunday',
-      teamName: 'Pulse Demo Athletics · Softball',
-      ...SPORT_COLORS.softball,
-      primarySportColor: SPORT_COLORS.softball.primary,
-      primarySportColorSoft: SPORT_COLORS.softball.soft,
+      teamName: 'DePaul University · Softball',
+      primarySportColor: DEPAUL_BLUE,
+      primarySportColorSoft: DEPAUL_BLUE_SOFT,
     },
-    noteOpener: 'Quick read going into the conference tournament — your circle is tight and Day-2 stamina is the real watch.',
+    noteOpener: 'Quick read going into the Villanova series — the circle is steady enough, but Day-2 stamina and missed assigned mental trainings are the follow-up points.',
     topLine: {
-      whatChanged: 'Sanchez is approaching circle workload tightness across two starts and the catching pair is wearing all-day tournament throwing volume into Day 2.',
-      who: 'K. Sanchez (P) and the catching pair (Park + Lopez)',
+      whatChanged: 'Sanchez is approaching circle workload tightness across two starts, and the catching pair is wearing series throwing volume into Saturday.',
+      who: 'K. Sanchez (P) and the catching pair (N. Park + R. Lopez)',
       firstAction: 'Use Sanchez\'s recovery window and catching load only as context before the opener. If she carries one pitch into the next, tell her: one pitch, one breath.',
-      secondaryThread: 'Separate thing — Mendez\'s bat speed has been trending lower across two sessions and her dugout body language has gotten quiet. Five-minute hitting check-in Thursday — feel-focused, no film.',
+      secondaryThread: 'Separate thing — Mendez missed two assigned mental trainings while her bat-speed trend dipped. Five-minute hitting check-in Thursday: feel-focused, no film.',
     },
     dimensionState: {
       focus: 'solid',
       composure: 'watch',
       decisioning: 'watch',
+    },
+    teamReadiness: {
+      score: 72,
+      label: 'Mostly ready',
+      trend: 'Readiness is playable, with a circle/catcher cluster that needs cleaner reset language by Saturday.',
+      summary: 'Team readiness is good enough for the series; the main watch is pitch-to-pitch composure as volume stacks.',
+    },
+    adherence: {
+      wearRate7d: 0.89,
+      noraCheckinCompletion7d: 0.83,
+      protocolOrSimCompletion7d: 0.74,
+      trainingOrNutritionCoverage7d: 0.81,
+      overallAdherencePct: 0.79,
+      categoriesReady: 4,
+      categoriesTotal: 4,
+      athleteCount: 21,
+      completedCheckins: 122,
+      expectedCheckins: 147,
+      completedMentalTrainings: 78,
+      expectedMentalTrainings: 105,
+      confidenceLabel: 'Strong read',
+      summary: 'Adherence is strong enough to name follow-up athletes. The roster is checking in; assigned mental trainings need a tighter close before the weekend.',
+      followUpAthletes: [
+        {
+          athleteName: 'A. Mendez',
+          role: 'Outfield · 3-hole',
+          missedCheckins: 1,
+          missedMentalTrainings: 2,
+          followUpReason: 'Hitting confidence and assigned mental training completion moved together this week.',
+        },
+        {
+          athleteName: 'R. Lopez',
+          role: 'Catcher',
+          missedCheckins: 2,
+          missedMentalTrainings: 1,
+          followUpReason: 'Catcher workload is high and daily signal has been uneven.',
+        },
+      ],
     },
     watchlist: [
       {
@@ -558,16 +687,16 @@ export const COACH_REPORT_DEMO_EXAMPLES: Record<string, CoachReportDemoExample> 
       {
         athleteName: 'A. Mendez',
         role: 'Outfield · 3-hole',
-        whyMatters: 'Bat speed has been trending lower across two sessions and she\'s been quiet in the dugout the last two practices. Sleep was thin two of the last three nights ahead of a long tournament weekend.',
-        coachMove: 'Thursday hitting — short, feel-focused. Five-minute one-on-one about timing, not mechanics.',
+        whyMatters: 'Bat speed has been trending lower across two sessions, she has been quiet in the dugout the last two practices, and she missed two assigned mental trainings. Sleep was thin two of the last three nights ahead of the series.',
+        coachMove: 'Thursday hitting — short, feel-focused. Five-minute one-on-one about timing and the missed assigned mental trainings, not mechanics.',
         confidenceTier: 'stable',
-        evidenceRefs: ['bat speed trending lower', 'mood is off', 'sleep was thin'],
+        evidenceRefs: ['bat speed trending lower', 'mood is off', 'sleep was thin', 'two missed assigned mental trainings'],
       },
     ],
     coachActions: [
       { action: 'If Sanchez carries one pitch into the next, tell her: one pitch, one breath', appliesTo: 'K. Sanchez', session: 'Friday opener' },
-      { action: 'If the catching pair looks tight late in the tournament, keep the message to: breathe, block, throw', appliesTo: 'Park and Lopez', session: 'Friday — Sunday tournament' },
-      { action: 'Five-minute feel-focused hitting check-in (no film)', appliesTo: 'A. Mendez', session: 'Thursday hitting' },
+      { action: 'If the catching pair looks tight late in the series, keep the message to: breathe, block, throw', appliesTo: 'Park and Lopez', session: 'Friday — Sunday series' },
+      { action: 'Five-minute feel-focused hitting check-in and private adherence follow-up', appliesTo: 'A. Mendez', session: 'Thursday hitting' },
     ],
     gameDayLookFors: [
       {
@@ -577,7 +706,7 @@ export const COACH_REPORT_DEMO_EXAMPLES: Record<string, CoachReportDemoExample> 
       },
       {
         athleteOrUnit: 'catching pair',
-        lookFor: 'tight pop times back to second or slow blocks late in Saturday\'s game',
+        lookFor: 'tight throws back to second or slow blocks late in Saturday\'s game',
         ifThen: 'keep the athlete message simple: breathe, block, throw.',
       },
       {
@@ -586,7 +715,7 @@ export const COACH_REPORT_DEMO_EXAMPLES: Record<string, CoachReportDemoExample> 
         ifThen: 'keep the message simple: "first strike, find your pitch."',
       },
     ],
-    teamSynthesis: 'This is a tournament-stamina week. The physical pattern tells us pitch-to-pitch focus and role stability may get harder, so the coach message should stay simple and avoid circle or catching decisions.',
+    teamSynthesis: 'This is a series-stamina week. The physical pattern tells us pitch-to-pitch focus and role stability may get harder, so the coach message should stay simple while adherence follow-up stays private and specific.',
     closer: 'We\'ll send the next one Sunday morning. Reply with questions — we read every one.',
   },
   volleyball: {
@@ -837,7 +966,7 @@ export const COACH_REPORT_DEMO_EXAMPLES: Record<string, CoachReportDemoExample> 
       },
       {
         athleteOrUnit: 'K. Holloway',
-        lookFor: 'tight in stance during warm-up or short on hand-fight reps',
+        lookFor: 'tight in stance during warm-up or short on hand-fight exchanges',
         ifThen: 'at the corner, say: "hands first."',
       },
       {

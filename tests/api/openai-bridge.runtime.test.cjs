@@ -154,7 +154,9 @@ test('openai-bridge returns a clear 500 when no server-side provider key is conf
     assert.equal(fetchCalled, false);
 
     const body = JSON.parse(response.body);
-    assert.match(body.error, /missing OPENAI_API_KEY or OPEN_AI_SECRET_KEY/i);
+    assert.equal(body.error.code, 'AI_BRIDGE_UNAVAILABLE');
+    assert.match(body.error.message, /couldn't complete/i);
+    assert.ok(body.error.incidentId);
   });
 });
 
@@ -342,9 +344,10 @@ test('openai-bridge wraps non-json upstream responses for SDK clients', async ()
     assert.equal(response.headers['Content-Type'], 'application/json');
 
     const body = JSON.parse(response.body);
-    assert.match(body.error, /non-json response/i);
-    assert.equal(body.upstreamStatus, 504);
-    assert.equal(body.upstreamContentType, 'text/html; charset=utf-8');
-    assert.match(body.upstreamBodyPreview, /Gateway timeout/);
+    assert.equal(body.error.code, 'AI_ANALYZER_UNAVAILABLE');
+    assert.match(body.error.message, /couldn't complete/i);
+    assert.ok(body.error.incidentId);
+    assert.equal(body.upstreamStatus, undefined);
+    assert.equal(body.upstreamBodyPreview, undefined);
   });
 });

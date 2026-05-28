@@ -55,6 +55,7 @@ const toDemoCoachSurface = (
     primarySportColorSoft: demo.meta.primarySportColorSoft,
   },
   topLine: demo.topLine,
+  teamReadiness: demo.teamReadiness,
   dimensionState: demo.dimensionState || {},
   watchlist: demo.watchlist,
   coachActions: demo.coachActions,
@@ -62,11 +63,14 @@ const toDemoCoachSurface = (
   noteOpener: demo.noteOpener,
   teamSynthesis: demo.teamSynthesis,
   closer: demo.closer,
-  adherence: {
+  adherence: demo.adherence || {
     wearRate7d: 0.84,
     noraCheckinCompletion7d: 0.76,
     protocolOrSimCompletion7d: 0.68,
     trainingOrNutritionCoverage7d: 0.91,
+    overallAdherencePct: 0.72,
+    categoriesReady: 3,
+    categoriesTotal: 4,
     deviceCoveragePct: 0.84,
     noraCompletionPct: 0.76,
     protocolSimulationCompletionPct: 0.68,

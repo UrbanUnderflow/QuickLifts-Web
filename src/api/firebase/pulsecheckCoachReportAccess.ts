@@ -11,6 +11,10 @@ const COACH_REPORT_ACCESS_ROLES = new Set<PulseCheckTeamMembershipRole>(['team-a
 export interface CoachReportAdherenceSummary {
   categoriesReady?: number;
   categoriesTotal?: number;
+  overallAdherencePct?: number;
+  noraCheckinCompletionPct?: number;
+  mentalTrainingCompletionPct?: number;
+  followUpCount?: number;
   label?: string;
   summary?: string;
 }
@@ -59,6 +63,12 @@ const isCoachVisibleReport = (data: CoachReportDocData) => {
   );
 };
 
+const normalizeRatio = (value: unknown): number | undefined => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return undefined;
+  return Math.max(0, Math.min(1, numeric > 1 ? numeric / 100 : numeric));
+};
+
 const countReadyCategories = (adherence: CoachReportDocData) => {
   const explicitReady = Number(adherence.categoriesReady ?? adherence.readyCategories);
   const explicitTotal = Number(adherence.categoriesTotal ?? adherence.totalCategories);
@@ -70,10 +80,10 @@ const countReadyCategories = (adherence: CoachReportDocData) => {
   }
 
   const possibleValues = [
-    adherence.deviceCoveragePct ?? adherence.wearRatePct ?? adherence.wearRate7d,
-    adherence.noraCompletionPct ?? adherence.noraCheckinCompletionPct ?? adherence.noraCheckinCompletion7d,
-    adherence.protocolSimulationCompletionPct ?? adherence.protocolCompletionPct ?? adherence.simulationCompletionPct,
-    adherence.trainingCoveragePct ?? adherence.trainingRpeCoveragePct ?? adherence.trainingCoverage,
+    normalizeRatio(adherence.deviceCoveragePct ?? adherence.wearRatePct ?? adherence.wearRate7d),
+    normalizeRatio(adherence.noraCompletionPct ?? adherence.noraCheckinCompletionPct ?? adherence.noraCheckinCompletion7d),
+    normalizeRatio(adherence.protocolSimulationCompletionPct ?? adherence.protocolCompletionPct ?? adherence.simulationCompletionPct),
+    normalizeRatio(adherence.trainingCoveragePct ?? adherence.trainingRpeCoveragePct ?? adherence.trainingCoverage),
   ];
   const ready = possibleValues.filter((value) => typeof value === 'number' && value >= 0.7).length;
   const present = possibleValues.filter((value) => typeof value === 'number').length;
@@ -85,14 +95,35 @@ const countReadyCategories = (adherence: CoachReportDocData) => {
   };
 };
 
+const normalizePct = (value: unknown): number | undefined => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return undefined;
+  return Math.max(0, Math.min(100, numeric <= 1 ? numeric * 100 : numeric));
+};
+
 export const normalizeCoachReportAdherence = (data?: CoachReportDocData | null): CoachReportAdherenceSummary => {
   const adherence = data || {};
   const counted = countReadyCategories(adherence);
   const label = String(adherence.label || adherence.confidenceLabel || adherence.readConfidenceLabel || '').trim();
   const summary = String(adherence.summary || adherence.coverageSummary || '').trim();
+  const noraPct = normalizePct(
+    adherence.noraCompletionPct ?? adherence.noraCheckinCompletionPct ?? adherence.noraCheckinCompletion7d,
+  );
+  const mentalTrainingPct = normalizePct(
+    adherence.protocolSimulationCompletionPct ?? adherence.protocolCompletionPct ?? adherence.simulationCompletionPct ?? adherence.protocolOrSimCompletion7d,
+  );
+  const explicitOverall = normalizePct(adherence.overallAdherencePct ?? adherence.overallAdherenceRate);
+  const overallAdherencePct =
+    explicitOverall
+    ?? (noraPct !== undefined && mentalTrainingPct !== undefined ? (noraPct + mentalTrainingPct) / 2 : undefined);
+  const followUpCount = Array.isArray(adherence.followUpAthletes) ? adherence.followUpAthletes.length : undefined;
 
   return {
     ...counted,
+    ...(overallAdherencePct !== undefined ? { overallAdherencePct } : {}),
+    ...(noraPct !== undefined ? { noraCheckinCompletionPct: noraPct } : {}),
+    ...(mentalTrainingPct !== undefined ? { mentalTrainingCompletionPct: mentalTrainingPct } : {}),
+    ...(followUpCount !== undefined ? { followUpCount } : {}),
     ...(label ? { label } : {}),
     ...(summary ? { summary } : {}),
   };

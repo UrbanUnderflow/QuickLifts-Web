@@ -20,6 +20,9 @@ const formatReportDate = (date?: Date) => {
 };
 
 const formatAdherenceChip = (report: CoachReportListItem) => {
+  if (typeof report.adherence.overallAdherencePct === 'number') {
+    return `Adherence: ${Math.round(report.adherence.overallAdherencePct)}%`;
+  }
   if (!report.adherence.categoriesTotal) return report.adherence.label || 'Coverage pending';
   return `Adherence: ${report.adherence.categoriesReady ?? 0} / ${report.adherence.categoriesTotal} categories`;
 };

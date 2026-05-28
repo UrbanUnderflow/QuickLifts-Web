@@ -74,6 +74,15 @@ const toPercent = (value: number | undefined) => {
   return Math.round(Math.max(0, Math.min(100, numeric <= 1 ? numeric * 100 : numeric)));
 };
 const fromPercent = (value: string) => Math.max(0, Math.min(1, (Number(value) || 0) / 100));
+const toRatio = (value: number | undefined) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(1, numeric > 1 ? numeric / 100 : numeric));
+};
+const deriveOverallAdherence = (adherence: CoachReportAdherenceBlock) => (
+  toRatio(adherence.noraCheckinCompletion7d ?? adherence.noraCompletionPct)
+  + toRatio(adherence.protocolOrSimCompletion7d ?? adherence.protocolSimulationCompletionPct)
+) / 2;
 
 const watchlistAthleteUserId = (entry: CoachReportWatchlistEntry) => {
   const extended = entry as CoachReportWatchlistEntry & {
@@ -158,11 +167,14 @@ const buildFixtureReport = (
 ): Omit<StoredCoachReport, 'id' | 'createdAt' | 'updatedAt'> => {
   const colors = getSportColor(sport.id);
   const weekStart = currentWeekStartKey();
-  const adherence: CoachReportAdherenceBlock = {
+  const adherence: CoachReportAdherenceBlock = demo.adherence || {
     wearRate7d: 0.84,
     noraCheckinCompletion7d: 0.76,
     protocolOrSimCompletion7d: 0.68,
     trainingOrNutritionCoverage7d: 0.91,
+    overallAdherencePct: 0.72,
+    categoriesReady: 3,
+    categoriesTotal: 4,
     deviceCoveragePct: 84,
     noraCompletionPct: 76,
     protocolSimulationCompletionPct: 68,
@@ -184,6 +196,7 @@ const buildFixtureReport = (
       source: 'fixture',
     },
     topLine: demo.topLine,
+    teamReadiness: demo.teamReadiness,
     dimensionState: demo.dimensionState || {},
     watchlist: demo.watchlist,
     coachActions: demo.coachActions,
@@ -905,8 +918,8 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
                         <div className="mt-4 grid grid-cols-2 gap-3">
                           {([
                             ['wearRate7d', 'deviceCoveragePct', 'Wear'],
-                            ['noraCheckinCompletion7d', 'noraCompletionPct', 'Nora'],
-                            ['protocolOrSimCompletion7d', 'protocolSimulationCompletionPct', 'Protocols/sims'],
+                            ['noraCheckinCompletion7d', 'noraCompletionPct', 'Daily check-ins'],
+                            ['protocolOrSimCompletion7d', 'protocolSimulationCompletionPct', 'Mental trainings'],
                             ['trainingOrNutritionCoverage7d', 'trainingNutritionCoveragePct', 'Training/nutrition'],
                           ] as const).map(([key, pctKey, label]) => (
                             <label key={key} className="block">
@@ -916,14 +929,20 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
                                 min={0}
                                 max={100}
                                 value={toPercent(draft.coachSurface.adherence[key])}
-                                onChange={(event) => updateCoachSurface((surface) => ({
-                                  ...surface,
-                                  adherence: {
+                                onChange={(event) => updateCoachSurface((surface) => {
+                                  const nextAdherence = {
                                     ...surface.adherence,
                                     [key]: fromPercent(event.target.value),
                                     [pctKey]: Number(event.target.value) || 0,
-                                  },
-                                }))}
+                                  };
+                                  return {
+                                    ...surface,
+                                    adherence: {
+                                      ...nextAdherence,
+                                      overallAdherencePct: deriveOverallAdherence(nextAdherence),
+                                    },
+                                  };
+                                })}
                                 className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-purple-400/60"
                               />
                             </label>

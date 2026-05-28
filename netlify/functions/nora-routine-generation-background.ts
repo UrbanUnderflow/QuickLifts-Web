@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions';
 import { admin } from './config/firebase';
+import { makeIncidentId } from './utils/safeErrorResponse';
 
 const JOB_COLLECTION = 'noraRoutineGenerationJobs';
 
@@ -97,13 +98,18 @@ export const handler: Handler = async (event) => {
 
     return { statusCode: 200, body: 'Routine generation complete' };
   } catch (error: any) {
+    const incidentId = makeIncidentId('NORA');
     console.error('[nora-routine-generation-background] Job failed:', {
       jobId,
+      incidentId,
       message: error?.message
     });
     await jobRef.update({
       status: 'failed',
-      errorMessage: previewText(error?.message || 'Routine generation failed.'),
+      errorMessage: "We couldn't generate that routine right now. Try again in a moment.",
+      errorCode: 'NORA_ROUTINE_GENERATION_FAILED',
+      incidentId,
+      errorDetails: previewText(error?.message || 'Routine generation failed.'),
       failedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }).catch(() => {});

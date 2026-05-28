@@ -5,6 +5,7 @@ import {
 } from '../../src/api/anthropic/serverBridge';
 import { admin, db, headers as corsHeaders } from './config/firebase';
 import { MACRA_DAILY_INSIGHT } from '../../src/api/anthropic/featureRouting';
+import { safeErrorBody, safeErrorResponse } from './utils/safeErrorResponse';
 import {
   buildNutritionFactLedger,
   formatDelta,
@@ -632,12 +633,12 @@ export const handler: Handler = async (event) => {
     return { statusCode: 200, headers: corsHeaders, body: '' };
   }
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+    return { statusCode: 405, headers: corsHeaders, body: JSON.stringify(safeErrorBody('METHOD_NOT_ALLOWED', 'That request is not supported.')) };
   }
 
   let body: RequestBody = {};
   try { body = JSON.parse(event.body || '{}'); } catch {
-    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid JSON' }) };
+    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify(safeErrorBody('BAD_REQUEST', 'That request could not be read.')) };
   }
 
   const internalToken = getHeader(event.headers, INTERNAL_TOKEN_HEADER);
@@ -648,12 +649,12 @@ export const handler: Handler = async (event) => {
   if (isInternalCaller) {
     uid = stringish(body.userId) || null;
     if (!uid) {
-      return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'userId required for internal caller' }) };
+      return { statusCode: 400, headers: corsHeaders, body: JSON.stringify(safeErrorBody('BAD_REQUEST', 'That request could not be read.')) };
     }
   } else {
     uid = await verifyAuth(getHeader(event.headers, 'authorization'));
     if (!uid) {
-      return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'Unauthorized' }) };
+      return { statusCode: 401, headers: corsHeaders, body: JSON.stringify(safeErrorBody('AUTH_REQUIRED', 'Please sign in again.')) };
     }
   }
 
@@ -757,12 +758,16 @@ export const handler: Handler = async (event) => {
       { auditLogger: buildAdminAuditLogger(db) },
     );
     if (!result.toolUseInput) {
-      console.error('[generate-macra-daily-insight] response missing forced tool_use block');
-      return {
+      return safeErrorResponse({
         statusCode: 502,
         headers: corsHeaders,
-        body: JSON.stringify({ error: 'insight_bridge_failed' }),
-      };
+        code: 'MACRA_DAILY_INSIGHT_FAILED',
+        message: "We couldn't refresh today's insight right now. Try again in a moment.",
+        source: 'generate-macra-daily-insight.missing-tool-use',
+        error: new Error('Anthropic response missing forced tool_use block'),
+        db,
+        context: { uid, date: targetDate, timezone },
+      });
     }
     insightRaw = JSON.stringify(result.toolUseInput);
   } catch (err) {

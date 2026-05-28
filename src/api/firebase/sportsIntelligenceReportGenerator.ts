@@ -35,6 +35,7 @@ import type {
   CoachReportCoachSurface,
   CoachReportGameDayLookFor,
   CoachReportReviewerOnly,
+  CoachReportTeamReadinessBlock,
   CoachReportWatchlistEntry,
 } from './pulsecheckCoachReports';
 import type { AthleteHealthContextSnapshot, DataConfidence, DomainKey } from './athleteContextSnapshot';
@@ -77,6 +78,22 @@ export interface ReportGeneratorInput {
     trainingOrNutritionCoverage7d: number;
     confidenceLabel: string;
     categoriesReady?: number;
+    categoriesTotal?: number;
+    overallAdherencePct?: number;
+    athleteCount?: number;
+    completedCheckins?: number;
+    expectedCheckins?: number;
+    completedMentalTrainings?: number;
+    expectedMentalTrainings?: number;
+    followUpAthletes?: Array<{
+      athleteUserId?: string;
+      athleteName: string;
+      role?: string;
+      missedCheckins?: number;
+      missedMentalTrainings?: number;
+      followUpReason?: string;
+      lastCompletedLabel?: string;
+    }>;
     summary?: string;
   };
 }
@@ -190,6 +207,57 @@ const inferenceConfidenceFloor = (results: InferenceResult[]): DataConfidence =>
   return ranks[lowestIdx];
 };
 
+const readinessScoreFromResult = (result: AthleteInferenceWithIdentity): number => {
+  const readinessEvidence = result.inference.readiness.evidence.find((entry) => (
+    typeof entry.value === 'number'
+    && /readinessScore|recoveryScore/i.test(entry.label)
+  ));
+  if (readinessEvidence && typeof readinessEvidence.value === 'number') {
+    return Math.max(0, Math.min(100, readinessEvidence.value));
+  }
+
+  switch (result.inference.readiness.readinessBand) {
+    case 'fresh':
+      return 88;
+    case 'on_plan':
+      return 76;
+    case 'one_to_watch':
+      return 62;
+    case 'concerning':
+      return 44;
+    default:
+      return 70;
+  }
+};
+
+const readinessLabelFromScore = (score: number): string => {
+  if (score >= 82) return 'Ready';
+  if (score >= 70) return 'Mostly ready';
+  if (score >= 58) return 'Uneven';
+  return 'Needs attention';
+};
+
+const buildTeamReadiness = (
+  athleteResults: AthleteInferenceWithIdentity[],
+): CoachReportTeamReadinessBlock | undefined => {
+  if (athleteResults.length === 0) return undefined;
+  const scores = athleteResults.map(readinessScoreFromResult);
+  const score = Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length);
+  const oneToWatchCount = athleteResults.filter((entry) =>
+    entry.inference.readiness.readinessBand === 'one_to_watch'
+    || entry.inference.readiness.readinessBand === 'concerning'
+  ).length;
+
+  return {
+    score,
+    label: readinessLabelFromScore(score),
+    trend: oneToWatchCount > 0
+      ? `${oneToWatchCount} athlete${oneToWatchCount === 1 ? '' : 's'} below their usual readiness band.`
+      : 'Most athletes are holding near their usual readiness band.',
+    summary: 'Team readiness blends recovery, check-in signal, and current performance-state movement.',
+  };
+};
+
 const buildAdherence = (
   athleteResults: AthleteInferenceWithIdentity[],
   override?: ReportGeneratorInput['adherence'],
@@ -204,6 +272,15 @@ const buildAdherence = (
       protocolOrSimCompletion7d: override.protocolOrSimCompletion7d,
       trainingOrNutritionCoverage7d: override.trainingOrNutritionCoverage7d,
       confidenceLabel: override.confidenceLabel,
+      overallAdherencePct: override.overallAdherencePct,
+      categoriesReady: override.categoriesReady,
+      categoriesTotal: override.categoriesTotal ?? 4,
+      athleteCount: override.athleteCount,
+      completedCheckins: override.completedCheckins,
+      expectedCheckins: override.expectedCheckins,
+      completedMentalTrainings: override.completedMentalTrainings,
+      expectedMentalTrainings: override.expectedMentalTrainings,
+      followUpAthletes: override.followUpAthletes || [],
       summary:
         override.summary
         || `Adherence read: ${override.confidenceLabel.toLowerCase()}${
@@ -227,6 +304,10 @@ const buildAdherence = (
     noraCheckinCompletion7d: 0,
     protocolOrSimCompletion7d: 0,
     trainingOrNutritionCoverage7d: 0,
+    overallAdherencePct: 0,
+    categoriesReady: 0,
+    categoriesTotal: 4,
+    followUpAthletes: [],
     confidenceLabel: lowConfidence ? 'Thin read' : 'Usable read',
     summary: lowConfidence
       ? 'Coverage is thin this week; reviewer should fill in adherence numbers and tighten the read before publish.'
@@ -386,7 +467,7 @@ const buildGameDayLookFors = (
       candidates.push({
         athleteOrUnit: entry.athleteName,
         lookFor: 'slower focus after corrections or frustration after a miss',
-        ifThen: 'keep feedback simple and give one phrase the athlete can use before the next rep.',
+        ifThen: 'keep feedback simple and give one phrase the athlete can use before the next action.',
       });
     }
   }
@@ -570,6 +651,7 @@ export const generateCoachReportDraft = (input: ReportGeneratorInput): Generated
   const coachActions = buildCoachActionsFromRecommendations(athleteResults, sport);
   const gameDayLookFors = buildGameDayLookFors(athleteResults);
   const topLine = buildTopLine(athleteResults, sport);
+  const teamReadiness = buildTeamReadiness(athleteResults);
 
   if (topLine.usedThinRead) {
     generatorNotes.push('Top-line fell back to thin-read copy due to missing fills.');
@@ -602,6 +684,7 @@ export const generateCoachReportDraft = (input: ReportGeneratorInput): Generated
       firstAction: topLine.firstAction,
       secondaryThread: topLine.secondaryThread,
     },
+    teamReadiness,
     dimensionState,
     watchlist: watchlist.rendered,
     coachActions: coachActions.rendered,

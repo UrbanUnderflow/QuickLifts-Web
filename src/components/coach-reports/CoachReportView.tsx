@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users } from 'lucide-react';
+import { Activity, Brain, CheckCircle2, MessageCircle, Users } from 'lucide-react';
 import type { CoachReportCoachSurface } from '../../api/firebase/pulsecheckCoachReports';
 export type { CoachReportCoachSurface } from '../../api/firebase/pulsecheckCoachReports';
 import {
@@ -78,13 +78,66 @@ const normalizePct = (value?: number) => {
   return numeric <= 1 ? numeric * 100 : numeric;
 };
 
-const adherencePercent = (value?: number) => `${Math.round(Math.max(0, Math.min(100, normalizePct(value))))}%`;
+const clampPct = (value?: number) => Math.round(Math.max(0, Math.min(100, normalizePct(value))));
+
+const adherencePercent = (value?: number) => `${clampPct(value)}%`;
 
 const adherenceTone = (value?: number) => {
   const pct = normalizePct(value);
   if (pct >= 80) return 'text-emerald-300';
   if (pct >= 60) return 'text-zinc-200';
   return 'text-amber-300';
+};
+
+const pluralize = (count: number, singular: string, plural = `${singular}s`) =>
+  `${count} ${count === 1 ? singular : plural}`;
+
+const readinessLabelFor = (score?: number) => {
+  if (!Number.isFinite(Number(score))) return 'Pending';
+  const pct = clampPct(score);
+  if (pct >= 82) return 'Ready';
+  if (pct >= 70) return 'Mostly ready';
+  if (pct >= 58) return 'Uneven';
+  return 'Needs attention';
+};
+
+const readinessToneFor = (score?: number) => {
+  if (!Number.isFinite(Number(score))) return 'text-zinc-400';
+  const pct = clampPct(score);
+  if (pct >= 82) return 'text-emerald-300';
+  if (pct >= 70) return 'text-sky-300';
+  if (pct >= 58) return 'text-amber-300';
+  return 'text-rose-300';
+};
+
+const inferReadinessScore = (state: CoachReportCoachSurface['dimensionState']) => {
+  const scores = Object.values(state || {})
+    .map((value) => {
+      if (value === 'solid') return 84;
+      if (value === 'watch') return 70;
+      if (value === 'declining') return 56;
+      return null;
+    })
+    .filter((value): value is number => typeof value === 'number');
+  if (scores.length === 0) return undefined;
+  return scores.reduce((sum, value) => sum + value, 0) / scores.length;
+};
+
+const formatCountPair = (completed?: number, expected?: number) => {
+  if (!Number.isFinite(Number(completed)) || !Number.isFinite(Number(expected)) || Number(expected) <= 0) {
+    return undefined;
+  }
+  return `${Math.round(Number(completed))}/${Math.round(Number(expected))} completed`;
+};
+
+const missingAdherenceText = (entry: NonNullable<CoachReportCoachSurface['adherence']['followUpAthletes']>[number]) => {
+  const missedCheckins = Math.max(0, Math.round(Number(entry.missedCheckins || 0)));
+  const missedMentalTrainings = Math.max(0, Math.round(Number(entry.missedMentalTrainings || 0)));
+  const parts = [
+    missedCheckins > 0 ? pluralize(missedCheckins, 'check-in') : '',
+    missedMentalTrainings > 0 ? pluralize(missedMentalTrainings, 'assigned mental training') : '',
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' + ') : entry.followUpReason || 'Needs a quick adherence check';
 };
 
 const fallbackSynthesis = (report: CoachReportCoachSurface) => {
@@ -132,6 +185,18 @@ const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, genera
   const noraRate = adherence.noraCheckinCompletion7d ?? adherence.noraCompletionPct;
   const protocolRate = adherence.protocolOrSimCompletion7d ?? adherence.protocolSimulationCompletionPct;
   const trainingRate = adherence.trainingOrNutritionCoverage7d ?? adherence.trainingNutritionCoveragePct;
+  const overallAdherenceRate =
+    adherence.overallAdherencePct
+    ?? adherence.overallAdherenceRate
+    ?? ((normalizePct(noraRate) + normalizePct(protocolRate)) / 2);
+  const readinessScore = report.teamReadiness?.score ?? inferReadinessScore(report.dimensionState || {});
+  const readinessLabel = report.teamReadiness?.label || readinessLabelFor(readinessScore);
+  const readinessSummary =
+    report.teamReadiness?.summary
+    || 'Team readiness blends recovery, check-in signal, and current performance-state movement.';
+  const checkinCountText = formatCountPair(adherence.completedCheckins, adherence.expectedCheckins);
+  const mentalTrainingCountText = formatCountPair(adherence.completedMentalTrainings, adherence.expectedMentalTrainings);
+  const followUpAthletes = (adherence.followUpAthletes || []).slice(0, 4);
 
   return (
     <article
@@ -175,6 +240,115 @@ const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, genera
             )}
           </div>
         </header>
+
+        <section className="mt-8">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-[11px] font-medium uppercase tracking-[0.22em] text-zinc-500">Weekly snapshot</h2>
+              <p className="mt-1 text-sm text-zinc-400">
+                Overall readiness and athlete adherence before the coach moves.
+              </p>
+            </div>
+            {adherence.athleteCount ? (
+              <p className="text-xs text-zinc-500">{adherence.athleteCount} athletes in this read</p>
+            ) : null}
+          </div>
+
+          <div className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-2">
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: soft, color: accent }}>
+                    <Activity className="h-4 w-4" />
+                  </span>
+                  <span className={`text-xs font-medium ${readinessToneFor(readinessScore)}`}>{readinessLabel}</span>
+                </div>
+                <p className="mt-5 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">Team readiness</p>
+                <p className="mt-1 text-4xl font-semibold tracking-tight text-white">{readinessScore !== undefined ? `${clampPct(readinessScore)}` : '--'}</p>
+                <p className="mt-2 min-h-[2.5rem] text-xs leading-relaxed text-zinc-500">
+                  {report.teamReadiness?.trend || readinessSummary}
+                </p>
+                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                  <div className="h-full rounded-full" style={{ width: `${readinessScore !== undefined ? clampPct(readinessScore) : 0}%`, background: accent }} />
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/12 text-emerald-300">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </span>
+                  <span className={`text-xs font-medium ${adherenceTone(overallAdherenceRate)}`}>{adherence.confidenceLabel}</span>
+                </div>
+                <p className="mt-5 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">Overall adherence</p>
+                <p className="mt-1 text-4xl font-semibold tracking-tight text-white">{adherencePercent(overallAdherenceRate)}</p>
+                <p className="mt-2 min-h-[2.5rem] text-xs leading-relaxed text-zinc-500">
+                  Daily check-ins plus assigned mental trainings.
+                </p>
+                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                  <div className="h-full rounded-full bg-emerald-400" style={{ width: `${clampPct(overallAdherenceRate)}%` }} />
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/12 text-sky-300">
+                    <MessageCircle className="h-4 w-4" />
+                  </span>
+                  <span className={`text-xs font-medium ${adherenceTone(noraRate)}`}>{adherencePercent(noraRate)}</span>
+                </div>
+                <p className="mt-5 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">Daily check-ins</p>
+                <p className="mt-1 text-xl font-semibold text-white">{checkinCountText || 'Completion trend'}</p>
+                <p className="mt-2 text-xs leading-relaxed text-zinc-500">Athletes completing the daily signal Pulse needs.</p>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/12 text-violet-300">
+                    <Brain className="h-4 w-4" />
+                  </span>
+                  <span className={`text-xs font-medium ${adherenceTone(protocolRate)}`}>{adherencePercent(protocolRate)}</span>
+                </div>
+                <p className="mt-5 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">Mental trainings</p>
+                <p className="mt-1 text-xl font-semibold text-white">{mentalTrainingCountText || 'Completion trend'}</p>
+                <p className="mt-2 text-xs leading-relaxed text-zinc-500">Assigned reset, focus, or pressure work completed.</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-[11px] font-medium uppercase tracking-[0.22em] text-zinc-500">Follow-up queue</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">Athletes missing check-ins or assigned mental trainings.</p>
+                </div>
+                <span className="rounded-full border border-zinc-800 bg-black/30 px-2.5 py-1 text-xs text-zinc-400">
+                  {followUpAthletes.length || 0} flagged
+                </span>
+              </div>
+              {followUpAthletes.length > 0 ? (
+                <div className="mt-4 space-y-3">
+                  {followUpAthletes.map((entry, index) => (
+                    <div key={`${entry.athleteName}-${index}`} className="flex gap-3 rounded-xl border border-zinc-800/80 bg-black/20 p-3">
+                      <Avatar name={entry.athleteName} accent={accent} soft={soft} size="sm" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-white">{entry.athleteName}</p>
+                        {entry.role && <p className="text-xs text-zinc-500">{entry.role}</p>}
+                        <p className="mt-1 text-xs leading-relaxed text-zinc-300">{missingAdherenceText(entry)}</p>
+                        {entry.followUpReason && (
+                          <p className="mt-1 text-xs leading-relaxed text-zinc-500">{entry.followUpReason}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-4 rounded-xl border border-zinc-800/80 bg-black/20 p-4 text-sm text-zinc-400">
+                  No adherence follow-ups flagged this week.
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
 
         <section className="mt-8">
           {report.noteOpener && <p className="mb-4 text-sm leading-relaxed text-zinc-400">{report.noteOpener}</p>}
@@ -299,11 +473,11 @@ const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, genera
         <section className="mt-10 rounded-2xl border border-zinc-800 bg-zinc-950/45 p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Participation this week</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Data coverage this week</p>
               <p className="mt-1.5 text-xs leading-relaxed text-zinc-400">
                 Wear <span className={adherenceTone(wearRate)}>{adherencePercent(wearRate)}</span>
                 {' · '}daily check-ins <span className={adherenceTone(noraRate)}>{adherencePercent(noraRate)}</span>
-                {' · '}mental performance reps <span className={adherenceTone(protocolRate)}>{adherencePercent(protocolRate)}</span>
+                {' · '}mental trainings <span className={adherenceTone(protocolRate)}>{adherencePercent(protocolRate)}</span>
                 {' · '}training context <span className={adherenceTone(trainingRate)}>{adherencePercent(trainingRate)}</span>
               </p>
             </div>

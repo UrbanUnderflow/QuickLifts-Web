@@ -5,6 +5,7 @@ import {
   callAnthropic as callAnthropicCore,
 } from '../../src/api/anthropic/serverBridge';
 import { NORA_NUTRITION_CHAT } from '../../src/api/anthropic/featureRouting';
+import { safeErrorBody, safeErrorResponse } from './utils/safeErrorResponse';
 
 interface IngredientContext {
   name: string;
@@ -1026,26 +1027,26 @@ export const handler: Handler = async (event) => {
     return { statusCode: 200, headers: corsHeaders, body: '' };
   }
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+    return { statusCode: 405, headers: corsHeaders, body: JSON.stringify(safeErrorBody('METHOD_NOT_ALLOWED', 'That request is not supported.')) };
   }
 
   const uid = await verifyAuth(getHeader(event.headers, 'authorization'));
   if (!uid) {
-    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'Unauthorized' }) };
+    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify(safeErrorBody('AUTH_REQUIRED', 'Please sign in again.')) };
   }
 
   let body: RequestBody;
   try {
     body = JSON.parse(event.body || '{}');
   } catch {
-    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid JSON' }) };
+    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify(safeErrorBody('BAD_REQUEST', 'That request could not be read.')) };
   }
 
   if (!body.query || typeof body.query !== 'string' || body.query.trim().length === 0) {
-    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'query required' }) };
+    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify(safeErrorBody('NORA_CHAT_INPUT_REQUIRED', 'Ask Nora a question before sending.')) };
   }
   if (!Array.isArray(body.meals)) {
-    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'meals array required' }) };
+    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify(safeErrorBody('NORA_CHAT_CONTEXT_INVALID', 'Nora needs your meal context to answer that.')) };
   }
 
   const systemPrompt = [
@@ -1220,11 +1221,15 @@ export const handler: Handler = async (event) => {
       })
     };
   } catch (err: any) {
-    console.error('[nora-nutrition-chat] Chat failed:', err);
-    return {
+    return safeErrorResponse({
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ error: err?.message || 'Chat failed' })
-    };
+      code: 'NORA_CHAT_FAILED',
+      message: "Nora couldn't answer right now. Try again in a moment.",
+      source: 'nora-nutrition-chat',
+      error: err,
+      db,
+      context: { uid, mealCount: body.meals?.length || 0, historyCount: body.history?.length || 0 },
+    });
   }
 };

@@ -5,6 +5,7 @@ import {
   buildAdminAuditLogger,
   callAnthropic as callAnthropicCore,
 } from '../../src/api/anthropic/serverBridge';
+import { safeErrorBody, safeErrorResponse } from './utils/safeErrorResponse';
 
 interface MealItem {
   name: string;
@@ -196,26 +197,26 @@ export const handler: Handler = async (event) => {
     return { statusCode: 200, headers: corsHeaders, body: '' };
   }
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+    return { statusCode: 405, headers: corsHeaders, body: JSON.stringify(safeErrorBody('METHOD_NOT_ALLOWED', 'That request is not supported.')) };
   }
 
   const uid = await verifyAuth(getHeader(event.headers, 'authorization'));
   if (!uid) {
-    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'Unauthorized' }) };
+    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify(safeErrorBody('AUTH_REQUIRED', 'Please sign in again.')) };
   }
 
   let body: RequestBody;
   try {
     body = JSON.parse(event.body || '{}');
   } catch {
-    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid JSON' }) };
+    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify(safeErrorBody('BAD_REQUEST', 'That request could not be read.')) };
   }
 
   if (!Number.isFinite(body.calories) || body.calories <= 0) {
-    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'calories required' }) };
+    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify(safeErrorBody('MACRA_MEAL_PLAN_INPUT_REQUIRED', 'Add calorie and macro targets before generating a plan.')) };
   }
   if (!Number.isFinite(body.protein) || !Number.isFinite(body.carbs) || !Number.isFinite(body.fat)) {
-    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'protein, carbs, fat required' }) };
+    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify(safeErrorBody('MACRA_MEAL_PLAN_INPUT_REQUIRED', 'Add calorie and macro targets before generating a plan.')) };
   }
 
   const mealsCount = Math.min(Math.max(body.mealsPerDay || 4, 2), 6);
@@ -314,11 +315,15 @@ export const handler: Handler = async (event) => {
       body: JSON.stringify({ plan: normalized, cached: false, generatedAt })
     };
   } catch (err: any) {
-    console.error('[generate-macra-meal-plan] Generation failed:', err);
-    return {
+    return safeErrorResponse({
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ error: err?.message || 'Generation failed' })
-    };
+      code: 'MACRA_MEAL_PLAN_GENERATION_FAILED',
+      message: "We couldn't generate that meal plan right now. Try again in a moment.",
+      source: 'generate-macra-meal-plan',
+      error: err,
+      db,
+      context: { uid, calories: body.calories, mealsPerDay: body.mealsPerDay },
+    });
   }
 };

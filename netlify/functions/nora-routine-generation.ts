@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions';
-import { admin, headers as corsHeaders } from './config/firebase';
+import { admin, db, headers as corsHeaders } from './config/firebase';
+import { makeIncidentId, safeErrorBody, safeErrorResponse } from './utils/safeErrorResponse';
 
 const JOB_COLLECTION = 'noraRoutineGenerationJobs';
 const ROUTINE_MAX_TOKENS = 8000;
@@ -130,9 +131,13 @@ const runRoutineGenerationJobInline = async (jobId: string, workerToken: string)
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
   } catch (error: any) {
+    const incidentId = makeIncidentId('NORA');
     await jobRef.update({
       status: 'failed',
-      errorMessage: previewText(error?.message || 'Routine generation failed.'),
+      errorMessage: "We couldn't generate that routine right now. Try again in a moment.",
+      errorCode: 'NORA_ROUTINE_GENERATION_FAILED',
+      incidentId,
+      errorDetails: previewText(error?.message || 'Routine generation failed.'),
       failedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }).catch(() => {});
@@ -149,7 +154,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 405,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Method Not Allowed' })
+      body: JSON.stringify(safeErrorBody('METHOD_NOT_ALLOWED', 'That request is not supported.'))
     };
   }
 
@@ -158,16 +163,21 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 401,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Unauthorized: Missing or invalid Firebase token' })
+      body: JSON.stringify(safeErrorBody('AUTH_REQUIRED', 'Please sign in again.'))
     };
   }
 
   if (!resolveOpenAIApiKey()) {
-    return {
+    return safeErrorResponse({
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'OpenAI routine generation is misconfigured: missing provider key' })
-    };
+      code: 'NORA_ROUTINE_GENERATION_FAILED',
+      message: "We couldn't generate that routine right now. Try again in a moment.",
+      source: 'nora-routine-generation.missing-provider-key',
+      error: new Error('Missing OpenAI provider key'),
+      db,
+      context: { uid },
+    });
   }
 
   let requestBody: any;
@@ -177,7 +187,10 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: error?.statusCode || 400,
       headers: corsHeaders,
-      body: JSON.stringify({ error: error?.message || 'Bad Request: Invalid JSON payload' })
+      body: JSON.stringify(safeErrorBody(
+        error?.statusCode === 403 ? 'REQUEST_NOT_ALLOWED' : 'BAD_REQUEST',
+        error?.statusCode === 403 ? 'That request is not allowed.' : 'That request could not be read.'
+      ))
     };
   }
 

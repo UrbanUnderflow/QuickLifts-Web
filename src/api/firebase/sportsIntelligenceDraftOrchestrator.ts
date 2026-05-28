@@ -249,6 +249,24 @@ export const orchestrateGeneratedReportDraft = async (
           trainingOrNutritionCoverage7d: adherenceSummary.trainingOrNutritionCoverage,
           confidenceLabel: adherenceSummary.confidenceLabel,
           categoriesReady: adherenceSummary.categoriesReady,
+          categoriesTotal: 4,
+          overallAdherencePct: adherenceSummary.overallAdherence,
+          athleteCount: adherenceSummary.athleteCount,
+          completedCheckins: adherenceSummary.completedCheckins,
+          expectedCheckins: adherenceSummary.expectedCheckins,
+          completedMentalTrainings: adherenceSummary.completedMentalTrainings,
+          expectedMentalTrainings: adherenceSummary.expectedMentalTrainings,
+          followUpAthletes: adherenceSummary.followUpAthletes.map((entry) => {
+            const athlete = athletes.find((candidate) => candidate.athleteUserId === entry.athleteUserId);
+            return {
+              athleteUserId: entry.athleteUserId,
+              athleteName: athlete?.athleteName || `Athlete ${entry.athleteUserId.slice(0, 6)}`,
+              role: athlete?.role,
+              missedCheckins: entry.missedCheckins,
+              missedMentalTrainings: entry.missedMentalTrainings,
+              followUpReason: 'Quick private nudge to complete the missed daily work before the next report window.',
+            };
+          }),
         }
       : undefined,
   };

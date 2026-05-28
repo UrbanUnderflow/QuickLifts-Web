@@ -1,5 +1,5 @@
 import { Handler } from '@netlify/functions';
-import { admin, headers as corsHeaders } from './config/firebase';
+import { admin, db, headers as corsHeaders } from './config/firebase';
 import { getFeatureRouting } from '../../src/api/anthropic/featureRouting';
 import {
   buildAdminFallbackLogger,
@@ -10,6 +10,7 @@ import {
   translateAnthropicToOpenAI,
   translateOpenAIToAnthropic,
 } from '../../src/api/anthropic/bridgeTranslation';
+import { safeErrorBody, safeErrorResponse } from './utils/safeErrorResponse';
 
 // Basic map to enforce reasonable limits per feature.
 const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }> = {
@@ -147,7 +148,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 405,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Method Not Allowed' })
+      body: JSON.stringify(safeErrorBody('METHOD_NOT_ALLOWED', 'That request is not supported.'))
     };
   }
 
@@ -157,7 +158,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 401,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Unauthorized: Missing or invalid Firebase token' })
+      body: JSON.stringify(safeErrorBody('AUTH_REQUIRED', 'Please sign in again.'))
     };
   }
 
@@ -175,21 +176,29 @@ export const handler: Handler = async (event) => {
       try {
         return await relayToRemoteBridge(event, openApiPath, featureId);
       } catch (error: any) {
-        console.error('[openai-bridge] Failed to relay local request to deployed bridge:', error);
-        return {
+        return safeErrorResponse({
           statusCode: 502,
           headers: corsHeaders,
-          body: JSON.stringify({ error: 'OpenAI bridge relay failed. Check deployed bridge availability.' })
-        };
+          code: 'AI_BRIDGE_UNAVAILABLE',
+          message: "We couldn't complete that request right now. Try again in a moment.",
+          source: 'openai-bridge.relay',
+          error,
+          db,
+          context: { featureId, openApiPath },
+        });
       }
     }
 
-    console.error('[openai-bridge] Missing provider API key. Configure OPENAI_API_KEY or OPEN_AI_SECRET_KEY.');
-    return {
+    return safeErrorResponse({
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'OpenAI bridge misconfigured: missing OPENAI_API_KEY or OPEN_AI_SECRET_KEY' })
-    };
+      code: 'AI_BRIDGE_UNAVAILABLE',
+      message: "We couldn't complete that request right now. Try again in a moment.",
+      source: 'openai-bridge.missing-provider-key',
+      error: new Error('Missing OPENAI_API_KEY or OPEN_AI_SECRET_KEY'),
+      db,
+      context: { featureId, openApiPath },
+    });
   }
   
   let parsedBody: any;
@@ -205,7 +214,7 @@ export const handler: Handler = async (event) => {
         return {
           statusCode: 403,
           headers: corsHeaders,
-          body: JSON.stringify({ error: 'Forbidden model' })
+          body: JSON.stringify(safeErrorBody('REQUEST_NOT_ALLOWED', 'That request is not allowed.'))
         };
       }
 
@@ -241,7 +250,7 @@ export const handler: Handler = async (event) => {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ error: 'Bad Request: Invalid JSON payload' })
+        body: JSON.stringify(safeErrorBody('BAD_REQUEST', 'That request could not be read.'))
       };
     }
   }
@@ -308,15 +317,16 @@ export const handler: Handler = async (event) => {
         body: JSON.stringify(result),
       };
     } catch (error: any) {
-      console.error('[openai-bridge] Dual-path both providers failed:', {
-        featureId,
-        message: error?.message?.slice(0, 500),
-      });
-      return {
+      return safeErrorResponse({
         statusCode: 502,
         headers: corsHeaders,
-        body: JSON.stringify({ error: 'Both Anthropic and OpenAI providers failed' }),
-      };
+        code: 'AI_ANALYZER_UNAVAILABLE',
+        message: "We couldn't complete that request right now. Try again in a moment.",
+        source: 'openai-bridge.dual-path',
+        error,
+        db,
+        context: { featureId, openApiPath, uid },
+      });
     }
   }
 
@@ -345,6 +355,22 @@ export const handler: Handler = async (event) => {
         featureId,
         body: data.slice(0, 1000)
       });
+      return safeErrorResponse({
+        statusCode: response.status,
+        headers: corsHeaders,
+        code: 'AI_ANALYZER_UNAVAILABLE',
+        message: "We couldn't complete that request right now. Try again in a moment.",
+        source: 'openai-bridge.upstream',
+        error: new Error(`OpenAI upstream ${response.status}: ${data.slice(0, 1000)}`),
+        db,
+        context: {
+          featureId,
+          openApiPath,
+          uid,
+          upstreamStatus: response.status,
+          upstreamContentType: responseContentType,
+        },
+      });
     }
 
     if (!responseContentType.toLowerCase().includes('application/json')) {
@@ -356,19 +382,22 @@ export const handler: Handler = async (event) => {
         contentType: responseContentType,
         body: bodyPreview
       });
-      return {
+      return safeErrorResponse({
         statusCode: response.ok ? 502 : response.status,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          error: 'OpenAI upstream returned a non-JSON response',
+        headers: corsHeaders,
+        code: 'AI_ANALYZER_UNAVAILABLE',
+        message: "We couldn't complete that request right now. Try again in a moment.",
+        source: 'openai-bridge.non-json-upstream',
+        error: new Error(`OpenAI upstream returned non-JSON ${response.status}: ${bodyPreview}`),
+        db,
+        context: {
+          featureId,
+          openApiPath,
+          uid,
           upstreamStatus: response.status,
           upstreamContentType: responseContentType,
-          upstreamBodyPreview: bodyPreview
-        })
-      };
+        },
+      });
     }
 
     return {
@@ -380,11 +409,15 @@ export const handler: Handler = async (event) => {
       body: data
     };
   } catch (error: any) {
-    console.error('[openai-bridge] Failed to proxy request to OpenAI:', error);
-    return {
+    return safeErrorResponse({
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Internal Gateway Error contacting OpenAI' })
-    };
+      code: 'AI_ANALYZER_UNAVAILABLE',
+      message: "We couldn't complete that request right now. Try again in a moment.",
+      source: 'openai-bridge.proxy',
+      error,
+      db,
+      context: { featureId, openApiPath, uid },
+    });
   }
 };

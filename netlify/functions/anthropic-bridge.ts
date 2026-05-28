@@ -1,5 +1,5 @@
 import { Handler } from '@netlify/functions';
-import { admin, headers as corsHeaders } from './config/firebase';
+import { admin, db, headers as corsHeaders } from './config/firebase';
 import {
   callAnthropic,
   buildAdminAuditLogger,
@@ -7,6 +7,7 @@ import {
   ServerBridgeForbiddenModelError,
   ServerBridgeProviderMismatchError,
 } from '../../src/api/anthropic/serverBridge';
+import { safeErrorBody, safeErrorResponse } from './utils/safeErrorResponse';
 
 // =============================================================================
 // anthropic-bridge — HTTP transport for Anthropic traffic from clients that
@@ -131,7 +132,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 405,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Method Not Allowed' }),
+      body: JSON.stringify(safeErrorBody('METHOD_NOT_ALLOWED', 'That request is not supported.')),
     };
   }
 
@@ -140,7 +141,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 401,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Unauthorized: Missing or invalid Firebase token' }),
+      body: JSON.stringify(safeErrorBody('AUTH_REQUIRED', 'Please sign in again.')),
     };
   }
 
@@ -156,22 +157,28 @@ export const handler: Handler = async (event) => {
       try {
         return await relayToRemoteBridge(event, apiPath, featureId);
       } catch (error: any) {
-        console.error('[anthropic-bridge] Failed to relay local request to deployed bridge:', error);
-        return {
+        return safeErrorResponse({
           statusCode: 502,
           headers: corsHeaders,
-          body: JSON.stringify({
-            error: 'Anthropic bridge relay failed. Check deployed bridge availability.',
-          }),
-        };
+          code: 'AI_BRIDGE_UNAVAILABLE',
+          message: "We couldn't complete that request right now. Try again in a moment.",
+          source: 'anthropic-bridge.relay',
+          error,
+          db,
+          context: { featureId, apiPath },
+        });
       }
     }
-    console.error('[anthropic-bridge] Missing ANTHROPIC_API_KEY.');
-    return {
+    return safeErrorResponse({
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Anthropic bridge misconfigured: missing ANTHROPIC_API_KEY' }),
-    };
+      code: 'AI_BRIDGE_UNAVAILABLE',
+      message: "We couldn't complete that request right now. Try again in a moment.",
+      source: 'anthropic-bridge.missing-provider-key',
+      error: new Error('Missing ANTHROPIC_API_KEY'),
+      db,
+      context: { featureId, apiPath },
+    });
   }
 
   // Only `/v1/messages` is supported via Core for now (this is what every
@@ -181,9 +188,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 404,
       headers: corsHeaders,
-      body: JSON.stringify({
-        error: `Unsupported path '${apiPath}'. Bridge currently supports POST /v1/messages only.`,
-      }),
+      body: JSON.stringify(safeErrorBody('NOT_FOUND', 'That request is not supported.')),
     };
   }
 
@@ -194,7 +199,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 400,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Bad Request: Invalid JSON payload' }),
+      body: JSON.stringify(safeErrorBody('BAD_REQUEST', 'That request could not be read.')),
     };
   }
 
@@ -231,14 +236,14 @@ export const handler: Handler = async (event) => {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ error: `Unknown feature: ${featureId}` }),
+        body: JSON.stringify(safeErrorBody('UNKNOWN_FEATURE', 'That request is not supported.')),
       };
     }
     if (error instanceof ServerBridgeProviderMismatchError) {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ error: error.message }),
+        body: JSON.stringify(safeErrorBody('REQUEST_NOT_ALLOWED', 'That request is not allowed.')),
       };
     }
     if (error instanceof ServerBridgeForbiddenModelError) {
@@ -248,17 +253,18 @@ export const handler: Handler = async (event) => {
       return {
         statusCode: 403,
         headers: corsHeaders,
-        body: JSON.stringify({ error: 'Forbidden model' }),
+        body: JSON.stringify(safeErrorBody('REQUEST_NOT_ALLOWED', 'That request is not allowed.')),
       };
     }
-    console.error('[anthropic-bridge] Failed to proxy request to Anthropic:', error);
-    return {
+    return safeErrorResponse({
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({
-        error: 'Internal Gateway Error contacting Anthropic',
-        detail: error?.message || String(error),
-      }),
-    };
+      code: 'AI_ANALYZER_UNAVAILABLE',
+      message: "We couldn't complete that request right now. Try again in a moment.",
+      source: 'anthropic-bridge.proxy',
+      error,
+      db,
+      context: { featureId, apiPath, uid },
+    });
   }
 };
