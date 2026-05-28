@@ -118,7 +118,7 @@ const inferReadinessScore = (state: CoachReportCoachSurface['dimensionState']) =
       if (value === 'declining') return 56;
       return null;
     })
-    .filter((value): value is number => typeof value === 'number');
+    .filter((value): value is 84 | 70 | 56 => typeof value === 'number');
   if (scores.length === 0) return undefined;
   return scores.reduce((sum, value) => sum + value, 0) / scores.length;
 };
