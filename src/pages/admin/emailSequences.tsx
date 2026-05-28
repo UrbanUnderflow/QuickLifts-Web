@@ -170,6 +170,19 @@ type AppsFlyerAttributionDoc = Record<string, any> & {
   customerUserId?: string | null;
 };
 
+type AppsFlyerAggregatePeriodDoc = Record<string, any> & {
+  id: string;
+  periodStart?: unknown;
+  periodEnd?: unknown;
+  periodGranularity?: unknown;
+  periodSource?: unknown;
+  importedAt?: unknown;
+  updatedAt?: unknown;
+  summary?: Record<string, any>;
+  excludedFromRangeRollups?: boolean;
+  supersededBy?: unknown;
+};
+
 type MacraScoreboardRangePreset = 'last_7_days' | 'last_14_days' | 'last_30_days' | 'yesterday' | 'today' | 'custom';
 
 type MacraScoreboardDateRange = {
@@ -2519,7 +2532,7 @@ const EmailSequencesAdmin: React.FC = () => {
           });
         }),
       ]);
-      const appsFlyerAggregatePeriodDocs = appsFlyerAggregatePeriodsSnap?.docs.map((snapshot) => ({
+      const appsFlyerAggregatePeriodDocs: AppsFlyerAggregatePeriodDoc[] = appsFlyerAggregatePeriodsSnap?.docs.map((snapshot) => ({
         id: snapshot.id,
         ...((snapshot.data() || {}) as Record<string, any>),
       })) || [];
