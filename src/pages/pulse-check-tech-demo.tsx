@@ -216,7 +216,6 @@ const PulseCheckTechDemoPage: React.FC = () => {
         />
         <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
         <link rel="dns-prefetch" href="https://firebasestorage.googleapis.com" />
-        <link rel="preload" as="video" href={VIDEO_SRC} crossOrigin="anonymous" type="video/mp4" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
@@ -283,8 +282,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
                     className="demo-video"
                     controls
                     playsInline
-                    preload="auto"
-                    crossOrigin="anonymous"
+                    preload="metadata"
                     onPlay={() => {
                       setIsHeroExpanded(true);
                       setShowPlayOverlay(false);
