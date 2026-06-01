@@ -547,7 +547,7 @@ export const athleteHasConnectedWearable = async (athleteUserId: string): Promis
   );
   if (!statusDoc.exists()) return false;
   const data = statusDoc.data() || {};
-  const wearableSources: SnapshotSourceId[] = ['health_kit', 'apple_watch', 'oura', 'polar', 'whoop', 'garmin'];
+  const wearableSources: SnapshotSourceId[] = ['health_kit', 'apple_watch', 'oura', 'polar', 'fitbit', 'whoop', 'garmin'];
   return wearableSources.some((sourceId) => {
     const status = (data as Record<string, unknown>)[sourceId];
     return status === 'connected_synced';

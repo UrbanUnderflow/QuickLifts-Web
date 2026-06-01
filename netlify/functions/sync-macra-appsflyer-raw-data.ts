@@ -381,6 +381,83 @@ const getValue = (row: NormalizedRow, keys: string[]): string => {
   return '';
 };
 
+const parseJsonishObject = (value: unknown): Record<string, any> | null => {
+  const text = normalizeString(value);
+  if (!text) return null;
+
+  const candidates = [text];
+  try {
+    const decoded = decodeURIComponent(text);
+    if (decoded && decoded !== text) candidates.push(decoded);
+  } catch {
+    // Ignore malformed percent-encoding and try the original text.
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, any>;
+      }
+      if (typeof parsed === 'string' && parsed !== candidate) {
+        const nested = parseJsonishObject(parsed);
+        if (nested) return nested;
+      }
+    } catch {
+      // Continue to the next candidate.
+    }
+  }
+
+  return null;
+};
+
+const getNestedObjectValue = (source: Record<string, any> | null, path: string): string => {
+  if (!source || !path) return '';
+  const value = path.split('.').reduce<any>((acc, part) => (acc === null || acc === undefined ? undefined : acc[part]), source);
+  return normalizeString(value);
+};
+
+const getEventValueObject = (row: NormalizedRow): Record<string, any> | null =>
+  parseJsonishObject(getValue(row, ['event_value', 'event_values', 'event_value_json', 'event_parameters', 'af_event_value']));
+
+const getEventValue = (row: NormalizedRow, keys: string[]): string => {
+  const eventValue = getEventValueObject(row);
+  if (!eventValue) return '';
+
+  for (const key of keys) {
+    const direct = getNestedObjectValue(eventValue, key);
+    if (direct) return direct;
+
+    const normalized = normalizeHeader(key);
+    const normalizedMatch = Object.entries(eventValue).find(([eventKey]) => normalizeHeader(eventKey) === normalized);
+    const normalizedValue = normalizedMatch ? normalizeString(normalizedMatch[1]) : '';
+    if (normalizedValue) return normalizedValue;
+  }
+
+  return '';
+};
+
+const CUSTOMER_USER_ID_KEYS = [
+  'customer_user_id',
+  'customer_userid',
+  'af_customer_user_id',
+  'app_user_id',
+  'user_id',
+  'firebase_uid',
+  'firebase_user_id',
+  'external_id',
+  'external_user_id',
+  'cuid',
+];
+
+const APPSFLYER_ID_KEYS = ['appsflyer_id', 'apps_flyer_id', 'af_id'];
+
+const getCustomerUserId = (row: NormalizedRow): string =>
+  getValue(row, CUSTOMER_USER_ID_KEYS) || getEventValue(row, CUSTOMER_USER_ID_KEYS);
+
+const getAppsFlyerId = (row: NormalizedRow): string =>
+  getValue(row, APPSFLYER_ID_KEYS) || getEventValue(row, APPSFLYER_ID_KEYS);
+
 const bump = (target: Record<string, number>, key: string, amount = 1) => {
   const normalized = key || 'unknown';
   target[normalized] = (target[normalized] || 0) + amount;
@@ -456,7 +533,7 @@ const createSummary = (args: {
 });
 
 const addRowToSummary = (summary: SummaryShape, row: NormalizedRow, report: ReportConfig) => {
-  const customerUserId = getValue(row, ['customer_user_id', 'customer_userid', 'customer_id', 'app_user_id']);
+  const customerUserId = getCustomerUserId(row);
   const mediaSource = report.organic ? 'Organic' : getValue(row, ['media_source', 'pid', 'source']) || 'Unknown paid source';
   const campaign = getValue(row, ['campaign', 'campaign_name', 'c']) || 'Unknown campaign';
   const aggregateEventName = getValue(row, ['in_apps_events']);
@@ -873,8 +950,8 @@ function mergeAttributionRow(args: {
   report: ReportConfig;
 }) {
   const { aggregateByDocId, row, report } = args;
-  const customerUserId = getValue(row, ['customer_user_id', 'customer_userid', 'customer_id', 'app_user_id']);
-  const appsFlyerId = getValue(row, ['appsflyer_id', 'apps_flyer_id', 'af_id']);
+  const customerUserId = getCustomerUserId(row);
+  const appsFlyerId = getAppsFlyerId(row);
   const identity = customerUserId || appsFlyerId;
   if (!identity) return;
 
@@ -949,7 +1026,9 @@ function inferUploadedReport(file: UploadedCsvFile, rows: NormalizedRow[], index
 function stableRawRowId(row: NormalizedRow, report: ReportConfig, uploadKey = ''): string {
   const isAggregate = isAggregatedPerformanceRow(row);
   const eventName = report.type === 'event' ? getValue(row, ['event_name', 'in_apps_events']) || 'unknown_event' : '';
-  const identity = getValue(row, ['customer_user_id', 'customer_userid', 'customer_id', 'app_user_id', 'appsflyer_id', 'apps_flyer_id', 'af_id']);
+  const customerUserId = getCustomerUserId(row);
+  const appsFlyerId = getAppsFlyerId(row);
+  const identity = customerUserId || appsFlyerId;
   const occurredAt = getValue(row, ['event_time', 'event_time_selected_timezone', 'install_time', 'install_time_selected_timezone']);
   const fallback = Object.keys(row)
     .sort()
@@ -959,6 +1038,8 @@ function stableRawRowId(row: NormalizedRow, report: ReportConfig, uploadKey = ''
     JSON.stringify({
       type: report.type,
       organic: report.organic,
+      customerUserId,
+      appsFlyerId,
       identity,
       eventName,
       occurredAt,
@@ -1020,8 +1101,8 @@ const rawRowMetadata = (row: NormalizedRow, report: ReportConfig): Record<string
   const eventTime = rawRowEventTime(row);
   const parsedEventTime = Date.parse(eventTime);
   const aggregatePerformance = isAggregatedPerformanceRow(row);
-  const customerUserId = getValue(row, ['customer_user_id', 'customer_userid', 'customer_id', 'app_user_id']);
-  const appsFlyerId = getValue(row, ['appsflyer_id', 'apps_flyer_id', 'af_id']);
+  const customerUserId = getCustomerUserId(row);
+  const appsFlyerId = getAppsFlyerId(row);
 
   return {
     aggregatePerformance,

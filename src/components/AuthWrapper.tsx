@@ -135,8 +135,17 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     // Hosted Sports Intelligence report URLs are allowed through the global
     // wrapper so the report page can own team-membership authorization.
     '/coach-reports',
+    // Shared System Overview artifacts have their own token/passcode/revocation
+    // checks on the page and must stay viewable without account auth.
+    '/shared/system-overview',
     '/coach-report-demo', '/research', '/onboarding', '/legal-doc', '/pulsecheck', '/group-meet', '/sign'
   ].map(pattern => pattern.toLowerCase());
+
+  const isSharedSystemOverviewPath = (path: string) => {
+    const raw = (path || '').split('?')[0].split('#')[0] || '/';
+    const normalizedPath = (raw === '/' ? '/' : raw.replace(/\/$/, '')).toLowerCase();
+    return normalizedPath === '/shared/system-overview' || normalizedPath.startsWith('/shared/system-overview/');
+  };
 
   const isPublicClubPath = (path: string) => {
     const raw = (path || '').split('?')[0].split('#')[0] || '/';
@@ -394,9 +403,10 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
             // If the user is authenticated but missing required onboarding (e.g., username),
             // force the registration modal regardless of route visibility.
             if (activeUser && (!activeUser.username || activeUser.username.trim() === '')) {
-              // Do NOT block public creator landing pages
-              if (isCreatorLandingPath(router.asPath || router.pathname) || isClubCheckInPath(router.asPath || router.pathname)) {
-                console.log('[AuthWrapper] Authenticated but missing username on public landing/check-in page. Not showing modal.');
+              const routePath = router.asPath || router.pathname;
+              // Do NOT block public creator landing pages, check-ins, or shared artifacts.
+              if (isCreatorLandingPath(routePath) || isClubCheckInPath(routePath) || isSharedSystemOverviewPath(routePath)) {
+                console.log('[AuthWrapper] Authenticated but missing username on public route. Not showing modal.');
                 setShowSignInModal(false);
                 dispatch(setLoading(false));
                 setAuthChecked(true);
@@ -416,8 +426,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
                 includeLocalCache: false,
               })
             ) {
-              if (isCreatorLandingPath(router.asPath || router.pathname) || isClubCheckInPath(router.asPath || router.pathname)) {
-                console.log('[AuthWrapper] Authenticated but missing current legal acceptance on public landing/check-in page. Not showing modal.');
+              const routePath = router.asPath || router.pathname;
+              if (isCreatorLandingPath(routePath) || isClubCheckInPath(routePath) || isSharedSystemOverviewPath(routePath)) {
+                console.log('[AuthWrapper] Authenticated but missing current legal acceptance on public route. Not showing modal.');
                 setShowSignInModal(false);
                 dispatch(setLoading(false));
                 setAuthChecked(true);
@@ -495,10 +506,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               setShowSignInModal(true);
             } else {
               console.log(`[AuthWrapper] User not authenticated but on public route: ${router.pathname}. No modal needed.`);
-              // Ensure modal is not shown on creator landing pages
-              if (isCreatorLandingPath(router.asPath || router.pathname)) {
-                setShowSignInModal(false);
-              }
+              setShowSignInModal(false);
             }
           }
         } catch (error) {

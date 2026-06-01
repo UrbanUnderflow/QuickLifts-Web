@@ -131,6 +131,46 @@ test('PulseCheck function proxy strips upstream transfer and encoding headers', 
   }
 });
 
+test('PulseCheck function proxy supports Google Health Fitbit endpoints', async () => {
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  global.fetch = async (url, options = {}) => {
+    fetchCalls.push({ url: String(url), options });
+    return {
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      async arrayBuffer() {
+        return Buffer.from('{"connected":true}');
+      },
+    };
+  };
+
+  try {
+    const { default: handler } = loadProxyModule();
+    const response = createResponseRecorder();
+
+    await handler({
+      method: 'GET',
+      url: '/api/pulsecheck/functions/google-health-status',
+      query: { name: 'google-health-status' },
+      headers: {
+        host: 'localhost:3000',
+        'x-forwarded-host': 'localhost:3000',
+        authorization: 'Bearer token',
+      },
+      body: undefined,
+    }, response);
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(String(response.body), '{"connected":true}');
+    assert.equal(fetchCalls.length, 1);
+    assert.equal(fetchCalls[0].url, 'https://fitwithpulse.ai/.netlify/functions/google-health-status');
+    assert.equal(fetchCalls[0].options.headers.get('authorization'), 'Bearer token');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('PulseCheck function proxy rejects unsupported functions', async () => {
   const { default: handler } = loadProxyModule();
   const response = createResponseRecorder();

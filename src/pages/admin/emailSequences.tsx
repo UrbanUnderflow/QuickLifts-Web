@@ -626,8 +626,8 @@ const MACRA_PREVIEW_COPY_BY_SEQUENCE_ID: Record<string, MacraPreviewCopy> = {
     proofTitle: 'Why this is different from a blank food tracker',
     proofBody:
       'Macra starts from your profile instead of asking you to guess. Nora uses your target, plan, and saved meals to help you decide what fits next.',
-    ctaLabel: 'Review my plan',
-    ctaHref: '{{macraUrl}}',
+    ctaLabel: 'Start your free month',
+    ctaHref: '{{checkoutUrl}}',
     contextRows: MACRA_RETARGETING_PREVIEW_CONTEXT_ROWS,
   },
   'macra-paywall-view-value-v1': {
@@ -1413,6 +1413,78 @@ const rawAppsFlyerActionCount = (doc: Record<string, any>): number => {
   return 1;
 };
 
+const parseScoreboardJsonObject = (value: unknown): Record<string, any> | null => {
+  const text = normalizeScoreboardString(value);
+  if (!text) return null;
+
+  const candidates = [text];
+  try {
+    const decoded = decodeURIComponent(text);
+    if (decoded && decoded !== text) candidates.push(decoded);
+  } catch {
+    // Keep parsing the original value when percent-decoding is not applicable.
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+      if (typeof parsed === 'string' && parsed !== candidate) {
+        const nested = parseScoreboardJsonObject(parsed);
+        if (nested) return nested;
+      }
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  return null;
+};
+
+const rawAppsFlyerEventValueObject = (doc: Record<string, any>): Record<string, any> | null =>
+  parseScoreboardJsonObject(
+    getNestedValue(doc, 'row.event_value') ||
+      getNestedValue(doc, 'row.event_values') ||
+      getNestedValue(doc, 'row.event_value_json') ||
+      getNestedValue(doc, 'row.event_parameters') ||
+      getNestedValue(doc, 'row.af_event_value')
+  );
+
+const rawAppsFlyerEventValue = (doc: Record<string, any>, keys: string[]): string => {
+  const eventValue = rawAppsFlyerEventValueObject(doc);
+  if (!eventValue) return '';
+
+  for (const key of keys) {
+    const value = normalizeScoreboardString(eventValue[key]);
+    if (value) return value;
+  }
+
+  return '';
+};
+
+const rawAppsFlyerCustomerUserId = (doc: Record<string, any>): string =>
+  normalizeScoreboardString(
+    doc.customerUserId ||
+      getNestedValue(doc, 'row.customer_user_id') ||
+      getNestedValue(doc, 'row.customer_userid') ||
+      getNestedValue(doc, 'row.af_customer_user_id') ||
+      getNestedValue(doc, 'row.app_user_id') ||
+      getNestedValue(doc, 'row.firebase_uid') ||
+      getNestedValue(doc, 'row.external_id')
+  ) ||
+  rawAppsFlyerEventValue(doc, [
+    'customer_user_id',
+    'customer_userid',
+    'af_customer_user_id',
+    'app_user_id',
+    'user_id',
+    'firebase_uid',
+    'firebase_user_id',
+    'external_id',
+    'external_user_id',
+    'cuid',
+  ]);
+
 const buildAppsFlyerRawRowsSummaryForRange = (
   baseSummary: Record<string, any> | null,
   rawRows: Record<string, any>[],
@@ -1465,7 +1537,7 @@ const buildAppsFlyerRawRowsSummaryForRange = (
 
     dateRow.rows += 1;
     mergeScoreboardNumberMap(reports, { [reportKey]: 1 });
-    if (doc.customerUserId || getNestedValue(doc, 'row.customer_user_id') || getNestedValue(doc, 'row.customer_userid')) matchedCustomerUserRows += 1;
+    if (rawAppsFlyerCustomerUserId(doc)) matchedCustomerUserRows += 1;
     else unmatchedRows += 1;
 
     if (reportType === 'install') {

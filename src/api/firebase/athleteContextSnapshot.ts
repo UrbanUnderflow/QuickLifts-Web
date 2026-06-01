@@ -57,7 +57,7 @@ export type SummaryMode = 'direct' | 'merged_direct' | 'historical_contextual' |
  * Build state (2026-04-25):
  * - `health_kit`, `apple_watch`, `oura`, `fit_with_pulse`, `macra`,
  *   `pulsecheck_self_report`, `coach_entered` → ACTIVE.
- * - `polar`, `whoop`, `garmin` → planned future devices, not yet implemented.
+ * - `polar`, `fitbit`, `whoop`, `garmin` → device lanes.
  */
 export type SnapshotSourceId =
   | 'fit_with_pulse'
@@ -66,6 +66,7 @@ export type SnapshotSourceId =
   | 'apple_watch'
   | 'oura'
   | 'polar'
+  | 'fitbit'
   | 'whoop'
   | 'garmin'
   | 'pulsecheck_self_report'

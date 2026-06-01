@@ -60,6 +60,7 @@ const FAMILY_TO_SNAPSHOT_SOURCE: Record<HealthContextSourceFamily, SnapshotSourc
   oura: 'oura',
   apple_health: 'health_kit',
   polar: 'polar',
+  fitbit: 'fitbit',
   whoop: 'whoop',
   garmin: 'garmin',
   pulsecheck_self_report: 'pulsecheck_self_report',
@@ -82,17 +83,17 @@ const familyToSnapshotSource = (family: HealthContextSourceFamily): SnapshotSour
 // device-strategy spec: Apple Watch (via `apple_health`) is the platform-of-
 // record for active workout windows; Polar is the strongest sleep/recovery
 // lane; Oura remains the next-best recovery source when Polar is absent.
-// Polar 360 produces richer overnight stages + nightly recharge than the
-// mirrored sources and should override Oura for sleep.
+// Fitbit rides behind Polar/Oura for recovery, behind Apple/Polar for activity,
+// and ahead of Oura/Polar for biometrics when Apple Health is absent.
 const DOMAIN_PRECEDENCE: Record<HealthContextDomain, HealthContextSourceFamily[]> = {
   identity: ['fit_with_pulse', 'macra', 'coach_entered'],
-  training: ['fit_with_pulse', 'apple_health', 'polar', 'oura'],
-  recovery: ['polar', 'oura', 'apple_health', 'pulsecheck_self_report'],
-  activity: ['apple_health', 'polar', 'oura', 'pulsecheck_self_report'],
+  training: ['fit_with_pulse', 'apple_health', 'polar', 'fitbit', 'oura'],
+  recovery: ['polar', 'oura', 'fitbit', 'apple_health', 'pulsecheck_self_report'],
+  activity: ['apple_health', 'polar', 'fitbit', 'oura', 'pulsecheck_self_report'],
   nutrition: ['macra', 'pulsecheck_self_report', 'fit_with_pulse'],
-  biometrics: ['apple_health', 'polar', 'oura', 'coach_entered'],
+  biometrics: ['apple_health', 'fitbit', 'polar', 'oura', 'coach_entered'],
   behavioral: ['pulsecheck_self_report', 'macra', 'coach_entered'],
-  summary: ['oura', 'polar', 'apple_health', 'fit_with_pulse', 'macra'],
+  summary: ['oura', 'polar', 'fitbit', 'apple_health', 'fit_with_pulse', 'macra'],
 };
 
 // ──────────────────────────────────────────────────────────────────────────────

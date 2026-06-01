@@ -47,6 +47,7 @@ import { db } from './config';
  *
  * Planned future families:
  *   - polar
+ *   - fitbit
  *   - whoop
  *   - garmin
  */
@@ -54,6 +55,7 @@ export type HealthContextSourceFamily =
   | 'oura'
   | 'apple_health'
   | 'polar'
+  | 'fitbit'
   | 'whoop'
   | 'garmin'
   | 'pulsecheck_self_report'

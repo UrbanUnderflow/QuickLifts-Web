@@ -11,6 +11,8 @@ export const handler = createMacraRetargetingEmailHandler({
   proofTitle: 'Why this is different from a blank food tracker',
   proofBody:
     'Macra starts from your profile instead of asking you to guess. Nora uses your target, plan, and saved meals to help you decide what fits next.',
-  ctaLabel: 'Review my plan',
+  ctaLabel: 'Start your free month',
+  ctaUrlMode: 'webOfferCheckout',
+  checkoutPlan: 'monthly',
   tags: ['web-offer-proof'],
 });

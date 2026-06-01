@@ -57,8 +57,19 @@ type ExperimentVariantResult = {
   qualifiedUsers: number;
   onboardingCompletions: number;
   paywallViews: number;
+  valuePreviewViews: number;
+  pricingDisclosureViews: number;
+  trialConfidenceViews: number;
+  planSelections: number;
   ctaTaps: number;
+  checkoutStarts: number;
+  purchaseBridgeViews: number;
+  purchaseBridgeContinues: number;
   appleCancels: number;
+  cancelFeedbackPresented: number;
+  cancelFeedbackSubmitted: number;
+  trialActivationScreens: number;
+  trialActivationPrimaryActions: number;
   trialStarts: number;
   paidConversions: number;
   trialRate: number;
@@ -83,6 +94,7 @@ type ExperimentResultsSnapshot = {
   aggregateValidation?: {
     appsFlyerTrialStarts: number;
     appsFlyerEvents: number;
+    fineGrainedEvents?: Record<string, number>;
     note: string;
   };
   dataInputs?: {
@@ -126,6 +138,37 @@ const EXPERIMENT_BACKFILL_PROFILE_CHUNK_SIZE = 40;
 const EXPERIMENT_BACKFILL_ATTRIBUTION_CHUNK_SIZE = 30;
 const MACRA_APPSFLYER_TRIAL_EVENT_NAMES = ['af_start_trial', 'start_trial', 'trial_started', 'macra_trial_started'];
 const MACRA_APPSFLYER_PURCHASE_EVENT_NAMES = ['af_subscribe', 'af_purchase', 'subscribe', 'purchase', 'macra_subscription_started'];
+const MACRA_APPSFLYER_EXPERIMENT_ASSIGNMENT_EVENT_NAMES = ['macra_experiment_assignment'];
+const MACRA_APPSFLYER_VALUE_PREVIEW_EVENT_NAMES = ['macra_paywall_value_preview_viewed'];
+const MACRA_APPSFLYER_PRICING_DISCLOSURE_EVENT_NAMES = ['macra_paywall_pricing_disclosure_viewed'];
+const MACRA_APPSFLYER_TRIAL_CONFIDENCE_EVENT_NAMES = ['macra_paywall_trial_confidence_viewed'];
+const MACRA_APPSFLYER_PLAN_SELECTED_EVENT_NAMES = ['macra_subscription_plan_selected'];
+const MACRA_APPSFLYER_CHECKOUT_STARTED_EVENT_NAMES = ['af_initiated_checkout', 'macra_subscription_web_checkout_started'];
+const MACRA_APPSFLYER_PURCHASE_BRIDGE_VIEWED_EVENT_NAMES = ['macra_paywall_purchase_bridge_viewed'];
+const MACRA_APPSFLYER_PURCHASE_BRIDGE_CONTINUED_EVENT_NAMES = ['macra_paywall_purchase_bridge_continued'];
+const MACRA_APPSFLYER_APPLE_CANCEL_EVENT_NAMES = ['macra_subscription_purchase_cancelled'];
+const MACRA_APPSFLYER_CANCEL_FEEDBACK_PRESENTED_EVENT_NAMES = ['macra_paywall_cancel_feedback_presented'];
+const MACRA_APPSFLYER_CANCEL_FEEDBACK_SUBMITTED_EVENT_NAMES = ['macra_paywall_cancel_feedback_submitted'];
+const MACRA_APPSFLYER_TRIAL_ACTIVATION_SCREEN_EVENT_NAMES = ['macra_trial_activation_screen_viewed'];
+const MACRA_APPSFLYER_TRIAL_ACTIVATION_PRIMARY_EVENT_NAMES = ['macra_trial_activation_primary_pressed'];
+
+const MACRA_EXPERIMENT_EVENT_BREAKDOWN = [
+  { key: 'experimentAssignments', label: 'Experiment assignment', eventNames: MACRA_APPSFLYER_EXPERIMENT_ASSIGNMENT_EVENT_NAMES },
+  { key: 'valuePreviewViews', label: 'Value preview', eventNames: MACRA_APPSFLYER_VALUE_PREVIEW_EVENT_NAMES },
+  { key: 'pricingDisclosureViews', label: 'Pricing disclosure', eventNames: MACRA_APPSFLYER_PRICING_DISCLOSURE_EVENT_NAMES },
+  { key: 'trialConfidenceViews', label: 'Trial confidence', eventNames: MACRA_APPSFLYER_TRIAL_CONFIDENCE_EVENT_NAMES },
+  { key: 'planSelections', label: 'Plan selected', eventNames: MACRA_APPSFLYER_PLAN_SELECTED_EVENT_NAMES },
+  { key: 'purchaseBridgeViews', label: 'Apple bridge viewed', eventNames: MACRA_APPSFLYER_PURCHASE_BRIDGE_VIEWED_EVENT_NAMES },
+  { key: 'purchaseBridgeContinues', label: 'Apple bridge continued', eventNames: MACRA_APPSFLYER_PURCHASE_BRIDGE_CONTINUED_EVENT_NAMES },
+  { key: 'checkoutStarts', label: 'Checkout started', eventNames: MACRA_APPSFLYER_CHECKOUT_STARTED_EVENT_NAMES },
+  { key: 'appleCancels', label: 'Apple cancels', eventNames: MACRA_APPSFLYER_APPLE_CANCEL_EVENT_NAMES },
+  { key: 'cancelFeedbackPresented', label: 'Cancel feedback shown', eventNames: MACRA_APPSFLYER_CANCEL_FEEDBACK_PRESENTED_EVENT_NAMES },
+  { key: 'cancelFeedbackSubmitted', label: 'Cancel feedback submitted', eventNames: MACRA_APPSFLYER_CANCEL_FEEDBACK_SUBMITTED_EVENT_NAMES },
+  { key: 'trialActivationScreens', label: 'Activation screen', eventNames: MACRA_APPSFLYER_TRIAL_ACTIVATION_SCREEN_EVENT_NAMES },
+  { key: 'trialActivationPrimaryActions', label: 'Activation primary', eventNames: MACRA_APPSFLYER_TRIAL_ACTIVATION_PRIMARY_EVENT_NAMES },
+  { key: 'trialStarts', label: 'Trial starts', eventNames: MACRA_APPSFLYER_TRIAL_EVENT_NAMES },
+  { key: 'paidConversions', label: 'Paid conversion', eventNames: MACRA_APPSFLYER_PURCHASE_EVENT_NAMES },
+] as const;
 
 const DEFAULT_EXPERIMENT: ExperimentDocument = {
   id: EXPERIMENT_ID,
@@ -437,8 +480,19 @@ const createEmptyVariantResult = (variant: ExperimentVariant): ExperimentVariant
   qualifiedUsers: 0,
   onboardingCompletions: 0,
   paywallViews: 0,
+  valuePreviewViews: 0,
+  pricingDisclosureViews: 0,
+  trialConfidenceViews: 0,
+  planSelections: 0,
   ctaTaps: 0,
+  checkoutStarts: 0,
+  purchaseBridgeViews: 0,
+  purchaseBridgeContinues: 0,
   appleCancels: 0,
+  cancelFeedbackPresented: 0,
+  cancelFeedbackSubmitted: 0,
+  trialActivationScreens: 0,
+  trialActivationPrimaryActions: 0,
   trialStarts: 0,
   paidConversions: 0,
   trialRate: 0,
@@ -839,8 +893,19 @@ const ExperimentsPage: React.FC = () => {
         if (qualified) variantResult.qualifiedUsers += 1;
         if (completedOnboarding) variantResult.onboardingCompletions += 1;
         if (reachedPaywall) variantResult.paywallViews += 1;
+        if (appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_VALUE_PREVIEW_EVENT_NAMES) > 0) variantResult.valuePreviewViews += 1;
+        if (appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_PRICING_DISCLOSURE_EVENT_NAMES) > 0) variantResult.pricingDisclosureViews += 1;
+        if (appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_TRIAL_CONFIDENCE_EVENT_NAMES) > 0) variantResult.trialConfidenceViews += 1;
+        if (appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_PLAN_SELECTED_EVENT_NAMES) > 0) variantResult.planSelections += 1;
         if (ctaTappedAt) variantResult.ctaTaps += 1;
-        if (appleCancelAt) variantResult.appleCancels += 1;
+        if (latestAttemptedAt || appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_CHECKOUT_STARTED_EVENT_NAMES) > 0) variantResult.checkoutStarts += 1;
+        if (appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_PURCHASE_BRIDGE_VIEWED_EVENT_NAMES) > 0) variantResult.purchaseBridgeViews += 1;
+        if (appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_PURCHASE_BRIDGE_CONTINUED_EVENT_NAMES) > 0) variantResult.purchaseBridgeContinues += 1;
+        if (appleCancelAt || appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_APPLE_CANCEL_EVENT_NAMES) > 0) variantResult.appleCancels += 1;
+        if (appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_CANCEL_FEEDBACK_PRESENTED_EVENT_NAMES) > 0) variantResult.cancelFeedbackPresented += 1;
+        if (appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_CANCEL_FEEDBACK_SUBMITTED_EVENT_NAMES) > 0) variantResult.cancelFeedbackSubmitted += 1;
+        if (appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_TRIAL_ACTIVATION_SCREEN_EVENT_NAMES) > 0) variantResult.trialActivationScreens += 1;
+        if (appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_TRIAL_ACTIVATION_PRIMARY_EVENT_NAMES) > 0) variantResult.trialActivationPrimaryActions += 1;
         if (trialStartedAt || appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_TRIAL_EVENT_NAMES) > 0) variantResult.trialStarts += 1;
         if (paidAt || appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_PURCHASE_EVENT_NAMES) > 0) variantResult.paidConversions += 1;
       });
@@ -881,6 +946,12 @@ const ExperimentsPage: React.FC = () => {
         aggregateValidation: {
           appsFlyerTrialStarts: appsFlyerSummaryEventCount(appsFlyerSummary, MACRA_APPSFLYER_TRIAL_EVENT_NAMES),
           appsFlyerEvents: Number(getNestedValue(appsFlyerSummary, 'events.total') || 0),
+          fineGrainedEvents: Object.fromEntries(
+            MACRA_EXPERIMENT_EVENT_BREAKDOWN.map((row) => [
+              row.key,
+              appsFlyerSummaryEventCount(appsFlyerSummary, [...row.eventNames]),
+            ])
+          ),
           note: 'AppsFlyer aggregate data validates top-line event volume but cannot split by variant unless event metadata includes the variant.',
         },
         dataInputs: {
@@ -1135,6 +1206,7 @@ const ExperimentResultsPanel: React.FC<{
   const bestVariant = results?.variants
     .filter((variant) => variant.assignments > 0)
     .sort((left, right) => primaryMetricRate(right) - primaryMetricRate(left))[0];
+  const aggregateFineGrainedEvents = results?.aggregateValidation?.fineGrainedEvents || {};
 
   if (!results) {
     return (
@@ -1213,6 +1285,14 @@ const ExperimentResultsPanel: React.FC<{
             <p className="mt-2 text-sm text-zinc-400">
               {results.aggregateValidation?.note || 'Top-line AppsFlyer validation will appear after the scoreboard has imported AppsFlyer data.'}
             </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {MACRA_EXPERIMENT_EVENT_BREAKDOWN.map((eventRow) => (
+                <div key={eventRow.key} className="flex items-center justify-between gap-3 rounded-lg bg-black/25 px-3 py-2">
+                  <span className="text-xs font-semibold text-zinc-400">{eventRow.label}</span>
+                  <span className="font-mono text-sm font-black text-white">{aggregateFineGrainedEvents[eventRow.key] || 0}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -1240,6 +1320,43 @@ const ExperimentResultsPanel: React.FC<{
               <div className="text-xs text-zinc-500">Aggregate events</div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-800 bg-[#11151b] p-5">
+        <div className="flex items-center gap-3">
+          <SlidersHorizontal className="h-5 w-5 text-[#E0FE10]" />
+          <div>
+            <h2 className="text-lg font-black">Trial Breakdown By Variant</h2>
+            <p className="text-sm text-zinc-400">Person-level checkpoints from matched first-party and AppsFlyer docs.</p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+          {results.variants.map((variant) => (
+            <div key={variant.variantId} className="rounded-xl border border-zinc-800 bg-black/20 p-4">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-bold text-white">{variant.variantName}</div>
+                  <div className="font-mono text-xs text-zinc-500">{variant.variantId}</div>
+                </div>
+                <div className="text-right text-xs text-zinc-500">{variant.assignments} assigned</div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <DiagnosticMetric label="Value preview" value={variant.valuePreviewViews} denominator={variant.paywallViews} />
+                <DiagnosticMetric label="Pricing disclosure" value={variant.pricingDisclosureViews} denominator={variant.paywallViews} />
+                <DiagnosticMetric label="Trial confidence" value={variant.trialConfidenceViews} denominator={variant.paywallViews} />
+                <DiagnosticMetric label="Plan selected" value={variant.planSelections} denominator={variant.paywallViews} />
+                <DiagnosticMetric label="CTA taps" value={variant.ctaTaps} denominator={variant.paywallViews} />
+                <DiagnosticMetric label="Checkout starts" value={variant.checkoutStarts} denominator={variant.ctaTaps || variant.paywallViews} />
+                <DiagnosticMetric label="Apple bridge viewed" value={variant.purchaseBridgeViews} denominator={variant.ctaTaps || variant.paywallViews} />
+                <DiagnosticMetric label="Bridge continued" value={variant.purchaseBridgeContinues} denominator={variant.purchaseBridgeViews || variant.ctaTaps || variant.paywallViews} />
+                <DiagnosticMetric label="Apple cancels" value={variant.appleCancels} denominator={variant.checkoutStarts || variant.ctaTaps || variant.paywallViews} />
+                <DiagnosticMetric label="Cancel feedback" value={variant.cancelFeedbackSubmitted} denominator={variant.cancelFeedbackPresented || variant.appleCancels || variant.paywallViews} />
+                <DiagnosticMetric label="Activation screen" value={variant.trialActivationScreens} denominator={variant.trialStarts || variant.paidConversions || variant.assignments} />
+                <DiagnosticMetric label="Activation primary" value={variant.trialActivationPrimaryActions} denominator={variant.trialActivationScreens || variant.trialStarts || variant.assignments} />
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -1323,6 +1440,20 @@ const ResultMetric: React.FC<{ label: string; value: React.ReactNode; sublabel: 
     <div className="mt-1 text-xs text-zinc-500">{sublabel}</div>
   </div>
 );
+
+const DiagnosticMetric: React.FC<{ label: string; value?: number; denominator?: number }> = ({ label, value = 0, denominator = 0 }) => {
+  const normalizedValue = Number(value || 0);
+  const normalizedDenominator = Number(denominator || 0);
+  return (
+    <div className="rounded-lg bg-black/25 px-3 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold text-zinc-400">{label}</span>
+        <span className="font-mono text-sm font-black text-white">{normalizedValue}</span>
+      </div>
+      <div className="mt-1 text-[11px] text-zinc-500">{formatPercent(normalizedValue, normalizedDenominator)}</div>
+    </div>
+  );
+};
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <label className="block">

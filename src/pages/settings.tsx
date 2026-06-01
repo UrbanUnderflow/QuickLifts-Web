@@ -69,6 +69,10 @@ const SettingsPage: NextPage = () => {
     router.push('/PulseCheck/coach');
   };
 
+  const handleFitbitSetup = () => {
+    router.push('/fitbit');
+  };
+
   const handleTutorial = () => {
     // For now, route to Programming tutorial page; can be replaced with a dedicated tutorial modal later.
     router.push('/programming?web=1');
@@ -120,6 +124,12 @@ const SettingsPage: NextPage = () => {
             title="Coach-Led Organization Setup"
             subtitle="Start the canonical org, team, and admin-activation flow"
             onClick={handleCoachSetup}
+          />
+
+          <SettingRow
+            title="Fitbit / Google Health"
+            subtitle="Connect Fitbit Air and Google Health data for sleep, heart-rate, and activity context"
+            onClick={handleFitbitSetup}
           />
 
           {/* Show Tutorial Modal */}
@@ -183,7 +193,6 @@ const SettingsPage: NextPage = () => {
 };
 
 export default SettingsPage;
-
 
 
 

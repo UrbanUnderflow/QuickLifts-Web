@@ -741,6 +741,12 @@ export default function PulseCheckTeamWorkspacePage() {
                       >
                         Connect Oura
                       </Link>
+                      <Link
+                        href="/PulseCheck/fitbit"
+                        className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-zinc-300 transition-all hover:border-white/20 hover:bg-white/[0.07] hover:text-white backdrop-blur-sm"
+                      >
+                        Connect Fitbit
+                      </Link>
                     </>
                   ) : (
                     <>
@@ -749,6 +755,12 @@ export default function PulseCheckTeamWorkspacePage() {
                         className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-zinc-300 transition-all hover:border-white/20 hover:bg-white/[0.07] hover:text-white backdrop-blur-sm"
                       >
                         Connect Oura
+                      </Link>
+                      <Link
+                        href="/PulseCheck/fitbit"
+                        className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-zinc-300 transition-all hover:border-white/20 hover:bg-white/[0.07] hover:text-white backdrop-blur-sm"
+                      >
+                        Connect Fitbit
                       </Link>
                       <Link
                         href="/PulseCheck"

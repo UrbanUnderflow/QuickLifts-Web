@@ -7,6 +7,7 @@ import PulseCheckDeviceIntegrationPartnershipMatrixTab from './PulseCheckDeviceI
 import PulseCheckOuraCognitiveCorrelationSpecTab from './PulseCheckOuraCognitiveCorrelationSpecTab';
 import PulseCheckOuraIntegrationStrategyTab from './PulseCheckOuraIntegrationStrategyTab';
 import PulseCheckSchoolWearableBundlePlanTab from './PulseCheckSchoolWearableBundlePlanTab';
+import PulseCheckFitbitIntegrationChecklistTab from './PulseCheckFitbitIntegrationChecklistTab';
 
 const CURRENT_BASELINE_ROWS = [
   ['Apple Watch / HealthKit', 'Platform bridge and permission layer for iOS-first athletes.', 'Current baseline lane for wearable health context.'],
@@ -30,7 +31,7 @@ const WISHLIST_ROWS = [
   ['Tier 1', 'Catapult', 'Elite team performance data and high-value B2B alliance potential.', 'Enterprise feed / partner integration'],
   ['Tier 2', 'Whoop', 'Recovery-first positioning and strong athlete community.', 'Partner API or platform bridge'],
   ['Tier 2', 'COROS', 'Endurance niche with useful training and activity context.', 'Partner API / cloud feed'],
-  ['Tier 2', 'Fitbit', 'Broad consumer reach and legacy sleep/activity coverage.', 'Public API'],
+  ['Tier 2', 'Fitbit', 'Broad consumer reach and Google Health-backed sleep/activity coverage.', 'Google Health API'],
   ['Tier 3', 'Nike ecosystem', 'Brand halo is real, but direct device/API access is weak.', 'Bridge only until a true API exists'],
 ];
 
@@ -479,6 +480,14 @@ const DEVICE_INTEGRATION_PAGES: ArtifactPageEntry[] = [
     icon: Moon,
     accent: '#22c55e',
     render: () => <PulseCheckOuraIntegrationStrategyTab />,
+  },
+  {
+    id: 'fitbit-integration-checklist',
+    label: 'Fitbit Checklist',
+    subtitle: 'Google Health connector, Pulse Check UI, and Fit With Pulse parity rollout.',
+    icon: Activity,
+    accent: '#38bdf8',
+    render: () => <PulseCheckFitbitIntegrationChecklistTab />,
   },
   {
     id: 'oura-cognitive-correlation-spec',

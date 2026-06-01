@@ -26,6 +26,13 @@ const SUPPORTED_FUNCTIONS = new Set([
   'polar-disconnect',
   'polar-sync',
   'polar-webhook',
+  'google-health-auth-start',
+  'google-health-callback',
+  'google-health-status',
+  'google-health-disconnect',
+  'google-health-sync',
+  'google-health-webhook',
+  'scheduled-google-health-sync',
   'create-pulsecheck-oura-share',
 ]);
 

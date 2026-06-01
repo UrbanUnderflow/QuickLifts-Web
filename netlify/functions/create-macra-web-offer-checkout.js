@@ -110,6 +110,27 @@ const buildCancelUrl = ({ baseUrl }) => {
   return url.toString();
 };
 
+const markCheckoutFailure = async ({ userRef, reason, details }) => {
+  if (!userRef || !reason) return;
+
+  try {
+    await userRef.set(
+      {
+        macraEmailSequenceState: {
+          webOffer24hCheckoutFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+          webOffer24hCheckoutFailureReason: reason,
+          ...(details ? { webOffer24hCheckoutFailureDetails: String(details).slice(0, 500) } : {}),
+          webOffer24hStatus: `checkout_failed:${reason}`,
+          webOffer24hLastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    console.warn('[create-macra-web-offer-checkout] Failed to record checkout failure:', error?.message || error);
+  }
+};
+
 exports.handler = async (event) => {
   if (event.httpMethod !== 'GET') {
     return {
@@ -198,6 +219,7 @@ exports.handler = async (event) => {
     );
 
     if (!email) {
+      await markCheckoutFailure({ userRef, reason: 'missing_email' });
       return {
         statusCode: 400,
         headers: jsonHeaders,
@@ -254,6 +276,10 @@ exports.handler = async (event) => {
     const { stripe, isTestMode } = getStripeInstance(event, forceTestMode);
     const priceId = resolveMacraPriceId({ plan, isTestMode });
     if (!priceId) {
+      await markCheckoutFailure({
+        userRef,
+        reason: isTestMode ? 'missing_test_price' : 'missing_live_price',
+      });
       return {
         statusCode: 500,
         headers: jsonHeaders,
@@ -300,13 +326,27 @@ exports.handler = async (event) => {
       session = await stripe.checkout.sessions.create(checkoutParams);
     } catch (stripeError) {
       if (!stripeCustomerId || stripeError?.code !== 'resource_missing') {
+        await markCheckoutFailure({
+          userRef,
+          reason: stripeError?.code || 'stripe_session_create_failed',
+          details: stripeError?.message || stripeError,
+        });
         throw stripeError;
       }
       console.warn('[create-macra-web-offer-checkout] Stored customer could not be used; retrying with email:', stripeCustomerId);
       const retryParams = { ...checkoutParams };
       delete retryParams.customer;
       retryParams.customer_email = email;
-      session = await stripe.checkout.sessions.create(retryParams);
+      try {
+        session = await stripe.checkout.sessions.create(retryParams);
+      } catch (retryError) {
+        await markCheckoutFailure({
+          userRef,
+          reason: retryError?.code || 'stripe_session_retry_failed',
+          details: retryError?.message || retryError,
+        });
+        throw retryError;
+      }
     }
 
     await userRef.set(

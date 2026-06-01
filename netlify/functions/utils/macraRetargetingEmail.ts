@@ -10,6 +10,12 @@ import {
 } from './emailSequenceHelpers';
 import { evaluateMacraEmailEligibility, MACRA_EMAIL_SENDER } from './macraEmailEligibility';
 
+const {
+  MACRA_WEB_OFFER_CAMPAIGN_ID,
+  normalizePlan,
+  signMacraOfferLink,
+} = require('./macraStripe');
+
 type SendResponse = {
   success: boolean;
   skipped?: boolean;
@@ -61,7 +67,11 @@ export type MacraRetargetingEmailConfig = {
   proofBody: string;
   ctaLabel: string;
   tags: string[];
+  ctaUrlMode?: 'macra' | 'webOfferCheckout';
+  checkoutPlan?: string;
 };
+
+const OFFER_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const BIGGEST_STRUGGLE_LABELS: Record<string, { label: string; proof: string }> = {
   consistency: {
@@ -106,6 +116,27 @@ const titleCase = (value: string): string =>
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+
+function buildCheckoutUrl(args: { userId: string; plan?: string }): string {
+  const siteUrl = getBaseSiteUrl();
+  const campaignId = MACRA_WEB_OFFER_CAMPAIGN_ID;
+  const normalizedPlan = normalizePlan(args.plan || 'monthly');
+  const expiresAt = Date.now() + OFFER_LINK_TTL_MS;
+  const sig = signMacraOfferLink({
+    userId: args.userId,
+    campaignId,
+    plan: normalizedPlan,
+    expiresAt,
+  });
+
+  const url = new URL('/macra-offer', siteUrl);
+  url.searchParams.set('uid', args.userId);
+  url.searchParams.set('campaign', campaignId);
+  url.searchParams.set('plan', normalizedPlan);
+  url.searchParams.set('expires', String(expiresAt));
+  url.searchParams.set('sig', sig);
+  return url.toString();
+}
 
 function goalLabelFromProfile(profile: Record<string, any> | null): string {
   if (!profile) return 'your goal';
@@ -359,7 +390,13 @@ export function createMacraRetargetingEmailHandler(config: MacraRetargetingEmail
 
       const context = await loadRetargetingContext(userId || '', recipient.userData);
       const siteUrl = getBaseSiteUrl();
-      const macraUrl = `${siteUrl}/macra`;
+      const appMacraUrl = `${siteUrl}/macra`;
+      const checkoutUrl =
+        userId && config.ctaUrlMode === 'webOfferCheckout'
+          ? buildCheckoutUrl({ userId, plan: config.checkoutPlan })
+          : '';
+      const primaryCtaUrl = checkoutUrl || appMacraUrl;
+      const macraUrl = primaryCtaUrl;
       const fallbackHtml = renderFallbackHtml({
         firstName: recipient.firstName,
         macraUrl,
@@ -379,6 +416,12 @@ export function createMacraRetargetingEmailHandler(config: MacraRetargetingEmail
           user_name: recipient.username,
           macraUrl,
           macra_url: macraUrl,
+          appMacraUrl,
+          app_macra_url: appMacraUrl,
+          checkoutUrl: checkoutUrl || macraUrl,
+          checkout_url: checkoutUrl || macraUrl,
+          offerUrl: checkoutUrl || macraUrl,
+          offer_url: checkoutUrl || macraUrl,
           ...context,
         },
       });

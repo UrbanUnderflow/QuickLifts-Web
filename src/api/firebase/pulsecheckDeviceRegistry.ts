@@ -13,6 +13,7 @@ export const PULSECHECK_DEVICE_REGISTRY_CONTRACT_VERSION = 'pulsecheck-device-re
 export type PulseCheckDeviceFamily =
   | 'polar_ble'
   | 'polar_accesslink'
+  | 'fitbit'
   | 'oura'
   | 'apple_health'
   | 'whoop'
@@ -40,6 +41,8 @@ export type PulseCheckDeviceRegistryDataType =
   | 'steps'
   | 'distance'
   | 'active_energy'
+  | 'active_minutes'
+  | 'active_zone_minutes'
   | 'activity'
   | 'training'
   | 'workouts'
@@ -48,7 +51,12 @@ export type PulseCheckDeviceRegistryDataType =
   | 'readiness'
   | 'hrv'
   | 'resting_hr'
+  | 'oxygen_saturation'
+  | 'respiratory_rate'
   | 'temperature'
+  | 'vo2_max'
+  | 'body_weight'
+  | 'body_fat'
   | 'cardio_load'
   | 'strain'
   | 'stress'
@@ -140,6 +148,7 @@ export interface PulseCheckDeviceRegistryEntry {
 export const PULSECHECK_DEVICE_REGISTRY_DEVICE_FAMILIES: PulseCheckDeviceFamily[] = [
   'polar_ble',
   'polar_accesslink',
+  'fitbit',
   'oura',
   'apple_health',
   'whoop',
@@ -162,6 +171,8 @@ export const PULSECHECK_DEVICE_REGISTRY_DATA_TYPES: PulseCheckDeviceRegistryData
   'steps',
   'distance',
   'active_energy',
+  'active_minutes',
+  'active_zone_minutes',
   'activity',
   'training',
   'workouts',
@@ -170,7 +181,12 @@ export const PULSECHECK_DEVICE_REGISTRY_DATA_TYPES: PulseCheckDeviceRegistryData
   'readiness',
   'hrv',
   'resting_hr',
+  'oxygen_saturation',
+  'respiratory_rate',
   'temperature',
+  'vo2_max',
+  'body_weight',
+  'body_fat',
   'cardio_load',
   'strain',
   'stress',
@@ -223,6 +239,43 @@ export const PULSECHECK_DEVICE_REGISTRY_SEED_ENTRIES: PulseCheckDeviceRegistryEn
     gaps: [
       'Training payloads may be delayed or empty until Polar classifies and syncs workouts.',
       'Useful as a post-hoc source, not live session truth.',
+    ],
+  }),
+  registryEntry({
+    deviceFamily: 'fitbit',
+    displayName: 'Fitbit / Google Health',
+    transport: 'oauth-webhook',
+    authModel: 'oauth-pkce',
+    dataTypesProvided: [
+      'steps',
+      'distance',
+      'active_energy',
+      'active_minutes',
+      'active_zone_minutes',
+      'activity',
+      'workouts',
+      'training',
+      'sleep',
+      'recovery',
+      'hrv',
+      'resting_hr',
+      'oxygen_saturation',
+      'respiratory_rate',
+      'temperature',
+      'vo2_max',
+      'body_weight',
+      'body_fat',
+    ],
+    liveStreamingSupported: false,
+    iOSAdapter: null,
+    webAdapter: 'google-health-sync',
+    sessionBoundarySource: 'post-hoc-cloud-sync',
+    phaseJSportFingerprint: 'via-vendor-sport-field',
+    integrationStatus: 'pilot',
+    lastVerifiedAt: '2026-05-26T00:00:00.000Z',
+    gaps: [
+      'Fitbit data arrives after the wearable syncs into Google Health, so it should not be treated as live Phase J evidence.',
+      'Webhook notifications queue refresh work; snapshot projection still depends on a successful Google Health read using the athlete consent scopes.',
     ],
   }),
   registryEntry({

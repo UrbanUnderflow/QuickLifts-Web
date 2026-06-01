@@ -29,7 +29,7 @@ const PARTNER_MATRIX_ROWS = [
   ['Polar', 'Data access partner', 'Training, HR, sleep, and sports-data pedigree', 'Sports credibility and clean structured data', 'Tier 2'],
   ['WHOOP', 'Recovery-oriented alliance', 'Recovery, strain, sleep, and coaching-adjacent audience', 'Premium recovery segment and high engagement', 'Tier 2'],
   ['COROS', 'Endurance partner', 'Workouts, activity, and endurance-athlete context', 'Niche but strong endurance credibility', 'Tier 2'],
-  ['Fitbit', 'Consumer scale partnership', 'Activity, sleep, and heart-rate coverage', 'Mass-market reach and familiar consumer onboarding', 'Tier 2'],
+  ['Fitbit', 'Consumer scale partnership through Google Health', 'Activity, sleep, and heart-rate coverage', 'Mass-market reach and familiar consumer onboarding', 'Tier 2'],
   ['Nike', 'Brand / community partnership', 'Mostly bridgeable fitness context rather than a strong data API', 'Brand halo and consumer attention, but weak data depth', 'Bridge only'],
 ];
 
