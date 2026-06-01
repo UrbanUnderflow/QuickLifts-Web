@@ -127,6 +127,7 @@ import QuickLiftsProfileHealthSystemTab, {
 import PulseCheckVisionProImmersiveTestsTab from "../../components/admin/system-overview/PulseCheckVisionProImmersiveTestsTab";
 import PulseSystemDesignLanguageTab from "../../components/admin/system-overview/PulseSystemDesignLanguageTab";
 import AuntEdnaIntegrationStrategyTab from "../../components/admin/system-overview/AuntEdnaIntegrationStrategyTab";
+import AuntEdnaEscalationDataExchangeContractTab from "../../components/admin/system-overview/AuntEdnaEscalationDataExchangeContractTab";
 import AuntEdnaPilotAuthorizationMemoTab from "../../components/admin/system-overview/AuntEdnaPilotAuthorizationMemoTab";
 import AuntEdnaExhibitATab from "../../components/admin/system-overview/AuntEdnaExhibitATab";
 import AuntEdnaExhibitBTab from "../../components/admin/system-overview/AuntEdnaExhibitBTab";
@@ -356,6 +357,7 @@ const SYSTEM_TABS: SystemTab[] = [
     accent: "#f59e0b",
     sectionIds: [
       "auntedna-integration-strategy",
+      "auntedna-escalation-data-exchange-contract",
       "auntedna-pilot-authorization-memo",
       "auntedna-exhibit-a-data-architecture",
       "auntedna-exhibit-b-performance-standards",
@@ -2090,6 +2092,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "auntedna-integration-strategy":
         return <AuntEdnaIntegrationStrategyTab />;
+
+      case "auntedna-escalation-data-exchange-contract":
+        return <AuntEdnaEscalationDataExchangeContractTab />;
 
       case "auntedna-pilot-authorization-memo":
         return <AuntEdnaPilotAuthorizationMemoTab />;
