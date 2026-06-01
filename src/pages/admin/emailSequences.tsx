@@ -903,6 +903,14 @@ const scoreNumber = (value: unknown): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const scoreReportNumber = (value: unknown): number => {
+  if (value === null || value === undefined || value === '') return 0;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const cleaned = String(value).trim().replace(/[$,%]/g, '').replace(/,/g, '');
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const positiveScoreNumber = (value: unknown): number | null => {
   const parsed = scoreNumber(value);
   return parsed && parsed > 0 ? parsed : null;
@@ -1275,6 +1283,8 @@ const buildAppsFlyerAggregateSummaryForRange = (
   const eventMediaSources: Record<string, number> = {};
   const installMediaSources: Record<string, number> = {};
   const installCampaigns: Record<string, number> = {};
+  const revenueByEventName: Record<string, number> = {};
+  const revenueByMediaSource: Record<string, number> = {};
   const reports: Record<string, number> = {};
   let rows = 0;
   let maximumRows = 0;
@@ -1286,6 +1296,7 @@ const buildAppsFlyerAggregateSummaryForRange = (
   let installTotal = 0;
   let organicInstalls = 0;
   let nonOrganicInstalls = 0;
+  let revenueTotal = 0;
   let latestImportedAt: unknown = null;
   let appId = normalizeScoreboardString(baseSummary?.appId || getNestedValue(baseSummary || {}, 'aggregateCsvSummary.appId'));
 
@@ -1301,10 +1312,13 @@ const buildAppsFlyerAggregateSummaryForRange = (
     installTotal += Number(getNestedValue(summary, 'installs.total') || 0) || 0;
     organicInstalls += Number(getNestedValue(summary, 'installs.organic') || 0) || 0;
     nonOrganicInstalls += Number(getNestedValue(summary, 'installs.nonOrganic') || 0) || 0;
+    revenueTotal += Number(getNestedValue(summary, 'revenue.total') || 0) || 0;
     mergeScoreboardNumberMap(eventsByName, getNestedValue(summary, 'events.byName'));
     mergeScoreboardNumberMap(eventMediaSources, getNestedValue(summary, 'events.byMediaSource'));
     mergeScoreboardNumberMap(installMediaSources, getNestedValue(summary, 'installs.byMediaSource'));
     mergeScoreboardNumberMap(installCampaigns, getNestedValue(summary, 'installs.byCampaign'));
+    mergeScoreboardNumberMap(revenueByEventName, getNestedValue(summary, 'revenue.byEventName'));
+    mergeScoreboardNumberMap(revenueByMediaSource, getNestedValue(summary, 'revenue.byMediaSource'));
     mergeScoreboardNumberMap(reports, summary.reports);
     appId = appId || normalizeScoreboardString(summary.appId);
     if (period.importedAt && (!latestImportedAt || (scoreMillis(period.importedAt) || 0) > (scoreMillis(latestImportedAt) || 0))) {
@@ -1360,6 +1374,11 @@ const buildAppsFlyerAggregateSummaryForRange = (
       byName: eventsByName,
       byMediaSource: eventMediaSources,
     },
+    revenue: {
+      total: revenueTotal,
+      byEventName: revenueByEventName,
+      byMediaSource: revenueByMediaSource,
+    },
     topMediaSources,
     topCampaigns: scoreboardTopEntriesFromMap(installCampaigns),
     topEvents: scoreboardTopEntriesFromMap(eventsByName),
@@ -1413,12 +1432,15 @@ const buildAppsFlyerRawRowsSummaryForRange = (
   const eventMediaSources: Record<string, number> = {};
   const installMediaSources: Record<string, number> = {};
   const installCampaigns: Record<string, number> = {};
+  const revenueByEventName: Record<string, number> = {};
+  const revenueByMediaSource: Record<string, number> = {};
   const reports: Record<string, number> = {};
   const dateRows: Record<string, { rows: number; events: number; installs: number; trialStarts: number }> = {};
   let eventTotal = 0;
   let installTotal = 0;
   let organicInstalls = 0;
   let nonOrganicInstalls = 0;
+  let revenueTotal = 0;
   let matchedCustomerUserRows = 0;
   let unmatchedRows = 0;
   let latestImportedAt: unknown = null;
@@ -1436,6 +1458,9 @@ const buildAppsFlyerRawRowsSummaryForRange = (
       normalizeScoreboardString(doc.campaign || getNestedValue(doc, 'row.campaign') || getNestedValue(doc, 'row.campaign_name') || getNestedValue(doc, 'row.c')) ||
       'Unknown campaign';
     const eventName = rawAppsFlyerEventName(doc);
+    const revenue = scoreReportNumber(
+      doc.revenue || getNestedValue(doc, 'row.revenue') || getNestedValue(doc, 'row.event_revenue') || getNestedValue(doc, 'row.af_revenue')
+    );
     const dateRow = dateRows[eventDate] || { rows: 0, events: 0, installs: 0, trialStarts: 0 };
 
     dateRow.rows += 1;
@@ -1456,6 +1481,11 @@ const buildAppsFlyerRawRowsSummaryForRange = (
       mergeScoreboardNumberMap(eventMediaSources, { [mediaSource]: actionCount });
       dateRow.events += actionCount;
       if (MACRA_APPSFLYER_TRIAL_EVENT_NAMES.includes(eventName)) dateRow.trialStarts += actionCount;
+      if (revenue) {
+        revenueTotal += revenue;
+        mergeScoreboardNumberMap(revenueByEventName, { [eventName]: revenue });
+        mergeScoreboardNumberMap(revenueByMediaSource, { [mediaSource]: revenue });
+      }
     }
 
     dateRows[eventDate] = dateRow;
@@ -1510,6 +1540,11 @@ const buildAppsFlyerRawRowsSummaryForRange = (
       total: eventTotal,
       byName: eventsByName,
       byMediaSource: eventMediaSources,
+    },
+    revenue: {
+      total: revenueTotal,
+      byEventName: revenueByEventName,
+      byMediaSource: revenueByMediaSource,
     },
     topMediaSources: scoreboardTopEntriesFromMap(eventTotal ? eventMediaSources : installMediaSources),
     topCampaigns: scoreboardTopEntriesFromMap(installCampaigns),
@@ -3548,17 +3583,18 @@ const EmailSequencesAdmin: React.FC = () => {
     const qualifiedCheckoutStarts = count((user) => user.isQualified && signalInRange(user.signals.checkoutStartedAt));
     const qualifiedAppleCancels = count((user) => user.isQualified && signalInRange(user.signals.appleCancelAt));
     const qualifiedTrialStarts = count((user) => user.isQualified && signalInRange(user.signals.trialStartedAt));
+    const displayedTrialStarts = Math.max(qualifiedTrialStarts, appsFlyerStartTrialEvents);
     const qualifiedPaid = count((user) => user.isQualified && signalInRange(user.signals.paidAt));
     const qualifiedStripeClicks = count((user) => user.isQualified && signalInRange(user.signals.stripeRetargetClickedAt));
     const appsFlyerQualifiedCtaLabel = appsFlyerIsAggregateCsv
       ? `${qualifiedCtaTaps} first-party qualified taps · ${appsFlyerCtaEvents} AppsFlyer aggregate events · ${appsFlyerCheckoutEvents} aggregate checkout starts`
       : `${qualifiedCtaTaps} matched qualified users · ${appsFlyerCtaEvents} AppsFlyer raw events · ${appsFlyerCheckoutEvents} checkout starts`;
-    const qualifiedTrialStartUnit = qualifiedTrialStarts === 1 ? 'trial start' : 'trial starts';
+    const appsFlyerTrialStartUnit = appsFlyerStartTrialEvents === 1 ? 'trial start' : 'trial starts';
     const appsFlyerTrialEventUnit = appsFlyerStartTrialEvents === 1 ? 'event' : 'events';
     const matchedQualifiedUserUnit = qualifiedTrialStarts === 1 ? 'user' : 'users';
     const appsFlyerQualifiedTrialLabel = appsFlyerIsAggregateCsv
-      ? `${qualifiedTrialStarts} first-party qualified ${qualifiedTrialStartUnit} · ${appsFlyerStartTrialEvents} AppsFlyer aggregate ${appsFlyerTrialEventUnit}`
-      : `${qualifiedTrialStarts} matched qualified ${matchedQualifiedUserUnit} · ${appsFlyerStartTrialEvents} AppsFlyer raw ${appsFlyerTrialEventUnit}`;
+      ? `${appsFlyerStartTrialEvents} AppsFlyer aggregate ${appsFlyerTrialStartUnit} · ${qualifiedTrialStarts} matched first-party qualified ${matchedQualifiedUserUnit}`
+      : `${displayedTrialStarts} observed ${displayedTrialStarts === 1 ? 'trial start' : 'trial starts'} · ${qualifiedTrialStarts} matched qualified ${matchedQualifiedUserUnit} · ${appsFlyerStartTrialEvents} AppsFlyer raw ${appsFlyerTrialEventUnit}`;
     const webOfferSentUsers = count((user) => user.isQualified && signalInRange(user.signals.webOfferSentAt));
     const webOfferOpenedUsers = count((user) => user.isQualified && signalInRange(user.signals.webOfferOpenedAt));
     const webOfferCheckoutStarts = count((user) => user.isQualified && signalInRange(user.signals.webOfferCheckoutStartedAt));
@@ -3634,6 +3670,7 @@ const EmailSequencesAdmin: React.FC = () => {
       qualifiedCheckoutStarts,
       qualifiedAppleCancels,
       qualifiedTrialStarts,
+      displayedTrialStarts,
       qualifiedPaid,
       qualifiedStripeClicks,
       webOfferSentUsers,
@@ -3754,7 +3791,7 @@ const EmailSequencesAdmin: React.FC = () => {
     },
     {
       label: 'Trial starts',
-      value: macraScoreboardSummary.qualifiedTrialStarts,
+      value: macraScoreboardSummary.displayedTrialStarts,
       sublabel: macraScoreboard.appsFlyerSummary
         ? macraScoreboardSummary.appsFlyerQualifiedTrialLabel
         : `${formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.qualified)} of qualified users · upload AppsFlyer CSV events`,
@@ -3825,7 +3862,7 @@ const EmailSequencesAdmin: React.FC = () => {
     },
     {
       label: 'Trial starts',
-      value: macraScoreboardSummary.qualifiedTrialStarts,
+      value: macraScoreboardSummary.displayedTrialStarts,
       sublabel: macraScoreboard.appsFlyerSummary
         ? macraScoreboardSummary.appsFlyerQualifiedTrialLabel
         : `${formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.seriousPlanCompleters)} of serious plan completers`,
@@ -3935,7 +3972,9 @@ const EmailSequencesAdmin: React.FC = () => {
           retargetingRecoveryRate: formatScoreboardPercent(macraScoreboardSummary.retargetingRecoveredUsers, macraScoreboardSummary.webOfferCheckoutStarts),
           retargetingPaidRate: formatScoreboardPercent(macraScoreboardSummary.retargetingPaidConversions, macraScoreboardSummary.retargetingTrialRedemptions),
           qualifiedTrialStartRate: formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.qualified),
-          trialStartRateFromSeriousPlan: formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.seriousPlanCompleters),
+          trialStartRateFromSeriousPlan: formatScoreboardPercent(macraScoreboardSummary.displayedTrialStarts, macraScoreboardSummary.seriousPlanCompleters),
+          observedTrialStartRateFromSeriousPlan: formatScoreboardPercent(macraScoreboardSummary.displayedTrialStarts, macraScoreboardSummary.seriousPlanCompleters),
+          matchedTrialStartRateFromSeriousPlan: formatScoreboardPercent(macraScoreboardSummary.qualifiedTrialStarts, macraScoreboardSummary.seriousPlanCompleters),
           paidRateFromSeriousPlan: formatScoreboardPercent(macraScoreboardSummary.qualifiedPaid, macraScoreboardSummary.seriousPlanCompleters),
         },
         buckets: {
@@ -3974,7 +4013,9 @@ const EmailSequencesAdmin: React.FC = () => {
           stripeRetargetClicks: macraScoreboardSummary.qualifiedStripeClicks,
           webOfferCheckoutStarts: macraScoreboardSummary.webOfferCheckoutStarts,
           retargetingRecoveries: macraScoreboardSummary.retargetingRecoveredUsers,
-          trialStarts: macraScoreboardSummary.qualifiedTrialStarts,
+          observedTrialStarts: macraScoreboardSummary.displayedTrialStarts,
+          matchedFirstPartyTrialStarts: macraScoreboardSummary.qualifiedTrialStarts,
+          appsFlyerTrialStarts: macraScoreboardSummary.appsFlyerStartTrialEvents,
           paidUsers: macraScoreboardSummary.qualifiedPaid,
         },
         aggregateValidation: {
