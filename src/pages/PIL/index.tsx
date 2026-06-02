@@ -212,6 +212,7 @@ const PILPage: NextPage = () => {
             <PILLogoMark tone="light" />
             <div className="hidden items-center gap-7 text-sm text-zinc-300 sm:flex">
               <Link href="/apps" className="hover:text-white transition-colors">Apps</Link>
+              <Link href="/TheAthleticMindCouncil" className="hover:text-white transition-colors">Council</Link>
               <a href="https://fitwithpulse.ai/pulseintelligencelabs" className="hover:text-white transition-colors">Lab</a>
               <a href={`mailto:${CONTACT_EMAIL}`} className="hover:text-white transition-colors">Contact</a>
             </div>
@@ -460,6 +461,7 @@ const PILPage: NextPage = () => {
             </div>
             <div className="flex flex-wrap items-center gap-5">
               <Link href="/apps" className="hover:text-white transition-colors">Apps</Link>
+              <Link href="/TheAthleticMindCouncil" className="hover:text-white transition-colors">Council</Link>
               <a href="https://fitwithpulse.ai/pulseintelligencelabs" className="hover:text-white transition-colors">Lab</a>
               <a href="https://fitwithpulse.ai" className="hover:text-white transition-colors">Fit With Pulse</a>
               <a href="https://eatwithmacra.ai" className="hover:text-white transition-colors">Macra</a>

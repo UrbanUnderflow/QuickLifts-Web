@@ -113,6 +113,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/pulseintelligencelabs',
     // Pulse Intelligence Labs one-pager and executive summary
     '/PILOne',
+    '/TheAthleticMindCouncil',
     // AuntEdna demo (public for stakeholder demos)
     '/auntedna',
     // Pulse x auntEDNA stakeholder deck (public for stakeholder demos)
@@ -138,7 +139,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     // Shared System Overview artifacts have their own token/passcode/revocation
     // checks on the page and must stay viewable without account auth.
     '/shared/system-overview',
-    '/coach-report-demo', '/research', '/onboarding', '/legal-doc', '/pulsecheck', '/group-meet', '/sign'
+    '/coach-report-demo', '/research', '/onboarding', '/legal-doc', '/pulsecheck', '/group-meet', '/sign', '/pil'
   ].map(pattern => pattern.toLowerCase());
 
   const isSharedSystemOverviewPath = (path: string) => {
