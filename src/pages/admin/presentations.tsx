@@ -136,6 +136,15 @@ const PRESENTATION_REGISTRY: PresentationLink[] = [
     description: 'Story-driven stakeholder presentation for the Pulse Check x auntEDNA.ai signal-to-care vision without market-size or fundraising content.',
   },
   {
+    id: 'the-athletic-mind-council',
+    title: 'The Athletic Mind Council',
+    href: '/TheAthleticMindCouncil',
+    category: 'Supporting Surfaces',
+    typeLabel: 'Council site',
+    accessLabel: 'Live route',
+    description: 'Brochure-style site for the Athletic Mind Council mission, product context, founders, advisors, and performance-to-care pathway.',
+  },
+  {
     id: 'pulse-overview',
     title: 'Pulse 2 Minute Overview',
     href: '/pulse-overview',
