@@ -298,46 +298,6 @@ const SectionHeader: React.FC<{
 );
 
 const AthleticMindCouncilPage: NextPage = () => {
-  const heroVideoRef = React.useRef<HTMLVideoElement | null>(null);
-
-  React.useEffect(() => {
-    const video = heroVideoRef.current;
-    if (!video) return undefined;
-
-    video.muted = true;
-    video.defaultMuted = true;
-    video.autoplay = true;
-    video.loop = true;
-    video.playsInline = true;
-    video.setAttribute('muted', '');
-    video.setAttribute('autoplay', '');
-    video.setAttribute('loop', '');
-    video.setAttribute('playsinline', '');
-    video.setAttribute('webkit-playsinline', '');
-
-    const playHeroVideo = () => {
-      if (video.readyState === 0) {
-        video.load();
-      }
-
-      const playPromise = video.play();
-      if (playPromise) {
-        void playPromise.catch(() => {
-          // Safari may still delay autoplay on constrained connections.
-        });
-      }
-    };
-
-    playHeroVideo();
-    video.addEventListener('loadeddata', playHeroVideo, { once: true });
-    video.addEventListener('canplay', playHeroVideo, { once: true });
-
-    return () => {
-      video.removeEventListener('loadeddata', playHeroVideo);
-      video.removeEventListener('canplay', playHeroVideo);
-    };
-  }, []);
-
   return (
     <>
       <Head>
@@ -353,19 +313,17 @@ const AthleticMindCouncilPage: NextPage = () => {
         <meta property="og:image:height" content="630" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:image" content={META_OG_IMAGE} key="twitter:image" />
-        <link rel="preload" href="/pil-hero.mp4" as="video" type="video/mp4" />
       </Head>
 
       <main className="min-h-screen overflow-hidden bg-black text-white selection:bg-[#E0FE10]/30 selection:text-black">
         <section className="relative min-h-[88svh] overflow-hidden">
           <video
-            ref={heroVideoRef}
             className="absolute inset-0 h-full w-full object-cover opacity-55"
             autoPlay
             muted
             loop
             playsInline
-            preload="auto"
+            preload="metadata"
             poster="/pil-og-source.jpg"
             aria-hidden="true"
           >

@@ -294,6 +294,65 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       )
     );
 
+  useEffect(() => {
+    const routePath = (router.asPath || router.pathname || '').split('?')[0].split('#')[0] || '/';
+    const normalizedPath = (routePath === '/' ? '/' : routePath.replace(/\/$/, '')).toLowerCase();
+    const isAthleticMindCouncilRoute =
+      normalizedPath === '/theathleticmindcouncil' ||
+      normalizedPath === '/pil/theathleticmindcouncil';
+
+    if (!isAthleticMindCouncilRoute || typeof document === 'undefined') return undefined;
+
+    const preloadHref = '/pil-hero.mp4';
+    let preloadLink = document.querySelector<HTMLLinkElement>(`link[rel="preload"][href="${preloadHref}"]`);
+    if (!preloadLink) {
+      preloadLink = document.createElement('link');
+      preloadLink.rel = 'preload';
+      preloadLink.href = preloadHref;
+      preloadLink.as = 'video';
+      preloadLink.type = 'video/mp4';
+      document.head.appendChild(preloadLink);
+    }
+
+    const heroSource = document.querySelector<HTMLSourceElement>('video source[src*="pil-hero"]');
+    const video = heroSource?.closest('video') || document.querySelector<HTMLVideoElement>('video[src*="pil-hero"]');
+    if (!video) return undefined;
+
+    video.muted = true;
+    video.defaultMuted = true;
+    video.autoplay = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.setAttribute('muted', '');
+    video.setAttribute('autoplay', '');
+    video.setAttribute('loop', '');
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+
+    const playHeroVideo = () => {
+      if (video.readyState === 0) {
+        video.load();
+      }
+
+      const playPromise = video.play();
+      if (playPromise) {
+        void playPromise.catch(() => {
+          // Safari may still delay autoplay on constrained connections.
+        });
+      }
+    };
+
+    playHeroVideo();
+    video.addEventListener('loadeddata', playHeroVideo, { once: true });
+    video.addEventListener('canplay', playHeroVideo, { once: true });
+
+    return () => {
+      video.removeEventListener('loadeddata', playHeroVideo);
+      video.removeEventListener('canplay', playHeroVideo);
+    };
+  }, [router.asPath, router.pathname]);
+
   // Add debug useEffect to track currentUser changes with Safari-specific logging
   useEffect(() => {
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
