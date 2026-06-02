@@ -22,6 +22,55 @@ const {
   toConnectionStatus,
 } = require('../google-health-utils');
 
+const googleHealthUtilsPath = require.resolve('../google-health-utils');
+const googleSecretManagerUtilsPath = require.resolve('../google-secret-manager-utils');
+
+async function withFreshGoogleHealthUtils({ env = {}, secretManager } = {}, callback) {
+  const envKeys = [
+    'GOOGLE_HEALTH_CLIENT_ID',
+    'GOOGLE_HEALTH_CLIENT_SECRET',
+    'GOOGLE_HEALTH_OAUTH_SECRET_NAME',
+    'GOOGLE_HEALTH_SECRET_MANAGER_PROJECT_ID',
+    'GOOGLE_HEALTH_ALLOW_ENV_CREDENTIALS_FALLBACK',
+    'GOOGLE_SECRET_MANAGER_PROJECT_ID',
+    'NODE_ENV',
+    'CONTEXT',
+    'NETLIFY',
+  ];
+  const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+
+  for (const key of envKeys) {
+    delete process.env[key];
+  }
+  Object.entries(env).forEach(([key, value]) => {
+    process.env[key] = value;
+  });
+
+  delete require.cache[googleHealthUtilsPath];
+  delete require.cache[googleSecretManagerUtilsPath];
+  require.cache[googleSecretManagerUtilsPath] = {
+    id: googleSecretManagerUtilsPath,
+    filename: googleSecretManagerUtilsPath,
+    loaded: true,
+    exports: secretManager,
+  };
+
+  try {
+    const utils = require('../google-health-utils');
+    return await callback(utils);
+  } finally {
+    delete require.cache[googleHealthUtilsPath];
+    delete require.cache[googleSecretManagerUtilsPath];
+    Object.entries(previousEnv).forEach(([key, value]) => {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    });
+  }
+}
+
 test('normalizeScopes accepts full Google Health scopes and short suffixes', () => {
   assert.deepEqual(
     normalizeScopes([
@@ -90,4 +139,75 @@ test('toConnectionStatus returns a token-free Fitbit status contract', () => {
 
 test('buildConnectionDocId keeps Google Health connections product-shareable', () => {
   assert.equal(buildConnectionDocId('athlete-1'), 'athlete-1_google_health');
+});
+
+test('getOauthCredentials reads the Fitbit OAuth client from Secret Manager first', async () => {
+  const calls = [];
+
+  await withFreshGoogleHealthUtils({
+    env: {
+      NODE_ENV: 'development',
+      GOOGLE_HEALTH_CLIENT_ID: 'env-client-id',
+      GOOGLE_HEALTH_CLIENT_SECRET: 'env-client-secret',
+    },
+    secretManager: {
+      getSecretManagerSecret: async (secretName, options) => {
+        calls.push({ secretName, options });
+        return JSON.stringify({
+          client_id: 'secret-client-id',
+          client_secret: 'secret-client-secret',
+        });
+      },
+    },
+  }, async ({ getOauthCredentials }) => {
+    assert.deepEqual(await getOauthCredentials(), {
+      clientId: 'secret-client-id',
+      clientSecret: 'secret-client-secret',
+    });
+  });
+
+  assert.deepEqual(calls, [{
+    secretName: 'GOOGLE_HEALTH_OAUTH_CLIENT',
+    options: { projectId: 'quicklifts-dd3f1' },
+  }]);
+});
+
+test('getOauthCredentials falls back to env credentials when Secret Manager is unavailable', async () => {
+  await withFreshGoogleHealthUtils({
+    env: {
+      NODE_ENV: 'development',
+      GOOGLE_HEALTH_CLIENT_ID: 'env-client-id',
+      GOOGLE_HEALTH_CLIENT_SECRET: 'env-client-secret',
+    },
+    secretManager: {
+      getSecretManagerSecret: async () => {
+        throw new Error('Secret unavailable');
+      },
+    },
+  }, async ({ getOauthCredentials }) => {
+    assert.deepEqual(await getOauthCredentials(), {
+      clientId: 'env-client-id',
+      clientSecret: 'env-client-secret',
+    });
+  });
+});
+
+test('getOauthCredentials does not fall back to env credentials in production', async () => {
+  await withFreshGoogleHealthUtils({
+    env: {
+      NODE_ENV: 'production',
+      GOOGLE_HEALTH_CLIENT_ID: 'env-client-id',
+      GOOGLE_HEALTH_CLIENT_SECRET: 'env-client-secret',
+    },
+    secretManager: {
+      getSecretManagerSecret: async () => {
+        throw new Error('Secret unavailable');
+      },
+    },
+  }, async ({ getOauthCredentials }) => {
+    await assert.rejects(getOauthCredentials(), (error) => {
+      assert.equal(error.errorCode, 'GOOGLE_HEALTH_CONFIG_UNAVAILABLE');
+      return true;
+    });
+  });
 });
