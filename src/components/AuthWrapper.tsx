@@ -147,6 +147,16 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     return normalizedPath === '/shared/system-overview' || normalizedPath.startsWith('/shared/system-overview/');
   };
 
+  const isLocalSystemOverviewPreviewPath = (path: string) => {
+    if (process.env.NODE_ENV !== 'development' || typeof window === 'undefined') return false;
+    const hostname = window.location.hostname.toLowerCase();
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1' && hostname !== '::1') return false;
+
+    const raw = (path || '').split('?')[0].split('#')[0] || '/';
+    const normalizedPath = (raw === '/' ? '/' : raw.replace(/\/$/, '')).toLowerCase();
+    return normalizedPath === '/admin/systemoverview';
+  };
+
   const isPublicClubPath = (path: string) => {
     const raw = (path || '').split('?')[0].split('#')[0] || '/';
     const normalizedPath = (raw === '/' ? '/' : raw.replace(/\/$/, '')).toLowerCase();
@@ -166,7 +176,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     const normalizedPath = (raw === '/' ? '/' : raw.replace(/\/$/, '')).toLowerCase();
     const segments = normalizedPath.split('/').filter(Boolean);
 
-    if (isPublicClubPath(normalizedPath) || isClubCheckInPath(normalizedPath)) {
+    if (isPublicClubPath(normalizedPath) || isClubCheckInPath(normalizedPath) || isLocalSystemOverviewPreviewPath(normalizedPath)) {
       return true;
     }
 
@@ -405,7 +415,12 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
             if (activeUser && (!activeUser.username || activeUser.username.trim() === '')) {
               const routePath = router.asPath || router.pathname;
               // Do NOT block public creator landing pages, check-ins, or shared artifacts.
-              if (isCreatorLandingPath(routePath) || isClubCheckInPath(routePath) || isSharedSystemOverviewPath(routePath)) {
+              if (
+                isCreatorLandingPath(routePath) ||
+                isClubCheckInPath(routePath) ||
+                isSharedSystemOverviewPath(routePath) ||
+                isLocalSystemOverviewPreviewPath(routePath)
+              ) {
                 console.log('[AuthWrapper] Authenticated but missing username on public route. Not showing modal.');
                 setShowSignInModal(false);
                 dispatch(setLoading(false));
@@ -427,7 +442,12 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               })
             ) {
               const routePath = router.asPath || router.pathname;
-              if (isCreatorLandingPath(routePath) || isClubCheckInPath(routePath) || isSharedSystemOverviewPath(routePath)) {
+              if (
+                isCreatorLandingPath(routePath) ||
+                isClubCheckInPath(routePath) ||
+                isSharedSystemOverviewPath(routePath) ||
+                isLocalSystemOverviewPreviewPath(routePath)
+              ) {
                 console.log('[AuthWrapper] Authenticated but missing current legal acceptance on public route. Not showing modal.');
                 setShowSignInModal(false);
                 dispatch(setLoading(false));

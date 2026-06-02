@@ -217,8 +217,8 @@ const DEFAULT_EXPERIMENT: ExperimentDocument = {
     },
     {
       id: 'variant_c',
-      name: 'Hard paywall value',
-      description: 'Monthly-first value paywall with Nora guided onboarding, focused on paid conversion instead of free-trial starts.',
+      name: 'Hard paywall monthly',
+      description: 'Monthly-only value paywall with Nora guided onboarding, focused on paid conversion instead of free-trial starts.',
       isEnabled: false,
       weight: 0,
       parameters: {
@@ -252,6 +252,16 @@ const normalizeExperiment = (data: Partial<ExperimentDocument> | null): Experime
       ? data.variants.map(normalizeVariant)
       : DEFAULT_EXPERIMENT.variants,
   };
+};
+
+const promotionSaltForVariant = (variantId: string) => {
+  const safeVariantId = variantId
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'variant';
+
+  return `${EXPERIMENT_ID}-rollout-${safeVariantId}-${Date.now()}`;
 };
 
 const normalizeString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
@@ -601,6 +611,58 @@ const ExperimentsPage: React.FC = () => {
       ...current,
       variants: current.variants.filter(variant => variant.id !== variantId),
     }));
+  };
+
+  const promoteVariantToFullRollout = async (variantId: string) => {
+    if (saving) return;
+
+    const promotedVariant = experiment.variants.find(variant => variant.id === variantId);
+    if (!promotedVariant) {
+      setError('Variant could not be found.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Promote "${promotedVariant.name}" to 100%? This will publish it as the only active variant and create a new assignment salt.`
+    );
+    if (!confirmed) return;
+
+    const promotedExperiment: ExperimentDocument = {
+      ...experiment,
+      isEnabled: true,
+      assignmentSalt: promotionSaltForVariant(variantId),
+      variants: experiment.variants.map(variant => (
+        variant.id === variantId
+          ? { ...variant, isEnabled: true, weight: 100 }
+          : { ...variant, isEnabled: false, weight: 0 }
+      )),
+    };
+
+    setSaving(true);
+    setMessage('');
+    setError('');
+
+    try {
+      const payload = {
+        ...promotedExperiment,
+        id: EXPERIMENT_ID,
+        rolloutPromotedAt: serverTimestamp(),
+        rolloutPromotedBy: user?.email || 'unknown',
+        rolloutPromotedVariantId: promotedVariant.id,
+        rolloutPromotedVariantName: promotedVariant.name,
+        updatedAt: serverTimestamp(),
+        updatedBy: user?.email || 'unknown',
+      };
+
+      await setDoc(doc(db, EXPERIMENT_COLLECTION, EXPERIMENT_ID), payload, { merge: true });
+      setExperiment(promotedExperiment);
+      setMessage(`${promotedVariant.name} is now published at 100%. New app sessions will read this rollout config.`);
+    } catch (promoteError) {
+      console.error('Failed to promote experiment variant', promoteError);
+      setError(promoteError instanceof Error ? promoteError.message : 'Failed to promote variant.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const saveExperiment = async () => {
@@ -1168,8 +1230,10 @@ const ExperimentsPage: React.FC = () => {
                 <VariantEditor
                   key={variant.id}
                   variant={variant}
+                  isBusy={saving}
                   onUpdate={updateVariant}
                   onParameterUpdate={updateVariantParameter}
+                  onPromote={promoteVariantToFullRollout}
                   onRemove={experiment.variants.length > 1 ? removeVariant : undefined}
                 />
               ))}
@@ -1464,16 +1528,18 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
 
 type VariantEditorProps = {
   variant: ExperimentVariant;
+  isBusy?: boolean;
   onUpdate: (variantId: string, updates: Partial<ExperimentVariant>) => void;
   onParameterUpdate: <K extends keyof ExperimentParameterMap>(
     variantId: string,
     key: K,
     value: ExperimentParameterMap[K]
   ) => void;
+  onPromote: (variantId: string) => void;
   onRemove?: (variantId: string) => void;
 };
 
-const VariantEditor: React.FC<VariantEditorProps> = ({ variant, onUpdate, onParameterUpdate, onRemove }) => (
+const VariantEditor: React.FC<VariantEditorProps> = ({ variant, isBusy = false, onUpdate, onParameterUpdate, onPromote, onRemove }) => (
   <div className="p-5">
     <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
       <div>
@@ -1488,6 +1554,15 @@ const VariantEditor: React.FC<VariantEditorProps> = ({ variant, onUpdate, onPara
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onPromote(variant.id)}
+          disabled={isBusy}
+          className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm font-bold text-emerald-100 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <CheckCircle2 className="h-4 w-4" />
+          Promote to 100%
+        </button>
         <label className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-black/20 px-3 py-2">
           <input
             type="checkbox"
@@ -1553,7 +1628,7 @@ const VariantEditor: React.FC<VariantEditorProps> = ({ variant, onUpdate, onPara
         >
           <option value="trial_confidence_control">Control</option>
           <option value="trial_confidence">Trial prep compact</option>
-          <option value="hard_paywall_value">Hard paywall value</option>
+          <option value="hard_paywall_value">Hard paywall monthly</option>
         </select>
       </Field>
       <Field label="Onboarding variant">

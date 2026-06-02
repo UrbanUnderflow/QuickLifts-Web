@@ -1,25 +1,88 @@
 import React from 'react';
 import { ArrowRightLeft, ClipboardList, Database, Link2, Lock, ShieldCheck, Stethoscope, Workflow } from 'lucide-react';
-import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
+import { BulletList, CardGrid, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
 
-const BOUNDARY_ROWS = [
-  ['PulseCheck-only product data', 'PulseCheck', 'No by default', 'Athlete profiles, full readiness history, full Nora conversation history, raw simulation history, training-plan internals, and broad product analytics stay inside PulseCheck unless a specific escalation requires a minimum-necessary excerpt or summary.'],
-  ['Escalation handoff payload', 'PulseCheck -> AuntEdna', 'Yes', 'AuntEdna should expect a focused case packet for the specific escalation: identity, routing, tier, reason, concise concern summary, consent state, and freshness-aware context.'],
-  ['AuntEdna clinical case data', 'AuntEdna', 'No, except limited status metadata back to PulseCheck', 'Clinical intake, triage, notes, diagnosis, care plan, treatment detail, clinician messaging, EHR, billing, and PHI remain AuntEdna-side records.'],
-  ['Hybrid operational metadata', 'Both systems, with different depth', 'Yes, limited', 'Shared ids, delivery timestamps, receipt status, status category, assignment label, appointment existence, crisis-pathway state, resolution state, and reconciliation metadata.'],
-  ['De-identified aggregate outcomes', 'AuntEdna -> PulseCheck when permitted', 'Yes, aggregate only', 'Pilot and system-improvement signals may return as de-identified buckets, never individual clinical detail.'],
+const BOUNDARY_CARDS = [
+  {
+    title: 'PulseCheck-only product data',
+    owner: 'PulseCheck',
+    crosses: 'No by default',
+    body: 'Athlete profiles, full readiness history, full Nora conversation history, raw simulation history, training-plan internals, and broad product analytics stay inside PulseCheck unless a specific escalation requires a minimum-necessary excerpt or summary.',
+  },
+  {
+    title: 'Escalation handoff payload',
+    owner: 'PulseCheck -> AuntEdna',
+    crosses: 'Yes',
+    body: 'AuntEdna should expect a focused case packet for the specific escalation: identity, routing, tier, reason, concise concern summary, consent state, and freshness-aware context.',
+  },
+  {
+    title: 'AuntEdna clinical case data',
+    owner: 'AuntEdna',
+    crosses: 'No, except limited status metadata back to PulseCheck',
+    body: 'Clinical intake, triage, notes, diagnosis, care plan, treatment detail, clinician messaging, EHR, billing, and PHI remain AuntEdna-side records.',
+  },
+  {
+    title: 'Hybrid operational metadata',
+    owner: 'Both systems, with different depth',
+    crosses: 'Yes, limited',
+    body: 'Shared ids, delivery timestamps, receipt status, status category, assignment label, appointment existence, crisis-pathway state, resolution state, and reconciliation metadata.',
+  },
+  {
+    title: 'De-identified aggregate outcomes',
+    owner: 'AuntEdna -> PulseCheck when permitted',
+    crosses: 'Yes, aggregate only',
+    body: 'Pilot and system-improvement signals may return as de-identified buckets, never individual clinical detail.',
+  },
 ];
 
-const EXPECTED_PAYLOAD_ROWS = [
-  ['Handoff envelope', '`pulseEscalationId`, `pulseConversationId`, `handoffId`, `createdAt`, `callbackRef`, `payloadVersion`', 'Gives AuntEdna deterministic ids, timestamps, versioning, and a secure reconciliation path.'],
-  ['Escalation classification', '`tier`, `category`, `urgency`, `confidence`, `classificationReason`, `triggerSource`', 'Explains why PulseCheck is creating the handoff without giving AuntEdna the entire product rulebook.'],
-  ['Athlete identity', '`pulseUserId`, display name, email or phone when authorized, sport, team, organization, timezone', 'Supports identity matching, intake, and correct routing. Date of birth, guardian, or emergency contact fields should appear only when required by the deployment or safety workflow.'],
-  ['Routing context', '`organizationId`, `teamId`, `defaultClinicianProfileId`, `athleteClinicianOverrideId`, provider-pool id, staff point of contact', 'Tells AuntEdna where the case should land and who the operational counterpart is.'],
-  ['Consent and disclosure state', '`consentStatus`, `consentedAt`, `disclosureVersion`, `optInChannel`, `lawfulBasisNote`', 'Separates Tier 2 consent-based handoff from Tier 3 immediate safety routing.'],
-  ['Concern summary', 'Concise summary, triggering excerpt when necessary, risk flags, support flag state, staff-visible context', 'Provides the minimum context needed for clinical intake without exporting a broad transcript or full account history.'],
-  ['Current state snapshot summary', 'Readiness color, activation, focus readiness, emotional load, cognitive fatigue, snapshot freshness, confidence, sources used', 'Gives AuntEdna performance-state context while preserving source provenance and avoiding unsupported clinical interpretation.'],
-  ['Recent trend summary', 'Short-window readiness trend, check-in trend, recovery or sleep trend if permitted, adherence or engagement pattern', 'Useful only when it materially helps triage. Send summaries and evidence references, not raw streams.'],
-  ['Operational refs', '`stateSnapshotId`, `sourceRecordIds[]`, `coachVisibleSummaryId`, retry count, delivery attempt id', 'Allows audit and troubleshooting without forcing AuntEdna to ingest raw PulseCheck source records.'],
+const EXPECTED_PAYLOAD_CARDS = [
+  {
+    title: 'Handoff envelope',
+    fields: ['pulseEscalationId', 'pulseConversationId', 'handoffId', 'createdAt', 'callbackRef', 'payloadVersion'],
+    why: 'Gives AuntEdna deterministic ids, timestamps, versioning, and a secure reconciliation path.',
+  },
+  {
+    title: 'Escalation classification',
+    fields: ['tier', 'category', 'urgency', 'confidence', 'classificationReason', 'triggerSource'],
+    why: 'Explains why PulseCheck is creating the handoff without giving AuntEdna the entire product rulebook.',
+  },
+  {
+    title: 'Athlete identity',
+    fields: ['pulseUserId', 'displayName', 'email or phone when authorized', 'sport', 'team', 'organization', 'timezone'],
+    why: 'Supports identity matching, intake, and correct routing.',
+    note: 'Date of birth, guardian, or emergency contact fields should appear only when required by the deployment or safety workflow.',
+  },
+  {
+    title: 'Routing context',
+    fields: ['organizationId', 'teamId', 'defaultClinicianProfileId', 'athleteClinicianOverrideId', 'providerPoolId', 'staffPointOfContact'],
+    why: 'Tells AuntEdna where the case should land and who the operational counterpart is.',
+  },
+  {
+    title: 'Consent and disclosure state',
+    fields: ['consentStatus', 'consentedAt', 'disclosureVersion', 'optInChannel', 'lawfulBasisNote'],
+    why: 'Separates Tier 2 consent-based handoff from Tier 3 immediate safety routing.',
+  },
+  {
+    title: 'Concern summary',
+    fields: ['conciseSummary', 'triggeringExcerpt', 'riskFlags', 'supportFlagState', 'staffVisibleContext'],
+    why: 'Provides the minimum context needed for clinical intake without exporting a broad transcript or full account history.',
+  },
+  {
+    title: 'Current state snapshot summary',
+    fields: ['readinessColor', 'activation', 'focusReadiness', 'emotionalLoad', 'cognitiveFatigue', 'snapshotFreshness', 'confidence', 'sourcesUsed'],
+    why: 'Gives AuntEdna performance-state context while preserving source provenance and avoiding unsupported clinical interpretation.',
+  },
+  {
+    title: 'Recent trend summary',
+    fields: ['readinessTrend', 'checkInTrend', 'recoveryOrSleepTrend', 'adherencePattern', 'engagementPattern'],
+    why: 'Useful only when it materially helps triage.',
+    note: 'Send summaries and evidence references, not raw streams.',
+  },
+  {
+    title: 'Operational references',
+    fields: ['stateSnapshotId', 'sourceRecordIds[]', 'coachVisibleSummaryId', 'retryCount', 'deliveryAttemptId'],
+    why: 'Allows audit and troubleshooting without forcing AuntEdna to ingest raw PulseCheck source records.',
+  },
 ];
 
 const AUNTEDNA_ONLY_ROWS = [
@@ -95,6 +158,92 @@ const DECISION_ROWS = [
   ['Aggregate outcomes', 'Define the de-identified outcome buckets AuntEdna may return for pilot reporting and product improvement.'],
 ];
 
+const FieldChipList: React.FC<{ fields: string[] }> = ({ fields }) => (
+  <div className="flex flex-wrap gap-2">
+    {fields.map((field) => (
+      <code key={field} className="rounded-md border border-zinc-700 bg-black/35 px-2 py-1 text-xs text-zinc-200">
+        {field}
+      </code>
+    ))}
+  </div>
+);
+
+const BoundaryCard: React.FC<(typeof BOUNDARY_CARDS)[number]> = ({ title, owner, crosses, body }) => (
+  <article className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-4">
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <div>
+        <p className="text-sm font-semibold text-white">{title}</p>
+        <p className="mt-2 text-sm leading-relaxed text-zinc-300">{body}</p>
+      </div>
+      <div className="grid min-w-[220px] gap-2 text-xs">
+        <div className="rounded-lg border border-zinc-800 bg-black/25 p-2">
+          <p className="uppercase tracking-wide text-zinc-500">Owner</p>
+          <p className="mt-1 text-zinc-200">{owner}</p>
+        </div>
+        <div className="rounded-lg border border-zinc-800 bg-black/25 p-2">
+          <p className="uppercase tracking-wide text-zinc-500">Crosses Boundary</p>
+          <p className="mt-1 text-zinc-200">{crosses}</p>
+        </div>
+      </div>
+    </div>
+  </article>
+);
+
+const PayloadCard: React.FC<(typeof EXPECTED_PAYLOAD_CARDS)[number]> = ({ title, fields, why, note }) => (
+  <article className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-4">
+    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+      <div className="max-w-2xl">
+        <p className="text-sm font-semibold text-white">{title}</p>
+        <p className="mt-2 text-sm leading-relaxed text-zinc-300">{why}</p>
+        {note ? <p className="mt-2 text-xs leading-relaxed text-amber-200/80">{note}</p> : null}
+      </div>
+      <div className="w-full xl:max-w-[520px]">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Expected fields</p>
+        <FieldChipList fields={fields} />
+      </div>
+    </div>
+  </article>
+);
+
+const ThreePartCardList: React.FC<{
+  rows: string[][];
+  secondLabel: string;
+  thirdLabel: string;
+}> = ({ rows, secondLabel, thirdLabel }) => (
+  <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+    {rows.map(([title, second, third]) => (
+      <article key={title} className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-4">
+        <p className="text-sm font-semibold text-white">{title}</p>
+        <div className="mt-3 grid gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{secondLabel}</p>
+            <p className="mt-1 text-sm leading-relaxed text-zinc-300">{second}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{thirdLabel}</p>
+            <p className="mt-1 text-sm leading-relaxed text-zinc-300">{third}</p>
+          </div>
+        </div>
+      </article>
+    ))}
+  </div>
+);
+
+const TwoPartCardList: React.FC<{
+  rows: string[][];
+  bodyLabel: string;
+}> = ({ rows, bodyLabel }) => (
+  <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+    {rows.map(([title, body]) => (
+      <article key={title} className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-4">
+        <p className="text-sm font-semibold text-white">{title}</p>
+        <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">{bodyLabel}</p>
+        <p className="mt-1 text-sm leading-relaxed text-zinc-300">{body}</p>
+      </article>
+    ))}
+  </div>
+);
+
 const AuntEdnaEscalationDataExchangeContractTab: React.FC = () => {
   return (
     <div className="space-y-10">
@@ -133,11 +282,19 @@ const AuntEdnaEscalationDataExchangeContractTab: React.FC = () => {
       />
 
       <SectionBlock icon={Database} title="System Boundary Summary">
-        <DataTable columns={['Data Class', 'System of Record', 'Crosses Boundary?', 'Rule']} rows={BOUNDARY_ROWS} />
+        <div className="space-y-3">
+          {BOUNDARY_CARDS.map((card) => (
+            <BoundaryCard key={card.title} {...card} />
+          ))}
+        </div>
       </SectionBlock>
 
       <SectionBlock icon={ClipboardList} title="What AuntEdna Should Expect From PulseCheck">
-        <DataTable columns={['Payload Category', 'Expected Fields', 'Why AuntEdna Needs It']} rows={EXPECTED_PAYLOAD_ROWS} />
+        <div className="space-y-3">
+          {EXPECTED_PAYLOAD_CARDS.map((card) => (
+            <PayloadCard key={card.title} {...card} />
+          ))}
+        </div>
         <CardGrid columns="md:grid-cols-2">
           <InfoCard
             title="Payload Shape"
@@ -153,11 +310,11 @@ const AuntEdnaEscalationDataExchangeContractTab: React.FC = () => {
       </SectionBlock>
 
       <SectionBlock icon={Stethoscope} title="What AuntEdna Stores That PulseCheck Does Not">
-        <DataTable columns={['AuntEdna Data Category', 'Examples', 'PulseCheck Boundary']} rows={AUNTEDNA_ONLY_ROWS} />
+        <ThreePartCardList rows={AUNTEDNA_ONLY_ROWS} secondLabel="Examples" thirdLabel="PulseCheck boundary" />
       </SectionBlock>
 
       <SectionBlock icon={ArrowRightLeft} title="Hybrid Operational Metadata">
-        <DataTable columns={['Shared Field Group', 'Examples', 'Why It Is Shared']} rows={HYBRID_ROWS} />
+        <ThreePartCardList rows={HYBRID_ROWS} secondLabel="Examples" thirdLabel="Why it is shared" />
       </SectionBlock>
 
       <SectionBlock icon={Lock} title="PulseCheck Data That Should Not Cross By Default">
@@ -165,7 +322,7 @@ const AuntEdnaEscalationDataExchangeContractTab: React.FC = () => {
       </SectionBlock>
 
       <SectionBlock icon={Link2} title="Expected AuntEdna Status Webhooks">
-        <DataTable columns={['Webhook', 'Meaning', 'PulseCheck Mirror Behavior']} rows={WEBHOOK_ROWS} />
+        <ThreePartCardList rows={WEBHOOK_ROWS} secondLabel="Meaning" thirdLabel="PulseCheck mirror behavior" />
       </SectionBlock>
 
       <SectionBlock icon={Workflow} title="Exchange Lifecycle">
@@ -173,7 +330,7 @@ const AuntEdnaEscalationDataExchangeContractTab: React.FC = () => {
       </SectionBlock>
 
       <SectionBlock icon={ShieldCheck} title="Contract Lock Decisions">
-        <DataTable columns={['Decision', 'What Needs To Be Agreed']} rows={DECISION_ROWS} />
+        <TwoPartCardList rows={DECISION_ROWS} bodyLabel="What needs to be agreed" />
       </SectionBlock>
     </div>
   );
