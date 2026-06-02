@@ -184,10 +184,10 @@ function sanitizeReturnTo(value) {
       return parsed.toString();
     }
   } catch (error) {
-    return DEFAULT_RETURN_TO;
+    return DEFAULT_RETURN;
   }
 
-  return DEFAULT_RETURN_TO;
+  return DEFAULT_RETURN;
 }
 
 function getBaseSiteUrl() {
