@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { admin, headers } = require('./config/firebase');
+const { getSecretManagerSecret } = require('./google-secret-manager-utils');
 
 const GOOGLE_HEALTH_AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_HEALTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -25,6 +26,9 @@ const DEFAULT_RETURN_TO = '/PulseCheck/fitbit';
 const OAUTH_STATES_COLLECTION = 'pulsecheck-oauth-states';
 const CONNECTIONS_COLLECTION = 'health-provider-connections';
 const TOKEN_REFRESH_SKEW_SECONDS = 5 * 60;
+const GOOGLE_HEALTH_OAUTH_SECRET_NAME = 'GOOGLE_HEALTH_OAUTH_CLIENT';
+const GOOGLE_HEALTH_SECRET_MANAGER_PROJECT_ID = 'quicklifts-dd3f1';
+let cachedOauthCredentials = null;
 
 const RESPONSE_HEADERS = {
   ...headers,
@@ -180,10 +184,10 @@ function sanitizeReturnTo(value) {
       return parsed.toString();
     }
   } catch (error) {
-    return DEFAULT_RETURN_TO;
+    return DEFAULT_RETURN;
   }
 
-  return DEFAULT_RETURN_TO;
+  return DEFAULT_RETURN;
 }
 
 function getBaseSiteUrl() {
@@ -200,13 +204,78 @@ function getConfiguredScopes() {
   return normalizeScopes(process.env.GOOGLE_HEALTH_SCOPES || DEFAULT_SCOPES);
 }
 
-function getOauthCredentials() {
+function parseOauthSecretPayload(rawValue) {
+  const trimmed = String(rawValue || '').trim();
+  if (!trimmed) return null;
+
+  let parsed = null;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (error) {
+    return null;
+  }
+
+  const clientId = parsed.client_id || parsed.clientId || parsed.GOOGLE_HEALTH_CLIENT_ID || '';
+  const clientSecret = parsed.client_secret || parsed.clientSecret || parsed.GOOGLE_HEALTH_CLIENT_SECRET || '';
+  if (!clientId || !clientSecret) return null;
+  return { clientId, clientSecret };
+}
+
+function getOauthCredentialsFromEnv() {
   const clientId = process.env.GOOGLE_HEALTH_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_HEALTH_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    throw createError(500, 'Missing GOOGLE_HEALTH_CLIENT_ID or GOOGLE_HEALTH_CLIENT_SECRET environment variables.');
-  }
+  if (!clientId || !clientSecret) return null;
   return { clientId, clientSecret };
+}
+
+function shouldAllowEnvOauthFallback() {
+  const configured = String(process.env.GOOGLE_HEALTH_ALLOW_ENV_CREDENTIALS_FALLBACK || '').trim().toLowerCase();
+  if (['true', '1', 'yes'].includes(configured)) return true;
+  if (['false', '0', 'no'].includes(configured)) return false;
+  return process.env.NODE_ENV !== 'production'
+    && process.env.CONTEXT !== 'production'
+    && process.env.NETLIFY !== 'true';
+}
+
+async function getOauthCredentials() {
+  if (cachedOauthCredentials) return cachedOauthCredentials;
+
+  const secretName = process.env.GOOGLE_HEALTH_OAUTH_SECRET_NAME || GOOGLE_HEALTH_OAUTH_SECRET_NAME;
+  const secretProjectId =
+    process.env.GOOGLE_HEALTH_SECRET_MANAGER_PROJECT_ID
+    || process.env.GOOGLE_SECRET_MANAGER_PROJECT_ID
+    || GOOGLE_HEALTH_SECRET_MANAGER_PROJECT_ID;
+  let secretError = null;
+
+  if (secretName) {
+    try {
+      const secretValue = await getSecretManagerSecret(secretName, { projectId: secretProjectId });
+      const secretCredentials = parseOauthSecretPayload(secretValue);
+      if (secretCredentials) {
+        cachedOauthCredentials = secretCredentials;
+        return cachedOauthCredentials;
+      }
+      secretError = new Error(`Secret Manager secret ${secretName} is missing a Google Health OAuth client id or client secret.`);
+    } catch (error) {
+      secretError = error;
+    }
+  }
+
+  const envCredentials = getOauthCredentialsFromEnv();
+  if (envCredentials && shouldAllowEnvOauthFallback()) {
+    cachedOauthCredentials = envCredentials;
+    return cachedOauthCredentials;
+  }
+
+  const error = createError(
+    500,
+    `Missing GOOGLE_HEALTH_CLIENT_ID or GOOGLE_HEALTH_CLIENT_SECRET environment variables${
+      secretError ? `, and failed to load Google Health OAuth credentials from Secret Manager: ${secretError.message}` : '.'
+    }`
+  );
+  error.errorCode = 'GOOGLE_HEALTH_CONFIG_UNAVAILABLE';
+  error.publicMessage = 'The Fitbit connection is unavailable right now.';
+  throw error;
 }
 
 async function verifyAuth(event) {
@@ -245,7 +314,7 @@ function parseJsonText(rawText) {
 }
 
 async function exchangeCodeForToken({ code, redirectUri }) {
-  const { clientId, clientSecret } = getOauthCredentials();
+  const { clientId, clientSecret } = await getOauthCredentials();
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code,
@@ -276,7 +345,7 @@ async function refreshAccessToken(refreshToken) {
     throw createError(409, 'Google Health refresh token is missing. Reconnect Fitbit to keep syncing.');
   }
 
-  const { clientId, clientSecret } = getOauthCredentials();
+  const { clientId, clientSecret } = await getOauthCredentials();
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
