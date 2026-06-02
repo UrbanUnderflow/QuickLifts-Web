@@ -178,67 +178,81 @@ const foundingTeam = [
     imageSrc: '/bobbyAdvisor.jpg',
     imagePosition: 'center 15%',
     accent: '#38BDF8',
-    body: 'Bobby supports operations, partnerships, and organizational design across education, venture, and the broader Pulse Intelligence Labs ecosystem.',
+    body: 'Bobby supports operations, partnerships, and organizational design of education framework across product and the broader Pulse Intelligence Labs ecosystem.',
     proof: ['Operations', 'Partnerships', 'Organizational design'],
   },
 ];
 
-const advisors = [
+const advisorBoards = [
   {
-    name: 'Marques Zak',
-    role: 'CMO @ ACC',
-    imageSrc: '/zak.jpg',
-    imagePosition: 'center top',
-    imageFit: 'cover',
-    accent: '#3B82F6',
+    title: 'Pulse Intelligence Labs Advisory Board',
+    body: 'Advisors supporting the performance technology, sports-market strategy, legal infrastructure, and cultural reach behind Pulse Intelligence Labs.',
+    accent: '#E0FE10',
+    advisors: [
+      {
+        name: 'Marques Zak',
+        role: 'Chief Marketing Officer @ The Atlantic Coast Conference(ACC)',
+        imageSrc: '/zak.jpg',
+        imagePosition: 'center top',
+        imageFit: 'cover',
+        accent: '#3B82F6',
+      },
+      {
+        name: 'Valerie Alexander',
+        role: 'Fortune 500 Consultant, IPO Attorney',
+        imageSrc: '/Val.jpg',
+        imagePosition: 'center top',
+        imageFit: 'cover',
+        accent: '#A855F7',
+      },
+      {
+        name: 'DeRay Mckesson',
+        role: 'Campaign Zero, Activist',
+        imageSrc: '/Deray.png',
+        imagePosition: 'center top',
+        imageFit: 'cover',
+        accent: '#38BDF8',
+      },
+      {
+        name: 'Erik Edwards',
+        role: 'Partner, securities and corporate attorney',
+        imageSrc: '/ErikEdwards.png',
+        imagePosition: 'center top',
+        imageFit: 'cover',
+        accent: '#EC4899',
+      },
+    ],
   },
   {
-    name: 'Valerie Alexander',
-    role: 'Fortune 500 Consultant, IP Attorney',
-    imageSrc: '/Val.jpg',
-    imagePosition: 'center top',
-    imageFit: 'cover',
-    accent: '#A855F7',
-  },
-  {
-    name: 'DeRay Mckesson',
-    role: 'Campaign Zero, Activist',
-    imageSrc: '/Deray.png',
-    imagePosition: 'center top',
-    imageFit: 'cover',
-    accent: '#38BDF8',
-  },
-  {
-    name: 'Erik Edwards',
-    role: 'Partner @ Cooley',
-    imageSrc: '/ErikEdwards.png',
-    imagePosition: 'center top',
-    imageFit: 'cover',
-    accent: '#EC4899',
-  },
-  {
-    name: 'Evan Poncelet',
-    role: 'Lead Partner @ Venture Black',
-    imageSrc: '/evan-poncelet.jpeg',
-    imagePosition: 'center 18%',
-    imageFit: 'cover',
-    accent: '#10B981',
-  },
-  {
-    name: 'Garin Varis',
-    role: 'Retired Patriots Player, Attorney',
-    imageSrc: '/garin-varis.webp',
-    imagePosition: 'center 24%',
-    imageFit: 'contain',
-    accent: '#FF6B35',
-  },
-  {
-    name: 'Dr. Malikia Johnson',
-    role: 'Director of Counseling, Council Lead of Clinical Directors - East Coast',
-    imageSrc: '/malkia-advisor.png',
-    imagePosition: 'center 18%',
-    imageFit: 'cover',
-    accent: '#F59E0B',
+    title: 'auntEDNA.ai Advisory Board',
+    body: 'Advisors supporting the clinical, athlete-care, legal, and venture infrastructure behind auntEDNA.ai.',
+    accent: '#A78BFA',
+    advisors: [
+      {
+        name: 'Evan Poncelet',
+        role: 'Lead Partner @ Venture Black',
+        imageSrc: '/evan-poncelet.jpeg',
+        imagePosition: 'center 18%',
+        imageFit: 'cover',
+        accent: '#10B981',
+      },
+      {
+        name: 'Garin Varis',
+        role: 'Retired Patriots Player, Attorney',
+        imageSrc: '/garin-varis.webp',
+        imagePosition: 'center 24%',
+        imageFit: 'contain',
+        accent: '#FF6B35',
+      },
+      {
+        name: 'Dr. Malikia Johnson',
+        role: 'Director of Counseling, Council Lead of Clinical Directors - East Coast',
+        imageSrc: '/malkia-advisor.png',
+        imagePosition: 'center 18%',
+        imageFit: 'cover',
+        accent: '#F59E0B',
+      },
+    ],
   },
 ] as const;
 
@@ -734,42 +748,61 @@ const AthleticMindCouncilPage: NextPage = () => {
             <div className="mt-20">
               <SectionHeader
                 eyebrow="Our Advisors"
-                title="A board of advisors spanning athletics, clinical leadership, legal infrastructure, venture, and culture."
-                body="This roster reflects the cross-disciplinary network behind the initiative across Pulse Intelligence Labs and auntEDNA.ai."
+                title="Two advisory boards spanning athletics, clinical leadership, legal infrastructure, venture, and culture."
+                body="The council brings together the advisor networks behind Pulse Intelligence Labs and auntEDNA.ai while keeping each company's board distinct."
               />
 
-              <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {advisors.map((advisor, index) => (
-                  <motion.article
-                    key={advisor.name}
-                    variants={fadeUp}
-                    initial="hidden"
-                    whileInView="visible"
-                    viewport={{ once: true, margin: '-80px' }}
-                    transition={{ duration: 0.5, delay: index * 0.04, ease: [0.22, 1, 0.36, 1] }}
-                    className="rounded-lg border border-white/10 bg-zinc-950 p-4"
-                  >
-                    <div
-                      className="h-40 overflow-hidden rounded-lg border bg-white/[0.04]"
-                      style={{ borderColor: `${advisor.accent}66` }}
-                    >
-                      <img
-                        src={advisor.imageSrc}
-                        alt={advisor.name}
-                        className="h-full w-full"
-                        style={{
-                          objectFit: advisor.imageFit,
-                          objectPosition: advisor.imagePosition,
-                        }}
-                      />
+              <div className="mt-10 space-y-8">
+                {advisorBoards.map((board) => (
+                  <div key={board.title} className="rounded-lg border border-white/10 bg-zinc-950/80 p-4 sm:p-5">
+                    <div className="flex flex-col gap-2 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: board.accent }}>
+                          Advisory Board
+                        </p>
+                        <h3 className="mt-2 text-2xl font-semibold text-white">{board.title}</h3>
+                        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-400">{board.body}</p>
+                      </div>
+                      <div className="text-sm font-semibold text-zinc-500">
+                        {board.advisors.length} {board.advisors.length === 1 ? 'advisor' : 'advisors'}
+                      </div>
                     </div>
-                    <div className="mt-4">
-                      <h3 className="text-base font-semibold text-white">{advisor.name}</h3>
-                      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: advisor.accent }}>
-                        {advisor.role}
-                      </p>
+
+                    <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {board.advisors.map((advisor, index) => (
+                        <motion.article
+                          key={advisor.name}
+                          variants={fadeUp}
+                          initial="hidden"
+                          whileInView="visible"
+                          viewport={{ once: true, margin: '-80px' }}
+                          transition={{ duration: 0.5, delay: index * 0.04, ease: [0.22, 1, 0.36, 1] }}
+                          className="rounded-lg border border-white/10 bg-black p-4"
+                        >
+                          <div
+                            className="h-56 overflow-hidden rounded-lg border bg-white/[0.04] sm:h-52 lg:h-48"
+                            style={{ borderColor: `${advisor.accent}66` }}
+                          >
+                            <img
+                              src={advisor.imageSrc}
+                              alt={advisor.name}
+                              className="h-full w-full"
+                              style={{
+                                objectFit: advisor.imageFit,
+                                objectPosition: advisor.imagePosition,
+                              }}
+                            />
+                          </div>
+                          <div className="mt-4">
+                            <h4 className="text-base font-semibold text-white">{advisor.name}</h4>
+                            <p className="mt-1 text-xs font-semibold leading-relaxed tracking-[0.04em]" style={{ color: advisor.accent }}>
+                              {advisor.role}
+                            </p>
+                          </div>
+                        </motion.article>
+                      ))}
                     </div>
-                  </motion.article>
+                  </div>
                 ))}
               </div>
             </div>
