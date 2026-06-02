@@ -183,7 +183,23 @@ const foundingTeam = [
   },
 ];
 
-const advisorBoards = [
+type BoardAdvisor = {
+  name: string;
+  role: string;
+  imageSrc: string;
+  imagePosition: string;
+  imageFit: React.CSSProperties['objectFit'];
+  accent: string;
+};
+
+type AdvisorBoard = {
+  title: string;
+  body: string;
+  accent: string;
+  advisors: BoardAdvisor[];
+};
+
+const advisorBoards: AdvisorBoard[] = [
   {
     title: 'Pulse Intelligence Labs Advisory Board',
     body: 'Advisors supporting the performance technology, sports-market strategy, legal infrastructure, and cultural reach behind Pulse Intelligence Labs.',
@@ -254,7 +270,7 @@ const advisorBoards = [
       },
     ],
   },
-] as const;
+];
 
 const ProductFlow: React.FC = () => (
   <div className="relative overflow-hidden rounded-lg border border-white/10 bg-black/55 p-5 shadow-2xl shadow-black/40 backdrop-blur-xl">
