@@ -28,7 +28,7 @@ const META_TITLE = 'The Athletic Mind Council | Pulse Intelligence Labs';
 const META_DESCRIPTION =
   'A founding council convened by PulseCheck and auntEDNA.ai to shape cognitive performance and clinical mental health infrastructure for athletes.';
 const META_URL = 'https://pulseintelligencelabs.com/TheAthleticMindCouncil';
-const META_OG_IMAGE = 'https://pulseintelligencelabs.com/athletic-mind-council-og.png';
+const META_OG_IMAGE = 'https://pulseintelligencelabs.com/athletic-mind-council-og-v2.png';
 
 type IconComponent = LucideIcon;
 
