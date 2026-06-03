@@ -28,7 +28,7 @@ const META_TITLE = 'The Athletic Mind Council | Pulse Intelligence Labs';
 const META_DESCRIPTION =
   'A founding council convened by PulseCheck and auntEDNA.ai to shape cognitive performance and clinical mental health infrastructure for athletes.';
 const META_URL = 'https://pulseintelligencelabs.com/TheAthleticMindCouncil';
-const META_OG_IMAGE = 'https://pulseintelligencelabs.com/athletic-mind-council-og-v3.png';
+const META_OG_IMAGE = 'https://pulseintelligencelabs.com/athletic-mind-council-og-v4.png';
 
 type IconComponent = LucideIcon;
 
@@ -339,10 +339,19 @@ const AthleticMindCouncilPage: NextPage = () => {
         <meta property="og:type" content="website" />
         <meta property="og:image" content={META_OG_IMAGE} key="og:image" />
         <meta property="og:image:secure_url" content={META_OG_IMAGE} />
+        <meta property="og:image:type" content="image/png" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
+        <meta
+          property="og:image:alt"
+          content="The Athletic Mind Council with PulseCheck and AuntEdna.ai logos."
+        />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:image" content={META_OG_IMAGE} key="twitter:image" />
+        <meta
+          name="twitter:image:alt"
+          content="The Athletic Mind Council with PulseCheck and AuntEdna.ai logos."
+        />
       </Head>
 
       <main className="min-h-screen overflow-hidden bg-black text-white selection:bg-[#E0FE10]/30 selection:text-black">

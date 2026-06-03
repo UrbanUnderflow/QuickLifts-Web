@@ -8,7 +8,7 @@ const sharp = require(path.join(__dirname, '..', 'node_modules', 'sharp'));
 
 const WIDTH = 1200;
 const HEIGHT = 630;
-const OUT = path.join(__dirname, '..', 'public', 'athletic-mind-council-og-v3.png');
+const OUT = path.join(__dirname, '..', 'public', 'athletic-mind-council-og-v4.png');
 
 const pulseIconPath = path.join(__dirname, '..', 'public', 'pulsecheck-logo.svg');
 const auntEdnaIconPath = path.join(__dirname, '..', 'public', 'auntedna-mark.png');
@@ -82,23 +82,23 @@ const svg = `<svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HE
     text-anchor="middle"
     letter-spacing="0">Mind Council</text>
 
-  <g transform="translate(235 390)">
-    <rect x="0" y="0" width="330" height="104" rx="20" fill="#0A0D12" stroke="#E0FE10" stroke-opacity="0.26"/>
-    <rect x="28" y="22" width="60" height="60" rx="13" fill="#0F1117"/>
-    <text x="116" y="66"
+  <g transform="translate(160 390)">
+    <rect x="0" y="0" width="420" height="104" rx="20" fill="#0A0D12" stroke="#E0FE10" stroke-opacity="0.26"/>
+    <rect x="30" y="22" width="60" height="60" rx="13" fill="#0F1117"/>
+    <text x="124" y="66"
       font-family="${FONT_STACK}"
-      font-size="38"
+      font-size="36"
       font-weight="800"
       fill="#FFFFFF"
       letter-spacing="0">PulseCheck</text>
   </g>
 
-  <g transform="translate(610 390)">
-    <rect x="0" y="0" width="400" height="104" rx="20" fill="#0A0A13" stroke="url(#auntStroke)" stroke-opacity="0.5"/>
-    <rect x="28" y="22" width="60" height="60" rx="13" fill="#F9F5FF"/>
-    <text x="116" y="66"
+  <g transform="translate(620 390)">
+    <rect x="0" y="0" width="420" height="104" rx="20" fill="#0A0A13" stroke="url(#auntStroke)" stroke-opacity="0.5"/>
+    <rect x="30" y="22" width="60" height="60" rx="13" fill="#F9F5FF"/>
+    <text x="124" y="66"
       font-family="${FONT_STACK}"
-      font-size="38"
+      font-size="36"
       font-weight="800"
       fill="#FFFFFF"
       letter-spacing="0">AuntEdna.ai</text>
@@ -118,8 +118,8 @@ async function generate() {
 
   const info = await sharp(Buffer.from(svg))
     .composite([
-      { input: pulseIcon, left: 235 + 28, top: 390 + 22 },
-      { input: auntEdnaIcon, left: 610 + 30, top: 390 + 26 },
+      { input: pulseIcon, left: 160 + 30, top: 390 + 22 },
+      { input: auntEdnaIcon, left: 620 + 32, top: 390 + 26 },
     ])
     .png({ compressionLevel: 9, quality: 92 })
     .toFile(OUT);
