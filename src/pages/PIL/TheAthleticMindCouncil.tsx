@@ -1,7 +1,7 @@
 import type { GetStaticProps, NextPage } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Activity,
@@ -29,6 +29,10 @@ const META_DESCRIPTION =
   'A founding council convened by PulseCheck and auntEDNA.ai to shape cognitive performance and clinical mental health infrastructure for athletes.';
 const META_URL = 'https://pulseintelligencelabs.com/TheAthleticMindCouncil';
 const META_OG_IMAGE = 'https://pulseintelligencelabs.com/athletic-mind-council-og-v4.png';
+const HERO_VIDEO_SRC = '/pil-hero.mp4';
+const HERO_VIDEO_POSTER = '/pil-og-source.jpg';
+const PULSECHECK_PROTOCOL_COUNT = 12;
+const PULSECHECK_SIMULATION_COUNT = 105;
 
 type IconComponent = LucideIcon;
 
@@ -328,6 +332,77 @@ const SectionHeader: React.FC<{
 );
 
 const AthleticMindCouncilPage: NextPage = () => {
+  const heroVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [heroVideoIsPlaying, setHeroVideoIsPlaying] = useState(false);
+
+  useEffect(() => {
+    const video = heroVideoRef.current;
+    if (!video) return;
+
+    let isMounted = true;
+
+    const primeVideoForMobileAutoplay = () => {
+      video.muted = true;
+      video.defaultMuted = true;
+      video.autoplay = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.controls = false;
+      video.setAttribute('muted', '');
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', '');
+    };
+
+    const tryPlay = () => {
+      if (!isMounted) return;
+      primeVideoForMobileAutoplay();
+      const playAttempt = video.play();
+      if (playAttempt) {
+        playAttempt.catch(() => {
+          // iOS can still pause autoplay in Low Power Mode; the next gesture retries it.
+        });
+      }
+    };
+
+    const handlePlaying = () => {
+      if (isMounted) {
+        setHeroVideoIsPlaying(true);
+      }
+    };
+
+    primeVideoForMobileAutoplay();
+    video.addEventListener('playing', handlePlaying);
+    video.addEventListener('loadeddata', tryPlay, { once: true });
+    video.addEventListener('canplay', tryPlay, { once: true });
+    tryPlay();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && video.paused) {
+        tryPlay();
+      }
+    };
+
+    const handleFirstGesture = () => {
+      if (video.paused) {
+        tryPlay();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('touchstart', handleFirstGesture, { once: true, passive: true });
+    window.addEventListener('pointerdown', handleFirstGesture, { once: true });
+
+    return () => {
+      isMounted = false;
+      video.removeEventListener('loadeddata', tryPlay);
+      video.removeEventListener('canplay', tryPlay);
+      video.removeEventListener('playing', handlePlaying);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('touchstart', handleFirstGesture);
+      window.removeEventListener('pointerdown', handleFirstGesture);
+    };
+  }, []);
+
   return (
     <>
       <Head>
@@ -357,16 +432,24 @@ const AthleticMindCouncilPage: NextPage = () => {
       <main className="min-h-screen overflow-hidden bg-black text-white selection:bg-[#E0FE10]/30 selection:text-black">
         <section className="relative min-h-[88svh] overflow-hidden">
           <video
-            className="absolute inset-0 h-full w-full object-cover opacity-55"
+            ref={heroVideoRef}
+            className={`pointer-events-none absolute inset-0 h-full w-full select-none object-cover transition-opacity duration-500 ${
+              heroVideoIsPlaying ? 'opacity-55' : 'opacity-0'
+            }`}
             autoPlay
             muted
             loop
+            controls={false}
             playsInline
-            preload="metadata"
-            poster="/pil-og-source.jpg"
+            preload="auto"
+            poster={HERO_VIDEO_POSTER}
+            disablePictureInPicture
+            controlsList="nodownload nofullscreen noremoteplayback"
+            tabIndex={-1}
+            onContextMenu={(event) => event.preventDefault()}
             aria-hidden="true"
           >
-            <source src="/pil-hero.mp4" type="video/mp4" />
+            <source src={HERO_VIDEO_SRC} type="video/mp4" />
           </video>
           <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.92),rgba(0,0,0,0.58)_48%,rgba(0,0,0,0.88))]" />
           <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.045)_1px,transparent_1px)] [background-size:44px_44px] opacity-30" />
@@ -511,6 +594,16 @@ const AthleticMindCouncilPage: NextPage = () => {
                 <p className="mt-6 text-base leading-relaxed text-zinc-300">
                   PulseCheck is built around two non-clinical training layers: Protocols for athlete mental-state regulation, and Simulations for cognitive sharpening under stress. Together, they train the mind while producing the detection, scoring, thresholding, and escalation signals that define when support should move toward care.
                 </p>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-[#F472B6]/35 bg-[#F472B6]/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#FBCFE8]">
+                    <span className="text-sm font-bold tracking-normal text-white">{PULSECHECK_PROTOCOL_COUNT}</span>
+                    Protocols in library
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-[#E0FE10]/35 bg-[#E0FE10]/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5FF9A]">
+                    <span className="text-sm font-bold tracking-normal text-white">{PULSECHECK_SIMULATION_COUNT}</span>
+                    Simulations in library
+                  </span>
+                </div>
 
                 <div className="mt-7 rounded-lg border border-[#F472B6]/20 bg-[#F472B6]/[0.04] p-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#F472B6]">Protocols</p>
