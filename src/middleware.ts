@@ -7,6 +7,7 @@ const PIL_HOSTS = new Set(['pulseintelligencelabs.com', 'www.pulseintelligencela
 const FWP_HOSTS = new Set(['fitwithpulse.ai', 'www.fitwithpulse.ai']);
 
 const PIL_PREFIX = '/PIL';
+const PIL_PUBLIC_ALIAS_PATHS = new Set(['/TheAthleticMindCouncil']);
 const LINK_PREVIEW_CRAWLER_PATTERN =
   /(bot|crawler|spider|preview|facebookexternalhit|facebot|twitterbot|slackbot|linkedinbot|whatsapp|telegrambot|discordbot|pinterest|vkshare|skypeuripreview|applebot)/i;
 
@@ -33,6 +34,10 @@ export function middleware(request: NextRequest) {
   // Direct visits to /PIL or /PIL/* on that host get canonicalized back.
   if (PIL_HOSTS.has(host)) {
     const { pathname } = request.nextUrl;
+    if (PIL_PUBLIC_ALIAS_PATHS.has(pathname)) {
+      return NextResponse.next();
+    }
+
     // Keep the Pulse Check demo accessible directly on pulseintelligencelabs.com.
     if (pathname === '/pulse-check-tech-demo') {
       return NextResponse.next();
