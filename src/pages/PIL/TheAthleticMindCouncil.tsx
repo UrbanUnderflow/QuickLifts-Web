@@ -680,7 +680,10 @@ const AthleticMindCouncilPage: NextPage = () => {
                     ['Auditable handoff', 'The handoff package keeps the performance system and the clinical system accountable to their own boundaries.'],
                   ].map(([title, body]) => (
                     <div key={title} className="rounded-lg border border-[#6D28D9]/35 bg-[#2E1065]/20 p-4">
-                      <h4 className="text-sm font-semibold text-white">{title}</h4>
+                      <div className="flex items-center gap-3">
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-[#A78BFA]" />
+                        <h4 className="text-sm font-semibold text-white">{title}</h4>
+                      </div>
                       <p className="mt-2 text-xs leading-relaxed text-[#C4B5FD]">{body}</p>
                     </div>
                   ))}
