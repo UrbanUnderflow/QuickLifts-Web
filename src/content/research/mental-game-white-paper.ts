@@ -17,7 +17,7 @@ export const TRAINING_MENTAL_GAME_WHITE_PAPER_CONTENT = `
 :::abstract
 Mental performance is widely acknowledged as a critical factor in athletic competition, yet the tools available to train it have not kept pace with the systems used to develop physical capacity. Most existing approaches fall into one of two categories: clinical sport psychology delivered through conversation, or consumer-facing brain training apps built on generic cognitive tasks with limited evidence of transfer to sport-specific contexts. Neither approach provides athletes and coaches with a structured, measurable, progressive training system for the cognitive-perceptual and state-regulation skills that determine performance under pressure.
 
-This paper introduces Pulse Check as a protocol and simulation architecture for mental performance training. The system now operates through two coordinated lanes. Protocols are bounded mental regulation, priming, and recovery interventions that help an athlete change state before, between, or after demanding performance moments. Simulations are instrumented pressure-training environments that sharpen and measure Focus, Composure, and Decision skills under controlled challenge. Nora, the adaptive planning engine, reads state signals, profile history, protocol responsiveness, simulation outcomes, and curriculum progress before assigning the next useful action.
+This paper introduces Pulse Check as a protocol and simulation architecture for mental performance training. The system operates through two coordinated lanes. Protocols are bounded mental regulation, priming, and recovery interventions that help an athlete change state before, between, or after demanding performance moments. Simulations are instrumented pressure-training environments that sharpen and measure Focus, Composure, and Decision skills under controlled challenge. Nora, the adaptive planning engine, reads state signals, profile history, protocol responsiveness, simulation outcomes, and curriculum progress before assigning the next useful action.
 
 The core thesis is that athletes do not need a one-day competition trick. They need a curriculum that builds automaticity over time. Pulse Check therefore keeps a small active slate of protocols and simulations in flight, rotates them as mastery emerges, and uses repeated, state-aware practice to make useful responses easier to retrieve when pressure taxes attention. This paper describes the scientific foundations, system architecture, protocol and simulation design principles, curriculum model, automaticity framework, physiology-cognition roadmap, and validation discipline that govern Pulse Check.
 :::
@@ -34,9 +34,9 @@ The mental side of sport is usually less organized. Sport psychology has produce
 
 None of those approaches, by themselves, create a complete training system. A conversation can be powerful, but it is not the same as instrumented practice. A breathing exercise can help, but it does not automatically become available under pressure unless it is rehearsed and embedded into the athlete's performance routine. A generic reaction game may improve performance on that game without teaching the athlete how to regulate state or execute inside sport-relevant pressure.
 
-Pulse Check was built to address that gap. The original system thesis was simulation-based: create serious mental training environments that target and measure cognitive-perceptual skills under controlled stress. That thesis remains central. But the architecture has evolved. Athletes also need protocols: bounded mental interventions that help them regulate, prime, recover, and apply the right state before a simulation, trial, practice exposure, or competition moment.
+Pulse Check addresses that gap by combining two complementary forms of training. Simulations create serious mental training environments that target and measure cognitive-perceptual skills under controlled stress. Protocols provide bounded mental interventions that help athletes regulate, prime, recover, and apply the right state before a simulation, trial, practice exposure, or competition moment.
 
-The updated thesis is therefore broader and stronger: Pulse Check is a protocol and simulation system. Protocols help the athlete change state. Simulations test and sharpen execution under pressure. Curriculum ties both together over time so the athlete is not hoping to remember a tool on competition day; they are building a practiced response that has already been rehearsed, measured, and refined.
+Pulse Check is a protocol and simulation system. Protocols help the athlete change state. Simulations test and sharpen execution under pressure. Curriculum ties both together over time so the athlete is not hoping to remember a tool on competition day; they are building a practiced response that has already been rehearsed, measured, and refined.
 
 # 2. Scientific Foundations
 
@@ -94,7 +94,7 @@ Pulse Check is organized around a formal architecture that defines what is being
 
 ## 3.1 Two Sibling Lanes: Protocols and Simulations
 
-The most important architectural update is the separation between protocols and simulations.
+The central architectural principle is the separation between protocols and simulations.
 
 Protocols are bounded state interventions. They are not lightweight content cards and they are not simulation variants. A protocol exists to change athlete state so a following action becomes more useful. It may regulate overactivation, prime readiness, narrow attention, build confidence, rehearse imagery, or support recovery. Each protocol needs a mechanism, use window, expected state shift, contraindications, evidence posture, and runtime eligibility.
 
@@ -121,7 +121,7 @@ The simulation system is organized around six locked initial families:
 - Sequence Shift: working-memory updating and task switching under load.
 - Endurance Lock: sustained attention, fatigability, and late-session deterioration.
 
-Each family can have variants, sport-context expressions, pressure modifiers, and assessment modes. The system can expand, but expansion is governed. New families must demonstrate that they are meaningfully distinct from existing families rather than merely a new visual wrapper.
+Each family can have variants, sport-context expressions, pressure modifiers, and assessment modes. The system can expand, but expansion is governed. Additional families must demonstrate that they are meaningfully distinct from established families rather than merely a different visual wrapper.
 
 ## 3.4 Three Pillars: Focus, Composure, Decision
 
@@ -137,7 +137,7 @@ These pillars are intentionally stable. They give athletes and coaches a shared 
 
 ## 3.5 State Signal Layer
 
-The updated system does not assign work from profile history alone. It reads current state first.
+Pulse Check does not assign work from profile history alone. It reads current state first.
 
 The State Signal Layer collects self-report, conversation signals, performance patterns, context, biometrics when available, execution events, and coach constraints. It then builds a shared state snapshot that captures activation, focus readiness, emotional load, cognitive fatigue, overall readiness, confidence, freshness, and recommended routing posture.
 
@@ -178,7 +178,7 @@ Cue-Word Anchoring is a priming and focus-narrowing protocol. The athlete trains
 
 ## 4.3 Teach, Practice, Evaluate
 
-A protocol should not end when Nora explains it. The protocol practice model has three layers.
+A protocol does not end when Nora explains it. The protocol practice model has three layers.
 
 First, Nora teaches the protocol: what it is, when to use it, and what state shift it is designed to create.
 
@@ -206,7 +206,7 @@ This prevents the most common failure mode in cognitive training products: build
 
 ## 5.2 Example: The Reset Switch
 
-The Reset Switch is the flagship Reset-family simulation. The current family name is Reset, and the athlete-facing example is The Reset Switch. It is a mental recovery training simulation that asks one essential question: how fast and how cleanly can the athlete recover after something goes wrong?
+The Reset Switch is the flagship Reset-family simulation. It is a mental recovery training simulation that asks one essential question: how fast and how cleanly can the athlete recover after something goes wrong?
 
 The simulation follows a three-phase loop.
 
@@ -238,11 +238,11 @@ Together, these families give the system enough coverage to train and measure th
 
 # 6. Curriculum, Mastery, and Automaticity
 
-Pulse Check should not behave like a one-day recommendation engine. The strongest product model is a curriculum model.
+Pulse Check is not a one-day recommendation engine. It is a curriculum model.
 
 ## 6.1 The Six-Exercise Active Slate
 
-The curriculum layer should keep six active exercises in flight for each athlete:
+The curriculum layer keeps six active exercises in flight for each athlete:
 
 - Three protocols for mental regulation, priming, or recovery.
 - Three simulations for mental sharpening and measurement.
@@ -253,13 +253,13 @@ The slate also solves a practical coaching problem. If the system assigns only o
 
 ## 6.2 Mastery and Rotation
 
-Each active exercise should have a mastery model. Mastery does not mean perfection. It means the athlete has shown enough reliable performance, completion quality, and state-fit evidence that the exercise can graduate from active curriculum emphasis.
+Each active exercise has a mastery model. Mastery does not mean perfection. It means the athlete has shown enough reliable performance, completion quality, and state-fit evidence that the exercise can graduate from active curriculum emphasis.
 
 For protocols, mastery may include completion consistency, technique fidelity, athlete-reported state shift, state snapshot movement, and improved downstream simulation quality.
 
 For simulations, mastery may include stable skill score improvement, raw metric reliability, lower variance, improved performance under modifiers, and reduced degradation across time.
 
-When an exercise reaches mastery, Nora should not simply stop training the athlete. Nora should rotate the mastered exercise into maintenance or periodic reassessment and bring in the next best protocol or simulation. This keeps the curriculum alive. The athlete's toolkit expands, and the active slate continues to match current needs.
+When an exercise reaches mastery, Nora rotates the mastered exercise into maintenance or periodic reassessment and brings in the next best protocol or simulation. This keeps the curriculum alive. The athlete's toolkit expands, and the active slate continues to match current needs.
 
 ## 6.3 How Automaticity Develops
 
@@ -287,11 +287,15 @@ The curriculum is therefore not a content schedule. It is an automaticity engine
 
 # 7. Nora Planning and Training Plan Architecture
 
-Nora is the adaptive planning engine for Pulse Check. The updated Nora model is not a simple recommendation system and not a freeform coach that invents tasks on demand. Nora reads state, profile, curriculum, protocol responsiveness, simulation outcomes, coach constraints, and candidate availability. Then it chooses the next useful action from bounded inventory.
+Nora is the adaptive planning engine for Pulse Check. Nora operates as a bounded planner: it reads state, profile, curriculum, protocol responsiveness, simulation outcomes, coach constraints, and candidate availability, then chooses the next useful action from approved protocol and simulation inventory.
 
 ## 7.1 Assignment Outcomes
 
-Nora can choose several assignment outcomes:
+The six-exercise active slate remains the curriculum backbone. Nora's assignment outcomes describe the real-time chat layer that sits alongside that curriculum. When an athlete talks with Nora before practice, after a difficult session, during competition prep, or inside a coach-defined training window, Nora can assign an additional immediate action based on real-time need.
+
+That chat-time decision leans on what the system already knows about the athlete: which protocols have felt effective, which simulations reveal pressure bottlenecks, where protocol responsiveness is strongest, how recent simulation and protocol work has trended, what the athlete is saying in the conversation, what biometric markers are available from connected sports performance devices, and what context coaches have provided about competition schedule, training load, team rules, and situational constraints.
+
+Inside that real-time layer, Nora can choose several assignment outcomes:
 
 - Protocol only, when current state is the primary bottleneck.
 - Simulation only, when state is workable and skill challenge is the right next action.
@@ -300,11 +304,11 @@ Nora can choose several assignment outcomes:
 - Simulation into protocol, when the challenge remains useful but a downshift or recovery step should follow.
 - Defer or alternate path, when safety, support, state, or context makes normal training inappropriate.
 
-This matters because the system should not force a high-pressure simulation when the athlete is not in a usable state. It also should not default to deferral when a bounded protocol can still create a productive path.
+This matters because the curriculum gives the athlete a stable training base, while the chat layer lets Nora respond to the moment. The system avoids forcing a high-pressure simulation when the athlete is not in a usable state, and it avoids deferral when a bounded protocol can still create a productive path.
 
 ## 7.2 DailyTask and TrainingPlan
 
-The runtime separates today's execution from longer-horizon programming.
+The runtime separates date-specific execution from longer-horizon programming.
 
 DailyTask is the execution truth. It answers what the athlete is doing on a specific date, what state the assignment is in, why Nora assigned it, and what happened when it was completed.
 
@@ -314,7 +318,7 @@ This separation prevents a common product problem: daily recommendations can fee
 
 ## 7.3 Plan Types
 
-The current plan model supports four plan types.
+The plan model supports four plan types.
 
 Sim-focused plans are used when the athlete is stable enough to train skill directly and the primary bottleneck is executional.
 
@@ -324,22 +328,22 @@ Mixed plans are used when state and skill both matter and the athlete needs prot
 
 Assessment plans are used for baseline, reassessment, or diagnostic calibration windows.
 
-The six-exercise active slate can sit inside this larger plan architecture. A plan defines the current development goal. The slate defines the active toolkit Nora is building and rotating as mastery emerges.
+The six-exercise active slate sits inside this larger plan architecture. A plan defines the development goal. The slate defines the active toolkit Nora is building and rotating as mastery emerges.
 
 # 8. Physiology-Cognition Roadmap
 
-The next major layer of Pulse Check is the physiology-cognition correlation engine.
+The physiology-cognition correlation engine connects body-state evidence with mental performance evidence.
 
 The product edge is not simply that Pulse Check can connect wearable data. Wearables can see aspects of the body. Simulations can measure aspects of mental performance. The differentiated opportunity is joining those evidence streams to learn how a specific athlete's mental performance behaves under different body states.
 
-The engine should learn personal thresholds, confidence, freshness, and state-performance relationships. It may ask questions like:
+The engine models personal thresholds, confidence, freshness, and state-performance relationships. It asks questions like:
 
 - Does this athlete's focus stability change when sleep is short?
 - Does reset speed degrade when recovery markers are below personal baseline?
 - Does pressure sensitivity increase when resting heart rate is elevated?
 - Which protocol tends to help when the athlete is in a specific physiological posture?
 
-Oura is the first strong source-specific lane because it provides sleep, readiness, heart-rate variability, resting heart rate, recovery markers, and timing context. But Oura is not the engine. It is one input into a broader model that should eventually support multiple physiological sources.
+No single wearable is the engine. Polar is the signature sports-performance lane because its direct device path can contribute training, exertion, live heart-rate or RR evidence, activity samples, and session context. Apple Watch and HealthKit provide the baseline iOS wearable and health-platform lane. Oura contributes a strong sleep and recovery lane through direct API support or HealthKit fallback. Fitbit Air and the broader Fitbit lane contribute post-sync sleep, heart-rate, activity, biometrics, and recovery context through Google Health. Each source has different strengths, timing, freshness, and limitations, so Pulse Check normalizes them into the same health-context record model before the correlation engine uses them.
 
 The language must stay honest. These are correlations unless stronger evidence supports causal claims. Pulse Check may learn that an athlete usually performs better inside a certain recovery band, or that a specific protocol tends to help under a specific body-state pattern. It should not pretend that wearable data alone decides training. Body-state evidence informs interpretation; Pulse Check still needs simulation outcomes, protocol evidence, athlete feedback, and coaching context.
 
@@ -347,7 +351,7 @@ The language must stay honest. These are correlations unless stronger evidence s
 
 Pulse Check uses an evidence framework because citations alone are not enough. A scientific paper can support a mechanism without validating a specific product implementation.
 
-The system should distinguish between:
+The system distinguishes between:
 
 - Mechanism support: published evidence supports the underlying cognitive, physiological, or behavioral mechanism.
 - Internal validity: Pulse Check's implementation reliably measures what it claims to measure inside the platform.
@@ -357,9 +361,9 @@ The system should distinguish between:
 
 Validation must also include pilot outcome metrics. Enrollment, adherence, mental performance improvement, escalations, speed to care, trust, and recommendation intent all matter. A mental training system that produces scores but loses athlete trust is not succeeding.
 
-For research readouts, Pulse Check should use frozen evidence frames. A readout should lock to one pilot, one date window, one cohort filter, one read-model version, and one set of metrics. Claims should be tagged as observed, inferred, or speculative. Unsupported sections should be suppressed rather than dressed up with confident language. Human review remains the authority before stronger claims become official.
+For research readouts, Pulse Check uses frozen evidence frames. A readout locks to one pilot, one date window, one cohort filter, one read-model version, and one set of metrics. Claims are tagged as observed, inferred, or speculative. Unsupported sections are suppressed rather than dressed up with confident language. Human review remains the authority before stronger claims become official.
 
-This is not just legal caution. It is scientific discipline. The system should earn its claims.
+This is not just legal caution. It is scientific discipline. The system earns its claims.
 
 # 10. Why This Architecture Over Alternatives
 
@@ -377,7 +381,7 @@ Pulse Check combines the missing pieces. Protocols give the athlete concrete sta
 
 # 11. What We Are Not Claiming
 
-Pulse Check is not claiming that the full system has already been validated through randomized controlled trials. The current claims are structural and mechanistic. Efficacy claims must follow data.
+Pulse Check is not claiming that the full system has already been validated through randomized controlled trials. The claims in this paper are structural and mechanistic. Efficacy claims must follow data.
 
 Pulse Check is not claiming that simulation gains automatically transfer to competition. Transfer is a real problem in cognitive training. The system is designed with transfer in mind, but transfer has to be tested.
 
@@ -389,7 +393,7 @@ Pulse Check is not claiming that all mental performance reduces to cognition. Sl
 
 # 12. Looking Ahead
 
-Pulse Check's current direction is clear. The system should continue evolving from one-off assignment into curriculum. It should keep a balanced active slate of protocols and simulations, rotate exercises as mastery emerges, learn protocol responsiveness by athlete, connect state and body-context signals carefully, and validate claims through governed pilot evidence.
+Pulse Check is designed as a curriculum-based mental performance system. It keeps a balanced active slate of protocols and simulations, rotates exercises as mastery emerges, learns protocol responsiveness by athlete, connects state and body-context signals carefully, and validates claims through governed pilot evidence.
 
 The long-term vision is not a mental performance content app. It is a training operating system for the mental side of sport.
 
