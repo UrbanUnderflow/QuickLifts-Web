@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import PageHead from '../../components/PageHead';
 import { collection, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
+import { applyResearchArticleListOverride } from '../../content/research/mental-game-white-paper';
 
 // ─── Research categories ───────────────────────────────────────────
 const categories = [
@@ -17,6 +18,11 @@ const categories = [
   'Recovery',
 ];
 
+const FEATURED_IMAGE_BY_SLUG: Record<string, string> = {
+  'training-the-mental-game-a-simulation-based-architecture-for-mental-performance-in-sport':
+    '/research-training-mental-game-white-paper.webp',
+};
+
 // ─── Article interface ─────────────────────────────────────────────
 interface Article {
   slug: string;
@@ -28,16 +34,90 @@ interface Article {
   excerpt: string;
   featured: boolean;
   featuredImage?: string;
+  contentType?: 'article' | 'white-paper';
   status: 'draft' | 'published' | 'archived';
   createdAt: Timestamp;
   publishedAt?: Timestamp;
 }
 
+type FirestoreRestField = {
+  stringValue?: string;
+  booleanValue?: boolean;
+  timestampValue?: string;
+};
+
+type FirestoreRestDocument = {
+  name?: string;
+  fields?: Record<string, FirestoreRestField>;
+};
+
 const normalizeArticle = (id: string, data: Omit<Article, 'slug'>): Article => ({
-  ...data,
-  // The Firestore document ID is the canonical route segment for /research/[slug].
-  slug: id,
+  ...applyResearchArticleListOverride({
+    ...data,
+    // The Firestore document ID is the canonical route segment for /research/[slug].
+    slug: id,
+  }),
 });
+
+const isBrowserLocalhost = () =>
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const restString = (field?: FirestoreRestField) => field?.stringValue || '';
+const restBoolean = (field?: FirestoreRestField) => field?.booleanValue === true;
+const restTimestamp = (field?: FirestoreRestField) =>
+  field?.timestampValue ? Timestamp.fromDate(new Date(field.timestampValue)) : undefined;
+
+const normalizeRestArticle = (document: FirestoreRestDocument): Article | null => {
+  const slug = document.name?.split('/').pop();
+  const fields = document.fields;
+  if (!slug || !fields) return null;
+
+  const publishedAt = restTimestamp(fields.publishedAt);
+  const createdAt = restTimestamp(fields.createdAt) || publishedAt || Timestamp.now();
+  const status = restString(fields.status) as Article['status'];
+
+  return {
+    slug,
+    title: restString(fields.title),
+    subtitle: restString(fields.subtitle),
+    author: restString(fields.author),
+    category: restString(fields.category),
+    readTime: restString(fields.readTime),
+    excerpt: restString(fields.excerpt),
+    featured: restBoolean(fields.featured),
+    featuredImage: restString(fields.featuredImage) || undefined,
+    contentType: (restString(fields.contentType) || 'article') as Article['contentType'],
+    status,
+    createdAt,
+    publishedAt,
+  };
+};
+
+const sortArticlesByPublishedDate = (articles: Article[]) =>
+  [...articles].sort((a, b) => {
+    const aTime = a.publishedAt?.toMillis?.() || a.createdAt?.toMillis?.() || 0;
+    const bTime = b.publishedAt?.toMillis?.() || b.createdAt?.toMillis?.() || 0;
+    return bTime - aTime;
+  });
+
+const fetchProductionResearchArticlesFallback = async (): Promise<Article[]> => {
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'quicklifts-dd3f1';
+  const response = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/researchArticles?pageSize=100`,
+  );
+
+  if (!response.ok) {
+    throw new Error(`Production research fallback failed with ${response.status}`);
+  }
+
+  const payload = (await response.json()) as { documents?: FirestoreRestDocument[] };
+  return sortArticlesByPublishedDate(
+    (payload.documents || [])
+      .map(normalizeRestArticle)
+      .filter((article): article is Article => !!article && article.status === 'published'),
+  ).map(applyResearchArticleListOverride);
+};
 
 // ─── Format date from Timestamp ────────────────────────────────────
 const formatDate = (timestamp: Timestamp | undefined): string => {
@@ -50,8 +130,18 @@ const formatDate = (timestamp: Timestamp | undefined): string => {
   });
 };
 
+const isWhitePaper = (article: Article) => article.contentType === 'white-paper';
+
+const articleMetaLabel = (article: Article) => (isWhitePaper(article) ? 'White Paper' : article.category);
+
+const articleFeaturedImage = (article: Article) => article.featuredImage || FEATURED_IMAGE_BY_SLUG[article.slug];
+
+const readActionLabel = (article: Article) => (isWhitePaper(article) ? 'Read white paper' : 'Read article');
+
 // ─── Article card component ────────────────────────────────────────
 const ArticleCard: React.FC<{ article: Article; index: number }> = ({ article, index }) => {
+  const featuredImage = articleFeaturedImage(article);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -62,10 +152,10 @@ const ArticleCard: React.FC<{ article: Article; index: number }> = ({ article, i
         <article className="py-8 border-b border-stone-200 transition-colors duration-300 group-hover:border-stone-400">
           <div className="flex flex-col md:flex-row md:items-start gap-6">
             {/* Featured image thumbnail */}
-            {article.featuredImage && (
+            {featuredImage && (
               <div className="w-full md:w-56 lg:w-64 flex-shrink-0 aspect-[16/10] rounded-lg overflow-hidden bg-stone-100 group-hover:shadow-md transition-shadow duration-300">
                 <img
-                  src={article.featuredImage}
+                  src={featuredImage}
                   alt={article.title}
                   className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
                 />
@@ -75,8 +165,8 @@ const ArticleCard: React.FC<{ article: Article; index: number }> = ({ article, i
             {/* Content */}
             <div className="flex-1 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
               <div className="flex-1 max-w-2xl">
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="text-sm font-medium text-stone-500">{article.category}</span>
+                <div className="flex flex-wrap items-center gap-3 mb-3">
+                  <span className="text-sm font-medium text-stone-500">{articleMetaLabel(article)}</span>
                   <span className="text-stone-300">·</span>
                   <span className="text-sm text-stone-400">{formatDate(article.publishedAt || article.createdAt)}</span>
                 </div>
@@ -94,7 +184,7 @@ const ArticleCard: React.FC<{ article: Article; index: number }> = ({ article, i
                   <span className="text-stone-300">·</span>
                   <span className="text-sm text-stone-400">{article.readTime}</span>
                   <span className="inline-flex items-center gap-1 text-sm font-medium text-stone-900 group-hover:text-stone-600 transition-colors ml-auto">
-                    Read article
+                    {readActionLabel(article)}
                     <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                     </svg>
@@ -111,6 +201,8 @@ const ArticleCard: React.FC<{ article: Article; index: number }> = ({ article, i
 
 // ─── Featured article card ─────────────────────────────────────────
 const FeaturedArticleCard: React.FC<{ article: Article }> = ({ article }) => {
+  const featuredImage = articleFeaturedImage(article);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -121,21 +213,21 @@ const FeaturedArticleCard: React.FC<{ article: Article }> = ({ article }) => {
         <article className="relative border-t-2 border-stone-900 pt-8 md:pt-10 transition-all duration-300">
           <div className="flex flex-col gap-6">
             {/* Meta row */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-stone-400">
                 Featured
               </span>
               <span className="text-stone-300">·</span>
-              <span className="text-sm text-stone-400">{article.category}</span>
+              <span className="text-sm text-stone-400">{articleMetaLabel(article)}</span>
               <span className="text-stone-300">·</span>
               <span className="text-sm text-stone-400">{formatDate(article.publishedAt || article.createdAt)}</span>
             </div>
 
             {/* Featured Image */}
-            {article.featuredImage && (
+            {featuredImage && (
               <div className="relative aspect-[16/10] rounded-xl overflow-hidden bg-stone-100 group-hover:shadow-lg transition-shadow duration-300">
                 <img
-                  src={article.featuredImage}
+                  src={featuredImage}
                   alt={article.title}
                   className="w-full h-full object-cover"
                 />
@@ -162,7 +254,7 @@ const FeaturedArticleCard: React.FC<{ article: Article }> = ({ article }) => {
               <span className="text-sm text-stone-400">By {article.author}</span>
               <span className="text-sm text-stone-400">{article.readTime}</span>
               <span className="inline-flex items-center gap-1 text-sm font-medium text-stone-900 group-hover:text-stone-600 transition-colors">
-                Read article
+                {readActionLabel(article)}
                 <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                 </svg>
@@ -186,18 +278,25 @@ const ResearchPage: NextPage = () => {
     const fetchArticles = async () => {
       try {
         const snapshot = await getDocs(collection(db, 'researchArticles'));
-        const publishedArticles = snapshot.docs
+        let publishedArticles = sortArticlesByPublishedDate(snapshot.docs
           .map(doc => normalizeArticle(doc.id, doc.data() as Omit<Article, 'slug'>))
-          .filter(article => article.status === 'published')
-          .sort((a, b) => {
-            const aTime = a.publishedAt?.toMillis?.() || a.createdAt?.toMillis?.() || 0;
-            const bTime = b.publishedAt?.toMillis?.() || b.createdAt?.toMillis?.() || 0;
-            return bTime - aTime;
-          });
+          .filter(article => article.status === 'published'));
+        if (publishedArticles.length === 0 && isBrowserLocalhost()) {
+          publishedArticles = await fetchProductionResearchArticlesFallback();
+        }
         setArticles(publishedArticles);
       } catch (error) {
         console.error('[Research] Error fetching articles:', error);
-        setArticles([]);
+        if (isBrowserLocalhost()) {
+          try {
+            setArticles(await fetchProductionResearchArticlesFallback());
+          } catch (fallbackError) {
+            console.error('[Research] Error fetching production fallback articles:', fallbackError);
+            setArticles([]);
+          }
+        } else {
+          setArticles([]);
+        }
       } finally {
         setLoading(false);
       }
@@ -220,10 +319,10 @@ const ResearchPage: NextPage = () => {
           pageId: 'research',
           pageTitle: 'Research – Pulse',
           metaDescription:
-            'Articles, whitepapers, and deep dives from the Pulse team on metabolic health, performance science, wearable technology, and the future of fitness.',
+            'Articles, white papers, and deep dives from the Pulse team on metabolic health, performance science, wearable technology, and the future of fitness.',
           ogTitle: 'Research – Pulse',
           ogDescription:
-            'Articles, whitepapers, and deep dives from the Pulse team on metabolic health, performance science, wearable technology, and the future of fitness.',
+            'Articles, white papers, and deep dives from the Pulse team on metabolic health, performance science, wearable technology, and the future of fitness.',
           lastUpdated: new Date().toISOString(),
         }}
         pageOgUrl="https://fitwithpulse.ai/research"

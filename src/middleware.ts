@@ -8,6 +8,7 @@ const FWP_HOSTS = new Set(['fitwithpulse.ai', 'www.fitwithpulse.ai']);
 
 const PIL_PREFIX = '/PIL';
 const PIL_PUBLIC_ALIAS_PATHS = new Set(['/TheAthleticMindCouncil']);
+const PIL_SHARED_PUBLIC_PREFIXES = ['/research'];
 const LINK_PREVIEW_CRAWLER_PATTERN =
   /(bot|crawler|spider|preview|facebookexternalhit|facebot|twitterbot|slackbot|linkedinbot|whatsapp|telegrambot|discordbot|pinterest|vkshare|skypeuripreview|applebot)/i;
 
@@ -38,6 +39,14 @@ export function middleware(request: NextRequest) {
       return NextResponse.next();
     }
 
+    if (
+      PIL_SHARED_PUBLIC_PREFIXES.some(
+        (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+      )
+    ) {
+      return NextResponse.next();
+    }
+
     // Keep the Pulse Check demo accessible directly on pulseintelligencelabs.com.
     if (pathname === '/pulse-check-tech-demo') {
       return NextResponse.next();
@@ -48,6 +57,14 @@ export function middleware(request: NextRequest) {
     if (nextDataMatch) {
       const [, buildId, dataPath] = nextDataMatch;
       if (dataPath === 'pulse-check-tech-demo') {
+        return NextResponse.next();
+      }
+      if (
+        PIL_SHARED_PUBLIC_PREFIXES.some(
+          (prefix) =>
+            dataPath === prefix.slice(1) || dataPath.startsWith(`${prefix.slice(1)}/`),
+        )
+      ) {
         return NextResponse.next();
       }
       if (dataPath === 'PIL' || dataPath.startsWith('PIL/')) {

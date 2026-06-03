@@ -6,9 +6,20 @@ import { motion } from 'framer-motion';
 import PageHead from '../../components/PageHead';
 import ArticleAudioPlayer from '../../components/ArticleAudioPlayer';
 import { getFirestoreDocFallback } from '../../lib/server-firestore-fallback';
+import { getResearchArticleOverride } from '../../content/research/mental-game-white-paper';
 
 // Known research article slugs (add new articles here)
 const RESEARCH_SLUGS = ['the-system'] as const;
+const FEATURED_IMAGE_BY_SLUG: Record<string, string> = {
+  'training-the-mental-game-a-simulation-based-architecture-for-mental-performance-in-sport':
+    '/research-training-mental-game-white-paper.webp',
+};
+
+const normalizeResearchArticleCopy = (content: string) =>
+  content
+    .replace(/\bThe Kill Switch\b/g, 'The Reset Switch')
+    .replace(/\bthe Kill Switch\b/g, 'the Reset Switch')
+    .replace(/\bKill Switch\b/g, 'Reset Switch');
 
 // ─── Article content for audio narration ────────────────────────────
 const THE_SYSTEM_ARTICLE_TEXT = `
@@ -242,18 +253,29 @@ export const getServerSideProps: GetServerSideProps = async ({ params, query }) 
       }
     }
 
+    const articleOverride = getResearchArticleOverride(slug);
+
     // Serialize Firestore timestamps
+    const featuredImage =
+      (typeof articleOverride?.featuredImage === 'string' && articleOverride.featuredImage) ||
+      (typeof data?.featuredImage === 'string' && data.featuredImage) ||
+      FEATURED_IMAGE_BY_SLUG[slug] ||
+      '';
+
     const articleData = {
       ...data,
+      ...articleOverride,
       slug,
       authorTitle,
+      featuredImage,
+      content: normalizeResearchArticleCopy(String(articleOverride?.content || data?.content || '')),
       createdAt: data?.createdAt?.toDate?.()?.toISOString() || null,
       updatedAt: data?.updatedAt?.toDate?.()?.toISOString() || null,
       publishedAt: data?.publishedAt?.toDate?.()?.toISOString() || null,
     };
 
     // Build OG image URL — ensure absolute
-    let ogImage = data?.featuredImage || '';
+    let ogImage = featuredImage;
     if (ogImage && !ogImage.startsWith('http')) {
       ogImage = `https://fitwithpulse.ai${ogImage}`;
     }
@@ -262,8 +284,8 @@ export const getServerSideProps: GetServerSideProps = async ({ params, query }) 
     }
 
     const ogMeta = {
-      title: data?.title || 'Pulse Research',
-      description: data?.excerpt || 'Research from Pulse Intelligence Labs.',
+      title: articleData.title || 'Pulse Research',
+      description: articleData.excerpt || articleData.subtitle || 'Research from Pulse Intelligence Labs.',
       image: ogImage,
       url: `https://fitwithpulse.ai/research/${slug}`,
       lastUpdated: articleData.updatedAt || articleData.publishedAt || new Date().toISOString(),
@@ -367,9 +389,63 @@ interface ResearchArticlePageProps {
   ogMeta: OgMeta;
 }
 
+type WhitePaperReferenceMap = Record<number, string>;
+
+const extractWhitePaperReferences = (content: string): WhitePaperReferenceMap => {
+  const referencesBlock = content.match(/:::references\n([\s\S]*?):::/);
+  if (!referencesBlock) return {};
+
+  return referencesBlock[1]
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .reduce<WhitePaperReferenceMap>((references, line) => {
+      const match = line.match(/^\[(\d+)\]\s*(.+)$/);
+      if (!match) return references;
+
+      references[Number(match[1])] = match[2].trim();
+      return references;
+    }, {});
+};
+
+const InlineCitation: React.FC<{ numbers: number[]; references: WhitePaperReferenceMap }> = ({ numbers, references }) => {
+  const citationLabel = numbers.join(', ');
+  const firstReferenceNumber = numbers[0];
+  const referenceItems = numbers.map((number) => ({
+    number,
+    text: references[number] || 'Reference details appear in the references section.',
+  }));
+
+  return (
+    <span className="relative inline-block align-baseline group">
+      <a
+        href={`#reference-${firstReferenceNumber}`}
+        className="mx-0.5 inline-flex translate-y-[-0.2em] items-center rounded-full border border-stone-300 bg-stone-100 px-1.5 py-0.5 text-[0.68em] font-semibold leading-none text-stone-600 no-underline transition-colors hover:border-stone-500 hover:bg-white hover:text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:ring-offset-2"
+        aria-label={`View reference ${citationLabel}`}
+      >
+        [{citationLabel}]
+      </a>
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-[70] mb-2 hidden w-[22rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-stone-200 bg-white p-4 text-left font-sans text-xs leading-relaxed text-stone-600 opacity-0 shadow-xl shadow-stone-900/10 group-hover:block group-hover:opacity-100 group-focus-within:block group-focus-within:opacity-100">
+        <span className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-stone-400">
+          Citation Preview
+        </span>
+        <span className="flex flex-col gap-2">
+          {referenceItems.map((item) => (
+            <span key={item.number} className="flex gap-2">
+              <span className="flex-shrink-0 font-mono text-[10px] text-stone-400">[{item.number}]</span>
+              <span>{item.text}</span>
+            </span>
+          ))}
+        </span>
+      </span>
+    </span>
+  );
+};
+
 // ─── White Paper Renderer ───────────────────────────────────────────
 const WhitePaperContent: React.FC<{ article: DynamicArticle }> = ({ article }) => {
   const [showToc, setShowToc] = useState(false);
+  const references = extractWhitePaperReferences(article.content);
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '';
@@ -379,13 +455,19 @@ const WhitePaperContent: React.FC<{ article: DynamicArticle }> = ({ article }) =
   // Shared inline markdown parser
   const parseInline = (text: string): React.ReactNode[] => {
     const parts: React.ReactNode[] = [];
-    const re = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(\[(.+?)\]\((.+?)\))/g;
+    const re = /(\[cite:\s*(\d+(?:\s*,\s*\d+)*)\])|(\*\*(.+?)\*\*)|(\*(.+?)\*)|(\[(.+?)\]\((.+?)\))/g;
     let last = 0, m;
     while ((m = re.exec(text)) !== null) {
       if (m.index > last) parts.push(text.substring(last, m.index));
-      if (m[1]) parts.push(<strong key={m.index} className="font-semibold text-stone-900">{m[2]}</strong>);
-      else if (m[3]) parts.push(<em key={m.index}>{m[4]}</em>);
-      else if (m[5]) parts.push(<a key={m.index} href={m[7]} className="text-blue-700 underline decoration-blue-300 hover:decoration-blue-700 transition-colors" target="_blank" rel="noopener noreferrer">{m[6]}</a>);
+      if (m[1]) {
+        const citationNumbers = m[2]
+          .split(',')
+          .map((number) => Number(number.trim()))
+          .filter((number) => Number.isFinite(number));
+        parts.push(<InlineCitation key={m.index} numbers={citationNumbers} references={references} />);
+      } else if (m[3]) parts.push(<strong key={m.index} className="font-semibold text-stone-900">{m[4]}</strong>);
+      else if (m[5]) parts.push(<em key={m.index}>{m[6]}</em>);
+      else if (m[7]) parts.push(<a key={m.index} href={m[9]} className="text-blue-700 underline decoration-blue-300 hover:decoration-blue-700 transition-colors" target="_blank" rel="noopener noreferrer">{m[8]}</a>);
       last = m.index + m[0].length;
     }
     if (last < text.length) parts.push(text.substring(last));
@@ -454,7 +536,12 @@ const WhitePaperContent: React.FC<{ article: DynamicArticle }> = ({ article }) =
             </h2>
             <ol className="space-y-3 list-none">
               {refs.map((ref, ri) => (
-                <li key={ri} className="flex gap-3 text-sm text-stone-600 leading-relaxed" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+                <li
+                  key={ri}
+                  id={`reference-${ri + 1}`}
+                  className="scroll-mt-24 flex gap-3 text-sm text-stone-600 leading-relaxed"
+                  style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}
+                >
                   <span className="flex-shrink-0 text-stone-400 font-mono text-xs pt-0.5">[{ri + 1}]</span>
                   <span>{parseInline(ref.replace(/^\[\d+\]\s*/, ''))}</span>
                 </li>
@@ -649,50 +736,62 @@ const WhitePaperContent: React.FC<{ article: DynamicArticle }> = ({ article }) =
 
         {/* White Paper Cover */}
         <header className="border-b border-stone-200 bg-white">
-          <div className="max-w-3xl mx-auto px-6 md:px-8 py-14 md:py-20 text-center">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-stone-100 border border-stone-200 mb-8">
-              <span className="text-xs font-semibold uppercase tracking-widest text-stone-500">White Paper</span>
-              <span className="w-1 h-1 rounded-full bg-stone-400" />
-              <span className="text-xs text-stone-400">{article.category}</span>
-            </div>
-
-            {/* Title */}
-            <h1
-              className="text-3xl md:text-4xl lg:text-[2.6rem] font-bold text-stone-900 leading-[1.12] tracking-tight mb-5"
-              style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
-            >
-              {article.title}
-            </h1>
-
-            {/* Subtitle */}
-            {article.subtitle && (
-              <p className="text-base md:text-lg text-stone-500 leading-relaxed mb-8 max-w-2xl mx-auto">
-                {article.subtitle}
-              </p>
-            )}
-
-            {/* Divider line */}
-            <div className="w-16 h-px bg-stone-300 mx-auto mb-8" />
-
-            {/* Meta */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm text-stone-500">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-stone-900 flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-bold text-[#E0FE10]">{article.author.charAt(0).toUpperCase()}</span>
-                </div>
-                <span className="font-medium text-stone-700">{article.author}</span>
-                {article.authorTitle && <span className="text-stone-400">· {article.authorTitle}</span>}
+          <div className="max-w-5xl mx-auto px-6 md:px-8 py-14 md:py-20">
+            <div className="max-w-3xl mx-auto text-center">
+              {/* Badge */}
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-stone-100 border border-stone-200 mb-8">
+                <span className="text-xs font-semibold uppercase tracking-widest text-stone-500">White Paper</span>
+                <span className="w-1 h-1 rounded-full bg-stone-400" />
+                <span className="text-xs text-stone-400">{article.category}</span>
               </div>
-              {pubDate && (
-                <>
-                  <span className="hidden sm:inline text-stone-300">·</span>
-                  <span>{pubDate}</span>
-                </>
+
+              {/* Title */}
+              <h1
+                className="text-3xl md:text-4xl lg:text-[2.6rem] font-bold text-stone-900 leading-[1.12] tracking-tight mb-5"
+                style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
+              >
+                {article.title}
+              </h1>
+
+              {/* Subtitle */}
+              {article.subtitle && (
+                <p className="text-base md:text-lg text-stone-500 leading-relaxed mb-8 max-w-2xl mx-auto">
+                  {article.subtitle}
+                </p>
               )}
-              <span className="hidden sm:inline text-stone-300">·</span>
-              <span>{article.readTime}</span>
+
+              {/* Divider line */}
+              <div className="w-16 h-px bg-stone-300 mx-auto mb-8" />
+
+              {/* Meta */}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm text-stone-500">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-stone-900 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-bold text-[#E0FE10]">{article.author.charAt(0).toUpperCase()}</span>
+                  </div>
+                  <span className="font-medium text-stone-700">{article.author}</span>
+                  {article.authorTitle && <span className="text-stone-400">· {article.authorTitle}</span>}
+                </div>
+                {pubDate && (
+                  <>
+                    <span className="hidden sm:inline text-stone-300">·</span>
+                    <span>{pubDate}</span>
+                  </>
+                )}
+                <span className="hidden sm:inline text-stone-300">·</span>
+                <span>{article.readTime}</span>
+              </div>
             </div>
+
+            {article.featuredImage && (
+              <div className="mt-10 overflow-hidden rounded-xl border border-stone-200 bg-stone-100 shadow-sm">
+                <img
+                  src={article.featuredImage}
+                  alt={article.title}
+                  className="aspect-[16/10] w-full object-cover"
+                />
+              </div>
+            )}
           </div>
         </header>
 
