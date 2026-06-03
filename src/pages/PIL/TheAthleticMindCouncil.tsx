@@ -560,7 +560,9 @@ const AthleticMindCouncilPage: NextPage = () => {
                 <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#4C1D95]/30 blur-3xl" />
                 <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(76,29,149,0.20),transparent_42%,rgba(109,40,217,0.12))]" />
                 <div className="relative flex flex-wrap items-center gap-4">
-                  <img src="/auntedna-logo.svg" alt="auntEDNA.ai logo" className="h-16 w-auto max-w-[210px] object-contain" />
+                  <div className="flex h-20 w-32 items-center justify-center rounded-lg border border-white/15 bg-white px-3 shadow-lg shadow-[#4C1D95]/30">
+                    <img src="/auntedna-mark.png" alt="auntEDNA.ai logo" className="h-full w-full object-contain" />
+                  </div>
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#A78BFA]">About auntEDNA.ai</p>
                     <h3 className="text-2xl font-semibold text-white">Clinical infrastructure for care once performance support is not enough.</h3>
