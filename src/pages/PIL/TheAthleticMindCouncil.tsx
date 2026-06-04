@@ -11,6 +11,7 @@ import {
   Compass,
   Eye,
   FlaskConical,
+  X,
   Landmark,
   Megaphone,
   Network,
@@ -148,6 +149,39 @@ const cohortLanes = [
   { title: 'Technology and AI experts', body: 'Builders and researchers who can stress-test model behavior, safety boundaries, and product architecture.', Icon: Bot, accent: '#2DD4BF' },
 ] satisfies Array<{ title: string; body: string; Icon: IconComponent; accent: string }>;
 
+const councilLeadership = {
+  id: 'arionne-allen',
+  name: 'Arionne Allen',
+  role: 'Founding Executive Director, The Athletic Mind Council',
+  accent: '#A78BFA',
+  imageSrc: '/arionne-allen.jpg',
+  imagePosition: 'center 18%',
+  summary:
+    'Technology executive, strategic advisor, former Division I student-athlete, and CEO of Diverse Excellence Technology. Arionne leads the council by convening leaders across athletics, mental health, technology, and policy to turn vision into partnerships, execution, and impact.',
+  badges: [
+    'CEO, Diverse Excellence Technology',
+    'USA Track & Field',
+    'USA Gymnastics',
+    'NASCAR',
+    'Former D-I student-athlete',
+    'AI and data analytics',
+    '15+ years executive leadership',
+    'Sports partnerships',
+    'Hampton University alumna',
+    'Indiana University alumna',
+    'Western Governors University',
+  ],
+  fullBio: [
+    'Arionne Allen is a technology executive, strategic advisor, and former Division I student-athlete whose career has focused on building partnerships, driving innovation, and creating impact across sports, technology, and higher education.',
+    'As CEO of Diverse Excellence Technology, a woman-owned professional services firm, she helps organizations navigate digital transformation through AI, data analytics, and strategic technology solutions. Her work focuses on helping organizations make smarter decisions, improve operations, and successfully implement change through strong project and change management practices.',
+    'Today, she works with organizations that are ready to move beyond conversation and combine strategy, partnerships, and execution to bridge the gap between vision and results, especially as they explore what is possible with AI and emerging technologies.',
+    'With more than 15 years of leadership experience spanning sports, technology, partnerships, and organizational strategy, Arionne has worked with organizations including NASCAR, USA Track & Field, USA Gymnastics, and Western Governors University. She is known for bringing people together, building meaningful partnerships, and turning innovative ideas into actionable solutions.',
+    'She also serves as Founding Executive Director of The Athletic Mind Council, where she convenes leaders across athletics, mental health, technology, and policy to advance athlete wellness and innovation.',
+    'A proud Hampton University and Indiana University alumna, Arionne is passionate about creating opportunities that empower individuals, strengthen communities, and drive lasting impact. A natural connector, she is most energized by bringing people together around ideas and opportunities that create meaningful change.',
+    'Outside of work, she enjoys traveling, discovering great food and live music, and creating memorable experiences with her husband and three children.',
+  ],
+};
+
 const foundingTeam = [
   {
     name: 'Tremaine Grant',
@@ -164,8 +198,8 @@ const foundingTeam = [
     imageSrc: '/dr-tracey-basketball.jpeg',
     imagePosition: 'center 16%',
     accent: '#F472B6',
-    body: 'Dr. Tracey brings the clinical care, escalation workflow, and athlete-support lens behind the AuntEdna side of the council. She is the AuntEdna partner contact for pilot, research, and care-pathway coordination.',
-    proof: ['Athlete-facing clinical lens', 'AuntEdna partner contact', 'NCAA committee experience'],
+    body: 'Former D-I athlete, athletic director, and leading researcher from University of Massachusetts, Boston.',
+    proof: ['Former D-I athlete', 'Athletic director', 'University of Massachusetts, Boston researcher'],
   },
   {
     name: 'Jelanna Salas Olivera',
@@ -173,8 +207,8 @@ const foundingTeam = [
     imageSrc: '/jelanna.jpg',
     imagePosition: 'center',
     accent: '#A78BFA',
-    body: 'Jelanna brings operations, care coordination, and pilot-stage execution support across the AuntEdna side of the partnership.',
-    proof: ['Operations', 'Care coordination', 'Pilot execution'],
+    body: 'Former Big Four and Big Pharma, top 20 Business School Alum. Kelley School of Business, Indiana University, Bloomington.',
+    proof: ['Former Big Four', 'Former Big Pharma', 'Kelley School of Business'],
   },
   {
     name: 'Bobby Nweke',
@@ -272,6 +306,14 @@ const advisorBoards: AdvisorBoard[] = [
         imageFit: 'cover',
         accent: '#F59E0B',
       },
+      {
+        name: 'George Reed',
+        role: 'Executive Leader, Strategic Innovator, and Operational development and oversight of technology programs',
+        imageSrc: '/GeorgeReed.jpg',
+        imagePosition: 'center',
+        imageFit: 'cover',
+        accent: '#38BDF8',
+      },
     ],
   },
 ];
@@ -331,9 +373,94 @@ const SectionHeader: React.FC<{
   </motion.div>
 );
 
+const CouncilLeadershipCard: React.FC<{
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+}> = ({ isOpen, onToggle, onClose }) => (
+  <motion.article
+    variants={fadeUp}
+    initial="hidden"
+    whileInView="visible"
+    viewport={{ once: true, margin: '-80px' }}
+    transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+    className="group relative mt-10 overflow-hidden rounded-lg border border-[#A78BFA]/35 bg-[#12091F] shadow-2xl shadow-[#4C1D95]/20"
+  >
+    <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#4C1D95]/25 blur-3xl" />
+    <div className="relative grid gap-0 lg:grid-cols-[360px,1fr]">
+      <div className="relative min-h-[360px] overflow-hidden border-b border-[#A78BFA]/20 bg-black/35 lg:border-b-0 lg:border-r">
+        <img
+          src={councilLeadership.imageSrc}
+          alt={councilLeadership.name}
+          className="h-full w-full object-cover"
+          style={{ objectPosition: councilLeadership.imagePosition }}
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.82),rgba(0,0,0,0.08)_52%,transparent)]" />
+        <div className="absolute bottom-0 left-0 right-0 p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#C4B5FD]">Council Leadership</p>
+          <h3 className="mt-3 text-3xl font-semibold text-white">{councilLeadership.name}</h3>
+        </div>
+      </div>
+
+      <div className="relative p-6 sm:p-8">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#A78BFA]">{councilLeadership.role}</p>
+        <p className="mt-5 max-w-3xl text-base leading-relaxed text-zinc-200">{councilLeadership.summary}</p>
+        <div className="mt-6 flex flex-wrap gap-2">
+          {councilLeadership.badges.map((badge) => (
+            <span
+              key={badge}
+              className="rounded-md border border-[#A78BFA]/25 bg-[#A78BFA]/10 px-3 py-1.5 text-xs font-semibold text-[#DDD6FE]"
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+        <button
+          type="button"
+          aria-expanded={isOpen}
+          aria-controls="arionne-allen-full-bio"
+          onClick={onToggle}
+          className="mt-7 inline-flex items-center gap-2 rounded-lg border border-[#A78BFA]/35 bg-[#A78BFA]/10 px-4 py-2 text-sm font-semibold text-white transition hover:border-[#C4B5FD]/70 hover:bg-[#A78BFA]/18"
+        >
+          Read full bio
+        </button>
+      </div>
+    </div>
+
+    <div
+      id="arionne-allen-full-bio"
+      className={`absolute inset-0 z-20 flex flex-col overflow-y-auto bg-[#07030F]/95 p-6 backdrop-blur-xl transition duration-300 sm:p-8 ${
+        isOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 md:group-hover:pointer-events-auto md:group-hover:opacity-100'
+      }`}
+    >
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#A78BFA]">Full bio</p>
+          <h3 className="mt-2 text-2xl font-semibold text-white">{councilLeadership.name}</h3>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-white transition hover:border-[#A78BFA]/50 hover:bg-[#A78BFA]/10"
+          aria-label="Close Arionne Allen bio"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="max-w-4xl space-y-4 text-sm leading-relaxed text-zinc-300 sm:text-base">
+        {councilLeadership.fullBio.map((paragraph) => (
+          <p key={paragraph}>{paragraph}</p>
+        ))}
+      </div>
+    </div>
+  </motion.article>
+);
+
 const AthleticMindCouncilPage: NextPage = () => {
   const heroVideoRef = useRef<HTMLVideoElement | null>(null);
   const [heroVideoIsPlaying, setHeroVideoIsPlaying] = useState(false);
+  const [openBioId, setOpenBioId] = useState<string | null>(null);
+  const isCouncilLeadershipBioOpen = openBioId === councilLeadership.id;
 
   useEffect(() => {
     const video = heroVideoRef.current;
@@ -928,6 +1055,19 @@ const AthleticMindCouncilPage: NextPage = () => {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="mt-20">
+              <SectionHeader
+                eyebrow="Council Leadership"
+                title="Founding leadership dedicated to convening the people who can move the field."
+                body="Arionne Allen leads the council experience, bringing together strategy, partnerships, sports, higher education, technology, and execution."
+              />
+              <CouncilLeadershipCard
+                isOpen={isCouncilLeadershipBioOpen}
+                onToggle={() => setOpenBioId(isCouncilLeadershipBioOpen ? null : councilLeadership.id)}
+                onClose={() => setOpenBioId(null)}
+              />
             </div>
           </div>
         </section>

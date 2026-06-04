@@ -1,1 +1,4 @@
-export { default, getStaticProps } from './PIL/TheAthleticMindCouncil';
+import AthleticMindCouncilPage, { getStaticProps } from './PIL/TheAthleticMindCouncil';
+
+export { getStaticProps };
+export default AthleticMindCouncilPage;
