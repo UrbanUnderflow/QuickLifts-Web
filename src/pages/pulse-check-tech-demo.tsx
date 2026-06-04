@@ -390,7 +390,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
             <div className="container">
               <div className="section-header">
                 <h2>For Reviewers</h2>
-                <div>Pepperdine MFC 2026</div>
+                <div>Stakeholder deck</div>
               </div>
 
               <div className="context-grid">
@@ -402,9 +402,9 @@ const PulseCheckTechDemoPage: React.FC = () => {
                     to $100M ARR, and the capital plan. Together they tell the full fundability story.
                   </p>
                   <a
-                    href="/investor-docs/Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf"
+                    href="/investor-docs/Pulse_Intelligence_Labs_Deck.pdf"
                     className="context-link"
-                    download="Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf"
+                    download="Pulse_Intelligence_Labs_Deck.pdf"
                   >
                     View the Deck
                   </a>

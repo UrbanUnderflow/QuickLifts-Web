@@ -33,8 +33,9 @@ const SKY = '#38BDF8';
 const VIOLET = '#A78BFA';
 const CORAL = '#FB7185';
 const AMBER = '#FBBF24';
+const ORANGE = '#FF6B35';
 
-type ProductKey = 'pulse' | 'pulseCheck';
+type ProductKey = 'pulseCheck' | 'pulse' | 'macra';
 type LensKey = 'athlete' | 'engineer' | 'clinical';
 
 const sections = [
@@ -94,17 +95,38 @@ const productDetails: Record<ProductKey, {
   title: string;
   body: string;
   status: string;
+  oneLiner: string;
+  platformLabel: string;
   icon: LucideIcon;
   color: string;
   bullets: string[];
   buyers: string[];
 }> = {
+  pulseCheck: {
+    name: 'Pulse Check',
+    eyebrow: 'Flagship institutional platform',
+    title: 'Cognitive training, athlete signal detection, and sports intelligence for teams.',
+    body: 'Pulse Check helps teams and athletes train attention, regulation, stress response, and decision-making under pressure. It is the flagship institutional product inside the Pulse Intelligence Labs portfolio.',
+    status: 'Shipped flagship. Institutional pilot pipeline active.',
+    oneLiner: 'Elite cognitive performance',
+    platformLabel: 'iOS · Web',
+    icon: Brain,
+    color: SKY,
+    bullets: [
+      'Simulation-based attention and stress training',
+      'Readiness and cognitive-state capture per athlete',
+      'auntEDNA.ai clinical pathway partnership for support beyond performance work',
+    ],
+    buyers: ['Athletes', 'Teams', 'Universities', 'Pro sports'],
+  },
   pulse: {
     name: 'Fit With Pulse',
     eyebrow: 'Community fitness OS',
     title: 'Community infrastructure for creators, clubs, brands, and corporate wellness teams.',
     body: 'Fit With Pulse gives run clubs, trainers, strength coaches, and wellness operators one place to manage programming, challenges, content, memberships, and payments.',
     status: 'Live on iOS, Android, and Web.',
+    oneLiner: 'Community fitness infrastructure',
+    platformLabel: 'iOS · Android · Web',
     icon: Users,
     color: PULSE_GREEN,
     bullets: [
@@ -114,20 +136,22 @@ const productDetails: Record<ProductKey, {
     ],
     buyers: ['Creators', 'Brands', 'Corporations', 'Run clubs'],
   },
-  pulseCheck: {
-    name: 'Pulse Check',
-    eyebrow: 'Mental performance OS',
-    title: 'Cognitive training and measurement built for athletes who compete for a living.',
-    body: 'Pulse Check uses software simulations and Nora, its AI coach, to train attention, stress response, and decision-making. Teams receive readiness and cognitive-state signals they can use in training.',
-    status: 'Live on iOS and Web. University and professional pilots in progress.',
-    icon: Brain,
-    color: SKY,
+  macra: {
+    name: 'Macra',
+    eyebrow: 'Nutrition intelligence',
+    title: 'AI nutrition context for meals, labels, macros, and performance routines.',
+    body: 'Macra turns food logging, label scans, supplement questions, meal planning, and Nora nutrition chat into structured health context for consumers and performance users.',
+    status: 'Shipped nutrition AI surface.',
+    oneLiner: 'AI nutrition intelligence',
+    platformLabel: 'iOS',
+    icon: Activity,
+    color: ORANGE,
     bullets: [
-      'Simulation-based attention and stress training',
-      'Readiness and cognitive-state capture per athlete',
-      'Built for teams, athletic departments, and pro organizations',
+      'Meal, label, supplement, and macro intelligence',
+      'Day-aware Nora nutrition chat and meal planning',
+      'Dedicated nutrition context for the broader human-performance stack',
     ],
-    buyers: ['Athletes', 'Teams', 'Universities', 'Pro sports'],
+    buyers: ['Consumers', 'Athletes', 'Performance users', 'Wellness operators'],
   },
 };
 
@@ -135,7 +159,7 @@ const coreMetrics = [
   { value: '2025', label: 'Founded and Delaware incorporated' },
   { value: '$25K', label: 'Pre-seed closed from LAUNCH in Jan 2026' },
   { value: '50+', label: 'Fitness creators onboarded' },
-  { value: '$1.4M', label: 'Planned seed after anchor milestones' },
+  { value: '$1.4M', label: 'Active pre-seed at $10M pre-money' },
 ];
 
 const tractionItems = [
@@ -148,22 +172,29 @@ const tractionItems = [
   },
   {
     label: 'University pilots',
-    title: 'HBCU athletic departments moving',
-    body: 'Clark Atlanta University launch scheduled for April 6, 2026 (National Student Athlete Day). University of Maryland Eastern Shore pilot confirmed, date TBA.',
+    title: 'Institutional pilot pipeline active',
+    body: 'Worcester State and DePaul are active pilot lanes. Clark Atlanta University is listed as an active HBCU pilot, and UMES is in final pilot-pricing negotiations.',
     icon: GraduationCap,
     color: SKY,
   },
   {
     label: 'Professional sports',
     title: 'NFL conversations underway',
-    body: 'Active early-stage discussions with the New England Patriots are focused on integrating Pulse Check at the professional level and expanding into the broader league environment.',
+    body: 'Initial New England Patriots conversations are focused on how Pulse Check could support the professional team lane and broader league environment.',
     icon: Medal,
     color: VIOLET,
   },
   {
+    label: 'Macra',
+    title: 'Shipped nutrition intelligence',
+    body: 'Macra is the dedicated nutrition AI surface for meals, labels, macros, meal planning, and Nora nutrition context inside the Pulse Intelligence Labs portfolio.',
+    icon: Activity,
+    color: ORANGE,
+  },
+  {
     label: 'Anchor partnerships',
-    title: 'Celebrity-backed run club in final talks',
-    body: 'Final negotiations with a prominent celebrity-backed run club, plus additional conversations across the run-club and cultural-sport landscape.',
+    title: 'Portfolio partnerships in motion',
+    body: 'Creator, team, and cultural-sport conversations continue across Fit With Pulse and the broader Pulse Intelligence Labs portfolio.',
     icon: Rocket,
     color: CORAL,
   },
@@ -185,31 +216,31 @@ const team = [
     image: '/bobbyAdvisor.jpg',
     color: SKY,
     tags: ['Harvard', 'Teach For America', 'TED'],
-    body: 'Supports operations, hiring, partnerships, and execution across the company. His background spans Harvard, Teach For America, TED, education, policy, and public leadership.',
+    body: 'Supports operations, partnerships, and organizational design of education frameworks across product and the broader Pulse Intelligence Labs ecosystem.',
     email: 'bobby@fitwithpulse.ai',
   },
   {
     name: 'Lola Oluwaladun',
-    role: 'Design Lead',
+    role: 'Head of Design',
     image: '/lola.jpg',
     color: VIOLET,
     tags: ['Product design', 'Brand identity', 'UX'],
-    body: 'Owns visual identity, product surface, and experience quality across Fit With Pulse and Pulse Check.',
+    body: 'Owns visual identity, product surface, and experience quality across Pulse Check, Fit With Pulse, and Macra.',
   },
 ];
 
 const advisors = [
   {
     name: 'Marques Zak',
-    role: 'CMO, Atlantic Coast Conference',
+    role: 'Chief Marketing Officer @ The Atlantic Coast Conference (ACC)',
     focus: 'Sports and brand strategy',
     image: '/zak.jpg',
     color: PULSE_GREEN,
   },
   {
     name: 'Valerie Alexander',
-    role: 'IP Attorney and former AI founder',
-    focus: 'Legal and corporate strategy',
+    role: 'Fortune 500 consultant, IPO attorney',
+    focus: 'Enterprise, IPO, and corporate strategy',
     image: '/Val.jpg',
     color: SKY,
   },
@@ -222,8 +253,8 @@ const advisors = [
   },
   {
     name: 'Erik Edwards',
-    role: 'Cooley LLP',
-    focus: 'Legal counsel and company readiness',
+    role: 'Partner, securities and corporate attorney',
+    focus: 'Legal counsel, securities, corporate strategy, and company readiness',
     image: '/ErikEdwards.png',
     color: AMBER,
   },
@@ -366,7 +397,7 @@ const ProductSwitch: React.FC<{
   const product = productDetails[activeProduct];
   const ProductIcon = product.icon;
   const onWhiteColor = activeProduct === 'pulse' ? VIOLET : product.color;
-  const onWhiteBg = activeProduct === 'pulse' ? '#F5F2FF' : '#F7F9F4';
+  const onWhiteBg = activeProduct === 'pulse' ? '#F5F2FF' : activeProduct === 'macra' ? '#FFF4ED' : '#F7F9F4';
 
   return (
     <div className="grid gap-6 lg:grid-cols-[0.45fr_0.55fr]">
@@ -449,7 +480,7 @@ const ProductSwitch: React.FC<{
 const PILOnePage: NextPage = () => {
   const [activeSection, setActiveSection] = useState('company');
   const [activeLens, setActiveLens] = useState<LensKey>('athlete');
-  const [activeProduct, setActiveProduct] = useState<ProductKey>('pulse');
+  const [activeProduct, setActiveProduct] = useState<ProductKey>('pulseCheck');
 
   const currentLens = founderLenses[activeLens];
   const CurrentLensIcon = currentLens.icon;
@@ -482,9 +513,9 @@ const PILOnePage: NextPage = () => {
         metaData={{
           pageId: 'pulse-intelligence-labs-company-brief',
           pageTitle: 'Pulse Intelligence Labs, Inc. | Executive Summary',
-          metaDescription: 'Company one-pager and executive summary for Pulse Intelligence Labs, Inc., covering founder credibility, team, products, traction, and market timing.',
+          metaDescription: 'Company one-pager and executive summary for Pulse Intelligence Labs, Inc., covering founder credibility, team, products, traction, and market timing across Pulse Check, Fit With Pulse, and Macra.',
           ogTitle: 'Pulse Intelligence Labs, Inc. | Executive Summary',
-          ogDescription: 'Company brief for Pulse Intelligence Labs: human performance AI, Fit With Pulse, Pulse Check, team, traction, and seed narrative.',
+          ogDescription: 'Company brief for Pulse Intelligence Labs: human performance AI, Pulse Check, Fit With Pulse, Macra, team, traction, and pre-seed narrative.',
           ogImage: 'https://fitwithpulse.ai/pil-og.png',
           ogType: 'website',
           twitterCard: 'summary_large_image',
@@ -536,7 +567,7 @@ const PILOnePage: NextPage = () => {
           <div className="relative mx-auto flex max-w-7xl items-center justify-between gap-6 px-5 pb-6 pt-2 text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-500 sm:px-8 lg:px-10">
             <span>Pulse Intelligence Labs, Inc.</span>
             <span className="hidden sm:inline">Delaware C-Corp · Atlanta, GA · Est. 2025</span>
-            <span>Company brief · April 2026</span>
+            <span>Company brief · June 2026</span>
           </div>
 
           <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-5 pb-16 pt-6 sm:px-8 lg:grid-cols-[1.15fr_0.85fr] lg:gap-14 lg:px-10 lg:pb-24 lg:pt-10">
@@ -551,7 +582,7 @@ const PILOnePage: NextPage = () => {
               </h1>
 
               <p className="mt-8 max-w-2xl text-lg leading-8 text-zinc-300 sm:text-xl sm:leading-9">
-                Pulse Intelligence Labs builds applied AI software for human performance. Fit With Pulse serves fitness communities and wellness operators. Pulse Check helps teams and athletes train attention, stress response, and decision-making under pressure.
+                Pulse Intelligence Labs builds applied AI software for human performance. Pulse Check is the flagship institutional platform for athlete mental performance. Fit With Pulse serves fitness communities and wellness operators. Macra is the dedicated AI nutrition intelligence surface.
               </p>
 
               <div className="mt-10 flex flex-wrap items-center gap-3">
@@ -610,8 +641,6 @@ const PILOnePage: NextPage = () => {
                     {(Object.keys(productDetails) as ProductKey[]).map((key) => {
                       const product = productDetails[key];
                       const Icon = product.icon;
-                      const oneLiner = key === 'pulse' ? 'Community fitness infrastructure' : 'Elite cognitive performance';
-                      const platformLabel = key === 'pulse' ? 'iOS · Android · Web' : 'iOS · Web';
                       return (
                         <div key={product.name} className="flex items-center justify-between gap-3 border border-white/10 bg-black/25 p-3 rounded-lg">
                           <div className="flex items-center gap-3">
@@ -620,10 +649,10 @@ const PILOnePage: NextPage = () => {
                             </div>
                             <div className="min-w-0">
                               <div className="text-sm font-black leading-tight">{product.name}</div>
-                              <div className="text-[11px] leading-tight text-zinc-500">{oneLiner}</div>
+                              <div className="text-[11px] leading-tight text-zinc-500">{product.oneLiner}</div>
                             </div>
                           </div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">{platformLabel}</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">{product.platformLabel}</span>
                         </div>
                       );
                     })}
@@ -724,7 +753,7 @@ const PILOnePage: NextPage = () => {
           </div>
         </SectionShell>
 
-        <SectionShell id="team" eyebrow="Team and advisors" title="Pulse is led by a focused core team with advisors across sport, design, law, and community.">
+        <SectionShell id="team" eyebrow="Team and advisors" title="Pulse is led by a focused core team with advisors across sport, design, law, capital markets, and community.">
           <div className="grid gap-5 lg:grid-cols-3">
             {team.map((person, index) => (
               <PersonCard key={person.name} person={person} index={index} />
@@ -735,7 +764,7 @@ const PILOnePage: NextPage = () => {
             <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
               <div>
                 <div className="text-xs font-bold uppercase text-zinc-500">Advisory board and ecosystem</div>
-                <h3 className="mt-2 text-2xl font-black">Advisor support across sports marketing, IP, legal readiness, startup programs, and community building.</h3>
+                <h3 className="mt-2 text-2xl font-black">Advisor support across sports marketing, IPO strategy, securities law, startup programs, and community building.</h3>
               </div>
               <div className="flex flex-wrap items-center gap-5">
                 {partnerLogos.map((logo) => (
@@ -751,15 +780,15 @@ const PILOnePage: NextPage = () => {
           </motion.div>
         </SectionShell>
 
-        <SectionShell id="business" eyebrow="Products and business model" title="Pulse sells human performance software across community fitness and competitive sport." tone="light">
+        <SectionShell id="business" eyebrow="Products and business model" title="Pulse sells human performance software across competitive sport, community fitness, and nutrition intelligence." tone="light">
           <ProductSwitch activeProduct={activeProduct} setActiveProduct={setActiveProduct} />
 
           <div className="mt-12 grid gap-4 lg:grid-cols-4">
             {[
-              { icon: Building2, title: 'Company', body: 'Pulse Intelligence Labs, Inc. is a Delaware C-Corp headquartered in Atlanta. The company operates with two product units under one strategy.' },
+              { icon: Building2, title: 'Company', body: 'Pulse Intelligence Labs, Inc. is a Delaware C-Corp headquartered in Atlanta. The company operates three shipped product surfaces under one human-performance strategy.' },
               { icon: Compass, title: 'Vision', body: 'Build the software layer for human performance across fitness, athletics, wellness, and cognition.' },
-              { icon: LineChart, title: 'Model', body: 'Platform revenue on Fit With Pulse; enterprise contracts and pilots on Pulse Check. Both expand through partner channels, reducing dependence on paid acquisition.' },
-              { icon: Briefcase, title: 'Counsel', body: 'Corporate and IP counsel through Erik Edwards at Cooley LLP. Structured for institutional capital from day one.' },
+              { icon: LineChart, title: 'Model', body: 'Enterprise pilots and contracts on Pulse Check; platform revenue on Fit With Pulse; consumer and performance-user revenue on Macra. Partner channels reduce dependence on paid acquisition.' },
+              { icon: Briefcase, title: 'Counsel', body: 'Corporate and securities counsel through Erik Edwards at Cooley LLP. Structured for institutional capital from day one.' },
             ].map((item, index) => {
               const Icon = item.icon;
               return (
@@ -778,7 +807,7 @@ const PILOnePage: NextPage = () => {
           </div>
         </SectionShell>
 
-        <SectionShell id="traction" eyebrow="Traction and capital posture" title="Pulse is securing anchor partnerships and raising $1.4M to accelerate.">
+        <SectionShell id="traction" eyebrow="Traction and capital posture" title="Pulse is securing anchor partnerships and raising a $1.4M pre-seed to accelerate.">
           <div className="grid gap-5 md:grid-cols-2">
             {tractionItems.map((item, index) => {
               const Icon = item.icon;
@@ -814,10 +843,10 @@ const PILOnePage: NextPage = () => {
               </p>
             </div>
             <div className="border border-white/10 bg-white/[0.04] p-6 rounded-lg">
-              <div className="text-xs font-bold uppercase text-zinc-500">Active seed: $1.4M</div>
-              <h3 className="mt-3 text-3xl font-black">Partnerships are the priority for the seed round.</h3>
+              <div className="text-xs font-bold uppercase text-zinc-500">Active pre-seed: $1.4M</div>
+              <h3 className="mt-3 text-3xl font-black">Pulse Check beachhead proof is the priority for this round.</h3>
               <p className="mt-5 text-sm leading-7 text-zinc-300">
-                The primary focus is locking in anchor partnerships with high-profile athletes, pro teams, and cultural creators for Fit With Pulse. The $1.4M seed is open alongside that motion. Planned uses include product, team, partnership infrastructure, and select tuck-in acquisitions.
+                The current raise is a $1.4M pre-seed at $10M pre-money. The primary focus is funding the Pulse Check institutional beachhead while continuing shipped Fit With Pulse and Macra growth. Planned uses include product, team, partnership infrastructure, and select tuck-in acquisitions.
               </p>
             </div>
           </motion.div>
@@ -857,7 +886,7 @@ const PILOnePage: NextPage = () => {
                 Pulse is building practical AI software for human performance.
               </h2>
               <p className="mt-6 max-w-3xl text-lg leading-8 text-zinc-300">
-                Tremaine's background helps the company connect community fitness, elite athlete mental performance, AI systems, and evidence-based product development.
+                Tremaine's background helps the company connect community fitness, elite athlete mental performance, nutrition intelligence, AI systems, and evidence-based product development.
               </p>
             </motion.div>
 

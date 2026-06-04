@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 const TOTAL_SLIDES = 22;
-const PDF_DOWNLOAD_PATH = '/Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf';
+const PDF_DOWNLOAD_PATH = '/Pulse_Intelligence_Labs_Deck.pdf';
 
 const SLIDE_META = [
   { label: 'Title', eyebrow: 'Slide 1' },
@@ -834,7 +834,7 @@ const SceneTitle: React.FC = () => (
         >
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#E0FE10]/25 bg-black/35 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-[#E0FE10] backdrop-blur-xl">
             <span className="h-1.5 w-1.5 rounded-full bg-[#E0FE10] shadow-[0_0_8px_rgba(224,254,16,0.5)]" />
-            Pepperdine Most Fundable Companies · 2026
+            Institutional Stakeholder Deck
           </div>
 
           <div
@@ -2337,7 +2337,7 @@ const SceneBuildingBlocks: React.FC = () => (
         </h1>
         <div className="mt-4 max-w-5xl text-xl font-medium leading-relaxed text-zinc-300 md:text-2xl">
           Average annual contract value at each segment of the market. These are the units that compound into the
-          Pepperdine revenue plan.
+          revenue plan.
         </div>
       </div>
 
@@ -3079,10 +3079,10 @@ const GTM_NODES = [
   {
     stage: 'Research Lane',
     icon: '🎓',
-    name: 'Northeastern',
-    type: 'University · R1',
-    statusBold: 'Active',
-    statusDetail: 'institutional credibility',
+    name: 'DePaul University',
+    type: 'University · D1',
+    statusBold: 'Paid pilot lane',
+    statusDetail: 'institutional workflow',
     accent: '#10B981',
     accentDim: 'rgba(16,185,129,0.12)',
     accentBorder: 'rgba(16,185,129,0.25)',
@@ -3104,7 +3104,6 @@ const GTM_NODES = [
 
 const GTM_ADDITIONAL_PILOTS = [
   { school: 'Clark Atlanta University', meta: 'Atlanta, GA · HBCU · Active pilot' },
-  { school: 'DePaul University', meta: 'Chicago, IL · Initial conversations had for pilot' },
   { school: 'UMES', meta: 'Princess Anne, MD · HBCU · Final pilot-pricing negotiations' },
 ] as const;
 
@@ -3133,13 +3132,10 @@ const SceneGTM: React.FC = () => (
     <div className="flex h-full min-h-0 flex-col justify-center gap-4">
       {/* Header */}
       <div>
-        <SlideKicker>Go-to-Market · Boston Corridor</SlideKicker>
+        <SlideKicker>Go-to-Market</SlideKicker>
         <h1 className="mt-4 text-[2.6rem] font-black leading-[1.05] tracking-tight text-white md:text-[3.2rem]">
           Three prospective partners already in the <span style={{ color: COLORS.lime }}>pipeline.</span>
         </h1>
-        <p className="mt-3 max-w-[780px] text-[15px] leading-relaxed text-white/55">
-          Boston-affiliated relationships are already active across every tier we care about — <strong className="font-medium text-white">campus, research, and pro.</strong> The wedge is visible.
-        </p>
       </div>
 
       {/* ── THE CORRIDOR TRACK ── */}
@@ -3239,17 +3235,11 @@ const SceneGTM: React.FC = () => (
 
       {/* ── ADDITIONAL PILOTS ROW ── */}
       <motion.div
-        className="grid items-stretch gap-3.5 md:grid-cols-[auto_1fr_1fr]"
+        className="grid items-stretch gap-3.5 md:grid-cols-2"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.9, duration: 0.6 }}
       >
-        {/* "+2" label card */}
-        <div className="flex items-center gap-2.5 whitespace-nowrap rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3.5 text-xl font-medium tracking-wide text-white/55">
-          <span className="text-2xl font-black leading-none tracking-wide text-[#E0FE10]" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>+3</span>
-          <span>Additional active pilots outside Boston</span>
-        </div>
-
         {/* Pilot cards */}
         {GTM_ADDITIONAL_PILOTS.map((pilot) => (
           <div
@@ -3288,7 +3278,9 @@ const SceneGTM: React.FC = () => (
             <Zap className="h-3.5 w-3.5 text-[#0a0a0b]" />
           </div>
           <div className="text-[13px] leading-snug text-white/55">
-            <strong className="font-semibold text-white">Pilot first. Prove workflow. Convert to contracts.</strong>
+            <strong className="font-semibold text-white">Paid pilots are contracts.</strong>{' '}
+            We conform the software to the institution and sports team, then convert into a continuation contract after
+            the pilot and personalization phase.
           </div>
         </div>
       </motion.div>
@@ -3520,7 +3512,7 @@ const SceneAuntEdnaPartnership: React.FC = () => (
     <div className="grid min-h-[42rem] content-center gap-7">
       <div className="grid gap-6 xl:grid-cols-[1.12fr_0.88fr] xl:items-end">
         <div className="max-w-6xl">
-          <SlideKicker>Strategic clinical partner</SlideKicker>
+          <SlideKicker>Strategic Alliance</SlideKicker>
           <h1 className="mt-5 text-5xl font-black leading-[0.94] text-white md:text-6xl">
             AuntEDNA.ai — <span className="text-[#F472B6]">Clinical pathway, validated.</span>
           </h1>
@@ -3624,7 +3616,7 @@ const SUPPORTERS_V2 = [
     categoryColor: '#EC4899',
     topBar: '#EC4899',
     colSpan: 'xl:col-span-4',
-    description: '<strong>Strategic clinical pathway partner</strong> for escalation and care routing',
+    description: '<strong>Strategic clinical pathway partner</strong> connecting care routing, research validation, and athletics access',
   },
   {
     key: 'polar',
@@ -3643,28 +3635,12 @@ const SUPPORTERS_V2 = [
     description: '<strong>Legal and venture infrastructure</strong> for company formation and financing',
   },
   {
-    key: 'ncaa',
-    category: 'Sports Institution',
-    categoryColor: '#5B8DEF',
-    topBar: '#004B87',
-    colSpan: 'xl:col-span-4',
-    description: '<strong>College athletics ecosystem credibility</strong> — direct institutional alignment',
-  },
-  {
     key: 'acc',
     category: 'Conference',
     categoryColor: '#3B82F6',
     topBar: '#00447C',
-    colSpan: 'xl:col-span-4',
+    colSpan: 'xl:col-span-3',
     description: '<strong>Conference-level marketing and institutional access</strong>',
-  },
-  {
-    key: 'nsf',
-    category: 'Scientific',
-    categoryColor: '#60A5FA',
-    topBar: '#2563EB',
-    colSpan: 'xl:col-span-4',
-    description: '<strong>Research validation</strong>',
   },
   {
     key: 'aws',
@@ -3695,7 +3671,7 @@ const SUPPORTERS_V2 = [
     category: 'Academic',
     categoryColor: '#A51C30',
     topBar: '#A51C30',
-    colSpan: 'xl:col-span-3',
+    colSpan: 'xl:col-span-12',
     description: '<strong>Harvard Graduate School of Education</strong> — HGSE network and education leadership',
   },
 ] as const;
@@ -3705,11 +3681,19 @@ const SupporterLogo: React.FC<{ supporterKey: string }> = ({ supporterKey }) => 
   switch (supporterKey) {
     case 'auntedna':
       return (
-        <div>
+        <div className="w-full">
           <div className="text-[34px] font-black leading-none tracking-tight text-white">
             Aunt<span className="text-[#EC4899]">EDNA</span><span className="text-xl text-white/50">.ai</span>
           </div>
           <div className="mt-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-[#EC4899]">Clinical pathway</div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[15px] font-black leading-none tracking-tight text-white">
+              NCAA<span className="ml-0.5 align-super text-[8px] font-semibold text-white/35">®</span>
+            </div>
+            <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] font-black leading-none tracking-tight text-white">
+              NSF
+            </div>
+          </div>
         </div>
       );
     case 'polar':
@@ -3719,12 +3703,6 @@ const SupporterLogo: React.FC<{ supporterKey: string }> = ({ supporterKey }) => 
           <div className="mt-1.5 h-[3px] w-20 rounded-full bg-[#38BDF8]" />
         </div>
       );
-    case 'ncaa':
-      return (
-        <div className="text-[44px] font-black leading-none tracking-tight text-white" style={{ letterSpacing: '-1px' }}>
-          NCAA<span className="ml-0.5 align-super text-xl font-semibold text-white/30">®</span>
-        </div>
-      );
     case 'acc':
       return (
         <div>
@@ -3732,25 +3710,6 @@ const SupporterLogo: React.FC<{ supporterKey: string }> = ({ supporterKey }) => 
             ACC
           </div>
           <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/55">Atlantic Coast Conference</div>
-        </div>
-      );
-    case 'nsf':
-      return (
-        <div className="flex items-center gap-3">
-          <div
-            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 border-[#60A5FA] text-xl font-black text-white"
-            style={{
-              background: 'radial-gradient(circle, #1E40AF, #0C2D6B)',
-              fontFamily: "'Playfair Display', serif",
-              boxShadow: 'inset 0 0 12px rgba(255,255,255,0.1)',
-            }}
-          >
-            NSF
-          </div>
-          <div className="font-extrabold text-white">
-            <div className="text-2xl leading-tight" style={{ letterSpacing: '0.5px' }}>NSF</div>
-            <div className="mt-0.5 text-[9px] uppercase tracking-[0.12em] text-white/55">National Science Foundation</div>
-          </div>
         </div>
       );
     case 'cooley':
@@ -4274,7 +4233,7 @@ const SceneSummary: React.FC = () => (
         <div className="flex flex-col gap-1.5 text-[12px] text-white/55 md:flex-row md:flex-wrap md:items-center md:gap-x-4">
           <span><strong className="font-semibold text-white">Tremaine Grant</strong> · tre@fitwithpulse.ai</span>
           <span className="hidden text-white/18 md:inline">|</span>
-          <span><strong className="font-semibold text-white">Pulse Intelligence Labs</strong> · Pepperdine MFC 2026</span>
+          <span><strong className="font-semibold text-white">Pulse Intelligence Labs</strong> · Institutional stakeholder deck</span>
         </div>
       </div>
 
@@ -4364,7 +4323,7 @@ const PulsePILPepperdinePitchPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Pulse Intelligence Labs Pepperdine MFC Pitch | Pulse Check</title>
+        <title>Pulse Intelligence Labs Stakeholder Deck | Pulse Check</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
@@ -4427,7 +4386,7 @@ const PulsePILPepperdinePitchPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <a
                 href={PDF_DOWNLOAD_PATH}
-                download="Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf"
+                download="Pulse_Intelligence_Labs_Deck.pdf"
                 className="inline-flex items-center gap-2 rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-4 py-2 text-xl font-semibold text-[#E0FE10] transition hover:bg-[#E0FE10]/15"
               >
                 <Download className="h-4 w-4" />
