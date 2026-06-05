@@ -186,7 +186,7 @@ const foundingTeam = [
   {
     name: 'Tremaine Grant',
     role: 'Founder and CEO, Pulse Intelligence Labs',
-    imageSrc: '/TremaineFounder.jpg',
+    imageSrc: '/founder-portrait-1.jpg',
     imagePosition: 'center top',
     accent: '#E0FE10',
     body: 'Former Florida State D1 track and field athlete, longtime personal trainer, and software engineer with more than 20 years of experience. Tremaine builds AI systems at the intersection of human performance, fitness, cognitive science, and clinical research.',
@@ -291,11 +291,11 @@ const advisorBoards: AdvisorBoard[] = [
         accent: '#10B981',
       },
       {
-        name: 'Garin Varis',
+        name: 'Garin Veris',
         role: 'Retired Patriots Player, Attorney',
         imageSrc: '/garin-varis.webp',
         imagePosition: 'center 24%',
-        imageFit: 'contain',
+        imageFit: 'cover',
         accent: '#FF6B35',
       },
       {
@@ -387,8 +387,8 @@ const CouncilLeadershipCard: React.FC<{
     className="group relative mt-10 overflow-hidden rounded-lg border border-[#A78BFA]/35 bg-[#12091F] shadow-2xl shadow-[#4C1D95]/20"
   >
     <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#4C1D95]/25 blur-3xl" />
-    <div className="relative grid gap-0 lg:grid-cols-[360px,1fr]">
-      <div className="relative min-h-[360px] overflow-hidden border-b border-[#A78BFA]/20 bg-black/35 lg:border-b-0 lg:border-r">
+    <div className="relative grid gap-0 sm:grid-cols-[220px,1fr]">
+      <div className="relative h-72 overflow-hidden border-b border-[#A78BFA]/20 bg-black/35 sm:h-80 sm:border-b-0 sm:border-r">
         <img
           src={councilLeadership.imageSrc}
           alt={councilLeadership.name}
