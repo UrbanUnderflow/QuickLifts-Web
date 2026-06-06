@@ -370,9 +370,24 @@ export const getServerSideProps: GetServerSideProps = async ({ params, query, re
       res.setHeader('Cache-Control', 'private, no-store, max-age=0');
     }
 
-    const articleData = {
+    const articleData: DynamicArticle = {
       ...(data || {}),
       slug,
+      title: typeof data?.title === 'string' ? data.title : 'Research',
+      subtitle: typeof data?.subtitle === 'string' ? data.subtitle : '',
+      author: typeof data?.author === 'string' ? data.author : '',
+      excerpt: typeof data?.excerpt === 'string' ? data.excerpt : '',
+      category: typeof data?.category === 'string' ? data.category : 'Research',
+      readTime: typeof data?.readTime === 'string' ? data.readTime : '',
+      featured: data?.featured === true,
+      contentType:
+        data?.contentType === 'article' || data?.contentType === 'white-paper'
+          ? data.contentType
+          : undefined,
+      visibility: data?.visibility === 'public' || data?.visibility === 'unlisted' ? data.visibility : undefined,
+      listed: data?.listed,
+      passwordProtected: data?.passwordProtected === true,
+      status: typeof data?.status === 'string' ? data.status : 'published',
       authorTitle: resolvedAuthorTitle,
       featuredImage,
       content: articleAccess.isLocked ? '' : normalizeResearchArticleCopy(String(data?.content || '')),
