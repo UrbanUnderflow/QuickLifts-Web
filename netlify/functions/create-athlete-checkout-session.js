@@ -29,10 +29,10 @@ const USERS_COLLECTION = 'users';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
 
-const LIVE_ATHLETE_MONTHLY_PRICE_ID = 'price_1PDq26RobSf56MUOucDIKLhd';
-const LIVE_ATHLETE_ANNUAL_PRICE_ID = 'price_1PDq3LRobSf56MUOng0UxhCC';
-const TEST_ATHLETE_MONTHLY_PRICE_ID = 'price_1RMIUNRobSf56MUOfeB4gIot';
-const TEST_ATHLETE_ANNUAL_PRICE_ID = 'price_1RMISFRobSf56MUOpcSoohjP';
+const LIVE_ATHLETE_MONTHLY_PRICE_ID = 'price_1TfN9QIkArZc741WdNmcTHPv';
+const LIVE_ATHLETE_ANNUAL_PRICE_ID = 'price_1TfN8cIkArZc741WskOfYXhL';
+const TEST_ATHLETE_MONTHLY_PRICE_ID = 'price_1TfOBPIkArZc741WGAWleQke';
+const TEST_ATHLETE_ANNUAL_PRICE_ID = 'price_1TfOBPIkArZc741WwYxdNa8Q';
 
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
 

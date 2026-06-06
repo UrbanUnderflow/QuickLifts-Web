@@ -62,6 +62,7 @@ type TrainingTrack = {
   format: string;
   price: string;
   outcomes: string[];
+  href?: string;
 };
 
 type StakeholderAssessment = {
@@ -367,12 +368,14 @@ const assessments: StakeholderAssessment[] = [
         format: 'Two live sessions plus a take-home guide',
         price: '$199',
         outcomes: ['Understanding stress and recovery', 'What to say (and what not to)', 'Easing pressure at home'],
+        href: '/parent-training?course=parent-foundations',
       },
       {
         title: 'Recognizing the Signs Before a Crisis',
         format: 'Go-at-your-own-pace lessons plus real scenarios',
         price: '$79',
         outcomes: ['Eating and sleep changes', 'Pulling-away signs', 'Knowing when to get help'],
+        href: '/parent-training?course=parent-recognizing-the-signs',
       },
     ],
     domainCopy: {
@@ -618,12 +621,14 @@ const assessments: StakeholderAssessment[] = [
         format: 'Live workshop plus team language guide',
         price: '$399',
         outcomes: ['Reading pressure and fatigue', 'Task-focused correction', 'Recovery-aware practice design'],
+        href: '/coach-training?course=coaching-the-nervous-system',
       },
       {
         title: 'Coaching the Mind in Practice',
         format: 'Scenario-based session',
         price: '$199',
         outcomes: ['Reinforcing mental skills', 'Reading the warning signs', 'When to escalate'],
+        href: '/coach-training?course=coaching-the-mind-in-practice',
       },
     ],
     domainCopy: {
@@ -857,12 +862,14 @@ const assessments: StakeholderAssessment[] = [
         format: 'Live applied-neuroscience lab',
         price: '$399',
         outcomes: ['Arousal and recovery regulation', 'Reading readiness data', 'Mind-body return to play'],
+        href: '/athletic-trainer-training?course=performance-neuroscience-for-sports-medicine',
       },
       {
         title: 'Reinforcing the Mental-Performance Curriculum',
         format: 'Self-paced module plus scenario lab',
         price: '$149',
         outcomes: ['Supporting daily skills', 'Performance vs. clinical triage', 'Clean team handoffs'],
+        href: '/athletic-trainer-training?course=reinforcing-the-mental-performance-curriculum',
       },
     ],
     domainCopy: {
@@ -1651,6 +1658,11 @@ const ResultsView: React.FC<{
               <p className="mt-3 text-sm leading-6 text-stone-500">{assessment.resultsCopy.trainingIntro}</p>
             )}
 
+            <div className="mt-4 inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium" style={{ borderColor: `${assessment.secondary}33`, backgroundColor: `${assessment.secondary}0d`, color: '#57534e' }}>
+              <CheckCircle2 className="h-3.5 w-3.5" style={{ color: assessment.secondary }} />
+              <span>The $10 you paid for this assessment is credited toward any training below.</span>
+            </div>
+
             <div className="mt-5 rounded-lg border border-stone-200 bg-white/80 p-4">
               <div className="text-sm font-semibold text-stone-500">Priority domains</div>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -1682,18 +1694,41 @@ const ResultsView: React.FC<{
                       </div>
                     ))}
                   </div>
+                  {track.href && (
+                    <a
+                      href={track.href}
+                      className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold transition hover:opacity-80"
+                      style={{ color: assessment.secondary }}
+                    >
+                      <span>Open course</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </a>
+                  )}
                 </div>
               ))}
             </div>
 
-            <a
-              href="mailto:tre@fitwithpulse.ai?subject=Elite%20Athlete%20Support%20Readiness%20Training"
-              className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition hover:opacity-90"
-              style={{ backgroundColor: assessment.secondary, color: '#FAFAF8' }}
-            >
-              <Mail className="h-4 w-4" />
-              <span>Request training package</span>
-            </a>
+            {assessment.trainingTracks.some((track) => track.href) ? (
+              <p className="mt-5 text-center text-xs text-stone-500">
+                Prefer a tailored package?{' '}
+                <a
+                  href="mailto:tre@fitwithpulse.ai?subject=Elite%20Athlete%20Support%20Readiness%20Training"
+                  className="font-semibold underline-offset-2 hover:underline"
+                  style={{ color: assessment.secondary }}
+                >
+                  Request a training package
+                </a>
+              </p>
+            ) : (
+              <a
+                href="mailto:tre@fitwithpulse.ai?subject=Elite%20Athlete%20Support%20Readiness%20Training"
+                className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition hover:opacity-90"
+                style={{ backgroundColor: assessment.secondary, color: '#FAFAF8' }}
+              >
+                <Mail className="h-4 w-4" />
+                <span>Request training package</span>
+              </a>
+            )}
           </div>
         </motion.div>
       </div>

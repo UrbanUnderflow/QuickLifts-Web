@@ -312,3 +312,1561 @@
 [37867358ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
 [37872360ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
 [37877364ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[38873959ms] [WARNING] <link rel=preload> has an unsupported `type` value @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[38874082ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ webpack-internal:///./node_modules/react-dom/cjs/react-dom.development.js:29889
+[38874098ms] [LOG] [HMR] connected @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:38
+[38874241ms] [LOG] [Firebase] Initial mode: {isDev: true, source: localhost default, timestamp: 2026-06-06T13:45:15.727Z} @ webpack-internal:///./src/api/firebase/config.ts:212
+[38874241ms] [LOG] [Firebase] Starting initialization: {environment: development, isLocalhost: true, timestamp: 2026-06-06T13:45:15.731Z} @ webpack-internal:///./src/api/firebase/config.ts:141
+[38874242ms] [LOG] [Firebase Config] Environment Check: {isDev: true, isLocalhost: true, nodeEnv: development, envVarsPresent: Object, timestamp: 2026-06-06T13:45:15.731Z} @ webpack-internal:///./src/api/firebase/config.ts:92
+[38874242ms] [LOG] [Firebase Config] Final Configuration: {mode: development, apiKey: AIzaSyDy25daRNR3sd9P9OJKYnoQmLkQlhuQcy4, authDomain: quicklifts-dev-01.firebaseapp.com, projectId: quicklifts-dev-01, storageBucket: quicklifts-dev-01.appspot.com} @ webpack-internal:///./src/api/firebase/config.ts:111
+[38874242ms] [LOG] [Firebase] Using configuration: {mode: development, isLocalhost: true, projectId: quicklifts-dev-01, hasApiKey: true, hasAppId: true} @ webpack-internal:///./src/api/firebase/config.ts:161
+[38874244ms] [LOG] [Firebase] Initialization complete: {hasApp: true, hasAuth: true, hasDb: true, hasStorage: true, timestamp: 2026-06-06T13:45:15.734Z} @ webpack-internal:///./src/api/firebase/config.ts:182
+[38874256ms] [LOG] 🛠️ Environment debug helper available! Run window.debugEnv() in console to check environment variables. @ webpack-internal:///./src/utils/envDebug.ts:61
+[38874285ms] [LOG] [App] User Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36 @ webpack-internal:///./src/pages/_app.tsx:183
+[38874285ms] [LOG] [App] Current URL: http://localhost:3000/elite-athlete-support-readiness-assessments @ webpack-internal:///./src/pages/_app.tsx:184
+[38874286ms] [LOG] [App] User Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36 @ webpack-internal:///./src/pages/_app.tsx:183
+[38874286ms] [LOG] [App] Current URL: http://localhost:3000/elite-athlete-support-readiness-assessments @ webpack-internal:///./src/pages/_app.tsx:184
+[38874287ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[38874287ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[38874287ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[38874287ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[38874294ms] [WARNING] [Mixpanel] Project token not found. Tracking disabled. @ webpack-internal:///./src/pages/_app.tsx:134
+[38874295ms] [LOG] 🔍 [AuthWrapper] Current User State: {user: null, subscription: undefined, isNull: true, isSafari: false, userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36} @ webpack-internal:///./src/components/AuthWrapper.tsx:455
+[38874295ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T13:45:15.784Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:492
+[38874295ms] [WARNING] [Mixpanel] Project token not found. Tracking disabled. @ webpack-internal:///./src/pages/_app.tsx:134
+[38874295ms] [LOG] 🔍 [AuthWrapper] Current User State: {user: null, subscription: undefined, isNull: true, isSafari: false, userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36} @ webpack-internal:///./src/components/AuthWrapper.tsx:455
+[38874295ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T13:45:15.785Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:492
+[38874322ms] [LOG] Auth state changed: {hasFirebaseUser: false, email: undefined, timestamp: 2026-06-06T13:45:15.811Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:505
+[38874322ms] [LOG] No firebase user, clearing state @ webpack-internal:///./src/components/AuthWrapper.tsx:768
+[38874322ms] [LOG] [AuthWrapper] User not authenticated but on public route: /elite-athlete-support-readiness-assessments. No modal needed. @ webpack-internal:///./src/components/AuthWrapper.tsx:776
+[38874322ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[38874323ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[38874323ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[38874323ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[38874323ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[38874323ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[38874323ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[38874323ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[38874323ms] [LOG] [Firebase] Persistence set successfully to browserLocalPersistence @ webpack-internal:///./src/api/firebase/config.ts:177
+[38877364ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[38882398ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[39233540ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39234543ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39235546ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39236551ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39237554ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39242559ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39247566ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39252581ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39257629ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39262671ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39267729ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39272836ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39278368ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39283962ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39291429ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39298857ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39305364ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39314657ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39323738ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39331229ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39340172ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39346479ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39353674ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39360041ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[39366555ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[40548166ms] [WARNING] <link rel=preload> has an unsupported `type` value @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[40548288ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ webpack-internal:///./node_modules/react-dom/cjs/react-dom.development.js:29889
+[40548304ms] [LOG] [HMR] connected @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:38
+[40548450ms] [LOG] [Firebase] Initial mode: {isDev: true, source: localhost default, timestamp: 2026-06-06T14:13:09.936Z} @ webpack-internal:///./src/api/firebase/config.ts:212
+[40548450ms] [LOG] [Firebase] Starting initialization: {environment: development, isLocalhost: true, timestamp: 2026-06-06T14:13:09.940Z} @ webpack-internal:///./src/api/firebase/config.ts:141
+[40548451ms] [LOG] [Firebase Config] Environment Check: {isDev: true, isLocalhost: true, nodeEnv: development, envVarsPresent: Object, timestamp: 2026-06-06T14:13:09.940Z} @ webpack-internal:///./src/api/firebase/config.ts:92
+[40548451ms] [LOG] [Firebase Config] Final Configuration: {mode: development, apiKey: AIzaSyDy25daRNR3sd9P9OJKYnoQmLkQlhuQcy4, authDomain: quicklifts-dev-01.firebaseapp.com, projectId: quicklifts-dev-01, storageBucket: quicklifts-dev-01.appspot.com} @ webpack-internal:///./src/api/firebase/config.ts:111
+[40548451ms] [LOG] [Firebase] Using configuration: {mode: development, isLocalhost: true, projectId: quicklifts-dev-01, hasApiKey: true, hasAppId: true} @ webpack-internal:///./src/api/firebase/config.ts:161
+[40548453ms] [LOG] [Firebase] Initialization complete: {hasApp: true, hasAuth: true, hasDb: true, hasStorage: true, timestamp: 2026-06-06T14:13:09.943Z} @ webpack-internal:///./src/api/firebase/config.ts:182
+[40548465ms] [LOG] 🛠️ Environment debug helper available! Run window.debugEnv() in console to check environment variables. @ webpack-internal:///./src/utils/envDebug.ts:61
+[40548487ms] [LOG] [Firebase] Persistence set successfully to browserLocalPersistence @ webpack-internal:///./src/api/firebase/config.ts:177
+[40548497ms] [LOG] [App] User Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36 @ webpack-internal:///./src/pages/_app.tsx:183
+[40548497ms] [LOG] [App] Current URL: http://localhost:3000/elite-athlete-support-readiness-assessments @ webpack-internal:///./src/pages/_app.tsx:184
+[40548498ms] [LOG] [App] User Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36 @ webpack-internal:///./src/pages/_app.tsx:183
+[40548498ms] [LOG] [App] Current URL: http://localhost:3000/elite-athlete-support-readiness-assessments @ webpack-internal:///./src/pages/_app.tsx:184
+[40548499ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40548499ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40548499ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40548499ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40548506ms] [WARNING] [Mixpanel] Project token not found. Tracking disabled. @ webpack-internal:///./src/pages/_app.tsx:134
+[40548507ms] [LOG] 🔍 [AuthWrapper] Current User State: {user: null, subscription: undefined, isNull: true, isSafari: false, userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36} @ webpack-internal:///./src/components/AuthWrapper.tsx:457
+[40548507ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T14:13:09.997Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:494
+[40548508ms] [WARNING] [Mixpanel] Project token not found. Tracking disabled. @ webpack-internal:///./src/pages/_app.tsx:134
+[40548508ms] [LOG] 🔍 [AuthWrapper] Current User State: {user: null, subscription: undefined, isNull: true, isSafari: false, userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36} @ webpack-internal:///./src/components/AuthWrapper.tsx:457
+[40548508ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T14:13:09.998Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:494
+[40548517ms] [LOG] Auth state changed: {hasFirebaseUser: false, email: undefined, timestamp: 2026-06-06T14:13:10.006Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:507
+[40548517ms] [LOG] No firebase user, clearing state @ webpack-internal:///./src/components/AuthWrapper.tsx:770
+[40548517ms] [LOG] [AuthWrapper] User not authenticated but on public route: /elite-athlete-support-readiness-assessments. No modal needed. @ webpack-internal:///./src/components/AuthWrapper.tsx:778
+[40548517ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40548518ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40548518ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40548518ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40548522ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40548522ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40548522ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40548522ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40551567ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[40556614ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[40762571ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[40771725ms] [LOG] Refreshing page data due to server-side change @ webpack-internal:///./node_modules/next/dist/client/page-bootstrap.js:102
+[40771752ms] [LOG] [Firebase] Initial mode: {isDev: true, source: localhost default, timestamp: 2026-06-06T14:16:53.241Z} @ webpack-internal:///./src/api/firebase/config.ts:212
+[40771752ms] [LOG] [Firebase] Starting initialization: {environment: development, isLocalhost: true, timestamp: 2026-06-06T14:16:53.241Z} @ webpack-internal:///./src/api/firebase/config.ts:141
+[40771752ms] [LOG] [Firebase Config] Environment Check: {isDev: true, isLocalhost: true, nodeEnv: development, envVarsPresent: Object, timestamp: 2026-06-06T14:16:53.241Z} @ webpack-internal:///./src/api/firebase/config.ts:92
+[40771752ms] [LOG] [Firebase Config] Final Configuration: {mode: development, apiKey: AIzaSyDy25daRNR3sd9P9OJKYnoQmLkQlhuQcy4, authDomain: quicklifts-dev-01.firebaseapp.com, projectId: quicklifts-dev-01, storageBucket: quicklifts-dev-01.appspot.com} @ webpack-internal:///./src/api/firebase/config.ts:111
+[40771752ms] [LOG] [Firebase] Using configuration: {mode: development, isLocalhost: true, projectId: quicklifts-dev-01, hasApiKey: true, hasAppId: true} @ webpack-internal:///./src/api/firebase/config.ts:161
+[40771752ms] [LOG] [Firebase] Initialization complete: {hasApp: true, hasAuth: true, hasDb: true, hasStorage: true, timestamp: 2026-06-06T14:16:53.242Z} @ webpack-internal:///./src/api/firebase/config.ts:182
+[40771754ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771754ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40771754ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771754ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40771754ms] [LOG] 🔍 [AuthWrapper] Current User State: {user: null, subscription: undefined, isNull: true, isSafari: false, userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36} @ webpack-internal:///./src/components/AuthWrapper.tsx:457
+[40771754ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T14:16:53.244Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:494
+[40771755ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771755ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40771755ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771755ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40771755ms] [LOG] Auth state changed: {hasFirebaseUser: false, email: undefined, timestamp: 2026-06-06T14:16:53.244Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:507
+[40771755ms] [LOG] No firebase user, clearing state @ webpack-internal:///./src/components/AuthWrapper.tsx:770
+[40771756ms] [LOG] [AuthWrapper] User not authenticated but on public route: /elite-athlete-support-readiness-assessments. No modal needed. @ webpack-internal:///./src/components/AuthWrapper.tsx:778
+[40771756ms] [LOG] [Firebase] Persistence set successfully to browserLocalPersistence @ webpack-internal:///./src/api/firebase/config.ts:177
+[40771756ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771756ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40771756ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771756ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40771756ms] [LOG] [Fast Refresh] done in 9186ms @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:190
+[40771756ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771756ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40771756ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771756ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40771763ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[40771768ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771768ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40771768ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771768ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40771774ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T14:16:53.263Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:494
+[40771774ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771774ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40771774ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771774ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40771775ms] [LOG] Auth state changed: {hasFirebaseUser: false, email: undefined, timestamp: 2026-06-06T14:16:53.264Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:507
+[40771775ms] [LOG] No firebase user, clearing state @ webpack-internal:///./src/components/AuthWrapper.tsx:770
+[40771775ms] [LOG] [AuthWrapper] User not authenticated but on public route: /elite-athlete-support-readiness-assessments. No modal needed. @ webpack-internal:///./src/components/AuthWrapper.tsx:778
+[40771775ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771775ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40771775ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771775ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40771775ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771775ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40771775ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40771775ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40774913ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[40799421ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[40799877ms] [LOG] Refreshing page data due to server-side change @ webpack-internal:///./node_modules/next/dist/client/page-bootstrap.js:102
+[40799889ms] [LOG] [Firebase] Initial mode: {isDev: true, source: localhost default, timestamp: 2026-06-06T14:17:21.379Z} @ webpack-internal:///./src/api/firebase/config.ts:212
+[40799889ms] [LOG] [Firebase] Starting initialization: {environment: development, isLocalhost: true, timestamp: 2026-06-06T14:17:21.379Z} @ webpack-internal:///./src/api/firebase/config.ts:141
+[40799889ms] [LOG] [Firebase Config] Environment Check: {isDev: true, isLocalhost: true, nodeEnv: development, envVarsPresent: Object, timestamp: 2026-06-06T14:17:21.379Z} @ webpack-internal:///./src/api/firebase/config.ts:92
+[40799889ms] [LOG] [Firebase Config] Final Configuration: {mode: development, apiKey: AIzaSyDy25daRNR3sd9P9OJKYnoQmLkQlhuQcy4, authDomain: quicklifts-dev-01.firebaseapp.com, projectId: quicklifts-dev-01, storageBucket: quicklifts-dev-01.appspot.com} @ webpack-internal:///./src/api/firebase/config.ts:111
+[40799889ms] [LOG] [Firebase] Using configuration: {mode: development, isLocalhost: true, projectId: quicklifts-dev-01, hasApiKey: true, hasAppId: true} @ webpack-internal:///./src/api/firebase/config.ts:161
+[40799890ms] [LOG] [Firebase] Initialization complete: {hasApp: true, hasAuth: true, hasDb: true, hasStorage: true, timestamp: 2026-06-06T14:17:21.379Z} @ webpack-internal:///./src/api/firebase/config.ts:182
+[40799891ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799891ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40799891ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799891ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40799891ms] [LOG] 🔍 [AuthWrapper] Current User State: {user: null, subscription: undefined, isNull: true, isSafari: false, userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36} @ webpack-internal:///./src/components/AuthWrapper.tsx:457
+[40799891ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T14:17:21.381Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:494
+[40799892ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799892ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40799892ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799892ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40799892ms] [LOG] Auth state changed: {hasFirebaseUser: false, email: undefined, timestamp: 2026-06-06T14:17:21.381Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:507
+[40799892ms] [LOG] No firebase user, clearing state @ webpack-internal:///./src/components/AuthWrapper.tsx:770
+[40799892ms] [LOG] [AuthWrapper] User not authenticated but on public route: /elite-athlete-support-readiness-assessments. No modal needed. @ webpack-internal:///./src/components/AuthWrapper.tsx:778
+[40799892ms] [LOG] [Firebase] Persistence set successfully to browserLocalPersistence @ webpack-internal:///./src/api/firebase/config.ts:177
+[40799892ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799892ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40799892ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799892ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40799892ms] [LOG] [Fast Refresh] done in 472ms @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:190
+[40799893ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799893ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40799893ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799893ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40799973ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799973ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40799973ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799973ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40799978ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T14:17:21.468Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:494
+[40799979ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799979ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40799979ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799979ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40799979ms] [LOG] Auth state changed: {hasFirebaseUser: false, email: undefined, timestamp: 2026-06-06T14:17:21.469Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:507
+[40799980ms] [LOG] No firebase user, clearing state @ webpack-internal:///./src/components/AuthWrapper.tsx:770
+[40799980ms] [LOG] [AuthWrapper] User not authenticated but on public route: /elite-athlete-support-readiness-assessments. No modal needed. @ webpack-internal:///./src/components/AuthWrapper.tsx:778
+[40799980ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799980ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40799980ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799980ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40799980ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799980ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40799980ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[40799980ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[40802974ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[40807849ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[41202523ms] [LOG] Refreshing page data due to server-side change @ webpack-internal:///./node_modules/next/dist/client/page-bootstrap.js:102
+[41202631ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202631ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41202631ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202632ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41202637ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T14:24:04.127Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:494
+[41202638ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202638ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41202638ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202638ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41202638ms] [LOG] Auth state changed: {hasFirebaseUser: false, email: undefined, timestamp: 2026-06-06T14:24:04.128Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:507
+[41202638ms] [LOG] No firebase user, clearing state @ webpack-internal:///./src/components/AuthWrapper.tsx:770
+[41202638ms] [LOG] [AuthWrapper] User not authenticated but on public route: /elite-athlete-support-readiness-assessments. No modal needed. @ webpack-internal:///./src/components/AuthWrapper.tsx:778
+[41202638ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202639ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41202639ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202639ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41202639ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202639ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41202639ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202639ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41202694ms] [LOG] [Firebase] Initial mode: {isDev: true, source: localhost default, timestamp: 2026-06-06T14:24:04.184Z} @ webpack-internal:///./src/api/firebase/config.ts:212
+[41202695ms] [LOG] [Firebase] Starting initialization: {environment: development, isLocalhost: true, timestamp: 2026-06-06T14:24:04.184Z} @ webpack-internal:///./src/api/firebase/config.ts:141
+[41202695ms] [LOG] [Firebase Config] Environment Check: {isDev: true, isLocalhost: true, nodeEnv: development, envVarsPresent: Object, timestamp: 2026-06-06T14:24:04.184Z} @ webpack-internal:///./src/api/firebase/config.ts:92
+[41202695ms] [LOG] [Firebase Config] Final Configuration: {mode: development, apiKey: AIzaSyDy25daRNR3sd9P9OJKYnoQmLkQlhuQcy4, authDomain: quicklifts-dev-01.firebaseapp.com, projectId: quicklifts-dev-01, storageBucket: quicklifts-dev-01.appspot.com} @ webpack-internal:///./src/api/firebase/config.ts:111
+[41202695ms] [LOG] [Firebase] Using configuration: {mode: development, isLocalhost: true, projectId: quicklifts-dev-01, hasApiKey: true, hasAppId: true} @ webpack-internal:///./src/api/firebase/config.ts:161
+[41202695ms] [LOG] [Firebase] Initialization complete: {hasApp: true, hasAuth: true, hasDb: true, hasStorage: true, timestamp: 2026-06-06T14:24:04.184Z} @ webpack-internal:///./src/api/firebase/config.ts:182
+[41202696ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202696ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41202696ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202696ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41202696ms] [LOG] 🔍 [AuthWrapper] Current User State: {user: null, subscription: undefined, isNull: true, isSafari: false, userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36} @ webpack-internal:///./src/components/AuthWrapper.tsx:457
+[41202696ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T14:24:04.186Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:494
+[41202696ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202696ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41202696ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202696ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41202696ms] [LOG] Auth state changed: {hasFirebaseUser: false, email: undefined, timestamp: 2026-06-06T14:24:04.186Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:507
+[41202697ms] [LOG] No firebase user, clearing state @ webpack-internal:///./src/components/AuthWrapper.tsx:770
+[41202697ms] [LOG] [AuthWrapper] User not authenticated but on public route: /elite-athlete-support-readiness-assessments. No modal needed. @ webpack-internal:///./src/components/AuthWrapper.tsx:778
+[41202697ms] [LOG] [Firebase] Persistence set successfully to browserLocalPersistence @ webpack-internal:///./src/api/firebase/config.ts:177
+[41202697ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202697ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41202697ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202697ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41202697ms] [LOG] [Fast Refresh] done in 394848ms @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:190
+[41202701ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202701ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41202701ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41202701ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41205701ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[41206568ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[41211525ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[41265968ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[41346378ms] [LOG] [Fast Refresh] done in 80410ms @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:190
+[41349383ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[41437076ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41438080ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41439084ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41440090ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41441095ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41446102ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41451112ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41456133ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41461149ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41466221ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41471327ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41476442ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41481827ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41488032ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41494968ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41503650ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41510321ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41518984ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41528797ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41536862ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41543143ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41552300ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41557303ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41562306ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41567311ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[41964124ms] [WARNING] <link rel=preload> has an unsupported `type` value @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[41964239ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ webpack-internal:///./node_modules/react-dom/cjs/react-dom.development.js:29889
+[41964256ms] [LOG] [HMR] connected @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:38
+[41964413ms] [LOG] [Firebase] Initial mode: {isDev: true, source: localhost default, timestamp: 2026-06-06T14:36:45.899Z} @ webpack-internal:///./src/api/firebase/config.ts:212
+[41964413ms] [LOG] [Firebase] Starting initialization: {environment: development, isLocalhost: true, timestamp: 2026-06-06T14:36:45.902Z} @ webpack-internal:///./src/api/firebase/config.ts:141
+[41964413ms] [LOG] [Firebase Config] Environment Check: {isDev: true, isLocalhost: true, nodeEnv: development, envVarsPresent: Object, timestamp: 2026-06-06T14:36:45.903Z} @ webpack-internal:///./src/api/firebase/config.ts:92
+[41964413ms] [LOG] [Firebase Config] Final Configuration: {mode: development, apiKey: AIzaSyDy25daRNR3sd9P9OJKYnoQmLkQlhuQcy4, authDomain: quicklifts-dev-01.firebaseapp.com, projectId: quicklifts-dev-01, storageBucket: quicklifts-dev-01.appspot.com} @ webpack-internal:///./src/api/firebase/config.ts:111
+[41964413ms] [LOG] [Firebase] Using configuration: {mode: development, isLocalhost: true, projectId: quicklifts-dev-01, hasApiKey: true, hasAppId: true} @ webpack-internal:///./src/api/firebase/config.ts:161
+[41964416ms] [LOG] [Firebase] Initialization complete: {hasApp: true, hasAuth: true, hasDb: true, hasStorage: true, timestamp: 2026-06-06T14:36:45.906Z} @ webpack-internal:///./src/api/firebase/config.ts:182
+[41964428ms] [LOG] 🛠️ Environment debug helper available! Run window.debugEnv() in console to check environment variables. @ webpack-internal:///./src/utils/envDebug.ts:61
+[41964452ms] [LOG] [Firebase] Persistence set successfully to browserLocalPersistence @ webpack-internal:///./src/api/firebase/config.ts:177
+[41964464ms] [LOG] [App] User Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36 @ webpack-internal:///./src/pages/_app.tsx:183
+[41964464ms] [LOG] [App] Current URL: http://localhost:3000/elite-athlete-support-readiness-assessments @ webpack-internal:///./src/pages/_app.tsx:184
+[41964465ms] [LOG] [App] User Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36 @ webpack-internal:///./src/pages/_app.tsx:183
+[41964465ms] [LOG] [App] Current URL: http://localhost:3000/elite-athlete-support-readiness-assessments @ webpack-internal:///./src/pages/_app.tsx:184
+[41964466ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41964466ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41964466ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41964466ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41964473ms] [WARNING] [Mixpanel] Project token not found. Tracking disabled. @ webpack-internal:///./src/pages/_app.tsx:134
+[41964474ms] [LOG] 🔍 [AuthWrapper] Current User State: {user: null, subscription: undefined, isNull: true, isSafari: false, userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36} @ webpack-internal:///./src/components/AuthWrapper.tsx:458
+[41964474ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T14:36:45.964Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:495
+[41964475ms] [WARNING] [Mixpanel] Project token not found. Tracking disabled. @ webpack-internal:///./src/pages/_app.tsx:134
+[41964475ms] [LOG] 🔍 [AuthWrapper] Current User State: {user: null, subscription: undefined, isNull: true, isSafari: false, userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36} @ webpack-internal:///./src/components/AuthWrapper.tsx:458
+[41964475ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T14:36:45.965Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:495
+[41964484ms] [LOG] Auth state changed: {hasFirebaseUser: false, email: undefined, timestamp: 2026-06-06T14:36:45.973Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:508
+[41964484ms] [LOG] No firebase user, clearing state @ webpack-internal:///./src/components/AuthWrapper.tsx:771
+[41964484ms] [LOG] [AuthWrapper] User not authenticated but on public route: /elite-athlete-support-readiness-assessments. No modal needed. @ webpack-internal:///./src/components/AuthWrapper.tsx:779
+[41964485ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41964485ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41964485ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41964485ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41964490ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41964490ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41964490ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[41964490ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[41967532ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[41968256ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[41972560ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[42068901ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42069905ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42070909ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42071911ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42072915ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42077918ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42082920ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42087923ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42092926ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42097930ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42102935ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42107939ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42112946ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42117958ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42122974ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42127984ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42133007ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42138030ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42143052ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[42148832ms] [LOG] [HMR] connected @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:38
+[42148850ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[42149985ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[42150002ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/_next/static/webpack/7fe8c97a15f6905e.webpack.hot-update.json:0
+[42150069ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[42151442ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[42151614ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/_next/static/webpack/7fe8c97a15f6905e.webpack.hot-update.json:0
+[42151903ms] [WARNING] <link rel=preload> has an unsupported `type` value @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[42151991ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ webpack-internal:///./node_modules/react-dom/cjs/react-dom.development.js:29889
+[42152004ms] [LOG] [HMR] connected @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:38
+[42152174ms] [WARNING] [HMR] Invalid message: [object Object]
+TypeError: Cannot read properties of undefined (reading 'pathname')
+    at eval (webpack-internal:///./node_modules/next/dist/client/dev/hot-middleware-client.js:25:48)
+    at processMessage (webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:338:21)
+    at eval (webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:67:13)
+    at WebSocket.handleMessage (webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:48:21) @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:69
+[42152175ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[42152279ms] [LOG] [Firebase] Initial mode: {isDev: true, source: localhost default, timestamp: 2026-06-06T14:39:53.768Z} @ webpack-internal:///./src/api/firebase/config.ts:212
+[42152279ms] [LOG] [Firebase] Starting initialization: {environment: development, isLocalhost: true, timestamp: 2026-06-06T14:39:53.768Z} @ webpack-internal:///./src/api/firebase/config.ts:141
+[42152279ms] [LOG] [Firebase Config] Environment Check: {isDev: true, isLocalhost: true, nodeEnv: development, envVarsPresent: Object, timestamp: 2026-06-06T14:39:53.768Z} @ webpack-internal:///./src/api/firebase/config.ts:92
+[42152279ms] [LOG] [Firebase Config] Final Configuration: {mode: development, apiKey: AIzaSyDy25daRNR3sd9P9OJKYnoQmLkQlhuQcy4, authDomain: quicklifts-dev-01.firebaseapp.com, projectId: quicklifts-dev-01, storageBucket: quicklifts-dev-01.appspot.com} @ webpack-internal:///./src/api/firebase/config.ts:111
+[42152279ms] [LOG] [Firebase] Using configuration: {mode: development, isLocalhost: true, projectId: quicklifts-dev-01, hasApiKey: true, hasAppId: true} @ webpack-internal:///./src/api/firebase/config.ts:161
+[42152279ms] [LOG] [Firebase] Initialization complete: {hasApp: true, hasAuth: true, hasDb: true, hasStorage: true, timestamp: 2026-06-06T14:39:53.769Z} @ webpack-internal:///./src/api/firebase/config.ts:182
+[42152281ms] [LOG] 🛠️ Environment debug helper available! Run window.debugEnv() in console to check environment variables. @ webpack-internal:///./src/utils/envDebug.ts:61
+[42152290ms] [LOG] [Firebase] Persistence set successfully to browserLocalPersistence @ webpack-internal:///./src/api/firebase/config.ts:177
+[42152309ms] [LOG] [App] User Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36 @ webpack-internal:///./src/pages/_app.tsx:183
+[42152309ms] [LOG] [App] Current URL: http://localhost:3000/elite-athlete-support-readiness-assessments @ webpack-internal:///./src/pages/_app.tsx:184
+[42152309ms] [LOG] [App] User Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36 @ webpack-internal:///./src/pages/_app.tsx:183
+[42152309ms] [LOG] [App] Current URL: http://localhost:3000/elite-athlete-support-readiness-assessments @ webpack-internal:///./src/pages/_app.tsx:184
+[42152309ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[42152309ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[42152309ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[42152309ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[42152313ms] [WARNING] [Mixpanel] Project token not found. Tracking disabled. @ webpack-internal:///./src/pages/_app.tsx:134
+[42152314ms] [LOG] 🔍 [AuthWrapper] Current User State: {user: null, subscription: undefined, isNull: true, isSafari: false, userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36} @ webpack-internal:///./src/components/AuthWrapper.tsx:458
+[42152314ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T14:39:53.804Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:495
+[42152314ms] [WARNING] [Mixpanel] Project token not found. Tracking disabled. @ webpack-internal:///./src/pages/_app.tsx:134
+[42152315ms] [LOG] 🔍 [AuthWrapper] Current User State: {user: null, subscription: undefined, isNull: true, isSafari: false, userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36} @ webpack-internal:///./src/components/AuthWrapper.tsx:458
+[42152315ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T14:39:53.804Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:495
+[42152317ms] [LOG] Auth state changed: {hasFirebaseUser: false, email: undefined, timestamp: 2026-06-06T14:39:53.807Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:508
+[42152317ms] [LOG] No firebase user, clearing state @ webpack-internal:///./src/components/AuthWrapper.tsx:771
+[42152317ms] [LOG] [AuthWrapper] User not authenticated but on public route: /elite-athlete-support-readiness-assessments. No modal needed. @ webpack-internal:///./src/components/AuthWrapper.tsx:779
+[42152317ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[42152318ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[42152318ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[42152318ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[42152324ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[42152324ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[42152324ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:129
+[42152324ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:142
+[42155329ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[42160347ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[42649137ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[42649460ms] [LOG] [Fast Refresh] done in 322ms @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:190
+[42649564ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[42652613ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[42765091ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[42765275ms] [ERROR] ./node_modules/mixpanel-browser/dist/mixpanel.module.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/mixpanel-browser/dist/mixpanel.module.js'
+
+Import trace for requested module:
+./node_modules/mixpanel-browser/dist/mixpanel.module.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765276ms] [ERROR] ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[7].oneOf[14].use[1]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[7].oneOf[14].use[2]!./src/index.css
+Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js'
+Import trace for requested module:
+./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[7].oneOf[14].use[1]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[7].oneOf[14].use[2]!./src/index.css
+./src/index.css @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765276ms] [ERROR] ./node_modules/next/dist/build/webpack/loaders/css-loader/src/runtime/api.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/dist/build/webpack/loaders/css-loader/src/runtime/api.js'
+
+Import trace for requested module:
+./node_modules/next/dist/build/webpack/loaders/css-loader/src/runtime/api.js
+./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[7].oneOf[14].use[1]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[7].oneOf[14].use[2]!./src/components/Footer/GlisteningButton.css
+./src/components/Footer/GlisteningButton.css @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/next/dist/build/webpack/loaders/next-style-loader/runtime/injectStylesIntoStyleTag.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/dist/build/webpack/loaders/next-style-loader/runtime/injectStylesIntoStyleTag.js'
+
+Import trace for requested module:
+./node_modules/next/dist/build/webpack/loaders/next-style-loader/runtime/injectStylesIntoStyleTag.js
+./src/components/Footer/GlisteningButton.css @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/activity.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/activity.js
+__barrel_optimize__?names=Activity,AlertTriangle,ArrowLeft,ArrowRight,BookOpen,Brain,CheckCircle2,ChevronDown,ClipboardCheck,Gauge,GraduationCap,HeartPulse,Home,LineChart,LockKeyhole,Mail,RotateCcw,Shield,Stethoscope,Target!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/arrow-left.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/arrow-left.js
+__barrel_optimize__?names=Activity,AlertTriangle,ArrowLeft,ArrowRight,BookOpen,Brain,CheckCircle2,ChevronDown,ClipboardCheck,Gauge,GraduationCap,HeartPulse,Home,LineChart,LockKeyhole,Mail,RotateCcw,Shield,Stethoscope,Target!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/arrow-right.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/arrow-right.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/award.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/award.js
+__barrel_optimize__?names=AlertTriangle,Award,CheckCircle,Info,XCircle!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/common/Toast.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/badge-check.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/badge-check.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/book-open-check.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/book-open-check.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/book-open.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/book-open.js
+__barrel_optimize__?names=Activity,AlertTriangle,ArrowLeft,ArrowRight,BookOpen,Brain,CheckCircle2,ChevronDown,ClipboardCheck,Gauge,GraduationCap,HeartPulse,Home,LineChart,LockKeyhole,Mail,RotateCcw,Shield,Stethoscope,Target!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/brain.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/brain.js
+__barrel_optimize__?names=Activity,AlertTriangle,ArrowLeft,ArrowRight,BookOpen,Brain,CheckCircle2,ChevronDown,ClipboardCheck,Gauge,GraduationCap,HeartPulse,Home,LineChart,LockKeyhole,Mail,RotateCcw,Shield,Stethoscope,Target!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/building-2.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/building-2.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/calendar-clock.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/calendar-clock.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/camera.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/camera.js
+__barrel_optimize__?names=Camera,Eye,EyeOff,X!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/SignInModal.tsx
+./src/components/AuthWrapper.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/chart-line.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/chart-line.js
+__barrel_optimize__?names=Activity,AlertTriangle,ArrowLeft,ArrowRight,BookOpen,Brain,CheckCircle2,ChevronDown,ClipboardCheck,Gauge,GraduationCap,HeartPulse,Home,LineChart,LockKeyhole,Mail,RotateCcw,Shield,Stethoscope,Target!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/chevron-down.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/chevron-down.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/chevron-right.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/chevron-right.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/circle-check-big.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/circle-check-big.js
+__barrel_optimize__?names=AlertTriangle,Award,CheckCircle,Info,XCircle!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/common/Toast.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765277ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/circle-check.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/circle-check.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/circle-help.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/circle-help.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/circle-x.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/circle-x.js
+__barrel_optimize__?names=AlertTriangle,Award,CheckCircle,Info,XCircle!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/common/Toast.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/clipboard-check.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/clipboard-check.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/clipboard-list.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/clipboard-list.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/copy.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/copy.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/eye-off.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/eye-off.js
+__barrel_optimize__?names=Camera,Eye,EyeOff,X!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/SignInModal.tsx
+./src/components/AuthWrapper.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/eye.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/eye.js
+__barrel_optimize__?names=Camera,Eye,EyeOff,X!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/SignInModal.tsx
+./src/components/AuthWrapper.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/gauge.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/gauge.js
+__barrel_optimize__?names=Activity,AlertTriangle,ArrowLeft,ArrowRight,BookOpen,Brain,CheckCircle2,ChevronDown,ClipboardCheck,Gauge,GraduationCap,HeartPulse,Home,LineChart,LockKeyhole,Mail,RotateCcw,Shield,Stethoscope,Target!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/graduation-cap.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/graduation-cap.js
+__barrel_optimize__?names=Activity,AlertTriangle,ArrowLeft,ArrowRight,BookOpen,Brain,CheckCircle2,ChevronDown,ClipboardCheck,Gauge,GraduationCap,HeartPulse,Home,LineChart,LockKeyhole,Mail,RotateCcw,Shield,Stethoscope,Target!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/heart-pulse.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/heart-pulse.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/house.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/house.js
+__barrel_optimize__?names=Activity,AlertTriangle,ArrowLeft,ArrowRight,BookOpen,Brain,CheckCircle2,ChevronDown,ClipboardCheck,Gauge,GraduationCap,HeartPulse,Home,LineChart,LockKeyhole,Mail,RotateCcw,Shield,Stethoscope,Target!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/info.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/info.js
+__barrel_optimize__?names=AlertTriangle,Award,CheckCircle,Info,XCircle!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/common/Toast.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/laptop.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/laptop.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/loader-circle.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/loader-circle.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/lock-keyhole.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/lock-keyhole.js
+__barrel_optimize__?names=Activity,AlertTriangle,ArrowLeft,ArrowRight,BookOpen,Brain,CheckCircle2,ChevronDown,ClipboardCheck,Gauge,GraduationCap,HeartPulse,Home,LineChart,LockKeyhole,Mail,RotateCcw,Shield,Stethoscope,Target!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/mail-plus.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/mail-plus.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/mail.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/mail.js
+__barrel_optimize__?names=Activity,AlertTriangle,ArrowLeft,ArrowRight,BookOpen,Brain,CheckCircle2,ChevronDown,ClipboardCheck,Gauge,GraduationCap,HeartPulse,Home,LineChart,LockKeyhole,Mail,RotateCcw,Shield,Stethoscope,Target!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/map.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/map.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/message-square-text.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/message-square-text.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/monitor-check.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/monitor-check.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/refresh-cw.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/refresh-cw.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/rocket.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/rocket.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/rotate-ccw.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/rotate-ccw.js
+__barrel_optimize__?names=Activity,AlertTriangle,ArrowLeft,ArrowRight,BookOpen,Brain,CheckCircle2,ChevronDown,ClipboardCheck,Gauge,GraduationCap,HeartPulse,Home,LineChart,LockKeyhole,Mail,RotateCcw,Shield,Stethoscope,Target!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/search.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/search.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/shield-check.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/shield-check.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/shield.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/shield.js
+__barrel_optimize__?names=Activity,AlertTriangle,ArrowLeft,ArrowRight,BookOpen,Brain,CheckCircle2,ChevronDown,ClipboardCheck,Gauge,GraduationCap,HeartPulse,Home,LineChart,LockKeyhole,Mail,RotateCcw,Shield,Stethoscope,Target!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/smartphone.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/smartphone.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/sparkles.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/sparkles.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/stethoscope.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/stethoscope.js
+__barrel_optimize__?names=Activity,AlertTriangle,ArrowLeft,ArrowRight,BookOpen,Brain,CheckCircle2,ChevronDown,ClipboardCheck,Gauge,GraduationCap,HeartPulse,Home,LineChart,LockKeyhole,Mail,RotateCcw,Shield,Stethoscope,Target!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/target.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/target.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/triangle-alert.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/triangle-alert.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/users-round.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/users-round.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/watch.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/watch.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/x.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/x.js
+__barrel_optimize__?names=Camera,Eye,EyeOff,X!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/SignInModal.tsx
+./src/components/AuthWrapper.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/dist/client/next-dev.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" } @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/dist/client/router.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" } @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/dist/pages/_error.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" } @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/styled-jsx/style.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/styled-jsx/style.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/dist/compiled/@next/react-refresh-utils/dist/runtime.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/dist/compiled/@next/react-refresh-utils/dist/runtime.js' @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/head.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/head.js'
+
+Import trace for requested module:
+./node_modules/next/head.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/link.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/link.js'
+
+Import trace for requested module:
+./node_modules/next/link.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/router.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/router.js'
+
+Import trace for requested module:
+./node_modules/next/router.js
+./src/components/auth/AdminRouteGuard.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/script.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/script.js'
+
+Import trace for requested module:
+./node_modules/next/script.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/process/browser.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/process/browser.js'
+
+Import trace for requested module:
+./node_modules/process/browser.js
+./src/api/firebase/pulsecheckProvisioning/service.ts @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/react/index.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/react/index.js'
+
+Import trace for requested module:
+./node_modules/react/index.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/react/jsx-dev-runtime.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/react/jsx-dev-runtime.js'
+
+Import trace for requested module:
+./node_modules/react/jsx-dev-runtime.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/redux-persist-indexeddb-storage/dist/index.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/redux-persist-indexeddb-storage/dist/index.js'
+
+Import trace for requested module:
+./node_modules/redux-persist-indexeddb-storage/dist/index.js
+./src/redux/store.ts
+./src/api/firebase/user/service.ts
+./src/api/firebase/user/index.ts
+./src/api/firebase/pulsecheckProvisioning/service.ts @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/redux-persist/es/index.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/redux-persist/es/index.js'
+
+Import trace for requested module:
+./node_modules/redux-persist/es/index.js
+./src/redux/store.ts
+./src/api/firebase/user/service.ts
+./src/api/firebase/user/index.ts
+./src/api/firebase/pulsecheckProvisioning/service.ts @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/redux-persist/es/integration/react.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/redux-persist/es/integration/react.js'
+
+Import trace for requested module:
+./node_modules/redux-persist/es/integration/react.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/@reduxjs/toolkit/dist/redux-toolkit.modern.mjs
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/@reduxjs/toolkit/dist/redux-toolkit.modern.mjs'
+
+Import trace for requested module:
+./node_modules/@reduxjs/toolkit/dist/redux-toolkit.modern.mjs
+./src/redux/store.ts
+./src/api/firebase/user/service.ts
+./src/api/firebase/user/index.ts
+./src/api/firebase/pulsecheckProvisioning/service.ts @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/firebase/app/dist/esm/index.esm.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/firebase/app/dist/esm/index.esm.js'
+
+Import trace for requested module:
+./node_modules/firebase/app/dist/esm/index.esm.js
+./src/api/firebase/config.ts
+./src/api/firebase/pulsecheckProvisioning/service.ts @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/firebase/auth/dist/esm/index.esm.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/firebase/auth/dist/esm/index.esm.js'
+
+Import trace for requested module:
+./node_modules/firebase/auth/dist/esm/index.esm.js
+./src/api/firebase/config.ts
+./src/api/firebase/pulsecheckProvisioning/service.ts @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/firebase/firestore/dist/esm/index.esm.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/firebase/firestore/dist/esm/index.esm.js'
+
+Import trace for requested module:
+./node_modules/firebase/firestore/dist/esm/index.esm.js
+./src/api/firebase/pulsecheckProvisioning/service.ts @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/firebase/storage/dist/esm/index.esm.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/firebase/storage/dist/esm/index.esm.js'
+
+Import trace for requested module:
+./node_modules/firebase/storage/dist/esm/index.esm.js
+./src/api/firebase/config.ts
+./src/api/firebase/pulsecheckProvisioning/service.ts @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/framer-motion/dist/es/index.mjs
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/framer-motion/dist/es/index.mjs'
+
+Import trace for requested module:
+./node_modules/framer-motion/dist/es/index.mjs @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/date-fns/format.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/date-fns/format.js
+__barrel_optimize__?names=format!=!./node_modules/date-fns/index.js
+./src/api/firebase/workout/service.ts
+./src/api/firebase/workout/index.ts
+./src/api/firebase/user/service.ts
+./src/api/firebase/user/index.ts
+./src/api/firebase/pulsecheckProvisioning/service.ts @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/node_modules/@swc/helpers/esm/_async_to_generator.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/node_modules/@swc/helpers/esm/_async_to_generator.js'
+
+Import trace for requested module:
+./node_modules/next/node_modules/@swc/helpers/esm/_async_to_generator.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/node_modules/@swc/helpers/esm/_class_call_check.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/node_modules/@swc/helpers/esm/_class_call_check.js'
+
+Import trace for requested module:
+./node_modules/next/node_modules/@swc/helpers/esm/_class_call_check.js
+./src/api/firebase/user/types.ts
+./src/hooks/useUser.ts @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/node_modules/@swc/helpers/esm/_create_class.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/node_modules/@swc/helpers/esm/_create_class.js'
+
+Import trace for requested module:
+./node_modules/next/node_modules/@swc/helpers/esm/_create_class.js
+./src/api/firebase/user/service.ts
+./src/api/firebase/user/index.ts
+./src/api/firebase/pulsecheckProvisioning/service.ts @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/node_modules/@swc/helpers/esm/_create_super.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/node_modules/@swc/helpers/esm/_create_super.js'
+
+Import trace for requested module:
+./node_modules/next/node_modules/@swc/helpers/esm/_create_super.js
+./src/components/ErrorBoundary.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/node_modules/@swc/helpers/esm/_define_property.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/node_modules/@swc/helpers/esm/_define_property.js'
+
+Import trace for requested module:
+./node_modules/next/node_modules/@swc/helpers/esm/_define_property.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/node_modules/@swc/helpers/esm/_inherits.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/node_modules/@swc/helpers/esm/_inherits.js'
+
+Import trace for requested module:
+./node_modules/next/node_modules/@swc/helpers/esm/_inherits.js
+./src/components/ErrorBoundary.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/node_modules/@swc/helpers/esm/_object_spread.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/node_modules/@swc/helpers/esm/_object_spread.js'
+
+Import trace for requested module:
+./node_modules/next/node_modules/@swc/helpers/esm/_object_spread.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/node_modules/@swc/helpers/esm/_object_spread_props.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/node_modules/@swc/helpers/esm/_object_spread_props.js'
+
+Import trace for requested module:
+./node_modules/next/node_modules/@swc/helpers/esm/_object_spread_props.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/node_modules/@swc/helpers/esm/_object_without_properties.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/node_modules/@swc/helpers/esm/_object_without_properties.js'
+
+Import trace for requested module:
+./node_modules/next/node_modules/@swc/helpers/esm/_object_without_properties.js
+./src/api/firebase/mentaltraining/e2eHarness.ts
+./src/api/firebase/config.ts
+./src/api/firebase/pulsecheckProvisioning/service.ts @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/node_modules/@swc/helpers/esm/_sliced_to_array.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/node_modules/@swc/helpers/esm/_sliced_to_array.js'
+
+Import trace for requested module:
+./node_modules/next/node_modules/@swc/helpers/esm/_sliced_to_array.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/node_modules/@swc/helpers/esm/_to_consumable_array.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/node_modules/@swc/helpers/esm/_to_consumable_array.js'
+
+Import trace for requested module:
+./node_modules/next/node_modules/@swc/helpers/esm/_to_consumable_array.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/node_modules/@swc/helpers/esm/_ts_generator.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/node_modules/@swc/helpers/esm/_ts_generator.js'
+
+Import trace for requested module:
+./node_modules/next/node_modules/@swc/helpers/esm/_ts_generator.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/node_modules/@swc/helpers/esm/_ts_values.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/node_modules/@swc/helpers/esm/_ts_values.js'
+
+Import trace for requested module:
+./node_modules/next/node_modules/@swc/helpers/esm/_ts_values.js
+./src/api/firebase/admin/methods.ts
+./src/components/auth/AdminRouteGuard.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/next/node_modules/@swc/helpers/esm/_type_of.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/node_modules/@swc/helpers/esm/_type_of.js'
+
+Import trace for requested module:
+./node_modules/next/node_modules/@swc/helpers/esm/_type_of.js
+./src/api/firebase/user/service.ts
+./src/api/firebase/user/index.ts
+./src/api/firebase/pulsecheckProvisioning/service.ts @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42765278ms] [ERROR] ./node_modules/react-redux/dist/react-redux.mjs
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/react-redux/dist/react-redux.mjs'
+
+Import trace for requested module:
+./node_modules/react-redux/dist/react-redux.mjs
+./src/hooks/useUser.ts @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42768349ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[42782221ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/_next/static/development/_devPagesManifest.json:0
+[42782221ms] [LOG] Failed to fetch devPagesManifest SyntaxError: Unexpected token 'I', "Internal S"... is not valid JSON @ webpack-internal:///./node_modules/next/dist/client/page-bootstrap.js:61
+[42785223ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[42789680ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[42789751ms] [ERROR] ./node_modules/next/dist/build/templates/helpers.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/dist/build/templates/helpers.js'
+
+Import trace for requested module:
+./node_modules/next/dist/build/templates/helpers.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/arrow-right.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/arrow-right.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/award.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/award.js
+__barrel_optimize__?names=AlertTriangle,Award,CheckCircle,Info,XCircle!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/common/Toast.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/badge-check.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/badge-check.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/book-open-check.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/book-open-check.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/building-2.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/building-2.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/calendar-clock.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/calendar-clock.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/camera.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/camera.js
+__barrel_optimize__?names=Camera,Eye,EyeOff,X!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/SignInModal.tsx
+./src/components/AuthWrapper.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/check.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/check.js
+__barrel_optimize__?names=Check,X!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/App/Dashboard/WorkoutTypeSelector.tsx
+./src/components/App/RootScreens/Discover.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/chevron-down.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/chevron-down.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/chevron-right.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/chevron-right.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/circle-check-big.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/circle-check-big.js
+__barrel_optimize__?names=AlertTriangle,Award,CheckCircle,Info,XCircle!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/common/Toast.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/circle-check.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/circle-check.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/circle-help.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/circle-help.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/circle-user.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/circle-user.js
+__barrel_optimize__?names=Dumbbell,Search,UserCircle,Users!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/App/RootScreens/Search.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/circle-x.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/circle-x.js
+__barrel_optimize__?names=AlertTriangle,Award,CheckCircle,Info,XCircle!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/common/Toast.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/clipboard-check.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/clipboard-check.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/clipboard-list.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/clipboard-list.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/clock.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/clock.js
+__barrel_optimize__?names=ChevronDown,Clock,Dumbbell,ListOrdered,Play,Target,X!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/WorkoutReadyView.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/copy.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/copy.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/dumbbell.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/dumbbell.js
+__barrel_optimize__?names=Dumbbell,Search,UserCircle,Users!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/App/RootScreens/Search.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/eye-off.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/eye-off.js
+__barrel_optimize__?names=Camera,Eye,EyeOff,X!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/SignInModal.tsx
+./src/components/AuthWrapper.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/eye.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/eye.js
+__barrel_optimize__?names=Camera,Eye,EyeOff,X!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/SignInModal.tsx
+./src/components/AuthWrapper.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/heart-pulse.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/heart-pulse.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/info.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/info.js
+__barrel_optimize__?names=AlertTriangle,Award,CheckCircle,Info,XCircle!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/common/Toast.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/laptop.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/laptop.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/list-ordered.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/list-ordered.js
+__barrel_optimize__?names=ChevronDown,Clock,Dumbbell,ListOrdered,Play,Target,X!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/WorkoutReadyView.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/loader-circle.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/loader-circle.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/mail-plus.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/mail-plus.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/map.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/map.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/message-square-text.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/message-square-text.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/monitor-check.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/monitor-check.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/pause.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/pause.js
+__barrel_optimize__?names=CheckCircle2,Dumbbell,Pause,Play,Repeat,Timer,X!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/App/InProgressExercise/InProgressExercise.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/play.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/play.js
+__barrel_optimize__?names=ChevronDown,Clock,Dumbbell,ListOrdered,Play,Target,X!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/WorkoutReadyView.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/refresh-cw.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/refresh-cw.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/repeat.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/repeat.js
+__barrel_optimize__?names=CheckCircle2,Dumbbell,Pause,Play,Repeat,Timer,X!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/App/InProgressExercise/InProgressExercise.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/rocket.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/rocket.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/search.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/search.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/shield-check.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/shield-check.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/smartphone.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/smartphone.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/sparkles.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/sparkles.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/target.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/target.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789751ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/timer.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/timer.js
+__barrel_optimize__?names=CheckCircle2,Dumbbell,Pause,Play,Repeat,Timer,X!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/App/InProgressExercise/InProgressExercise.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/trash-2.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/trash-2.js
+__barrel_optimize__?names=Camera,Trash2,User!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/App/RootScreens/Profile.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/triangle-alert.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/triangle-alert.js
+__barrel_optimize__?names=AlertTriangle,Award,CheckCircle,Info,XCircle!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/common/Toast.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/user.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/user.js
+__barrel_optimize__?names=Camera,Trash2,User!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/App/RootScreens/Profile.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/users-round.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/users-round.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/users.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/users.js
+__barrel_optimize__?names=Dumbbell,Search,UserCircle,Users!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/App/RootScreens/Search.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/watch.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/watch.js
+__barrel_optimize__?names=AlertTriangle,ArrowRight,BadgeCheck,BookOpenCheck,Building2,CalendarClock,CheckCircle2,ChevronDown,ChevronRight,ClipboardCheck,ClipboardList,Copy,HeartPulse,HelpCircle,Laptop,Loader2,MailPlus,Map,MessageSquareText,MonitorCheck,RefreshCw,Rocket,Search,ShieldCheck,Smartphone,Sparkles,Target,Users2,Watch!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/lucide-react/dist/esm/icons/x.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/lucide-react/dist/esm/icons/x.js
+__barrel_optimize__?names=Camera,Eye,EyeOff,X!=!./node_modules/lucide-react/dist/esm/lucide-react.js
+./src/components/SignInModal.tsx
+./src/components/AuthWrapper.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/next/dist/pages/_error.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/next/dist/pages/_error.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./src/pages/elite-athlete-support-readiness-assessments.tsx
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./src/pages/elite-athlete-support-readiness-assessments.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/next/dist/server/future/route-kind.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/dist/server/future/route-kind.js'
+
+Import trace for requested module:
+./node_modules/next/dist/server/future/route-kind.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/next/dist/server/future/route-modules/pages/module.compiled.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/dist/server/future/route-modules/pages/module.compiled.js'
+
+Import trace for requested module:
+./node_modules/next/dist/server/future/route-modules/pages/module.compiled.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/next/document.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/document.js'
+
+Import trace for requested module:
+./node_modules/next/document.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/next/link.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/link.js'
+
+Import trace for requested module:
+./node_modules/next/link.js
+./src/pages/admin/pulsecheckOnboardingOverview.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/next/router.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/router.js'
+
+Import trace for requested module:
+./node_modules/next/router.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/next/script.js
+Module build failed: Error: EPERM: operation not permitted, open '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/script.js'
+
+Import trace for requested module:
+./node_modules/next/script.js @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/BoltIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/BoltIcon.js
+__barrel_optimize__?names=BoltIcon,CalendarDaysIcon,CheckIcon,ChevronDownIcon,ChevronUpIcon,CircleStackIcon,MagnifyingGlassIcon,MoonIcon,PlayIcon,SparklesIcon,SunIcon,UserGroupIcon,XCircleIcon,XMarkIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/App/RootScreens/Discover.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/CalendarDaysIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/CalendarDaysIcon.js
+__barrel_optimize__?names=BoltIcon,CalendarDaysIcon,CheckIcon,ChevronDownIcon,ChevronUpIcon,CircleStackIcon,MagnifyingGlassIcon,MoonIcon,PlayIcon,SparklesIcon,SunIcon,UserGroupIcon,XCircleIcon,XMarkIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/App/RootScreens/Discover.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/CheckIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/CheckIcon.js
+__barrel_optimize__?names=BoltIcon,CalendarDaysIcon,CheckIcon,ChevronDownIcon,ChevronUpIcon,CircleStackIcon,MagnifyingGlassIcon,MoonIcon,PlayIcon,SparklesIcon,SunIcon,UserGroupIcon,XCircleIcon,XMarkIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/App/RootScreens/Discover.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/ChevronDownIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/ChevronDownIcon.js
+__barrel_optimize__?names=BoltIcon,CalendarDaysIcon,CheckIcon,ChevronDownIcon,ChevronUpIcon,CircleStackIcon,MagnifyingGlassIcon,MoonIcon,PlayIcon,SparklesIcon,SunIcon,UserGroupIcon,XCircleIcon,XMarkIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/App/RootScreens/Discover.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/ChevronLeftIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/ChevronLeftIcon.js
+__barrel_optimize__?names=ChevronLeftIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/pages/FullscreenExerciseView.tsx
+./src/components/App/RootScreens/Profile.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/ChevronUpIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/ChevronUpIcon.js
+__barrel_optimize__?names=BoltIcon,CalendarDaysIcon,CheckIcon,ChevronDownIcon,ChevronUpIcon,CircleStackIcon,MagnifyingGlassIcon,MoonIcon,PlayIcon,SparklesIcon,SunIcon,UserGroupIcon,XCircleIcon,XMarkIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/App/RootScreens/Discover.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/CircleStackIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/CircleStackIcon.js
+__barrel_optimize__?names=BoltIcon,CalendarDaysIcon,CheckIcon,ChevronDownIcon,ChevronUpIcon,CircleStackIcon,MagnifyingGlassIcon,MoonIcon,PlayIcon,SparklesIcon,SunIcon,UserGroupIcon,XCircleIcon,XMarkIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/App/RootScreens/Discover.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/EllipsisVerticalIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/EllipsisVerticalIcon.js
+__barrel_optimize__?names=CalendarDaysIcon,EllipsisVerticalIcon,StarIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/ChallengeCard.tsx
+./src/components/ChallengesTab.tsx
+./src/components/App/RootScreens/Profile.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/MagnifyingGlassIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/MagnifyingGlassIcon.js
+__barrel_optimize__?names=BoltIcon,CalendarDaysIcon,CheckIcon,ChevronDownIcon,ChevronUpIcon,CircleStackIcon,MagnifyingGlassIcon,MoonIcon,PlayIcon,SparklesIcon,SunIcon,UserGroupIcon,XCircleIcon,XMarkIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/App/RootScreens/Discover.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/MoonIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/MoonIcon.js
+__barrel_optimize__?names=BoltIcon,CalendarDaysIcon,CheckIcon,ChevronDownIcon,ChevronUpIcon,CircleStackIcon,MagnifyingGlassIcon,MoonIcon,PlayIcon,SparklesIcon,SunIcon,UserGroupIcon,XCircleIcon,XMarkIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/App/RootScreens/Discover.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/PlayIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/PlayIcon.js
+__barrel_optimize__?names=BoltIcon,CalendarDaysIcon,CheckIcon,ChevronDownIcon,ChevronUpIcon,CircleStackIcon,MagnifyingGlassIcon,MoonIcon,PlayIcon,SparklesIcon,SunIcon,UserGroupIcon,XCircleIcon,XMarkIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/App/RootScreens/Discover.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/SparklesIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/SparklesIcon.js
+__barrel_optimize__?names=BoltIcon,CalendarDaysIcon,CheckIcon,ChevronDownIcon,ChevronUpIcon,CircleStackIcon,MagnifyingGlassIcon,MoonIcon,PlayIcon,SparklesIcon,SunIcon,UserGroupIcon,XCircleIcon,XMarkIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/App/RootScreens/Discover.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/StarIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/StarIcon.js
+__barrel_optimize__?names=StarIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/App/RootScreens/Profile.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/SunIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/SunIcon.js
+__barrel_optimize__?names=BoltIcon,CalendarDaysIcon,CheckIcon,ChevronDownIcon,ChevronUpIcon,CircleStackIcon,MagnifyingGlassIcon,MoonIcon,PlayIcon,SparklesIcon,SunIcon,UserGroupIcon,XCircleIcon,XMarkIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/App/RootScreens/Discover.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/UserGroupIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/UserGroupIcon.js
+__barrel_optimize__?names=BoltIcon,CalendarDaysIcon,CheckIcon,ChevronDownIcon,ChevronUpIcon,CircleStackIcon,MagnifyingGlassIcon,MoonIcon,PlayIcon,SparklesIcon,SunIcon,UserGroupIcon,XCircleIcon,XMarkIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/App/RootScreens/Discover.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/XCircleIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/XCircleIcon.js
+__barrel_optimize__?names=BoltIcon,CalendarDaysIcon,CheckIcon,ChevronDownIcon,ChevronUpIcon,CircleStackIcon,MagnifyingGlassIcon,MoonIcon,PlayIcon,SparklesIcon,SunIcon,UserGroupIcon,XCircleIcon,XMarkIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/App/RootScreens/Discover.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/@heroicons/react/24/outline/esm/XMarkIcon.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/@heroicons/react/24/outline/esm/XMarkIcon.js
+__barrel_optimize__?names=BoltIcon,CalendarDaysIcon,CheckIcon,ChevronDownIcon,ChevronUpIcon,CircleStackIcon,MagnifyingGlassIcon,MoonIcon,PlayIcon,SparklesIcon,SunIcon,UserGroupIcon,XCircleIcon,XMarkIcon!=!./node_modules/@heroicons/react/24/outline/esm/index.js
+./src/components/App/RootScreens/Discover.tsx
+./src/components/home/HomeContent.tsx
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/date-fns/format.js
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/date-fns/format.js
+__barrel_optimize__?names=format!=!./node_modules/date-fns/index.js
+./src/api/firebase/workout/service.ts
+./src/components/SignInModal.tsx
+./src/components/AuthWrapper.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/react-icons/fa/index.mjs
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/react-icons/fa/index.mjs
+__barrel_optimize__?names=FaCheck,FaUser!=!./node_modules/react-icons/fa/index.mjs
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789752ms] [ERROR] ./node_modules/react-icons/fa6/index.mjs
+Error: failed to process called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+Import trace for requested module:
+./node_modules/react-icons/fa6/index.mjs
+__barrel_optimize__?names=FaArrowRight,FaBolt,FaChartLine,FaCoins,FaFire,FaGamepad,FaRocket,FaStar,FaTrophy,FaXmark!=!./node_modules/react-icons/fa6/index.mjs
+./src/pages/index.tsx @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[42789793ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[42789799ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/favicon.ico:0

@@ -15,8 +15,8 @@ function getStripeClient(event) {
 }
 
 // Shared monthly price IDs (keep in sync with subscribe.tsx)
-const LIVE_MONTHLY_PRICE_ID = 'price_1PDq26RobSf56MUOucDIKLhd';
-const TEST_MONTHLY_PRICE_ID = 'price_1RMIUNRobSf56MUOfeB4gIot';
+const LIVE_MONTHLY_PRICE_ID = 'price_1TfN9QIkArZc741WdNmcTHPv';
+const TEST_MONTHLY_PRICE_ID = 'price_1TfOBPIkArZc741WGAWleQke';
 
 function getMonthlyPriceId(event) {
   return isLocalhost(event) ? TEST_MONTHLY_PRICE_ID : LIVE_MONTHLY_PRICE_ID;

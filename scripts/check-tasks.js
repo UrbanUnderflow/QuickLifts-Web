@@ -1,20 +1,9 @@
 const { initializeApp, cert } = require('firebase-admin/app');
+const { resolveAdminCredential } = require('./lib/resolveAdminCredential');
 const { getFirestore } = require('firebase-admin/firestore');
 
 const app = initializeApp({
-    credential: cert({
-        type: 'service_account',
-        project_id: 'quicklifts-dd3f1',
-        private_key_id: '***REMOVED***',
-        private_key: "***REMOVED***",
-        client_email: 'firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com',
-        client_id: '111494077667496751062',
-        auth_uri: 'https://accounts.google.com/o/oauth2/auth',
-        token_uri: 'https://oauth2.googleapis.com/token',
-        auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
-        client_x509_cert_url: 'https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0%40quicklifts-dd3f1.iam.gserviceaccount.com',
-        universe_domain: 'googleapis.com'
-    })
+    credential: resolveAdminCredential()
 });
 const db = getFirestore(app);
 

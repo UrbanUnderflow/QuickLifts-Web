@@ -4,9 +4,11 @@ import { buildPulseCheckTeamInviteOneLink, resolvePulseCheckInvitePreviewImage }
 import { SubscriptionPlatform, SubscriptionType } from '../user';
 import {
   derivePulseCheckTeamPlanBypass,
+  getDefaultPulseCheckIntakeForm,
   getDefaultPulseCheckRequiredConsents,
   getDefaultPulseCheckTeamCommercialConfig,
   mergePulseCheckRequiredConsents,
+  PULSECHECK_INTAKE_FORM_VERSION,
 } from './types';
 import { ATHLETE_MENTAL_PROGRESS_COLLECTION } from '../mentaltraining/collections';
 import type { AthleteMentalProgress } from '../mentaltraining/types';
@@ -39,8 +41,13 @@ import type {
   PulseCheckPilotEnrollmentStatus,
   PulseCheckPilotCohortStatus,
   PulseCheckPilotStatus,
+  PulseCheckIntakeForm,
+  PulseCheckIntakeKind,
+  PulseCheckIntakeResponses,
   PulseCheckPilotStudyMode,
   PulseCheckRequiredConsentDocument,
+  PulseCheckTeamIntakeConfig,
+  SurveyQuestion,
   PulseCheckResearchConsentStatus,
   PulseCheckRosterVisibilityScope,
   PulseCheckNotificationPreferences,
@@ -318,6 +325,80 @@ const resolveEffectiveRequiredConsents = (
     return teamList;
   }
   return normalizeRequiredConsentDocuments(pilot?.requiredConsents || [], pilot?.studyMode || 'operational');
+};
+
+const VALID_SURVEY_QUESTION_TYPES = new Set<SurveyQuestion['type']>(['text', 'multiple_choice', 'number', 'yes_no']);
+
+const normalizeSurveyQuestions = (value: unknown): SurveyQuestion[] => {
+  if (!Array.isArray(value)) return [];
+  return value.reduce<SurveyQuestion[]>((acc, entry, index) => {
+    if (!entry || typeof entry !== 'object') return acc;
+    const candidate = entry as Record<string, unknown>;
+    const question = normalizeString(typeof candidate.question === 'string' ? candidate.question : '');
+    if (!question) return acc;
+    const rawType = typeof candidate.type === 'string' ? (candidate.type as SurveyQuestion['type']) : 'text';
+    const type = VALID_SURVEY_QUESTION_TYPES.has(rawType) ? rawType : 'text';
+    const id = normalizeString(typeof candidate.id === 'string' ? candidate.id : '') || `q-${index + 1}`;
+    const normalized: SurveyQuestion = { id, type, question };
+    if (candidate.required === true) normalized.required = true;
+    if (type === 'multiple_choice' && Array.isArray(candidate.options)) {
+      const options = candidate.options.reduce<NonNullable<SurveyQuestion['options']>>((opts, opt, optIndex) => {
+        if (!opt || typeof opt !== 'object') return opts;
+        const optionCandidate = opt as Record<string, unknown>;
+        const text = normalizeString(typeof optionCandidate.text === 'string' ? optionCandidate.text : '');
+        if (!text) return opts;
+        opts.push({ id: normalizeString(typeof optionCandidate.id === 'string' ? optionCandidate.id : '') || `opt-${optIndex + 1}`, text });
+        return opts;
+      }, []);
+      if (options.length > 0) normalized.options = options;
+    }
+    if (type === 'number') {
+      if (typeof candidate.minValue === 'number') normalized.minValue = candidate.minValue;
+      if (typeof candidate.maxValue === 'number') normalized.maxValue = candidate.maxValue;
+    }
+    acc.push(normalized);
+    return acc;
+  }, []);
+};
+
+const normalizeIntakeForm = (value: unknown): PulseCheckIntakeForm | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as Record<string, unknown>;
+  return {
+    questions: normalizeSurveyQuestions(candidate.questions),
+    version: normalizeString(typeof candidate.version === 'string' ? candidate.version : '') || PULSECHECK_INTAKE_FORM_VERSION,
+    updatedAt: (candidate.updatedAt as PulseCheckIntakeForm['updatedAt']) || null,
+  };
+};
+
+const normalizeIntakeConfig = (value: unknown): PulseCheckTeamIntakeConfig | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as Record<string, unknown>;
+  const athlete = normalizeIntakeForm(candidate.athlete);
+  const coach = normalizeIntakeForm(candidate.coach);
+  if (!athlete && !coach) return undefined;
+  const config: PulseCheckTeamIntakeConfig = {};
+  if (athlete) config.athlete = athlete;
+  if (coach) config.coach = coach;
+  return config;
+};
+
+const normalizeIntakeResponses = (value: unknown): PulseCheckIntakeResponses => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.entries(value as Record<string, unknown>).reduce<PulseCheckIntakeResponses>((acc, [rawId, rawValue]) => {
+    const id = normalizeString(rawId);
+    if (!id) return acc;
+    if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
+      acc[id] = rawValue;
+    } else if (typeof rawValue === 'string') {
+      const trimmed = rawValue.trim();
+      if (trimmed) acc[id] = trimmed;
+    } else if (Array.isArray(rawValue)) {
+      const arr = rawValue.map((entry) => normalizeString(typeof entry === 'string' ? entry : '')).filter(Boolean);
+      if (arr.length > 0) acc[id] = arr;
+    }
+    return acc;
+  }, {});
 };
 
 const normalizeCompletedConsentIds = (
@@ -728,6 +809,7 @@ const toTeam = (id: string, data: Record<string, any>): PulseCheckTeam => ({
   defaultClinicianProfileSource: data.defaultClinicianProfileSource || 'pulsecheck-local',
   implementationMetadata: normalizeTeamImplementationMetadata(data.implementationMetadata, data.defaultInvitePolicy || 'admin-only'),
   requiredConsents: normalizeConsentDocList(data.requiredConsents || []),
+  intake: normalizeIntakeConfig(data.intake),
   notes: data.notes || '',
   createdAt: data.createdAt || null,
   updatedAt: data.updatedAt || null,
@@ -913,6 +995,9 @@ const toTeamMembership = (id: string, data: Record<string, any>): PulseCheckTeam
     ...defaultAthleteOnboardingState(),
     ...(data.athleteOnboarding || {}),
   },
+  coachIntakeResponses: normalizeIntakeResponses(data.coachIntakeResponses),
+  coachIntakeFormVersion: data.coachIntakeFormVersion || '',
+  coachIntakeCompletedAt: data.coachIntakeCompletedAt || null,
   onboardingStatus: data.onboardingStatus || 'pending',
   postActivationCompletedAt: data.postActivationCompletedAt || null,
   grantedByInviteToken: data.grantedByInviteToken || '',
@@ -1128,6 +1213,9 @@ const getTeamById = async (teamId: string): Promise<PulseCheckTeam | null> => {
 const hydrateMembershipConsentStates = async (
   memberships: PulseCheckTeamMembership[]
 ): Promise<PulseCheckTeamMembership[]> => {
+  const teamIds = Array.from(
+    new Set(memberships.map((membership) => normalizeString(membership.teamId)).filter(Boolean))
+  );
   const pilotIds = Array.from(
     new Set(
       memberships
@@ -1135,14 +1223,19 @@ const hydrateMembershipConsentStates = async (
         .filter(Boolean)
     )
   );
-  if (pilotIds.length === 0) return memberships;
+  if (teamIds.length === 0 && pilotIds.length === 0) return memberships;
 
-  const pilots = await Promise.all(pilotIds.map((pilotId) => getPilotById(pilotId)));
+  const [teams, pilots] = await Promise.all([
+    Promise.all(teamIds.map((teamId) => getTeamById(teamId))),
+    Promise.all(pilotIds.map((pilotId) => getPilotById(pilotId))),
+  ]);
+  const teamsById = new Map(teams.filter(Boolean).map((team) => [team!.id, team!]));
   const pilotsById = new Map(pilots.filter(Boolean).map((pilot) => [pilot!.id, pilot!]));
 
   return memberships.map((membership) =>
     applyLatestConsentStateToMembership(
       membership,
+      teamsById.get(normalizeString(membership.teamId)) || null,
       pilotsById.get(normalizeString(membership.athleteOnboarding?.targetPilotId)) || null
     )
   );
@@ -2486,6 +2579,21 @@ export const pulseCheckProvisioningService = {
               (input.implementationMetadata.legacySignupPathUsed ? null : serverTimestamp()),
           }
         : null,
+      // Seed the team's editable consent set from the operational preset. After
+      // creation this list is the authoritative source staff edit in provisioning.
+      requiredConsents: normalizeConsentDocList(
+        input.requiredConsents && input.requiredConsents.length > 0
+          ? input.requiredConsents
+          : getDefaultPulseCheckRequiredConsents('operational')
+      ),
+      // Seed default athlete + coach intake question sets so new teams start
+      // with sensible defaults staff can edit, not a blank slate.
+      intake: normalizeIntakeConfig(
+        input.intake || {
+          athlete: getDefaultPulseCheckIntakeForm('athlete'),
+          coach: getDefaultPulseCheckIntakeForm('coach'),
+        }
+      ) || null,
       notes: normalizeString(input.notes),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -2493,6 +2601,45 @@ export const pulseCheckProvisioningService = {
 
     const docRef = await addDoc(collection(db, TEAMS_COLLECTION), payload);
     return docRef.id;
+  },
+
+  async updateTeamRequiredConsents(
+    teamId: string,
+    requiredConsents: PulseCheckRequiredConsentDocument[]
+  ): Promise<void> {
+    const normalizedTeamId = normalizeString(teamId);
+    if (!normalizedTeamId) {
+      throw new Error('Team id is required.');
+    }
+    const teamRef = doc(db, TEAMS_COLLECTION, normalizedTeamId);
+    await updateDoc(teamRef, {
+      requiredConsents: normalizeConsentDocList(requiredConsents),
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  async updateTeamIntakeForm(
+    teamId: string,
+    kind: PulseCheckIntakeKind,
+    form: PulseCheckIntakeForm
+  ): Promise<void> {
+    const normalizedTeamId = normalizeString(teamId);
+    if (!normalizedTeamId) {
+      throw new Error('Team id is required.');
+    }
+    if (kind !== 'athlete' && kind !== 'coach') {
+      throw new Error('Intake kind must be athlete or coach.');
+    }
+    const normalizedForm = {
+      questions: normalizeSurveyQuestions(form?.questions),
+      version: normalizeString(form?.version) || PULSECHECK_INTAKE_FORM_VERSION,
+      updatedAt: serverTimestamp(),
+    };
+    const teamRef = doc(db, TEAMS_COLLECTION, normalizedTeamId);
+    await updateDoc(teamRef, {
+      [`intake.${kind}`]: normalizedForm,
+      updatedAt: serverTimestamp(),
+    });
   },
 
   async createPilot(input: CreatePulseCheckPilotInput): Promise<string> {
@@ -2682,7 +2829,11 @@ export const pulseCheckProvisioningService = {
     const normalizedTargetEmail = normalizeEmail(input.targetEmail);
     const normalizedPilotId = normalizeString(input.pilotId);
     const normalizedCohortId = normalizeString(input.cohortId);
-    const redemptionMode = normalizeInviteRedemptionMode(input.redemptionMode);
+    // Team-access invites (org/team/pilot/cohort joins) are reusable by default:
+    // one durable link that adds anyone who redeems it into the right bucket and
+    // never auto-retires. Pass 'single-use' explicitly to opt out.
+    const redemptionMode: PulseCheckInviteLinkRedemptionMode =
+      input.redemptionMode === 'single-use' ? 'single-use' : 'general';
     const shouldRevokeExistingMatchingLinks = input.revokeExistingMatchingLinks !== false;
     const normalizedOrganizationId = normalizeString(input.organizationId);
     const inviteQuerySnapshot = await getDocs(collection(db, INVITE_LINKS_COLLECTION));
@@ -2843,6 +2994,13 @@ export const pulseCheckProvisioningService = {
         ...defaultNotificationPreferences(),
         ...(input.notificationPreferences || {}),
       },
+      ...(input.intakeResponses
+        ? {
+            coachIntakeResponses: normalizeIntakeResponses(input.intakeResponses),
+            coachIntakeFormVersion: normalizeString(input.intakeFormVersion) || PULSECHECK_INTAKE_FORM_VERSION,
+            coachIntakeCompletedAt: serverTimestamp(),
+          }
+        : {}),
       onboardingStatus: 'profile-complete',
       postActivationCompletedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -2873,9 +3031,11 @@ export const pulseCheckProvisioningService = {
     const userId = normalizeString(currentData.userId);
     const pilotSnap = pilotId ? await getDoc(doc(db, PILOTS_COLLECTION, pilotId)) : null;
     const pilotStudyMode = pilotSnap?.exists() ? ((pilotSnap.data()?.studyMode as PulseCheckPilotStudyMode) || 'operational') : null;
-    const requiredConsents = normalizeRequiredConsentDocuments(
-      pilotSnap?.data()?.requiredConsents ?? currentAthleteOnboarding.requiredConsents ?? [],
-      pilotStudyMode || 'operational'
+    const teamId = normalizeString(currentData.teamId);
+    const teamSnap = teamId ? await getDoc(doc(db, TEAMS_COLLECTION, teamId)) : null;
+    const requiredConsents = resolveEffectiveRequiredConsents(
+      teamSnap?.exists() ? teamSnap.data()?.requiredConsents : undefined,
+      pilotSnap?.exists() ? toPilot(pilotSnap.id, pilotSnap.data() as Record<string, any>) : null
     );
     const completedConsentVersions = buildCompletedConsentVersions({
       completedConsentIds: input.completedConsentIds ?? currentAthleteOnboarding.completedConsentIds,
@@ -2928,6 +3088,9 @@ export const pulseCheckProvisioningService = {
       entryOnboardingStep: 'complete',
       baselinePathStatus: baselineState.baselinePathStatus,
       baselinePathwayId: baselineState.baselinePathwayId,
+      intakeResponses: normalizeIntakeResponses(input.intakeResponses ?? currentAthleteOnboarding.intakeResponses),
+      intakeFormVersion: normalizeString(input.intakeFormVersion) || normalizeString(currentAthleteOnboarding.intakeFormVersion),
+      intakeCompletedAt: serverTimestamp(),
     };
     const nextMembershipOnboardingStatus = resolveTeamMembershipOnboardingStatus({
       role: 'athlete',
@@ -3009,9 +3172,11 @@ export const pulseCheckProvisioningService = {
     const userId = normalizeString(currentData.userId);
     const pilotSnap = pilotId ? await getDoc(doc(db, PILOTS_COLLECTION, pilotId)) : null;
     const pilotStudyMode = pilotSnap?.exists() ? ((pilotSnap.data()?.studyMode as PulseCheckPilotStudyMode) || 'operational') : null;
-    const requiredConsents = normalizeRequiredConsentDocuments(
-      pilotSnap?.data()?.requiredConsents ?? currentAthleteOnboarding.requiredConsents ?? [],
-      pilotStudyMode || 'operational'
+    const teamId = normalizeString(currentData.teamId);
+    const teamSnap = teamId ? await getDoc(doc(db, TEAMS_COLLECTION, teamId)) : null;
+    const requiredConsents = resolveEffectiveRequiredConsents(
+      teamSnap?.exists() ? teamSnap.data()?.requiredConsents : undefined,
+      pilotSnap?.exists() ? toPilot(pilotSnap.id, pilotSnap.data() as Record<string, any>) : null
     );
     const completedConsentVersions = buildCompletedConsentVersions({
       completedConsentIds: input.completedConsentIds ?? currentAthleteOnboarding.completedConsentIds,
@@ -3070,6 +3235,12 @@ export const pulseCheckProvisioningService = {
       completedConsentVersions,
       baselinePathStatus: baselineState.baselinePathStatus,
       baselinePathwayId: baselineState.baselinePathwayId,
+      ...(input.intakeResponses
+        ? {
+            intakeResponses: normalizeIntakeResponses(input.intakeResponses),
+            intakeFormVersion: normalizeString(input.intakeFormVersion) || normalizeString(currentAthleteOnboarding.intakeFormVersion),
+          }
+        : {}),
     };
     const nextMembershipOnboardingStatus = resolveTeamMembershipOnboardingStatus({
       role: 'athlete',

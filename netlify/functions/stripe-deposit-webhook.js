@@ -4,6 +4,7 @@ const db = admin.firestore();
 
 // Initialize Stripe
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { getSecretWithEnvFallback } = require('./google-secret-manager-utils');
 
 const headers = {
   'Access-Control-Allow-Origin': '*',
@@ -23,7 +24,11 @@ exports.handler = async (event, context) => {
 
   try {
     const sig = event.headers['stripe-signature'];
-    const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    // Dedicated signing secret for the deposit webhook endpoint.
+    // Prefers env, falls back to Google Secret Manager (prod), then the shared secret.
+    const endpointSecret =
+      (await getSecretWithEnvFallback('STRIPE_WEBHOOK_SECRET_DEPOSIT').catch(() => '')) ||
+      (await getSecretWithEnvFallback('STRIPE_WEBHOOK_SECRET').catch(() => ''));
 
     let stripeEvent;
 

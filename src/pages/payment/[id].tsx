@@ -7,7 +7,7 @@ import { userService } from '../../api/firebase/user/service';
 import Link from 'next/link';
 import { ArrowRight, Globe } from 'lucide-react';
 import ChallengeCTA from '../../components/ChallengeCTA';
-import { isLocalhost, getStripePublishableKey } from '../../utils/stripeKey';
+import { isLocalhost, getStripePublishableKey, STRIPE_PUBLISHABLE_KEY_LIVE, STRIPE_PUBLISHABLE_KEY_TEST } from '../../utils/stripeKey';
 import { subscriptionService } from '../../api/firebase/subscription/service';
 
 // Helper function to detect iOS devices
@@ -110,11 +110,11 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
         
         // Automatically use test mode on localhost if not explicitly set to false
         key = shouldUseTestMode || savedTestMode === null
-          ? process.env.NEXT_PUBLIC_TEST_STRIPE_PUBLISHABLE_KEY
-          : process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+          ? STRIPE_PUBLISHABLE_KEY_TEST
+          : STRIPE_PUBLISHABLE_KEY_LIVE;
       } else {
         // In production, always use live mode
-        key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+        key = STRIPE_PUBLISHABLE_KEY_LIVE;
       }
       
       console.log('Got Stripe key:', key ? 'Key present' : 'No key found');

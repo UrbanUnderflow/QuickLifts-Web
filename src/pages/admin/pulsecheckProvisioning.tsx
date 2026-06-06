@@ -5,10 +5,8 @@ import {
   AlertTriangle,
   Building2,
   ChevronDown,
-  CheckCircle2,
   Clipboard,
   ClipboardList,
-  Clock,
   Download,
   ExternalLink,
   HeartPulse,
@@ -30,20 +28,16 @@ import GuidedTour, { type GuidedTourStep } from '../../components/onboarding/Gui
 import { storage } from '../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import {
-  TEAM_ONBOARDING_TRACKER_STEPS,
-  TRACKER_STATUS_OPTIONS,
-  getTeamOnboardingStepStatus,
-  getTeamOnboardingProgress,
-  getTrackerStatusLabel,
-} from '../../api/firebase/pulsecheckProvisioning/onboardingTracker';
-import {
   fetchPulseCheckSportConfiguration,
   getDefaultPulseCheckSports,
   type PulseCheckSportConfigurationEntry,
 } from '../../api/firebase/pulsecheckSportConfig';
 import {
   derivePulseCheckTeamPlanBypass,
+  getDefaultPulseCheckIntakeForm,
+  getDefaultPulseCheckRequiredConsents,
   getDefaultPulseCheckTeamCommercialConfig,
+  PULSECHECK_INTAKE_FORM_VERSION,
 } from '../../api/firebase/pulsecheckProvisioning/types';
 import type {
   PulseCheckAdminContact,
@@ -56,15 +50,17 @@ import type {
   PulseCheckClinicianProfileType,
   PulseCheckInviteLink,
   PulseCheckInvitePolicy,
-  PulseCheckOnboardingTrackerStepId,
-  PulseCheckOnboardingTrackerStepStatus,
   PulseCheckOrganization,
   PulseCheckOrganizationStatus,
   PulseCheckPilot,
   PulseCheckPilotCohort,
   PulseCheckPilotCohortStatus,
+  PulseCheckIntakeForm,
+  PulseCheckIntakeKind,
   PulseCheckPilotStudyMode,
+  PulseCheckRequiredConsentDocument,
   PulseCheckRevenueRecipientRole,
+  SurveyQuestion,
   PulseCheckStudyPosture,
   PulseCheckTeam,
   PulseCheckTeamCommercialConfig,
@@ -452,20 +448,6 @@ const PROVISIONING_WIZARD_STEPS: Array<{ key: ProvisioningWizardStep; label: str
   { key: 'cohort', label: 'Cohort' },
 ];
 
-const getTrackerStatusClassName = (status: PulseCheckOnboardingTrackerStepStatus) => {
-  switch (status) {
-    case 'complete':
-      return 'pcp-tracker-status-complete';
-    case 'blocked':
-      return 'pcp-tracker-status-blocked';
-    case 'in-progress':
-      return 'pcp-tracker-status-progress';
-    case 'pending':
-    default:
-      return 'pcp-tracker-status-pending';
-  }
-};
-
 const PULSECHECK_ADMIN_TOUR_STEPS: GuidedTourStep[] = [
   {
     selector: '[data-tour="admin-provisioning-header"]',
@@ -583,6 +565,11 @@ const shouldShowPulseCheckTestHarnessData = () => {
   if (queryValue === '1' || queryValue === 'true') return true;
   if (queryValue === '0' || queryValue === 'false') return false;
 
+  // When deep-linked to a specific team (e.g. from the dashboard "Set up"
+  // intake action), always reveal it so the target resolves regardless of the
+  // test-harness filter.
+  if (params.get('focusTeam')) return true;
+
   return window.localStorage.getItem('pulsecheck_show_test_harness_data') === 'true';
 };
 
@@ -611,6 +598,41 @@ const getDashboardStatusClassName = (display: StatusDisplay) => {
       return 'pcp-s-prov';
   }
 };
+
+// Reusable collapsible card. Header is always visible (title + optional actions
+// + chevron); the body shows only when open. Used for org and team section
+// cards so the console stays scannable.
+const CollapsibleCard: React.FC<{
+  title: React.ReactNode;
+  open: boolean;
+  onToggle: () => void;
+  preview?: React.ReactNode;
+  actions?: React.ReactNode;
+  className?: string;
+  id?: string;
+  children: React.ReactNode;
+}> = ({ title, open, onToggle, preview, actions, className, id, children }) => (
+  <div id={id} className={className || 'pcp-card'} style={{ scrollMarginTop: 16 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, background: 'transparent', border: 0, padding: 0, cursor: 'pointer', textAlign: 'left' }}
+      >
+        <ChevronDown
+          style={{ width: 16, height: 16, flexShrink: 0, color: 'rgba(255,255,255,0.5)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+        />
+        <span className="pcp-card-title" style={{ marginBottom: 0 }}>{title}</span>
+      </button>
+      {actions || null}
+    </div>
+    {open ? (
+      <div style={{ marginTop: 12 }}>{children}</div>
+    ) : preview ? (
+      <div style={{ marginTop: 6, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{preview}</div>
+    ) : null}
+  </div>
+);
 
 const PulseCheckProvisioningPage: React.FC = () => {
   const currentUser = useUser();
@@ -649,7 +671,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [clinicianLinkCreatingProfileId, setClinicianLinkCreatingProfileId] = useState<string | null>(null);
   const [adminLinkCreatingEmail, setAdminLinkCreatingEmail] = useState<string | null>(null);
   const [teamCommercialSavingId, setTeamCommercialSavingId] = useState<string | null>(null);
-  const [teamOnboardingTrackerSavingKey, setTeamOnboardingTrackerSavingKey] = useState<string | null>(null);
+  const [teamConsentDrafts, setTeamConsentDrafts] = useState<Record<string, PulseCheckRequiredConsentDocument[]>>({});
+  const [teamConsentSavingId, setTeamConsentSavingId] = useState<string | null>(null);
+  const [teamIntakeDrafts, setTeamIntakeDrafts] = useState<Record<string, SurveyQuestion[]>>({});
+  const [teamIntakeSavingKey, setTeamIntakeSavingKey] = useState<string | null>(null);
   const [adminTourOpen, setAdminTourOpen] = useState(false);
   const [pilotStudyModeDrafts, setPilotStudyModeDrafts] = useState<Record<string, PulseCheckPilotStudyMode>>({});
   const [pilotStudyModeSavingId, setPilotStudyModeSavingId] = useState<string | null>(null);
@@ -666,6 +691,22 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [organizationSearch, setOrganizationSearch] = useState('');
   const [organizationStatusFilter, setOrganizationStatusFilter] = useState<DashboardStatusFilter>('all');
   const [expandedOrganizationIds, setExpandedOrganizationIds] = useState<string[]>([]);
+  const [collapsedTeamIds, setCollapsedTeamIds] = useState<Set<string>>(() => new Set());
+  const toggleTeamCollapsed = (teamId: string) => {
+    setCollapsedTeamIds((current) => {
+      const next = new Set(current);
+      if (next.has(teamId)) next.delete(teamId); else next.add(teamId);
+      return next;
+    });
+  };
+  const [expandedOrgCardKeys, setExpandedOrgCardKeys] = useState<Set<string>>(() => new Set());
+  const toggleOrgCard = (key: string) => {
+    setExpandedOrgCardKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
   const [expandedTeamIds, setExpandedTeamIds] = useState<string[]>([]);
   const [expandedPilotIds, setExpandedPilotIds] = useState<string[]>([]);
   const [hasInitializedExpansionState, setHasInitializedExpansionState] = useState(false);
@@ -785,19 +826,17 @@ const PulseCheckProvisioningPage: React.FC = () => {
     });
     return nextMap;
   }, [inviteLinks]);
-  const athleteInviteLinksByCohortId = useMemo(() => {
-    const nextMap = new Map<string, PulseCheckInviteLink[]>();
+  const reusableCohortInviteByCohortId = useMemo(() => {
+    const nextMap = new Map<string, PulseCheckInviteLink>();
     inviteLinks.forEach((link) => {
       if (link.status !== 'active') return;
+      if (link.redemptionMode !== 'general') return;
       if (link.inviteType !== 'team-access') return;
       if (link.teamMembershipRole !== 'athlete') return;
       if (!link.cohortId) return;
-
-      const current = nextMap.get(link.cohortId) || [];
-      current.push(link);
-      nextMap.set(link.cohortId, current);
+      // Keep the most recent reusable link per cohort.
+      if (!nextMap.has(link.cohortId)) nextMap.set(link.cohortId, link);
     });
-
     return nextMap;
   }, [inviteLinks]);
   const inviteLinksByClinicianProfileId = useMemo(() => {
@@ -1063,6 +1102,48 @@ const PulseCheckProvisioningPage: React.FC = () => {
     }
   }, [loading]);
 
+  // Deep-link focus: when arriving from the dashboard "Set up" intake action,
+  // pre-load default questions if none exist yet and scroll to that team's
+  // intake editor.
+  const [intakeFocusHandled, setIntakeFocusHandled] = useState(false);
+  useEffect(() => {
+    if (loading || intakeFocusHandled || typeof window === 'undefined' || teams.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const focusTeam = params.get('focusTeam');
+    if (!focusTeam) return;
+    setIntakeFocusHandled(true);
+
+    // Make sure the team card is expanded so the deep-link lands on its content.
+    setCollapsedTeamIds((prev) => {
+      if (!prev.has(focusTeam)) return prev;
+      const next = new Set(prev);
+      next.delete(focusTeam);
+      return next;
+    });
+    // Open the (collapsed-by-default) intake editor card so the deep-link lands on it.
+    setExpandedOrgCardKeys((prev) => {
+      if (prev.has(`${focusTeam}:intakecard`)) return prev;
+      const next = new Set(prev);
+      next.add(`${focusTeam}:intakecard`);
+      return next;
+    });
+    const focusIntake = params.get('focusIntake');
+    const targetTeam = teams.find((team) => team.id === focusTeam);
+    if (targetTeam && (focusIntake === 'athlete' || focusIntake === 'coach')) {
+      const kind = focusIntake as PulseCheckIntakeKind;
+      const existing = targetTeam.intake?.[kind]?.questions || [];
+      if (existing.length === 0) {
+        const key = `${focusTeam}:${kind}`;
+        setTeamIntakeDrafts((prev) => (prev[key] ? prev : { ...prev, [key]: getDefaultPulseCheckIntakeForm(kind).questions }));
+      }
+    }
+
+    window.setTimeout(() => {
+      const el = document.getElementById(`pcp-intake-${focusTeam}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 400);
+  }, [loading, intakeFocusHandled, teams]);
+
   useEffect(() => {
     if (hasInitializedExpansionState || loading) return;
 
@@ -1170,6 +1251,24 @@ const PulseCheckProvisioningPage: React.FC = () => {
       }
     },
     [loadData, uploadInvitePreviewImage]
+  );
+
+  const handleRevertTeamInviteImage = useCallback(
+    async (teamId: string) => {
+      setTeamImageUploadingId(teamId);
+      setMessage(null);
+      try {
+        await pulseCheckProvisioningService.updateTeamInvitePreviewImage(teamId, '');
+        await loadData();
+        setMessage({ type: 'success', text: 'Team is now using the organization artwork.' });
+      } catch (error) {
+        console.error('[PulseCheckProvisioning] Failed to revert team invite preview image:', error);
+        setMessage({ type: 'error', text: 'Failed to update team image.' });
+      } finally {
+        setTeamImageUploadingId((current) => (current === teamId ? null : current));
+      }
+    },
+    [loadData]
   );
 
   useEffect(() => {
@@ -1606,46 +1705,208 @@ const PulseCheckProvisioningPage: React.FC = () => {
     }
   };
 
-  const handleTeamOnboardingStepStatusChange = async (
+  const getTeamConsentDraft = (team: PulseCheckTeam): PulseCheckRequiredConsentDocument[] =>
+    teamConsentDrafts[team.id] ?? (team.requiredConsents || []);
+
+  const isTeamConsentDirty = (team: PulseCheckTeam): boolean => {
+    const draft = teamConsentDrafts[team.id];
+    if (!draft) return false;
+    return JSON.stringify(draft) !== JSON.stringify(team.requiredConsents || []);
+  };
+
+  const setTeamConsentDraft = (teamId: string, next: PulseCheckRequiredConsentDocument[]) => {
+    setTeamConsentDrafts((prev) => ({ ...prev, [teamId]: next }));
+  };
+
+  const handleAddTeamConsent = (team: PulseCheckTeam) => {
+    const newConsent: PulseCheckRequiredConsentDocument = {
+      id: `custom-${Math.random().toString(36).slice(2, 10)}`,
+      title: '',
+      body: '',
+      version: 'v1',
+    };
+    setTeamConsentDraft(team.id, [...getTeamConsentDraft(team), newConsent]);
+  };
+
+  const handleTeamConsentFieldChange = (
     team: PulseCheckTeam,
-    stepId: PulseCheckOnboardingTrackerStepId,
-    status: PulseCheckOnboardingTrackerStepStatus
+    index: number,
+    field: 'title' | 'body' | 'version',
+    value: string
   ) => {
-    const savingKey = `${team.id}:${stepId}`;
-    const currentTracker = team.implementationMetadata?.onboardingTracker || {};
-    const currentStep = currentTracker.steps?.[stepId] || { status: 'pending' as PulseCheckOnboardingTrackerStepStatus };
+    setTeamConsentDraft(
+      team.id,
+      getTeamConsentDraft(team).map((consent, i) => (i === index ? { ...consent, [field]: value } : consent))
+    );
+  };
 
-    setTeamOnboardingTrackerSavingKey(savingKey);
+  const handleBumpTeamConsentVersion = (team: PulseCheckTeam, index: number) => {
+    setTeamConsentDraft(
+      team.id,
+      getTeamConsentDraft(team).map((consent, i) => {
+        if (i !== index) return consent;
+        const current = parseInt((consent.version.match(/\d+/) || ['0'])[0], 10) || 0;
+        return { ...consent, version: `v${current + 1}` };
+      })
+    );
+  };
+
+  const handleRemoveTeamConsent = (team: PulseCheckTeam, index: number) => {
+    setTeamConsentDraft(team.id, getTeamConsentDraft(team).filter((_, i) => i !== index));
+  };
+
+  const handleSeedTeamConsents = (team: PulseCheckTeam, studyMode: PulseCheckPilotStudyMode) => {
+    setTeamConsentDraft(team.id, getDefaultPulseCheckRequiredConsents(studyMode).map((consent) => ({ ...consent })));
+  };
+
+  const handleResetTeamConsentDraft = (teamId: string) => {
+    setTeamConsentDrafts((prev) => {
+      const next = { ...prev };
+      delete next[teamId];
+      return next;
+    });
+  };
+
+  const handleSaveTeamConsents = async (team: PulseCheckTeam) => {
+    const draft = getTeamConsentDraft(team);
+    if (draft.some((consent) => !consent.title.trim() || !consent.body.trim())) {
+      setMessage({ type: 'error', text: 'Each consent needs a title and body before saving.' });
+      return;
+    }
+    setTeamConsentSavingId(team.id);
     setMessage(null);
-
     try {
-      await pulseCheckProvisioningService.updateTeamOnboardingTracker({
-        teamId: team.id,
-        onboardingTracker: {
-          ...currentTracker,
-          steps: {
-            ...(currentTracker.steps || {}),
-            [stepId]: {
-              ...currentStep,
-              status,
-              updatedByUserId: currentUser?.id || '',
-              updatedByEmail: currentUser?.email || '',
-            },
-          },
-        },
-        updatedByUserId: currentUser?.id || '',
-        updatedByEmail: currentUser?.email || '',
-      });
+      await pulseCheckProvisioningService.updateTeamRequiredConsents(team.id, draft);
       await loadData();
-      setMessage({
-        type: 'success',
-        text: `${team.displayName} onboarding tracker updated.`,
-      });
+      handleResetTeamConsentDraft(team.id);
+      setMessage({ type: 'success', text: `${team.displayName} consent forms updated.` });
     } catch (error) {
-      console.error('[PulseCheckProvisioning] Failed to update team onboarding tracker:', error);
-      setMessage({ type: 'error', text: 'Failed to update onboarding tracker.' });
+      console.error('[PulseCheckProvisioning] Failed to update team consents:', error);
+      setMessage({ type: 'error', text: 'Failed to update consent forms.' });
     } finally {
-      setTeamOnboardingTrackerSavingKey((current) => (current === savingKey ? null : current));
+      setTeamConsentSavingId((current) => (current === team.id ? null : current));
+    }
+  };
+
+  const intakeDraftKey = (teamId: string, kind: PulseCheckIntakeKind) => `${teamId}:${kind}`;
+
+  const getIntakeDraft = (team: PulseCheckTeam, kind: PulseCheckIntakeKind): SurveyQuestion[] =>
+    teamIntakeDrafts[intakeDraftKey(team.id, kind)] ?? (team.intake?.[kind]?.questions || []);
+
+  const isIntakeDirty = (team: PulseCheckTeam, kind: PulseCheckIntakeKind): boolean => {
+    const draft = teamIntakeDrafts[intakeDraftKey(team.id, kind)];
+    if (!draft) return false;
+    return JSON.stringify(draft) !== JSON.stringify(team.intake?.[kind]?.questions || []);
+  };
+
+  const setIntakeDraft = (teamId: string, kind: PulseCheckIntakeKind, next: SurveyQuestion[]) => {
+    setTeamIntakeDrafts((prev) => ({ ...prev, [intakeDraftKey(teamId, kind)]: next }));
+  };
+
+  const updateIntakeQuestion = (
+    team: PulseCheckTeam,
+    kind: PulseCheckIntakeKind,
+    index: number,
+    updater: (question: SurveyQuestion) => SurveyQuestion
+  ) => {
+    setIntakeDraft(team.id, kind, getIntakeDraft(team, kind).map((question, i) => (i === index ? updater(question) : question)));
+  };
+
+  const handleAddIntakeQuestion = (team: PulseCheckTeam, kind: PulseCheckIntakeKind) => {
+    const question: SurveyQuestion = { id: `q-${Math.random().toString(36).slice(2, 10)}`, type: 'text', question: '' };
+    setIntakeDraft(team.id, kind, [...getIntakeDraft(team, kind), question]);
+  };
+
+  const handleRemoveIntakeQuestion = (team: PulseCheckTeam, kind: PulseCheckIntakeKind, index: number) => {
+    setIntakeDraft(team.id, kind, getIntakeDraft(team, kind).filter((_, i) => i !== index));
+  };
+
+  const handleIntakeQuestionTypeChange = (
+    team: PulseCheckTeam,
+    kind: PulseCheckIntakeKind,
+    index: number,
+    type: SurveyQuestion['type']
+  ) => {
+    updateIntakeQuestion(team, kind, index, (question) => {
+      const next: SurveyQuestion = { id: question.id, type, question: question.question };
+      if (question.required) next.required = true;
+      if (type === 'multiple_choice') {
+        next.options = question.options && question.options.length > 0
+          ? question.options
+          : [{ id: `opt-${Math.random().toString(36).slice(2, 8)}`, text: '' }];
+      }
+      if (type === 'number') {
+        next.minValue = question.minValue;
+        next.maxValue = question.maxValue;
+      }
+      return next;
+    });
+  };
+
+  const handleAddIntakeOption = (team: PulseCheckTeam, kind: PulseCheckIntakeKind, index: number) => {
+    updateIntakeQuestion(team, kind, index, (question) => ({
+      ...question,
+      options: [...(question.options || []), { id: `opt-${Math.random().toString(36).slice(2, 8)}`, text: '' }],
+    }));
+  };
+
+  const handleIntakeOptionChange = (
+    team: PulseCheckTeam,
+    kind: PulseCheckIntakeKind,
+    index: number,
+    optionIndex: number,
+    text: string
+  ) => {
+    updateIntakeQuestion(team, kind, index, (question) => ({
+      ...question,
+      options: (question.options || []).map((option, i) => (i === optionIndex ? { ...option, text } : option)),
+    }));
+  };
+
+  const handleRemoveIntakeOption = (
+    team: PulseCheckTeam,
+    kind: PulseCheckIntakeKind,
+    index: number,
+    optionIndex: number
+  ) => {
+    updateIntakeQuestion(team, kind, index, (question) => ({
+      ...question,
+      options: (question.options || []).filter((_, i) => i !== optionIndex),
+    }));
+  };
+
+  const handleLoadStarterIntake = (team: PulseCheckTeam, kind: PulseCheckIntakeKind) => {
+    setIntakeDraft(team.id, kind, getDefaultPulseCheckIntakeForm(kind).questions);
+  };
+
+  const handleDiscardIntakeDraft = (team: PulseCheckTeam, kind: PulseCheckIntakeKind) => {
+    setTeamIntakeDrafts((prev) => {
+      const next = { ...prev };
+      delete next[intakeDraftKey(team.id, kind)];
+      return next;
+    });
+  };
+
+  const handleSaveIntake = async (team: PulseCheckTeam, kind: PulseCheckIntakeKind) => {
+    const draft = getIntakeDraft(team, kind);
+    if (draft.some((question) => !question.question.trim())) {
+      setMessage({ type: 'error', text: 'Every question needs text before saving.' });
+      return;
+    }
+    const savingKey = intakeDraftKey(team.id, kind);
+    setTeamIntakeSavingKey(savingKey);
+    setMessage(null);
+    try {
+      const form: PulseCheckIntakeForm = { questions: draft, version: PULSECHECK_INTAKE_FORM_VERSION };
+      await pulseCheckProvisioningService.updateTeamIntakeForm(team.id, kind, form);
+      await loadData();
+      handleDiscardIntakeDraft(team, kind);
+      setMessage({ type: 'success', text: `${team.displayName} ${kind} intake updated.` });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to update intake form:', error);
+      setMessage({ type: 'error', text: 'Failed to update intake form.' });
+    } finally {
+      setTeamIntakeSavingKey((current) => (current === savingKey ? null : current));
     }
   };
 
@@ -1855,13 +2116,37 @@ const PulseCheckProvisioningPage: React.FC = () => {
     }
   };
 
-  const handleCopyInviteLink = async (activationUrl: string, successText = 'Invite link copied to clipboard.') => {
+  // Copy must run synchronously inside the click gesture — calling
+  // navigator.clipboard.writeText after an await loses user activation and the
+  // browser denies it. Falls back to execCommand, then to showing the link.
+  const copyInviteToClipboard = (text: string, successText: string) => {
+    const onDone = () => setMessage({ type: 'success', text: successText });
+    const fallback = () => {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (ok) { onDone(); return; }
+      } catch (error) {
+        console.warn('[PulseCheckProvisioning] execCommand copy fallback failed:', error);
+      }
+      setMessage({ type: 'error', text: `Copy this invite link manually: ${text}` });
+    };
     try {
-      await navigator.clipboard.writeText(activationUrl);
-      setMessage({ type: 'success', text: successText });
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).then(onDone).catch(fallback);
+      } else {
+        fallback();
+      }
     } catch (error) {
-      console.error('[PulseCheckProvisioning] Failed to copy invite link:', error);
-      setMessage({ type: 'error', text: 'Failed to copy invite link.' });
+      console.warn('[PulseCheckProvisioning] clipboard.writeText threw:', error);
+      fallback();
     }
   };
 
@@ -1878,6 +2163,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
         pilotName: pilot.name,
         cohortId: cohort.id,
         cohortName: cohort.name,
+        redemptionMode: 'general',
         createdByUserId: currentUser?.id || '',
         createdByEmail: currentUser?.email || '',
       });
@@ -1885,13 +2171,13 @@ const PulseCheckProvisioningPage: React.FC = () => {
       const refreshedInviteLinks = await pulseCheckProvisioningService.listInviteLinks();
       setInviteLinks(refreshedInviteLinks);
       const createdInvite = refreshedInviteLinks.find((invite) => invite.id === inviteId);
-      if (createdInvite?.activationUrl) {
-        await navigator.clipboard.writeText(createdInvite.activationUrl);
-      }
-
+      // Do NOT copy here: we're past the click gesture (clipboard would be
+      // denied). The button now shows "Copy Invite" and copies synchronously.
       setMessage({
         type: 'success',
-        text: `Cohort athlete invite created for ${cohort.name} and copied to the clipboard.`,
+        text: createdInvite?.activationUrl
+          ? `Reusable invite ready for ${cohort.name} — tap Copy Invite to copy it.`
+          : `Reusable invite created for ${cohort.name}.`,
       });
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to create cohort athlete invite:', error);
@@ -1999,10 +2285,6 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
   const toggleOrganizationRow = useCallback((organizationId: string) => {
     toggleExpandedId(organizationId, setExpandedOrganizationIds);
-  }, [toggleExpandedId]);
-
-  const toggleTeamRow = useCallback((teamId: string) => {
-    toggleExpandedId(teamId, setExpandedTeamIds);
   }, [toggleExpandedId]);
 
   const togglePilotRow = useCallback((pilotId: string) => {
@@ -2408,6 +2690,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-org-row.open .pcp-org-chev svg { transform: rotate(90deg); }
           .pcp-org-ico { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, rgba(0, 212, 170, 0.14), rgba(0, 212, 170, 0.04)); border: 0.5px solid var(--teal-b); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: 12px; color: var(--teal); }
           .pcp-org-info { flex: 1; min-width: 0; padding: 12px 0; }
+          .pcp-level-eyebrow { font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--teal); opacity: 0.7; margin-bottom: 3px; }
           .pcp-org-name { font-size: 14px; font-weight: 600; letter-spacing: -0.2px; margin-bottom: 2px; }
           .pcp-org-meta { font-size: 11px; color: var(--t3); font-family: var(--fm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 520px; }
           .pcp-org-counts { display: flex; gap: 5px; margin-right: 12px; }
@@ -2425,7 +2708,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-ab-t { background: var(--teal-d); color: var(--teal); border: 0.5px solid var(--teal-b); }
           .pcp-ab-t:hover { background: rgba(0, 212, 170, 0.16); }
           .pcp-ab:disabled { opacity: 0.45; cursor: not-allowed; }
-          .pcp-org-body { display: none; }
+          .pcp-org-body { display: none; padding-bottom: 16px; }
           .pcp-org-row.open .pcp-org-body { display: block; }
           .pcp-team-row { border-top: 0.5px solid var(--mb); }
           .pcp-team-hd { display: flex; align-items: center; padding: 0 16px 0 0; cursor: pointer; user-select: none; min-height: 46px; transition: background 0.15s; }
@@ -2475,7 +2758,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-org-grid,
           .pcp-team-grid { display: grid; gap: 12px; }
           .pcp-org-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); }
-          .pcp-team-shell { padding: 14px 16px 16px 80px; }
+          .pcp-team-card { margin: 12px 16px 0 54px; }
+          .pcp-team-shell { padding: 12px 0 4px 0; }
           .pcp-team-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.9fr); margin-bottom: 12px; }
           .pcp-card { border-radius: 14px; border: 0.5px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02); padding: 14px; }
           .pcp-card-title { font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--t3); margin-bottom: 10px; }
@@ -2570,14 +2854,14 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-warn-box { background: var(--amber-d); border: 0.5px solid rgba(245, 166, 35, 0.22); color: var(--amber); }
           .pcp-fg { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
           .pcp-fg.pcp-c1 { grid-template-columns: 1fr; }
-          .pcp-fld { display: flex; flex-direction: column; gap: 5px; }
+          .pcp-fld { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
           .pcp-fld.pcp-s2 { grid-column: 1 / -1; }
           .pcp-flbl { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t3); }
-          .pcp-finp { background: var(--glass); border: 0.5px solid var(--mb); border-radius: 9px; padding: 8px 12px; font-size: 13px; color: var(--t1); outline: none; transition: border-color 0.2s, background 0.2s; }
+          .pcp-finp { width: 100%; max-width: 100%; box-sizing: border-box; background: var(--glass); border: 0.5px solid var(--mb); border-radius: 9px; padding: 8px 12px; font-size: 13px; color: var(--t1); outline: none; transition: border-color 0.2s, background 0.2s; }
           .pcp-finp:focus { border-color: var(--teal-b); background: var(--teal-d); }
           .pcp-finp::placeholder { color: var(--t3); }
           .pcp-finp:disabled { opacity: 0.5; cursor: not-allowed; }
-          .pcp-finp.pcp-select { cursor: pointer; }
+          .pcp-finp.pcp-select { cursor: pointer; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
           .pcp-finp.pcp-textarea { resize: vertical; min-height: 76px; line-height: 1.55; }
           .pcp-fhint { font-size: 11px; color: var(--t3); line-height: 1.45; }
           .pcp-toggle-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 13px; border-radius: 10px; background: var(--glass); border: 0.5px solid var(--mb); margin-bottom: 12px; }
@@ -2621,7 +2905,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
             .pcp-commercial-grid,
             .pcp-tracker-grid { grid-template-columns: 1fr; }
             .pcp-org-overview { padding-left: 18px; }
-            .pcp-team-shell { padding-left: 18px; }
+            .pcp-team-card { margin-left: 18px; margin-right: 16px; }
+            .pcp-team-shell { padding-left: 0; }
             .pcp-pilot-panel.open { grid-template-columns: 1fr; padding-left: 80px; }
             .pcp-pilot-settings-grid { grid-template-columns: 1fr; }
             .pcp-pilot-settings-actions { flex-direction: column; align-items: flex-start; }
@@ -2822,6 +3107,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
                   filteredOrganizationBundles.map(({ organization, teams: bundledTeams }, organizationIndex) => {
                     const orgStatus = getOrganizationStatusDisplay(organization.status);
                     const organizationExpanded = expandedOrganizationIds.includes(organization.id);
+                    const orgArtworkOpen = expandedOrgCardKeys.has(`${organization.id}:artwork`);
+                    const orgSummaryOpen = expandedOrgCardKeys.has(`${organization.id}:summary`);
                     const organizationPreviewImage = resolvePulseCheckInvitePreviewImage(undefined, organization.invitePreviewImageUrl);
                     const organizationAdminCount =
                       (organization.primaryCustomerAdminEmail ? 1 : 0) + (organization.additionalAdminContacts?.length || 0);
@@ -2842,6 +3129,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           <div className="pcp-org-chev"><ChevronDown /></div>
                           <div className="pcp-org-ico"><Building2 /></div>
                           <div className="pcp-org-info">
+                            <div className="pcp-level-eyebrow">Organization</div>
                             <div className="pcp-org-name">{organization.displayName}</div>
                             <div className="pcp-org-meta">
                               {[
@@ -2897,7 +3185,16 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           <div className="pcp-org-overview">
                             <div className="pcp-org-grid">
                               <div className="pcp-card">
-                                <div className="pcp-card-title">Organization Invite Artwork</div>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleOrgCard(`${organization.id}:artwork`)}
+                                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%', background: 'transparent', border: 0, padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                                >
+                                  <span className="pcp-card-title" style={{ marginBottom: 0 }}>Invite Artwork · Organization default</span>
+                                  <ChevronDown style={{ width: 16, height: 16, flexShrink: 0, color: 'rgba(255,255,255,0.5)', transform: orgArtworkOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                </button>
+                                {orgArtworkOpen ? (
+                                <div style={{ marginTop: 12 }}>
                                 <div className="pcp-preview-shell">
                                   <img
                                     className="pcp-preview-image"
@@ -2907,7 +3204,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                   <div className="pcp-preview-meta">
                                     <div className="pcp-preview-title">{organization.displayName}</div>
                                     <div className="pcp-preview-copy">
-                                      This artwork becomes the default invite preview for every team that inherits organization branding.
+                                      The image athletes see on invites. Every team uses this by default — a team can override it with its own below.
                                     </div>
                                   </div>
                                 </div>
@@ -2929,10 +3226,24 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                     {organizationImageUploadingId === organization.id ? 'Uploading...' : 'Upload Organization Image'}
                                   </label>
                                 </div>
+                                </div>
+                                ) : (
+                                  <div style={{ marginTop: 6, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                                    Default invite image every team uses. Open to view or change.
+                                  </div>
+                                )}
                               </div>
 
                               <div className="pcp-card">
-                                <div className="pcp-card-title">Organization Summary</div>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleOrgCard(`${organization.id}:summary`)}
+                                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%', background: 'transparent', border: 0, padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                                >
+                                  <span className="pcp-card-title" style={{ marginBottom: 0 }}>Organization Summary</span>
+                                  <ChevronDown style={{ width: 16, height: 16, flexShrink: 0, color: 'rgba(255,255,255,0.5)', transform: orgSummaryOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                </button>
+                                {orgSummaryOpen ? (
                                 <div className="pcp-summary-grid">
                                   <div className="pcp-summary-item">
                                     <div className="pcp-summary-kicker">Customer Admin</div>
@@ -2968,6 +3279,11 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                     </div>
                                   </div>
                                 </div>
+                                ) : (
+                                  <div style={{ marginTop: 6, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                                    {organization.primaryCustomerAdminName || organization.primaryCustomerAdminEmail || 'No admin'} · {formatEnumLabel(organization.defaultStudyPosture)} · {orgStatus.label} · {bundledTeams.length} team{bundledTeams.length === 1 ? '' : 's'}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -2980,7 +3296,12 @@ const PulseCheckProvisioningPage: React.FC = () => {
                             </div>
                           ) : (
                             bundledTeams.map(({ team, pilots: bundledPilots, clinicianProfile, adminActivationLinks, clinicianOnboardingLink }) => {
-                              const teamExpanded = expandedTeamIds.includes(team.id);
+                              const teamCollapsed = collapsedTeamIds.has(team.id);
+                              const teamArtworkOpen = expandedOrgCardKeys.has(`${team.id}:artwork`);
+                              const teamCommercialOpen = expandedOrgCardKeys.has(`${team.id}:commercial`);
+                              const teamSupportOpen = expandedOrgCardKeys.has(`${team.id}:support`);
+                              const teamConsentCardOpen = expandedOrgCardKeys.has(`${team.id}:consent`);
+                              const teamIntakeCardOpen = expandedOrgCardKeys.has(`${team.id}:intakecard`);
                               const teamStatus = getTeamStatusDisplay(team.status);
                               const activeAdminLink = adminActivationLinks[0] || null;
                               const teamCommercialDraft = teamCommercialDrafts[team.id] || team.commercialConfig;
@@ -2989,16 +3310,20 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                 organization.invitePreviewImageUrl
                               );
                               const teamPlanBypass = derivePulseCheckTeamPlanBypass(teamCommercialDraft);
-                              const onboardingProgress = getTeamOnboardingProgress(team);
 
                               return (
-                                <div key={team.id} className={`pcp-team-row ${teamExpanded ? 'open' : ''}`}>
-                                  <div className="pcp-team-hd" onClick={() => toggleTeamRow(team.id)}>
-                                    <div className="pcp-t-indent" />
-                                    <div className="pcp-t-chev"><ChevronDown /></div>
-                                    <div className="pcp-t-vline" />
+                                <div key={team.id} className="pcp-card pcp-team-card" style={{ paddingBottom: 20 }}>
+                                  <div
+                                    className="pcp-team-hd"
+                                    style={{ cursor: 'pointer', padding: 0, minHeight: 0 }}
+                                    onClick={() => toggleTeamCollapsed(team.id)}
+                                  >
+                                    <ChevronDown
+                                      style={{ width: 16, height: 16, flexShrink: 0, marginRight: 10, color: 'rgba(255,255,255,0.5)', transform: teamCollapsed ? 'none' : 'rotate(180deg)', transition: 'transform 0.2s' }}
+                                    />
                                     <div className="pcp-t-av"><Users2 /></div>
                                     <div className="pcp-t-info">
+                                      <div className="pcp-level-eyebrow">Team</div>
                                       <div className="pcp-t-name">{team.displayName}</div>
                                       <div className="pcp-t-meta">
                                         {[
@@ -3026,27 +3351,47 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                     </div>
                                   </div>
 
-                                  <div className="pcp-team-body">
+                                  {!teamCollapsed ? (
+                                  <div className="pcp-team-body" style={{ display: 'block', marginTop: 12 }}>
                                     <div className="pcp-team-shell">
                                       <div className="pcp-team-grid">
-                                        <div className="pcp-card">
-                                          <div className="pcp-card-title">Pilot Invite Artwork</div>
-                                          <div className="pcp-preview-shell">
+                                        <CollapsibleCard
+                                          title="Invite Artwork · This team"
+                                          open={teamArtworkOpen}
+                                          onToggle={() => toggleOrgCard(`${team.id}:artwork`)}
+                                          preview={team.invitePreviewImageUrl ? 'Custom team image set. Open to change.' : 'Inheriting org default. Open to override for this team.'}
+                                        >
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                             <img
-                                              className="pcp-preview-image"
                                               src={teamPreviewImage}
                                               alt={`${team.displayName} invite artwork`}
+                                              style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover', flexShrink: 0, border: '1px solid rgba(255,255,255,0.1)' }}
                                             />
-                                            <div className="pcp-preview-meta">
-                                              <div className="pcp-preview-title">{team.displayName}</div>
-                                              <div className="pcp-preview-copy">
+                                            <div style={{ minWidth: 0, flex: 1 }}>
+                                              <span
+                                                style={{
+                                                  display: 'inline-block',
+                                                  fontSize: 10,
+                                                  fontWeight: 700,
+                                                  letterSpacing: '0.08em',
+                                                  textTransform: 'uppercase',
+                                                  padding: '3px 8px',
+                                                  borderRadius: 999,
+                                                  border: team.invitePreviewImageUrl ? '1px solid rgba(0,212,170,0.35)' : '1px solid rgba(255,255,255,0.15)',
+                                                  background: team.invitePreviewImageUrl ? 'rgba(0,212,170,0.12)' : 'rgba(255,255,255,0.04)',
+                                                  color: team.invitePreviewImageUrl ? '#00d4aa' : 'rgba(255,255,255,0.55)',
+                                                }}
+                                              >
+                                                {team.invitePreviewImageUrl ? 'Custom team image' : 'Inheriting org default'}
+                                              </span>
+                                              <div style={{ marginTop: 6, fontSize: 12, lineHeight: 1.5, color: 'rgba(255,255,255,0.5)' }}>
                                                 {team.invitePreviewImageUrl
-                                                  ? 'This team has its own invite preview artwork.'
-                                                  : 'This team is currently inheriting the organization invite artwork.'}
+                                                  ? 'Athletes on this team see this image instead of the organization default.'
+                                                  : 'Athletes see the organization artwork above. Upload one to override it just for this team.'}
                                               </div>
                                             </div>
                                           </div>
-                                          <div className="pcp-preview-actions">
+                                          <div className="pcp-preview-actions" style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                             <label className="pcp-ab pcp-ab-g pcp-file-trigger">
                                               <input
                                                 type="file"
@@ -3061,15 +3406,29 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                               ) : (
                                                 <Sparkles className="h-3.5 w-3.5" />
                                               )}
-                                              {teamImageUploadingId === team.id ? 'Uploading...' : 'Upload Team Image'}
+                                              {teamImageUploadingId === team.id ? 'Uploading...' : team.invitePreviewImageUrl ? 'Replace team image' : 'Upload team image'}
                                             </label>
+                                            {team.invitePreviewImageUrl ? (
+                                              <button
+                                                type="button"
+                                                className="pcp-ab pcp-ab-t"
+                                                disabled={teamImageUploadingId === team.id}
+                                                onClick={() => void handleRevertTeamInviteImage(team.id)}
+                                              >
+                                                Use org default
+                                              </button>
+                                            ) : null}
                                           </div>
-                                        </div>
+                                        </CollapsibleCard>
 
-                                        <div className="pcp-card">
+                                        <CollapsibleCard
+                                          title="Team Commercial Config"
+                                          open={teamCommercialOpen}
+                                          onToggle={() => toggleOrgCard(`${team.id}:commercial`)}
+                                          preview={`${teamPlanBypass ? 'Team plan (paywall bypassed)' : 'Athlete-paid access'} — open to configure.`}
+                                        >
                                           <div className="pcp-commercial-footer" style={{ alignItems: 'flex-start' }}>
                                             <div>
-                                              <div className="pcp-card-title">Team Commercial Config</div>
                                               <div className="pcp-card-copy">
                                                 Control whether this team uses athlete-paid access or a bypassed team plan, and where referral revenue routes.
                                               </div>
@@ -3203,10 +3562,14 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                               </button>
                                             </div>
                                           </div>
-                                        </div>
+                                        </CollapsibleCard>
 
-                                        <div className="pcp-card">
-                                          <div className="pcp-card-title">Support Route + Activation</div>
+                                        <CollapsibleCard
+                                          title="Support Route + Activation"
+                                          open={teamSupportOpen}
+                                          onToggle={() => toggleOrgCard(`${team.id}:support`)}
+                                          preview="Escalation routing + admin / clinician activation links. Open to manage."
+                                        >
                                           <div className="pcp-card-stack">
                                             {team.defaultEscalationRoute === 'clinician' ? (
                                               <div className="pcp-link-card">
@@ -3291,122 +3654,193 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                               </button>
                                             </div>
                                           </div>
-                                        </div>
+                                        </CollapsibleCard>
                                       </div>
-                                      <div className="pcp-card pcp-tracker-card" data-tour="admin-team-tracker">
-                                        <div className="pcp-tracker-head">
-                                          <div>
-                                            <div className="pcp-tracker-title-row">
-                                              <div className="pcp-tracker-icon"><ClipboardList /></div>
-                                              <div>
-                                                <div className="pcp-card-title" style={{ marginBottom: 0 }}>Team Onboarding Tracker</div>
-                                                <div className="pcp-tracker-title">{team.displayName} launch readiness</div>
+                                      {(() => {
+                                        const consentDraft = getTeamConsentDraft(team);
+                                        const consentDirty = isTeamConsentDirty(team);
+                                        const consentSaving = teamConsentSavingId === team.id;
+                                        const consentInputStyle: React.CSSProperties = {
+                                          background: 'rgba(0,0,0,0.35)',
+                                          border: '1px solid rgba(255,255,255,0.12)',
+                                          borderRadius: 8,
+                                          color: '#fff',
+                                          padding: '8px 10px',
+                                          fontSize: 13,
+                                        };
+                                        return (
+                                          <CollapsibleCard
+                                            title="Consent Forms"
+                                            open={teamConsentCardOpen}
+                                            onToggle={() => toggleOrgCard(`${team.id}:consent`)}
+                                            preview={`${consentDraft.length} consent${consentDraft.length === 1 ? '' : 's'} athletes accept at intake. Open to edit.`}
+                                            className="pcp-card pcp-tracker-card"
+                                          >
+                                            <div className="pcp-tracker-copy" style={{ marginTop: 0 }}>
+                                              Every athlete on this team accepts these during intake. Signing here means the app will not ask again. Bumping a version re-prompts anyone who signed the older one. Research-study consents are added automatically when a pilot runs in research mode.
+                                            </div>
+                                            {consentDraft.length === 0 ? (
+                                              <div className="pcp-c-empty">No consents yet. Add one or seed a preset package below.</div>
+                                            ) : (
+                                              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                                {consentDraft.map((consent, index) => (
+                                                  <div key={consent.id} style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: 12, background: 'rgba(255,255,255,0.02)' }}>
+                                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                                                      <input
+                                                        value={consent.title}
+                                                        placeholder="Consent title"
+                                                        onChange={(event) => handleTeamConsentFieldChange(team, index, 'title', event.target.value)}
+                                                        style={{ flex: 1, ...consentInputStyle }}
+                                                      />
+                                                      <input
+                                                        value={consent.version}
+                                                        placeholder="v1"
+                                                        onChange={(event) => handleTeamConsentFieldChange(team, index, 'version', event.target.value)}
+                                                        style={{ width: 56, textAlign: 'center', ...consentInputStyle }}
+                                                      />
+                                                      <button type="button" className="pcp-ab pcp-ab-t" onClick={() => handleBumpTeamConsentVersion(team, index)}>Bump</button>
+                                                      <button type="button" className="pcp-ab pcp-ab-t" aria-label="Remove consent" onClick={() => handleRemoveTeamConsent(team, index)}><X /></button>
+                                                    </div>
+                                                    <textarea
+                                                      value={consent.body}
+                                                      placeholder="Full consent text shown to the athlete…"
+                                                      rows={4}
+                                                      onChange={(event) => handleTeamConsentFieldChange(team, index, 'body', event.target.value)}
+                                                      style={{ width: '100%', resize: 'vertical', ...consentInputStyle }}
+                                                    />
+                                                    <div style={{ marginTop: 6, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>id: {consent.id}</div>
+                                                  </div>
+                                                ))}
                                               </div>
+                                            )}
+
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 12 }}>
+                                              <button type="button" className="pcp-ab pcp-ab-g" onClick={() => handleAddTeamConsent(team)}><Plus /> Add consent</button>
+                                              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Seed preset:</span>
+                                              {(['operational', 'pilot', 'research'] as PulseCheckPilotStudyMode[]).map((mode) => (
+                                                <button key={mode} type="button" className="pcp-ab pcp-ab-t" onClick={() => handleSeedTeamConsents(team, mode)}>{mode}</button>
+                                              ))}
+                                              <div style={{ flex: 1 }} />
+                                              {consentDirty ? (
+                                                <button type="button" className="pcp-ab pcp-ab-t" disabled={consentSaving} onClick={() => handleResetTeamConsentDraft(team.id)}>Discard</button>
+                                              ) : null}
+                                              <button type="button" className="pcp-ab pcp-ab-g" disabled={!consentDirty || consentSaving} onClick={() => void handleSaveTeamConsents(team)}>
+                                                {consentSaving ? 'Saving…' : 'Save consents'}
+                                              </button>
                                             </div>
-                                            <div className="pcp-tracker-copy">
-                                              Track the full school rollout from intake through weekly coach snapshots and stakeholder check-ins. Status changes save to this team record.
+                                          </CollapsibleCard>
+                                        );
+                                      })()}
+
+                                      {(() => {
+                                        const intakeKinds: Array<{ kind: PulseCheckIntakeKind; label: string }> = [
+                                          { kind: 'athlete', label: 'Athlete intake' },
+                                          { kind: 'coach', label: 'Coach intake' },
+                                        ];
+                                        const fieldStyle: React.CSSProperties = {
+                                          background: 'rgba(0,0,0,0.35)',
+                                          border: '1px solid rgba(255,255,255,0.12)',
+                                          borderRadius: 8,
+                                          color: '#fff',
+                                          padding: '8px 10px',
+                                          fontSize: 13,
+                                        };
+                                        return (
+                                          <CollapsibleCard
+                                            id={`pcp-intake-${team.id}`}
+                                            title="Intake Surveys"
+                                            open={teamIntakeCardOpen}
+                                            onToggle={() => toggleOrgCard(`${team.id}:intakecard`)}
+                                            preview="Athlete & coach intake questions. Open to edit."
+                                            className="pcp-card pcp-tracker-card"
+                                          >
+                                            <div className="pcp-tracker-copy" style={{ marginTop: 0 }}>
+                                              Questions each athlete and coach answers during onboarding. Athletes answer theirs alongside the consent block, so they sign once and the app will not ask again.
                                             </div>
-                                          </div>
-                                          <div className="pcp-tracker-actions">
-                                            <Link
-                                              href={`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organization.id)}&teamId=${encodeURIComponent(team.id)}&mode=launch-day`}
-                                              className="pcp-ab pcp-ab-g"
-                                              data-tour="admin-launch-day-link"
-                                            >
-                                              <Clock />
-                                              Launch-Day Mode
-                                            </Link>
-                                            <Link href="/admin/pulsecheckOnboardingOverview" className="pcp-ab pcp-ab-t">
-                                              <ClipboardList />
-                                              Playbook
-                                            </Link>
-                                          </div>
-                                        </div>
-
-                                        <div className="pcp-tracker-progress-shell">
-                                          <div className="pcp-tracker-progress-top">
-                                            <span>
-                                              {onboardingProgress.completedCount} of {onboardingProgress.totalCount} steps complete
-                                            </span>
-                                            <span>
-                                              {onboardingProgress.blockedCount > 0
-                                                ? `${onboardingProgress.blockedCount} needs help`
-                                                : onboardingProgress.inProgressCount > 0
-                                                  ? `${onboardingProgress.inProgressCount} working`
-                                                  : 'No steps need help'}
-                                            </span>
-                                          </div>
-                                          <div className="pcp-tracker-progress-track">
-                                            <div className="pcp-tracker-progress-bar" style={{ width: `${onboardingProgress.pct}%` }} />
-                                          </div>
-                                        </div>
-
-                                        <div className="pcp-tracker-legend" aria-label="Onboarding status legend">
-                                          {TRACKER_STATUS_OPTIONS.map((option) => (
-                                            <div key={option.value} className="pcp-tracker-legend-item">
-                                              <span className={`pcp-tracker-status ${getTrackerStatusClassName(option.value)}`}>
-                                                {option.label}
-                                              </span>
-                                              <div className="pcp-tracker-legend-desc">{option.description}</div>
-                                            </div>
-                                          ))}
-                                        </div>
-
-                                        <div className="pcp-tracker-grid">
-                                          {TEAM_ONBOARDING_TRACKER_STEPS.map((step) => {
-                                            const status = getTeamOnboardingStepStatus(team, step.id);
-                                            const savingKey = `${team.id}:${step.id}`;
-                                            const isSaving = teamOnboardingTrackerSavingKey === savingKey;
-
-                                            return (
-                                              <div key={step.id} className="pcp-tracker-step">
-                                                <div className="pcp-tracker-step-main">
-                                                  <div className="pcp-tracker-step-dot">
-                                                    {status === 'complete' ? <CheckCircle2 /> : <Clock />}
+                                            {intakeKinds.map(({ kind, label }) => {
+                                              const draft = getIntakeDraft(team, kind);
+                                              const dirty = isIntakeDirty(team, kind);
+                                              const saving = teamIntakeSavingKey === `${team.id}:${kind}`;
+                                              return (
+                                                <div key={kind} style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                                    <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>
+                                                      {label}
+                                                      <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400 }}> · {draft.length} question{draft.length === 1 ? '' : 's'}</span>
+                                                    </div>
+                                                    <button type="button" className="pcp-ab pcp-ab-t" onClick={() => handleLoadStarterIntake(team, kind)}>Load starter</button>
                                                   </div>
-                                                  <div>
-                                                    <div className="pcp-tracker-step-title">{step.label}</div>
-                                                    <div className="pcp-tracker-step-meta">{step.meeting} · {step.owner}</div>
-                                                  </div>
-                                                </div>
-                                                <div className="pcp-tracker-step-copy">{step.description}</div>
-                                                <div className="pcp-tracker-step-footer">
-                                                  <span className={`pcp-tracker-status ${getTrackerStatusClassName(status)}`}>
-                                                    {getTrackerStatusLabel(status)}
-                                                  </span>
-                                                  <div className="flex items-center gap-2">
-                                                    {isSaving ? (
-                                                      <span className="pcp-tracker-saving">
-                                                        <Loader2 className="animate-spin" />
-                                                        Saving
-                                                      </span>
-                                                    ) : null}
-                                                    <select
-                                                      className="pcp-tracker-select"
-                                                      value={status}
-                                                      disabled={isSaving}
-                                                      onChange={(event) => {
-                                                        event.stopPropagation();
-                                                        void handleTeamOnboardingStepStatusChange(
-                                                          team,
-                                                          step.id,
-                                                          event.target.value as PulseCheckOnboardingTrackerStepStatus
-                                                        );
-                                                      }}
-                                                    >
-                                                      {TRACKER_STATUS_OPTIONS.map((option) => (
-                                                        <option key={option.value} value={option.value}>
-                                                          {option.label}
-                                                        </option>
+
+                                                  {draft.length === 0 ? (
+                                                    <div className="pcp-c-empty">No questions yet. Add one or load the starter set.</div>
+                                                  ) : (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                      {draft.map((question, index) => (
+                                                        <div key={question.id} style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: 10, background: 'rgba(255,255,255,0.02)' }}>
+                                                          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                                            <textarea
+                                                              value={question.question}
+                                                              placeholder="Question text"
+                                                              rows={2}
+                                                              onChange={(event) => updateIntakeQuestion(team, kind, index, (current) => ({ ...current, question: event.target.value }))}
+                                                              style={{ flex: 1, resize: 'vertical', ...fieldStyle }}
+                                                            />
+                                                            <button type="button" className="pcp-ab pcp-ab-t" aria-label="Remove question" onClick={() => handleRemoveIntakeQuestion(team, kind, index)}><X /></button>
+                                                          </div>
+                                                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                                                            <select
+                                                              value={question.type}
+                                                              onChange={(event) => handleIntakeQuestionTypeChange(team, kind, index, event.target.value as SurveyQuestion['type'])}
+                                                              style={{ ...fieldStyle, padding: '6px 8px' }}
+                                                            >
+                                                              <option value="text">Text</option>
+                                                              <option value="multiple_choice">Multiple choice</option>
+                                                              <option value="number">Number</option>
+                                                              <option value="yes_no">Yes / No</option>
+                                                            </select>
+                                                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+                                                              <input type="checkbox" checked={!!question.required} onChange={(event) => updateIntakeQuestion(team, kind, index, (current) => ({ ...current, required: event.target.checked }))} />
+                                                              Required
+                                                            </label>
+                                                            {question.type === 'number' ? (
+                                                              <>
+                                                                <input type="number" value={question.minValue ?? ''} placeholder="min" onChange={(event) => updateIntakeQuestion(team, kind, index, (current) => ({ ...current, minValue: event.target.value === '' ? undefined : Number(event.target.value) }))} style={{ width: 70, ...fieldStyle, padding: '6px 8px' }} />
+                                                                <input type="number" value={question.maxValue ?? ''} placeholder="max" onChange={(event) => updateIntakeQuestion(team, kind, index, (current) => ({ ...current, maxValue: event.target.value === '' ? undefined : Number(event.target.value) }))} style={{ width: 70, ...fieldStyle, padding: '6px 8px' }} />
+                                                              </>
+                                                            ) : null}
+                                                          </div>
+                                                          {question.type === 'multiple_choice' ? (
+                                                            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                              {(question.options || []).map((option, optionIndex) => (
+                                                                <div key={option.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                                                  <input value={option.text} placeholder={`Option ${optionIndex + 1}`} onChange={(event) => handleIntakeOptionChange(team, kind, index, optionIndex, event.target.value)} style={{ flex: 1, ...fieldStyle, padding: '6px 8px' }} />
+                                                                  <button type="button" className="pcp-ab pcp-ab-t" aria-label="Remove option" onClick={() => handleRemoveIntakeOption(team, kind, index, optionIndex)}><X /></button>
+                                                                </div>
+                                                              ))}
+                                                              <button type="button" className="pcp-ab pcp-ab-t" style={{ alignSelf: 'flex-start' }} onClick={() => handleAddIntakeOption(team, kind, index)}><Plus /> Add option</button>
+                                                            </div>
+                                                          ) : null}
+                                                        </div>
                                                       ))}
-                                                    </select>
+                                                    </div>
+                                                  )}
+
+                                                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+                                                    <button type="button" className="pcp-ab pcp-ab-g" onClick={() => handleAddIntakeQuestion(team, kind)}><Plus /> Add question</button>
+                                                    <div style={{ flex: 1 }} />
+                                                    {dirty ? (
+                                                      <button type="button" className="pcp-ab pcp-ab-t" disabled={saving} onClick={() => handleDiscardIntakeDraft(team, kind)}>Discard</button>
+                                                    ) : null}
+                                                    <button type="button" className="pcp-ab pcp-ab-g" disabled={!dirty || saving} onClick={() => void handleSaveIntake(team, kind)}>
+                                                      {saving ? 'Saving…' : 'Save'}
+                                                    </button>
                                                   </div>
                                                 </div>
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-                                      </div>
+                                              );
+                                            })}
+                                          </CollapsibleCard>
+                                        );
+                                      })()}
                                     </div>
 
                                     {bundledPilots.length === 0 ? (
@@ -3430,6 +3864,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                               <div className="pcp-p-indent" />
                                               <div className="pcp-p-dot" />
                                               <div className="pcp-p-info">
+                                                <div className="pcp-level-eyebrow">Pilot</div>
                                                 <div className="pcp-p-name">{pilot.name}</div>
                                                 <div className="pcp-p-meta">
                                                   {[
@@ -3501,17 +3936,31 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                 </div>
                                               </div>
                                               <div>
-                                                <div className="pcp-pp-lbl">Cohorts</div>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                                                  <div className="pcp-pp-lbl" style={{ marginBottom: 0 }}>Cohorts</div>
+                                                  <button
+                                                    type="button"
+                                                    className="pcp-ab pcp-ab-g"
+                                                    onClick={(event) => {
+                                                      event.stopPropagation();
+                                                      handleOpenProvisioningModal('cohort', { pilotId: pilot.id });
+                                                    }}
+                                                  >
+                                                    <Plus />
+                                                    Add Cohort
+                                                  </button>
+                                                </div>
                                                 {cohorts.length === 0 ? (
                                                   <div className="pcp-c-empty">No cohorts attached yet.</div>
                                                 ) : (
                                                   cohorts.map((cohort) => {
-                                                    const activeCohortInvite = (athleteInviteLinksByCohortId.get(cohort.id) || [])[0] || null;
+                                                    const reusableCohortInvite = reusableCohortInviteByCohortId.get(cohort.id) || null;
                                                     const cohortStatus = getCohortStatusDisplay(cohort.status);
 
                                                     return (
                                                       <div key={cohort.id} className="pcp-cohort-item">
                                                         <div style={{ minWidth: 0, flex: 1 }}>
+                                                          <div className="pcp-level-eyebrow">Cohort</div>
                                                           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
                                                             <div className="pcp-ci-name">{cohort.name}</div>
                                                             <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${cohortStatus.tone}`}>
@@ -3531,19 +3980,19 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                           className="pcp-ab pcp-ab-g"
                                                           onClick={(event) => {
                                                             event.stopPropagation();
-                                                            void (
-                                                              activeCohortInvite
-                                                                ? handleCopyInviteLink(
-                                                                    activeCohortInvite.activationUrl,
-                                                                    'Cohort athlete invite copied to clipboard.'
-                                                                  )
-                                                                : handleCreateCohortInviteLink(pilot, cohort)
-                                                            );
+                                                            if (reusableCohortInvite?.activationUrl) {
+                                                              copyInviteToClipboard(
+                                                                reusableCohortInvite.activationUrl,
+                                                                `Reusable invite for ${cohort.name} copied to clipboard.`
+                                                              );
+                                                            } else {
+                                                              void handleCreateCohortInviteLink(pilot, cohort);
+                                                            }
                                                           }}
                                                           disabled={cohortInviteCreatingId === cohort.id}
                                                         >
                                                           {cohortInviteCreatingId === cohort.id ? <Loader2 /> : <Clipboard />}
-                                                          {activeCohortInvite ? 'Copy Invite' : 'Create Invite'}
+                                                          {reusableCohortInvite ? 'Copy Invite' : 'Create Invite'}
                                                         </button>
                                                       </div>
                                                     );
@@ -3641,6 +4090,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                       })
                                     )}
                                   </div>
+                                  ) : null}
                                 </div>
                               );
                             })

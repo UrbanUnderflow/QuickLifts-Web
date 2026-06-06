@@ -290,7 +290,7 @@ test('create-round-checkout builds a subscription checkout for inactive members 
 
       assert.equal(sessionCalls[0].payload.mode, 'subscription');
       assert.equal(sessionCalls[0].payload.customer, 'cus_inactive');
-      assert.equal(sessionCalls[0].payload.line_items[0].price, 'price_1PDq26RobSf56MUOucDIKLhd');
+      assert.equal(sessionCalls[0].payload.line_items[0].price, 'price_1TfN9QIkArZc741WdNmcTHPv');
       assert.equal(sessionCalls[0].payload.line_items[1].price_data.unit_amount, 1250);
 
       assert.equal(sessionCalls[1].payload.mode, 'payment');
@@ -336,7 +336,7 @@ test('stripe-webhook records a subscription-created event into user and subscrip
               metadata: { userId: 'user-4' },
               current_period_end: 1730000000,
               items: {
-                data: [{ price: { id: 'price_1PDq26RobSf56MUOucDIKLhd' } }],
+                data: [{ price: { id: 'price_1TfN9QIkArZc741WdNmcTHPv' } }],
               },
             },
           },

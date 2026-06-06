@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { requiresReConsentForVersion } from '../../api/firebase/pulsecheckProvisioning/accessState';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
+import { PULSECHECK_INTAKE_FORM_VERSION } from '../../api/firebase/pulsecheckProvisioning/types';
+import { isDevAuthBypassEnabled } from '../../utils/devAuthBypass';
 import type {
   PulseCheckOrganization,
   PulseCheckPilot,
@@ -227,6 +229,9 @@ export default function PulseCheckAthleteOnboardingPage() {
   const currentUserLoading = useUserLoading();
   const organizationId = typeof router.query.organizationId === 'string' ? router.query.organizationId : '';
   const teamId = typeof router.query.teamId === 'string' ? router.query.teamId : '';
+  // Dev-only preview: staff can see the athlete-facing form sourced straight
+  // from the team config, without needing a real athlete membership.
+  const previewMode = (router.query.preview === '1' || router.query.preview === 'true') && isDevAuthBypassEnabled();
 
   const [membership, setMembership] = useState<PulseCheckTeamMembership | null>(null);
   const [organization, setOrganization] = useState<PulseCheckOrganization | null>(null);
@@ -243,8 +248,32 @@ export default function PulseCheckAthleteOnboardingPage() {
   const [activeConsent, setActiveConsent] = useState<PulseCheckRequiredConsentDocument | null>(null);
   const [downloadingConsentId, setDownloadingConsentId] = useState<string | null>(null);
   const [progressHydrated, setProgressHydrated] = useState(false);
+  const [intakeAnswers, setIntakeAnswers] = useState<Record<string, string | number | string[]>>({});
 
   useEffect(() => {
+    if (previewMode) {
+      if (!teamId) { setLoading(false); return; }
+      setLoading(true);
+      let active = true;
+      (async () => {
+        try {
+          const [previewOrg, previewTeam] = await Promise.all([
+            organizationId ? pulseCheckProvisioningService.getOrganization(organizationId) : Promise.resolve(null),
+            pulseCheckProvisioningService.getTeam(teamId),
+          ]);
+          if (!active) return;
+          setOrganization(previewOrg);
+          setTeam(previewTeam);
+          setProgressHydrated(true);
+        } catch (error) {
+          console.error('[PulseCheck athlete onboarding] Failed to load preview context:', error);
+          if (active) setMessage({ type: 'error', text: 'We could not load this preview right now.' });
+        } finally {
+          if (active) setLoading(false);
+        }
+      })();
+      return () => { active = false; };
+    }
     if (currentUserLoading) return;
     if (!currentUser?.id || !teamId) { setLoading(false); return; }
 
@@ -308,6 +337,7 @@ export default function PulseCheckAthleteOnboardingPage() {
           (nextMembership?.athleteOnboarding?.researchConsentStatus as PulseCheckResearchConsentStatus | undefined)
             || (nextPilot?.studyMode === 'research' ? 'pending' : 'not-required')
         );
+        setIntakeAnswers(nextMembership?.athleteOnboarding?.intakeResponses || {});
         setProgressHydrated(true);
       } catch (error) {
         console.error('[PulseCheck athlete onboarding] Failed to load context:', error);
@@ -317,12 +347,25 @@ export default function PulseCheckAthleteOnboardingPage() {
       }
     })();
     return () => { active = false; };
-  }, [currentUser?.id, currentUserLoading, organizationId, teamId]);
+  }, [currentUser?.id, currentUserLoading, organizationId, teamId, previewMode]);
 
   const requiresResearchConsent = pilot?.studyMode === 'research';
   const hasPilotEnrollment = Boolean(membership?.athleteOnboarding?.targetPilotId);
-  const requiredConsents = membership?.athleteOnboarding?.requiredConsents || [];
+  const requiredConsents = previewMode
+    ? (team?.requiredConsents || [])
+    : (membership?.athleteOnboarding?.requiredConsents || []);
   const requiredConsentsComplete = requiredConsents.every((consent) => completedConsentIds.includes(consent.id));
+
+  const intakeQuestions = team?.intake?.athlete?.questions || [];
+  const intakeFormVersion = team?.intake?.athlete?.version || PULSECHECK_INTAKE_FORM_VERSION;
+  const isIntakeAnswerEmpty = (value: string | number | string[] | undefined) =>
+    value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+  const intakeComplete = intakeQuestions
+    .filter((question) => question.required)
+    .every((question) => !isIntakeAnswerEmpty(intakeAnswers[question.id]));
+  const setIntakeAnswer = (questionId: string, value: string | number | string[]) => {
+    setIntakeAnswers((current) => ({ ...current, [questionId]: value }));
+  };
 
   useEffect(() => {
     if (!progressHydrated || !membership || saving || membership.onboardingStatus === 'complete') return;
@@ -346,6 +389,9 @@ export default function PulseCheckAthleteOnboardingPage() {
         completedConsentIds,
         completedConsentVersions,
         researchConsentStatus: requiresResearchConsent ? researchConsentStatus : undefined,
+        ...(intakeQuestions.length > 0
+          ? { intakeResponses: intakeAnswers, intakeFormVersion }
+          : {}),
       }).catch((error) => {
         console.error('[PulseCheck athlete onboarding] Failed to sync onboarding progress:', error);
       });
@@ -357,6 +403,9 @@ export default function PulseCheckAthleteOnboardingPage() {
     completedConsentVersions,
     consentAccepted,
     displayName,
+    intakeAnswers,
+    intakeFormVersion,
+    intakeQuestions.length,
     membership,
     progressHydrated,
     requiredConsentsComplete,
@@ -422,6 +471,10 @@ export default function PulseCheckAthleteOnboardingPage() {
       setMessage({ type: 'error', text: 'Choose whether you want to participate in the research portion before continuing.' });
       return;
     }
+    if (!intakeComplete) {
+      setMessage({ type: 'error', text: 'Please answer the required questions before continuing.' });
+      return;
+    }
 
     setSaving(true);
     setMessage(null);
@@ -446,6 +499,8 @@ export default function PulseCheckAthleteOnboardingPage() {
           requiresResearchConsent && (researchConsentStatus === 'accepted' || researchConsentStatus === 'declined')
             ? RESEARCH_CONSENT_VERSION
             : '',
+        intakeResponses: intakeAnswers,
+        intakeFormVersion,
       });
       setMessage({ type: 'success', text: 'You are set. Your team access is ready.' });
       router.push(`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`);
@@ -469,9 +524,9 @@ export default function PulseCheckAthleteOnboardingPage() {
     );
   }
 
-  if (!currentUser) return null;
+  if (!currentUser && !previewMode) return null;
 
-  if (!membership || membership.role !== 'athlete') {
+  if (!previewMode && (!membership || membership.role !== 'athlete')) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#05070c] px-4 text-white">
         <div className="w-full max-w-xl rounded-[28px] border border-white/10 bg-zinc-900/60 p-8 text-center backdrop-blur-xl">
@@ -639,6 +694,12 @@ export default function PulseCheckAthleteOnboardingPage() {
           {/* ── Right Panel: Form ────────────────────────────────────────── */}
           <GlassCard accentColor="#3B82F6" delay={0.2}>
             <form onSubmit={handleSubmit} className="p-8">
+              {previewMode ? (
+                <div className="mb-5 flex items-center gap-2 rounded-2xl border border-[#E0FE10]/30 bg-[#E0FE10]/[0.08] px-4 py-3 text-sm text-[#E0FE10]">
+                  <ShieldCheck className="h-4 w-4 flex-shrink-0" />
+                  Staff preview — this is exactly what an athlete sees. Nothing here saves.
+                </div>
+              ) : null}
               {/* Error / Success Banner */}
               <AnimatePresence>
                 {message && (
@@ -676,6 +737,89 @@ export default function PulseCheckAthleteOnboardingPage() {
                     placeholder="Your name"
                   />
                 </motion.label>
+
+                {/* Intake questions */}
+                {intakeQuestions.length > 0 ? (
+                  <SectionCard
+                    icon={<ClipboardCheck className="h-4 w-4 text-[#84DFC1]" />}
+                    title="A Few Questions"
+                    accentColor="#84DFC1"
+                    delay={0.42}
+                  >
+                    <p className="text-sm leading-7 text-zinc-400 mb-4">
+                      A quick read on where you are right now. Answer honestly — there are no wrong answers.
+                    </p>
+                    <div className="space-y-5">
+                      {intakeQuestions.map((question) => {
+                        const answer = intakeAnswers[question.id];
+                        return (
+                          <div key={question.id} className="space-y-2">
+                            <span className="block text-sm text-zinc-300">
+                              {question.question}
+                              {question.required ? <span className="text-[#E0FE10]"> *</span> : null}
+                            </span>
+                            {question.type === 'text' ? (
+                              <textarea
+                                value={typeof answer === 'string' ? answer : ''}
+                                onChange={(e) => setIntakeAnswer(question.id, e.target.value)}
+                                rows={2}
+                                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition focus:border-[#E0FE10]/50 placeholder:text-zinc-600"
+                                placeholder="Your answer"
+                              />
+                            ) : null}
+                            {question.type === 'number' ? (
+                              <input
+                                type="number"
+                                value={typeof answer === 'number' ? answer : typeof answer === 'string' ? answer : ''}
+                                min={question.minValue}
+                                max={question.maxValue}
+                                onChange={(e) => setIntakeAnswer(question.id, e.target.value === '' ? '' : Number(e.target.value))}
+                                className="w-40 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition focus:border-[#E0FE10]/50 placeholder:text-zinc-600"
+                                placeholder={question.minValue !== undefined && question.maxValue !== undefined ? `${question.minValue}–${question.maxValue}` : 'Number'}
+                              />
+                            ) : null}
+                            {question.type === 'yes_no' ? (
+                              <div className="flex gap-3">
+                                {['Yes', 'No'].map((opt) => (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => setIntakeAnswer(question.id, opt)}
+                                    className={`rounded-2xl border px-5 py-2.5 text-sm transition ${
+                                      answer === opt
+                                        ? 'border-[#E0FE10]/50 bg-[#E0FE10]/[0.12] text-white'
+                                        : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-white/20'
+                                    }`}
+                                  >
+                                    {opt}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+                            {question.type === 'multiple_choice' ? (
+                              <div className="grid gap-2">
+                                {(question.options || []).map((opt) => (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() => setIntakeAnswer(question.id, opt.text)}
+                                    className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                                      answer === opt.text
+                                        ? 'border-[#E0FE10]/50 bg-[#E0FE10]/[0.12] text-white'
+                                        : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-white/20'
+                                    }`}
+                                  >
+                                    {opt.text}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </SectionCard>
+                ) : null}
 
                 {/* Product Consent */}
                 <SectionCard
@@ -812,7 +956,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                 {/* Primary CTA */}
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={saving || previewMode}
                   className="group relative inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-black transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 overflow-hidden"
                   style={{ background: '#E0FE10' }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 24px rgba(224,254,16,0.4)'; }}
@@ -823,7 +967,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                     ? <Loader2 className="relative h-4 w-4 animate-spin" />
                     : <CheckCircle2 className="relative h-4 w-4" />
                   }
-                  <span className="relative">{saving ? 'Saving…' : 'Continue'}</span>
+                  <span className="relative">{previewMode ? 'Preview only' : saving ? 'Saving…' : 'Continue'}</span>
                 </button>
 
                 {/* Secondary */}

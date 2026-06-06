@@ -189,7 +189,7 @@ test('verify-subscription updates the user and subscription records from Stripe 
                 data: [
                   {
                     price: {
-                      id: 'price_1PDq26RobSf56MUOucDIKLhd',
+                      id: 'price_1TfN9QIkArZc741WdNmcTHPv',
                     },
                   },
                 ],
@@ -203,7 +203,7 @@ test('verify-subscription updates the user and subscription records from Stripe 
                   data: [
                     {
                       price: {
-                        id: 'price_1PDq26RobSf56MUOucDIKLhd',
+                        id: 'price_1TfN9QIkArZc741WdNmcTHPv',
                       },
                     },
                   ],

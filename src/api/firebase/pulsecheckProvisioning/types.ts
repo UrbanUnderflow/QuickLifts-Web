@@ -1,4 +1,7 @@
 import type { Timestamp } from 'firebase/firestore';
+import type { SurveyQuestion } from '../creatorPages/service';
+
+export type { SurveyQuestion } from '../creatorPages/service';
 
 export type PulseCheckOrganizationStatus = 'draft' | 'provisioning' | 'ready-for-activation' | 'active' | 'archived' | 'implementation-hold';
 export type PulseCheckTeamStatus = 'draft' | 'provisioning' | 'ready-for-activation' | 'active' | 'paused' | 'archived';
@@ -279,6 +282,55 @@ export const mergePulseCheckRequiredConsents = (
   return Array.from(merged.values());
 };
 
+export type PulseCheckIntakeKind = 'athlete' | 'coach';
+
+export interface PulseCheckIntakeForm {
+  questions: SurveyQuestion[];
+  version: string;
+  updatedAt?: Timestamp | null;
+}
+
+export interface PulseCheckTeamIntakeConfig {
+  athlete?: PulseCheckIntakeForm;
+  coach?: PulseCheckIntakeForm;
+}
+
+// Answers keyed by question id, mirroring the SurveyResponse answer shape.
+export type PulseCheckIntakeResponses = Record<string, string | number | string[]>;
+
+export const PULSECHECK_INTAKE_FORM_VERSION = 'pulsecheck-intake-v1';
+
+// Starter question sets staff can load and then edit. Kept in athlete/coach
+// voice — supportive and plain, not clinical.
+const DEFAULT_PULSECHECK_INTAKE_QUESTIONS: Record<PulseCheckIntakeKind, SurveyQuestion[]> = {
+  athlete: [
+    { id: 'athlete-position', type: 'text', question: 'What position or role do you play?', required: false },
+    { id: 'athlete-experience', type: 'text', question: 'How long have you played, and at what level?', required: false },
+    { id: 'athlete-physical', type: 'text', question: 'Anything going on physically we should know about?', required: false },
+    { id: 'athlete-sleep', type: 'number', question: 'On a normal night, about how many hours do you sleep?', required: false, minValue: 0, maxValue: 14 },
+    { id: 'athlete-load', type: 'number', question: 'How heavy does your training and life feel right now? (1 = light, 5 = a lot)', required: false, minValue: 1, maxValue: 5 },
+    { id: 'athlete-good-day', type: 'text', question: 'What does a good day feel like for you?', required: false },
+    { id: 'athlete-coach-note', type: 'text', question: 'Anything you want your coach to know?', required: false },
+  ],
+  coach: [
+    { id: 'coach-role', type: 'text', question: 'What is your role or title with the team?', required: false },
+    { id: 'coach-context', type: 'text', question: 'Tell us about your team and where you are in the season.', required: false },
+    { id: 'coach-learn', type: 'text', question: 'What do you most want to learn about your team this season?', required: false },
+    { id: 'coach-concerns', type: 'text', question: 'What are your biggest concerns right now?', required: false },
+    { id: 'coach-wellbeing', type: 'text', question: 'How do you track how your athletes are doing today?', required: false },
+    { id: 'coach-recipients', type: 'text', question: 'Who else should receive reports? (names and roles)', required: false },
+    { id: 'coach-contact', type: 'text', question: 'How would you like us to reach you, and how often?', required: false },
+  ],
+};
+
+export const getDefaultPulseCheckIntakeForm = (kind: PulseCheckIntakeKind): PulseCheckIntakeForm => ({
+  questions: (DEFAULT_PULSECHECK_INTAKE_QUESTIONS[kind] || []).map((question) => ({
+    ...question,
+    options: question.options ? question.options.map((option) => ({ ...option })) : undefined,
+  })),
+  version: PULSECHECK_INTAKE_FORM_VERSION,
+});
+
 export interface PulseCheckAthleteOnboardingState {
   productConsentAccepted: boolean;
   productConsentAcceptedAt?: Timestamp | null;
@@ -299,6 +351,9 @@ export interface PulseCheckAthleteOnboardingState {
   completedConsentVersions?: Record<string, string>;
   baselinePathStatus?: 'pending' | 'ready' | 'started' | 'complete';
   baselinePathwayId?: string;
+  intakeResponses?: PulseCheckIntakeResponses;
+  intakeFormVersion?: string;
+  intakeCompletedAt?: Timestamp | null;
 }
 
 export interface PulseCheckAdminContact {
@@ -402,6 +457,9 @@ export interface PulseCheckTeam {
   // this team must accept (research-study consents layer on when a pilot's
   // study mode is 'research'). Seeded from the operational preset at create.
   requiredConsents?: PulseCheckRequiredConsentDocument[];
+  // Team-owned, configurable intake question sets (athlete + coach). Surfaced in
+  // the athlete-onboarding and coach post-activation flows.
+  intake?: PulseCheckTeamIntakeConfig;
   notes?: string;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
@@ -429,6 +487,7 @@ export interface CreatePulseCheckTeamInput {
   defaultClinicianProfileSource?: PulseCheckClinicianProfileSource;
   implementationMetadata?: PulseCheckTeamImplementationMetadata;
   requiredConsents?: PulseCheckRequiredConsentDocument[];
+  intake?: PulseCheckTeamIntakeConfig;
   notes?: string;
 }
 
@@ -658,6 +717,9 @@ export interface PulseCheckTeamMembership {
   allowedAthleteIds?: string[];
   notificationPreferences?: PulseCheckNotificationPreferences;
   athleteOnboarding?: PulseCheckAthleteOnboardingState;
+  coachIntakeResponses?: PulseCheckIntakeResponses;
+  coachIntakeFormVersion?: string;
+  coachIntakeCompletedAt?: Timestamp | null;
   onboardingStatus?: 'pending' | 'pending-profile' | 'profile-complete' | 'pending-consent' | 'complete';
   postActivationCompletedAt?: Timestamp | null;
   grantedByInviteToken?: string;
@@ -749,6 +811,8 @@ export interface SavePulseCheckPostActivationSetupInput {
   operatingRole: PulseCheckOperatingRole;
   notificationPreferences: PulseCheckNotificationPreferences;
   profileImageUrl?: string;
+  intakeResponses?: PulseCheckIntakeResponses;
+  intakeFormVersion?: string;
 }
 
 export interface SavePulseCheckAdultMemberSetupInput {
@@ -765,6 +829,8 @@ export interface CompletePulseCheckAthleteOnboardingInput {
   completedConsentVersions?: Record<string, string>;
   researchConsentStatus?: PulseCheckResearchConsentStatus;
   researchConsentVersion?: string;
+  intakeResponses?: PulseCheckIntakeResponses;
+  intakeFormVersion?: string;
 }
 
 export interface SavePulseCheckAthleteOnboardingProgressInput {
@@ -775,6 +841,8 @@ export interface SavePulseCheckAthleteOnboardingProgressInput {
   completedConsentIds?: string[];
   completedConsentVersions?: Record<string, string>;
   researchConsentStatus?: PulseCheckResearchConsentStatus;
+  intakeResponses?: PulseCheckIntakeResponses;
+  intakeFormVersion?: string;
 }
 
 export interface UpdatePulseCheckTeamMembershipAccessInput {

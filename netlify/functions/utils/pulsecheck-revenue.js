@@ -8,14 +8,14 @@ const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const PRICE_CATALOG = {
   athlete: {
     monthlyPriceIds: new Set([
-      'price_1PDq26RobSf56MUOucDIKLhd',
-      'price_1RMIUNRobSf56MUOfeB4gIot',
+      'price_1TfN9QIkArZc741WdNmcTHPv',
+      'price_1TfOBPIkArZc741WGAWleQke',
       process.env.STRIPE_PRICE_ATHLETE_MONTHLY || '',
       process.env.NEXT_PUBLIC_STRIPE_PRICE_ATHLETE_MONTHLY || '',
     ].filter(Boolean)),
     annualPriceIds: new Set([
-      'price_1PDq3LRobSf56MUOng0UxhCC',
-      'price_1RMISFRobSf56MUOpcSoohjP',
+      'price_1TfN8cIkArZc741WskOfYXhL',
+      'price_1TfOBPIkArZc741WwYxdNa8Q',
       process.env.STRIPE_PRICE_ATHLETE_ANNUAL || '',
       process.env.NEXT_PUBLIC_STRIPE_PRICE_ATHLETE_ANNUAL || '',
     ].filter(Boolean)),

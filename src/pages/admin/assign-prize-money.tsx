@@ -1,6 +1,7 @@
 // Admin page for assigning prize money to challenges
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
+import { STRIPE_PUBLISHABLE_KEY_LIVE } from '../../utils/stripeKey';
 import { RootState } from '../../redux/store';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
@@ -229,7 +230,7 @@ const AssignPrizeMoneyPage: React.FC = () => {
     setIsDepositing(true);
     try {
       // Initialize Stripe
-      const stripeKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+      const stripeKey = STRIPE_PUBLISHABLE_KEY_LIVE;
       if (!stripeKey) {
         alert('Stripe configuration error. Please contact support.');
         setIsDepositing(false);

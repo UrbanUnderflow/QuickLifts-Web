@@ -39,6 +39,7 @@ import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProv
 import type {
   PulseCheckOrganization,
   PulseCheckTeam,
+  PulseCheckTeamMembership,
   PulseCheckOnboardingTrackerStepId,
   PulseCheckOnboardingTrackerStepStatus,
 } from '../../api/firebase/pulsecheckProvisioning/types';
@@ -514,6 +515,15 @@ const STEP_STATUS_UI: Record<PulseCheckOnboardingTrackerStepStatus, { dot: strin
   pending: { dot: 'bg-slate-600', badge: 'border-white/10 bg-white/[0.05] text-slate-400', label: 'Not started' },
 };
 
+// Generic step -> action registry. Any tracker step can grow action buttons here;
+// today the intake step carries the athlete + coach intake actions.
+const STEP_ACTIONS: Partial<Record<PulseCheckOnboardingTrackerStepId, Array<{ kind: 'athlete' | 'coach'; label: string }>>> = {
+  intake: [
+    { kind: 'athlete', label: 'Athlete intake' },
+    { kind: 'coach', label: 'Coach intake' },
+  ],
+};
+
 const getTeamNextStepLabel = (team: PulseCheckTeam): string => {
   const next = TEAM_ONBOARDING_TRACKER_STEPS.find(
     (step) => getTeamOnboardingStepStatus(team, step.id) !== 'complete'
@@ -534,6 +544,34 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
   const [expandedTeamIds, setExpandedTeamIds] = useState<Set<string>>(() => new Set());
   const [boardFilter, setBoardFilter] = useState<DashboardFilter>('all');
   const [boardSearch, setBoardSearch] = useState('');
+  const [membershipsByTeam, setMembershipsByTeam] = useState<Record<string, PulseCheckTeamMembership[]>>({});
+  const [membershipsLoading, setMembershipsLoading] = useState<Record<string, boolean>>({});
+  const [copiedActionKey, setCopiedActionKey] = useState<string | null>(null);
+
+  const loadTeamMemberships = useCallback(async (teamId: string) => {
+    setMembershipsLoading((current) => ({ ...current, [teamId]: true }));
+    try {
+      const members = await pulseCheckProvisioningService.listTeamMemberships(teamId);
+      setMembershipsByTeam((current) => ({ ...current, [teamId]: members }));
+    } catch (error) {
+      console.error('[PulseCheckOnboardingOverview] Failed to load team memberships:', error);
+    } finally {
+      setMembershipsLoading((current) => {
+        const next = { ...current };
+        delete next[teamId];
+        return next;
+      });
+    }
+  }, []);
+
+  const copyActionLink = (key: string, url: string) => {
+    void navigator.clipboard.writeText(url).then(() => {
+      setCopiedActionKey(key);
+      window.setTimeout(() => setCopiedActionKey((current) => (current === key ? null : current)), 1800);
+    }).catch((error) => {
+      console.error('[PulseCheckOnboardingOverview] Failed to copy link:', error);
+    });
+  };
 
   const loadBoard = useCallback(async () => {
     setBoardLoading(true);
@@ -556,6 +594,15 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
   useEffect(() => {
     void loadBoard();
   }, [loadBoard]);
+
+  // Lazily load memberships for expanded teams (for live intake completion counts).
+  useEffect(() => {
+    expandedTeamIds.forEach((teamId) => {
+      if (!membershipsByTeam[teamId] && !membershipsLoading[teamId]) {
+        void loadTeamMemberships(teamId);
+      }
+    });
+  }, [expandedTeamIds, membershipsByTeam, membershipsLoading, loadTeamMemberships]);
 
   const toggleTeamExpanded = (teamId: string) => {
     setExpandedTeamIds((current) => {
@@ -933,42 +980,102 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
                                       return (
                                         <div
                                           key={step.id}
-                                          className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.02] p-3 sm:flex-row sm:items-center sm:justify-between"
+                                          className="rounded-xl border border-white/10 bg-white/[0.02] p-3"
                                         >
-                                          <div className="flex min-w-0 items-start gap-3">
-                                            <span className={`mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full ${STEP_STATUS_UI[status].dot}`} />
-                                            <div className="min-w-0">
-                                              <p className="text-sm font-medium text-white">
-                                                <span className="text-slate-500">{index + 1}. </span>
-                                                {step.label}
-                                              </p>
-                                              <p className="text-xs text-slate-500">{step.meeting} · {step.owner}</p>
+                                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                            <div className="flex min-w-0 items-start gap-3">
+                                              <span className={`mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full ${STEP_STATUS_UI[status].dot}`} />
+                                              <div className="min-w-0">
+                                                <p className="text-sm font-medium text-white">
+                                                  <span className="text-slate-500">{index + 1}. </span>
+                                                  {step.label}
+                                                </p>
+                                                <p className="text-xs text-slate-500">{step.meeting} · {step.owner}</p>
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 sm:flex-shrink-0">
+                                              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin text-[#00d4aa]" /> : null}
+                                              <span className={`hidden rounded-full border px-2.5 py-1 text-[10px] font-semibold sm:inline ${STEP_STATUS_UI[status].badge}`}>
+                                                {STEP_STATUS_UI[status].label}
+                                              </span>
+                                              <select
+                                                value={status}
+                                                disabled={saving}
+                                                onChange={(event) =>
+                                                  void handleStepStatusChange(
+                                                    team,
+                                                    step.id,
+                                                    event.target.value as PulseCheckOnboardingTrackerStepStatus
+                                                  )
+                                                }
+                                                className="rounded-lg border border-white/10 bg-black/40 px-2.5 py-1.5 text-xs text-white focus:border-[#00d4aa]/40 focus:outline-none disabled:opacity-60"
+                                              >
+                                                {TRACKER_STATUS_OPTIONS.map((option) => (
+                                                  <option key={option.value} value={option.value}>
+                                                    {option.label}
+                                                  </option>
+                                                ))}
+                                              </select>
                                             </div>
                                           </div>
-                                          <div className="flex items-center gap-2 sm:flex-shrink-0">
-                                            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin text-[#00d4aa]" /> : null}
-                                            <span className={`hidden rounded-full border px-2.5 py-1 text-[10px] font-semibold sm:inline ${STEP_STATUS_UI[status].badge}`}>
-                                              {STEP_STATUS_UI[status].label}
-                                            </span>
-                                            <select
-                                              value={status}
-                                              disabled={saving}
-                                              onChange={(event) =>
-                                                void handleStepStatusChange(
-                                                  team,
-                                                  step.id,
-                                                  event.target.value as PulseCheckOnboardingTrackerStepStatus
-                                                )
-                                              }
-                                              className="rounded-lg border border-white/10 bg-black/40 px-2.5 py-1.5 text-xs text-white focus:border-[#00d4aa]/40 focus:outline-none disabled:opacity-60"
-                                            >
-                                              {TRACKER_STATUS_OPTIONS.map((option) => (
-                                                <option key={option.value} value={option.value}>
-                                                  {option.label}
-                                                </option>
-                                              ))}
-                                            </select>
-                                          </div>
+
+                                          {STEP_ACTIONS[step.id] ? (
+                                            <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                                              {STEP_ACTIONS[step.id]!.map((action) => {
+                                                const questions = action.kind === 'athlete'
+                                                  ? team.intake?.athlete?.questions
+                                                  : team.intake?.coach?.questions;
+                                                const configuredCount = questions?.length || 0;
+                                                const members = membershipsByTeam[team.id];
+                                                const loadingMembers = !!membershipsLoading[team.id];
+                                                let completion: string;
+                                                if (!members) {
+                                                  completion = loadingMembers ? 'counting…' : '—';
+                                                } else if (action.kind === 'athlete') {
+                                                  const athletes = members.filter((member) => member.role === 'athlete');
+                                                  const done = athletes.filter((member) => Object.keys(member.athleteOnboarding?.intakeResponses || {}).length > 0).length;
+                                                  completion = `${done}/${athletes.length} done`;
+                                                } else {
+                                                  const adults = members.filter((member) => member.role !== 'athlete');
+                                                  const done = adults.filter((member) => Object.keys(member.coachIntakeResponses || {}).length > 0).length;
+                                                  completion = `${done}/${adults.length} done`;
+                                                }
+                                                const path = action.kind === 'athlete' ? '/PulseCheck/athlete-onboarding' : '/PulseCheck/post-activation';
+                                                const relative = `${path}?organizationId=${encodeURIComponent(team.organizationId)}&teamId=${encodeURIComponent(team.id)}`;
+                                                const copyKey = `${team.id}:${action.kind}`;
+                                                return (
+                                                  <div key={action.kind} className="flex flex-col gap-2 rounded-lg border border-white/10 bg-black/20 p-2.5 sm:flex-row sm:items-center sm:justify-between">
+                                                    <div className="min-w-0">
+                                                      <p className="text-xs font-semibold text-white">{action.label}</p>
+                                                      <p className="text-[11px] text-slate-400">
+                                                        {configuredCount > 0 ? `${configuredCount} question${configuredCount === 1 ? '' : 's'}` : 'Not set up'}
+                                                        {' · '}
+                                                        {completion}
+                                                      </p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => copyActionLink(copyKey, `${window.location.origin}${relative}`)}
+                                                        disabled={configuredCount === 0}
+                                                        className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-semibold text-slate-200 transition hover:bg-white/[0.07] disabled:opacity-40"
+                                                      >
+                                                        {copiedActionKey === copyKey ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                                        {copiedActionKey === copyKey ? 'Copied' : 'Copy link'}
+                                                      </button>
+                                                      <Link
+                                                        href={`/admin/pulsecheckProvisioning?focusOrg=${encodeURIComponent(team.organizationId)}&focusTeam=${encodeURIComponent(team.id)}&focusIntake=${action.kind}`}
+                                                        className="inline-flex items-center gap-1 rounded-lg border border-[#00d4aa]/30 bg-[#00d4aa]/10 px-2.5 py-1.5 text-[11px] font-semibold text-[#00d4aa] transition hover:bg-[#00d4aa]/20"
+                                                      >
+                                                        {configuredCount > 0 ? 'Edit' : 'Set up'}
+                                                        <ArrowRight className="h-3 w-3" />
+                                                      </Link>
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          ) : null}
                                         </div>
                                       );
                                     })}

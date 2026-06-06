@@ -113,6 +113,10 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     // Pulse Intelligence Labs deck (public for stakeholder demos)
     '/pulseintelligencelabs',
     '/elite-athlete-support-readiness-assessments',
+    // Education courses (public so people can reach training from assessment results)
+    '/parent-training',
+    '/coach-training',
+    '/athletic-trainer-training',
     // Pulse Intelligence Labs one-pager and executive summary
     '/PILOne',
     // Athletic Mind Council site (public brochure surface)

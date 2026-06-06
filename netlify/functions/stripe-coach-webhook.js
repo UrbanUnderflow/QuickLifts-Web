@@ -7,7 +7,7 @@
 
 const { admin } = require('./config/firebase');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET_COACH;
+const { getSecretWithEnvFallback } = require('./google-secret-manager-utils');
 const {
   normalizeString,
   resolvePulseCheckCommercialContext,
@@ -150,6 +150,7 @@ exports.handler = async (event) => {
   let stripeEvent;
   try {
     const sig = event.headers['stripe-signature'];
+    const endpointSecret = await getSecretWithEnvFallback('STRIPE_WEBHOOK_SECRET_COACH');
     stripeEvent = stripe.webhooks.constructEvent(event.body, sig, endpointSecret);
   } catch (err) {
     console.error(`[CoachWebhook] Webhook signature verification failed: ${err.message}`);

@@ -166,8 +166,19 @@ async function getSecretManagerSecret(secretName, options = {}) {
   throw lastError || new Error(`Failed to access Secret Manager secret ${normalizedName}.`);
 }
 
+/**
+ * Resolve a secret by name: prefer the env var (fast, e.g. local dev / Netlify),
+ * otherwise fall back to Google Secret Manager. Used for Stripe webhook signing secrets.
+ */
+async function getSecretWithEnvFallback(name, options = {}) {
+  const envVal = String(process.env[name] || '').trim();
+  if (envVal) return envVal;
+  return getSecretManagerSecret(name, options);
+}
+
 module.exports = {
   getSecretManagerSecret,
+  getSecretWithEnvFallback,
   __test: {
     getRuntimeServiceAccountCredential,
   },

@@ -35,31 +35,41 @@ const normalizePlan = (value) => {
   return 'monthly';
 };
 
+// Pulse Intelligence Labs (acct_1Sd8YLIkArZc741W) Macra price IDs. Price IDs are public;
+// hardcoded as defaults so checkout works without env config. NOTE: env vars still override —
+// remove the stale old-account STRIPE_PRICE_MACRA_* from Netlify or they will win over these.
+const MACRA_PRICE_DEFAULTS = {
+  liveMonthly: 'price_1TfOvqIkArZc741WtVrr86nW',
+  liveAnnual: 'price_1TfOwrIkArZc741WyDpKEDuw',
+  testMonthly: 'price_1TfOywIkArZc741WYlKfWBt7',
+  testAnnual: 'price_1TfOywIkArZc741WqGXrV1SP',
+};
+
 const getMacraPriceIds = () => ({
   liveMonthly: firstEnv([
     'STRIPE_PRICE_MACRA_MONTHLY',
     'STRIPE_MACRA_MONTHLY_PRICE_ID',
     'NEXT_PUBLIC_STRIPE_PRICE_MACRA_MONTHLY',
     'NEXT_PUBLIC_STRIPE_MACRA_MONTHLY_PRICE_ID',
-  ]),
+  ]) || MACRA_PRICE_DEFAULTS.liveMonthly,
   liveAnnual: firstEnv([
     'STRIPE_PRICE_MACRA_ANNUAL',
     'STRIPE_MACRA_ANNUAL_PRICE_ID',
     'NEXT_PUBLIC_STRIPE_PRICE_MACRA_ANNUAL',
     'NEXT_PUBLIC_STRIPE_MACRA_ANNUAL_PRICE_ID',
-  ]),
+  ]) || MACRA_PRICE_DEFAULTS.liveAnnual,
   testMonthly: firstEnv([
     'STRIPE_TEST_PRICE_MACRA_MONTHLY',
     'STRIPE_TEST_MACRA_MONTHLY_PRICE_ID',
     'NEXT_PUBLIC_STRIPE_TEST_PRICE_MACRA_MONTHLY',
     'NEXT_PUBLIC_STRIPE_TEST_MACRA_MONTHLY_PRICE_ID',
-  ]),
+  ]) || MACRA_PRICE_DEFAULTS.testMonthly,
   testAnnual: firstEnv([
     'STRIPE_TEST_PRICE_MACRA_ANNUAL',
     'STRIPE_TEST_MACRA_ANNUAL_PRICE_ID',
     'NEXT_PUBLIC_STRIPE_TEST_PRICE_MACRA_ANNUAL',
     'NEXT_PUBLIC_STRIPE_TEST_MACRA_ANNUAL_PRICE_ID',
-  ]),
+  ]) || MACRA_PRICE_DEFAULTS.testAnnual,
 });
 
 const resolveMacraPriceId = ({ plan, isTestMode, priceId }) => {

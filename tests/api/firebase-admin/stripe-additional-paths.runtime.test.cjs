@@ -56,7 +56,7 @@ test('verify-subscription-simple updates the subscription record for a paid chec
             client_reference_id: 'user-simple',
             customer: 'cus_simple',
             line_items: {
-              data: [{ price: { id: 'price_1PDq3LRobSf56MUOng0UxhCC' } }],
+              data: [{ price: { id: 'price_1TfN8cIkArZc741WskOfYXhL' } }],
             },
             subscription: {
               id: 'sub_simple',
@@ -64,7 +64,7 @@ test('verify-subscription-simple updates the subscription record for a paid chec
               metadata: { userId: 'user-simple' },
               current_period_end: 1735000000,
               items: {
-                data: [{ price: { id: 'price_1PDq3LRobSf56MUOng0UxhCC' } }],
+                data: [{ price: { id: 'price_1TfN8cIkArZc741WskOfYXhL' } }],
               },
             },
           };

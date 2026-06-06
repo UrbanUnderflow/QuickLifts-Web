@@ -1,6 +1,6 @@
 const { admin } = require('./config/firebase');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const { getSecretWithEnvFallback } = require('./google-secret-manager-utils');
 const {
   upsertPulseCheckRevenueEvent,
   recalculatePulseCheckRevenueSummaries,
@@ -73,12 +73,12 @@ function mapPriceIdToSubscriptionType(priceId) {
   }
 
   // Live price IDs (from subscribe.tsx)
-  const LIVE_MONTHLY_PRICE_ID = 'price_1PDq26RobSf56MUOucDIKLhd';
-  const LIVE_ANNUAL_PRICE_ID = 'price_1PDq3LRobSf56MUOng0UxhCC';
+  const LIVE_MONTHLY_PRICE_ID = 'price_1TfN9QIkArZc741WdNmcTHPv';
+  const LIVE_ANNUAL_PRICE_ID = 'price_1TfN8cIkArZc741WskOfYXhL';
 
   // Test price IDs (from subscribe.tsx)
-  const TEST_MONTHLY_PRICE_ID = 'price_1RMIUNRobSf56MUOfeB4gIot';
-  const TEST_ANNUAL_PRICE_ID = 'price_1RMISFRobSf56MUOpcSoohjP';
+  const TEST_MONTHLY_PRICE_ID = 'price_1TfOBPIkArZc741WGAWleQke';
+  const TEST_ANNUAL_PRICE_ID = 'price_1TfOBPIkArZc741WwYxdNa8Q';
 
   const priceMapping = {
     [LIVE_MONTHLY_PRICE_ID]: SubscriptionType.monthly,
@@ -97,10 +97,10 @@ function mapPriceIdToPlanType(priceId) {
   if (macraPlanType) return macraPlanType;
 
   switch (priceId) {
-    case 'price_1PDq26RobSf56MUOucDIKLhd': return 'pulsecheck-monthly';
-    case 'price_1PDq3LRobSf56MUOng0UxhCC': return 'pulsecheck-annual';
-    case 'price_1RMIUNRobSf56MUOfeB4gIot': return 'pulsecheck-monthly';
-    case 'price_1RMISFRobSf56MUOpcSoohjP': return 'pulsecheck-annual';
+    case 'price_1TfN9QIkArZc741WdNmcTHPv': return 'pulsecheck-monthly';
+    case 'price_1TfN8cIkArZc741WskOfYXhL': return 'pulsecheck-annual';
+    case 'price_1TfOBPIkArZc741WGAWleQke': return 'pulsecheck-monthly';
+    case 'price_1TfOBPIkArZc741WwYxdNa8Q': return 'pulsecheck-annual';
     default: return null;
   }
 }
@@ -144,6 +144,7 @@ exports.handler = async (event) => {
 
   try {
     const sig = event.headers['stripe-signature'];
+    const endpointSecret = await getSecretWithEnvFallback('STRIPE_WEBHOOK_SECRET');
     stripeEvent = stripe.webhooks.constructEvent(event.body, sig, endpointSecret);
   } catch (err) {
     console.error(`Webhook signature verification failed: ${err.message}`);

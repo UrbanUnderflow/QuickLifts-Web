@@ -15,10 +15,10 @@ async function getStripeClient(event) {
 }
 
 function mapPriceIdToPlanType(priceId) {
-  const LIVE_MONTHLY_PRICE_ID = 'price_1PDq26RobSf56MUOucDIKLhd';
-  const LIVE_ANNUAL_PRICE_ID = 'price_1PDq3LRobSf56MUOng0UxhCC';
-  const TEST_MONTHLY_PRICE_ID = 'price_1RMIUNRobSf56MUOfeB4gIot';
-  const TEST_ANNUAL_PRICE_ID = 'price_1RMISFRobSf56MUOpcSoohjP';
+  const LIVE_MONTHLY_PRICE_ID = 'price_1TfN9QIkArZc741WdNmcTHPv';
+  const LIVE_ANNUAL_PRICE_ID = 'price_1TfN8cIkArZc741WskOfYXhL';
+  const TEST_MONTHLY_PRICE_ID = 'price_1TfOBPIkArZc741WGAWleQke';
+  const TEST_ANNUAL_PRICE_ID = 'price_1TfOBPIkArZc741WwYxdNa8Q';
   const map = {
     [LIVE_MONTHLY_PRICE_ID]: 'pulsecheck-monthly',
     [LIVE_ANNUAL_PRICE_ID]: 'pulsecheck-annual',

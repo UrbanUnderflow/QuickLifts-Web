@@ -32,10 +32,10 @@ const mapPriceIdToSubscriptionType = (priceId, isTestMode) => {
   const macraSubscriptionType = mapMacraPriceIdToSubscriptionType(priceId, SubscriptionType);
   if (macraSubscriptionType) return macraSubscriptionType;
 
-  const LIVE_MONTHLY_PRICE_ID = 'price_1PDq26RobSf56MUOucDIKLhd';
-  const LIVE_ANNUAL_PRICE_ID = 'price_1PDq3LRobSf56MUOng0UxhCC';
-  const TEST_MONTHLY_PRICE_ID = 'price_1RMIUNRobSf56MUOfeB4gIot';
-  const TEST_ANNUAL_PRICE_ID = 'price_1RMISFRobSf56MUOpcSoohjP';
+  const LIVE_MONTHLY_PRICE_ID = 'price_1TfN9QIkArZc741WdNmcTHPv';
+  const LIVE_ANNUAL_PRICE_ID = 'price_1TfN8cIkArZc741WskOfYXhL';
+  const TEST_MONTHLY_PRICE_ID = 'price_1TfOBPIkArZc741WGAWleQke';
+  const TEST_ANNUAL_PRICE_ID = 'price_1TfOBPIkArZc741WwYxdNa8Q';
   
   const priceMapping = {
     [LIVE_MONTHLY_PRICE_ID]: SubscriptionType.monthly,
@@ -52,10 +52,10 @@ const mapPriceIdToPlanType = (priceId) => {
   if (macraPlanType) return macraPlanType;
 
   switch (priceId) {
-    case 'price_1PDq26RobSf56MUOucDIKLhd': return 'pulsecheck-monthly';
-    case 'price_1PDq3LRobSf56MUOng0UxhCC': return 'pulsecheck-annual';
-    case 'price_1RMIUNRobSf56MUOfeB4gIot': return 'pulsecheck-monthly';
-    case 'price_1RMISFRobSf56MUOpcSoohjP': return 'pulsecheck-annual';
+    case 'price_1TfN9QIkArZc741WdNmcTHPv': return 'pulsecheck-monthly';
+    case 'price_1TfN8cIkArZc741WskOfYXhL': return 'pulsecheck-annual';
+    case 'price_1TfOBPIkArZc741WGAWleQke': return 'pulsecheck-monthly';
+    case 'price_1TfOBPIkArZc741WwYxdNa8Q': return 'pulsecheck-annual';
     default: return null;
   }
 };
