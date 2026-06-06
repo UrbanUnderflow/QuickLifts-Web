@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { motion } from 'framer-motion';
 import { ArrowRight, CalendarDays, ClipboardCheck, FileText, Search } from 'lucide-react';
 import PageHead from '../../components/PageHead';
@@ -28,12 +29,14 @@ const formatAdherenceChip = (report: CoachReportListItem) => {
 };
 
 const CoachSportsIntelligenceReports: React.FC = () => {
+  const router = useRouter();
   const currentUser = useUser();
   const userLoading = useUserLoading();
   const [reports, setReports] = useState<CoachReportListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const trainingMode = router.query.training === '1';
 
   useEffect(() => {
     if (userLoading) return;
@@ -112,6 +115,14 @@ const CoachSportsIntelligenceReports: React.FC = () => {
               <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-300">
                 Open the latest reviewed report or look back at prior weeks. This page stays intentionally thin: the report carries the interpretation.
               </p>
+              {trainingMode ? (
+                <div className="mt-5 rounded-2xl border border-[#6EE7B7]/25 bg-[#6EE7B7]/10 p-4">
+                  <p className="text-sm font-semibold text-white">Guided training: report archive</p>
+                  <p className="mt-2 text-sm leading-6 text-zinc-300">
+                    Use the archive when a coach asks, "What changed from last week?" Open the newest reviewed read first, then compare older reports only after checking data coverage.
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             <div className="relative w-full lg:max-w-sm">
@@ -158,7 +169,7 @@ const CoachSportsIntelligenceReports: React.FC = () => {
                   transition={{ delay: index * 0.04 }}
                 >
                   <Link
-                    href={report.href}
+                    href={trainingMode ? `${report.href}?training=1` : report.href}
                     className="group block rounded-2xl border border-white/10 bg-zinc-900/60 p-5 transition-all hover:-translate-y-0.5 hover:border-[#6EE7B7]/40 hover:bg-zinc-900/80"
                   >
                     <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">

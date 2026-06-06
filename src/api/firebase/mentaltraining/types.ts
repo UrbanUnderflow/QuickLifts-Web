@@ -722,6 +722,13 @@ export enum PulseCheckDailyAssignmentStatus {
 }
 
 export type PulseCheckDailyAssignmentActionType = 'sim' | 'simulation' | 'lighter_sim' | 'protocol' | 'defer';
+export type PulseCheckCurriculumSlotKind = 'protocol' | 'simulation';
+export type PulseCheckCurriculumSlotState =
+  | 'active'
+  | 'maintenance'
+  | 'cooldown'
+  | 'needs_coach_review'
+  | 'graduated';
 export type PulseCheckAssignmentEventType =
   | 'daily_task_materialized'
   | 'daily_task_superseded'
@@ -1452,6 +1459,15 @@ export interface PulseCheckDailyAssignment {
   trainingPlanStepIndex?: number;
   trainingPlanStepLabel?: string;
   trainingPlanIsPrimary?: boolean;
+  curriculumSlateId?: string;
+  curriculumSlotId?: string;
+  curriculumSlotIndex?: number;
+  curriculumSlotKind?: PulseCheckCurriculumSlotKind;
+  curriculumSlotState?: PulseCheckCurriculumSlotState;
+  curriculumLane?: 'mental_regulation' | 'mental_sharpening' | string;
+  curriculumIsDueToday?: boolean;
+  curriculumDueRank?: number;
+  curriculumGeneratorVersion?: string;
   isPlanOverride?: boolean;
   overrideMetadata?: PulseCheckDailyTaskOverrideMetadata;
   supersededByDailyTaskId?: string;
@@ -2242,6 +2258,15 @@ export function pulseCheckDailyAssignmentToFirestore(
   if (typeof assignment.trainingPlanStepIndex === 'number') data.trainingPlanStepIndex = assignment.trainingPlanStepIndex;
   if (assignment.trainingPlanStepLabel) data.trainingPlanStepLabel = assignment.trainingPlanStepLabel;
   if (typeof assignment.trainingPlanIsPrimary === 'boolean') data.trainingPlanIsPrimary = assignment.trainingPlanIsPrimary;
+  if (assignment.curriculumSlateId) data.curriculumSlateId = assignment.curriculumSlateId;
+  if (assignment.curriculumSlotId) data.curriculumSlotId = assignment.curriculumSlotId;
+  if (typeof assignment.curriculumSlotIndex === 'number') data.curriculumSlotIndex = assignment.curriculumSlotIndex;
+  if (assignment.curriculumSlotKind) data.curriculumSlotKind = assignment.curriculumSlotKind;
+  if (assignment.curriculumSlotState) data.curriculumSlotState = assignment.curriculumSlotState;
+  if (assignment.curriculumLane) data.curriculumLane = assignment.curriculumLane;
+  if (typeof assignment.curriculumIsDueToday === 'boolean') data.curriculumIsDueToday = assignment.curriculumIsDueToday;
+  if (typeof assignment.curriculumDueRank === 'number') data.curriculumDueRank = assignment.curriculumDueRank;
+  if (assignment.curriculumGeneratorVersion) data.curriculumGeneratorVersion = assignment.curriculumGeneratorVersion;
   if (typeof assignment.isPlanOverride === 'boolean') data.isPlanOverride = assignment.isPlanOverride;
   if (assignment.overrideMetadata) data.overrideMetadata = sanitizeFirestoreValue(assignment.overrideMetadata);
   if (assignment.supersededByDailyTaskId) data.supersededByDailyTaskId = assignment.supersededByDailyTaskId;
@@ -2328,6 +2353,15 @@ export function pulseCheckDailyAssignmentFromFirestore(
     trainingPlanStepIndex: typeof data.trainingPlanStepIndex === 'number' ? data.trainingPlanStepIndex : undefined,
     trainingPlanStepLabel: data.trainingPlanStepLabel,
     trainingPlanIsPrimary: typeof data.trainingPlanIsPrimary === 'boolean' ? data.trainingPlanIsPrimary : undefined,
+    curriculumSlateId: data.curriculumSlateId,
+    curriculumSlotId: data.curriculumSlotId,
+    curriculumSlotIndex: typeof data.curriculumSlotIndex === 'number' ? data.curriculumSlotIndex : undefined,
+    curriculumSlotKind: data.curriculumSlotKind,
+    curriculumSlotState: data.curriculumSlotState,
+    curriculumLane: data.curriculumLane,
+    curriculumIsDueToday: typeof data.curriculumIsDueToday === 'boolean' ? data.curriculumIsDueToday : undefined,
+    curriculumDueRank: typeof data.curriculumDueRank === 'number' ? data.curriculumDueRank : undefined,
+    curriculumGeneratorVersion: data.curriculumGeneratorVersion,
     isPlanOverride: data.isPlanOverride,
     overrideMetadata: data.overrideMetadata,
     supersededByDailyTaskId: data.supersededByDailyTaskId,

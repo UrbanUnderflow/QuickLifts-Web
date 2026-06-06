@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Bell, Brain, CheckCircle2, ChevronRight, ClipboardList, Copy, Loader2, Lock, Mail, ScanLine, Shield, Sparkles, UserRound, Users, Waves, XCircle } from 'lucide-react';
-import { collection, getDocs, limit, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore';
 import { resolvePulseCheckAthleteTaskState } from '../../api/firebase/pulsecheckProvisioning/athleteTaskState';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import type {
@@ -29,6 +29,7 @@ import { BaselineAssessmentModal } from '../../components/mentaltraining';
 import { userService } from '../../api/firebase/user';
 import type { User } from '../../api/firebase/user';
 import { useUser, useUserLoading } from '../../hooks/useUser';
+import GuidedTour, { type GuidedTourStep } from '../../components/onboarding/GuidedTour';
 
 // ─── Chromatic Glass Primitives ───────────────────────────────────────────────
 const FloatingOrb: React.FC<{ color: string; size: string; style: React.CSSProperties; delay?: number }> = ({ color, size, style, delay = 0 }) => (
@@ -101,8 +102,67 @@ type AthleteRosterEntry = {
 };
 
 type VisionProTaskState = 'not-queued' | 'queued' | 'completed';
+type LaunchDeviceFamily = 'oura' | 'fitbit' | 'apple_health' | 'polar_ble';
+
+type LaunchDeviceStatus = {
+  status: string;
+  label: string;
+  tone: string;
+};
+
+const LAUNCH_DEVICE_FAMILIES: Array<{ id: LaunchDeviceFamily; label: string }> = [
+  { id: 'oura', label: 'Oura' },
+  { id: 'fitbit', label: 'Fitbit' },
+  { id: 'apple_health', label: 'Apple Health' },
+  { id: 'polar_ble', label: 'Polar' },
+];
+
+const LAUNCH_DAY_TOUR_STEPS: GuidedTourStep[] = [
+  {
+    selector: '[data-tour="launch-day-hero"]',
+    title: 'Use this as the room board',
+    body: 'Launch-Day Mode is built for Meeting 3. Keep it open while athletes join, sync devices, complete setup, and finish the first actions.',
+    placement: 'bottom',
+  },
+  {
+    selector: '[data-tour="launch-day-metrics"]',
+    title: 'Watch the room totals',
+    body: 'These cards show how many athletes are in the launch flow, who is ready, how many invite links remain active, and who needs action before leaving.',
+    placement: 'bottom',
+  },
+  {
+    selector: '[data-tour="launch-day-athlete-flow"]',
+    title: 'Work each athlete row',
+    body: 'Each row combines invite state, setup state, device source status, and the next action PulseCheck staff should use in the room.',
+    placement: 'top',
+  },
+  {
+    selector: '[data-tour="launch-day-invite-athletes"]',
+    title: 'Invite or replace missing athletes',
+    body: 'If an athlete has not joined yet, use this link to create or copy the correct team invite path.',
+    placement: 'left',
+  },
+];
 
 const todayDateKey = () => new Date().toISOString().split('T')[0];
+
+const launchDeviceStatusFor = (status?: string): LaunchDeviceStatus => {
+  switch (status) {
+    case 'connected_synced':
+      return { status, label: 'Synced', tone: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200' };
+    case 'connected_waiting_data':
+      return { status, label: 'Waiting', tone: 'border-sky-400/30 bg-sky-400/10 text-sky-200' };
+    case 'connected_error':
+      return { status, label: 'Error', tone: 'border-red-400/30 bg-red-400/10 text-red-200' };
+    case 'pairing_lost':
+      return { status, label: 'Reconnect', tone: 'border-amber-400/30 bg-amber-400/10 text-amber-200' };
+    case 'pairing_lost_dismissed':
+      return { status, label: 'Deferred', tone: 'border-zinc-500/40 bg-zinc-500/10 text-zinc-300' };
+    case 'not_connected':
+    default:
+      return { status: status || 'not_connected', label: 'Not connected', tone: 'border-zinc-700 bg-black/20 text-zinc-500' };
+  }
+};
 
 const humanizeDailyTaskLabel = (assignment: PulseCheckDailyAssignment | null) => {
   if (!assignment) return null;
@@ -271,6 +331,7 @@ export default function PulseCheckTeamWorkspacePage() {
   const currentUserLoading = useUserLoading();
   const organizationId = typeof router.query.organizationId === 'string' ? router.query.organizationId : '';
   const teamId = typeof router.query.teamId === 'string' ? router.query.teamId : '';
+  const isLaunchDayMode = router.query.mode === 'launch-day';
 
   const [membership, setMembership] = useState<PulseCheckTeamMembership | null>(null);
   const [organization, setOrganization] = useState<PulseCheckOrganization | null>(null);
@@ -289,6 +350,8 @@ export default function PulseCheckTeamWorkspacePage() {
   const [selectedAthletes, setSelectedAthletes] = useState<string[]>([]);
   const [athleteProgress, setAthleteProgress] = useState<AthleteMentalProgress | null>(null);
   const [todayDailyAssignment, setTodayDailyAssignment] = useState<PulseCheckDailyAssignment | null>(null);
+  const [launchDeviceStatusByAthlete, setLaunchDeviceStatusByAthlete] = useState<Record<string, Record<LaunchDeviceFamily, LaunchDeviceStatus>>>({});
+  const [launchDayTourOpen, setLaunchDayTourOpen] = useState(false);
   const [athleteTaskLoading, setAthleteTaskLoading] = useState(false);
   const [baselineModalOpen, setBaselineModalOpen] = useState(false);
   const [pendingAssignmentCount, setPendingAssignmentCount] = useState(0);
@@ -333,6 +396,32 @@ export default function PulseCheckTeamWorkspacePage() {
     }));
 
     const scopedRoster = applyRosterScope(roster, myMembership);
+    const launchDeviceStatusEntries = isLaunchDayMode
+      ? await Promise.all(
+          scopedRoster.map(async (athlete) => {
+            const familyEntries = await Promise.all(
+              LAUNCH_DEVICE_FAMILIES.map(async (family) => {
+                try {
+                  const sourceStatusSnap = await getDoc(doc(db, 'health-context-source-status', `${athlete.id}_${family.id}`));
+                  const sourceStatus = sourceStatusSnap.exists() ? (sourceStatusSnap.data() as Record<string, unknown>) : null;
+                  const rawStatus = String(
+                    sourceStatus?.lifecycleState ||
+                    sourceStatus?.status ||
+                    sourceStatus?.connectionState ||
+                    'not_connected'
+                  );
+                  return [family.id, launchDeviceStatusFor(rawStatus)] as const;
+                } catch (error) {
+                  console.warn('[PulseCheck team workspace] Failed to load device source status:', { athleteId: athlete.id, family: family.id, error });
+                  return [family.id, launchDeviceStatusFor('not_connected')] as const;
+                }
+              })
+            );
+
+            return [athlete.id, Object.fromEntries(familyEntries) as Record<LaunchDeviceFamily, LaunchDeviceStatus>] as const;
+          })
+        )
+      : [];
 
     let resolvedMembership = myMembership;
 
@@ -409,6 +498,7 @@ export default function PulseCheckTeamWorkspacePage() {
     setTeamMembers(memberViews);
     setAthleteRoster(scopedRoster);
     setInviteLinks(nextInviteLinks);
+    setLaunchDeviceStatusByAthlete(Object.fromEntries(launchDeviceStatusEntries));
   };
 
   useEffect(() => {
@@ -435,13 +525,63 @@ export default function PulseCheckTeamWorkspacePage() {
     return () => {
       active = false;
     };
-  }, [currentUser?.id, currentUserLoading, organizationId, teamId]);
+  }, [currentUser?.id, currentUserLoading, isLaunchDayMode, organizationId, teamId]);
+
+  useEffect(() => {
+    if (!loading && router.query.tour === '1' && isLaunchDayMode) {
+      setLaunchDayTourOpen(true);
+    }
+  }, [isLaunchDayMode, loading, router.query.tour]);
 
   const activeInviteLinks = useMemo(() => inviteLinks.filter((invite) => invite.status === 'active'), [inviteLinks]);
   const adultInviteCount = activeInviteLinks.filter((invite) => invite.teamMembershipRole && invite.teamMembershipRole !== 'athlete').length;
   const athleteInviteCount = activeInviteLinks.filter((invite) => invite.teamMembershipRole === 'athlete').length;
   const athleteInviteLinks = activeInviteLinks.filter((invite) => invite.teamMembershipRole === 'athlete');
   const adultMembers = useMemo(() => teamMembers.filter((entry) => entry.membership.role !== 'athlete'), [teamMembers]);
+  const launchDayRows = useMemo(() => {
+    const rosterEmails = new Set(athleteRoster.map((athlete) => athlete.email.toLowerCase()).filter(Boolean));
+    const rosterRows = athleteRoster.map((athlete) => {
+      const deviceStatuses = launchDeviceStatusByAthlete[athlete.id] || {};
+      const healthyDeviceCount = LAUNCH_DEVICE_FAMILIES.filter(
+        (family) => deviceStatuses[family.id]?.status === 'connected_synced' || deviceStatuses[family.id]?.status === 'connected_waiting_data'
+      ).length;
+      const nextAction = !athlete.consentReady
+        ? 'Ask athlete to finish consent'
+        : !athlete.baselineReady
+          ? 'Ask athlete to complete baseline'
+          : healthyDeviceCount === 0
+            ? 'Connect or sync a device'
+            : 'Ready for first check-in and training';
+
+      return {
+        id: athlete.id,
+        displayName: athlete.displayName,
+        email: athlete.email,
+        inviteState: 'Account created',
+        setupState: athlete.baselineReady ? 'Baseline complete' : athlete.consentReady ? 'Consent complete' : 'Setup pending',
+        deviceStatuses,
+        nextAction,
+        joined: true,
+        ready: athlete.consentReady && athlete.baselineReady && healthyDeviceCount > 0,
+      };
+    });
+    const inviteRows = athleteInviteLinks
+      .filter((invite) => invite.targetEmail && !rosterEmails.has(invite.targetEmail.toLowerCase()))
+      .map((invite) => ({
+        id: invite.id,
+        displayName: invite.recipientName || invite.targetEmail || 'Invited athlete',
+        email: invite.targetEmail || '',
+        inviteState: 'Link active',
+        setupState: 'Not joined',
+        deviceStatuses: {} as Record<LaunchDeviceFamily, LaunchDeviceStatus>,
+        nextAction: 'Ask athlete to open invite link',
+        joined: false,
+        ready: false,
+      }));
+
+    return [...rosterRows, ...inviteRows];
+  }, [athleteInviteLinks, athleteRoster, launchDeviceStatusByAthlete]);
+  const launchDayReadyCount = launchDayRows.filter((row) => row.ready).length;
   const isTeamAdmin = membership?.role === 'team-admin';
   const isAthleteWorkspace = membership?.role === 'athlete';
   const operatingRole = membership?.operatingRole || 'admin-only';
@@ -960,6 +1100,143 @@ export default function PulseCheckTeamWorkspacePage() {
             </div>
           ) : (
           <>
+          {isLaunchDayMode ? (
+          <div className="mt-8 space-y-6">
+            <div className="rounded-[30px] border border-emerald-400/20 bg-emerald-400/[0.06] p-6" data-tour="launch-day-hero">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <ScanLine className="h-6 w-6 text-emerald-300" />
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-200">Launch-Day Mode</div>
+                      <h2 className="mt-2 text-2xl font-semibold text-white">Team room onboarding board</h2>
+                    </div>
+                  </div>
+                  <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300">
+                    Use this during device delivery and athlete app setup. It observes invite state, consent, baseline, and device source status from the same team workspace data.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setLaunchDayTourOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/15"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Walkthrough
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void refreshWorkspace()}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
+                  >
+                    <Loader2 className="h-4 w-4" />
+                    Refresh Board
+                  </button>
+                  <Link
+                    href={`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
+                  >
+                    Standard Workspace
+                    <ChevronRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
+              <div className="mt-6 grid gap-3 md:grid-cols-4" data-tour="launch-day-metrics">
+                <div className="rounded-[22px] border border-black/20 bg-black/20 p-4">
+                  <div className="text-xs uppercase tracking-[0.18em] text-zinc-400">Launch Rows</div>
+                  <div className="mt-3 text-3xl font-semibold text-white">{launchDayRows.length}</div>
+                  <div className="mt-1 text-sm text-zinc-300">Joined athletes plus active invite targets</div>
+                </div>
+                <div className="rounded-[22px] border border-black/20 bg-black/20 p-4">
+                  <div className="text-xs uppercase tracking-[0.18em] text-zinc-400">Ready</div>
+                  <div className="mt-3 text-3xl font-semibold text-white">{launchDayReadyCount}</div>
+                  <div className="mt-1 text-sm text-zinc-300">Consent, baseline, and device state are usable</div>
+                </div>
+                <div className="rounded-[22px] border border-black/20 bg-black/20 p-4">
+                  <div className="text-xs uppercase tracking-[0.18em] text-zinc-400">Invite Links</div>
+                  <div className="mt-3 text-3xl font-semibold text-white">{athleteInviteCount}</div>
+                  <div className="mt-1 text-sm text-zinc-300">Active athlete invite links</div>
+                </div>
+                <div className="rounded-[22px] border border-black/20 bg-black/20 p-4">
+                  <div className="text-xs uppercase tracking-[0.18em] text-zinc-400">Needs Action</div>
+                  <div className="mt-3 text-3xl font-semibold text-white">{Math.max(launchDayRows.length - launchDayReadyCount, 0)}</div>
+                  <div className="mt-1 text-sm text-zinc-300">Use next action before athletes leave</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[30px] border border-zinc-800 bg-[#091326] p-6" data-tour="launch-day-athlete-flow">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="text-lg font-semibold text-white">Launch-Day Athlete Flow</div>
+                  <div className="mt-1 text-sm text-zinc-400">Invite, setup, device, and next action in one room view.</div>
+                </div>
+                <Link
+                  href={`/PulseCheck/post-activation?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-zinc-700 px-4 py-2 text-xs font-semibold text-white transition hover:border-zinc-500"
+                  data-tour="launch-day-invite-athletes"
+                >
+                  Invite Athletes
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                {launchDayRows.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-5 text-sm text-zinc-500">
+                    No athlete invite or roster rows are ready for launch-day tracking yet.
+                  </div>
+                ) : (
+                  launchDayRows.map((row) => (
+                    <div key={row.id} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_0.7fr_1.25fr_0.95fr] xl:items-center">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-sm font-semibold text-white">{row.displayName}</div>
+                            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${row.joined ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200' : 'border-amber-400/25 bg-amber-400/10 text-amber-200'}`}>
+                              {row.inviteState}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-sm text-zinc-400">{row.email || 'Email not set'}</div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2">
+                            <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Setup</div>
+                            <div className="mt-1 text-xs font-semibold text-white">{row.setupState}</div>
+                          </div>
+                          <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2">
+                            <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Room State</div>
+                            <div className={`mt-1 text-xs font-semibold ${row.ready ? 'text-emerald-200' : 'text-amber-200'}`}>
+                              {row.ready ? 'Ready' : 'Needs action'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {LAUNCH_DEVICE_FAMILIES.map((family) => {
+                            const status = row.deviceStatuses[family.id] || launchDeviceStatusFor('not_connected');
+                            return (
+                              <span key={family.id} className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold ${status.tone}`}>
+                                {family.label}: {status.label}
+                              </span>
+                            );
+                          })}
+                        </div>
+
+                        <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3 text-sm text-zinc-300">
+                          {row.nextAction}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+          ) : (
+          <>
           <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
             <div className={`rounded-[30px] border bg-gradient-to-br p-6 ${focus.accent}`}>
               <div className="flex items-center gap-3">
@@ -1343,6 +1620,16 @@ export default function PulseCheckTeamWorkspacePage() {
           </div>
           </>
           )}
+          </>
+          )}
+
+        <GuidedTour
+          open={launchDayTourOpen}
+          steps={LAUNCH_DAY_TOUR_STEPS}
+          accentColor="#6EE7B7"
+          storageKey="pulsecheck_launch_day_tour_status"
+          onClose={() => setLaunchDayTourOpen(false)}
+        />
 
         <BaselineAssessmentModal
           isOpen={baselineModalOpen}

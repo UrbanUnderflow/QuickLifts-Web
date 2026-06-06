@@ -122,7 +122,7 @@ test('resolveFrequency — rejects negative explicit and falls back', async () =
   assert.equal(v, 4);
 });
 
-test('buildCurriculumAssignmentIntent — explains intentional repetition and progression', async () => {
+test('buildCurriculumAssignmentIntent — explains intentional practice and progression', async () => {
   const { assignmentIntent, taxonomy } = await loadModules();
   const intent = assignmentIntent.buildCurriculumAssignmentIntent({
     kind: 'simulation',
@@ -139,11 +139,11 @@ test('buildCurriculumAssignmentIntent — explains intentional repetition and pr
   assert.equal(intent.source, 'curriculum-engine');
   assert.equal(intent.badgeLabel, 'Same by design');
   assert.equal(intent.repetitionIntentional, true);
-  assert.equal(intent.sequenceLabel, 'Rep 4 of 7');
+  assert.equal(intent.sequenceLabel, 'Practice 4 of 7');
   assert.match(intent.whyThisToday, /Fakeout Brake Point/);
-  assert.match(intent.whyThisToday, /not a random repeat/);
-  assert.match(intent.progressionCriteria, /7 planned reps/);
-  assert.match(intent.nextLikelyStep, /next decision control sim/i);
+  assert.match(intent.whyThisToday, /not random assignment/);
+  assert.match(intent.progressionCriteria, /7 planned practices/);
+  assert.match(intent.nextLikelyStep, /next decision control simulation/i);
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

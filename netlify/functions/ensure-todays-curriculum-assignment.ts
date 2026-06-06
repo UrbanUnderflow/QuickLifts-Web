@@ -6,12 +6,13 @@ import { generateDailyAssignmentAdmin } from './utils/dailyCurriculumAdmin';
 /**
  * POST /.netlify/functions/ensure-todays-curriculum-assignment
  *
- * Ensures the signed-in athlete has a curriculum-engine assignment for
+ * Ensures the signed-in athlete has a curriculum-engine six-item slate for
  * today (athlete-local). Called by iOS on home-screen appear so the
  * "Today" card is never empty — even before the morning cron has fired.
  *
- * Idempotent: if a curriculum-engine assignment already exists for the
- * athlete + sourceDate=today, returns it without writing.
+ * Idempotent: if the athlete already has three protocol assignments and
+ * three simulation assignments for sourceDate=today, returns without writing.
+ * Partial legacy days are topped up by the generator.
  *
  * Doctrine: athletes always have something to train. The cron handles
  * the bulk path; this endpoint covers (a) brand-new athletes onboarded
@@ -114,17 +115,26 @@ export const handler: Handler = async (event) => {
     'America/New_York';
   const sourceDate = body.sourceDate || formatYmdInTz(new Date(), tz);
 
-  // Idempotency check — if curriculum-engine already wrote today's
-  // assignment, short-circuit. iOS read path handles surfacing it.
+  // Idempotency check — if curriculum-engine already wrote today's full
+  // six-item slate, short-circuit. Partial legacy days are topped up below.
   const existing = await db
     .collection('pulsecheck-daily-assignments')
     .where('athleteId', '==', auth.uid)
     .where('sourceDate', '==', sourceDate)
     .where('assignedBy', '==', 'curriculum-engine')
-    .limit(1)
+    .limit(12)
     .get()
     .catch(() => null);
-  if (existing && !existing.empty) {
+  const existingDocs = existing?.docs ?? [];
+  const existingProtocolCount = existingDocs.filter((doc) => {
+    const actionType = String(doc.data().actionType || '').toLowerCase();
+    return actionType === 'protocol';
+  }).length;
+  const existingSimulationCount = existingDocs.filter((doc) => {
+    const actionType = String(doc.data().actionType || '').toLowerCase();
+    return actionType === 'simulation' || actionType === 'sim';
+  }).length;
+  if (existingProtocolCount >= 3 && existingSimulationCount >= 3) {
     return {
       statusCode: 200,
       headers: RESPONSE_HEADERS,

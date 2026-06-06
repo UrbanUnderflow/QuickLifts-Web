@@ -358,7 +358,7 @@ function resolveArchetype({ planType, primarySimId, focusSkill, liveSimRegistry,
       return {
         archetypeId: 'protocol_state_stabilization_v1',
         title: 'State Stabilization Block',
-        goal: 'Steady your state first so later reps have cleaner footing.',
+        goal: 'Steady your state first so later practice has cleaner footing.',
         progressMode: 'days',
         targetCount: 5,
         inventoryFallbackReason,
@@ -421,7 +421,7 @@ function resolveArchetype({ planType, primarySimId, focusSkill, liveSimRegistry,
       return {
         archetypeId: 'mixed_regulate_then_build_v1',
         title: `${humanizeLabel(focusSkill)} Mixed Build`,
-        goal: 'Blend state regulation and direct reps so today’s state does not block skill growth.',
+        goal: 'Blend state regulation and direct skill work so today’s state does not block skill growth.',
         progressMode: 'sessions',
         targetCount: 4,
         inventoryFallbackReason,
@@ -768,7 +768,7 @@ function resolvePlanAuthoringTrigger({
       shouldAuthor: true,
       trigger: lowConfidence ? 'exploratory_window_complete' : 'baseline_complete',
       reason: lowConfidence
-        ? 'Exploratory window completed; author the first plan from the calibration reps.'
+        ? 'Exploratory window completed; author the first plan from the calibration practice.'
         : 'Baseline complete and no primary plan exists.',
       exploratoryWindowRepCount,
       lowConfidence,

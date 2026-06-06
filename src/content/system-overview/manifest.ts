@@ -93,7 +93,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-phase-j-session-schema-contract', label: 'Phase J Schema Contract', description: 'Implementation-facing Firestore and TypeScript contract for Phase J session candidates, clarification prompts, confirmation events, canonical session records, athlete session patterns, confidence transitions, actor precedence, indexes, and provenance requirements.', parentSectionId: 'pulsecheck-contextual-sports-detection-engine' },
     { id: 'pulsecheck-phase-j-reviewer-debug-surface', label: 'Phase J Reviewer Surface', description: 'Admin reviewer/debug skeleton for inspecting candidate -> context -> prompt -> answer -> session record -> load contribution traces, provenance, confidence transitions, filters, and operator hold/confirm/dismiss actions.', parentSectionId: 'pulsecheck-contextual-sports-detection-engine' },
     { id: 'pulsecheck-adaptive-framing-layer-spec', label: 'Adaptation Framing Layer', description: 'Athlete-safe Nora translation layer, Anthropic bridge boundary, guardrail enforcement, audit logging, and remaining kill-switch/server-enforcement gaps.' },
-    { id: 'pulsecheck-curriculum-layer-spec', label: 'Daily Curriculum Layer', description: 'Proactive daily practice layer for curriculum-engine assignments, assignment-intent transparency, same-by-design repetition, reminders, rollups, coach overrides, iOS read surfaces, and current scheduler adapter gaps.' },
+    { id: 'pulsecheck-curriculum-layer-spec', label: 'Daily Curriculum Layer', description: 'Proactive six-exercise curriculum layer for three active protocols, three active simulations, mastery rotation, assignment-intent transparency, reminders, rollups, coach overrides, iOS read surfaces, and current implementation gaps.' },
     { id: 'pulsecheck-nora-conversation-orchestrator-spec', label: 'Nora Conversation Orchestrator', description: 'Reactive trigger sweep, conversation state machine, athlete reply endpoint, timeout sweep, and Phase C action-delivery integration.' },
     { id: 'pulsecheck-nora-guard-spec', label: 'Nora Guard', description: 'Pilot message-review inbox for Nora conversations, redaction, revoke controls, technical evidence, consent disclosure, and current logging-control limitations.' },
     { id: 'pulsecheck-nora-context-capture', label: 'Nora Context Capture', description: 'Coach-facing input layer — schedule upload, practice-plan upload, voice memo. Defines the structured records (team_schedule_event, prescribed_session, coach_observation), parser pipeline, intake channels, privacy boundaries, and coach-voice rules for missing-context nudges.', parentSectionId: 'pulsecheck-sports-intelligence-layer-spec' },
@@ -137,10 +137,10 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
-      'Added the Daily Curriculum assignment-intent contract so repeated sims/protocols can tell athletes “same by design,” show rep progress, explain why today, and name how they move forward across Today, Nora, and Training Room surfaces.',
+      'Added the Daily Curriculum assignment-intent contract so repeated sims/protocols can tell athletes “same by design,” show practice progress, explain why today, and name how they move forward across Today, Nora, and Training Room surfaces.',
       'Strengthened Visual Disruption Reset focus measurement with path-pattern confirmation: athletes now watch a moving target draw a pattern, then must match the drawn pattern after disruption before Recovery Time is scored.',
       'Removed the experimental handheld mobile camera gaze contract from Visual Disruption Reset after iPhone testing showed the estimates were not reliable enough for athlete-facing scoring; phone, web, iOS, and Android now use touch/click/tap recovery with concise Nora-read phase signals.',
-      'Updated the Reset family and Visual Disruption Reset registry contract so phone/web delivery is explicitly touch/click measured rather than implied gaze tracking, runs against a visible timer-led session, caps missed recoveries, and auto-advances reps without a manual round gate.',
+      'Updated the Reset family and Visual Disruption Reset registry contract so phone/web delivery is explicitly touch/click measured rather than implied gaze tracking, runs against a visible timer-led session, caps missed recoveries, and auto-advances rounds without a manual round gate.',
       'Completed Phase J implementation passes 11-16 at the foundation layer with a canonical session-record writer, deterministic sport-load handoff, Pulse Check device onboarding and self-report fallback helpers, Claude-backed lift summary parsing with local fallback, QA audit validators, and end-to-end type/lint verification.',
       'Completed Phase J implementation passes 6-10 at the runtime-helper layer with sport detection profiles, Nora clarification routing, unlabeled session candidate detection, athlete session pattern learning, and coach schedule / prescribed-session context matching.',
       'Locked the Phase J Session Schema Contract with TypeScript collection constants and record shapes for session candidates, clarification prompts, context confirmation events, canonical session records, athlete session patterns, confidence transitions, actor precedence, Firestore index requirements, and required provenance fields.',
@@ -530,7 +530,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       id: 'svc-pulsecheck-daily-curriculum-layer',
       name: 'PulseCheck Daily Curriculum Layer',
       purpose:
-        'Configurable proactive practice engine for one protocol and one simulation per athlete per day, with pillar balancing, coach overrides, reminders, and monthly assessment rollups.',
+        'Configurable proactive practice engine for the six-exercise curriculum target: three active protocol slots, three active simulation slots, mastery rotation, coach overrides, reminders, and monthly assessment rollups. Current runtime still uses the compatibility generator that writes one protocol and one simulation.',
       owner: 'PulseCheck Platform + Mental Performance',
       status: 'beta',
       environments: ['Development', 'Production Netlify'],
@@ -1304,7 +1304,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     },
     {
       term: 'Daily Curriculum Layer',
-      definition: 'PulseCheck proactive practice engine that balances protocol and simulation reps across composure, focus, and decisioning pillars.',
+      definition: 'PulseCheck proactive practice engine that balances protocol and simulation practice exposures across composure, focus, and decisioning pillars.',
     },
     {
       term: 'Consent v6',

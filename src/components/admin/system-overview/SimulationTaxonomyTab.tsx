@@ -75,9 +75,9 @@ const PILLARS = [
         description:
             'The ability to maintain execution quality when emotions, errors, or evaluative pressure threaten to derail performance. Composure skills keep the athlete from spiraling after a mistake or freezing when the moment matters.',
         skills: [
-            { name: 'Error Recovery Speed', construct: 'How fast the athlete returns to baseline execution after making a mistake.', coreMetric: 'Post-error recovery time (ms to clean rep)', primarySim: 'Reset' },
+            { name: 'Error Recovery Speed', construct: 'How fast the athlete returns to baseline execution after making a mistake.', coreMetric: 'Post-error recovery time (ms to clean execution)', primarySim: 'Reset' },
             { name: 'Emotional Interference Control', construct: 'Preventing emotional arousal from degrading cognitive or motor performance.', coreMetric: 'Performance delta under emotional load vs. neutral', primarySim: 'Reset' },
-            { name: 'Pressure Stability', construct: 'Maintaining quality under evaluative or competitive pressure conditions.', coreMetric: 'Score variance under pressure vs. training reps', primarySim: 'Reset' },
+            { name: 'Pressure Stability', construct: 'Maintaining quality under evaluative or competitive pressure conditions.', coreMetric: 'Score variance under pressure vs. training attempts', primarySim: 'Reset' },
         ] as Skill[],
     },
     {
@@ -97,14 +97,14 @@ const PILLARS = [
 ];
 
 const MODIFIERS: Modifier[] = [
-    { name: 'Readiness', key: 'readiness', type: 'state', description: 'Pre-session state derived from daily check-in (sleep, energy, stress, mood). Readiness adjusts session expectations and determines whether a session is a Probe, Skill Rep, or Recovery Rep.', measureHow: 'Daily check-in inputs → composite readiness score 0-100', color: '#22d3ee' },
+    { name: 'Readiness', key: 'readiness', type: 'state', description: 'Pre-session state derived from daily check-in (sleep, energy, stress, mood). Readiness adjusts session expectations and determines whether a session is a Probe, Skill Practice, or Recovery Practice.', measureHow: 'Daily check-in inputs → composite readiness score 0-100', color: '#22d3ee' },
     { name: 'Fatigability', key: 'fatigability', type: 'decay', description: 'How much a skill degrades over the course of a session due to time-on-task, cumulative cognitive load, or repeated challenge. Some athletes maintain performance; others show late-session decay.', measureHow: 'Performance delta: early-session vs. late-session within the same sim run', color: '#f59e0b' },
     { name: 'Consistency', key: 'consistency', type: 'stability', description: 'Variance in skill scores across repeated sessions. Low variance = the athlete truly owns the skill. High variance = the skill is context-dependent or unstable.', measureHow: 'Coefficient of variation across the last N sessions per skill', color: '#E0FE10' },
-    { name: 'Pressure Sensitivity', key: 'pressure_sensitivity', type: 'sensitivity', description: 'How much performance changes when evaluative, competitive, or escalating pressure is applied. Some athletes are pressure-neutral; others show measurable degradation.', measureHow: 'Performance delta: pressure reps vs. neutral reps within the same session', color: '#fb923c' },
+    { name: 'Pressure Sensitivity', key: 'pressure_sensitivity', type: 'sensitivity', description: 'How much performance changes when evaluative, competitive, or escalating pressure is applied. Some athletes are pressure-neutral; others show measurable degradation.', measureHow: 'Performance delta: pressure attempts vs. neutral attempts within the same session', color: '#fb923c' },
 ];
 
 const SIMS: Sim[] = [
-    { name: 'Reset', pillar: 'composure', skills: ['Error Recovery Speed', 'Emotional Interference Control', 'Attentional Shifting'], coreMetric: 'Post-error recovery time (ms to first clean rep after disruption)', supportingMetrics: ['Consistency index', 'Pre-disruption accuracy', 'Disruption-type recovery delta', 'Resilience score'], pressureTypes: ['Escalating (timer shrinks)', 'Error compounding', 'Evaluative (coach watching)'], description: 'Tap a rhythm pattern. The system disrupts with visual noise, rule changes, or emotional interference. The core measurement is how fast the athlete regains clean execution after being thrown off.', evidenceStatus: 'Adjacent', scientificBasis: 'ACT (Eysenck et al., 2007), SIT (Meichenbaum, 1985)' },
+    { name: 'Reset', pillar: 'composure', skills: ['Error Recovery Speed', 'Emotional Interference Control', 'Attentional Shifting'], coreMetric: 'Post-error recovery time (ms to first clean execution after disruption)', supportingMetrics: ['Consistency index', 'Pre-disruption accuracy', 'Disruption-type recovery delta', 'Resilience score'], pressureTypes: ['Escalating (timer shrinks)', 'Error compounding', 'Evaluative (coach watching)'], description: 'Tap a rhythm pattern. The system disrupts with visual noise, rule changes, or emotional interference. The core measurement is how fast the athlete regains clean execution after being thrown off.', evidenceStatus: 'Adjacent', scientificBasis: 'ACT (Eysenck et al., 2007), SIT (Meichenbaum, 1985)' },
     { name: 'Noise Gate', pillar: 'focus', skills: ['Selective Attention', 'Sustained Attention'], coreMetric: 'Accuracy under increasing distractor density (signal vs. noise)', supportingMetrics: ['False alarm rate', 'Distractor cost', 'Sustained accuracy over time'], pressureTypes: ['Distractor escalation', 'Environmental noise injection'], description: "Identify the target signal among increasing visual and auditory distractors. Trains the athlete's ability to filter noise and maintain focus on what matters while the environment gets louder.", evidenceStatus: 'Adjacent', scientificBasis: 'Posner & Petersen (1990), Nideffer & Sagal (2006)' },
     { name: 'Brake Point', pillar: 'decision', skills: ['Response Inhibition'], coreMetric: 'Go/No-Go accuracy under time pressure', supportingMetrics: ['False start rate', 'Inhibition latency', 'Commission errors'], pressureTypes: ['Time compression', 'High-similarity decoys'], description: 'React to valid signals and suppress reactions to no-go signals. Speed and accuracy both matter. Trains the athlete to cancel bad actions before errors cascade — the mental braking system.', evidenceStatus: 'Adjacent', scientificBasis: 'Miyake et al. (2000), USOC Mental Training Manual (2008)' },
     { name: 'Signal Window', pillar: 'decision', skills: ['Signal Discrimination'], coreMetric: 'Correct detection rate minus false alarm rate (d-prime)', supportingMetrics: ['Response time to valid signals', 'Decay rate with time pressure', 'Cross-modal accuracy'], pressureTypes: ['Time window compression', 'Multi-modal distractors'], description: "Detect the real signal from among decoy stimuli within a shrinking time window. Measures the athlete's ability to read the right signal when it matters and ignore convincing fakes.", evidenceStatus: 'Mechanism-Only', scientificBasis: 'Zhu et al. (2024), Signal Detection Theory (Green & Swets)' },
@@ -125,10 +125,19 @@ const EVIDENCE_LEVELS = [
     { level: 'Transfer-Validated', color: '#E0FE10', claim: 'The trained skill retains and transfers through Trials of increasing fidelity toward competition.', requirement: 'Transfer testing across Baseline → Immersive → Field trials with measurable Transfer Gap reduction.' },
 ];
 
+const FAMILY_VALIDITY_FINDINGS = [
+    { family: 'Reset', validity: 'Strong mechanism rationale', note: 'Maps to attentional control, stress exposure, choking/pressure, and refocusing logic. Product proof must show recovery latency and post-disruption accuracy predict pressure recovery outside the controlled sim.' },
+    { family: 'Noise Gate', validity: 'Strong mechanism rationale', note: 'Maps cleanly to selective attention and interference filtering. Product proof must show that distractor-cost improvements survive higher-fidelity pressure contexts.' },
+    { family: 'Brake Point', validity: 'Strong adjacent support', note: 'Maps to response inhibition and stop-signal literature. Sport meta-analysis supports inhibition relevance, but Pulse Check still needs implementation reliability and transfer data.' },
+    { family: 'Signal Window', validity: 'Strong but transfer-sensitive', note: 'Maps to perceptual-cognitive decision-making. Transfer is most credible when signals resemble sport decisions rather than abstract laboratory choices.' },
+    { family: 'Sequence Shift', validity: 'Mechanism-supported', note: 'Maps to shifting, updating, and old-rule intrusion. Product proof must show the sim captures meaningful rule or context changes rather than generic task switching only.' },
+    { family: 'Endurance Lock', validity: 'Strong adjacent support', note: 'Maps to sustained attention and mental fatigue. Product proof must separate cognitive-fatigue effects from boredom, physical fatigue, and interface friction.' },
+];
+
 const SESSION_TYPES = [
     { type: 'Probe', description: 'Assessment-focused. Tests current level. No coaching or adaptation applied. Used for baseline and periodic re-assessment.', duration: '2-3 min', when: 'First session, weekly check, or after readiness flag' },
-    { type: 'Skill Rep', description: "The standard daily training session. Nora adapts difficulty tier and pressure based on performance. Builds the skill through repetition and progressive overload.", duration: '3-5 min', when: 'Default daily session when readiness is normal' },
-    { type: 'Recovery Rep', description: 'Low-pressure, reduced-tempo session for days when readiness is low. Maintains habit and form without pushing for gains.', duration: '2-3 min', when: 'Low readiness day (sleep < 5h, high stress, etc.)' },
+    { type: 'Skill Practice', description: "The standard daily training session. Nora adapts difficulty tier and pressure based on performance. Builds the skill through repetition and progressive overload.", duration: '3-5 min', when: 'Default daily session when readiness is normal' },
+    { type: 'Recovery Practice', description: 'Low-pressure, reduced-tempo session for days when readiness is low. Maintains habit and form without pushing for gains.', duration: '2-3 min', when: 'Low readiness day (sleep < 5h, high stress, etc.)' },
     { type: 'Pressure Exposure', description: 'Intentionally escalated pressure conditions. Timer shrinks, penalties increase, evaluative signals added. Tests composure under realistic stress.', duration: '3-5 min', when: 'After athlete has stabilized at current tier' },
 ];
 
@@ -154,6 +163,9 @@ const REFERENCES = [
     { id: 11, text: 'Saunders, T., et al. (1996). The effect of stress inoculation training on anxiety and performance. JOHP, 1(2), 170-186.' },
     { id: 12, text: 'Stinson, C., & Bowman, D. A. (2014). Feasibility of training athletes for high-pressure situations using VR. IEEE TVCG, 20(4), 606-615.' },
     { id: 13, text: 'Schampheleer, E., et al. (2024). Mental fatigue in sport - from impaired performance to underlying mechanisms. Sports Medicine, 54, 1947-1968.' },
+    { id: 14, text: 'Harris, D. J., Wilson, M. R., & Vine, S. J. (2018). A systematic review of commercial cognitive training devices: Implications for use in sport. Frontiers in Psychology, 9, 709.' },
+    { id: 15, text: 'Albaladejo-Garcia, C., Garcia-Aguilar, F., & Moreno, F. J. (2023). The role of inhibitory control in sport performance: Systematic review and meta-analysis in stop-signal paradigm. Neuroscience & Biobehavioral Reviews, 147, 105108.' },
+    { id: 16, text: 'Habay, J., Van Cutsem, J., Verschueren, J., De Bock, S., Proost, M., De Wachter, J., Tassignon, B., Meeusen, R., & Roelands, B. (2021). Mental fatigue and sport-specific psychomotor performance: A systematic review. Sports Medicine, 51(7), 1527-1548.' },
 ];
 
 /* ---- COLLAPSIBLE ---- */
@@ -366,6 +378,51 @@ const SimulationTaxonomyTab: React.FC = () => {
                         </div>
                     ))}
                 </div>
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 space-y-4">
+                    <div className="space-y-2">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-300">Six-Family Validity Finding</p>
+                        <p className="text-sm text-zinc-300 leading-relaxed">
+                            Current research supports the six families as a <span className="font-semibold text-white">mechanism-valid taxonomy</span>, not as a product-validated final model. Each family maps to a defensible cognitive or performance-science construct, but Pulse Check must still prove that these six families are psychometrically distinct, reliable inside the product, and predictive across higher-fidelity Trials.
+                        </p>
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                            The current validation question is whether the six family scores explain athlete outcomes better than a simpler three-pillar model using Focus, Composure, and Decision alone.
+                        </p>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-xl border border-zinc-800">
+                        <table className="w-full min-w-[760px] text-sm">
+                            <thead className="bg-black/30 text-zinc-400 uppercase text-[10px] tracking-widest">
+                                <tr>
+                                    <th className="px-4 py-2.5 text-left">Family</th>
+                                    <th className="px-4 py-2.5 text-left">Validity Read</th>
+                                    <th className="px-4 py-2.5 text-left">What Must Be Proven</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {FAMILY_VALIDITY_FINDINGS.map((finding) => (
+                                    <tr key={finding.family} className="border-t border-zinc-800">
+                                        <td className="px-4 py-3 text-xs font-semibold text-white">{finding.family}</td>
+                                        <td className="px-4 py-3 text-xs text-amber-200">{finding.validity}</td>
+                                        <td className="px-4 py-3 text-xs text-zinc-400 leading-relaxed">{finding.note}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {[
+                            { title: 'Reliability', detail: 'Do repeated valid sessions produce stable family-level measures when state and difficulty are controlled?' },
+                            { title: 'Distinctiveness', detail: 'Do the six family measures separate cleanly, or do several collapse into the same underlying factor?' },
+                            { title: 'Incremental Value', detail: 'Do the six family scores explain outcomes beyond the three pillar scores alone?' },
+                        ].map((item) => (
+                            <div key={item.title} className="rounded-xl border border-zinc-800 bg-black/20 px-4 py-3">
+                                <p className="text-xs font-bold text-white mb-1">{item.title}</p>
+                                <p className="text-[10px] text-zinc-500 leading-relaxed">{item.detail}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </section>
 
             {/* 7. SIM SPEC TEMPLATE */}
@@ -396,7 +453,7 @@ const SimulationTaxonomyTab: React.FC = () => {
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         {[
-                            { title: 'Daily Check-In', desc: 'Readiness score from sleep, energy, stress, mood → adjusts session type (Probe / Skill Rep / Recovery Rep)', icon: '🌅' },
+                            { title: 'Daily Check-In', desc: 'Readiness score from sleep, energy, stress, mood → adjusts session type (Probe / Skill Practice / Recovery Practice)', icon: '🌅' },
                             { title: 'Prescription Engine', desc: 'TaxonomyProfile + CheckInState → prescribeNextSession() → Sim selection, session type, duration, and rationale', icon: '🔮' },
                             { title: 'Adaptive Difficulty', desc: "Within-session tier adjustment based on real-time performance. Nora scales pressure and complexity to the athlete's edge.", icon: '📈' },
                         ].map((item) => (

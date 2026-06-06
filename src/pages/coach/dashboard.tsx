@@ -7,6 +7,7 @@ import { coachService } from '../../api/firebase/coach';
 import { CoachModel } from '../../types/Coach';
 import AthleteCard from '../../components/AthleteCard';
 import CoachLayout from '../../components/CoachLayout';
+import GuidedTour, { type GuidedTourStep } from '../../components/onboarding/GuidedTour';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, 
@@ -19,11 +20,13 @@ import {
   Copy,
   BellRing,
   ArrowRight,
+  BookOpenCheck,
   FileText,
-  ClipboardCheck
+  ClipboardCheck,
+  X
 } from 'lucide-react';
 import { db } from '../../api/firebase/config';
-import { doc, getDoc, collection, getDocs, onSnapshot, query, where, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, onSnapshot, query, where, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { EscalationRecordStatus } from '../../api/firebase/escalation/types';
 import { escalationRecordsService } from '../../api/firebase/escalation/service';
 import { EscalationTier } from '../../api/firebase/escalation/types';
@@ -194,6 +197,56 @@ const formatAdherenceChip = (report?: CoachReportListItem | null) => {
   return `Adherence: ${report.adherence.categoriesReady ?? 0} / ${report.adherence.categoriesTotal} categories`;
 };
 
+const COACH_GUIDED_TRAINING_STEPS = [
+  {
+    title: 'Read the weekly report first',
+    body: 'Start with the latest Sports Intelligence read, then move through team snapshot, adherence context, athlete flags, and coach actions in that order.',
+    action: 'Open Latest Report',
+  },
+  {
+    title: 'Use follow-up as a queue',
+    body: 'Coach follow-up separates review-worthy updates, awareness-only context, and safety visibility so every item has the right level of attention.',
+    action: 'Review Follow-Up',
+  },
+  {
+    title: 'Keep roster context close',
+    body: 'The roster is where you confirm who is connected, who may need support, and whether safety visibility is active without exposing sensitive detail.',
+    action: 'Review Roster',
+  },
+  {
+    title: 'Do not over-read thin data',
+    body: 'Look for sustained patterns, missing data, and coverage context before changing a conversation with an athlete or team.',
+    action: 'Complete Training',
+  },
+];
+
+const COACH_DASHBOARD_TOUR_STEPS: GuidedTourStep[] = [
+  {
+    selector: '[data-tour="coach-guided-card"]',
+    title: 'Start with the walkthrough',
+    body: 'This card is the coach training launch point. Use it during onboarding or bring it back later with the training link.',
+    placement: 'bottom',
+  },
+  {
+    selector: '[data-tour="coach-latest-report"]',
+    title: 'Open the latest report first',
+    body: 'Coaches should start with the newest Sports Intelligence read before comparing older reports or acting on athlete-level details.',
+    placement: 'bottom',
+  },
+  {
+    selector: '[data-tour="coach-follow-up"]',
+    title: 'Use follow-up as a queue',
+    body: 'This section separates review-worthy updates, awareness-only context, and safety visibility so the coach knows what needs attention.',
+    placement: 'top',
+  },
+  {
+    selector: '[data-tour="coach-roster"]',
+    title: 'Check roster context',
+    body: 'The roster is where the coach confirms athlete connection, engagement, and safety visibility without exposing unnecessary sensitive detail.',
+    placement: 'top',
+  },
+];
+
 const CoachDashboard: React.FC = () => {
   const currentUser = useUser();
   const userLoading = useUserLoading();
@@ -208,6 +261,10 @@ const CoachDashboard: React.FC = () => {
   const [coachNotifications, setCoachNotifications] = useState<CoachNotificationDoc[]>([]);
   const [latestSportsIntelligenceReport, setLatestSportsIntelligenceReport] = useState<CoachReportListItem | null>(null);
   const [sportsIntelligenceLoading, setSportsIntelligenceLoading] = useState(false);
+  const [coachTrainingVisible, setCoachTrainingVisible] = useState(false);
+  const [coachTrainingStepIndex, setCoachTrainingStepIndex] = useState(0);
+  const [coachTourOpen, setCoachTourOpen] = useState(false);
+  const currentCoachTrainingStep = COACH_GUIDED_TRAINING_STEPS[coachTrainingStepIndex] || COACH_GUIDED_TRAINING_STEPS[0];
 
   const handleSignOut = async () => {
     try {
@@ -224,6 +281,50 @@ const CoachDashboard: React.FC = () => {
   const scrollToAthletesSection = () => {
     if (typeof window === 'undefined') return;
     document.getElementById('coach-athletes-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const completeCoachGuidedTraining = async (status: 'completed' | 'dismissed' = 'completed') => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('pulsecheck_coach_guided_training_status', status);
+    }
+    setCoachTrainingVisible(false);
+    setCoachTourOpen(false);
+
+    if (!currentUser?.id) return;
+    try {
+      await setDoc(
+        doc(db, 'users', currentUser.id),
+        {
+          coachGuidedTraining: {
+            status,
+            lastStep: coachTrainingStepIndex,
+            completedAt: status === 'completed' ? serverTimestamp() : null,
+            dismissedAt: status === 'dismissed' ? serverTimestamp() : null,
+          },
+        },
+        { merge: true }
+      );
+    } catch (trainingError) {
+      console.warn('[CoachDashboard] Failed to persist coach guided training status:', trainingError);
+    }
+  };
+
+  const handleCoachTrainingAction = () => {
+    if (coachTrainingStepIndex === 0) {
+      if (latestSportsIntelligenceReport) {
+        router.push(`${latestSportsIntelligenceReport.href}?training=1`);
+      }
+      return;
+    }
+    if (coachTrainingStepIndex === 1) {
+      document.getElementById('coach-follow-up-training')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if (coachTrainingStepIndex === 2) {
+      scrollToAthletesSection();
+      return;
+    }
+    void completeCoachGuidedTraining('completed');
   };
 
   const openCoachNotification = async (notification?: CoachNotificationDoc) => {
@@ -269,6 +370,23 @@ const CoachDashboard: React.FC = () => {
 
     return () => unsubscribe();
   }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser?.id || loading || userLoading) return;
+    const queryTraining = router.query.training === '1';
+    const storedStatus = typeof window !== 'undefined'
+      ? window.localStorage.getItem('pulsecheck_coach_guided_training_status')
+      : null;
+
+    if (queryTraining || !storedStatus) {
+      setCoachTrainingVisible(true);
+      setCoachTrainingStepIndex(0);
+    }
+    if (router.query.tour === '1') {
+      setCoachTrainingVisible(true);
+      setCoachTourOpen(true);
+    }
+  }, [currentUser?.id, loading, router.query.tour, router.query.training, userLoading]);
 
   const unreadNotificationCount = coachNotifications.filter((notification) => !notification.read).length;
   const actionNotificationCount = coachNotifications.filter((notification) => notification.actionRequired && !notification.read).length;
@@ -760,6 +878,112 @@ const CoachDashboard: React.FC = () => {
           />
           </div>
 
+        <AnimatePresence>
+          {coachTrainingVisible ? (
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ delay: 0.42 }}
+              className="mb-10"
+              data-tour="coach-guided-card"
+            >
+              <GlassCard accentColor="#6EE7B7" hoverEffect={false}>
+                <div className="p-6 lg:p-7">
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="max-w-3xl">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#6EE7B7]/30 bg-[#6EE7B7]/10">
+                          <BookOpenCheck className="h-5 w-5 text-[#6EE7B7]" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6EE7B7]">Guided Training</p>
+                          <h2 className="mt-1 text-2xl font-semibold text-white">Coach dashboard walkthrough</h2>
+                        </div>
+                      </div>
+                      <p className="mt-4 text-sm leading-relaxed text-zinc-300">
+                        Use this during onboarding or revisit it anytime. It teaches the order of attention: latest report, follow-up queue, roster context, then data-quality judgment.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void completeCoachGuidedTraining('dismissed')}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-zinc-400 transition hover:text-white"
+                      aria-label="Dismiss guided training"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="mt-6 grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
+                    <div className="grid gap-2">
+                      {COACH_GUIDED_TRAINING_STEPS.map((step, index) => (
+                        <button
+                          key={step.title}
+                          type="button"
+                          onClick={() => setCoachTrainingStepIndex(index)}
+                          className={`rounded-2xl border px-4 py-3 text-left transition ${
+                            index === coachTrainingStepIndex
+                              ? 'border-[#6EE7B7]/45 bg-[#6EE7B7]/10 text-white'
+                              : 'border-white/10 bg-black/20 text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                          }`}
+                        >
+                          <div className="text-xs font-semibold uppercase tracking-[0.18em]">Step {index + 1}</div>
+                          <div className="mt-1 text-sm font-semibold">{step.title}</div>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6EE7B7]">
+                            {coachTrainingStepIndex + 1} of {COACH_GUIDED_TRAINING_STEPS.length}
+                          </div>
+                          <h3 className="mt-2 text-xl font-semibold text-white">{currentCoachTrainingStep.title}</h3>
+                        </div>
+                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300">
+                          {Math.round(((coachTrainingStepIndex + 1) / COACH_GUIDED_TRAINING_STEPS.length) * 100)}%
+                        </span>
+                      </div>
+                      <p className="mt-4 text-sm leading-7 text-zinc-300">{currentCoachTrainingStep.body}</p>
+                      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={handleCoachTrainingAction}
+                          disabled={coachTrainingStepIndex === 0 && !latestSportsIntelligenceReport}
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#E0FE10] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-105 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500"
+                        >
+                          {currentCoachTrainingStep.action}
+                          <ArrowRight className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCoachTourOpen(true)}
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#6EE7B7]/30 bg-[#6EE7B7]/10 px-5 py-3 text-sm font-semibold text-[#6EE7B7] transition hover:bg-[#6EE7B7]/15"
+                        >
+                          Start Walkthrough
+                          <ArrowRight className="h-4 w-4" />
+                        </button>
+                        {coachTrainingStepIndex < COACH_GUIDED_TRAINING_STEPS.length - 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => setCoachTrainingStepIndex((current) => Math.min(current + 1, COACH_GUIDED_TRAINING_STEPS.length - 1))}
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-zinc-200 transition hover:bg-white/10"
+                          >
+                            Next Training Step
+                            <ArrowRight className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </GlassCard>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -771,7 +995,7 @@ const CoachDashboard: React.FC = () => {
             hoverEffect={Boolean(latestSportsIntelligenceReport)}
             onClick={latestSportsIntelligenceReport ? () => router.push(latestSportsIntelligenceReport.href) : undefined}
           >
-            <div className="p-6 lg:p-7">
+            <div className="p-6 lg:p-7" data-tour="coach-latest-report">
               <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex items-start gap-4">
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#10B981]/40 bg-[#10B981]/15">
@@ -847,6 +1071,8 @@ const CoachDashboard: React.FC = () => {
         </motion.div>
 
         <motion.div
+          id="coach-follow-up-training"
+          data-tour="coach-follow-up"
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
@@ -1130,6 +1356,7 @@ const CoachDashboard: React.FC = () => {
         {/* Athletes Section */}
         <motion.div
           id="coach-athletes-section"
+          data-tour="coach-roster"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
@@ -1260,6 +1487,18 @@ const CoachDashboard: React.FC = () => {
           </motion.div>
         )}
       </div>
+      <GuidedTour
+        open={coachTourOpen}
+        steps={COACH_DASHBOARD_TOUR_STEPS}
+        accentColor="#6EE7B7"
+        storageKey="pulsecheck_coach_click_tour_status"
+        onClose={(status) => {
+          setCoachTourOpen(false);
+          if (status === 'completed') {
+            void completeCoachGuidedTraining('completed');
+          }
+        }}
+      />
     </CoachLayout>
   );
 };

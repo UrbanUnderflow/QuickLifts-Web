@@ -39,6 +39,40 @@ export type PulseCheckTeamMembershipRole =
   | 'support-staff'
   | 'clinician'
   | 'athlete';
+export type PulseCheckOnboardingTrackerStepId =
+  | 'intake'
+  | 'provisioning'
+  | 'coach-kickoff'
+  | 'dashboard-training'
+  | 'team-rollout'
+  | 'device-sync'
+  | 'first-check-in'
+  | 'first-training'
+  | 'weekly-snapshot'
+  | 'stakeholder-cadence';
+export type PulseCheckOnboardingTrackerStepStatus = 'pending' | 'in-progress' | 'complete' | 'blocked';
+
+export interface PulseCheckOnboardingTrackerStepState {
+  status: PulseCheckOnboardingTrackerStepStatus;
+  owner?: string;
+  dueDate?: string;
+  note?: string;
+  updatedByUserId?: string;
+  updatedByEmail?: string;
+  updatedAt?: Timestamp | null;
+}
+
+export interface PulseCheckOnboardingTrackerState {
+  version?: string;
+  steps?: Partial<Record<PulseCheckOnboardingTrackerStepId, PulseCheckOnboardingTrackerStepState>>;
+  launchTargetDate?: string;
+  weeklySnapshotDay?: string;
+  stakeholderCadence?: string;
+  notes?: string;
+  updatedByUserId?: string;
+  updatedByEmail?: string;
+  updatedAt?: Timestamp | null;
+}
 
 export interface PulseCheckTeamCommercialConfig {
   commercialModel: PulseCheckTeamCommercialModel;
@@ -336,6 +370,7 @@ export interface PulseCheckTeamImplementationMetadata {
   sourceBriefPath?: string;
   routingDefaultsMode?: 'organization-default-optional' | 'organization-default-required' | 'team-clinician-profile' | 'team-hotline';
   invitePosture?: PulseCheckInvitePolicy;
+  onboardingTracker?: PulseCheckOnboardingTrackerState;
   provisionedBy?: string;
   provisionedAt?: Timestamp | null;
   notes?: string;

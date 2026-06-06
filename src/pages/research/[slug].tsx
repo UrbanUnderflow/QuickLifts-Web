@@ -7,12 +7,19 @@ import PageHead from '../../components/PageHead';
 import ArticleAudioPlayer from '../../components/ArticleAudioPlayer';
 import { getFirestoreDocFallback } from '../../lib/server-firestore-fallback';
 import { getResearchArticleOverride } from '../../content/research/mental-game-white-paper';
+import {
+  getResearchArticleAccessCookieName,
+  isResearchArticlePasswordProtected,
+  verifyResearchArticleAccessCookieValue,
+} from '../../lib/researchArticleAccess';
 
 // Known research article slugs (add new articles here)
 const RESEARCH_SLUGS = ['the-system'] as const;
 const FEATURED_IMAGE_BY_SLUG: Record<string, string> = {
   'training-the-mental-game-a-simulation-based-architecture-for-mental-performance-in-sport':
     '/research-training-mental-game-white-paper.webp',
+  'ai-supported-escalation-human-clinical-handoff-and-return-to-training-pathways':
+    '/auntedna-mark.png',
 };
 
 const normalizeResearchArticleCopy = (content: string) =>
@@ -20,6 +27,28 @@ const normalizeResearchArticleCopy = (content: string) =>
     .replace(/\bThe Kill Switch\b/g, 'The Reset Switch')
     .replace(/\bthe Kill Switch\b/g, 'the Reset Switch')
     .replace(/\bKill Switch\b/g, 'Reset Switch');
+
+const resolveResearchArticleAccessState = (
+  slug: string,
+  cookies: Partial<Record<string, string>>,
+) => {
+  const isProtected = isResearchArticlePasswordProtected(slug);
+  if (!isProtected) {
+    return {
+      isProtected: false,
+      isLocked: false,
+      unlockEndpoint: `/api/research/${encodeURIComponent(slug)}/unlock`,
+    };
+  }
+
+  const accessCookie = cookies[getResearchArticleAccessCookieName(slug)];
+  const isUnlocked = verifyResearchArticleAccessCookieValue(slug, accessCookie);
+  return {
+    isProtected,
+    isLocked: !isUnlocked,
+    unlockEndpoint: `/api/research/${encodeURIComponent(slug)}/unlock`,
+  };
+};
 
 // ─── Article content for audio narration ────────────────────────────
 const THE_SYSTEM_ARTICLE_TEXT = `
@@ -178,7 +207,7 @@ And that's where my interests converge: health, performance, technology, and the
 The body was always the original operating system. We're just finally building the dashboard.
 `;
 
-export const getServerSideProps: GetServerSideProps = async ({ params, query }) => {
+export const getServerSideProps: GetServerSideProps = async ({ params, query, req, res }) => {
   const slug = params?.slug as string;
   const forceDevFirebase = query.devFirebase === '1';
 
@@ -198,6 +227,49 @@ export const getServerSideProps: GetServerSideProps = async ({ params, query }) 
           image: 'https://fitwithpulse.ai/research-the-system-featured.png',
           url: `https://fitwithpulse.ai/research/${slug}`,
           lastUpdated: '2026-02-05T00:00:00.000Z',
+        },
+      },
+    };
+  }
+
+  const localArticleOverride = getResearchArticleOverride(slug);
+
+  if (localArticleOverride) {
+    const articleAccess = resolveResearchArticleAccessState(slug, req.cookies);
+    if (articleAccess.isProtected) {
+      res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+    }
+
+    const featuredImage = localArticleOverride.featuredImage || FEATURED_IMAGE_BY_SLUG[slug] || '';
+    let ogImage = featuredImage;
+    if (ogImage && !ogImage.startsWith('http')) {
+      ogImage = `https://fitwithpulse.ai${ogImage}`;
+    }
+    if (!ogImage) {
+      ogImage = 'https://fitwithpulse.ai/research-the-system-featured.png';
+    }
+
+    const articleData = {
+      ...localArticleOverride,
+      slug,
+      featuredImage,
+      content: articleAccess.isLocked ? '' : normalizeResearchArticleCopy(String(localArticleOverride.content || '')),
+      createdAt: localArticleOverride.createdAt || null,
+      updatedAt: localArticleOverride.updatedAt || localArticleOverride.publishedAt || null,
+      publishedAt: localArticleOverride.publishedAt || null,
+    };
+
+    return {
+      props: {
+        slug,
+        articleData,
+        articleAccess,
+        ogMeta: {
+          title: articleData.title || 'Pulse Research',
+          description: articleData.excerpt || articleData.subtitle || 'Research from Pulse Intelligence Labs.',
+          image: ogImage,
+          url: `https://fitwithpulse.ai/research/${slug}`,
+          lastUpdated: articleData.updatedAt || articleData.publishedAt || new Date().toISOString(),
         },
       },
     };
@@ -223,18 +295,18 @@ export const getServerSideProps: GetServerSideProps = async ({ params, query }) 
       data = await getFirestoreDocFallback('researchArticles', slug, forceDevFirebase);
     }
 
-    if (!data) {
+    if (!data && !localArticleOverride) {
       return { notFound: true };
     }
 
     // Only show published articles
-    if (data.status !== 'published') {
+    if (data?.status && data.status !== 'published') {
       return { notFound: true };
     }
 
     // Fetch author profile if available
     let authorTitle = '';
-    if (data.author) {
+    if (data?.author) {
       try {
         const authorSlug = String(data.author).toLowerCase().replace(/\s+/g, '-');
         const authorDoc = await db.collection('authorProfiles').doc(authorSlug).get();
@@ -253,7 +325,13 @@ export const getServerSideProps: GetServerSideProps = async ({ params, query }) 
       }
     }
 
-    const articleOverride = getResearchArticleOverride(slug);
+    const articleOverride = localArticleOverride;
+    const resolvedAuthorTitle =
+      authorTitle ||
+      String(articleOverride?.authorTitle || data?.authorTitle || '');
+    const fallbackPublishedAt = articleOverride?.publishedAt || null;
+    const fallbackUpdatedAt = articleOverride?.updatedAt || fallbackPublishedAt;
+    const fallbackCreatedAt = articleOverride?.createdAt || fallbackPublishedAt;
 
     // Serialize Firestore timestamps
     const featuredImage =
@@ -262,16 +340,21 @@ export const getServerSideProps: GetServerSideProps = async ({ params, query }) 
       FEATURED_IMAGE_BY_SLUG[slug] ||
       '';
 
+    const articleAccess = resolveResearchArticleAccessState(slug, req.cookies);
+    if (articleAccess.isProtected) {
+      res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+    }
+
     const articleData = {
-      ...data,
-      ...articleOverride,
+      ...(data || {}),
+      ...(articleOverride || {}),
       slug,
-      authorTitle,
+      authorTitle: resolvedAuthorTitle,
       featuredImage,
-      content: normalizeResearchArticleCopy(String(articleOverride?.content || data?.content || '')),
-      createdAt: data?.createdAt?.toDate?.()?.toISOString() || null,
-      updatedAt: data?.updatedAt?.toDate?.()?.toISOString() || null,
-      publishedAt: data?.publishedAt?.toDate?.()?.toISOString() || null,
+      content: articleAccess.isLocked ? '' : normalizeResearchArticleCopy(String(articleOverride?.content || data?.content || '')),
+      createdAt: data?.createdAt?.toDate?.()?.toISOString() || fallbackCreatedAt,
+      updatedAt: data?.updatedAt?.toDate?.()?.toISOString() || fallbackUpdatedAt,
+      publishedAt: data?.publishedAt?.toDate?.()?.toISOString() || fallbackPublishedAt,
     };
 
     // Build OG image URL — ensure absolute
@@ -291,7 +374,7 @@ export const getServerSideProps: GetServerSideProps = async ({ params, query }) 
       lastUpdated: articleData.updatedAt || articleData.publishedAt || new Date().toISOString(),
     };
 
-    return { props: { slug, articleData, ogMeta } };
+    return { props: { slug, articleData, articleAccess, ogMeta } };
   } catch (error) {
     console.error('Error fetching article:', error);
     return { notFound: true };
@@ -383,9 +466,16 @@ interface OgMeta {
   lastUpdated: string;
 }
 
+interface ResearchArticleAccessState {
+  isProtected: boolean;
+  isLocked: boolean;
+  unlockEndpoint: string;
+}
+
 interface ResearchArticlePageProps {
   slug: string;
   articleData: DynamicArticle | null;
+  articleAccess?: ResearchArticleAccessState | null;
   ogMeta: OgMeta;
 }
 
@@ -495,6 +585,17 @@ const WhitePaperContent: React.FC<{ article: DynamicArticle }> = ({ article }) =
 
   // Render content in white-paper style
   const renderWhitePaperContent = (content: string): React.ReactNode[] => {
+    const isMarkdownTableRow = (line: string) => /^\|.+\|$/.test(line.trim());
+    const isMarkdownTableDivider = (line: string) =>
+      /^\|\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|$/.test(line.trim());
+    const parseMarkdownTableRow = (line: string) =>
+      line
+        .trim()
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split('|')
+        .map((cell) => cell.trim());
+
     // Split on custom block tokens first
     const blockRegex = /:::(abstract|references|blocks|callout|stat)\n([\s\S]*?):::/g;
     const segments: { type: string; content: string }[] = [];
@@ -511,15 +612,22 @@ const WhitePaperContent: React.FC<{ article: DynamicArticle }> = ({ article }) =
     segments.forEach((seg, si) => {
       // Abstract block
       if (seg.type === 'abstract') {
+        const abstractParagraphs = seg.content
+          .split(/\n{2,}/)
+          .map((paragraph) => paragraph.trim())
+          .filter(Boolean);
+
         nodes.push(
           <div key={`abstract-${si}`} className="my-10 border border-stone-300 rounded-xl overflow-hidden">
             <div className="bg-stone-100 border-b border-stone-300 px-6 py-3">
               <p className="text-xs font-bold uppercase tracking-widest text-stone-500">Abstract</p>
             </div>
-            <div className="px-6 py-6">
-              <p className="text-base text-stone-700 leading-[1.9]" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-                {parseInline(seg.content)}
-              </p>
+            <div className="px-6 py-6 space-y-5">
+              {abstractParagraphs.map((paragraph, pi) => (
+                <p key={pi} className="text-base text-stone-700 leading-[1.9]" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+                  {parseInline(paragraph)}
+                </p>
+              ))}
             </div>
           </div>
         );
@@ -581,6 +689,7 @@ const WhitePaperContent: React.FC<{ article: DynamicArticle }> = ({ article }) =
       // This is robust regardless of whether blank lines exist after headings
       const lines = seg.content.split('\n');
       let pendingParaLines: string[] = [];
+      let pendingTableLines: string[] = [];
 
       const flushPara = (keyPrefix: string, idx: number) => {
         if (pendingParaLines.length === 0) return;
@@ -624,9 +733,60 @@ const WhitePaperContent: React.FC<{ article: DynamicArticle }> = ({ article }) =
         });
       };
 
+      const flushTable = (keyPrefix: string, idx: number) => {
+        if (pendingTableLines.length === 0) return;
+        const tableLines = pendingTableLines;
+        pendingTableLines = [];
+        if (tableLines.length < 2 || !isMarkdownTableDivider(tableLines[1])) {
+          pendingParaLines.push(...tableLines);
+          return;
+        }
+
+        const headers = parseMarkdownTableRow(tableLines[0]);
+        const rows = tableLines.slice(2).filter((row) => !isMarkdownTableDivider(row));
+
+        nodes.push(
+          <div key={`${keyPrefix}-table-${idx}`} className="my-8 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+            <table className="w-full min-w-[720px] border-collapse text-left" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+              <thead className="bg-stone-100">
+                <tr>
+                  {headers.map((header, hi) => (
+                    <th key={hi} className="border-b border-stone-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-stone-500">
+                      {parseInline(header)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, ri) => {
+                  const cells = parseMarkdownTableRow(row);
+                  return (
+                    <tr key={ri} className="border-b border-stone-100 last:border-b-0">
+                      {headers.map((_, ci) => (
+                        <td key={ci} className="align-top px-4 py-4 text-sm leading-relaxed text-stone-600">
+                          {parseInline(cells[ci] || '')}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+      };
+
       lines.forEach((rawLine, li) => {
         const line = rawLine.trim();
         const key = `${si}-${li}`;
+
+        if (isMarkdownTableRow(line)) {
+          flushPara(`${si}`, li);
+          pendingTableLines.push(line);
+          return;
+        }
+
+        flushTable(`${si}`, li);
 
         // Level-1 section heading
         if (line.startsWith('# ')) {
@@ -673,6 +833,7 @@ const WhitePaperContent: React.FC<{ article: DynamicArticle }> = ({ article }) =
       });
 
       // Flush any remaining paragraph lines
+      flushTable(`${si}`, lines.length);
       flushPara(`${si}`, lines.length);
     });
 
@@ -903,6 +1064,131 @@ const DynamicArticleContent: React.FC<{ article: DynamicArticle }> = ({ article 
     return <WhitePaperContent article={article} />;
   }
   return <StandardArticleContent article={article} />;
+};
+
+const ProtectedResearchArticleGate: React.FC<{
+  article: DynamicArticle;
+  articleAccess: ResearchArticleAccessState;
+}> = ({ article, articleAccess }) => {
+  const [password, setPassword] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+
+  const handleUnlock = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedPassword = password.trim();
+    if (!normalizedPassword) {
+      setUnlockError('Enter the white paper password.');
+      return;
+    }
+
+    setUnlocking(true);
+    setUnlockError(null);
+
+    try {
+      const response = await fetch(articleAccess.unlockEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: normalizedPassword }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Incorrect password.');
+      }
+
+      window.location.reload();
+    } catch (error) {
+      setUnlockError(error instanceof Error ? error.message : 'Failed to unlock white paper.');
+      setUnlocking(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#FAFAF7]">
+      <nav className="sticky top-0 z-50 bg-[#FAFAF7]/90 backdrop-blur-md border-b border-stone-200/60">
+        <div className="max-w-5xl mx-auto px-6 md:px-8">
+          <div className="flex items-center justify-between h-16">
+            <Link href="/research" className="flex items-center gap-3 group">
+              <img src="/pulse-logo.svg" alt="Pulse" className="h-7" />
+              <span className="text-sm text-stone-400 font-medium group-hover:text-stone-600 transition-colors">
+                Research
+              </span>
+            </Link>
+            <Link href="/research" className="text-sm text-stone-500 hover:text-stone-900 transition-colors">
+              All articles
+            </Link>
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-5xl mx-auto px-6 md:px-8 py-16 md:py-24">
+        <div className="grid gap-10 lg:grid-cols-[1fr_380px] lg:items-start">
+          <section>
+            <div className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5">
+              <span className="text-xs font-semibold uppercase tracking-widest text-stone-500">Link-only white paper</span>
+              <span className="h-1 w-1 rounded-full bg-stone-300" />
+              <span className="text-xs text-stone-400">{article.category}</span>
+            </div>
+            <h1 className="mt-7 text-4xl md:text-5xl font-bold leading-tight tracking-tight text-stone-900">
+              {article.title}
+            </h1>
+            {article.subtitle && (
+              <p className="mt-5 max-w-2xl text-lg leading-8 text-stone-500">
+                {article.subtitle}
+              </p>
+            )}
+            <div className="mt-8 flex flex-wrap items-center gap-3 text-sm text-stone-500">
+              <span className="font-medium text-stone-700">{article.author}</span>
+              <span className="text-stone-300">·</span>
+              <span>{article.readTime}</span>
+              <span className="text-stone-300">·</span>
+              <span>Password protected</span>
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-stone-400">
+              Private access
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold text-stone-900">
+              Enter password
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-stone-500">
+              This white paper is available by direct link only. Enter the shared password to view the full paper.
+            </p>
+
+            <form className="mt-6" onSubmit={handleUnlock}>
+              <label htmlFor="research-article-password" className="block text-sm font-medium text-stone-700">
+                Password
+              </label>
+              <input
+                id="research-article-password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
+                className="mt-2 w-full rounded-lg border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none transition focus:border-stone-500 focus:ring-2 focus:ring-stone-200"
+                placeholder="Enter password"
+              />
+
+              {unlockError && (
+                <p className="mt-3 text-sm text-red-700">{unlockError}</p>
+              )}
+
+              <button
+                type="submit"
+                disabled={unlocking}
+                className="mt-5 inline-flex min-h-[46px] w-full items-center justify-center rounded-lg bg-stone-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {unlocking ? 'Unlocking...' : 'Unlock white paper'}
+              </button>
+            </form>
+          </section>
+        </div>
+      </main>
+    </div>
+  );
 };
 
 // ─── Standard Article Renderer ─────────────────────────────────────
@@ -1460,11 +1746,13 @@ const StandardArticleContent: React.FC<{ article: DynamicArticle }> = ({ article
 };
 
 // ─── Article page ──────────────────────────────────────────────────
-const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug, articleData, ogMeta }) => {
+const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug, articleData, articleAccess, ogMeta }) => {
   const [showToc, setShowToc] = useState(false);
 
   // If articleData is provided, render the dynamic article
   if (articleData) {
+    const isLocked = Boolean(articleAccess?.isLocked);
+
     return (
       <>
         {/* OG tags rendered at page-level for reliable SSR — crawlers see these in initial HTML */}
@@ -1480,7 +1768,11 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug, article
           pageOgUrl={ogMeta.url}
           pageOgImage={ogMeta.image}
         />
-        <DynamicArticleContent article={articleData} />
+        {isLocked && articleAccess ? (
+          <ProtectedResearchArticleGate article={articleData} articleAccess={articleAccess} />
+        ) : (
+          <DynamicArticleContent article={articleData} />
+        )}
       </>
     );
   }

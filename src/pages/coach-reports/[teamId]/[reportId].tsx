@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { AlertTriangle, ArrowLeft, CalendarDays, Lock, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, BookOpenCheck, CalendarDays, Lock, RefreshCw } from 'lucide-react';
 
 import CoachReportView from '../../../components/coach-reports/CoachReportView';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
@@ -208,6 +208,7 @@ const CoachReportPage: React.FC = () => {
     if (!state.report || !sport) return null;
     return hydrateCoachSurfaceMeta(state.report, state.teamName, sport);
   }, [sport, state.report, state.teamName]);
+  const trainingMode = router.query.training === '1';
 
   if (state.status === 'loading') {
     return (
@@ -318,6 +319,28 @@ const CoachReportPage: React.FC = () => {
             <ArrowLeft className="h-4 w-4" />
             Back to coach home
           </Link>
+          {trainingMode ? (
+            <div className="mb-5 rounded-3xl border border-emerald-400/20 bg-emerald-400/[0.08] p-5">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/30 bg-emerald-400/10">
+                  <BookOpenCheck className="h-5 w-5 text-emerald-200" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-200">Guided Training</p>
+                  <h2 className="mt-2 text-xl font-semibold text-white">Read this report in order</h2>
+                  <p className="mt-3 text-sm leading-7 text-zinc-300">
+                    Start with the weekly snapshot, then the follow-up queue, priority this week, coach actions, and data coverage. Do not act on a single thin signal without checking coverage and trend context.
+                  </p>
+                  <Link
+                    href="/coach/dashboard?training=1"
+                    className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-zinc-200"
+                  >
+                    Return to training card
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ) : null}
           <CoachReportView report={coachSurface} sport={sport} />
         </div>
       </div>

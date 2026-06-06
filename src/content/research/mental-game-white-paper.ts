@@ -1,3 +1,9 @@
+import {
+  AUNTEDNA_ESCALATION_WHITE_PAPER_CONTENT,
+  AUNTEDNA_ESCALATION_WHITE_PAPER_METADATA,
+  AUNTEDNA_ESCALATION_WHITE_PAPER_SLUG,
+} from './auntedna-escalation-white-paper';
+
 export const TRAINING_MENTAL_GAME_WHITE_PAPER_SLUG =
   'training-the-mental-game-a-simulation-based-architecture-for-mental-performance-in-sport';
 
@@ -8,8 +14,15 @@ export const TRAINING_MENTAL_GAME_WHITE_PAPER_METADATA = {
   excerpt:
     'A white paper on Pulse Check as a two-lane mental performance system: protocols for regulation, simulations for sharpening, and curriculum that builds automaticity over time.',
   category: 'Performance Science',
+  author: 'Tremaine Grant',
+  authorTitle: 'Founder of Pulse Intelligence Labs',
   readTime: '34 min read',
   contentType: 'white-paper' as const,
+  featured: false,
+  status: 'published' as const,
+  createdAt: '2026-06-05T00:00:00.000Z',
+  updatedAt: '2026-06-05T00:00:00.000Z',
+  publishedAt: '2026-06-05T00:00:00.000Z',
   featuredImage: '/research-training-mental-game-white-paper.webp',
 };
 
@@ -37,6 +50,16 @@ None of those approaches, by themselves, create a complete training system. A co
 Pulse Check addresses that gap by combining two complementary forms of training. Simulations create serious mental training environments that target and measure cognitive-perceptual skills under controlled stress. Protocols provide bounded mental interventions that help athletes regulate, prime, recover, and apply the right state before a simulation, trial, practice exposure, or competition moment.
 
 Pulse Check is a protocol and simulation system. Protocols help the athlete change state. Simulations test and sharpen execution under pressure. Curriculum ties both together over time so the athlete is not hoping to remember a tool on competition day; they are building a practiced response that has already been rehearsed, measured, and refined.
+
+## 1.1 What This Looks Like in Practice
+
+Consider an athlete who opens Pulse Check after a difficult practice. They report feeling keyed up, frustrated by a mistake, and unsure whether they should push into another pressure challenge. If a connected device is available, the state layer may also see that recovery markers are below that athlete's recent baseline. A generic app might serve a relaxation clip or a reaction game. Pulse Check should do something more specific.
+
+Nora first reads the current state pattern. If the main bottleneck is overactivation, Nora may assign a short regulation protocol such as Box Breathing or Nerves to Excitement. The athlete practices the intervention inside a bounded exchange, and the system records whether the athlete can name the body signal, apply the technique, and describe a useful shift. If the athlete becomes more available for challenge, Nora can then assign The Reset Switch to test whether the athlete can return to task focus after disruption.
+
+The output is not a vague claim that the athlete "worked on mindset." The system can compare pre-protocol state, protocol completion quality, recovery latency, first-post-reset accuracy, false starts, and stability across repeated disruptions. The coach can see whether regulation improved the quality of the following simulation, whether the athlete needs another exposure, or whether the next useful action is recovery rather than pressure work.
+
+That is the product thesis in miniature: read state, choose a bounded intervention, test execution under pressure, and use the result to shape the next training decision.
 
 # 2. Scientific Foundations
 
@@ -251,6 +274,10 @@ This slate gives the athlete a living toolkit. They are not waiting until a comp
 
 The slate also solves a practical coaching problem. If the system assigns only one protocol and one simulation at a time, the athlete may become too narrow. They might improve one skill while neglecting the broader toolkit needed for competition. A six-exercise slate keeps mental training broad enough to build range while still focused enough to avoid overload.
 
+Six is a design constraint, not a claim that the number is biologically magic. Working-memory research suggests that people can hold only a small number of active items in attention at once, and choice-overload research shows that large option sets can reduce follow-through when the decision context is uncertain. [cite:20,21] At the same time, skill durability depends on revisiting material across time rather than cramming it into a single exposure. [cite:22]
+
+The six-exercise slate therefore balances three demands. It is small enough for an athlete and coach to understand quickly. It is broad enough to keep regulation, priming, recovery, and cognitive-perceptual challenge in the same training plan. And it is stable enough for repeated exposure, so Nora can observe whether practice is producing mastery instead of constantly chasing novelty.
+
 ## 6.2 Mastery and Rotation
 
 Each active exercise has a mastery model. Mastery does not mean perfection. It means the athlete has shown enough reliable performance, completion quality, and state-fit evidence that the exercise can graduate from active curriculum emphasis.
@@ -359,6 +386,18 @@ The system distinguishes between:
 - Protocol effectiveness: a protocol produces the intended state shift and improves the usefulness of downstream execution.
 - Curriculum effectiveness: the system's plan structure improves durability, adherence, automaticity, and performance over time.
 
+## 9.1 Evidence Map
+
+The evidence posture should be visible at the level of each major product claim. This keeps the paper from blending established science, plausible design translation, and unproven implementation outcomes into one overconfident story.
+
+| Product claim | Mechanism support | Pulse Check implementation | Current evidence posture | Next validation step |
+| --- | --- | --- | --- | --- |
+| Protocols can help athletes shift state before or after demanding moments. | Slow breathing, reappraisal, self-talk, and imagery have mechanism-level and intervention support. [cite:16,17,18,19] | Published protocol registry, target state shifts, bounded practice, pre/post state capture, downstream simulation comparison. | Mechanism-supported. Product-specific effectiveness still needs pilot data. | Compare protocol-to-simulation sequences against simulation-only assignments within similar state windows. |
+| Simulations can train and measure cognitive-perceptual pressure skills. | Attentional control, executive function, and stress inoculation support the target mechanisms, while sport cognitive-training reviews warn that transfer is not automatic. [cite:1,3,4,23] | Reset, Noise Gate, Brake Point, Signal Window, Sequence Shift, and Endurance Lock with raw metrics and pressure modifiers. | Mechanism-supported and internally instrumentable. Transfer validity remains an earned claim. | Establish reliability, construct validity, and sport-relevant transfer signals across pilot cohorts. |
+| A small active slate can support automaticity without overwhelming the athlete. | Automatic processing, working-memory limits, choice-overload findings, and distributed practice support compact recurring practice. [cite:9,10,11,12,20,21,22] | Three active protocols plus three active simulations, with mastery, maintenance, and rotation. | Design-supported. The exact slate size should remain adjustable if pilot evidence shows a better operating range. | Track adherence, mastery speed, retention, and athlete-reported usability across different slate sizes. |
+| State-aware planning should improve assignment fit. | Self-regulation and pressure-performance research support matching interventions to state, but assignment logic must be validated. [cite:2,3,17] | Nora reads state snapshots, profile history, protocol responsiveness, simulation outcomes, and coach constraints before choosing from approved inventory. | Strong product hypothesis. It should not be framed as proven personalization until compared against simpler rules. | Compare state-aware planning against static curriculum and coach-selected assignment baselines. |
+| Physiology can improve interpretation of mental performance data. | Wearables can inform body-state context, but body-state relationships should be treated as correlations unless stronger designs support causal claims. | Health-context records, source freshness, personal thresholds, simulation outcomes, and protocol responsiveness feed the correlation roadmap. | Correlation-only roadmap. Useful for interpretation, not standalone readiness authority. | Run preregistered pilot analyses that control for sleep, training load, injury status, sport, and schedule context. |
+
 Validation must also include pilot outcome metrics. Enrollment, adherence, mental performance improvement, escalations, speed to care, trust, and recommendation intent all matter. A mental training system that produces scores but loses athlete trust is not succeeding.
 
 For research readouts, Pulse Check uses frozen evidence frames. A readout locks to one pilot, one date window, one cohort filter, one read-model version, and one set of metrics. Claims are tagged as observed, inferred, or speculative. Unsupported sections are suppressed rather than dressed up with confident language. Human review remains the authority before stronger claims become official.
@@ -417,14 +456,25 @@ Mental performance training deserves the same rigor as physical performance trai
 [13] Beilock, S. L., & Carr, T. H. (2001). On the fragility of skilled performance: What governs choking under pressure? Journal of Experimental Psychology: General, 130(4), 701-725.
 [14] Masters, R. S. W. (1992). Knowledge, knerves and know-how: The role of explicit versus implicit knowledge in the breakdown of a complex motor skill under pressure. British Journal of Psychology, 83(3), 343-358.
 [15] Wulf, G., & Prinz, W. (2001). Directing attention to movement effects enhances learning: A review. Psychonomic Bulletin & Review, 8(4), 648-660.
-[16] Ma, X., Yue, Z. Q., Gong, Z. Q., Zhang, H., Duan, N. Y., Shi, Y. T., Wei, G. X., & Li, Y. F. (2023). The effect of slow-paced breathing on cardiovascular and emotion functions: A meta-analysis and systematic review. Mindfulness.
+[16] Ma, X., Yue, Z. Q., Gong, Z. Q., Zhang, H., Duan, N. Y., Shi, Y. T., Wei, G. X., & Li, Y. F. (2024). The effect of slow-paced breathing on cardiovascular and emotion functions: A meta-analysis and systematic review. Mindfulness, 15, 1-18.
 [17] Brooks, A. W. (2014). Get excited: Reappraising pre-performance anxiety as excitement. Journal of Experimental Psychology: General, 143(3), 1144-1158.
 [18] Hatzigeorgiadis, A., Zourbanos, N., Galanis, E., & Theodorakis, Y. (2011). Self-talk and sports performance: A meta-analysis. Perspectives on Psychological Science, 6(4), 348-356.
-[19] Liu, Y., Li, D., Liu, C., & Liu, J. (2025). The effects of imagery practice on athletes' performance: A multilevel meta-analysis with systematic review. Behavioral Sciences.
+[19] Liu, Y., Zhao, S., Zhang, X., Zhang, X., Liang, T., & Ning, Z. (2025). The effects of imagery practice on athletes' performance: A multilevel meta-analysis with systematic review. Behavioral Sciences, 15(5), 685.
+[20] Cowan, N. (2001). The magical number 4 in short-term memory: A reconsideration of mental storage capacity. Behavioral and Brain Sciences, 24(1), 87-185.
+[21] Iyengar, S. S., & Lepper, M. R. (2000). When choice is demotivating: Can one desire too much of a good thing? Journal of Personality and Social Psychology, 79(6), 995-1006.
+[22] Cepeda, N. J., Pashler, H., Vul, E., Wixted, J. T., & Rohrer, D. (2006). Distributed practice in verbal recall tasks: A review and quantitative synthesis. Psychological Bulletin, 132(3), 354-380.
+[23] Harris, D. J., Wilson, M. R., & Vine, S. J. (2018). A systematic review of commercial cognitive training devices: Implications for use in sport. Frontiers in Psychology, 9, 709.
 :::
 `;
 
 export const getResearchArticleOverride = (slug: string) => {
+  if (slug === AUNTEDNA_ESCALATION_WHITE_PAPER_SLUG) {
+    return {
+      ...AUNTEDNA_ESCALATION_WHITE_PAPER_METADATA,
+      content: AUNTEDNA_ESCALATION_WHITE_PAPER_CONTENT,
+    };
+  }
+
   if (slug !== TRAINING_MENTAL_GAME_WHITE_PAPER_SLUG) return null;
 
   return {
@@ -433,11 +483,30 @@ export const getResearchArticleOverride = (slug: string) => {
   };
 };
 
+export const getLocalResearchArticleListItems = () => [
+  {
+    slug: AUNTEDNA_ESCALATION_WHITE_PAPER_SLUG,
+    ...AUNTEDNA_ESCALATION_WHITE_PAPER_METADATA,
+  },
+  {
+    slug: TRAINING_MENTAL_GAME_WHITE_PAPER_SLUG,
+    ...TRAINING_MENTAL_GAME_WHITE_PAPER_METADATA,
+  },
+];
+
 export const applyResearchArticleListOverride = <T extends { slug: string }>(article: T): T => {
   const override = getResearchArticleOverride(article.slug);
   if (!override) return article;
 
-  const { content: _content, ...metadata } = override;
+  const {
+    content: _content,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
+    publishedAt: _publishedAt,
+    status: _status,
+    featured: _featured,
+    ...metadata
+  } = override;
   return {
     ...article,
     ...metadata,

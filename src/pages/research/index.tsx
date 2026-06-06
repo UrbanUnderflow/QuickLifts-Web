@@ -5,13 +5,17 @@ import { motion } from 'framer-motion';
 import PageHead from '../../components/PageHead';
 import { collection, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { applyResearchArticleListOverride } from '../../content/research/mental-game-white-paper';
+import {
+  applyResearchArticleListOverride,
+  getLocalResearchArticleListItems,
+} from '../../content/research/mental-game-white-paper';
 
 // ─── Research categories ───────────────────────────────────────────
 const categories = [
   'All',
   'Metabolic Health',
   'Performance Science',
+  'Clinical Safety',
   'Technology',
   'Wearables',
   'Nutrition',
@@ -21,6 +25,8 @@ const categories = [
 const FEATURED_IMAGE_BY_SLUG: Record<string, string> = {
   'training-the-mental-game-a-simulation-based-architecture-for-mental-performance-in-sport':
     '/research-training-mental-game-white-paper.webp',
+  'ai-supported-escalation-human-clinical-handoff-and-return-to-training-pathways':
+    '/auntedna-mark.png',
 };
 
 // ─── Article interface ─────────────────────────────────────────────
@@ -35,6 +41,8 @@ interface Article {
   featured: boolean;
   featuredImage?: string;
   contentType?: 'article' | 'white-paper';
+  visibility?: 'public' | 'unlisted';
+  listed?: boolean;
   status: 'draft' | 'published' | 'archived';
   createdAt: Timestamp;
   publishedAt?: Timestamp;
@@ -88,6 +96,8 @@ const normalizeRestArticle = (document: FirestoreRestDocument): Article | null =
     featured: restBoolean(fields.featured),
     featuredImage: restString(fields.featuredImage) || undefined,
     contentType: (restString(fields.contentType) || 'article') as Article['contentType'],
+    visibility: (restString(fields.visibility) || 'public') as Article['visibility'],
+    listed: fields.listed?.booleanValue,
     status,
     createdAt,
     publishedAt,
@@ -101,6 +111,40 @@ const sortArticlesByPublishedDate = (articles: Article[]) =>
     return bTime - aTime;
   });
 
+const localResearchArticleToArticle = (
+  item: ReturnType<typeof getLocalResearchArticleListItems>[number],
+): Article => {
+  const createdAt = Timestamp.fromDate(new Date(item.createdAt || item.publishedAt));
+  const publishedAt = item.publishedAt ? Timestamp.fromDate(new Date(item.publishedAt)) : undefined;
+
+  return {
+    slug: item.slug,
+    title: item.title,
+    subtitle: item.subtitle,
+    author: item.author,
+    category: item.category,
+    readTime: item.readTime,
+    excerpt: item.excerpt,
+    featured: item.featured,
+    featuredImage: item.featuredImage,
+    contentType: item.contentType,
+    visibility: 'visibility' in item ? item.visibility : undefined,
+    listed: 'listed' in item ? item.listed : undefined,
+    status: item.status,
+    createdAt,
+    publishedAt,
+  };
+};
+
+const mergeLocalResearchArticles = (articles: Article[]) => {
+  const remoteSlugs = new Set(articles.map((article) => article.slug));
+  const localArticles = getLocalResearchArticleListItems()
+    .filter((article) => !remoteSlugs.has(article.slug))
+    .map(localResearchArticleToArticle);
+
+  return sortArticlesByPublishedDate([...articles, ...localArticles]);
+};
+
 const fetchProductionResearchArticlesFallback = async (): Promise<Article[]> => {
   const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'quicklifts-dd3f1';
   const response = await fetch(
@@ -112,11 +156,13 @@ const fetchProductionResearchArticlesFallback = async (): Promise<Article[]> => 
   }
 
   const payload = (await response.json()) as { documents?: FirestoreRestDocument[] };
-  return sortArticlesByPublishedDate(
+  const remoteArticles = sortArticlesByPublishedDate(
     (payload.documents || [])
       .map(normalizeRestArticle)
       .filter((article): article is Article => !!article && article.status === 'published'),
   ).map(applyResearchArticleListOverride);
+
+  return mergeLocalResearchArticles(remoteArticles);
 };
 
 // ─── Format date from Timestamp ────────────────────────────────────
@@ -137,6 +183,9 @@ const articleMetaLabel = (article: Article) => (isWhitePaper(article) ? 'White P
 const articleFeaturedImage = (article: Article) => article.featuredImage || FEATURED_IMAGE_BY_SLUG[article.slug];
 
 const readActionLabel = (article: Article) => (isWhitePaper(article) ? 'Read white paper' : 'Read article');
+
+const isListedArticle = (article: Article) =>
+  article.visibility !== 'unlisted' && article.listed !== false;
 
 // ─── Article card component ────────────────────────────────────────
 const ArticleCard: React.FC<{ article: Article; index: number }> = ({ article, index }) => {
@@ -284,7 +333,7 @@ const ResearchPage: NextPage = () => {
         if (publishedArticles.length === 0 && isBrowserLocalhost()) {
           publishedArticles = await fetchProductionResearchArticlesFallback();
         }
-        setArticles(publishedArticles);
+        setArticles(mergeLocalResearchArticles(publishedArticles));
       } catch (error) {
         console.error('[Research] Error fetching articles:', error);
         if (isBrowserLocalhost()) {
@@ -292,10 +341,10 @@ const ResearchPage: NextPage = () => {
             setArticles(await fetchProductionResearchArticlesFallback());
           } catch (fallbackError) {
             console.error('[Research] Error fetching production fallback articles:', fallbackError);
-            setArticles([]);
+            setArticles(mergeLocalResearchArticles([]));
           }
         } else {
-          setArticles([]);
+          setArticles(mergeLocalResearchArticles([]));
         }
       } finally {
         setLoading(false);
@@ -305,9 +354,11 @@ const ResearchPage: NextPage = () => {
     fetchArticles();
   }, []);
 
+  const listedArticles = articles.filter(isListedArticle);
+
   const filteredArticles = activeCategory === 'All'
-    ? articles
-    : articles.filter((a) => a.category === activeCategory);
+    ? listedArticles
+    : listedArticles.filter((a) => a.category === activeCategory);
 
   const featuredArticle = filteredArticles.find((a) => a.featured);
   const remainingArticles = filteredArticles.filter((a) => a.slug !== featuredArticle?.slug);

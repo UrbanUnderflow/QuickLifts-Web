@@ -43,6 +43,10 @@ import type {
   PulseCheckResearchConsentStatus,
   PulseCheckRosterVisibilityScope,
   PulseCheckNotificationPreferences,
+  PulseCheckOnboardingTrackerState,
+  PulseCheckOnboardingTrackerStepId,
+  PulseCheckOnboardingTrackerStepState,
+  PulseCheckOnboardingTrackerStepStatus,
   PulseCheckTeamCommercialConfig,
   PulseCheckTeamCommercialSnapshot,
   PulseCheckOrganizationStatus,
@@ -494,6 +498,58 @@ const normalizeAdminContacts = (value: unknown): PulseCheckAdminContact[] => {
   }, []);
 };
 
+const normalizeOnboardingTrackerStepStatus = (value: unknown): PulseCheckOnboardingTrackerStepStatus => {
+  const normalized = normalizeString(typeof value === 'string' ? value : '');
+  if (normalized === 'complete' || normalized === 'blocked' || normalized === 'in-progress') {
+    return normalized;
+  }
+  return 'pending';
+};
+
+const normalizeOnboardingTrackerStep = (value: unknown): PulseCheckOnboardingTrackerStepState => {
+  const candidate = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return {
+    status: normalizeOnboardingTrackerStepStatus(candidate.status),
+    owner: normalizeString(typeof candidate.owner === 'string' ? candidate.owner : ''),
+    dueDate: normalizeString(typeof candidate.dueDate === 'string' ? candidate.dueDate : ''),
+    note: normalizeString(typeof candidate.note === 'string' ? candidate.note : ''),
+    updatedByUserId: normalizeString(typeof candidate.updatedByUserId === 'string' ? candidate.updatedByUserId : ''),
+    updatedByEmail: normalizeString(typeof candidate.updatedByEmail === 'string' ? candidate.updatedByEmail : ''),
+    updatedAt: (candidate.updatedAt as PulseCheckOnboardingTrackerStepState['updatedAt']) || null,
+  };
+};
+
+const normalizeOnboardingTracker = (value: unknown): PulseCheckOnboardingTrackerState | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+
+  const candidate = value as Record<string, unknown>;
+  const rawSteps = candidate.steps && typeof candidate.steps === 'object'
+    ? (candidate.steps as Record<string, unknown>)
+    : {};
+
+  const steps = Object.entries(rawSteps).reduce<NonNullable<PulseCheckOnboardingTrackerState['steps']>>(
+    (nextSteps, [stepId, stepValue]) => {
+      if (!stepId) return nextSteps;
+      const normalizedStepId = stepId as PulseCheckOnboardingTrackerStepId;
+      nextSteps[normalizedStepId] = normalizeOnboardingTrackerStep(stepValue);
+      return nextSteps;
+    },
+    {}
+  );
+
+  return {
+    version: normalizeString(typeof candidate.version === 'string' ? candidate.version : '') || 'pulsecheck-school-onboarding-v1',
+    steps,
+    launchTargetDate: normalizeString(typeof candidate.launchTargetDate === 'string' ? candidate.launchTargetDate : ''),
+    weeklySnapshotDay: normalizeString(typeof candidate.weeklySnapshotDay === 'string' ? candidate.weeklySnapshotDay : ''),
+    stakeholderCadence: normalizeString(typeof candidate.stakeholderCadence === 'string' ? candidate.stakeholderCadence : ''),
+    notes: normalizeString(typeof candidate.notes === 'string' ? candidate.notes : ''),
+    updatedByUserId: normalizeString(typeof candidate.updatedByUserId === 'string' ? candidate.updatedByUserId : ''),
+    updatedByEmail: normalizeString(typeof candidate.updatedByEmail === 'string' ? candidate.updatedByEmail : ''),
+    updatedAt: (candidate.updatedAt as PulseCheckOnboardingTrackerState['updatedAt']) || null,
+  };
+};
+
 const normalizeOrganizationImplementationMetadata = (
   value: unknown
 ): PulseCheckOrganizationImplementationMetadata | undefined => {
@@ -575,6 +631,7 @@ const normalizeTeamImplementationMetadata = (
         : invitePosture === 'admin-and-staff'
           ? 'admin-and-staff'
           : 'admin-staff-and-coaches',
+    onboardingTracker: normalizeOnboardingTracker(candidate.onboardingTracker),
     provisionedBy: normalizeString(typeof candidate.provisionedBy === 'string' ? candidate.provisionedBy : ''),
     provisionedAt: (candidate.provisionedAt as PulseCheckTeamImplementationMetadata['provisionedAt']) || null,
     notes: normalizeString(typeof candidate.notes === 'string' ? candidate.notes : ''),
@@ -3088,6 +3145,56 @@ export const pulseCheckProvisioningService = {
     const teamRef = doc(db, TEAMS_COLLECTION, normalizeString(teamId));
     await updateDoc(teamRef, {
       commercialConfig: normalizeTeamCommercialConfig(commercialConfig),
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  async updateTeamOnboardingTracker(input: {
+    teamId: string;
+    onboardingTracker: PulseCheckOnboardingTrackerState;
+    updatedByUserId?: string;
+    updatedByEmail?: string;
+  }): Promise<void> {
+    const teamRef = doc(db, TEAMS_COLLECTION, normalizeString(input.teamId));
+    const teamSnapshot = await getDoc(teamRef);
+    if (!teamSnapshot.exists()) {
+      throw new Error('Team not found.');
+    }
+
+    const currentData = teamSnapshot.data() as Record<string, unknown>;
+    const rawImplementationMetadata = currentData.implementationMetadata && typeof currentData.implementationMetadata === 'object'
+      ? (currentData.implementationMetadata as Record<string, unknown>)
+      : {};
+    const currentMetadata = normalizeTeamImplementationMetadata(
+      rawImplementationMetadata,
+      (currentData.defaultInvitePolicy as PulseCheckTeamImplementationMetadata['invitePosture']) || 'admin-only'
+    );
+    const currentTracker = normalizeOnboardingTracker(currentMetadata?.onboardingTracker);
+    const nextTracker = normalizeOnboardingTracker({
+      ...(currentTracker || {}),
+      ...input.onboardingTracker,
+      steps: {
+        ...(currentTracker?.steps || {}),
+        ...(input.onboardingTracker.steps || {}),
+      },
+      version: input.onboardingTracker.version || currentTracker?.version || 'pulsecheck-school-onboarding-v1',
+      updatedByUserId: normalizeString(input.updatedByUserId) || normalizeString(input.onboardingTracker.updatedByUserId),
+      updatedByEmail: normalizeString(input.updatedByEmail) || normalizeString(input.onboardingTracker.updatedByEmail),
+      updatedAt: serverTimestamp(),
+    });
+
+    await updateDoc(teamRef, {
+      implementationMetadata: {
+        ...(Object.keys(rawImplementationMetadata).length > 0
+          ? rawImplementationMetadata
+          : {
+              provisioningPath: 'pulsecheck-hierarchy',
+              legacySignupPathUsed: false,
+              canaryTarget: false,
+            }),
+        ...(currentMetadata || {}),
+        onboardingTracker: nextTracker,
+      },
       updatedAt: serverTimestamp(),
     });
   },

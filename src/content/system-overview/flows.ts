@@ -174,11 +174,13 @@ export const endToEndFlows: EndToEndFlowSpec[] = [
       'pulsecheck-curriculum-overrides',
       'pulsecheck-curriculum-generation-traces',
       'pulsecheck-curriculum-assessments',
+      'pulsecheck-curriculum-slates',
       'pulsecheck-daily-assignments',
       'pulsecheck-assignment-events',
     ],
     integrations: ['FCM', 'Netlify Functions', 'Cloud Firestore'],
     failurePoints: [
+      'Six-slot curriculum slate, slot mastery, maintenance, and backfill are specified but not yet implemented as runtime storage',
       'Admin-SDK adapter is pending, so scheduled generation and monthly assessment sweeps currently enumerate/log instead of writing generated assignments or rollups',
       'Eligible protocol or sim pool is too thin for a complete daily pair',
       'Reminder text is static and has not yet been routed through translateForAthlete',
@@ -186,9 +188,9 @@ export const endToEndFlows: EndToEndFlowSpec[] = [
     ],
     steps: [
       { id: 'd1', actor: 'Curriculum admin', action: 'Configures engine, pillar weights, frequency targets, protocol mapping, and overrides.', output: 'Curriculum config and override records.' },
-      { id: 'd2', actor: 'Generator', action: 'Computes 30-day pillar gaps and picks one protocol plus one simulation from eligible assets.', output: 'Two curriculum-engine daily assignments when run through the live generator path.' },
+      { id: 'd2', actor: 'Generator', action: 'Target state: reads the athlete six-slot slate, evaluates slot freshness and mastery, materializes today work, and backfills graduated slots. Current runtime: computes 30-day pillar gaps and picks one protocol plus one simulation from eligible assets.', output: 'Date-bound curriculum-engine daily assignments plus generator trace; future output also includes updated slate state.' },
       { id: 'd3', actor: 'Scheduled functions', action: 'Run assignment, reminder, and assessment sweeps.', output: 'Today: reminders can send for existing assignments; generation/assessment cron writes remain adapter-gated.' },
-      { id: 'd4', actor: 'PulseCheck iOS', action: 'Listens for today’s curriculum-engine assignments without showing selection internals.', output: 'Athlete sees protocol/sim cards and rationale.' },
+      { id: 'd4', actor: 'PulseCheck iOS', action: 'Listens for today’s curriculum-engine assignments without showing selection internals.', output: 'Athlete sees protocol/sim cards and rationale; future surfaces should also show the active toolkit summary.' },
     ],
   },
   {

@@ -22,6 +22,7 @@ import {
   yearMonthOf,
 } from '../../../src/api/firebase/dailyCurriculum/types';
 import {
+  AssetCandidate,
   CompletionsSnapshot,
   countRepsByPillar,
   pickAsset,
@@ -34,6 +35,9 @@ const SIM_MODULES_COLLECTION = 'sim-modules';
 const DAILY_ASSIGNMENTS_COLLECTION = 'pulsecheck-daily-assignments';
 const ASSIGNMENT_EVENTS_COLLECTION = 'pulsecheck-assignment-events';
 const GENERATION_TRACES_COLLECTION = 'pulsecheck-curriculum-generation-traces';
+const CURRICULUM_SLATES_COLLECTION = 'pulsecheck-curriculum-slates';
+const CURRICULUM_SLOT_TARGET_PER_KIND = 3;
+const CURRICULUM_GENERATOR_VERSION = 'six_slot_curriculum_v1';
 
 const stripUndefinedDeep = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(stripUndefinedDeep).filter((v) => v !== undefined);
@@ -172,6 +176,248 @@ export interface GenerateDailyAssignmentAdminInput {
   preview?: boolean;
 }
 
+type CurriculumSlotKind = 'protocol' | 'simulation';
+
+interface ExistingCurriculumAssignmentRecord {
+  documentId: string;
+  data: Record<string, unknown>;
+}
+
+interface CurriculumSlotInput {
+  assignmentId: string;
+  kind: CurriculumSlotKind;
+  slotIndex: number;
+  existing?: ExistingCurriculumAssignmentRecord;
+  pick?: AssetCandidate;
+}
+
+const numberValue = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+};
+
+const stringValue = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+};
+
+const assignmentRecordKind = (record: ExistingCurriculumAssignmentRecord): 'protocol' | 'sim' | undefined =>
+  normalizeAssignmentKind(record.data.actionType);
+
+const assignmentRecordAssetId = (record: ExistingCurriculumAssignmentRecord): string | undefined =>
+  eventAssetId(record.data);
+
+const assignmentRecordLabel = (
+  record: ExistingCurriculumAssignmentRecord | undefined,
+  kind: CurriculumSlotKind,
+): string | undefined => {
+  if (!record) return undefined;
+  if (kind === 'protocol') {
+    return stringValue(record.data.protocolLabel) || stringValue(record.data.chosenCandidateId);
+  }
+  return stringValue(record.data.simName) || stringValue(record.data.simSpecId) || stringValue(record.data.chosenCandidateId);
+};
+
+const assignmentRecordCreatedAt = (record: ExistingCurriculumAssignmentRecord): number =>
+  numberValue(record.data.createdAt) || numberValue(record.data.materializedAt) || 0;
+
+const assignmentRecordSlotIndex = (record: ExistingCurriculumAssignmentRecord): number =>
+  numberValue(record.data.curriculumSlotIndex) || Number.MAX_SAFE_INTEGER;
+
+const sortExistingCurriculumAssignments = (
+  records: ExistingCurriculumAssignmentRecord[],
+): ExistingCurriculumAssignmentRecord[] =>
+  [...records].sort((a, b) => {
+    const slotDelta = assignmentRecordSlotIndex(a) - assignmentRecordSlotIndex(b);
+    if (slotDelta !== 0) return slotDelta;
+    return assignmentRecordCreatedAt(a) - assignmentRecordCreatedAt(b);
+  });
+
+const fetchTodaysCurriculumAssignmentsAdmin = async (
+  db: FirebaseAdmin.firestore.Firestore,
+  athleteUserId: string,
+  sourceDate: string,
+): Promise<ExistingCurriculumAssignmentRecord[]> => {
+  try {
+    const snap = await db
+      .collection(DAILY_ASSIGNMENTS_COLLECTION)
+      .where('athleteId', '==', athleteUserId)
+      .where('sourceDate', '==', sourceDate)
+      .where('assignedBy', '==', 'curriculum-engine')
+      .limit(12)
+      .get();
+    return snap.docs.map((doc) => ({
+      documentId: doc.id,
+      data: doc.data() as Record<string, unknown>,
+    }));
+  } catch {
+    return [];
+  }
+};
+
+const pickAssetSeries = ({
+  count,
+  pool,
+  drivingPillar,
+  completions,
+  overrides,
+  recentlyAssigned,
+  kind,
+  frequencyDefaults,
+}: {
+  count: number;
+  pool: Array<PulseCheckProtocolDefinition | MentalExercise>;
+  drivingPillar: TaxonomyPillar;
+  completions: CompletionsSnapshot;
+  overrides: CurriculumOverride[];
+  recentlyAssigned: Set<string>;
+  kind: 'protocol' | 'sim';
+  frequencyDefaults: Record<ProgressionLevel, number>;
+}): AssetCandidate[] => {
+  const picks: AssetCandidate[] = [];
+  const blocked = new Set(recentlyAssigned);
+
+  for (let slot = 0; slot < count; slot += 1) {
+    const pick = pickAsset({
+      pool,
+      drivingPillar,
+      completions,
+      overrides,
+      recentlyAssigned: blocked,
+      kind,
+      frequencyDefaults,
+    });
+    if (!pick) break;
+    picks.push(pick);
+    blocked.add(pick.asset.id);
+  }
+
+  return picks;
+};
+
+const selectionLabel = (pick: AssetCandidate, kind: CurriculumSlotKind): string =>
+  kind === 'protocol'
+    ? ((pick.asset as PulseCheckProtocolDefinition).label || pick.asset.id)
+    : ((pick.asset as MentalExercise).name || (pick.asset as MentalExercise).simSpecId || pick.asset.id);
+
+const buildCurriculumSlots = ({
+  athleteUserId,
+  sourceDate,
+  generatedAt,
+  kind,
+  existing,
+  picks,
+}: {
+  athleteUserId: string;
+  sourceDate: string;
+  generatedAt: number;
+  kind: CurriculumSlotKind;
+  existing: ExistingCurriculumAssignmentRecord[];
+  picks: AssetCandidate[];
+}): CurriculumSlotInput[] => {
+  const slots: CurriculumSlotInput[] = [];
+  const pickQueue = [...picks];
+  const idKind = kind === 'protocol' ? 'protocol' : 'sim';
+
+  for (let index = 1; index <= CURRICULUM_SLOT_TARGET_PER_KIND; index += 1) {
+    const existingRecord = existing[index - 1];
+    if (existingRecord) {
+      slots.push({
+        assignmentId: existingRecord.documentId,
+        kind,
+        slotIndex: index,
+        existing: existingRecord,
+      });
+      continue;
+    }
+
+    const pick = pickQueue.shift();
+    if (!pick) continue;
+    slots.push({
+      assignmentId: `${athleteUserId}_${sourceDate}_${idKind}_slot${index}_${generatedAt}`,
+      kind,
+      slotIndex: index,
+      pick,
+    });
+  }
+
+  return slots;
+};
+
+const slotLabel = (slot: CurriculumSlotInput): string => {
+  if (slot.pick) return selectionLabel(slot.pick, slot.kind);
+  return assignmentRecordLabel(slot.existing, slot.kind) || slot.assignmentId;
+};
+
+const slotAssetId = (slot: CurriculumSlotInput): string => {
+  if (slot.pick) return slot.pick.asset.id;
+  return assignmentRecordAssetId(slot.existing as ExistingCurriculumAssignmentRecord) || slot.assignmentId;
+};
+
+const slotPillar = (slot: CurriculumSlotInput, drivingPillar: TaxonomyPillar): TaxonomyPillar => {
+  if (slot.pick) return slot.pick.cognitivePillar;
+  return (slot.existing ? eventPillar(slot.existing.data) : undefined) || drivingPillar;
+};
+
+const slotProgression = (slot: CurriculumSlotInput): ProgressionLevel =>
+  slot.pick?.progressionLevel || 'foundational';
+
+const slotRationale = (slot: CurriculumSlotInput): string =>
+  slot.pick?.rationale || stringValue(slot.existing?.data.rationale) || 'Queued by the curriculum slate.';
+
+const existingCurriculumIntent = (slot: CurriculumSlotInput): Record<string, unknown> | undefined => {
+  const intent = slot.existing?.data.curriculumIntent;
+  return intent && typeof intent === 'object' ? intent as Record<string, unknown> : undefined;
+};
+
+const buildSlotIntent = ({
+  slot,
+  drivingPillar,
+  pairedAssignmentLabel,
+}: {
+  slot: CurriculumSlotInput;
+  drivingPillar: TaxonomyPillar;
+  pairedAssignmentLabel?: string;
+}) =>
+  buildCurriculumAssignmentIntent({
+    kind: slot.kind,
+    assetLabel: slotLabel(slot),
+    drivingPillar,
+    cognitivePillar: slotPillar(slot, drivingPillar),
+    progressionLevel: slotProgression(slot),
+    actualReps: slot.pick?.actualReps || numberValue(existingCurriculumIntent(slot)?.currentRep) || 0,
+    recommendedFrequency:
+      slot.pick?.recommendedFrequency || numberValue(existingCurriculumIntent(slot)?.targetReps) || 12,
+    pairedAssignmentLabel,
+  });
+
+const buildSlotMetadata = ({
+  slateId,
+  slot,
+}: {
+  slateId: string;
+  slot: CurriculumSlotInput;
+}): Record<string, unknown> => {
+  const isDueToday = slot.slotIndex === 1;
+  return {
+    curriculumSlateId: slateId,
+    curriculumSlotId: `${slateId}_${slot.kind}_${slot.slotIndex}`,
+    curriculumSlotIndex: slot.slotIndex,
+    curriculumSlotKind: slot.kind,
+    curriculumSlotState: 'active',
+    curriculumLane: slot.kind === 'protocol' ? 'mental_regulation' : 'mental_sharpening',
+    curriculumIsDueToday: isDueToday,
+    curriculumDueRank: isDueToday ? (slot.kind === 'protocol' ? 1 : 2) : undefined,
+    curriculumGeneratorVersion: CURRICULUM_GENERATOR_VERSION,
+    isPrimaryForDate: slot.kind === 'protocol' && isDueToday,
+  };
+};
+
 export const generateDailyAssignmentAdmin = async (
   db: FirebaseAdmin.firestore.Firestore,
   input: GenerateDailyAssignmentAdminInput,
@@ -183,11 +429,12 @@ export const generateDailyAssignmentAdmin = async (
   const yearMonth = yearMonthOf(sourceDate);
   const generatedAt = Date.now();
 
-  const [protocols, sims, completions, overrides] = await Promise.all([
+  const [protocols, sims, completions, overrides, existingAssignments] = await Promise.all([
     fetchEligibleProtocolsAdmin(db),
     fetchEligibleSimsAdmin(db),
     fetchLast30DaysCompletionsAdmin(db, input.athleteUserId, sourceDate),
     listOverridesForAthleteAdmin(db, input.athleteUserId, yearMonth),
+    input.preview ? Promise.resolve([]) : fetchTodaysCurriculumAssignmentsAdmin(db, input.athleteUserId, sourceDate),
   ]);
 
   const pillarRepCounts = countRepsByPillar(completions, protocols, sims);
@@ -208,50 +455,53 @@ export const generateDailyAssignmentAdmin = async (
     protocols,
   );
 
-  const protocolPick = pickAsset({
+  const existingProtocols = sortExistingCurriculumAssignments(
+    existingAssignments.filter((record) => assignmentRecordKind(record) === 'protocol'),
+  );
+  const existingSims = sortExistingCurriculumAssignments(
+    existingAssignments.filter((record) => assignmentRecordKind(record) === 'sim'),
+  );
+  const existingProtocolAssetIds = existingProtocols.map(assignmentRecordAssetId).filter(Boolean) as string[];
+  const existingSimAssetIds = existingSims.map(assignmentRecordAssetId).filter(Boolean) as string[];
+  const protocolPicks = pickAssetSeries({
+    count: Math.max(0, CURRICULUM_SLOT_TARGET_PER_KIND - existingProtocols.length),
     pool: protocols,
     drivingPillar: protocolDrivingPillar,
     completions,
     overrides,
-    recentlyAssigned,
+    recentlyAssigned: new Set([...recentlyAssigned, ...existingProtocolAssetIds]),
     kind: 'protocol',
     frequencyDefaults: config.frequencyTargetsByLevel,
   });
-
-  const simPick = pickAsset({
+  const simPicks = pickAssetSeries({
+    count: Math.max(0, CURRICULUM_SLOT_TARGET_PER_KIND - existingSims.length),
     pool: sims,
     drivingPillar: simDrivingPillar,
     completions,
     overrides,
-    recentlyAssigned,
+    recentlyAssigned: new Set([...recentlyAssigned, ...existingSimAssetIds]),
     kind: 'sim',
     frequencyDefaults: config.frequencyTargetsByLevel,
   });
 
-  if (!protocolPick || !simPick) return null;
-
-  const protocolLabel = (protocolPick.asset as PulseCheckProtocolDefinition).label;
-  const simLabel = (simPick.asset as MentalExercise).name;
-  const protocolIntent = buildCurriculumAssignmentIntent({
+  const protocolSlots = buildCurriculumSlots({
+    athleteUserId: input.athleteUserId,
+    sourceDate,
+    generatedAt,
     kind: 'protocol',
-    assetLabel: protocolLabel,
-    drivingPillar: protocolDrivingPillar,
-    cognitivePillar: protocolPick.cognitivePillar,
-    progressionLevel: protocolPick.progressionLevel,
-    actualReps: protocolPick.actualReps,
-    recommendedFrequency: protocolPick.recommendedFrequency,
-    pairedAssignmentLabel: simLabel,
+    existing: existingProtocols,
+    picks: protocolPicks,
   });
-  const simIntent = buildCurriculumAssignmentIntent({
+  const simSlots = buildCurriculumSlots({
+    athleteUserId: input.athleteUserId,
+    sourceDate,
+    generatedAt,
     kind: 'simulation',
-    assetLabel: simLabel,
-    drivingPillar: simDrivingPillar,
-    cognitivePillar: simPick.cognitivePillar,
-    progressionLevel: simPick.progressionLevel,
-    actualReps: simPick.actualReps,
-    recommendedFrequency: simPick.recommendedFrequency,
-    pairedAssignmentLabel: protocolLabel,
+    existing: existingSims,
+    picks: simPicks,
   });
+
+  if (protocolSlots.length === 0 || simSlots.length === 0) return null;
 
   const generatorNotes: string[] = [];
   generatorNotes.push(
@@ -269,109 +519,193 @@ export const generateDailyAssignmentAdmin = async (
       pillarRepCounts.composure
     }/${pillarRepCounts.focus}/${pillarRepCounts.decision} composure/focus/decision.`,
   );
-  if (protocolPick.coachOverrideId) {
-    generatorNotes.push(`Coach override applied for protocol: ${protocolPick.coachOverrideId}`);
+  for (const pick of protocolPicks) {
+    if (pick.coachOverrideId) {
+      generatorNotes.push(`Coach override applied for protocol: ${pick.coachOverrideId}`);
+    }
   }
-  if (simPick.coachOverrideId) {
-    generatorNotes.push(`Coach override applied for sim: ${simPick.coachOverrideId}`);
+  for (const pick of simPicks) {
+    if (pick.coachOverrideId) {
+      generatorNotes.push(`Coach override applied for sim: ${pick.coachOverrideId}`);
+    }
+  }
+  if (protocolSlots.length < CURRICULUM_SLOT_TARGET_PER_KIND || simSlots.length < CURRICULUM_SLOT_TARGET_PER_KIND) {
+    generatorNotes.push(
+      `Curriculum slate is partial: ${protocolSlots.length}/${CURRICULUM_SLOT_TARGET_PER_KIND} protocols and ${simSlots.length}/${CURRICULUM_SLOT_TARGET_PER_KIND} simulations available.`,
+    );
   }
 
-  const protocolAssignmentId = `${input.athleteUserId}_${sourceDate}_protocol_${generatedAt}`;
-  const simAssignmentId = `${input.athleteUserId}_${sourceDate}_sim_${generatedAt}`;
+  const pairedLabelForSlot = (slots: CurriculumSlotInput[], index: number): string | undefined =>
+    slots[index] ? slotLabel(slots[index]) : (slots[0] ? slotLabel(slots[0]) : undefined);
 
-  const protocolAssignment: Partial<PulseCheckDailyAssignment> = {
-    id: protocolAssignmentId,
-    lineageId: protocolAssignmentId,
-    revision: 1,
-    athleteId: input.athleteUserId,
-    teamId: input.teamId,
-    teamMembershipId: input.teamMembershipId,
-    sourceCheckInId: '',
-    sourceDate,
-    timezone: input.timezone,
-    assignedBy: 'curriculum-engine',
-    materializedAt: generatedAt,
-    isPrimaryForDate: true,
-    status: 'assigned' as PulseCheckDailyAssignment['status'],
-    actionType: 'protocol' as PulseCheckDailyAssignment['actionType'],
-    chosenCandidateId: protocolPick.asset.id,
-    chosenCandidateType: 'protocol' as PulseCheckDailyAssignment['chosenCandidateType'],
-    legacyExerciseId: (protocolPick.asset as PulseCheckProtocolDefinition).legacyExerciseId,
-    protocolId: protocolPick.asset.id,
-    protocolLabel,
-    rationale: protocolPick.rationale,
-    curriculumIntent: protocolIntent,
-    durationSeconds: (protocolPick.asset as PulseCheckProtocolDefinition).durationSeconds,
-    createdAt: generatedAt,
-    updatedAt: generatedAt,
-  };
+  const protocolSelections = protocolSlots.map((slot, index) => {
+    const curriculumIntent = buildSlotIntent({
+      slot,
+      drivingPillar: protocolDrivingPillar,
+      pairedAssignmentLabel: pairedLabelForSlot(simSlots, index),
+    });
+    return {
+      protocolId: slotAssetId(slot),
+      protocolLabel: slotLabel(slot),
+      cognitivePillar: slotPillar(slot, protocolDrivingPillar),
+      progressionLevel: slotProgression(slot),
+      drivingPillar: protocolDrivingPillar,
+      rationale: slotRationale(slot),
+      curriculumIntent,
+      coachOverrideApplied: slot.pick?.coachOverrideId,
+    };
+  });
 
-  const simAssignment: Partial<PulseCheckDailyAssignment> = {
-    id: simAssignmentId,
-    lineageId: simAssignmentId,
-    revision: 1,
-    athleteId: input.athleteUserId,
-    teamId: input.teamId,
-    teamMembershipId: input.teamMembershipId,
-    sourceCheckInId: '',
-    sourceDate,
-    timezone: input.timezone,
-    assignedBy: 'curriculum-engine',
-    materializedAt: generatedAt,
-    isPrimaryForDate: false,
-    status: 'assigned' as PulseCheckDailyAssignment['status'],
-    actionType: 'simulation' as PulseCheckDailyAssignment['actionType'],
-    chosenCandidateId: simPick.asset.id,
-    chosenCandidateType: 'simulation' as PulseCheckDailyAssignment['chosenCandidateType'],
-    simSpecId: (simPick.asset as MentalExercise).simSpecId || simPick.asset.id,
-    simName: simLabel,
-    rationale: simPick.rationale,
-    curriculumIntent: simIntent,
-    createdAt: generatedAt,
-    updatedAt: generatedAt,
-  };
+  const simSelections = simSlots.map((slot, index) => {
+    const curriculumIntent = buildSlotIntent({
+      slot,
+      drivingPillar: simDrivingPillar,
+      pairedAssignmentLabel: pairedLabelForSlot(protocolSlots, index),
+    });
+    return {
+      simId: slotAssetId(slot),
+      simName: slotLabel(slot),
+      cognitivePillar: slotPillar(slot, simDrivingPillar),
+      progressionLevel: slotProgression(slot),
+      drivingPillar: simDrivingPillar,
+      rationale: slotRationale(slot),
+      curriculumIntent,
+      coachOverrideApplied: slot.pick?.coachOverrideId,
+    };
+  });
+
+  const protocolSelection = protocolSelections[0];
+  const simSelection = simSelections[0];
+  if (!protocolSelection || !simSelection) return null;
+
+  const slateId = `${input.athleteUserId}_${sourceDate}_curriculum_slate`;
+  const dueAssignmentIds = [
+    protocolSlots.find((slot) => slot.slotIndex === 1)?.assignmentId,
+    simSlots.find((slot) => slot.slotIndex === 1)?.assignmentId,
+  ].filter(Boolean) as string[];
+  const queuedAssignmentIds = [...protocolSlots, ...simSlots].map((slot) => slot.assignmentId);
 
   const result: CurriculumGenerationResult = {
     athleteUserId: input.athleteUserId,
     sourceDate,
     generatedAt,
-    protocolSelection: {
-      protocolId: protocolPick.asset.id,
-      protocolLabel,
-      cognitivePillar: protocolPick.cognitivePillar,
-      progressionLevel: protocolPick.progressionLevel,
-      drivingPillar: protocolDrivingPillar,
-      rationale: protocolPick.rationale,
-      curriculumIntent: protocolIntent,
-      coachOverrideApplied: protocolPick.coachOverrideId,
-    },
-    simSelection: {
-      simId: simPick.asset.id,
-      simName: simLabel,
-      cognitivePillar: simPick.cognitivePillar,
-      progressionLevel: simPick.progressionLevel,
-      drivingPillar: simDrivingPillar,
-      rationale: simPick.rationale,
-      curriculumIntent: simIntent,
-      coachOverrideApplied: simPick.coachOverrideId,
-    },
+    curriculumSlateId: slateId,
+    protocolSelection,
+    protocolSelections,
+    simSelection,
+    simSelections,
     pillarBalanceAtGeneration: pillarRepCounts,
-    dailyAssignmentIdProtocol: protocolAssignmentId,
-    dailyAssignmentIdSim: simAssignmentId,
+    dailyAssignmentIdProtocol: protocolSlots[0].assignmentId,
+    dailyAssignmentIdSim: simSlots[0].assignmentId,
+    dailyAssignmentIdsProtocol: protocolSlots.map((slot) => slot.assignmentId),
+    dailyAssignmentIdsSim: simSlots.map((slot) => slot.assignmentId),
+    queuedAssignmentIds,
+    dueAssignmentIds,
     generatorNotes,
   };
 
   if (input.preview) return result;
 
   const traceId = `${input.athleteUserId}_${sourceDate}_${generatedAt}`;
+  const assignmentWrites = [...protocolSlots, ...simSlots].map((slot) => {
+    const slotMetadata = buildSlotMetadata({ slateId, slot });
+    if (slot.existing) {
+      return db.collection(DAILY_ASSIGNMENTS_COLLECTION).doc(slot.assignmentId).set(
+        stripUndefinedDeep({
+          id: stringValue(slot.existing.data.id) || slot.assignmentId,
+          lineageId: stringValue(slot.existing.data.lineageId) || slot.assignmentId,
+          ...slotMetadata,
+          updatedAt: generatedAt,
+        }) as Record<string, unknown>,
+        { merge: true },
+      );
+    }
+
+    const pick = slot.pick;
+    if (!pick) return Promise.resolve();
+    const assignmentBase: Partial<PulseCheckDailyAssignment> = {
+      id: slot.assignmentId,
+      lineageId: slot.assignmentId,
+      revision: 1,
+      athleteId: input.athleteUserId,
+      teamId: input.teamId,
+      teamMembershipId: input.teamMembershipId,
+      sourceCheckInId: '',
+      sourceDate,
+      timezone: input.timezone,
+      assignedBy: 'curriculum-engine',
+      materializedAt: generatedAt,
+      status: 'assigned' as PulseCheckDailyAssignment['status'],
+      actionType: slot.kind as PulseCheckDailyAssignment['actionType'],
+      chosenCandidateId: pick.asset.id,
+      chosenCandidateType: (slot.kind === 'protocol' ? 'protocol' : 'sim') as PulseCheckDailyAssignment['chosenCandidateType'],
+      rationale: pick.rationale,
+      curriculumIntent: buildSlotIntent({
+        slot,
+        drivingPillar: slot.kind === 'protocol' ? protocolDrivingPillar : simDrivingPillar,
+        pairedAssignmentLabel: pairedLabelForSlot(slot.kind === 'protocol' ? simSlots : protocolSlots, slot.slotIndex - 1),
+      }),
+      createdAt: generatedAt,
+      updatedAt: generatedAt,
+    };
+
+    if (slot.kind === 'protocol') {
+      const protocol = pick.asset as PulseCheckProtocolDefinition;
+      assignmentBase.legacyExerciseId = protocol.legacyExerciseId;
+      assignmentBase.protocolId = protocol.id;
+      assignmentBase.protocolLabel = protocol.label;
+      assignmentBase.durationSeconds = protocol.durationSeconds;
+    } else {
+      const sim = pick.asset as MentalExercise;
+      assignmentBase.simSpecId = sim.simSpecId || sim.id;
+      assignmentBase.simName = sim.name;
+    }
+
+    return db.collection(DAILY_ASSIGNMENTS_COLLECTION).doc(slot.assignmentId).set(
+      stripUndefinedDeep({
+        ...assignmentBase,
+        ...slotMetadata,
+      }) as Record<string, unknown>,
+      { merge: false },
+    );
+  });
+
   await Promise.all([
-    db.collection(DAILY_ASSIGNMENTS_COLLECTION).doc(protocolAssignmentId).set(
-      stripUndefinedDeep(protocolAssignment) as Record<string, unknown>,
-      { merge: false },
-    ),
-    db.collection(DAILY_ASSIGNMENTS_COLLECTION).doc(simAssignmentId).set(
-      stripUndefinedDeep(simAssignment) as Record<string, unknown>,
-      { merge: false },
+    ...assignmentWrites,
+    db.collection(CURRICULUM_SLATES_COLLECTION).doc(slateId).set(
+      stripUndefinedDeep({
+        id: slateId,
+        athleteId: input.athleteUserId,
+        teamId: input.teamId,
+        teamMembershipId: input.teamMembershipId,
+        sourceDate,
+        timezone: input.timezone,
+        status: 'active',
+        generatorVersion: CURRICULUM_GENERATOR_VERSION,
+        targetProtocolSlotCount: CURRICULUM_SLOT_TARGET_PER_KIND,
+        targetSimulationSlotCount: CURRICULUM_SLOT_TARGET_PER_KIND,
+        activeProtocolSlots: protocolSlots.map((slot) => ({
+          assignmentId: slot.assignmentId,
+          slotIndex: slot.slotIndex,
+          assetId: slotAssetId(slot),
+          label: slotLabel(slot),
+          cognitivePillar: slotPillar(slot, protocolDrivingPillar),
+          dueToday: slot.slotIndex === 1,
+        })),
+        activeSimulationSlots: simSlots.map((slot) => ({
+          assignmentId: slot.assignmentId,
+          slotIndex: slot.slotIndex,
+          assetId: slotAssetId(slot),
+          label: slotLabel(slot),
+          cognitivePillar: slotPillar(slot, simDrivingPillar),
+          dueToday: slot.slotIndex === 1,
+        })),
+        dueAssignmentIds,
+        queuedAssignmentIds,
+        generatedAt,
+        updatedAt: generatedAt,
+      }) as Record<string, unknown>,
+      { merge: true },
     ),
     db.collection(GENERATION_TRACES_COLLECTION).doc(traceId).set(
       stripUndefinedDeep({
@@ -386,11 +720,13 @@ export const generateDailyAssignmentAdmin = async (
     ),
   ]);
 
-  if (protocolPick.coachOverrideId) {
-    try { await markOverrideConsumedAdmin(db, protocolPick.coachOverrideId); } catch { /* swallow */ }
-  }
-  if (simPick.coachOverrideId) {
-    try { await markOverrideConsumedAdmin(db, simPick.coachOverrideId); } catch { /* swallow */ }
+  const overrideIds = new Set(
+    [...protocolPicks, ...simPicks]
+      .map((pick) => pick.coachOverrideId)
+      .filter(Boolean) as string[],
+  );
+  for (const overrideId of overrideIds) {
+    try { await markOverrideConsumedAdmin(db, overrideId); } catch { /* swallow */ }
   }
 
   return result;

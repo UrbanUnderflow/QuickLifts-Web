@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import {
   AlertTriangle,
   Building2,
   ChevronDown,
+  CheckCircle2,
   Clipboard,
   ClipboardList,
+  Clock,
   Download,
   ExternalLink,
   HeartPulse,
@@ -23,6 +26,7 @@ import type { Timestamp } from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { useUser } from '../../hooks/useUser';
+import GuidedTour, { type GuidedTourStep } from '../../components/onboarding/GuidedTour';
 import { storage } from '../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import {
@@ -45,6 +49,8 @@ import type {
   PulseCheckClinicianProfileType,
   PulseCheckInviteLink,
   PulseCheckInvitePolicy,
+  PulseCheckOnboardingTrackerStepId,
+  PulseCheckOnboardingTrackerStepStatus,
   PulseCheckOrganization,
   PulseCheckOrganizationStatus,
   PulseCheckPilot,
@@ -61,6 +67,14 @@ import type {
   PulseCheckTeamStatus,
 } from '../../api/firebase/pulsecheckProvisioning/types';
 import { resolvePulseCheckInvitePreviewImage } from '../../utils/pulsecheckInviteLinks';
+
+type TeamOnboardingTrackerStepDefinition = {
+  id: PulseCheckOnboardingTrackerStepId;
+  label: string;
+  owner: string;
+  meeting: string;
+  description: string;
+};
 
 const defaultOrganizationForm: CreatePulseCheckOrganizationInput = {
   displayName: '',
@@ -439,6 +453,253 @@ const PROVISIONING_WIZARD_STEPS: Array<{ key: ProvisioningWizardStep; label: str
   { key: 'cohort', label: 'Cohort' },
 ];
 
+const TEAM_ONBOARDING_TRACKER_STEPS: TeamOnboardingTrackerStepDefinition[] = [
+  {
+    id: 'intake',
+    label: 'School intake complete',
+    owner: 'PulseCheck admin',
+    meeting: 'Before kickoff',
+    description: 'School sponsor, coach list, roster estimate, launch window, support route, and device plan are confirmed.',
+  },
+  {
+    id: 'provisioning',
+    label: 'Org and team provisioned',
+    owner: 'PulseCheck admin',
+    meeting: 'Before kickoff',
+    description: 'Organization, team, pilot posture, cohort plan, commercial settings, and invite policies are configured.',
+  },
+  {
+    id: 'coach-kickoff',
+    label: 'Meeting 1 kickoff complete',
+    owner: 'PulseCheck staff',
+    meeting: 'Meeting 1',
+    description: 'Coach understands rollout goals, roles, data boundaries, device plan, and next actions.',
+  },
+  {
+    id: 'dashboard-training',
+    label: 'Meeting 2 dashboard training complete',
+    owner: 'PulseCheck staff',
+    meeting: 'Meeting 2',
+    description: 'Coach can read Nora reports, use the dashboard, review follow-up, and avoid over-reading thin data.',
+  },
+  {
+    id: 'team-rollout',
+    label: 'Meeting 3 team launch scheduled',
+    owner: 'PulseCheck admin',
+    meeting: 'Meeting 3',
+    description: 'Team room plan, invite flow, delivery support, troubleshooting lane, and athlete training agenda are ready.',
+  },
+  {
+    id: 'device-sync',
+    label: 'Devices delivered and synced',
+    owner: 'PulseCheck staff',
+    meeting: 'Launch day',
+    description: 'Device inventory is reconciled and athlete source status is healthy or logged for follow-up.',
+  },
+  {
+    id: 'first-check-in',
+    label: 'First team check-in complete',
+    owner: 'Coach + athletes',
+    meeting: 'Launch day',
+    description: 'Athletes complete the first check-in and understand when honest daily input is expected.',
+  },
+  {
+    id: 'first-training',
+    label: 'First protocol or simulation complete',
+    owner: 'Coach + athletes',
+    meeting: 'Launch day',
+    description: 'Athletes complete the first assigned mental training experience with PulseCheck staff present.',
+  },
+  {
+    id: 'weekly-snapshot',
+    label: 'Weekly coach snapshot cadence active',
+    owner: 'Coach success',
+    meeting: 'Post-launch',
+    description: 'PulseCheck staff has the weekly report snapshot day, owner, and coach delivery path confirmed.',
+  },
+  {
+    id: 'stakeholder-cadence',
+    label: 'Stakeholder check-ins scheduled',
+    owner: 'PulseCheck lead',
+    meeting: 'Post-launch',
+    description: 'Coach and stakeholder check-ins are scheduled every two weeks with agenda owner and action log.',
+  },
+];
+
+const TRACKER_STATUS_OPTIONS: Array<{
+  value: PulseCheckOnboardingTrackerStepStatus;
+  label: string;
+  description: string;
+}> = [
+  { value: 'pending', label: 'Not started', description: 'No action yet' },
+  { value: 'in-progress', label: 'Working', description: 'Owner is handling it' },
+  { value: 'complete', label: 'Done', description: 'Verified and ready' },
+  { value: 'blocked', label: 'Needs help', description: 'Escalate before launch' },
+];
+
+const getTeamOnboardingStepStatus = (
+  team: PulseCheckTeam,
+  stepId: PulseCheckOnboardingTrackerStepId
+): PulseCheckOnboardingTrackerStepStatus =>
+  team.implementationMetadata?.onboardingTracker?.steps?.[stepId]?.status || 'pending';
+
+const getTeamOnboardingProgress = (team: PulseCheckTeam) => {
+  const completedCount = TEAM_ONBOARDING_TRACKER_STEPS.filter(
+    (step) => getTeamOnboardingStepStatus(team, step.id) === 'complete'
+  ).length;
+  const blockedCount = TEAM_ONBOARDING_TRACKER_STEPS.filter(
+    (step) => getTeamOnboardingStepStatus(team, step.id) === 'blocked'
+  ).length;
+  const inProgressCount = TEAM_ONBOARDING_TRACKER_STEPS.filter(
+    (step) => getTeamOnboardingStepStatus(team, step.id) === 'in-progress'
+  ).length;
+
+  return {
+    completedCount,
+    blockedCount,
+    inProgressCount,
+    totalCount: TEAM_ONBOARDING_TRACKER_STEPS.length,
+    pct: Math.round((completedCount / TEAM_ONBOARDING_TRACKER_STEPS.length) * 100),
+  };
+};
+
+const getTrackerStatusClassName = (status: PulseCheckOnboardingTrackerStepStatus) => {
+  switch (status) {
+    case 'complete':
+      return 'pcp-tracker-status-complete';
+    case 'blocked':
+      return 'pcp-tracker-status-blocked';
+    case 'in-progress':
+      return 'pcp-tracker-status-progress';
+    case 'pending':
+    default:
+      return 'pcp-tracker-status-pending';
+  }
+};
+
+const getTrackerStatusLabel = (status: PulseCheckOnboardingTrackerStepStatus) =>
+  TRACKER_STATUS_OPTIONS.find((option) => option.value === status)?.label || 'Not started';
+
+const PULSECHECK_ADMIN_TOUR_STEPS: GuidedTourStep[] = [
+  {
+    selector: '[data-tour="admin-provisioning-header"]',
+    title: 'Start from the provisioning header',
+    body: 'This is the school launch control room. Use the top actions to open the playbook, export data, or create a new organization.',
+    placement: 'bottom',
+  },
+  {
+    selector: '[data-tour="admin-provisioning-actions"]',
+    title: 'Create or review launch records',
+    body: 'New Organization starts the provisioning flow. The Playbook stays close by when you need the onboarding sequence or call templates.',
+    placement: 'left',
+  },
+  {
+    selector: '[data-tour="admin-provisioning-filters"]',
+    title: 'Find the school quickly',
+    body: 'Use search and status filters to find the school, then expand the organization to review teams, links, support routing, and tracker status.',
+    placement: 'bottom',
+  },
+  {
+    selector: '[data-tour="admin-organization-list"]',
+    title: 'Open the organization and team',
+    body: 'The organization row holds team records, admin onboarding links, invite artwork, commercial settings, and launch readiness.',
+    placement: 'top',
+  },
+  {
+    selector: '[data-tour="admin-team-tracker"]',
+    title: 'Monitor launch readiness visually',
+    body: 'The tracker is intentionally simple: one progress bar, four status labels, and one dropdown per launch step.',
+    placement: 'top',
+  },
+  {
+    selector: '[data-tour="admin-launch-day-link"]',
+    title: 'Use Launch-Day Mode in the room',
+    body: 'Open this during Meeting 3 to track athlete invites, setup, device status, and next action while the team is present.',
+    placement: 'left',
+  },
+];
+
+const isPulseCheckTestHarnessText = (value?: string | null) => {
+  const normalized = (value || '').trim().toLowerCase();
+  if (!normalized) return false;
+
+  return (
+    normalized.startsWith('e2e ') ||
+    normalized.startsWith('e2e-') ||
+    normalized.startsWith('e2e_') ||
+    normalized.includes(' e2e ') ||
+    normalized.includes(' e2e-') ||
+    normalized.includes('e2e-pulsecheck') ||
+    normalized.endsWith('@pulse.test') ||
+    normalized.endsWith('@pulsecheck.test') ||
+    normalized.includes('playwright')
+  );
+};
+
+const isPulseCheckTestHarnessOrganization = (organization: PulseCheckOrganization) =>
+  [
+    organization.id,
+    organization.displayName,
+    organization.legalName,
+    organization.primaryCustomerAdminEmail,
+    organization.implementationOwnerEmail,
+    organization.notes,
+  ].some(isPulseCheckTestHarnessText);
+
+const isPulseCheckTestHarnessTeam = (team: PulseCheckTeam) =>
+  [
+    team.id,
+    team.organizationId,
+    team.displayName,
+    team.siteLabel,
+    team.defaultAdminEmail,
+    team.notes,
+  ].some(isPulseCheckTestHarnessText);
+
+const isPulseCheckTestHarnessPilot = (pilot: PulseCheckPilot) =>
+  [
+    pilot.id,
+    pilot.organizationId,
+    pilot.teamId,
+    pilot.name,
+    pilot.ownerInternalEmail,
+    pilot.notes,
+  ].some(isPulseCheckTestHarnessText);
+
+const isPulseCheckTestHarnessCohort = (cohort: PulseCheckPilotCohort) =>
+  [
+    cohort.id,
+    cohort.organizationId,
+    cohort.teamId,
+    cohort.pilotId,
+    cohort.name,
+    cohort.notes,
+  ].some(isPulseCheckTestHarnessText);
+
+const isPulseCheckTestHarnessInviteLink = (link: PulseCheckInviteLink) =>
+  [
+    link.id,
+    link.organizationId,
+    link.teamId,
+    link.pilotId,
+    link.cohortId,
+    link.recipientName,
+    link.targetEmail,
+    link.createdByEmail,
+    link.redeemedByEmail,
+  ].some(isPulseCheckTestHarnessText);
+
+const shouldShowPulseCheckTestHarnessData = () => {
+  if (typeof window === 'undefined') return false;
+  const params = new URLSearchParams(window.location.search);
+  const queryValue = params.get('showTestData');
+
+  if (queryValue === '1' || queryValue === 'true') return true;
+  if (queryValue === '0' || queryValue === 'false') return false;
+
+  return window.localStorage.getItem('pulsecheck_show_test_harness_data') === 'true';
+};
+
 const getOrganizationFilterStatus = (status?: PulseCheckOrganizationStatus): DashboardStatusFilter => {
   if (status === 'ready-for-activation') return 'ready';
   if (status === 'active') return 'active';
@@ -502,6 +763,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [clinicianLinkCreatingProfileId, setClinicianLinkCreatingProfileId] = useState<string | null>(null);
   const [adminLinkCreatingEmail, setAdminLinkCreatingEmail] = useState<string | null>(null);
   const [teamCommercialSavingId, setTeamCommercialSavingId] = useState<string | null>(null);
+  const [teamOnboardingTrackerSavingKey, setTeamOnboardingTrackerSavingKey] = useState<string | null>(null);
+  const [adminTourOpen, setAdminTourOpen] = useState(false);
   const [pilotStudyModeDrafts, setPilotStudyModeDrafts] = useState<Record<string, PulseCheckPilotStudyMode>>({});
   const [pilotStudyModeSavingId, setPilotStudyModeSavingId] = useState<string | null>(null);
   const [onboardingModal, setOnboardingModal] = useState<OnboardingModalState | null>(null);
@@ -804,54 +1067,95 @@ const PulseCheckProvisioningPage: React.FC = () => {
         pulseCheckProvisioningService.listPilots(),
         pulseCheckProvisioningService.listPilotCohorts(),
         pulseCheckProvisioningService.listClinicianProfiles(),
-        pulseCheckProvisioningService.listInviteLinks(),
-        fetchPulseCheckSportConfiguration(),
-      ]);
-      setOrganizations(organizationResults);
-      setTeams(teamResults);
+          pulseCheckProvisioningService.listInviteLinks(),
+          fetchPulseCheckSportConfiguration(),
+        ]);
+      const showTestHarnessData = shouldShowPulseCheckTestHarnessData();
+      const visibleOrganizationResults = showTestHarnessData
+        ? organizationResults
+        : organizationResults.filter((organization) => !isPulseCheckTestHarnessOrganization(organization));
+      const visibleOrganizationIds = new Set(visibleOrganizationResults.map((organization) => organization.id));
+      const visibleTeamResults = showTestHarnessData
+        ? teamResults
+        : teamResults.filter(
+            (team) => visibleOrganizationIds.has(team.organizationId) && !isPulseCheckTestHarnessTeam(team)
+          );
+      const visibleTeamIds = new Set(visibleTeamResults.map((team) => team.id));
+      const visiblePilotResults = showTestHarnessData
+        ? pilotResults
+        : pilotResults.filter(
+            (pilot) =>
+              visibleOrganizationIds.has(pilot.organizationId) &&
+              visibleTeamIds.has(pilot.teamId) &&
+              !isPulseCheckTestHarnessPilot(pilot)
+          );
+      const visiblePilotIds = new Set(visiblePilotResults.map((pilot) => pilot.id));
+      const visiblePilotCohortResults = showTestHarnessData
+        ? pilotCohortResults
+        : pilotCohortResults.filter(
+            (cohort) =>
+              visibleOrganizationIds.has(cohort.organizationId) &&
+              visibleTeamIds.has(cohort.teamId) &&
+              visiblePilotIds.has(cohort.pilotId) &&
+              !isPulseCheckTestHarnessCohort(cohort)
+          );
+      const visiblePilotCohortIds = new Set(visiblePilotCohortResults.map((cohort) => cohort.id));
+      const visibleInviteLinkResults = showTestHarnessData
+        ? inviteLinkResults
+        : inviteLinkResults.filter(
+            (link) =>
+              visibleOrganizationIds.has(link.organizationId) &&
+              visibleTeamIds.has(link.teamId) &&
+              (!link.pilotId || visiblePilotIds.has(link.pilotId)) &&
+              (!link.cohortId || visiblePilotCohortIds.has(link.cohortId)) &&
+              !isPulseCheckTestHarnessInviteLink(link)
+          );
+
+      setOrganizations(visibleOrganizationResults);
+      setTeams(visibleTeamResults);
       setTeamCommercialDrafts((current) => {
         const next = { ...current };
-        teamResults.forEach((team) => {
+        visibleTeamResults.forEach((team) => {
           next[team.id] = current[team.id] || team.commercialConfig;
         });
         return next;
       });
-      setPilots(pilotResults);
+      setPilots(visiblePilotResults);
       setPilotStudyModeDrafts(
-        pilotResults.reduce<Record<string, PulseCheckPilotStudyMode>>((next, pilot) => {
+        visiblePilotResults.reduce<Record<string, PulseCheckPilotStudyMode>>((next, pilot) => {
           next[pilot.id] = pilot.studyMode;
           return next;
         }, {})
       );
-      setPilotCohorts(pilotCohortResults);
+      setPilotCohorts(visiblePilotCohortResults);
       setClinicianProfiles(clinicianProfileResults);
-      setInviteLinks(inviteLinkResults);
+      setInviteLinks(visibleInviteLinkResults);
       setSportOptions(sportConfigurationResults);
       setTeamForm((current) => ({
         ...current,
-        organizationId: current.organizationId || organizationResults[0]?.id || '',
+        organizationId: current.organizationId || visibleOrganizationResults[0]?.id || '',
         defaultAdminName:
           current.defaultAdminName ||
-          organizationResults.find((organization) => organization.id === (current.organizationId || organizationResults[0]?.id))
+          visibleOrganizationResults.find((organization) => organization.id === (current.organizationId || visibleOrganizationResults[0]?.id))
             ?.primaryCustomerAdminName ||
           '',
         defaultAdminEmail:
           current.defaultAdminEmail ||
-          organizationResults.find((organization) => organization.id === (current.organizationId || organizationResults[0]?.id))
+          visibleOrganizationResults.find((organization) => organization.id === (current.organizationId || visibleOrganizationResults[0]?.id))
             ?.primaryCustomerAdminEmail ||
           '',
       }));
       setPilotForm((current) => ({
         ...current,
-        organizationId: current.organizationId || teamResults[0]?.organizationId || '',
-        teamId: current.teamId || teamResults[0]?.id || '',
+        organizationId: current.organizationId || visibleTeamResults[0]?.organizationId || '',
+        teamId: current.teamId || visibleTeamResults[0]?.id || '',
         status: 'active',
       }));
       setCohortForm((current) => ({
         ...current,
-        organizationId: current.organizationId || teamResults[0]?.organizationId || '',
-        teamId: current.teamId || teamResults[0]?.id || '',
-        pilotId: current.pilotId || pilotResults[0]?.id || '',
+        organizationId: current.organizationId || visibleTeamResults[0]?.organizationId || '',
+        teamId: current.teamId || visibleTeamResults[0]?.id || '',
+        pilotId: current.pilotId || visiblePilotResults[0]?.id || '',
       }));
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to load provisioning data:', error);
@@ -864,6 +1168,14 @@ const PulseCheckProvisioningPage: React.FC = () => {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (loading || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tour') === '1') {
+      setAdminTourOpen(true);
+    }
+  }, [loading]);
 
   useEffect(() => {
     if (hasInitializedExpansionState || loading) return;
@@ -1405,6 +1717,49 @@ const PulseCheckProvisioningPage: React.FC = () => {
       setMessage({ type: 'error', text: 'Failed to update team commercial config.' });
     } finally {
       setTeamCommercialSavingId((current) => (current === team.id ? null : current));
+    }
+  };
+
+  const handleTeamOnboardingStepStatusChange = async (
+    team: PulseCheckTeam,
+    stepId: PulseCheckOnboardingTrackerStepId,
+    status: PulseCheckOnboardingTrackerStepStatus
+  ) => {
+    const savingKey = `${team.id}:${stepId}`;
+    const currentTracker = team.implementationMetadata?.onboardingTracker || {};
+    const currentStep = currentTracker.steps?.[stepId] || { status: 'pending' as PulseCheckOnboardingTrackerStepStatus };
+
+    setTeamOnboardingTrackerSavingKey(savingKey);
+    setMessage(null);
+
+    try {
+      await pulseCheckProvisioningService.updateTeamOnboardingTracker({
+        teamId: team.id,
+        onboardingTracker: {
+          ...currentTracker,
+          steps: {
+            ...(currentTracker.steps || {}),
+            [stepId]: {
+              ...currentStep,
+              status,
+              updatedByUserId: currentUser?.id || '',
+              updatedByEmail: currentUser?.email || '',
+            },
+          },
+        },
+        updatedByUserId: currentUser?.id || '',
+        updatedByEmail: currentUser?.email || '',
+      });
+      await loadData();
+      setMessage({
+        type: 'success',
+        text: `${team.displayName} onboarding tracker updated.`,
+      });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to update team onboarding tracker:', error);
+      setMessage({ type: 'error', text: 'Failed to update onboarding tracker.' });
+    } finally {
+      setTeamOnboardingTrackerSavingKey((current) => (current === savingKey ? null : current));
     }
   };
 
@@ -2252,6 +2607,41 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-preview-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
           .pcp-file-trigger input { display: none; }
           .pcp-card-stack { display: grid; gap: 10px; }
+          .pcp-tracker-card { margin-top: 12px; }
+          .pcp-tracker-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 14px; }
+          .pcp-tracker-title-row { display: flex; align-items: center; gap: 10px; }
+          .pcp-tracker-icon { width: 30px; height: 30px; border-radius: 9px; background: var(--teal-d); border: 0.5px solid var(--teal-b); color: var(--teal); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+          .pcp-tracker-icon svg { width: 14px; height: 14px; }
+          .pcp-tracker-title { font-size: 13px; font-weight: 700; letter-spacing: -0.1px; }
+          .pcp-tracker-copy { margin-top: 3px; max-width: 760px; font-size: 11px; color: var(--t2); line-height: 1.55; }
+          .pcp-tracker-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+          .pcp-tracker-progress-shell { display: grid; gap: 8px; margin-bottom: 14px; }
+          .pcp-tracker-progress-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 11px; color: var(--t2); }
+          .pcp-tracker-progress-track { height: 6px; overflow: hidden; border-radius: 9999px; background: rgba(255, 255, 255, 0.07); }
+          .pcp-tracker-progress-bar { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--teal), #60a5fa); transition: width 0.2s ease; }
+          .pcp-tracker-legend { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+          .pcp-tracker-legend-item { border: 0.5px solid rgba(255, 255, 255, 0.08); border-radius: 10px; background: rgba(255, 255, 255, 0.02); padding: 8px 9px; min-width: 0; }
+          .pcp-tracker-legend-desc { margin-top: 5px; font-size: 10px; line-height: 1.35; color: var(--t3); }
+          .pcp-tracker-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+          .pcp-tracker-step { border: 0.5px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 10px; background: rgba(255, 255, 255, 0.022); display: grid; gap: 8px; }
+          .pcp-tracker-step-main { display: flex; gap: 9px; align-items: flex-start; min-width: 0; }
+          .pcp-tracker-step-dot { width: 18px; height: 18px; border-radius: 9999px; border: 0.5px solid rgba(255, 255, 255, 0.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; color: var(--t3); }
+          .pcp-tracker-step-dot svg { width: 10px; height: 10px; }
+          .pcp-tracker-step-title { font-size: 12px; font-weight: 600; color: var(--t1); line-height: 1.35; }
+          .pcp-tracker-step-meta { margin-top: 3px; font-size: 10px; color: var(--t3); line-height: 1.4; }
+          .pcp-tracker-step-copy { font-size: 11px; color: var(--t2); line-height: 1.5; }
+          .pcp-tracker-step-footer { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+          .pcp-tracker-select { min-width: 132px; padding: 6px 9px; border-radius: 8px; border: 0.5px solid var(--mb); background: rgba(0, 0, 0, 0.22); color: var(--t1); font-size: 11px; outline: none; }
+          .pcp-tracker-saving { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--teal); }
+          .pcp-tracker-saving svg { width: 11px; height: 11px; }
+          .pcp-tracker-status { border-radius: 9999px; padding: 3px 7px; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
+          .pcp-tracker-status-complete { background: var(--green-d); border: 0.5px solid rgba(74, 222, 128, 0.22); color: var(--green); }
+          .pcp-tracker-status-progress { background: var(--blue-d); border: 0.5px solid rgba(96, 165, 250, 0.2); color: var(--blue); }
+          .pcp-tracker-status-blocked { background: rgba(239, 68, 68, 0.09); border: 0.5px solid rgba(239, 68, 68, 0.22); color: rgba(248, 113, 113, 0.95); }
+          .pcp-tracker-status-pending { background: rgba(255, 255, 255, 0.045); border: 0.5px solid rgba(255, 255, 255, 0.08); color: var(--t3); }
+          @media (max-width: 980px) {
+            .pcp-tracker-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          }
           .pcp-link-card { padding: 11px 12px; border-radius: 10px; border: 0.5px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02); display: flex; justify-content: space-between; gap: 12px; }
           .pcp-link-card-main { min-width: 0; }
           .pcp-link-card-copy { font-size: 11px; color: var(--t2); line-height: 1.55; margin-top: 4px; }
@@ -2342,7 +2732,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
             .pcp-org-grid,
             .pcp-team-grid,
             .pcp-summary-grid,
-            .pcp-commercial-grid { grid-template-columns: 1fr; }
+            .pcp-commercial-grid,
+            .pcp-tracker-grid { grid-template-columns: 1fr; }
             .pcp-org-overview { padding-left: 18px; }
             .pcp-team-shell { padding-left: 18px; }
             .pcp-pilot-panel.open { grid-template-columns: 1fr; padding-left: 80px; }
@@ -2391,7 +2782,11 @@ const PulseCheckProvisioningPage: React.FC = () => {
             </header>
 
             <main className="pcp-main">
-              <div id="organizations-directory" className="pcp-page-head pcp-slide-up scroll-mt-24">
+              <div
+                id="organizations-directory"
+                className="pcp-page-head pcp-slide-up scroll-mt-24"
+                data-tour="admin-provisioning-header"
+              >
                 <div className="pcp-page-head-left">
                   <div className="pcp-eyebrow">PulseCheck Admin</div>
                   <div className="pcp-heading">Organizations</div>
@@ -2423,7 +2818,15 @@ const PulseCheckProvisioningPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="pcp-head-right">
+                <div className="pcp-head-right" data-tour="admin-provisioning-actions">
+                  <button type="button" className="pcp-btn pcp-btn-ghost" onClick={() => setAdminTourOpen(true)}>
+                    <Sparkles />
+                    Walkthrough
+                  </button>
+                  <Link href="/admin/pulsecheckOnboardingOverview" className="pcp-btn pcp-btn-ghost">
+                    <ClipboardList />
+                    Playbook
+                  </Link>
                   <button type="button" className="pcp-btn pcp-btn-ghost" onClick={handleExportOrganizations}>
                     <Download />
                     Export
@@ -2466,7 +2869,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pcp-toolbar pcp-slide-up" style={{ animationDelay: '0.1s' }}>
+              <div className="pcp-toolbar pcp-slide-up" style={{ animationDelay: '0.1s' }} data-tour="admin-provisioning-filters">
                 <div className="pcp-search-wrap">
                   <div className="pcp-search-icon"><Search /></div>
                   <input
@@ -2524,7 +2927,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                 </div>
               ) : null}
 
-              <div id="organization-hierarchy" className="pcp-org-list scroll-mt-24">
+              <div id="organization-hierarchy" className="pcp-org-list scroll-mt-24" data-tour="admin-organization-list">
                 {loading ? (
                   <div className="pcp-empty-panel">Loading organizations and provisioning hierarchy...</div>
                 ) : filteredOrganizationBundles.length === 0 ? (
@@ -2700,6 +3103,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                 organization.invitePreviewImageUrl
                               );
                               const teamPlanBypass = derivePulseCheckTeamPlanBypass(teamCommercialDraft);
+                              const onboardingProgress = getTeamOnboardingProgress(team);
 
                               return (
                                 <div key={team.id} className={`pcp-team-row ${teamExpanded ? 'open' : ''}`}>
@@ -3001,6 +3405,120 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                               </button>
                                             </div>
                                           </div>
+                                        </div>
+                                      </div>
+                                      <div className="pcp-card pcp-tracker-card" data-tour="admin-team-tracker">
+                                        <div className="pcp-tracker-head">
+                                          <div>
+                                            <div className="pcp-tracker-title-row">
+                                              <div className="pcp-tracker-icon"><ClipboardList /></div>
+                                              <div>
+                                                <div className="pcp-card-title" style={{ marginBottom: 0 }}>Team Onboarding Tracker</div>
+                                                <div className="pcp-tracker-title">{team.displayName} launch readiness</div>
+                                              </div>
+                                            </div>
+                                            <div className="pcp-tracker-copy">
+                                              Track the full school rollout from intake through weekly coach snapshots and stakeholder check-ins. Status changes save to this team record.
+                                            </div>
+                                          </div>
+                                          <div className="pcp-tracker-actions">
+                                            <Link
+                                              href={`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organization.id)}&teamId=${encodeURIComponent(team.id)}&mode=launch-day`}
+                                              className="pcp-ab pcp-ab-g"
+                                              data-tour="admin-launch-day-link"
+                                            >
+                                              <Clock />
+                                              Launch-Day Mode
+                                            </Link>
+                                            <Link href="/admin/pulsecheckOnboardingOverview" className="pcp-ab pcp-ab-t">
+                                              <ClipboardList />
+                                              Playbook
+                                            </Link>
+                                          </div>
+                                        </div>
+
+                                        <div className="pcp-tracker-progress-shell">
+                                          <div className="pcp-tracker-progress-top">
+                                            <span>
+                                              {onboardingProgress.completedCount} of {onboardingProgress.totalCount} steps complete
+                                            </span>
+                                            <span>
+                                              {onboardingProgress.blockedCount > 0
+                                                ? `${onboardingProgress.blockedCount} needs help`
+                                                : onboardingProgress.inProgressCount > 0
+                                                  ? `${onboardingProgress.inProgressCount} working`
+                                                  : 'No steps need help'}
+                                            </span>
+                                          </div>
+                                          <div className="pcp-tracker-progress-track">
+                                            <div className="pcp-tracker-progress-bar" style={{ width: `${onboardingProgress.pct}%` }} />
+                                          </div>
+                                        </div>
+
+                                        <div className="pcp-tracker-legend" aria-label="Onboarding status legend">
+                                          {TRACKER_STATUS_OPTIONS.map((option) => (
+                                            <div key={option.value} className="pcp-tracker-legend-item">
+                                              <span className={`pcp-tracker-status ${getTrackerStatusClassName(option.value)}`}>
+                                                {option.label}
+                                              </span>
+                                              <div className="pcp-tracker-legend-desc">{option.description}</div>
+                                            </div>
+                                          ))}
+                                        </div>
+
+                                        <div className="pcp-tracker-grid">
+                                          {TEAM_ONBOARDING_TRACKER_STEPS.map((step) => {
+                                            const status = getTeamOnboardingStepStatus(team, step.id);
+                                            const savingKey = `${team.id}:${step.id}`;
+                                            const isSaving = teamOnboardingTrackerSavingKey === savingKey;
+
+                                            return (
+                                              <div key={step.id} className="pcp-tracker-step">
+                                                <div className="pcp-tracker-step-main">
+                                                  <div className="pcp-tracker-step-dot">
+                                                    {status === 'complete' ? <CheckCircle2 /> : <Clock />}
+                                                  </div>
+                                                  <div>
+                                                    <div className="pcp-tracker-step-title">{step.label}</div>
+                                                    <div className="pcp-tracker-step-meta">{step.meeting} · {step.owner}</div>
+                                                  </div>
+                                                </div>
+                                                <div className="pcp-tracker-step-copy">{step.description}</div>
+                                                <div className="pcp-tracker-step-footer">
+                                                  <span className={`pcp-tracker-status ${getTrackerStatusClassName(status)}`}>
+                                                    {getTrackerStatusLabel(status)}
+                                                  </span>
+                                                  <div className="flex items-center gap-2">
+                                                    {isSaving ? (
+                                                      <span className="pcp-tracker-saving">
+                                                        <Loader2 className="animate-spin" />
+                                                        Saving
+                                                      </span>
+                                                    ) : null}
+                                                    <select
+                                                      className="pcp-tracker-select"
+                                                      value={status}
+                                                      disabled={isSaving}
+                                                      onChange={(event) => {
+                                                        event.stopPropagation();
+                                                        void handleTeamOnboardingStepStatusChange(
+                                                          team,
+                                                          step.id,
+                                                          event.target.value as PulseCheckOnboardingTrackerStepStatus
+                                                        );
+                                                      }}
+                                                    >
+                                                      {TRACKER_STATUS_OPTIONS.map((option) => (
+                                                        <option key={option.value} value={option.value}>
+                                                          {option.label}
+                                                        </option>
+                                                      ))}
+                                                    </select>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
                                         </div>
                                       </div>
                                     </div>
@@ -4331,6 +4849,13 @@ const PulseCheckProvisioningPage: React.FC = () => {
             </div>
           ) : null}
         </div>
+        <GuidedTour
+          open={adminTourOpen}
+          steps={PULSECHECK_ADMIN_TOUR_STEPS}
+          accentColor="#00d4aa"
+          storageKey="pulsecheck_admin_provisioning_tour_status"
+          onClose={() => setAdminTourOpen(false)}
+        />
       </div>
     </AdminRouteGuard>
   );

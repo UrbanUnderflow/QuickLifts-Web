@@ -278,40 +278,54 @@ export interface CurriculumOverride {
 // pulsecheck-daily-assignments collection for the iOS read path)
 // ──────────────────────────────────────────────────────────────────────────────
 
+export interface CurriculumProtocolSelectionResult {
+  protocolId: string;
+  protocolLabel: string;
+  cognitivePillar: TaxonomyPillar;
+  progressionLevel: ProgressionLevel;
+  /** Pillar that drove the selection. */
+  drivingPillar: TaxonomyPillar;
+  rationale: string;
+  curriculumIntent: CurriculumAssignmentIntent;
+  coachOverrideApplied?: string; // override id if any
+}
+
+export interface CurriculumSimulationSelectionResult {
+  simId: string;
+  simName: string;
+  cognitivePillar: TaxonomyPillar;
+  progressionLevel: ProgressionLevel;
+  drivingPillar: TaxonomyPillar;
+  rationale: string;
+  curriculumIntent: CurriculumAssignmentIntent;
+  coachOverrideApplied?: string;
+}
+
 export interface CurriculumGenerationResult {
   athleteUserId: string;
   sourceDate: string; // YYYY-MM-DD athlete-local
   generatedAt: number;
+  curriculumSlateId?: string;
 
-  /** The protocol the engine selected for today, plus why. */
-  protocolSelection: {
-    protocolId: string;
-    protocolLabel: string;
-    cognitivePillar: TaxonomyPillar;
-    progressionLevel: ProgressionLevel;
-    /** Pillar that drove the selection (most-underrepped). */
-    drivingPillar: TaxonomyPillar;
-    rationale: string;
-    curriculumIntent: CurriculumAssignmentIntent;
-    coachOverrideApplied?: string; // override id if any
-  };
-  /** The sim the engine selected. */
-  simSelection: {
-    simId: string;
-    simName: string;
-    cognitivePillar: TaxonomyPillar;
-    progressionLevel: ProgressionLevel;
-    drivingPillar: TaxonomyPillar;
-    rationale: string;
-    curriculumIntent: CurriculumAssignmentIntent;
-    coachOverrideApplied?: string;
-  };
+  /** The first protocol due today, plus why. */
+  protocolSelection: CurriculumProtocolSelectionResult;
+  /** Full active protocol slate for the athlete. */
+  protocolSelections?: CurriculumProtocolSelectionResult[];
+  /** The first simulation due today. */
+  simSelection: CurriculumSimulationSelectionResult;
+  /** Full active simulation slate for the athlete. */
+  simSelections?: CurriculumSimulationSelectionResult[];
 
   /** Pillar balance snapshot at time of generation (used for audit). */
   pillarBalanceAtGeneration: Record<TaxonomyPillar, number>;
-  /** The daily assignment doc ids written. */
+  /** Back-compat doc ids for the first due protocol and first due simulation. */
   dailyAssignmentIdProtocol: string;
   dailyAssignmentIdSim: string;
+  /** All protocol and simulation docs in the active slate. */
+  dailyAssignmentIdsProtocol?: string[];
+  dailyAssignmentIdsSim?: string[];
+  queuedAssignmentIds?: string[];
+  dueAssignmentIds?: string[];
 
   /** Notes for the reviewer / admin surface. */
   generatorNotes: string[];

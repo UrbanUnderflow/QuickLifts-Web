@@ -1,0 +1,151 @@
+[     288ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[     290ms] [WARNING] <link rel=preload> has an unsupported `type` value @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[     409ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ webpack-internal:///./node_modules/react-dom/cjs/react-dom.development.js:29889
+[     426ms] [LOG] [HMR] connected @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:38
+[     574ms] [LOG] [Firebase] Initial mode: {isDev: true, source: localhost default, timestamp: 2026-06-06T02:57:22.060Z} @ webpack-internal:///./src/api/firebase/config.ts:212
+[     575ms] [LOG] [Firebase] Starting initialization: {environment: development, isLocalhost: true, timestamp: 2026-06-06T02:57:22.064Z} @ webpack-internal:///./src/api/firebase/config.ts:141
+[     575ms] [LOG] [Firebase Config] Environment Check: {isDev: true, isLocalhost: true, nodeEnv: development, envVarsPresent: Object, timestamp: 2026-06-06T02:57:22.064Z} @ webpack-internal:///./src/api/firebase/config.ts:92
+[     575ms] [LOG] [Firebase Config] Final Configuration: {mode: development, apiKey: AIzaSyDy25daRNR3sd9P9OJKYnoQmLkQlhuQcy4, authDomain: quicklifts-dev-01.firebaseapp.com, projectId: quicklifts-dev-01, storageBucket: quicklifts-dev-01.appspot.com} @ webpack-internal:///./src/api/firebase/config.ts:111
+[     575ms] [LOG] [Firebase] Using configuration: {mode: development, isLocalhost: true, projectId: quicklifts-dev-01, hasApiKey: true, hasAppId: true} @ webpack-internal:///./src/api/firebase/config.ts:161
+[     578ms] [LOG] [Firebase] Initialization complete: {hasApp: true, hasAuth: true, hasDb: true, hasStorage: true, timestamp: 2026-06-06T02:57:22.067Z} @ webpack-internal:///./src/api/firebase/config.ts:182
+[     590ms] [LOG] 🛠️ Environment debug helper available! Run window.debugEnv() in console to check environment variables. @ webpack-internal:///./src/utils/envDebug.ts:61
+[     610ms] [LOG] [App] User Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36 @ webpack-internal:///./src/pages/_app.tsx:183
+[     611ms] [LOG] [App] Current URL: http://localhost:3000/elite-athlete-support-readiness-assessments @ webpack-internal:///./src/pages/_app.tsx:184
+[     612ms] [LOG] [App] User Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36 @ webpack-internal:///./src/pages/_app.tsx:183
+[     612ms] [LOG] [App] Current URL: http://localhost:3000/elite-athlete-support-readiness-assessments @ webpack-internal:///./src/pages/_app.tsx:184
+[     613ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[     613ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[     613ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[     613ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[     614ms] [WARNING] [Mixpanel] Project token not found. Tracking disabled. @ webpack-internal:///./src/pages/_app.tsx:134
+[     614ms] [LOG] 🔍 [AuthWrapper] Current User State: {user: null, subscription: undefined, isNull: true, isSafari: false, userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36} @ webpack-internal:///./src/components/AuthWrapper.tsx:453
+[     614ms] [LOG] Auth effect starting... {pathname: /404, hasCurrentUser: false, timestamp: 2026-06-06T02:57:22.103Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:490
+[     614ms] [WARNING] [Mixpanel] Project token not found. Tracking disabled. @ webpack-internal:///./src/pages/_app.tsx:134
+[     614ms] [LOG] 🔍 [AuthWrapper] Current User State: {user: null, subscription: undefined, isNull: true, isSafari: false, userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36} @ webpack-internal:///./src/components/AuthWrapper.tsx:453
+[     614ms] [LOG] Auth effect starting... {pathname: /404, hasCurrentUser: false, timestamp: 2026-06-06T02:57:22.104Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:490
+[     628ms] [LOG] Auth state changed: {hasFirebaseUser: false, email: undefined, timestamp: 2026-06-06T02:57:22.117Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:503
+[     628ms] [LOG] No firebase user, clearing state @ webpack-internal:///./src/components/AuthWrapper.tsx:766
+[     628ms] [LOG] [AuthWrapper] User not authenticated but on public route: /404. No modal needed. @ webpack-internal:///./src/components/AuthWrapper.tsx:774
+[     628ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[     629ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[     629ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[     629ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[     632ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[     632ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[     632ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[     632ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[     634ms] [ERROR] Full Debug Info: {debugCode: B6JI1X, timestamp: 2026-06-06T02:57:22.124Z, currentUrl: http://localhost:3000/elite-athlete-support-readiness-assessments, pathname: /elite-athlete-support-readiness-assessments, referrer: } @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[     635ms] [ERROR] Quick Summary: {url: http://localhost:3000/elite-athlete-support-readiness-assessments, intended: unknown, device: Desktop - Chrome, issues: Array(0)} @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[     635ms] [ERROR] Full Debug Info: {debugCode: XD83O2, timestamp: 2026-06-06T02:57:22.124Z, currentUrl: http://localhost:3000/elite-athlete-support-readiness-assessments, pathname: /elite-athlete-support-readiness-assessments, referrer: } @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[     635ms] [ERROR] Quick Summary: {url: http://localhost:3000/elite-athlete-support-readiness-assessments, intended: unknown, device: Desktop - Chrome, issues: Array(0)} @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[     655ms] [LOG] [Firebase] Persistence set successfully to browserLocalPersistence @ webpack-internal:///./src/api/firebase/config.ts:177
+[     663ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[     663ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[     663ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[     663ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[     664ms] [LOG] Auth effect starting... {pathname: /404, hasCurrentUser: false, timestamp: 2026-06-06T02:57:22.153Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:490
+[     664ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[     664ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[     664ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[     664ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[     665ms] [LOG] Auth state changed: {hasFirebaseUser: false, email: undefined, timestamp: 2026-06-06T02:57:22.154Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:503
+[     665ms] [LOG] No firebase user, clearing state @ webpack-internal:///./src/components/AuthWrapper.tsx:766
+[     665ms] [LOG] [AuthWrapper] User not authenticated but on public route: /404. No modal needed. @ webpack-internal:///./src/components/AuthWrapper.tsx:774
+[     665ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[     665ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[     665ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[     665ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[     666ms] [ERROR] Full Debug Info: {debugCode: A0J6O5, timestamp: 2026-06-06T02:57:22.155Z, currentUrl: http://localhost:3000/elite-athlete-support-readiness-assessments, pathname: /elite-athlete-support-readiness-assessments, referrer: } @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[     666ms] [ERROR] Quick Summary: {url: http://localhost:3000/elite-athlete-support-readiness-assessments, intended: unknown, device: Desktop - Chrome, issues: Array(0)} @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[     666ms] [ERROR] Full Debug Info: {debugCode: YGMOXY, timestamp: 2026-06-06T02:57:22.156Z, currentUrl: http://localhost:3000/elite-athlete-support-readiness-assessments, pathname: /elite-athlete-support-readiness-assessments, referrer: } @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[     666ms] [ERROR] Quick Summary: {url: http://localhost:3000/elite-athlete-support-readiness-assessments, intended: unknown, device: Desktop - Chrome, issues: Array(0)} @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/hydration-error-info.js:70
+[     666ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[     667ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[     667ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[     667ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[    3948ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[    8918ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[   78415ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[   79163ms] [LOG] [Fast Refresh] done in 748ms @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:190
+[   82167ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[  103391ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[  106950ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[  135640ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[  136643ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[  137646ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[  138648ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[  139651ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:80
+[  144696ms] [LOG] [HMR] connected @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:38
+[  144732ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[  147701ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[  149338ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[  149361ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/_next/static/webpack/df576c35b47c0755.webpack.hot-update.json:0
+[  149827ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[  150182ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[  150299ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/_next/static/webpack/df576c35b47c0755.webpack.hot-update.json:0
+[  150432ms] [WARNING] <link rel=preload> has an unsupported `type` value @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[  150649ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ webpack-internal:///./node_modules/react-dom/cjs/react-dom.development.js:29889
+[  150656ms] [LOG] [HMR] connected @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:38
+[  150925ms] [LOG] [Firebase] Initial mode: {isDev: true, source: localhost default, timestamp: 2026-06-06T02:59:52.411Z} @ webpack-internal:///./src/api/firebase/config.ts:212
+[  150926ms] [LOG] [Firebase] Starting initialization: {environment: development, isLocalhost: true, timestamp: 2026-06-06T02:59:52.415Z} @ webpack-internal:///./src/api/firebase/config.ts:141
+[  150926ms] [LOG] [Firebase Config] Environment Check: {isDev: true, isLocalhost: true, nodeEnv: development, envVarsPresent: Object, timestamp: 2026-06-06T02:59:52.415Z} @ webpack-internal:///./src/api/firebase/config.ts:92
+[  150926ms] [LOG] [Firebase Config] Final Configuration: {mode: development, apiKey: AIzaSyDy25daRNR3sd9P9OJKYnoQmLkQlhuQcy4, authDomain: quicklifts-dev-01.firebaseapp.com, projectId: quicklifts-dev-01, storageBucket: quicklifts-dev-01.appspot.com} @ webpack-internal:///./src/api/firebase/config.ts:111
+[  150926ms] [LOG] [Firebase] Using configuration: {mode: development, isLocalhost: true, projectId: quicklifts-dev-01, hasApiKey: true, hasAppId: true} @ webpack-internal:///./src/api/firebase/config.ts:161
+[  150929ms] [LOG] [Firebase] Initialization complete: {hasApp: true, hasAuth: true, hasDb: true, hasStorage: true, timestamp: 2026-06-06T02:59:52.418Z} @ webpack-internal:///./src/api/firebase/config.ts:182
+[  150941ms] [LOG] 🛠️ Environment debug helper available! Run window.debugEnv() in console to check environment variables. @ webpack-internal:///./src/utils/envDebug.ts:61
+[  150972ms] [LOG] [App] User Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36 @ webpack-internal:///./src/pages/_app.tsx:183
+[  150972ms] [LOG] [App] Current URL: http://localhost:3000/elite-athlete-support-readiness-assessments @ webpack-internal:///./src/pages/_app.tsx:184
+[  150973ms] [LOG] [App] User Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36 @ webpack-internal:///./src/pages/_app.tsx:183
+[  150973ms] [LOG] [App] Current URL: http://localhost:3000/elite-athlete-support-readiness-assessments @ webpack-internal:///./src/pages/_app.tsx:184
+[  150974ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[  150974ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[  150974ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[  150974ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[  150974ms] [WARNING] [Mixpanel] Project token not found. Tracking disabled. @ webpack-internal:///./src/pages/_app.tsx:134
+[  150975ms] [LOG] 🔍 [AuthWrapper] Current User State: {user: null, subscription: undefined, isNull: true, isSafari: false, userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36} @ webpack-internal:///./src/components/AuthWrapper.tsx:453
+[  150975ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T02:59:52.464Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:490
+[  150975ms] [WARNING] [Mixpanel] Project token not found. Tracking disabled. @ webpack-internal:///./src/pages/_app.tsx:134
+[  150975ms] [LOG] 🔍 [AuthWrapper] Current User State: {user: null, subscription: undefined, isNull: true, isSafari: false, userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36} @ webpack-internal:///./src/components/AuthWrapper.tsx:453
+[  150975ms] [LOG] Auth effect starting... {pathname: /elite-athlete-support-readiness-assessments, hasCurrentUser: false, timestamp: 2026-06-06T02:59:52.465Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:490
+[  150986ms] [LOG] Auth state changed: {hasFirebaseUser: false, email: undefined, timestamp: 2026-06-06T02:59:52.476Z} @ webpack-internal:///./src/components/AuthWrapper.tsx:503
+[  150986ms] [LOG] No firebase user, clearing state @ webpack-internal:///./src/components/AuthWrapper.tsx:766
+[  150987ms] [LOG] [AuthWrapper] User not authenticated but on public route: /elite-athlete-support-readiness-assessments. No modal needed. @ webpack-internal:///./src/components/AuthWrapper.tsx:774
+[  150987ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[  150987ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[  150987ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[  150987ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[  150987ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[  150987ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[  150988ms] [LOG] AuthWrapper component mounting... @ webpack-internal:///./src/components/AuthWrapper.tsx:127
+[  150988ms] [LOG] AuthWrapper setup complete, before useEffect @ webpack-internal:///./src/components/AuthWrapper.tsx:140
+[  151015ms] [LOG] [Firebase] Persistence set successfully to browserLocalPersistence @ webpack-internal:///./src/api/firebase/config.ts:177
+[  154017ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[  159114ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[  568497ms] [LOG] [HMR] connected @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/websocket.js:38
+[19953620ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[19953935ms] [LOG] [Fast Refresh] done in 315ms @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:190
+[19956937ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[19957543ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[19960622ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[21228265ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[21229700ms] [LOG] [Fast Refresh] done in 1434ms @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:190
+[21232701ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[21242503ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[21251426ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[21255495ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[21260424ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[21266254ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[21289694ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[21313820ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[21315540ms] [LOG] [Fast Refresh] done in 1720ms @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:190
+[21318550ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[21320628ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[21359741ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[21363588ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[21441952ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[21442315ms] [LOG] [Fast Refresh] done in 363ms @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:190
+[21445316ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[21453724ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[21456918ms] [WARNING] The resource http://localhost:3000/fonts/Thunder-LC.ttf was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/elite-athlete-support-readiness-assessments:0
+[21504892ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221
+[21510449ms] [LOG] [Fast Refresh] rebuilding @ webpack-internal:///./node_modules/next/dist/client/components/react-dev-overlay/pages/hot-reloader-client.js:221

@@ -33,7 +33,7 @@ const nextStepFor = (
 ): string =>
   kind === 'protocol'
     ? `Nora will either keep this reset in place or move you to the next ${PILLAR_LABELS[drivingPillar].toLowerCase()} protocol.`
-    : `Nora will either progress the pressure or move you to the next ${PILLAR_LABELS[drivingPillar].toLowerCase()} sim.`;
+    : `Nora will either progress the pressure or move you to the next ${PILLAR_LABELS[drivingPillar].toLowerCase()} simulation.`;
 
 export interface BuildCurriculumAssignmentIntentInput {
   kind: CurriculumAssignmentArtifactKind;
@@ -67,14 +67,14 @@ export const buildCurriculumAssignmentIntent = ({
   const artifactName = assetLabel.trim() || (kind === 'protocol' ? 'today\'s protocol' : 'today\'s simulation');
   const artifactKindLabel = articleFor(kind);
   const repetitionIntentional = completedReps > 0;
-  const badgeLabel = repetitionIntentional ? 'Same by design' : 'Planned rep';
-  const sequenceLabel = `Rep ${currentRep} of ${targetReps}`;
+  const badgeLabel = repetitionIntentional ? 'Same by design' : 'Planned practice';
+  const sequenceLabel = `Practice ${currentRep} of ${targetReps}`;
   const progressLabel = `${sequenceLabel} in this ${windowDays}-day window`;
   const repeatSentence = repetitionIntentional
-    ? `You have seen ${artifactName} before because repetition is the point, not a random repeat.`
+    ? `You have seen ${artifactName} before because daily familiarity is the point, not random assignment.`
     : `This starts a planned ${artifactKindLabel} exposure in your current training window.`;
   const pairedSentence = pairedAssignmentLabel
-    ? ` It is paired with ${pairedAssignmentLabel} so the reset and the pressure rep train the same focus.`
+    ? ` It is paired with ${pairedAssignmentLabel} so the reset and pressure work train the same focus.`
     : '';
 
   return {
@@ -90,7 +90,7 @@ export const buildCurriculumAssignmentIntent = ({
     currentRep,
     targetReps,
     windowDays,
-    progressionCriteria: `Move forward after ${targetReps} planned reps in this window or ${steadySessionThreshold} steady completions in a row.`,
+    progressionCriteria: `Move forward after ${targetReps} planned practices in this window or ${steadySessionThreshold} steady completions in a row.`,
     reassessmentLabel: `Nora reassesses this ${artifactKindLabel} after each completion and at the end of the ${windowDays}-day window.`,
     nextLikelyStep: nextStepFor(kind, drivingPillar),
     drivingPillar,

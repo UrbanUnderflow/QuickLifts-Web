@@ -6,12 +6,13 @@ const INPUT_ROWS = [
   ['Latest valid state snapshot', 'Current state across four dimensions, overall readiness, and confidence.', 'Yes'],
   ['AI-enriched interpretation', 'The system’s best explanation of what is most likely driving the athlete’s current state and what evidence supports it.', 'Yes'],
   ['Current escalation status', 'Tier 0 to Tier 3, safety mode, or support visibility state.', 'Yes'],
-  ['Program intent', 'Whether today is a probe, training rep, pressure exposure, reassessment, or competition-day support moment.', 'Yes'],
+  ['Program intent', 'Whether today is a probe, training exposure, pressure exposure, reassessment, or competition-day support moment.', 'Yes'],
   ['Curriculum intent', 'When the task comes from curriculum-engine, the athlete-facing why, repetition status, progress target, and move-on criteria.', 'When present'],
   ['Athlete profile', 'Longer-term strengths, weaknesses, modifier sensitivities, fatigability, and protocol responsiveness.', 'Yes'],
-  ['Current active program and daily assignment state', 'Whether today already has an unstarted, started, completed, or coach-overridden Nora task.', 'Yes'],
+  ['Current active program, curriculum slate, and daily assignment state', 'Whether today already has an unstarted, started, completed, or coach-overridden Nora task, plus which three protocol slots and three simulation slots are active in the standing curriculum.', 'Yes'],
   ['Recent session history', 'Recent exposures plus recent assignment outcomes, including whether Nora has already deferred the last day and should avoid getting stuck there again.', 'Yes'],
-  ['Schedule / context window', 'Pre-game, post-trial, travel, return-to-play, high-stakes week.', 'Yes'],
+  ['Schedule / context window', 'Pre-game, post-trial, travel, return-to-play, high-stakes week, coach schedule, competition schedule, and team rules.', 'Yes'],
+  ['Device and biometric context', 'Polar as the primary sports-performance lane, plus supported context from Apple Watch / HealthKit, Oura, Fitbit, and Google Health where available.', 'When available'],
   ['Eligible assignment candidate set', 'The bounded list of sims, protocols, or trials that are actually valid for this athlete, date, and program state.', 'Yes'],
   ['Coach assignment / manual constraints', 'Cases where a coach has locked or requested a specific family, duration, or trial window.', 'When present'],
 ];
@@ -22,18 +23,18 @@ const PRECEDENCE = [
   ['3. Support visibility', 'Persistent-red patterns can reduce aggressiveness even without clinical escalation.'],
   ['4. Fresh self-report and assignment-history posture', 'Today’s explicit signal leads, and recent Tier 0 defers can bias Nora away from repeating the same defer posture without new evidence.'],
   ['5. State-fit', 'Green / Yellow / Red plus the enriched dimension pattern decides whether the athlete should regulate, prime, recover, train, assess, or defer.'],
-  ['6. Program intent', 'Determines whether the day is a probe, skill rep, pressure exposure, reassessment, or support moment.'],
+  ['6. Program intent', 'Determines whether the day is a probe, skill practice, pressure exposure, reassessment, or support moment.'],
   ['7. AI planner choice within bounds', 'The model recommends the best-fit option from the bounded candidate set rather than following a hard-coded family matrix.'],
   ['8. Progression and dose', 'Set variant, difficulty, modifier intensity, and duration.'],
   ['9. Preference and presentation', 'Shape athlete-facing framing without changing the core decision.'],
 ];
 
 const OUTCOME_CARDS = [
-  ['Protocol only', 'Use when current state is clearly the bottleneck and a useful rep is unlikely right now.'],
-  ['Sim only', 'Use when state is workable and trainable skill is the main opportunity.'],
+  ['Protocol only', 'Real-time chat or check-in outcome outside the standing slate when current state is clearly the bottleneck and a useful skill session is unlikely right now.'],
+  ['Sim only', 'Real-time chat or check-in outcome outside the standing slate when state is workable and trainable skill is the main opportunity.'],
   ['Trial only', 'Use only for standardized assessment timing when the athlete is fit to complete it.'],
-  ['Protocol -> Sim', 'Use when a short state intervention will likely improve the next rep.'],
-  ['Sim -> Protocol', 'Use when the rep is still useful but a downshift or recovery step should follow it.'],
+  ['Protocol -> Sim', 'Use when a short state intervention will likely improve the next skill session.'],
+  ['Sim -> Protocol', 'Use when the skill session is still useful but a downshift or recovery step should follow it.'],
   ['Defer / alternate path', 'Use when state, support, or safety makes a normal assignment inappropriate.'],
 ];
 
@@ -63,6 +64,8 @@ const PLANNER_SCOPE_ROWS = [
   ['No freeform generation', 'Nora does not invent new exercises, new protocol types, or undocumented families at runtime.'],
   ['Sibling protocol registry rule', 'Protocols should live in their own registry-backed inventory, not as inline planner code and not as sim variants shoehorned into the wrong model.'],
   ['Current protocol inventory posture', 'The planner now reads published protocols from a sibling registry across breathing, focus, mindset, confidence, and visualization, but the authoring surface and long-tail inventory are still growing.'],
+  ['Curriculum boundary rule', 'The six-exercise curriculum slate remains programming truth. Real-time Nora outcomes may add, replace, or defer today’s work only when current evidence warrants it.'],
+  ['Athlete memory rule', 'Nora should lean toward protocols and simulations with better athlete-specific response evidence, freshness, and coach fit before trying a less proven option.'],
   ['Planner output contract', 'The AI planner should return structured decision JSON with candidate id, rationale, confidence, and support flags so deterministic validators can materialize the task safely.'],
 ];
 
@@ -72,12 +75,16 @@ const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
       <DocHeader
         eyebrow="Pulse Check Runtime"
         title="Nora Assignment Rules"
-        version="Version 1.4 | March 20, 2026"
-        summary="Execution-layer artifact for how Nora selects the next athlete action. This page now formalizes an AI-led planner that reads the enriched state snapshot, then chooses from a bounded candidate set of valid sims, protocols, and trials after safety and policy constraints are applied. Red days are protocol-first by default at Tier 0; defer is reserved for severe or high-cost situations rather than ordinary low-readiness days."
+        version="Version 1.5 | June 2026"
+        summary="Execution-layer artifact for how Nora selects the next athlete action in real time. This page formalizes an AI-led planner that reads the enriched state snapshot, current curriculum slate, athlete response history, device context, chat signal, and coach constraints, then chooses from a bounded candidate set after safety and policy constraints are applied. Red days are protocol-first by default at Tier 0; defer is reserved for severe or high-cost situations rather than ordinary low-readiness days."
         highlights={[
           {
             title: 'State Is a Routing Input',
-            body: 'Protocols are assigned when current state is the bottleneck. Sims and Trials are assigned when skill or assessment timing is the bottleneck.',
+            body: 'Protocols are assigned when current state is the real-time bottleneck. Sims and Trials are assigned when skill or assessment timing is the real-time bottleneck.',
+          },
+          {
+            title: 'Curriculum Is The Standing Toolkit',
+            body: 'The six active curriculum slots remain the baseline plan. Nora chat can add, replace, sequence, or defer work only when current evidence warrants it.',
           },
           {
             title: 'AI Chooses Within Bounds',
@@ -93,15 +100,15 @@ const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
           },
           {
             title: 'Completion Should Explain The Update',
-            body: 'Finishing a rep should write an athlete-readable session summary and a coach-readable next-program update rather than silently changing the active program underneath them.',
+            body: 'Finishing a practice item should write an athlete-readable session summary and a coach-readable next-program update rather than silently changing the active program underneath them.',
           },
           {
             title: 'Curriculum Repetition Needs A Why',
-            body: 'When an assignment carries curriculumIntent, Nora should use it to explain same-by-design repetition, the active rep target, and how the athlete moves forward. Home and Training Room should show this before launch.',
+            body: 'When an assignment carries curriculumIntent, Nora should use it to explain same-by-design repetition, the active practice target, and how the athlete moves forward. Home and Training Room should show this before launch.',
           },
           {
             title: 'Meaningful Shifts Deserve Follow-Up',
-            body: 'When a completed rep materially changes the next focus, Nora should offer an optional plain-language follow-up instead of expecting the athlete to infer the change alone.',
+            body: 'When a completed practice materially changes the next focus, Nora should offer an optional plain-language follow-up instead of expecting the athlete to infer the change alone.',
           },
           {
             title: 'Coach Intervention Freezes The Date',
@@ -169,7 +176,7 @@ const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
                 items={[
                   'Assign by protocol class and trigger pattern, not by generic calming content.',
                   'Regulation fits overactivation, frustration, and emotional spillover.',
-                  'Priming fits underactivation, flatness, and scattered focus before a useful rep.',
+                  'Priming fits underactivation, flatness, and scattered focus before a useful skill session.',
                   'Recovery fits post-load, post-trial, and cognitive depletion states.',
                 ]}
               />
@@ -182,7 +189,7 @@ const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
               <BulletList
                 items={[
                   'When state is workable and skill is the bottleneck, assign the best-fit family and variant.',
-                  'If state and skill bottlenecks both exist, prefer Protocol -> Sim instead of forcing a low-quality rep.',
+                  'If state and skill bottlenecks both exist, prefer Protocol -> Sim instead of forcing a low-quality skill session.',
                   'Yellow plus a high-pressure family should usually mean lighter modifier intensity or shorter duration.',
                   'Red without a trial or coach lock should not produce a normal pressure Sim.',
                 ]}
@@ -224,7 +231,7 @@ const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
         <InfoCard
           title="Current Runtime Truth"
           accent="blue"
-          body="In the current implementation slice, the Assignment Orchestrator can materialize one Nora daily task after check-in and the planner now reads published protocols from a sibling registry rather than an inline list. The protocol lane is real and broader than breathing-only, but its authoring workflow and inventory depth still need to mature."
+          body="In the current implementation slice, the Assignment Orchestrator can materialize one Nora daily task after check-in, the planner reads published protocols from a sibling registry, and the daily curriculum generator can write one protocol plus one simulation. The six-slot curriculum slate, slot mastery, maintenance, and backfill model are specified but not yet implemented as runtime storage."
         />
       </SectionBlock>
 

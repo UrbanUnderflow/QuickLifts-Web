@@ -91,7 +91,7 @@ const createFakeFirestore = (seed: Seed = {}) => {
   };
 };
 
-test('admin daily curriculum generator writes protocol, sim, and generation trace docs', async () => {
+test('admin daily curriculum generator writes six assignment docs, slate, and generation trace docs', async () => {
   const { db, collections } = createFakeFirestore({
     'pulsecheck-protocols': {
       'protocol-composure': {
@@ -103,11 +103,43 @@ test('admin daily curriculum generator writes protocol, sim, and generation trac
         progressionLevel: 'foundational',
         durationSeconds: 120,
       },
+      'protocol-box-breathing': {
+        id: 'protocol-box-breathing',
+        label: 'Box Breathing',
+        publishStatus: 'published',
+        isActive: true,
+        cognitivePillar: TaxonomyPillar.Composure,
+        progressionLevel: 'foundational',
+        durationSeconds: 120,
+      },
+      'protocol-visualization': {
+        id: 'protocol-visualization',
+        label: 'Visualization',
+        publishStatus: 'published',
+        isActive: true,
+        cognitivePillar: TaxonomyPillar.Composure,
+        progressionLevel: 'foundational',
+        durationSeconds: 120,
+      },
     },
     'sim-modules': {
       'sim-composure': {
         id: 'sim-composure',
         name: 'Composure Sim',
+        isActive: true,
+        taxonomy: { primaryPillar: TaxonomyPillar.Composure },
+        progressionLevel: 'foundational',
+      },
+      'sim-pressure': {
+        id: 'sim-pressure',
+        name: 'Pressure Sim',
+        isActive: true,
+        taxonomy: { primaryPillar: TaxonomyPillar.Composure },
+        progressionLevel: 'foundational',
+      },
+      'sim-reset-switch': {
+        id: 'sim-reset-switch',
+        name: 'The Reset Switch',
         isActive: true,
         taxonomy: { primaryPillar: TaxonomyPillar.Composure },
         progressionLevel: 'foundational',
@@ -126,20 +158,33 @@ test('admin daily curriculum generator writes protocol, sim, and generation trac
   assert.ok(result);
   assert.equal(result.protocolSelection.protocolId, 'protocol-composure');
   assert.equal(result.simSelection.simId, 'sim-composure');
+  assert.equal(result.protocolSelections?.length, 3);
+  assert.equal(result.simSelections?.length, 3);
+  assert.equal(result.dailyAssignmentIdsProtocol?.length, 3);
+  assert.equal(result.dailyAssignmentIdsSim?.length, 3);
+  assert.equal(result.queuedAssignmentIds?.length, 6);
+  assert.equal(result.dueAssignmentIds?.length, 2);
   assert.equal(collections.get('pulsecheck-curriculum-config')?.size, 1);
-  assert.equal(collections.get('pulsecheck-daily-assignments')?.size, 2);
+  assert.equal(collections.get('pulsecheck-daily-assignments')?.size, 6);
+  assert.equal(collections.get('pulsecheck-curriculum-slates')?.size, 1);
   assert.equal(collections.get('pulsecheck-curriculum-generation-traces')?.size, 1);
 
   const assignments = [...collections.get('pulsecheck-daily-assignments')!.values()];
-  assert.equal(assignments.filter((a) => a.assignedBy === 'curriculum-engine').length, 2);
+  assert.equal(assignments.filter((a) => a.assignedBy === 'curriculum-engine').length, 6);
+  assert.equal(assignments.filter((a) => a.actionType === 'protocol').length, 3);
+  assert.equal(assignments.filter((a) => a.actionType === 'simulation').length, 3);
   const protocolAssignment = assignments.find((a) => a.actionType === 'protocol');
   const simAssignment = assignments.find((a) => a.actionType === 'simulation');
   assert.ok(protocolAssignment);
   assert.ok(simAssignment);
+  assert.equal(protocolAssignment!.curriculumSlotKind, 'protocol');
+  assert.equal(protocolAssignment!.curriculumSlotIndex, 1);
+  assert.equal(protocolAssignment!.curriculumIsDueToday, true);
+  assert.equal(simAssignment!.curriculumSlotKind, 'simulation');
   assert.equal((protocolAssignment!.curriculumIntent as any)?.source, 'curriculum-engine');
   assert.equal((protocolAssignment!.curriculumIntent as any)?.pairedAssignmentLabel, 'Composure Sim');
   assert.match(String((simAssignment!.curriculumIntent as any)?.whyThisToday), /Composure Sim/);
-  assert.match(String((simAssignment!.curriculumIntent as any)?.progressionCriteria), /planned reps/);
+  assert.match(String((simAssignment!.curriculumIntent as any)?.progressionCriteria), /planned practices/);
 });
 
 test('admin daily curriculum generator can assign legacy category-only production assets', async () => {
@@ -176,6 +221,7 @@ test('admin daily curriculum generator can assign legacy category-only productio
   assert.equal(result.simSelection.simId, 'sim-focus');
   assert.equal(result.simSelection.cognitivePillar, TaxonomyPillar.Focus);
   assert.equal(collections.get('pulsecheck-daily-assignments')?.size, 2);
+  assert.equal(result.queuedAssignmentIds?.length, 2);
   const simAssignment = [...collections.get('pulsecheck-daily-assignments')!.values()]
     .find((assignment) => assignment.actionType === 'simulation');
   assert.equal(simAssignment?.simName, 'Focus Sim');

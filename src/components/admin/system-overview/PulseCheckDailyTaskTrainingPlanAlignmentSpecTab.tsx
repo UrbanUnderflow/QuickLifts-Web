@@ -20,13 +20,14 @@ import {
 } from './PulseCheckRuntimeDocPrimitives';
 
 const OBJECT_MODEL_ROWS = [
-  ['DailyTask', 'Execution truth for a specific date.', 'What is my rep today? What state is it in? What happened when I finished?', 'Exactly one primary due-today task per athlete per date.'],
-  ['TrainingPlan', 'Programming truth across days or sessions.', 'What is Nora building over time? Where am I in the sequence?', 'Provides context and progression but does not replace the active DailyTask by itself.'],
+  ['DailyTask', 'Execution truth for a specific date.', 'What is my practice today? What state is it in? What happened when I finished?', 'Exactly one primary due-today task per athlete per date.'],
+  ['TrainingPlan', 'Programming truth across days, sessions, or the six-slot curriculum slate.', 'What is Nora building over time? Where am I in the sequence?', 'Provides context and progression but does not replace the active DailyTask by itself.'],
+  ['CurriculumSlate', 'Standing toolkit inside or beside the TrainingPlan.', 'Which three protocols and three simulations are active until mastery?', 'Owns slot status, mastery evidence, maintenance posture, and backfill rules.'],
   ['PlanStep', 'A sequenced unit inside a TrainingPlan.', 'What was today supposed to be inside the plan?', 'Overridden steps are marked overridden, not silently completed.'],
 ];
 
 const MATERIALIZATION_ROWS = [
-  ['First app open', 'Primary v1 materialization path. Create today’s DailyTask from the latest state snapshot, active plan, and assignment rules.'],
+  ['First app open', 'Primary v1 materialization path. Create today’s DailyTask from the latest state snapshot, active plan or curriculum slate, and assignment rules.'],
   ['Structured check-in', 'May materialize or rematerialize the task when the task is still mutable.'],
   ['Coach manual assignment', 'May supersede an unmaterialized or mutable task for the date.'],
   ['State-triggered rematerialization', 'Allows same-day replacement when fresh state meaningfully changes routing.'],
@@ -52,6 +53,8 @@ const TIME_BOUNDARY_ROWS = [
 
 const COEXISTENCE_ROWS = [
   ['Protocol -> Sim chain', 'Yes', 'Represent as one composite DailyTask with internal phase progress, not two competing primary tasks.'],
+  ['Six-slot curriculum slate', 'Yes', 'Keep all six active exercises as programming truth, but materialize only the due work as the primary DailyTask.'],
+  ['Real-time Nora chat add-on', 'Yes', 'Allowed when chat signals, sport-performance device data, or coach context indicates an immediate need outside the standing slate. Show it as secondary work unless it intentionally supersedes today’s primary task.'],
   ['Coach secondary work', 'Yes', 'Allow as non-primary work. Show under Active Plans or coach-tagged training, not as the Home primary task.'],
   ['Post-completion follow-up suggestion', 'Yes', 'Keep as a suggestion in the completed card or Nora chat, not a second Home task.'],
   ['Two simultaneous Nora primary tasks', 'No', 'Never allow this. Nora must resolve to one primary due-today task.'],
@@ -64,8 +67,8 @@ const EMPTY_AND_OVERRIDE_ROWS = [
 ];
 
 const SURFACE_ROWS = [
-  ['Home', 'DailyTask surface', 'Active DailyTask.id', 'Shows the one current rep, why it was assigned, whether it is done, and what the athlete should do next.'],
-  ['Training Room', 'TrainingPlan surface with Today mirror', 'Active DailyTask.id + active TrainingPlan context', 'Uses the three-section model: Today -> Active Plans -> Recent Results.'],
+  ['Home', 'DailyTask surface', 'Active DailyTask.id', 'Shows the one current practice item, why it was assigned, whether it is done, and what the athlete should do next.'],
+  ['Training Room', 'TrainingPlan and curriculum-slate surface with Today mirror', 'Active DailyTask.id + active TrainingPlan context + active slate summary', 'Uses the four-section model: Today -> Active Toolkit -> Active Plans -> Recent Results.'],
   ['Nora chat', 'Conversation surface', 'Active DailyTask.id + TrainingPlan.id + latest state snapshot', 'Must launch and speak from the same assignment truth rather than inventing a second task narrative.'],
 ];
 
@@ -101,16 +104,19 @@ const SOURCE_OF_TRUTH_ROWS = [
   ['1. Safety and escalation policy', 'Tier 2 and Tier 3 states override all training assignment.'],
   ['2. Current state snapshot and freshness', 'Same-day state may cause Nora to override the planned step.'],
   ['3. DailyTask execution truth', 'The primary DailyTask is what every athlete surface shows for the date.'],
-  ['4. Active TrainingPlan context', 'Provides progression and longitudinal framing without replacing the active task by itself.'],
+  ['4. Active TrainingPlan and CurriculumSlate context', 'Provides progression, six active exercise slots, and longitudinal framing without replacing the active task by itself.'],
   ['5. Legacy assignment data', 'Only valid when mapped into the new model. Never show it as a competing primary truth.'],
 ];
 
 const ACCEPTANCE_ITEMS = [
   'Home, Nora chat, and Training Room all reference the same DailyTask.id for the same date.',
-  'The athlete never sees two different answers to what today’s rep is.',
-  'Completing a rep changes Home from launch-ready to completed state.',
+  'The athlete never sees two different answers to what today’s practice item is.',
+  'Completing today’s practice changes Home from launch-ready to completed state.',
   'Training Room mirrors today’s status correctly.',
   'Plan-backed tasks show progress in athlete-facing terms.',
+  'The active curriculum slate shows exactly three protocol slots and three simulation slots when the six-exercise model is enabled.',
+  'A graduated slot moves to maintenance or history and is backfilled before the athlete drops below three active protocols or three active simulations.',
+  'Real-time Nora chat assignments are labeled as state-driven add-ons or replacements when they are outside the standing curriculum slate.',
   'Home and Training Room show a top-level assignment-intent summary: why it was assigned, how long the repeat lasts, and what moves the athlete on.',
   'Overrides are visible and explained instead of silent.',
   'Empty states use live baseline or progress context instead of stale legacy fallbacks.',
@@ -130,8 +136,8 @@ const PulseCheckDailyTaskTrainingPlanAlignmentSpecTab: React.FC = () => {
       <DocHeader
         eyebrow="Pulse Check Runtime"
         title="Daily Task + Training Plan Alignment Spec"
-        version="Version 1.0 | March 2026"
-        summary="Runtime surface-coherence contract for athlete work in PulseCheck. This artifact defines the canonical DailyTask, TrainingPlan, and PlanStep model; materialization rules; lifecycle state machine; date-boundary rules; event contract; and migration path so Home, Training Room, and Nora chat always speak from one assignment truth."
+        version="Version 1.1 | June 2026"
+        summary="Runtime surface-coherence contract for athlete work in PulseCheck. This artifact defines the canonical DailyTask, TrainingPlan, CurriculumSlate, and PlanStep model; materialization rules; lifecycle state machine; date-boundary rules; event contract; and migration path so Home, Training Room, and Nora chat always speak from one assignment truth."
         highlights={[
           {
             title: 'DailyTask Is Execution Truth',
@@ -140,6 +146,10 @@ const PulseCheckDailyTaskTrainingPlanAlignmentSpecTab: React.FC = () => {
           {
             title: 'TrainingPlan Is Programming Truth',
             body: 'The plan explains what Nora is building over time, but it does not create a second competing answer about what matters right now.',
+          },
+          {
+            title: 'CurriculumSlate Holds Active Toolkit',
+            body: 'The six active slots explain what stays in training over time while DailyTask decides what is due today.',
           },
           {
             title: 'Programs Prescribe; Sessions Deliver',
@@ -154,7 +164,7 @@ const PulseCheckDailyTaskTrainingPlanAlignmentSpecTab: React.FC = () => {
         masterReference="Use Nora Assignment Rules for bounded selection logic, State Signal Layer for state and freshness logic, Runtime Architecture for source-of-truth ordering, and this page for what athlete-facing execution truth should look like once a task exists."
         relatedDocs={[
           'Runtime Architecture v1',
-          'Nora Assignment Rules v1.1',
+          'Nora Assignment Rules v1.5',
           'State Signal Layer v1.2',
           'Profile Architecture v1.3',
           'Onboarding Architecture v1',
@@ -172,7 +182,7 @@ const PulseCheckDailyTaskTrainingPlanAlignmentSpecTab: React.FC = () => {
           <InfoCard
             title="TrainingPlan"
             accent="blue"
-            body="Longer-horizon programming context. It should explain what Nora is building without conflicting with the current-day execution truth."
+            body="Longer-horizon programming context. It should explain what Nora is building, including the six active curriculum slots when enabled, without conflicting with the current-day execution truth."
           />
           <InfoCard
             title="PlanStep"
@@ -204,12 +214,12 @@ const PulseCheckDailyTaskTrainingPlanAlignmentSpecTab: React.FC = () => {
           <InfoCard
             title="Home"
             accent="purple"
-            body="Home is the DailyTask surface. It answers what today’s rep is, why it was assigned, whether it is done, and what the next action should be."
+            body="Home is the DailyTask surface. It answers what today’s practice item is, why it was assigned, whether it is done, and what the next action should be."
           />
           <InfoCard
             title="Training Room"
             accent="blue"
-            body="Training Room is the TrainingPlan surface with a mirrored Today section at the top. The intended information architecture is Today -> Active Plans -> Recent Results, with assignment intent visible before launch."
+            body="Training Room is the TrainingPlan and curriculum-slate surface with a mirrored Today section at the top. The intended information architecture is Today -> Active Toolkit -> Active Plans -> Recent Results, with assignment intent visible before launch."
           />
           <InfoCard
             title="Nora Chat"
@@ -256,7 +266,7 @@ const PulseCheckDailyTaskTrainingPlanAlignmentSpecTab: React.FC = () => {
               <BulletList
                 items={[
                   'protocol_then_sim is one DailyTask.',
-                  'Home should treat it as one due-today rep.',
+                  'Home should treat it as one due-today practice item.',
                   'The runtime may show internal phase progress, but the Home card completes only when the full chain completes.',
                 ]}
               />
@@ -285,7 +295,7 @@ const PulseCheckDailyTaskTrainingPlanAlignmentSpecTab: React.FC = () => {
           <InfoCard
             title="Plan Cardinality And Pause Posture"
             accent="blue"
-            body="V1 allows multiple active plans in the model, but exactly one may be primary. Paused and resumed remain reserved extension states or events rather than launch-blocking v1 requirements across all execution surfaces."
+            body="V1 allows multiple active plans in the model, but exactly one may be primary. The six-slot curriculum slate should not create six primary DailyTasks. Paused and resumed remain reserved extension states or events rather than launch-blocking v1 requirements across all execution surfaces."
           />
         </CardGrid>
       </SectionBlock>
