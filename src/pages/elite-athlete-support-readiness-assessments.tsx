@@ -9,6 +9,7 @@ import {
   BookOpen,
   Brain,
   CheckCircle2,
+  ChevronDown,
   ClipboardCheck,
   Gauge,
   GraduationCap,
@@ -36,7 +37,10 @@ type DomainKey =
   | 'escalation'
   | 'privacyTrust'
   | 'returnSupport'
-  | 'documentation';
+  | 'documentation'
+  | 'biometrics'
+  | 'mindBody'
+  | 'curriculumSupport';
 
 type AnswerOption = {
   label: string;
@@ -172,6 +176,21 @@ const domainConfig: Record<DomainKey, { label: string; icon: LucideIcon; descrip
     icon: ClipboardCheck,
     description: 'Minimum necessary event records, status, and handoff evidence.',
   },
+  biometrics: {
+    label: 'Biometrics and readiness',
+    icon: Gauge,
+    description: 'Reading HRV, sleep, and load as signals of mental and physical readiness.',
+  },
+  mindBody: {
+    label: 'Mind-body integration',
+    icon: Activity,
+    description: 'How psychology and physiology interact through injury, pain, and return to play.',
+  },
+  curriculumSupport: {
+    label: 'Reinforcing the curriculum',
+    icon: BookOpen,
+    description: 'Supporting the mental-performance skills an athlete is actively learning.',
+  },
 };
 
 const scoreBands: ScoreBand[] = [
@@ -208,14 +227,14 @@ const scoreBands: ScoreBand[] = [
 const assessments: StakeholderAssessment[] = [
   {
     id: 'parent',
-    title: 'Parent Elite Athlete Readiness',
+    title: 'Supporting Your Child Through Sport: Parent Readiness',
     shortTitle: 'Parent readiness',
     audience: 'Parents and guardians',
     icon: Home,
     accent: COLORS.lime,
     secondary: COLORS.sky,
-    price: '$149',
-    trainingPrice: '$399',
+    price: '$10',
+    trainingPrice: '$199',
     description:
       'Find out how ready you are to support your child through the pressure, setbacks, and big emotions that come with competing, without turning home into another place they have to perform.',
     includes: ['11-minute check-in', 'Your readiness report', 'Safety-moment check', 'A personalized next step'],
@@ -346,13 +365,13 @@ const assessments: StakeholderAssessment[] = [
       {
         title: 'Parent Foundations: The Athlete Brain Under Pressure',
         format: 'Two live sessions plus a take-home guide',
-        price: '$399',
+        price: '$199',
         outcomes: ['Understanding stress and recovery', 'What to say (and what not to)', 'Easing pressure at home'],
       },
       {
         title: 'Recognizing the Signs Before a Crisis',
         format: 'Go-at-your-own-pace lessons plus real scenarios',
-        price: '$249',
+        price: '$79',
         outcomes: ['Eating and sleep changes', 'Pulling-away signs', 'Knowing when to get help'],
       },
     ],
@@ -438,26 +457,26 @@ const assessments: StakeholderAssessment[] = [
   },
   {
     id: 'coach',
-    title: 'Coach Readiness: The Athlete Under Pressure',
+    title: 'Coaching the Mental Game: Performance Readiness',
     shortTitle: 'Coach readiness',
     audience: 'Head coaches, assistants, and performance staff',
     icon: Target,
     accent: COLORS.sky,
     secondary: COLORS.lime,
-    price: '$199',
-    trainingPrice: '$599',
+    price: '$10',
+    trainingPrice: '$399',
     description:
-      'Measures whether you can build a high-standard environment that keeps trust intact, read the pressure and warning signs across your roster, and move concern to the right people without trying to be the clinician.',
+      "Measures how ready you are to deliberately coach the mental game, build mental skills into how you train, and partner with the athlete's mental-performance development, not just run the X's and O's.",
     includes: ['14-minute assessment', 'Team-climate readout', 'Safety-judgment screen', 'Your next coaching step'],
     domains: [
       'neuroscience',
+      'biometrics',
       'mentalPerformance',
-      'patternRecognition',
+      'curriculumSupport',
       'communication',
+      'patternRecognition',
       'roleBoundaries',
       'escalation',
-      'privacyTrust',
-      'returnSupport',
     ],
     questions: [
       {
@@ -471,6 +490,19 @@ const assessments: StakeholderAssessment[] = [
           { label: 'Fatigue matters a little', detail: 'Tiredness affects play, but rest and a pep talk usually handle it.', score: 2 },
           { label: 'Their state changes what they can execute', detail: 'Sleep, fatigue, and pressure change how the skills actually show up.', score: 3 },
           { label: 'Read the whole picture, not just the play', detail: 'Execution is a pattern across fatigue, load, pressure, and how supported they feel.', score: 4 },
+        ],
+      },
+      {
+        id: 'coach-biometrics',
+        domain: 'biometrics',
+        prompt: 'Your readiness dashboard shows several athletes with suppressed recovery and poor sleep after a heavy week, but today is a big scheduled session. What is the best move?',
+        scenario: 'The plan says go hard; the data says the group is under-recovered.',
+        options: [
+          { label: 'Run the session as planned', detail: 'Stick to the schedule no matter what the data says.', score: 0 },
+          { label: 'Ignore the data and trust the eye test', detail: 'Dismiss the recovery numbers as unreliable.', score: 1 },
+          { label: 'Note it but do not change the plan', detail: 'Acknowledge the trend without adjusting.', score: 2 },
+          { label: 'Adjust the session to the readiness signal', detail: 'Modify volume or intensity to match recovery.', score: 3 },
+          { label: 'Coach to the data and the room', detail: 'Weigh the readiness data, how they look, and the schedule, then adjust the session and tell them why.', score: 4 },
         ],
       },
       {
@@ -497,6 +529,19 @@ const assessments: StakeholderAssessment[] = [
           { label: 'Address the team only', detail: 'Speak to the group but skip the athlete at the center of it.', score: 2 },
           { label: 'Talk to the athlete first, then steady the group', detail: 'Handle the source one-on-one, then reset the team standard.', score: 3 },
           { label: 'Reset the standard and protect the person', detail: 'Support the athlete privately, name the team norm, and keep it from becoming the culture.', score: 4 },
+        ],
+      },
+      {
+        id: 'coach-curriculum',
+        domain: 'curriculumSupport',
+        prompt: 'Your athletes are learning a pre-performance reset routine, breathing and a focus cue, in their mental-performance program. How should practice fit in?',
+        scenario: 'You control the environment where they would actually use these skills.',
+        options: [
+          { label: 'Leave it to the mental team', detail: 'Keep mental skills out of practice entirely.', score: 0 },
+          { label: 'Call it a distraction', detail: 'Tell them to skip the routine and just compete.', score: 1 },
+          { label: 'Mention it once and move on', detail: 'Acknowledge the routine but never use it.', score: 2 },
+          { label: 'Build reps of the routine into practice', detail: 'Create moments where they rehearse the reset under pressure.', score: 3 },
+          { label: 'Rehearse it and feed back to the team', detail: 'Build the skill into practice and share what you see with the mental-performance team.', score: 4 },
         ],
       },
       {
@@ -566,63 +611,45 @@ const assessments: StakeholderAssessment[] = [
           { label: 'Activate the emergency protocol now', detail: 'Do not leave them alone, follow your emergency steps, and hand off to the right care immediately.', score: 4 },
         ],
       },
-      {
-        id: 'coach-privacy',
-        domain: 'privacyTrust',
-        prompt: 'After a concern gets routed, what belongs in a team-level update?',
-        scenario: "Staff want details before deciding tomorrow's plan.",
-        options: [
-          { label: 'Share the whole story with staff', detail: 'Assume everyone knowing everything is safest.', score: 0 },
-          { label: 'Tell whoever can act fastest', detail: 'Hand the details to whoever can change things quickest.', score: 1 },
-          { label: 'Say nothing until the athlete clears every word', detail: 'Hold all info until they approve it, even when safety needs an exception.', score: 2 },
-          { label: 'Share only what staff need to do their job', detail: 'Give the smallest useful update and follow consent or safety rules.', score: 3 },
-          { label: 'Protect trust and follow policy', detail: 'Share the least needed with the right people, and note the consent or safety basis.', score: 4 },
-        ],
-      },
-      {
-        id: 'coach-return',
-        domain: 'returnSupport',
-        prompt: 'A clinician clears an athlete to re-enter team activity with monitoring. What should coaching do first?',
-        scenario: 'The athlete wants to regain role status quickly.',
-        options: [
-          { label: 'Run the normal pressure test', detail: 'Use competition-like stress to show they are back.', score: 0 },
-          { label: 'Make them sit out indefinitely', detail: 'Avoid all risk by withholding sport context.', score: 1 },
-          { label: 'Ask teammates to watch them', detail: 'Creates informal surveillance and stigma.', score: 2 },
-          { label: 'Use a lower-pressure return', detail: 'Follow clearance limits and keep status details contained.', score: 3 },
-          { label: 'Stage the return without making it a test', detail: 'Coordinate role-appropriate limits, watch the load, and keep the pressure off.', score: 4 },
-        ],
-      },
     ],
     trainingTracks: [
       {
         title: 'Coaching the Nervous System',
         format: 'Live workshop plus team language guide',
-        price: '$599',
+        price: '$399',
         outcomes: ['Reading pressure and fatigue', 'Task-focused correction', 'Recovery-aware practice design'],
       },
       {
-        title: 'Coach Escalation Protocol Lab',
-        format: 'Scenario-based certification session',
-        price: '$449',
-        outcomes: ['Who to notify first', 'Boundary language', 'Emergency response timing'],
+        title: 'Coaching the Mind in Practice',
+        format: 'Scenario-based session',
+        price: '$199',
+        outcomes: ['Reinforcing mental skills', 'Reading the warning signs', 'When to escalate'],
       },
     ],
     domainCopy: {
       neuroscience: {
-        label: 'Fatigue and pressure',
-        description: 'How fatigue, sleep, and pressure change what an athlete can actually execute.',
+        label: 'Coaching the nervous system',
+        description: 'Building pressure, arousal, and recovery into how you design practice.',
+      },
+      biometrics: {
+        label: 'Load and readiness',
+        description: 'Reading recovery and readiness data to plan smarter sessions.',
       },
       mentalPerformance: {
-        label: 'Team climate and confidence',
-        description: 'Building standards and confidence without fear, burnout, or hidden mistakes.',
+        label: 'Building mental skills',
+        description: 'Confidence, focus, and pressure tolerance coached as trainable skills.',
+      },
+      curriculumSupport: {
+        label: 'Reinforcing the curriculum',
+        description: 'Reinforcing the mental skills your athletes are learning, in practice.',
+      },
+      communication: {
+        label: 'Feedback that builds',
+        description: 'Correcting and connecting without shame or making it about who they are.',
       },
       patternRecognition: {
         label: 'Reading the warning signs',
         description: 'Spotting changes in behavior, mood, and effort that repeat over time.',
-      },
-      communication: {
-        label: 'Feedback that lands',
-        description: 'Correcting and connecting without shame or making it about who they are.',
       },
       roleBoundaries: {
         label: 'Staying in your lane',
@@ -632,14 +659,6 @@ const assessments: StakeholderAssessment[] = [
         label: 'When to escalate',
         description: 'When to step in, who to notify first, and how to move on an emergency.',
       },
-      privacyTrust: {
-        label: 'Trust and information',
-        description: "Sharing the minimum needed with staff while protecting the athlete's trust.",
-      },
-      returnSupport: {
-        label: 'Bringing them back',
-        description: 'Re-integrating an athlete after a concern without making the return a test.',
-      },
     },
     bands: [
       {
@@ -648,23 +667,23 @@ const assessments: StakeholderAssessment[] = [
         tone: 'Start here',
         accent: COLORS.rose,
         summary:
-          'You care about your athletes, and that is the base to build on. A few core ideas about pressure, boundaries, and when to escalate are still missing, and those are the fastest to learn.',
+          'You know your sport. This is about coaching the mental game with the same intent, where a few core ideas will change how your athletes handle pressure.',
       },
       {
         label: 'Developing',
         range: '50-69',
-        tone: 'Good instincts, real gaps',
+        tone: 'Good instincts, room to grow',
         accent: COLORS.amber,
         summary:
-          'You handle a lot of this well. Tightening how you read the warning signs and route concern will make your program steadier when it matters.',
+          'You already coach a lot of this by feel. Making the mental skills and readiness pieces deliberate will make your program steadier under pressure.',
       },
       {
         label: 'Program-Ready',
         range: '70-84',
-        tone: 'Solid and trusted',
+        tone: 'Solid and intentional',
         accent: COLORS.sky,
         summary:
-          'You can hold standards and protect trust, and you know when something leaves your lane. Some fine-tuning will sharpen the hardest moments.',
+          'You coach the mind as well as the body and know when something leaves your lane. Fine-tuning will sharpen the hardest moments.',
       },
       {
         label: 'Culture-Builder',
@@ -672,7 +691,7 @@ const assessments: StakeholderAssessment[] = [
         tone: 'Strong and prepared',
         accent: COLORS.lime,
         summary:
-          'You build an environment where athletes perform and still ask for help. This is the standard other programs should learn from.',
+          'You build an environment where athletes perform, grow mental skills, and still ask for help. This is the standard other programs should learn from.',
       },
     ],
     resultsCopy: {
@@ -681,7 +700,7 @@ const assessments: StakeholderAssessment[] = [
       trainingLabel: 'What to train next',
       trainingTitle: 'Your next step',
       trainingIntro:
-        'These optional sessions go deeper on the areas above. Start wherever your program needs it most, there is no wrong order.',
+        'These optional sessions go deeper on coaching the mental game. Start wherever your program needs it most, there is no wrong order.',
       safetyHoldTitle: 'One safety answer needs work',
       safetyHoldBody:
         "On a question about an athlete's safety, the most protective answer was missed. Until that is shored up we are keeping the result below Ready, because in those moments getting it right matters more than the overall score.",
@@ -689,52 +708,92 @@ const assessments: StakeholderAssessment[] = [
   },
   {
     id: 'athleticTrainer',
-    title: 'Athletic Trainer: Mental Readiness in Sports Medicine',
+    title: 'Performance Neuroscience Readiness for Sports Medicine',
     shortTitle: 'Athletic trainer readiness',
     audience: 'Athletic trainers and sports medicine staff',
     icon: Stethoscope,
     accent: COLORS.purple,
     secondary: COLORS.emerald,
-    price: '$249',
-    trainingPrice: '$799',
+    price: '$10',
+    trainingPrice: '$399',
     description:
-      'Measures whether you can recognize mental-readiness patterns, hold your scope of practice, document the minimum necessary, and coordinate the right support lane in sports medicine.',
-    includes: ['17-minute assessment', 'Pattern-triage readout', 'Documentation screen', 'Your next CEU-aligned step'],
+      'Measures how ready you are to extend your clinical expertise into performance neuroscience and the mental-performance side, supporting an elite athlete who is going through mental-performance training.',
+    includes: ['17-minute assessment', 'Performance-readiness readout', 'Safety and scope screen', 'Your next step'],
     domains: [
       'neuroscience',
-      'mentalPerformance',
+      'biometrics',
+      'mindBody',
+      'curriculumSupport',
       'patternRecognition',
       'roleBoundaries',
       'escalation',
-      'privacyTrust',
-      'returnSupport',
       'documentation',
     ],
     questions: [
       {
-        id: 'trainer-neuro',
+        id: 'trainer-perf-neuro',
         domain: 'neuroscience',
-        prompt: 'An injured athlete shows pain flares, poor sleep, irritability, and reduced rehab adherence. What is the best frame?',
-        scenario: 'The physical plan is sound, but the athlete is trending down across body state and behavior.',
+        prompt: 'An elite athlete is entering a high-pressure stretch. From a performance-neuroscience view, what most determines whether their skills hold up under stress?',
+        scenario: 'They are physically prepared; the question is whether their nervous system stays regulated under load.',
         options: [
-          { label: 'The physical exam tells the whole story', detail: 'If the tissue is healing, there is nothing else to manage.', score: 0 },
-          { label: 'It is mostly motivation', detail: 'The fix is pushing adherence and effort.', score: 1 },
-          { label: 'Stress is a minor factor', detail: 'It affects recovery a little, but rest and reassurance cover it.', score: 2 },
-          { label: 'Psychological state affects recovery', detail: 'Sleep, stress, and mood change pain, adherence, and healing.', score: 3 },
-          { label: 'Read it as a biopsychosocial pattern', detail: 'Recovery is a pattern across body state, behavior, context, and support, not tissue alone.', score: 4 },
+          { label: 'Raw talent and reps', detail: 'If the skill is trained, stress does not really change the outcome.', score: 0 },
+          { label: 'Toughness on the day', detail: 'Performing under pressure is mostly willpower.', score: 1 },
+          { label: 'Arousal matters a bit', detail: 'Nerves affect performance, but a warm-up usually settles it.', score: 2 },
+          { label: 'Arousal regulation drives access to skill', detail: 'Where their arousal sits changes how well trained skills show up.', score: 3 },
+          { label: 'Regulated stress-recovery is the foundation', detail: 'Skill under pressure rests on autonomic balance, recovery, and a regulated nervous system.', score: 4 },
         ],
       },
       {
-        id: 'trainer-performance',
-        domain: 'mentalPerformance',
-        prompt: 'Which statement best separates mental performance support from clinical care?',
-        scenario: 'A staff member asks whether PulseCheck training means the athlete is receiving therapy.',
+        id: 'trainer-biometrics',
+        domain: 'biometrics',
+        prompt: "An athlete's HRV is suppressed for several days and sleep is down, but they feel fine and want a full session. What is the most performance-ready call?",
+        scenario: 'The data and the self-report disagree heading into a heavy block.',
         options: [
-          { label: 'It is therapy if it helps stress', detail: 'Blurs the difference between training and treatment.', score: 0 },
-          { label: 'It replaces counseling for mild issues', detail: 'Overclaims the role of performance software.', score: 1 },
-          { label: 'It is wellness content only', detail: 'Misses the structured readiness and routing function.', score: 2 },
-          { label: 'It trains skills and routes concern', detail: 'Correctly keeps care decisions outside the product.', score: 3 },
-          { label: 'It supports readiness within hard boundaries', detail: 'Names training, routing, clinical authority, and emergency limits.', score: 4 },
+          { label: 'Trust how they feel and go full', detail: 'Self-report beats the numbers, run the plan.', score: 0 },
+          { label: 'Ignore the data as noise', detail: 'Dismiss HRV and sleep as unreliable.', score: 1 },
+          { label: 'Note it but change nothing', detail: 'Log the trend without acting on it.', score: 2 },
+          { label: 'Adjust load to the readiness signal', detail: 'Modify the session to match the suppressed recovery markers.', score: 3 },
+          { label: 'Integrate data, report, and context', detail: 'Weigh HRV, sleep, load, and how they present, then adjust and flag the trend.', score: 4 },
+        ],
+      },
+      {
+        id: 'trainer-mindbody',
+        domain: 'mindBody',
+        prompt: 'An athlete is physically cleared after a long injury but freezes in game-speed drills and avoids the movement that hurt them. What is the right read?',
+        scenario: 'The tissue has healed, but performance is being limited by something else.',
+        options: [
+          { label: 'They are not cleared after all', detail: 'Treat it as an unresolved physical problem only.', score: 0 },
+          { label: 'They just need to push through', detail: 'Tell them to stop hesitating and go.', score: 1 },
+          { label: 'Give it time, it will fade', detail: 'Wait passively for confidence to return.', score: 2 },
+          { label: 'Address fear of reinjury alongside the physical', detail: 'Treat return-to-play confidence as part of the plan.', score: 3 },
+          { label: 'Coordinate a graded, confidence-building return', detail: 'Pair graded exposure with the mental-performance team to rebuild trust in the movement.', score: 4 },
+        ],
+      },
+      {
+        id: 'trainer-curriculum',
+        domain: 'curriculumSupport',
+        prompt: 'An athlete is learning a pre-performance breathing and attention routine in their mental-performance program. How should your treatment-room touchpoints fit in?',
+        scenario: 'You see them daily, often right before they train or compete.',
+        options: [
+          { label: 'Stay out of it entirely', detail: 'Leave mental skills completely to the other team.', score: 0 },
+          { label: 'Call the routine overthinking', detail: 'Undercut the curriculum with your own take.', score: 1 },
+          { label: 'Mention it once and move on', detail: 'Acknowledge it but do not reinforce it.', score: 2 },
+          { label: 'Cue and reinforce the routine', detail: 'Prompt the breathing and attention skills during your touchpoints.', score: 3 },
+          { label: 'Reinforce and feed back to the team', detail: 'Reinforce the skills consistently and share what you observe with the mental-performance team.', score: 4 },
+        ],
+      },
+      {
+        id: 'trainer-triage',
+        domain: 'patternRecognition',
+        critical: true,
+        prompt: 'An athlete shows dropping performance, low mood, poor sleep, and weight loss over two weeks. How do you sort a performance dip from a clinical concern?',
+        scenario: 'It could be overtraining, or it could be something that needs clinical care.',
+        options: [
+          { label: 'Assume it is just a slump', detail: 'Treat it as a performance dip and push through.', score: 0 },
+          { label: 'Assume it is overtraining only', detail: 'Deload and expect it to resolve, with no further look.', score: 1 },
+          { label: 'Watch one more week', detail: 'Delay sorting it until it is clearer.', score: 2 },
+          { label: 'Screen the pattern and route if it crosses clinical', detail: 'Assess the convergence and refer when it points past performance.', score: 3 },
+          { label: 'Triage on convergence and escalate per protocol', detail: 'Treat converging mood, sleep, and weight change as clinically relevant and route without waiting.', score: 4 },
         ],
       },
       {
@@ -751,30 +810,16 @@ const assessments: StakeholderAssessment[] = [
         ],
       },
       {
-        id: 'trainer-eating-sleep',
-        domain: 'patternRecognition',
-        critical: true,
-        prompt: 'An athlete has lost noticeable weight, misses rehab, sleeps poorly, and says they are letting everyone down. What is the right pathway?',
-        scenario: 'No direct safety statement is made, but the pattern is clinically relevant.',
-        options: [
-          { label: 'Continue the current plan', detail: 'Treat it as a normal dip and keep the rehab plan unchanged.', score: 0 },
-          { label: 'Offer reassurance only', detail: 'Be supportive, but do not adjust care or escalate.', score: 1 },
-          { label: 'Monitor for one more sign', detail: 'Keep watching, but delay routing until risk is clearer.', score: 2 },
-          { label: 'Reduce load and route to the right lane', detail: 'Adjust demands and refer into the appropriate clinical or support lane.', score: 3 },
-          { label: 'Escalate per protocol now', detail: 'Treat the converging pattern as clinically relevant and refer or notify without waiting.', score: 4 },
-        ],
-      },
-      {
-        id: 'trainer-boundary',
+        id: 'trainer-scope',
         domain: 'roleBoundaries',
-        prompt: 'A coach asks you whether the athlete is mentally safe to play. What should your response preserve?',
-        scenario: 'You have observed concern, but a licensed clinician owns clinical clearance after elevated risk.',
+        prompt: 'A coach asks you to just tell the athlete they are mentally fine to compete. What protects both the athlete and your scope?',
+        scenario: 'You support performance and recovery, but mental clearance is not yours to give.',
         options: [
-          { label: 'Give a yes or no on the spot', detail: 'Answer the clearance question directly to satisfy the coach.', score: 0 },
-          { label: 'Share your personal read', detail: 'Offer an informal opinion as if it were clearance.', score: 1 },
-          { label: 'Stay supportive and wait', detail: 'Avoid the question without routing it.', score: 2 },
-          { label: 'Stay in scope and route the decision', detail: 'Share what you can within your role and move clearance to the licensed owner.', score: 3 },
-          { label: 'Name the scope and protect the process', detail: 'State that clinical clearance sits with the licensed clinician, share minimum necessary, and follow the pathway.', score: 4 },
+          { label: 'Give the reassurance the coach wants', detail: 'Tell the athlete they are fine to satisfy the coach.', score: 0 },
+          { label: 'Offer your opinion as clearance', detail: 'Treat your personal read as a clearance decision.', score: 1 },
+          { label: 'Dodge it and stay quiet', detail: 'Avoid the question without routing it.', score: 2 },
+          { label: 'Stay in scope and route the decision', detail: 'Share what is yours to share and move clearance to the right owner.', score: 3 },
+          { label: 'Name the scope and protect the process', detail: 'State that mental clearance sits with the licensed clinician, share minimum necessary, and follow the pathway.', score: 4 },
         ],
       },
       {
@@ -789,32 +834,6 @@ const assessments: StakeholderAssessment[] = [
           { label: 'Schedule a referral for later', detail: 'Route it through normal, non-urgent channels.', score: 2 },
           { label: 'Do not leave them alone and activate the crisis pathway', detail: 'Stay with them, contact the clinical or crisis owner, and follow emergency protocol.', score: 3 },
           { label: 'Initiate emergency response and document', detail: 'Do not leave them alone, activate emergency services or EAP per protocol, notify the clinical owner, and document the event.', score: 4 },
-        ],
-      },
-      {
-        id: 'trainer-trust',
-        domain: 'privacyTrust',
-        prompt: 'What is the appropriate information pattern for a non-emergency referral?',
-        scenario: 'A clinical partner needs enough context to act, but the athlete has shared sensitive details.',
-        options: [
-          { label: 'Send the full record', detail: 'Share everything so the partner has all context.', score: 0 },
-          { label: 'Tell whoever responds fastest', detail: 'Prioritize speed over scope.', score: 1 },
-          { label: 'Wait for blanket consent on everything', detail: 'Hold the referral until every detail is approved, even when appropriate consent already exists.', score: 2 },
-          { label: 'Share minimum necessary with consent', detail: 'Provide only what the partner needs to act, using appropriate consent.', score: 3 },
-          { label: 'Minimum necessary, documented basis', detail: 'Share the smallest useful record with the right partner and document the consent or safety basis.', score: 4 },
-        ],
-      },
-      {
-        id: 'trainer-return',
-        domain: 'returnSupport',
-        prompt: 'A clinician clears an athlete from an acute concern but keeps monitoring active. What should the sports medicine plan do?',
-        scenario: 'The athlete is physically available but still in a limited monitoring state.',
-        options: [
-          { label: 'Clear all limits immediately', detail: 'Treat clinical clearance as full performance clearance.', score: 0 },
-          { label: 'Keep the athlete out of all activity', detail: 'Avoids nuance and may create unnecessary stigma.', score: 1 },
-          { label: 'Ask the athlete to self-limit', detail: 'Leaves the return path too informal.', score: 2 },
-          { label: 'Coordinate a conservative progression', detail: 'Match activity load to operational status and clinician guidance.', score: 3 },
-          { label: 'Stage return with documented status', detail: 'Use low-pressure progression, status updates, and role-appropriate communication.', score: 4 },
         ],
       },
       {
@@ -834,50 +853,50 @@ const assessments: StakeholderAssessment[] = [
     ],
     trainingTracks: [
       {
-        title: 'Sports Medicine Mental Readiness Triage',
-        format: 'Live clinical-adjacent operations lab (CEU-eligible)',
-        price: '$799',
-        outcomes: ['Pattern escalation', 'Role coordination', 'Return-to-training status'],
+        title: 'Performance Neuroscience for Sports Medicine',
+        format: 'Live applied-neuroscience lab',
+        price: '$399',
+        outcomes: ['Arousal and recovery regulation', 'Reading readiness data', 'Mind-body return to play'],
       },
       {
-        title: 'Minimum Necessary Documentation',
-        format: 'Template workshop plus audit checklist (CEU-eligible)',
-        price: '$399',
-        outcomes: ['Event records', 'Status mirroring', 'Privacy-preserving handoff'],
+        title: 'Reinforcing the Mental-Performance Curriculum',
+        format: 'Self-paced module plus scenario lab',
+        price: '$149',
+        outcomes: ['Supporting daily skills', 'Performance vs. clinical triage', 'Clean team handoffs'],
       },
     ],
     domainCopy: {
       neuroscience: {
-        label: 'State and recovery',
-        description: 'How sleep, stress, and arousal affect pain, recovery, and adherence.',
+        label: 'Performance neuroscience',
+        description: 'Arousal regulation, stress and recovery, and autonomic balance under performance load.',
       },
-      mentalPerformance: {
-        label: 'Scope of practice',
-        description: 'Separating mental-performance support from clinical care.',
+      biometrics: {
+        label: 'Biometrics into readiness',
+        description: 'Reading HRV, sleep, and training load as signals of mental readiness, not just physical.',
+      },
+      mindBody: {
+        label: 'Mind-body in injury and return',
+        description: 'Fear of reinjury, pain-mood loops, and return-to-play confidence.',
+      },
+      curriculumSupport: {
+        label: 'Reinforcing the curriculum',
+        description: 'How your daily touchpoints support the mental skills the athlete is learning.',
       },
       patternRecognition: {
-        label: 'Pattern triage',
-        description: 'Recognizing converging changes in behavior, mood, eating, and sleep.',
+        label: 'Performance vs. clinical triage',
+        description: 'Telling a performance-psychology pattern from a clinical concern.',
       },
       roleBoundaries: {
-        label: 'Role and scope',
-        description: 'What sports medicine supports and what belongs to the licensed clinician.',
+        label: 'Scope and collaboration',
+        description: 'Holding scope while partnering with the mental-performance and clinical team.',
       },
       escalation: {
-        label: 'Escalation and emergency',
-        description: 'Referral timing, notification order, and emergency response.',
-      },
-      privacyTrust: {
-        label: 'Privacy and consent',
-        description: 'Minimum necessary sharing, consent, and disclosure safety.',
-      },
-      returnSupport: {
-        label: 'Return coordination',
-        description: 'Low-pressure, monitored return aligned to clinical guidance.',
+        label: 'Safety and escalation',
+        description: 'Recognizing crisis, notification order, and emergency response.',
       },
       documentation: {
-        label: 'Documentation',
-        description: 'Minimum necessary event records, status, and a clean handoff trail.',
+        label: 'Documentation and handoff',
+        description: 'Minimum necessary records, status, and a clean handoff trail.',
       },
     },
     bands: [
@@ -887,23 +906,23 @@ const assessments: StakeholderAssessment[] = [
         tone: 'Start here',
         accent: COLORS.rose,
         summary:
-          'You bring clinical instincts, and the base is here. A few core ideas about mental-readiness patterns, scope, and escalation need shoring up first.',
+          'You bring deep clinical expertise. This is about extending it into performance neuroscience and the mental-performance side, where a few core ideas will round out how you support an elite athlete.',
       },
       {
         label: 'Developing',
         range: '50-69',
-        tone: 'Gaps remain',
+        tone: 'Strong base, room to extend',
         accent: COLORS.amber,
         summary:
-          'You handle much of this well. Sharpening pattern triage and escalation timing will make your coordination more reliable under pressure.',
+          'Your clinical base is strong. Sharpening how you read readiness data and reinforce the mental-performance curriculum will make you a fuller partner to the athlete.',
       },
       {
         label: 'Practice-Ready',
         range: '70-84',
-        tone: 'Solid and reliable',
+        tone: 'Solid and integrated',
         accent: COLORS.sky,
         summary:
-          'You recognize the patterns, hold scope, and route concern correctly. Fine-tuning will sharpen the most acute calls.',
+          'You bridge sports medicine into performance well, hold scope, and route concern correctly. Fine-tuning the neuroscience and curriculum pieces will sharpen the hardest calls.',
       },
       {
         label: 'Advanced',
@@ -911,16 +930,16 @@ const assessments: StakeholderAssessment[] = [
         tone: 'Strong and prepared',
         accent: COLORS.lime,
         summary:
-          'You show strong literacy across pattern triage, scope, documentation, and escalation. This is the standard for mental-readiness coordination in sports medicine.',
+          'You connect the body and the mind for elite performance, partner cleanly with the mental-performance team, and act decisively on safety. This is the standard for performance-integrated sports medicine.',
       },
     ],
     resultsCopy: {
-      reportLabel: 'Your readiness report',
+      reportLabel: 'Your performance-readiness report',
       domainMapTitle: 'Where your readiness is strongest',
-      trainingLabel: 'What to train next',
+      trainingLabel: 'What to learn next',
       trainingTitle: 'Your next step',
       trainingIntro:
-        'These optional trainings go deeper on the areas above and can carry CEU value. Start wherever your practice needs it most.',
+        'These optional trainings go deeper on the performance-neuroscience and mental-performance side. Start wherever your practice needs it most.',
       safetyHoldTitle: 'One safety answer needs work',
       safetyHoldBody:
         'On a safety-critical item, the most protective answer was missed. Until that is shored up we are holding the result below Ready, because on acute calls getting it right matters more than the overall score.',
@@ -1173,13 +1192,13 @@ const HubView: React.FC<{
         <div className="max-w-3xl">
           <div className="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-white/80 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-600">
             <ClipboardCheck className="h-3.5 w-3.5" />
-            Stakeholder readiness assessments
+            Readiness assessments
           </div>
           <h1 className="mt-7 max-w-3xl text-4xl font-bold leading-[1.02] tracking-tight text-stone-900 sm:text-6xl">
-            Assess the humans around the athlete.
+            Every athlete is shaped by the people around them.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-stone-500">
-            Paid stakeholder assessments for the support system that surrounds elite athletes: parents, coaches, and athletic trainers. Each path scores readiness, flags safety-critical gaps, and routes the stakeholder into role-specific education.
+            Readiness checks for the parents, coaches, and athletic trainers who support elite athletes. Each one shows you where you are strong, flags the safety moments that matter most, and points you to what to learn next.
           </p>
         </div>
 
@@ -1211,7 +1230,7 @@ const HubView: React.FC<{
           <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">Assessment suite</p>
           <h2 className="mt-2 text-3xl font-semibold text-stone-900">Three role-specific readiness pathways</h2>
           <p className="mt-3 text-base leading-7 text-stone-500">
-            Each assessment has its own scoring lens and education path so the stakeholder is evaluated against the responsibilities they actually hold.
+            Each one has its own scoring lens and learning path, so you are measured against what your role actually does.
           </p>
         </div>
 
@@ -1368,7 +1387,7 @@ const QuestionView: React.FC<{
                     whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.99 }}
                     className={classNames(
-                      'group grid min-h-[86px] grid-cols-[42px_1fr_auto] items-center gap-4 rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-stone-400 sm:p-5',
+                      'group grid min-h-[64px] grid-cols-[42px_1fr_auto] items-center gap-4 rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-stone-400 sm:p-5',
                       isSelected
                         ? 'border-stone-400 bg-white text-stone-900'
                         : 'border-stone-200 bg-white/75 text-stone-900 hover:border-stone-300 hover:bg-white',
@@ -1384,9 +1403,6 @@ const QuestionView: React.FC<{
                     </span>
                     <span>
                       <span className="block text-base font-semibold leading-snug">{option.label}</span>
-                      <span className={classNames('mt-1 block text-sm leading-6', isSelected ? 'text-stone-700' : 'text-stone-500')}>
-                        {option.detail}
-                      </span>
                     </span>
                     <CheckCircle2
                       className={classNames('h-5 w-5 transition', isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-40')}
@@ -1442,6 +1458,79 @@ const DomainScoreRow: React.FC<{
         />
       </div>
     </div>
+  );
+};
+
+const AnswerReviewCard: React.FC<{
+  question: AssessmentQuestion;
+  selectedIndex: number | undefined;
+  accent: string;
+  index: number;
+}> = ({ question, selectedIndex, accent, index }) => {
+  const bestIndex = question.options.reduce(
+    (best, option, i) => (option.score > question.options[best].score ? i : best),
+    0,
+  );
+
+  const nailedIt = selectedIndex === bestIndex;
+
+  return (
+    <details
+      open={!nailedIt}
+      className="group rounded-lg border border-stone-200 bg-white/85 p-5 [&_summary::-webkit-details-marker]:hidden"
+    >
+      <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">
+            <span>Scenario {String(index + 1).padStart(2, '0')}</span>
+            {question.critical && <span className="text-[#A85353]">Safety item</span>}
+            <span style={{ color: nailedIt ? accent : COLORS.amber }}>{nailedIt ? 'Nailed it' : 'Review this'}</span>
+          </div>
+          <h3 className="mt-2 text-lg font-semibold leading-snug text-stone-900">{question.prompt}</h3>
+        </div>
+        <ChevronDown className="mt-1 h-5 w-5 shrink-0 text-stone-400 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="mt-4 grid gap-2">
+        {question.options.map((option, i) => {
+          const isBest = i === bestIndex;
+          const isPicked = i === selectedIndex;
+          return (
+            <div
+              key={option.label}
+              className={classNames('rounded-lg border p-3', isBest ? 'bg-white' : 'border-stone-200 bg-white/70')}
+              style={isBest ? { borderColor: accent, borderWidth: 2 } : undefined}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-stone-900">
+                  {answerLabel(i)}. {option.label}
+                </span>
+                <span className="flex flex-wrap gap-1">
+                  {isBest && (
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-white"
+                      style={{ backgroundColor: accent }}
+                    >
+                      Best answer
+                    </span>
+                  )}
+                  {isPicked && (
+                    <span
+                      className={classNames(
+                        'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em]',
+                        isBest ? 'bg-stone-900 text-white' : 'bg-stone-200 text-stone-700',
+                      )}
+                    >
+                      Your answer
+                    </span>
+                  )}
+                </span>
+              </div>
+              <p className="mt-1 text-sm leading-6 text-stone-500">{option.detail}</p>
+            </div>
+          );
+        })}
+      </div>
+    </details>
   );
 };
 
@@ -1608,6 +1697,32 @@ const ResultsView: React.FC<{
           </div>
         </motion.div>
       </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ ...transition, delay: 0.16 }}
+        className="mt-8"
+      >
+        <div className="mb-4 max-w-2xl">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">Answer review</p>
+          <h2 className="mt-1 text-2xl font-semibold text-stone-900">What each answer means</h2>
+          <p className="mt-2 text-sm leading-6 text-stone-500">
+            Now that you are scored, here is the thinking behind every option, including the strongest answer for each scenario.
+          </p>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {assessment.questions.map((question, i) => (
+            <AnswerReviewCard
+              key={question.id}
+              question={question}
+              selectedIndex={answers[question.id]}
+              accent={assessment.accent}
+              index={i}
+            />
+          ))}
+        </div>
+      </motion.div>
     </section>
   );
 };

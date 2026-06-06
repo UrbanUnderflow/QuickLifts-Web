@@ -398,6 +398,10 @@ export interface PulseCheckTeam {
   defaultClinicianProfileType?: PulseCheckClinicianProfileType;
   defaultClinicianProfileSource?: PulseCheckClinicianProfileSource;
   implementationMetadata?: PulseCheckTeamImplementationMetadata;
+  // Team-owned required consent set. Authoritative source for what athletes on
+  // this team must accept (research-study consents layer on when a pilot's
+  // study mode is 'research'). Seeded from the operational preset at create.
+  requiredConsents?: PulseCheckRequiredConsentDocument[];
   notes?: string;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
@@ -424,6 +428,7 @@ export interface CreatePulseCheckTeamInput {
   defaultClinicianProfileType?: PulseCheckClinicianProfileType;
   defaultClinicianProfileSource?: PulseCheckClinicianProfileSource;
   implementationMetadata?: PulseCheckTeamImplementationMetadata;
+  requiredConsents?: PulseCheckRequiredConsentDocument[];
   notes?: string;
 }
 

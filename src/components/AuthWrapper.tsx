@@ -10,6 +10,7 @@ import type { RootState } from '../redux/store';
 import { useUser } from '../hooks/useUser';
 import { setLoginRedirectPath } from '../redux/tempRedirectSlice';
 import { cacheLegalAcceptance, hasAcceptedCurrentLegal } from '../utils/legalAcceptance';
+import { isDevAuthBypassEnabled } from '../utils/devAuthBypass';
 
 interface AuthWrapperProps {
   children: React.ReactNode;
@@ -598,6 +599,13 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     );
 
   if (isPILHost) {
+    return <>{children}</>;
+  }
+
+  // Local dev escape hatch: when running the dev server with the bypass flag,
+  // skip the auth spinner, sign-in modal, and redirects entirely. Hard-gated
+  // against production builds inside isDevAuthBypassEnabled().
+  if (isDevAuthBypassEnabled()) {
     return <>{children}</>;
   }
 

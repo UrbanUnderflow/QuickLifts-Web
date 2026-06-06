@@ -77,7 +77,7 @@ const adminCardsData = [
   },
   {
     title: "PulseCheck Onboarding Playbook",
-    description: "Step-by-step school rollout guide for provisioning, coach training, team device setup, reports, and operating cadence.",
+    description: "Live board showing where every team stands in onboarding, plus the full step-by-step guide for setup, coach training, launch day, and the first 30 days.",
     icon: <ClipboardList className="w-5 h-5" />,
     link: "/admin/pulsecheckOnboardingOverview"
   },

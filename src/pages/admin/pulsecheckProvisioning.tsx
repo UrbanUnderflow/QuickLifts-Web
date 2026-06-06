@@ -30,6 +30,13 @@ import GuidedTour, { type GuidedTourStep } from '../../components/onboarding/Gui
 import { storage } from '../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import {
+  TEAM_ONBOARDING_TRACKER_STEPS,
+  TRACKER_STATUS_OPTIONS,
+  getTeamOnboardingStepStatus,
+  getTeamOnboardingProgress,
+  getTrackerStatusLabel,
+} from '../../api/firebase/pulsecheckProvisioning/onboardingTracker';
+import {
   fetchPulseCheckSportConfiguration,
   getDefaultPulseCheckSports,
   type PulseCheckSportConfigurationEntry,
@@ -67,14 +74,6 @@ import type {
   PulseCheckTeamStatus,
 } from '../../api/firebase/pulsecheckProvisioning/types';
 import { resolvePulseCheckInvitePreviewImage } from '../../utils/pulsecheckInviteLinks';
-
-type TeamOnboardingTrackerStepDefinition = {
-  id: PulseCheckOnboardingTrackerStepId;
-  label: string;
-  owner: string;
-  meeting: string;
-  description: string;
-};
 
 const defaultOrganizationForm: CreatePulseCheckOrganizationInput = {
   displayName: '',
@@ -453,116 +452,6 @@ const PROVISIONING_WIZARD_STEPS: Array<{ key: ProvisioningWizardStep; label: str
   { key: 'cohort', label: 'Cohort' },
 ];
 
-const TEAM_ONBOARDING_TRACKER_STEPS: TeamOnboardingTrackerStepDefinition[] = [
-  {
-    id: 'intake',
-    label: 'School intake complete',
-    owner: 'PulseCheck admin',
-    meeting: 'Before kickoff',
-    description: 'School sponsor, coach list, roster estimate, launch window, support route, and device plan are confirmed.',
-  },
-  {
-    id: 'provisioning',
-    label: 'Org and team provisioned',
-    owner: 'PulseCheck admin',
-    meeting: 'Before kickoff',
-    description: 'Organization, team, pilot posture, cohort plan, commercial settings, and invite policies are configured.',
-  },
-  {
-    id: 'coach-kickoff',
-    label: 'Meeting 1 kickoff complete',
-    owner: 'PulseCheck staff',
-    meeting: 'Meeting 1',
-    description: 'Coach understands rollout goals, roles, data boundaries, device plan, and next actions.',
-  },
-  {
-    id: 'dashboard-training',
-    label: 'Meeting 2 dashboard training complete',
-    owner: 'PulseCheck staff',
-    meeting: 'Meeting 2',
-    description: 'Coach can read Nora reports, use the dashboard, review follow-up, and avoid over-reading thin data.',
-  },
-  {
-    id: 'team-rollout',
-    label: 'Meeting 3 team launch scheduled',
-    owner: 'PulseCheck admin',
-    meeting: 'Meeting 3',
-    description: 'Team room plan, invite flow, delivery support, troubleshooting lane, and athlete training agenda are ready.',
-  },
-  {
-    id: 'device-sync',
-    label: 'Devices delivered and synced',
-    owner: 'PulseCheck staff',
-    meeting: 'Launch day',
-    description: 'Device inventory is reconciled and athlete source status is healthy or logged for follow-up.',
-  },
-  {
-    id: 'first-check-in',
-    label: 'First team check-in complete',
-    owner: 'Coach + athletes',
-    meeting: 'Launch day',
-    description: 'Athletes complete the first check-in and understand when honest daily input is expected.',
-  },
-  {
-    id: 'first-training',
-    label: 'First protocol or simulation complete',
-    owner: 'Coach + athletes',
-    meeting: 'Launch day',
-    description: 'Athletes complete the first assigned mental training experience with PulseCheck staff present.',
-  },
-  {
-    id: 'weekly-snapshot',
-    label: 'Weekly coach snapshot cadence active',
-    owner: 'Coach success',
-    meeting: 'Post-launch',
-    description: 'PulseCheck staff has the weekly report snapshot day, owner, and coach delivery path confirmed.',
-  },
-  {
-    id: 'stakeholder-cadence',
-    label: 'Stakeholder check-ins scheduled',
-    owner: 'PulseCheck lead',
-    meeting: 'Post-launch',
-    description: 'Coach and stakeholder check-ins are scheduled every two weeks with agenda owner and action log.',
-  },
-];
-
-const TRACKER_STATUS_OPTIONS: Array<{
-  value: PulseCheckOnboardingTrackerStepStatus;
-  label: string;
-  description: string;
-}> = [
-  { value: 'pending', label: 'Not started', description: 'No action yet' },
-  { value: 'in-progress', label: 'Working', description: 'Owner is handling it' },
-  { value: 'complete', label: 'Done', description: 'Verified and ready' },
-  { value: 'blocked', label: 'Needs help', description: 'Escalate before launch' },
-];
-
-const getTeamOnboardingStepStatus = (
-  team: PulseCheckTeam,
-  stepId: PulseCheckOnboardingTrackerStepId
-): PulseCheckOnboardingTrackerStepStatus =>
-  team.implementationMetadata?.onboardingTracker?.steps?.[stepId]?.status || 'pending';
-
-const getTeamOnboardingProgress = (team: PulseCheckTeam) => {
-  const completedCount = TEAM_ONBOARDING_TRACKER_STEPS.filter(
-    (step) => getTeamOnboardingStepStatus(team, step.id) === 'complete'
-  ).length;
-  const blockedCount = TEAM_ONBOARDING_TRACKER_STEPS.filter(
-    (step) => getTeamOnboardingStepStatus(team, step.id) === 'blocked'
-  ).length;
-  const inProgressCount = TEAM_ONBOARDING_TRACKER_STEPS.filter(
-    (step) => getTeamOnboardingStepStatus(team, step.id) === 'in-progress'
-  ).length;
-
-  return {
-    completedCount,
-    blockedCount,
-    inProgressCount,
-    totalCount: TEAM_ONBOARDING_TRACKER_STEPS.length,
-    pct: Math.round((completedCount / TEAM_ONBOARDING_TRACKER_STEPS.length) * 100),
-  };
-};
-
 const getTrackerStatusClassName = (status: PulseCheckOnboardingTrackerStepStatus) => {
   switch (status) {
     case 'complete':
@@ -576,9 +465,6 @@ const getTrackerStatusClassName = (status: PulseCheckOnboardingTrackerStepStatus
       return 'pcp-tracker-status-pending';
   }
 };
-
-const getTrackerStatusLabel = (status: PulseCheckOnboardingTrackerStepStatus) =>
-  TRACKER_STATUS_OPTIONS.find((option) => option.value === status)?.label || 'Not started';
 
 const PULSECHECK_ADMIN_TOUR_STEPS: GuidedTourStep[] = [
   {

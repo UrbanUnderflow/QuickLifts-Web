@@ -11,6 +11,7 @@ import {
   Database,
   ExternalLink,
   Gamepad2,
+  GraduationCap,
   Layers,
   Link2,
   Loader2,
@@ -126,6 +127,7 @@ import QuickLiftsProfileHealthSystemTab, {
 } from "../../components/admin/system-overview/QuickLiftsProfileHealthSystemTab";
 import PulseCheckVisionProImmersiveTestsTab from "../../components/admin/system-overview/PulseCheckVisionProImmersiveTestsTab";
 import PulseSystemDesignLanguageTab from "../../components/admin/system-overview/PulseSystemDesignLanguageTab";
+import PulseEducationOfferingsTab from "../../components/admin/system-overview/PulseEducationOfferingsTab";
 import AuntEdnaIntegrationStrategyTab from "../../components/admin/system-overview/AuntEdnaIntegrationStrategyTab";
 import AuntEdnaEscalationDataExchangeContractTab from "../../components/admin/system-overview/AuntEdnaEscalationDataExchangeContractTab";
 import AuntEdnaPilotAuthorizationMemoTab from "../../components/admin/system-overview/AuntEdnaPilotAuthorizationMemoTab";
@@ -342,6 +344,13 @@ const SYSTEM_TABS: SystemTab[] = [
     icon: MessageSquareQuote,
     accent: "#f97316",
     sectionIds: ["system-design-language"],
+  },
+  {
+    id: "education",
+    label: "Education",
+    icon: GraduationCap,
+    accent: "#a78bfa",
+    sectionIds: ["pulse-education-offerings"],
   },
   {
     id: "agent-swarm",
@@ -2089,6 +2098,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "system-design-language":
         return <PulseSystemDesignLanguageTab />;
+
+      case "pulse-education-offerings":
+        return <PulseEducationOfferingsTab />;
 
       case "auntedna-integration-strategy":
         return <AuntEdnaIntegrationStrategyTab />;

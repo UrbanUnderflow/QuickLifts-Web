@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import {
@@ -9,6 +9,7 @@ import {
   Building2,
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   ClipboardCheck,
   ClipboardList,
@@ -16,10 +17,14 @@ import {
   HeartPulse,
   HelpCircle,
   Laptop,
+  Loader2,
   MailPlus,
-  Map,
+  Map as MapIcon,
   MessageSquareText,
   MonitorCheck,
+  RefreshCw,
+  Rocket,
+  Search,
   ShieldCheck,
   Smartphone,
   Sparkles,
@@ -29,6 +34,20 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
+import { useUser } from '../../hooks/useUser';
+import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
+import type {
+  PulseCheckOrganization,
+  PulseCheckTeam,
+  PulseCheckOnboardingTrackerStepId,
+  PulseCheckOnboardingTrackerStepStatus,
+} from '../../api/firebase/pulsecheckProvisioning/types';
+import {
+  TEAM_ONBOARDING_TRACKER_STEPS,
+  TRACKER_STATUS_OPTIONS,
+  getTeamOnboardingStepStatus,
+  getTeamOnboardingProgress,
+} from '../../api/firebase/pulsecheckProvisioning/onboardingTracker';
 
 type PhaseSection = {
   eyebrow: string;
@@ -61,171 +80,171 @@ type OnboardingTemplate = {
 };
 
 const launchReadiness = [
-  'Organization, team, pilot, cohort, support route, and escalation posture are configured in provisioning.',
-  'Coach and adult staff access is active, role-scoped, and verified against the school staff list.',
-  'Roster source, athlete invite path, device inventory, and launch-day room plan are confirmed.',
-  'Coach has completed dashboard training and can explain the latest report, follow-up queue, and safety visibility boundaries.',
-  'PulseCheck staff has the monitoring calendar, weekly report snapshot day, and stakeholder meeting series scheduled for every two weeks.',
+  'The organization, team, and any pilot group are set up in the software, with a clear support contact and a plan for who to call if something feels off.',
+  'Every coach and staff member can log in, and each one has the right access for their role. Names match the organization’s real staff list.',
+  'You know where the roster is coming from, how athletes will join, what devices they’ll use, and how the room will be set up on launch day.',
+  'The coach has been through dashboard training and can read their latest report, work their follow-up list, and explain what PulseCheck can and can’t see.',
+  'The first month is on the calendar: the day the weekly report snapshot goes out, and the every-two-weeks check-in with the coach and sponsor.',
 ];
 
 const currentState = [
   {
-    title: 'Coach dashboard is useful for launch',
-    status: 'Ready now',
+    title: 'The coach dashboard',
+    status: 'Their home base',
     icon: MonitorCheck,
-    copy: 'The coach home already exposes team health, latest Sports Intelligence reporting, coach follow-up items, roster visibility, and athlete drill-down paths.',
+    copy: 'This is where the coach lives. It already shows team health, the latest report, their follow-up list, the full roster, and a way to drill into any single athlete.',
   },
   {
-    title: 'Report training needs a guided layer',
-    status: 'Needs structure',
+    title: 'The reports',
+    status: 'You lead the read',
     icon: BookOpenCheck,
-    copy: 'Nora coach reports are present, but coaches need a repeatable reading script, glossary, and in-product walkthrough so training is not dependent on a live call alone.',
+    copy: 'Nora writes a plain-language report on the team. Coaches won’t know how to read one on their own yet — teaching them a simple, repeatable way to read it is part of your job.',
   },
   {
-    title: 'Provisioning exists but needs a playbook',
-    status: 'Now covered here',
+    title: 'The setup console',
+    status: 'Where you build it',
     icon: Building2,
-    copy: 'The admin console can create organizations, teams, pilots, cohorts, invite links, commercial settings, and support routes. This page turns that tooling into an operating sequence.',
+    copy: 'This is where you create the organization, team, pilot group, and invite links, and set billing and support. The six steps below turn that tool into a clear order of operations.',
   },
   {
-    title: 'Team rollout still depends on human orchestration',
-    status: 'Process critical',
+    title: 'Launch day',
+    status: 'The human part',
     icon: Watch,
-    copy: 'Device delivery, athlete app setup, first check-in, device sync, and first protocol session need a launch-day checklist owned by PulseCheck staff.',
+    copy: 'Handing out devices, getting athletes into the app, the first check-in, syncing wearables, and the first session — this part runs on you and a good checklist, not on software alone.',
   },
 ];
 
 const phases: PhaseSection[] = [
   {
-    eyebrow: 'Phase 0',
-    title: 'School Intake And Deployment Readiness',
-    owner: 'PulseCheck admin',
-    timing: 'Before provisioning',
+    eyebrow: 'Step 1',
+    title: 'Intake — learn the team before you build anything',
+    owner: 'You (PulseCheck)',
+    timing: 'Before setup',
     icon: ClipboardList,
-    objective: 'Collect the operating context required to create the school correctly and avoid launch-day ambiguity.',
+    objective: 'Get the full picture of the organization so you can set them up correctly and walk into launch day with no surprises.',
     actions: [
-      'Confirm school name, legal entity, primary sponsor, billing or pilot posture, sport, team name, launch window, and stakeholder list.',
-      'Collect adult staff names, roles, emails, phone numbers, and permission expectations for head coach, assistants, performance staff, athletic trainer, and admin sponsor.',
-      'Confirm roster estimate, athlete age range, guardianship or consent requirements, roster import source, and whether athletes join by team invite link or direct invitation.',
-      'Confirm device plan: existing athlete devices, PulseCheck-provided devices, wearable models, charging needs, pairing requirements, and room setup for delivery day.',
-      'Define support and escalation routes before anyone is invited: operational support, technical support, clinician bridge mode, and urgent safety visibility boundaries.',
+      'Get the basics: organization name, who’s sponsoring it, whether this is a paid rollout or a pilot, the sport, the team name, the launch date, and who the key people are.',
+      'List every adult involved — head coach, assistants, performance staff, athletic trainer, admin sponsor — with their role, email, phone, and the access each one should have.',
+      'Nail down the roster: how many athletes, their age range, any parent-consent needs, where the list comes from, and whether they join by a team link or individual invites.',
+      'Sort out devices: what athletes already have, what we’re providing, which wearables, charging, pairing, and how the room gets set up on launch day.',
+      'Agree on who handles what before anyone is invited: everyday questions, tech problems, looping in a counselor, and what to do if something urgent comes up.',
     ],
     outputs: [
-      'Completed onboarding intake record',
-      'Launch calendar with the three onboarding meetings',
-      'Staff access map',
-      'Device inventory and delivery plan',
-      'Support and escalation routing notes',
+      'A filled-in intake record',
+      'A calendar with the three meetings booked',
+      'A list of who gets what access',
+      'A device count and delivery plan',
+      'Clear notes on who to contact for what',
     ],
   },
   {
-    eyebrow: 'Phase 1',
-    title: 'Provision Organization, Team, Pilot, And Access',
-    owner: 'PulseCheck admin',
-    timing: 'Immediately after intake',
+    eyebrow: 'Step 2',
+    title: 'Set them up in the software',
+    owner: 'You (PulseCheck)',
+    timing: 'Right after intake',
     icon: Building2,
-    objective: 'Create the canonical PulseCheck hierarchy and make the school launch-ready before coach training begins.',
+    objective: 'Build the organization, team, and access in the setup console so everything is ready before the first coach call.',
     actions: [
-      'Open PulseCheck Provisioning and create the organization using the school display name, legal name, organization type, primary customer admin, and study posture.',
-      'Create the operating team with sport, season label, team status, plan status, commercial model, roster policy, and escalation route.',
-      'Create the pilot and cohort when the deployment is part of a pilot, study, or phased rollout. Keep cohort names plain, such as Varsity Football Spring 2026.',
-      'Generate admin activation and coach invite paths. Verify that each invite routes adults into the correct organization, team, and role.',
-      'Review support contacts, clinician bridge mode, commercial configuration, and team preview assets before the kickoff meeting.',
+      'Open the setup console and create the organization — display name, legal name, type, the main admin contact, and whether it’s a pilot or a full rollout.',
+      'Create the team with its sport, season, status, plan, billing model, roster rules, and who to contact if something needs escalating.',
+      'If it’s a pilot or phased rollout, create the pilot and its group. Keep group names simple and obvious, like “Varsity Football, Spring 2026.”',
+      'Generate the admin and coach invite links. Click through each one to confirm it drops the person into the right organization, team, and role.',
+      'Before the kickoff call, double-check the support contacts, counselor-bridge setting, billing setup, and the team’s preview screens.',
     ],
     outputs: [
       'Organization and team created',
-      'Pilot and cohort created where applicable',
-      'Adult invite links ready',
-      'Team invite or roster import plan ready',
-      'Provisioning notes updated',
+      'Pilot group created (if needed)',
+      'Coach and staff invite links ready',
+      'A plan for getting athletes in',
+      'Setup notes written down',
     ],
   },
   {
-    eyebrow: 'Meeting 1',
-    title: 'Coach Kickoff And Soft Training',
-    owner: 'PulseCheck staff with head coach',
-    timing: '30 to 45 minutes',
+    eyebrow: 'Step 3',
+    title: 'Meeting 1 — coach kickoff',
+    owner: 'You + the head coach',
+    timing: '30–45 min',
     icon: MessageSquareText,
-    objective: 'Align expectations, explain the rollout, and give the coach enough context to trust the system before deeper dashboard training.',
+    objective: 'Get the coach comfortable — what PulseCheck does, what to expect, and why it’s worth their time — before any hands-on training.',
     actions: [
-      'Start with the deployment goal: what the school wants to learn, how success will be measured, and what PulseCheck will monitor during the first month.',
-      'Walk through roles: PulseCheck admin, coach, assistants, athletes, athletic trainer, stakeholder sponsor, and support contacts.',
-      'Explain the three-meeting sequence, device delivery plan, athlete onboarding flow, and the coach responsibility after launch.',
-      'Preview what the coach will see: dashboard, team trends, Nora coach reports, follow-up queue, athlete roster, check-in adherence, and mental training activity.',
-      'Name boundaries clearly: PulseCheck supports coaching decisions and wellness visibility, but it is not an emergency response service and does not replace school safety protocols.',
+      'Start with the goal: what does this organization want to learn, how will they know it’s working, and what will PulseCheck keep an eye on the first month?',
+      'Walk through who’s who: you, the coach, assistants, athletes, the athletic trainer, the sponsor, and who to contact for help.',
+      'Lay out what’s coming: the three meetings, how devices get handed out, how athletes get set up, and what the coach is responsible for once it’s live.',
+      'Preview what they’ll see: the dashboard, team trends, reports, their follow-up list, the roster, check-in rates, and mental training activity.',
+      'Be clear about the line: PulseCheck helps coaches support their athletes — it is not an emergency service and does not replace the organization’s safety plan.',
     ],
     outputs: [
-      'Coach knows the rollout plan',
-      'Coach confirms staff list and team launch date',
-      'Action items assigned before dashboard training',
-      'Open questions captured for Meeting 2',
+      'Coach knows the plan',
+      'Coach confirms the staff list and launch date',
+      'Action items handed out before training',
+      'Open questions saved for Meeting 2',
     ],
   },
   {
-    eyebrow: 'Meeting 2',
-    title: 'Coach Dashboard And Nora Report Training',
-    owner: 'PulseCheck staff with coach group',
-    timing: '60 minutes',
+    eyebrow: 'Step 4',
+    title: 'Meeting 2 — dashboard & report training',
+    owner: 'You + the coaching staff',
+    timing: '60 min',
     icon: Laptop,
-    objective: 'Train coaches to read the dashboard, interpret Nora reports, and turn insights into appropriate coach action.',
+    objective: 'Teach coaches to read the dashboard and reports on their own, and turn what they see into the right supportive action.',
     actions: [
-      'Open the coach dashboard and orient the coach to team summary cards, current report state, trend language, and the roster table.',
-      'Teach the report reading order: team snapshot, notable shifts, adherence context, athlete-level flags, suggested coach follow-up, and what to watch next.',
-      'Explain what to look for: sustained change, sudden drop-off, missing data, check-in drift, training fatigue signals, recovery patterns, and repeated coach follow-up themes.',
-      'Explain what not to over-read: one isolated day, incomplete wearable data, a single missed check-in, or a report generated before enough coverage exists.',
-      'Walk through Mental Training: assigned protocols, simulations, completion status, athlete engagement, and how coach actions should stay supportive rather than punitive.',
-      'Review safety visibility and escalation language so coaches know when to use school protocols and when PulseCheck staff will separately follow up.',
+      'Open the dashboard together and point out the team summary cards, the current report, the trend wording, and the roster table.',
+      'Teach a set reading order for every report: team snapshot, the changes that matter, how much data backs it up, individual flags, suggested follow-up, and what to watch next.',
+      'Show what’s worth noticing: a lasting change, a sudden drop-off, missing data, slipping check-ins, signs of fatigue, recovery patterns, and the same follow-up coming up again.',
+      'Show what not to read too much into: a single odd day, patchy wearable data, one missed check-in, or a report made before there’s enough data behind it.',
+      'Walk through Mental Training — what’s assigned, the practice scenarios, who’s completing them, and why a coach’s response should stay supportive, never a punishment.',
+      'Cover what PulseCheck can and can’t see, and exactly when to use the organization’s safety plan versus when PulseCheck staff will follow up separately.',
     ],
     outputs: [
-      'Coach can read a report without PulseCheck staff narrating it',
-      'Coach knows the daily and weekly operating routine',
-      'Coach understands follow-up language',
-      'Coach confirms team rollout agenda',
+      'Coach can read a report without you narrating it',
+      'Coach knows the daily and weekly routine',
+      'Coach knows how to talk about follow-ups',
+      'Coach confirms the launch-day plan',
     ],
   },
   {
-    eyebrow: 'Meeting 3',
-    title: 'Team Launch, Devices, Check-Ins, Protocols, And Simulations',
-    owner: 'PulseCheck staff with full team',
-    timing: '45 to 75 minutes',
+    eyebrow: 'Step 5',
+    title: 'Meeting 3 — team launch day',
+    owner: 'You + the full team',
+    timing: '45–75 min',
     icon: Smartphone,
-    objective: 'Get athletes into the app, sync devices, complete first check-in, and run the first mental training experience together.',
+    objective: 'Get athletes into the app, devices synced, the first check-in done, and the first mental training session run together.',
     actions: [
-      'Prepare the room with device stations, charging, QR codes or invite links, coach support table, and a staffed troubleshooting lane.',
-      'Deliver devices, confirm athlete names, match device IDs where needed, and document any missing or replacement hardware.',
-      'Guide athletes through app install, account creation, consent or acknowledgment screens, team join, profile basics, and notification permissions.',
-      'Pair and sync wearables. Confirm that each athlete reaches a healthy device state or is logged for follow-up before leaving the room.',
-      'Train the team on daily check-ins: when to complete them, what honest input looks like, how data helps the coach, and how PulseCheck handles privacy.',
-      'Run the first protocol and simulation as a group so athletes understand the rhythm before they are asked to complete future assignments on their own.',
+      'Set the room up first: device stations, charging, QR codes or invite links, a coach table, and someone dedicated to troubleshooting.',
+      'Hand out devices, check names, match device IDs where needed, and write down anything missing or that needs replacing.',
+      'Walk athletes through it: install the app, make an account, the consent screens, joining the team, basic profile, and turning on notifications.',
+      'Pair and sync the wearables. Before anyone leaves, each athlete is either fully connected or on a follow-up list.',
+      'Teach daily check-ins: when to do them, what an honest answer looks like, how it helps their coach, and how PulseCheck keeps it private.',
+      'Run the first session as a group so athletes get the rhythm before they’re ever asked to do one on their own.',
     ],
     outputs: [
       'Athletes invited and joined',
       'Device sync status recorded',
-      'First check-in completed by the launch group',
-      'First protocol or simulation completed',
-      'Follow-up list for absent athletes and device issues',
+      'First check-in done by the group',
+      'First session done together',
+      'Follow-up list for anyone absent or with device trouble',
     ],
   },
   {
-    eyebrow: 'Phase 4',
-    title: 'Post-Launch Monitoring And Stakeholder Cadence',
-    owner: 'PulseCheck admin and coach success',
+    eyebrow: 'Step 6',
+    title: 'The first 30 days',
+    owner: 'You + coach success',
     timing: 'First 30 days, then ongoing',
     icon: CalendarClock,
-    objective: 'Make the school feel supported while keeping data review, coach enablement, and stakeholder visibility predictable.',
+    objective: 'Make the organization feel looked after, and keep the data reviews, coach support, and stakeholder updates predictable.',
     actions: [
-      'Perform a daily operational check during launch week: invite completion, device sync health, check-in coverage, report readiness, and open support issues.',
-      'Send weekly coach report snapshots with the latest team state, adherence context, meaningful changes, and recommended coach follow-up.',
-      'Hold coach and stakeholder check-ins every two weeks with PulseCheck staff to review trends, adoption, questions, risks, and next operating decisions.',
-      'Maintain a shared issue log for devices, access, roster changes, report questions, and support follow-up so the school never has to restate the same problem.',
-      'Run a 30-day review covering adoption, coach usage, athlete completion, device reliability, report quality, and whether the deployment is ready to expand.',
+      'During launch week, check in daily: who’s joined, are devices syncing, are check-ins happening, are reports ready, and is anything stuck?',
+      'Send the coach a weekly snapshot: where the team is, how consistent check-ins are, what changed that matters, and what to follow up on.',
+      'Every two weeks, meet with the coach and sponsor to go over trends, how it’s being used, open questions, risks, and what to do next.',
+      'Keep one shared issue log for devices, access, roster changes, and report questions — so the organization never has to explain the same problem twice.',
+      'At 30 days, review the whole thing: usage, coach engagement, athlete completion, device reliability, report quality, and whether they’re ready to grow.',
     ],
     outputs: [
-      'Daily launch health notes',
-      'Weekly coach report snapshots',
-      'Meeting notes and action items every two weeks',
-      'Updated issue log',
-      '30-day readiness review',
+      'Daily launch-week notes',
+      'Weekly coach snapshots',
+      'Notes and action items every two weeks',
+      'An up-to-date issue log',
+      'A 30-day review',
     ],
   },
 ];
@@ -236,123 +255,122 @@ const cadenceItems: CadenceItem[] = [
     owner: 'PulseCheck admin',
     purpose: 'Catch setup problems before the coach loses trust.',
     actions: [
-      'Review invited versus joined athletes.',
-      'Check device sync status and stale source status.',
-      'Check daily check-in coverage.',
-      'Confirm any safety visibility items have a documented owner.',
+      'Compare who was invited to who’s actually joined.',
+      'Check that devices are syncing and none have gone stale.',
+      'Check how many athletes are doing their daily check-in.',
+      'Make sure anything safety-related has a clear owner.',
     ],
   },
   {
     cadence: 'Weekly',
     owner: 'Coach success',
-    purpose: 'Give the coach a predictable snapshot they can act on.',
+    purpose: 'Give the coach a snapshot they can count on and act on.',
     actions: [
-      'Review the latest Nora coach report.',
-      'Summarize adherence, team trend, notable shifts, and follow-up priorities.',
-      'Send the snapshot to the coach and internal PulseCheck owner.',
-      'Record coach questions for the next live check-in.',
+      'Read the latest coach report.',
+      'Sum up check-in rates, the team trend, what changed, and the top follow-ups.',
+      'Send the snapshot to the coach and the PulseCheck owner.',
+      'Note any coach questions for the next live check-in.',
     ],
   },
   {
     cadence: 'Every two weeks',
     owner: 'PulseCheck staff',
-    purpose: 'Keep the coach, sponsor, and key stakeholders aligned.',
+    purpose: 'Keep the coach, sponsor, and key people on the same page.',
     actions: [
-      'Review adoption, report themes, coach actions, device health, and unresolved issues.',
-      'Decide whether the team needs more training, roster cleanup, or device support.',
-      'Confirm next two-week focus.',
+      'Go over usage, report themes, coach actions, device health, and anything still open.',
+      'Decide if the team needs more training, a roster cleanup, or device help.',
+      'Agree on the focus for the next two weeks.',
       'Update the stakeholder note after the call.',
     ],
   },
   {
     cadence: 'Monthly',
     owner: 'PulseCheck lead',
-    purpose: 'Decide whether the deployment is healthy, needs adjustment, or is ready to expand.',
+    purpose: 'Decide if the rollout is healthy, needs a fix, or is ready to grow.',
     actions: [
-      'Review school-level outcomes and risk themes.',
-      'Evaluate coach engagement and athlete completion patterns.',
-      'Confirm reporting quality and operational load.',
-      'Document expansion, renewal, or remediation next steps.',
+      'Review the organization’s overall results and any risk themes.',
+      'Look at how engaged the coach is and how much athletes are completing.',
+      'Confirm report quality and how much effort it’s taking to run.',
+      'Write down next steps: expand, renew, or fix.',
     ],
   },
 ];
 
 const tutorialCoverage = [
   {
-    surface: 'Admin Provisioning',
+    surface: 'Setup console',
     path: '/admin/pulsecheckProvisioning',
     required: [
-      'Create organization',
-      'Create team',
-      'Create pilot and cohort',
-      'Generate adult invite links',
-      'Confirm support route and escalation posture',
+      'Create the organization',
+      'Create the team',
+      'Create a pilot group',
+      'Make the coach & staff invite links',
+      'Set the support and escalation contacts',
     ],
   },
   {
-    surface: 'Coach Dashboard',
+    surface: 'Coach dashboard',
     path: '/coach/dashboard',
     required: [
-      'Read team summary',
-      'Find latest report',
-      'Use coach follow-up queue',
-      'Review roster and athlete drill-down',
-      'Understand safety visibility boundaries',
+      'Read the team summary',
+      'Find the latest report',
+      'Work the follow-up list',
+      'Open the roster and a single athlete',
+      'Know what PulseCheck can & can’t see',
     ],
   },
   {
-    surface: 'Sports Intelligence Reports',
+    surface: 'Reports',
     path: '/coach/sports-intelligence-reports',
     required: [
-      'Open report archive',
-      'Read current report in order',
-      'Separate trend from missing data',
-      'Share questions with PulseCheck staff',
+      'Open past reports',
+      'Read the current one in order',
+      'Tell a trend from missing data',
+      'Send questions to PulseCheck',
     ],
   },
   {
-    surface: 'Mental Training Operations',
+    surface: 'Mental Training',
     path: '/coach/mentalGames',
     required: [
-      'Review assigned protocols',
-      'Review simulations',
-      'Track completion status',
+      'See what’s assigned',
+      'See the practice scenarios',
+      'Track who’s completed them',
       'Use supportive follow-up language',
     ],
   },
   {
-    surface: 'Athlete App Launch',
+    surface: 'Athlete app',
     path: 'Mobile app',
     required: [
-      'Join team',
-      'Complete first check-in',
-      'Connect device',
-      'Complete first protocol',
-      'Complete first simulation',
+      'Join the team',
+      'Do the first check-in',
+      'Connect a device',
+      'Do the first session',
     ],
   },
 ];
 
 const escalationPlaybooks = [
   {
-    trigger: 'Coach cannot access dashboard',
-    response: 'Verify adult invite, role, organization membership, team membership, and email casing before sending a new invite.',
+    trigger: 'Coach can’t log in',
+    response: 'Check their invite, their role, and that they’re on the right organization and team. Confirm the email matches exactly before sending a new invite.',
   },
   {
-    trigger: 'Athlete joined wrong team',
-    response: 'Remove incorrect membership, confirm roster source, resend the correct team invite, and document the correction in launch notes.',
+    trigger: 'Athlete joined the wrong team',
+    response: 'Remove the wrong membership, double-check where the roster came from, resend the correct team invite, and note the fix in your launch notes.',
   },
   {
-    trigger: 'Device is missing or stale',
-    response: 'Check source status, pairing state, battery, permission settings, and last sync time. Log hardware replacement only after software checks fail.',
+    trigger: 'A device is missing or won’t sync',
+    response: 'Check the connection, pairing, battery, permissions, and when it last synced. Only log a hardware swap after the software checks come up empty.',
   },
   {
-    trigger: 'Coach over-interprets a single signal',
-    response: 'Redirect the coach to trend, context, and coverage. Use the report reading order before recommending any athlete conversation.',
+    trigger: 'Coach is reading too much into one signal',
+    response: 'Walk them back to the trend, the context, and how much data is behind it. Use the report reading order before suggesting any conversation with an athlete.',
   },
   {
-    trigger: 'Safety visibility item appears',
-    response: 'Confirm ownership, document the route, and follow the school-approved protocol. PulseCheck staff should not improvise emergency handling.',
+    trigger: 'Something safety-related comes up',
+    response: 'Confirm who owns it, write down the route, and follow the organization’s safety plan. PulseCheck staff never improvise an emergency response.',
   },
 ];
 
@@ -360,23 +378,23 @@ const onboardingTemplates: OnboardingTemplate[] = [
   {
     id: 'coach-kickoff',
     title: 'Coach Kickoff Template',
-    audience: 'Head coach and school admin sponsor',
+    audience: 'Head coach and admin sponsor',
     timing: 'Meeting 1',
     icon: MessageSquareText,
     sections: [
       {
         label: 'Agenda',
         body: [
-          'Confirm the deployment goal, launch date, team scope, and what the school wants to learn in the first month.',
-          'Review PulseCheck roles, school roles, support contacts, and escalation boundaries.',
-          'Preview the coach dashboard, Nora reports, daily check-ins, mental training, device delivery, and the next two meetings.',
+          'Confirm the goal, launch date, who’s on the team, and what they want to learn in the first month.',
+          'Go over the roles on both sides, support contacts, and where PulseCheck’s responsibility ends.',
+          'Preview the dashboard, reports, daily check-ins, mental training, device hand-out, and the next two meetings.',
         ],
       },
       {
         label: 'Closeout',
         body: [
-          'Confirm staff list, athlete roster estimate, device plan, and dashboard training date.',
-          'Capture open questions and assign a PulseCheck owner before leaving the call.',
+          'Confirm the staff list, rough roster size, device plan, and the date for dashboard training.',
+          'Capture open questions and assign a PulseCheck owner before you hang up.',
         ],
       },
     ],
@@ -391,15 +409,15 @@ const onboardingTemplates: OnboardingTemplate[] = [
       {
         label: 'Reading Order',
         body: [
-          'Start with the team snapshot, then meaningful shifts, adherence context, athlete-level flags, suggested coach follow-up, and next-watch items.',
-          'Review the coach follow-up queue, safety visibility boundaries, roster drill-down, report archive, and Mental Training activity.',
+          'Team snapshot first, then the changes that matter, how much data backs them, individual flags, suggested follow-up, and what to watch next.',
+          'Then the follow-up list, what PulseCheck can and can’t see, the roster drill-down, past reports, and Mental Training activity.',
         ],
       },
       {
         label: 'Training Standards',
         body: [
-          'Look for sustained changes, missing data, check-in drift, training fatigue signals, recovery patterns, and repeated follow-up themes.',
-          'Do not over-read one isolated day, incomplete wearable data, a single missed check-in, or a report generated before coverage is strong.',
+          'Notice lasting changes, missing data, slipping check-ins, fatigue signs, recovery patterns, and repeat follow-up themes.',
+          'Don’t over-read one odd day, patchy wearable data, a single missed check-in, or a report made before there’s enough data.',
         ],
       },
     ],
@@ -407,22 +425,22 @@ const onboardingTemplates: OnboardingTemplate[] = [
   {
     id: 'team-rollout',
     title: 'Team Rollout Template',
-    audience: 'Full team',
+    audience: 'The full team',
     timing: 'Meeting 3',
     icon: Smartphone,
     sections: [
       {
         label: 'Room Plan',
         body: [
-          'Prepare device stations, charging, QR codes or invite links, coach support table, and a staffed troubleshooting lane.',
-          'Deliver devices, confirm athlete names, document missing hardware, and match device IDs where needed.',
+          'Set up device stations, charging, QR codes or invite links, a coach table, and a dedicated troubleshooting spot.',
+          'Hand out devices, confirm names, note anything missing, and match device IDs where needed.',
         ],
       },
       {
         label: 'Athlete Flow',
         body: [
-          'Guide app install, account creation, consent, team join, profile basics, notification permissions, and wearable sync.',
-          'Complete the first check-in and first protocol or simulation with PulseCheck staff present.',
+          'Walk through install, account, consent, joining the team, basic profile, notifications, and wearable sync.',
+          'Do the first check-in and first session with PulseCheck staff in the room.',
         ],
       },
     ],
@@ -437,15 +455,15 @@ const onboardingTemplates: OnboardingTemplate[] = [
       {
         label: 'Snapshot Fields',
         body: [
-          'Summarize team state, adherence coverage, meaningful changes, athletes needing supportive follow-up, device or data gaps, and recommended coach actions.',
-          'Name any questions the coach asked and the PulseCheck owner responsible for follow-up.',
+          'Sum up where the team is, how consistent check-ins are, what changed, who needs a supportive follow-up, any device or data gaps, and what you’d suggest the coach do.',
+          'Name any questions the coach asked and who at PulseCheck is following up.',
         ],
       },
       {
         label: 'Send Standard',
         body: [
-          'Keep the note short enough for a coach to read between sessions.',
-          'Use trend, coverage, and supportive next action as the structure.',
+          'Keep it short enough to read between sessions.',
+          'Structure it as: the trend, how much data backs it, and the supportive next step.',
         ],
       },
     ],
@@ -453,21 +471,21 @@ const onboardingTemplates: OnboardingTemplate[] = [
   {
     id: 'stakeholder-check-in',
     title: 'Stakeholder Check-In Template',
-    audience: 'Coach, sponsor, and key stakeholders',
+    audience: 'Coach, sponsor, and key people',
     timing: 'Every two weeks',
     icon: CalendarClock,
     sections: [
       {
         label: 'Review',
         body: [
-          'Review adoption, coach usage, athlete completion, report quality, device reliability, unresolved issues, and safety or support routing concerns.',
-          'Decide whether the team needs more training, roster cleanup, device support, or a revised operating focus.',
+          'Go over usage, coach engagement, athlete completion, report quality, device reliability, open issues, and any safety or support routing concerns.',
+          'Decide if the team needs more training, a roster cleanup, device help, or a new focus.',
         ],
       },
       {
         label: 'Decision Log',
         body: [
-          'Document decisions needed, next two-week focus, owner for each action item, and the date of the next check-in.',
+          'Write down the decisions needed, the next two-week focus, an owner for each item, and the date of the next check-in.',
         ],
       },
     ],
@@ -487,9 +505,192 @@ const formatTemplateForClipboard = (template: OnboardingTemplate) =>
     ]),
   ].join('\n').trim();
 
+type DashboardFilter = 'all' | 'active' | 'blocked' | 'live';
+
+const STEP_STATUS_UI: Record<PulseCheckOnboardingTrackerStepStatus, { dot: string; badge: string; label: string }> = {
+  complete: { dot: 'bg-emerald-400', badge: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300', label: 'Done' },
+  'in-progress': { dot: 'bg-amber-400', badge: 'border-amber-400/30 bg-amber-400/10 text-amber-300', label: 'Working' },
+  blocked: { dot: 'bg-rose-400', badge: 'border-rose-400/30 bg-rose-400/10 text-rose-300', label: 'Needs help' },
+  pending: { dot: 'bg-slate-600', badge: 'border-white/10 bg-white/[0.05] text-slate-400', label: 'Not started' },
+};
+
+const getTeamNextStepLabel = (team: PulseCheckTeam): string => {
+  const next = TEAM_ONBOARDING_TRACKER_STEPS.find(
+    (step) => getTeamOnboardingStepStatus(team, step.id) !== 'complete'
+  );
+  return next ? next.label : 'Fully onboarded';
+};
+
 const PulseCheckOnboardingOverviewPage: React.FC = () => {
   const [activeTemplateId, setActiveTemplateId] = useState(onboardingTemplates[0].id);
   const [copiedTemplateId, setCopiedTemplateId] = useState<string | null>(null);
+
+  const currentUser = useUser();
+  const [organizations, setOrganizations] = useState<PulseCheckOrganization[]>([]);
+  const [teams, setTeams] = useState<PulseCheckTeam[]>([]);
+  const [boardLoading, setBoardLoading] = useState(true);
+  const [boardError, setBoardError] = useState<string | null>(null);
+  const [savingStepKey, setSavingStepKey] = useState<string | null>(null);
+  const [expandedTeamIds, setExpandedTeamIds] = useState<Set<string>>(() => new Set());
+  const [boardFilter, setBoardFilter] = useState<DashboardFilter>('all');
+  const [boardSearch, setBoardSearch] = useState('');
+
+  const loadBoard = useCallback(async () => {
+    setBoardLoading(true);
+    setBoardError(null);
+    try {
+      const [orgs, allTeams] = await Promise.all([
+        pulseCheckProvisioningService.listOrganizations(),
+        pulseCheckProvisioningService.listTeams(),
+      ]);
+      setOrganizations(orgs);
+      setTeams(allTeams);
+    } catch (error) {
+      console.error('[PulseCheckOnboardingOverview] Failed to load onboarding board:', error);
+      setBoardError('Could not load the onboarding board. Refresh to try again.');
+    } finally {
+      setBoardLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadBoard();
+  }, [loadBoard]);
+
+  const toggleTeamExpanded = (teamId: string) => {
+    setExpandedTeamIds((current) => {
+      const next = new Set(current);
+      if (next.has(teamId)) {
+        next.delete(teamId);
+      } else {
+        next.add(teamId);
+      }
+      return next;
+    });
+  };
+
+  const handleStepStatusChange = async (
+    team: PulseCheckTeam,
+    stepId: PulseCheckOnboardingTrackerStepId,
+    status: PulseCheckOnboardingTrackerStepStatus
+  ) => {
+    const savingKey = `${team.id}:${stepId}`;
+    const currentTracker = team.implementationMetadata?.onboardingTracker || {};
+    const currentStep = currentTracker.steps?.[stepId] || {
+      status: 'pending' as PulseCheckOnboardingTrackerStepStatus,
+    };
+
+    setSavingStepKey(savingKey);
+    setBoardError(null);
+
+    // Optimistic local update so the board reacts instantly.
+    setTeams((current) =>
+      current.map((item) => {
+        if (item.id !== team.id) return item;
+        const meta = item.implementationMetadata ?? {
+          provisioningPath: 'pulsecheck-hierarchy' as const,
+          legacySignupPathUsed: false,
+          canaryTarget: false,
+        };
+        const tracker = meta.onboardingTracker || {};
+        return {
+          ...item,
+          implementationMetadata: {
+            ...meta,
+            onboardingTracker: {
+              ...tracker,
+              steps: {
+                ...(tracker.steps || {}),
+                [stepId]: { ...(tracker.steps?.[stepId] || {}), status },
+              },
+            },
+          },
+        };
+      })
+    );
+
+    try {
+      await pulseCheckProvisioningService.updateTeamOnboardingTracker({
+        teamId: team.id,
+        onboardingTracker: {
+          ...currentTracker,
+          steps: {
+            ...(currentTracker.steps || {}),
+            [stepId]: {
+              ...currentStep,
+              status,
+              updatedByUserId: currentUser?.id || '',
+              updatedByEmail: currentUser?.email || '',
+            },
+          },
+        },
+        updatedByUserId: currentUser?.id || '',
+        updatedByEmail: currentUser?.email || '',
+      });
+    } catch (error) {
+      console.error('[PulseCheckOnboardingOverview] Failed to update onboarding step:', error);
+      setBoardError(`Could not save ${team.displayName}. Refreshing the latest data.`);
+      await loadBoard();
+    } finally {
+      setSavingStepKey((current) => (current === savingKey ? null : current));
+    }
+  };
+
+  const organizationsById = useMemo(() => {
+    const map = new Map<string, PulseCheckOrganization>();
+    organizations.forEach((org) => map.set(org.id, org));
+    return map;
+  }, [organizations]);
+
+  const boardSummary = useMemo(() => {
+    let live = 0;
+    let needsHelp = 0;
+    let inFlight = 0;
+    teams.forEach((team) => {
+      const progress = getTeamOnboardingProgress(team);
+      if (progress.blockedCount > 0) needsHelp += 1;
+      if (progress.completedCount === progress.totalCount) live += 1;
+      else if (progress.completedCount > 0 || progress.inProgressCount > 0) inFlight += 1;
+    });
+    return { total: teams.length, live, needsHelp, inFlight };
+  }, [teams]);
+
+  const filteredTeams = useMemo(() => {
+    const query = boardSearch.trim().toLowerCase();
+    return teams.filter((team) => {
+      const progress = getTeamOnboardingProgress(team);
+      const isLive = progress.completedCount === progress.totalCount;
+      if (boardFilter === 'live' && !isLive) return false;
+      if (boardFilter === 'blocked' && progress.blockedCount === 0) return false;
+      if (boardFilter === 'active' && (isLive || progress.completedCount + progress.inProgressCount === 0)) return false;
+      if (query) {
+        const org = organizationsById.get(team.organizationId);
+        const haystack = `${team.displayName} ${team.sportOrProgram || ''} ${org?.displayName || ''}`.toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      return true;
+    });
+  }, [teams, boardFilter, boardSearch, organizationsById]);
+
+  const groupedBoard = useMemo(() => {
+    const groups = new Map<string, { org: PulseCheckOrganization | undefined; teams: PulseCheckTeam[] }>();
+    filteredTeams.forEach((team) => {
+      const key = team.organizationId || 'unassigned';
+      if (!groups.has(key)) {
+        groups.set(key, { org: organizationsById.get(team.organizationId), teams: [] });
+      }
+      groups.get(key)!.teams.push(team);
+    });
+    return Array.from(groups.entries()).map(([key, value]) => ({ key, ...value }));
+  }, [filteredTeams, organizationsById]);
+
+  const boardFilters: Array<{ id: DashboardFilter; label: string; count: number }> = [
+    { id: 'all', label: 'All', count: boardSummary.total },
+    { id: 'active', label: 'In progress', count: boardSummary.inFlight },
+    { id: 'blocked', label: 'Needs help', count: boardSummary.needsHelp },
+    { id: 'live', label: 'Live', count: boardSummary.live },
+  ];
+
   const activeTemplate = onboardingTemplates.find((template) => template.id === activeTemplateId) || onboardingTemplates[0];
   const ActiveTemplateIcon = activeTemplate.icon;
   const handleCopyTemplate = async (template: OnboardingTemplate) => {
@@ -515,14 +716,14 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
             <div className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[1.15fr_0.85fr] lg:p-10">
               <div>
                 <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#00d4aa]/30 bg-[#00d4aa]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">
-                  <Map className="h-3.5 w-3.5" />
-                  PulseCheck Admin Playbook
+                  <MapIcon className="h-3.5 w-3.5" />
+                  Onboarding Playbook · PulseCheck Staff
                 </div>
                 <h1 className="max-w-4xl text-3xl font-semibold leading-tight tracking-tight text-white sm:text-5xl">
-                  New-school onboarding from kickoff to monitored launch
+                  How we bring a new team onto PulseCheck
                 </h1>
                 <p className="mt-5 max-w-3xl text-base leading-7 text-slate-300">
-                  This is the internal operating guide for provisioning schools, inviting and training coaches, launching athletes and devices, and maintaining the reporting cadence after rollout.
+                  Your end-to-end guide to onboarding any organization — a school, a pro team, or a single team. It walks you through the whole journey: the first intake call, setting the team up in the software, the three meetings with the coach and athletes, and how we stay close for the first 30 days. If you can follow these steps, you can run a rollout.
                 </p>
                 <div className="mt-7 flex flex-wrap gap-3">
                   <Link
@@ -548,8 +749,8 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
                     <BadgeCheck className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-white">Launch-ready definition</p>
-                    <p className="text-xs text-slate-400">Use this before Meeting 3.</p>
+                    <p className="text-sm font-semibold text-white">Is the team ready to launch?</p>
+                    <p className="text-xs text-slate-400">Run through this before launch day.</p>
                   </div>
                 </div>
                 <div className="space-y-3">
@@ -561,6 +762,241 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
                   ))}
                 </div>
               </div>
+            </div>
+          </section>
+
+          {/* ===== Live birds-eye dashboard ===== */}
+          <section className="rounded-2xl border border-white/10 bg-[#0d1119] p-5 sm:p-7">
+            <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">Live Dashboard</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Where every team stands right now</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                  Every team you’re onboarding and exactly which of the ten steps they’re on. Change a status here and it saves straight to that team. The full playbook — what each step means and how to run it — is below.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void loadBoard()}
+                disabled={boardLoading}
+                className="inline-flex items-center gap-2 self-start rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.07] disabled:opacity-60"
+              >
+                <RefreshCw className={`h-4 w-4 ${boardLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                { label: 'Teams onboarding', value: boardSummary.total, icon: Users2, tone: 'text-[#00d4aa]' },
+                { label: 'In progress', value: boardSummary.inFlight, icon: CalendarClock, tone: 'text-amber-300' },
+                { label: 'Needs help', value: boardSummary.needsHelp, icon: AlertTriangle, tone: 'text-rose-300' },
+                { label: 'Live', value: boardSummary.live, icon: Rocket, tone: 'text-emerald-300' },
+              ].map((tile) => {
+                const Icon = tile.icon;
+                return (
+                  <div key={tile.label} className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{tile.label}</span>
+                      <Icon className={`h-4 w-4 ${tile.tone}`} />
+                    </div>
+                    <p className="mt-3 text-3xl font-semibold text-white">{tile.value}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap gap-2">
+                {boardFilters.map((filter) => (
+                  <button
+                    key={filter.id}
+                    type="button"
+                    onClick={() => setBoardFilter(filter.id)}
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                      boardFilter === filter.id
+                        ? 'border-[#00d4aa]/40 bg-[#00d4aa]/10 text-[#00d4aa]'
+                        : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    {filter.label}
+                    <span className="rounded-full bg-black/30 px-1.5 py-0.5 text-[10px] text-slate-400">{filter.count}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="relative sm:w-64">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  value={boardSearch}
+                  onChange={(event) => setBoardSearch(event.target.value)}
+                  placeholder="Search team or organization"
+                  className="w-full rounded-lg border border-white/10 bg-black/30 py-2 pl-9 pr-3 text-sm text-white placeholder:text-slate-500 focus:border-[#00d4aa]/40 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6">
+              {boardError ? (
+                <div className="mb-4 flex items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                  {boardError}
+                </div>
+              ) : null}
+
+              {boardLoading ? (
+                <div className="flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] py-16 text-sm text-slate-400">
+                  <Loader2 className="h-5 w-5 animate-spin text-[#00d4aa]" />
+                  Loading the board…
+                </div>
+              ) : groupedBoard.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] py-16 text-center">
+                  <p className="text-sm font-semibold text-white">No teams match this view</p>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {teams.length === 0
+                      ? 'Once you provision a team, it shows up here with its onboarding progress.'
+                      : 'Try a different filter or clear the search.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {groupedBoard.map((group) => (
+                    <div key={group.key}>
+                      <div className="mb-3 flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-slate-500" />
+                        <h3 className="text-sm font-semibold text-white">{group.org?.displayName || 'Unassigned organization'}</h3>
+                        <span className="text-xs text-slate-500">· {group.teams.length} {group.teams.length === 1 ? 'team' : 'teams'}</span>
+                      </div>
+                      <div className="space-y-3">
+                        {group.teams.map((team) => {
+                          const progress = getTeamOnboardingProgress(team);
+                          const isLive = progress.completedCount === progress.totalCount;
+                          const expanded = expandedTeamIds.has(team.id);
+                          return (
+                            <article key={team.id} className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025]">
+                              <button
+                                type="button"
+                                onClick={() => toggleTeamExpanded(team.id)}
+                                className="flex w-full flex-col gap-4 p-4 text-left transition hover:bg-white/[0.02] lg:flex-row lg:items-center"
+                              >
+                                <div className="min-w-0 lg:w-64 lg:flex-shrink-0">
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="truncate text-base font-semibold text-white">{team.displayName}</h4>
+                                    {progress.blockedCount > 0 ? (
+                                      <span className="inline-flex items-center gap-1 rounded-full border border-rose-400/30 bg-rose-400/10 px-2 py-0.5 text-[10px] font-semibold text-rose-300">
+                                        <AlertTriangle className="h-3 w-3" />
+                                        {progress.blockedCount}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <p className="mt-0.5 truncate text-xs text-slate-500">
+                                    {team.sportOrProgram || team.teamType || 'Team'}
+                                  </p>
+                                  <p className="mt-1 truncate text-xs text-slate-400">
+                                    {isLive ? (
+                                      <span className="text-emerald-300">Fully onboarded</span>
+                                    ) : (
+                                      <>Next: {getTeamNextStepLabel(team)}</>
+                                    )}
+                                  </p>
+                                </div>
+
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1">
+                                    {TEAM_ONBOARDING_TRACKER_STEPS.map((step) => {
+                                      const status = getTeamOnboardingStepStatus(team, step.id);
+                                      return (
+                                        <span
+                                          key={step.id}
+                                          title={`${step.label} — ${STEP_STATUS_UI[status].label}`}
+                                          className={`h-1.5 flex-1 rounded-full ${STEP_STATUS_UI[status].dot}`}
+                                        />
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 lg:w-36 lg:flex-shrink-0 lg:justify-end">
+                                  <span className="text-sm font-semibold text-white">
+                                    {progress.completedCount}/{progress.totalCount}
+                                  </span>
+                                  <ChevronDown className={`h-4 w-4 text-slate-400 transition ${expanded ? 'rotate-180' : ''}`} />
+                                </div>
+                              </button>
+
+                              {expanded ? (
+                                <div className="border-t border-white/10 bg-black/20 p-4">
+                                  <div className="grid gap-2">
+                                    {TEAM_ONBOARDING_TRACKER_STEPS.map((step, index) => {
+                                      const status = getTeamOnboardingStepStatus(team, step.id);
+                                      const saving = savingStepKey === `${team.id}:${step.id}`;
+                                      return (
+                                        <div
+                                          key={step.id}
+                                          className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.02] p-3 sm:flex-row sm:items-center sm:justify-between"
+                                        >
+                                          <div className="flex min-w-0 items-start gap-3">
+                                            <span className={`mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full ${STEP_STATUS_UI[status].dot}`} />
+                                            <div className="min-w-0">
+                                              <p className="text-sm font-medium text-white">
+                                                <span className="text-slate-500">{index + 1}. </span>
+                                                {step.label}
+                                              </p>
+                                              <p className="text-xs text-slate-500">{step.meeting} · {step.owner}</p>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-2 sm:flex-shrink-0">
+                                            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin text-[#00d4aa]" /> : null}
+                                            <span className={`hidden rounded-full border px-2.5 py-1 text-[10px] font-semibold sm:inline ${STEP_STATUS_UI[status].badge}`}>
+                                              {STEP_STATUS_UI[status].label}
+                                            </span>
+                                            <select
+                                              value={status}
+                                              disabled={saving}
+                                              onChange={(event) =>
+                                                void handleStepStatusChange(
+                                                  team,
+                                                  step.id,
+                                                  event.target.value as PulseCheckOnboardingTrackerStepStatus
+                                                )
+                                              }
+                                              className="rounded-lg border border-white/10 bg-black/40 px-2.5 py-1.5 text-xs text-white focus:border-[#00d4aa]/40 focus:outline-none disabled:opacity-60"
+                                            >
+                                              {TRACKER_STATUS_OPTIONS.map((option) => (
+                                                <option key={option.value} value={option.value}>
+                                                  {option.label}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  <div className="mt-3 flex justify-end">
+                                    <Link
+                                      href="/admin/pulsecheckProvisioning"
+                                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#00d4aa] hover:underline"
+                                    >
+                                      Open in Provisioning
+                                      <ArrowRight className="h-3.5 w-3.5" />
+                                    </Link>
+                                  </div>
+                                </div>
+                              ) : null}
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-8 flex items-center gap-3 border-t border-white/10 pt-6 text-xs text-slate-500">
+              <BookOpenCheck className="h-4 w-4" />
+              Below: the full playbook — what each step means and how to run it.
             </div>
           </section>
 
@@ -587,11 +1023,11 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
           <section className="rounded-2xl border border-white/10 bg-[#0d1119] p-5 sm:p-7">
             <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">Operating Flow</p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Provisioning, training, launch, and monitoring</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">The Six Steps</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">From first call to a steady rhythm</h2>
               </div>
               <p className="max-w-xl text-sm leading-6 text-slate-400">
-                These phases should be completed in order. If a phase is skipped, the coach dashboard may work technically while still feeling confusing operationally.
+                Do these in order. Skip one and the software might still technically work — but the rollout will feel confusing and shaky to the coach.
               </p>
             </div>
 
@@ -659,26 +1095,26 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#f5a623]">Coach Training Script</p>
-                  <h2 className="text-xl font-semibold text-white">How to read Nora coach reports</h2>
+                  <h2 className="text-xl font-semibold text-white">How to teach a coach to read a report</h2>
                 </div>
               </div>
 
               <div className="space-y-4 text-sm leading-6 text-slate-300">
                 <p>
-                  Train coaches to read reports in the same order every time: team snapshot, meaningful shifts, adherence context, athlete-level flags, coach follow-up, and next-watch items.
+                  Teach every coach to read a report the same way each time: team snapshot, the changes that matter, how much data backs it up, individual flags, who to follow up with, and what to watch next.
                 </p>
                 <p>
-                  The coach should ask three questions before acting: Is there enough coverage? Is this a trend or a single data point? What supportive action is appropriate for this athlete or team?
+                  Before they act, have them ask three questions: Is there enough data here to trust it? Is this a real trend or just one data point? And what’s a supportive next step for this athlete or team?
                 </p>
                 <p>
-                  PulseCheck staff should model the language coaches can use with athletes. The tone should be curious, specific, and supportive, not punitive or diagnostic.
+                  Model the language a coach can actually use with an athlete. Keep it curious, specific, and supportive — never punishing, never a diagnosis.
                 </p>
               </div>
 
               <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Coach Action Standard</p>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Every report ends with a next move</p>
                 <p className="text-sm leading-6 text-slate-300">
-                  A report should end with a clear coaching move: observe, check in, adjust training conversation, ask PulseCheck staff a question, or escalate through the school-approved route.
+                  Keep watching, check in with the athlete, adjust a training conversation, ask PulseCheck a question, or escalate through the organization’s safety plan.
                 </p>
               </div>
             </div>
@@ -689,8 +1125,8 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
                   <Target className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#60a5fa]">UI Walkthrough Coverage</p>
-                  <h2 className="text-xl font-semibold text-white">Training moments the product should cover</h2>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#60a5fa]">In The Software</p>
+                  <h2 className="text-xl font-semibold text-white">Where each part happens on screen</h2>
                 </div>
               </div>
 
@@ -703,7 +1139,7 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
                         <p className="text-xs text-slate-500">{item.path}</p>
                       </div>
                       <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300">
-                        Walkthrough scope
+                        What to show
                       </span>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -722,11 +1158,11 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
           <section className="rounded-2xl border border-white/10 bg-[#0d1119] p-5 sm:p-7">
             <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">Monitoring Cadence</p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">After launch, keep the rhythm visible</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">The First Month & Beyond</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">After launch, keep the rhythm going</h2>
               </div>
               <p className="max-w-xl text-sm leading-6 text-slate-400">
-                The first month should feel closely held. Coaches need predictable snapshots, and stakeholders need evidence that the deployment is being managed.
+                The first month should feel hands-on. Coaches need a snapshot they can count on, and sponsors need to see the rollout is being actively managed.
               </p>
             </div>
 
@@ -759,25 +1195,25 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
                   <ClipboardCheck className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">Admin Data Checklist</p>
-                  <h2 className="text-xl font-semibold text-white">Records to verify before launch</h2>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">Pre-Launch Checklist</p>
+                  <h2 className="text-xl font-semibold text-white">What to double-check before launch</h2>
                 </div>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 {[
-                  'Organization record',
-                  'Team record',
-                  'Pilot and cohort records',
-                  'Adult memberships',
+                  'Organization created',
+                  'Team created',
+                  'Pilot group created (if needed)',
+                  'Coach & staff access',
                   'Coach invite links',
-                  'Athlete invite or roster import plan',
-                  'Device inventory',
-                  'Health source status',
+                  'Athlete invites or roster import',
+                  'Device list',
+                  'Device & data connection status',
                   'Daily check-in coverage',
-                  'Mental training assignments',
-                  'Coach report snapshots',
-                  'Escalation and support notes',
+                  'Mental training assigned',
+                  'Saved coach reports',
+                  'Support & escalation contacts',
                 ].map((record) => (
                   <div key={record} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-3 text-sm text-slate-300">
                     <ShieldCheck className="h-4 w-4 flex-shrink-0 text-[#00d4aa]" />
@@ -817,11 +1253,11 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
           <section className="rounded-2xl border border-white/10 bg-[#0d1119] p-5 sm:p-7">
             <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">Admin Templates</p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Copy-ready onboarding agendas</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">Ready-To-Use Templates</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Copy-and-go agendas for every call</h2>
               </div>
               <p className="max-w-xl text-sm leading-6 text-slate-400">
-                Use these as operating notes for calls, weekly snapshots, and stakeholder follow-ups. Keep the source of truth in the tracker and issue log.
+                Grab these for calls, weekly snapshots, and stakeholder follow-ups. The real source of truth still lives in your tracker and issue log.
               </p>
             </div>
 
@@ -899,25 +1335,25 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
           <section className="rounded-2xl border border-white/10 bg-[#10141d] p-5 sm:p-7">
             <div className="grid gap-5 lg:grid-cols-[0.75fr_1.25fr] lg:items-center">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">Next Product Work</p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Turn the playbook into in-product training</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">Coming Soon</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Building this playbook right into the app</h2>
               </div>
               <div className="grid gap-3 md:grid-cols-3">
                 {[
                   {
                     icon: MailPlus,
                     title: 'Invite checklist',
-                    copy: 'Show invite status, missing adults, and launch readiness directly in provisioning.',
+                    copy: 'See invite status, who’s still missing, and whether the team is ready — right inside the setup console.',
                   },
                   {
                     icon: HeartPulse,
                     title: 'Coach walkthrough',
-                    copy: 'Add a guided tour for dashboard summary, Nora report reading, follow-up queue, and roster drill-down.',
+                    copy: 'A guided tour built into the dashboard for the team summary, reading a report, the follow-up list, and the roster.',
                   },
                   {
                     icon: Users2,
                     title: 'Launch-day mode',
-                    copy: 'Track athlete join state, device sync state, first check-in, and first protocol completion in one room view.',
+                    copy: 'One room-view that tracks who’s joined, device sync, the first check-in, and the first session as they happen.',
                   },
                 ].map((item) => {
                   const Icon = item.icon;

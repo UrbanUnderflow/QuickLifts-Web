@@ -4,6 +4,7 @@ import { buildPulseCheckTeamInviteOneLink, resolvePulseCheckInvitePreviewImage }
 import { SubscriptionPlatform, SubscriptionType } from '../user';
 import {
   derivePulseCheckTeamPlanBypass,
+  getDefaultPulseCheckRequiredConsents,
   getDefaultPulseCheckTeamCommercialConfig,
   mergePulseCheckRequiredConsents,
 } from './types';
@@ -273,6 +274,50 @@ const normalizeRequiredConsentDocuments = (
   }, []);
 
   return mergePulseCheckRequiredConsents(studyMode, normalized);
+};
+
+// Team-level consent list: validates and de-dupes by id WITHOUT injecting any
+// study-mode defaults. The team's stored array is authoritative — staff can
+// add, edit, version, and remove freely. (Seeding with a preset happens once at
+// team creation; after that this list is the source of truth.)
+const normalizeConsentDocList = (value: unknown): PulseCheckRequiredConsentDocument[] => {
+  if (!Array.isArray(value)) return [];
+  const byId = new Map<string, PulseCheckRequiredConsentDocument>();
+  value.forEach((entry, index) => {
+    if (!entry || typeof entry !== 'object') return;
+    const candidate = entry as Record<string, unknown>;
+    const title = normalizeString(typeof candidate.title === 'string' ? candidate.title : '');
+    const body = normalizeString(typeof candidate.body === 'string' ? candidate.body : '');
+    const version = normalizeString(typeof candidate.version === 'string' ? candidate.version : '') || 'v1';
+    const id = normalizeString(typeof candidate.id === 'string' ? candidate.id : '') || `consent-${index + 1}`;
+    if (!title || !body) return;
+    byId.set(id, { id, title, body, version });
+  });
+  return Array.from(byId.values());
+};
+
+// Effective required consents for an athlete on a team:
+//   - If the team has its own consent set, that is authoritative; research-study
+//     consents are layered on top when the pilot's study mode is 'research'.
+//   - Otherwise fall back to the legacy pilot-driven behavior (study-mode preset
+//     package), so teams that have not configured team consents are unaffected.
+const resolveEffectiveRequiredConsents = (
+  teamConsents: unknown,
+  pilot: PulseCheckPilot | null
+): PulseCheckRequiredConsentDocument[] => {
+  const teamList = normalizeConsentDocList(teamConsents);
+  if (teamList.length > 0) {
+    if (pilot?.studyMode === 'research') {
+      const research = normalizeRequiredConsentDocuments(pilot.requiredConsents || [], 'research');
+      const byId = new Map<string, PulseCheckRequiredConsentDocument>();
+      [...teamList, ...research].forEach((consent) => {
+        if (!byId.has(consent.id)) byId.set(consent.id, consent);
+      });
+      return Array.from(byId.values());
+    }
+    return teamList;
+  }
+  return normalizeRequiredConsentDocuments(pilot?.requiredConsents || [], pilot?.studyMode || 'operational');
 };
 
 const normalizeCompletedConsentIds = (
@@ -682,6 +727,7 @@ const toTeam = (id: string, data: Record<string, any>): PulseCheckTeam => ({
   defaultClinicianProfileType: data.defaultClinicianProfileType || 'group',
   defaultClinicianProfileSource: data.defaultClinicianProfileSource || 'pulsecheck-local',
   implementationMetadata: normalizeTeamImplementationMetadata(data.implementationMetadata, data.defaultInvitePolicy || 'admin-only'),
+  requiredConsents: normalizeConsentDocList(data.requiredConsents || []),
   notes: data.notes || '',
   createdAt: data.createdAt || null,
   updatedAt: data.updatedAt || null,
@@ -988,13 +1034,20 @@ const toLegacyRosterMigrationResult = (
 
 const applyLatestConsentStateToMembership = (
   membership: PulseCheckTeamMembership,
+  team: PulseCheckTeam | null,
   pilot: PulseCheckPilot | null
 ): PulseCheckTeamMembership => {
-  if (membership.role !== 'athlete' || !membership.athleteOnboarding || !pilot) {
+  if (membership.role !== 'athlete' || !membership.athleteOnboarding) {
+    return membership;
+  }
+  // Preserve the legacy no-op for memberships with neither team consents nor a
+  // pilot (nothing to hydrate from).
+  const hasTeamConsents = normalizeConsentDocList(team?.requiredConsents).length > 0;
+  if (!hasTeamConsents && !pilot) {
     return membership;
   }
 
-  const requiredConsents = normalizeRequiredConsentDocuments(pilot.requiredConsents || [], pilot.studyMode || 'operational');
+  const requiredConsents = resolveEffectiveRequiredConsents(team?.requiredConsents, pilot);
   const completedConsentVersions = buildCompletedConsentVersions({
     completedConsentIds: membership.athleteOnboarding.completedConsentIds,
     completedConsentVersions: membership.athleteOnboarding.completedConsentVersions,
@@ -1014,7 +1067,7 @@ const applyLatestConsentStateToMembership = (
     onboardingStatus: resolveTeamMembershipOnboardingStatus({
       role: membership.role,
       athleteOnboarding,
-      studyMode: pilot.studyMode || null,
+      studyMode: pilot?.studyMode || null,
     }) as PulseCheckTeamMembership['onboardingStatus'],
   };
 };
@@ -1063,6 +1116,13 @@ const getPilotById = async (pilotId: string): Promise<PulseCheckPilot | null> =>
   if (!normalizedPilotId) return null;
   const snapshot = await getDoc(doc(db, PILOTS_COLLECTION, normalizedPilotId));
   return snapshot.exists() ? toPilot(snapshot.id, snapshot.data() as Record<string, any>) : null;
+};
+
+const getTeamById = async (teamId: string): Promise<PulseCheckTeam | null> => {
+  const normalizedTeamId = normalizeString(teamId);
+  if (!normalizedTeamId) return null;
+  const snapshot = await getDoc(doc(db, TEAMS_COLLECTION, normalizedTeamId));
+  return snapshot.exists() ? toTeam(snapshot.id, snapshot.data() as Record<string, any>) : null;
 };
 
 const hydrateMembershipConsentStates = async (

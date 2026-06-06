@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { adminMethods } from '../../api/firebase/admin/methods';
+import { isDevAuthBypassEnabled } from '../../utils/devAuthBypass';
 
 interface AdminRouteGuardProps {
   children: React.ReactNode;
@@ -41,6 +42,13 @@ const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children }) => {
       router.replace('/');
     }
   }, [isAdmin, loading, router, user]);
+
+  // Local-only escape hatch: when running the dev server with the bypass flag
+  // set, render admin content without requiring a signed-in admin. Hard-gated
+  // against production builds inside isDevAuthBypassEnabled().
+  if (isDevAuthBypassEnabled()) {
+    return <>{children}</>;
+  }
 
   if (loading || userLoading) {
     return <div className="text-center mt-10">Checking admin access...</div>;
