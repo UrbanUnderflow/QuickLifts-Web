@@ -914,6 +914,14 @@ const toInviteLink = (id: string, data: Record<string, any>): PulseCheckInviteLi
   createdByEmail: data.createdByEmail || '',
   createdAt: data.createdAt || null,
   updatedAt: data.updatedAt || null,
+  redeemedByUserId: data.redeemedByUserId || '',
+  redeemedByEmail: data.redeemedByEmail || '',
+  redeemedAt: data.redeemedAt || null,
+  lastEmailStatus: data.lastEmailStatus === 'sent' || data.lastEmailStatus === 'failed' ? data.lastEmailStatus : undefined,
+  lastEmailSentAt: data.lastEmailSentAt || null,
+  lastEmailSentByEmail: data.lastEmailSentByEmail || '',
+  lastEmailMessageId: data.lastEmailMessageId || '',
+  emailSendCount: Math.max(0, Number(data.emailSendCount || 0)),
 });
 
 const normalizeInviteActivityEventType = (value: unknown): PulseCheckInviteActivityEventType => {
@@ -928,6 +936,8 @@ const normalizeInviteActivityEventType = (value: unknown): PulseCheckInviteActiv
       return 'redeem-failed';
     case 'follow-up-requested':
       return 'follow-up-requested';
+    case 'email-sent':
+      return 'email-sent';
     case 'page-view':
     default:
       return 'page-view';
@@ -1384,6 +1394,65 @@ export const pulseCheckProvisioningService = {
         const rightTime = toJsDate(right.createdAt)?.getTime() || 0;
         return rightTime - leftTime;
       });
+  },
+
+  // Activity for a single invite link (by its token). Used to surface whether the
+  // recipient has opened the activation link / started redeeming, newest-first.
+  async listInviteActivityByToken(token: string): Promise<PulseCheckInviteActivity[]> {
+    const normalizedToken = normalizeString(token);
+    if (!normalizedToken) return [];
+    const snapshot = await getDocs(
+      query(collection(db, INVITE_ACTIVITY_COLLECTION), where('token', '==', normalizedToken))
+    );
+    return snapshot.docs
+      .map((docSnap) => toInviteActivity(docSnap.id, docSnap.data() as Record<string, any>))
+      .sort((left, right) => {
+        const leftTime = toJsDate(left.createdAt)?.getTime() || 0;
+        const rightTime = toJsDate(right.createdAt)?.getTime() || 0;
+        return rightTime - leftTime;
+      });
+  },
+
+  // Records the outcome of a manual activation-email send/resend on the invite link
+  // doc (source of truth for "sent" status) and appends an audit activity event.
+  async recordAdminActivationEmailResult(input: {
+    token: string;
+    success: boolean;
+    messageId?: string;
+    sentByUserId?: string;
+    sentByEmail?: string;
+    targetEmail?: string;
+    organizationId?: string;
+    teamId?: string;
+    errorMessage?: string;
+  }): Promise<void> {
+    const normalizedToken = normalizeString(input.token);
+    if (!normalizedToken) return;
+
+    const inviteDocRef = doc(db, INVITE_LINKS_COLLECTION, normalizedToken);
+    await updateDoc(inviteDocRef, {
+      lastEmailStatus: input.success ? 'sent' : 'failed',
+      lastEmailSentAt: serverTimestamp(),
+      lastEmailSentByEmail: normalizeString(input.sentByEmail),
+      lastEmailMessageId: normalizeString(input.messageId),
+      ...(input.success ? { emailSendCount: increment(1) } : {}),
+      updatedAt: serverTimestamp(),
+    });
+
+    await addDoc(collection(db, INVITE_ACTIVITY_COLLECTION), {
+      token: normalizedToken,
+      inviteId: normalizedToken,
+      eventType: 'email-sent',
+      organizationId: normalizeString(input.organizationId),
+      teamId: normalizeString(input.teamId),
+      inviteStatus: 'active',
+      email: normalizeString(input.targetEmail),
+      emailSource: 'authenticated-user',
+      userId: normalizeString(input.sentByUserId),
+      ...(input.success ? {} : { errorMessage: normalizeString(input.errorMessage), needsFollowUp: true }),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
   },
 
   async listUserTeamMemberships(userId: string): Promise<PulseCheckTeamMembership[]> {

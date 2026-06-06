@@ -2,7 +2,9 @@ const PULSE_WEB_ORIGIN = 'https://fitwithpulse.ai';
 const APPS_FLYER_SUBDOMAIN = 'pulsecheckapp.onelink.me';
 const APPS_FLYER_TEMPLATE_ID = 'uT14';
 const APPS_FLYER_DEEP_LINK_VALUE = 'pulsecheck_team_invite';
-const DEFAULT_INVITE_PREVIEW_IMAGE = `${PULSE_WEB_ORIGIN}/round-preview.png`;
+// Dedicated PulseCheck provisioning invite default (org/team/pilot fallback).
+// NOTE: intentionally NOT round-preview.png — that asset is the shared Rounds invite image.
+const DEFAULT_INVITE_PREVIEW_IMAGE = `${PULSE_WEB_ORIGIN}/pulsecheck-invite-default.png`;
 
 export interface PulseCheckInviteLinkDiagnostic {
   status: 'valid' | 'warning';

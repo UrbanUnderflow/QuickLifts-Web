@@ -42,7 +42,7 @@ const FloatingOrb: React.FC<{ color: string; size: string; style: React.CSSPrope
 );
 
 const GlassCard: React.FC<{ children: React.ReactNode; accentColor?: string; className?: string; delay?: number; animate?: boolean }> = ({
-  children, accentColor = '#E0FE10', className = '', delay = 0, animate = true,
+  children, accentColor = '#7C3AED', className = '', delay = 0, animate = true,
 }) => {
   const inner = (
     <div className={`relative group ${className}`}>
@@ -63,7 +63,7 @@ const GlassCard: React.FC<{ children: React.ReactNode; accentColor?: string; cla
 };
 
 const InfoCard: React.FC<{ icon: React.ReactNode; title: string; accentColor?: string; children: React.ReactNode; delay?: number }> = ({
-  icon, title, accentColor = '#E0FE10', children, delay = 0,
+  icon, title, accentColor = '#7C3AED', children, delay = 0,
 }) => (
   <motion.div
     initial={{ opacity: 0, y: 12 }}
@@ -229,18 +229,18 @@ const applyRosterScope = (
 
 const focusByRole: Record<PulseCheckOperatingRole, { title: string; description: string; accent: string }> = {
   'admin-only': {
-    title: 'Operational Control Lane',
-    description: 'Keep team permissions, onboarding, and visibility boundaries clean as the container scales.',
+    title: 'Running the team',
+    description: 'Keep permissions, invites, and who-sees-what tidy as your team grows.',
     accent: 'from-amber-400/18 to-orange-500/10 border-amber-400/25',
   },
   'admin-plus-coach': {
-    title: 'Coach-Led Team Lane',
-    description: 'Coordinate admin operations while maintaining direct coaching awareness and athlete entry flow.',
+    title: 'Coaching the team',
+    description: 'Manage the team and stay close to your athletes as they come on board.',
     accent: 'from-cyan-400/18 to-sky-500/10 border-cyan-400/25',
   },
   'admin-plus-support-staff': {
-    title: 'Support Operations Lane',
-    description: 'Run staffing and athlete support posture from the performance or support side of the team.',
+    title: 'Supporting the team',
+    description: 'Run staffing and athlete support from the performance side of the team.',
     accent: 'from-emerald-400/18 to-teal-500/10 border-emerald-400/25',
   },
 };
@@ -799,10 +799,10 @@ export default function PulseCheckTeamWorkspacePage() {
 
   if (currentUserLoading || loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center" style={{ background: '#05070c' }}>
+      <div className="flex min-h-screen items-center justify-center" style={{ background: '#070711' }}>
         <div className="relative">
-          <div className="absolute inset-0 rounded-full bg-[#E0FE10]/20 blur-2xl" />
-          <Loader2 className="relative h-8 w-8 animate-spin text-[#E0FE10]" />
+          <div className="absolute inset-0 rounded-full bg-[#7C3AED]/20 blur-2xl" />
+          <Loader2 className="relative h-8 w-8 animate-spin text-[#7C3AED]" />
         </div>
       </div>
     );
@@ -813,7 +813,7 @@ export default function PulseCheckTeamWorkspacePage() {
   }
 
   return (
-    <div className="min-h-screen text-white overflow-hidden" style={{ background: '#05070c' }}>
+    <div className="min-h-screen text-white overflow-hidden" style={{ background: '#070711' }}>
       <Head>
         <title>{team.displayName} | PulseCheck Workspace</title>
         <meta name="robots" content="noindex,nofollow" />
@@ -821,7 +821,7 @@ export default function PulseCheckTeamWorkspacePage() {
 
       {/* Ambient background orbs */}
       <div className="fixed inset-0 pointer-events-none">
-        <FloatingOrb color="#E0FE10" size="w-[550px] h-[550px]" style={{ top: '-10%', left: '-8%' }} delay={0} />
+        <FloatingOrb color="#7C3AED" size="w-[550px] h-[550px]" style={{ top: '-10%', left: '-8%' }} delay={0} />
         <FloatingOrb color="#3B82F6" size="w-[420px] h-[420px]" style={{ top: '25%', right: '-6%' }} delay={3} />
         <FloatingOrb color="#8B5CF6" size="w-[380px] h-[380px]" style={{ bottom: '5%', left: '20%' }} delay={6} />
         <div className="absolute inset-0 opacity-[0.018]" style={{ backgroundImage: `url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIGJhc2VGcmVxdWVuY3k9Ii43NSIgc3RpdGNoVGlsZXM9InN0aXRjaCIgdHlwZT0iZnJhY3RhbE5vaXNlIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxwYXRoIGQ9Ik0wIDBoMzAwdjMwMEgweiIgZmlsdGVyPSJ1cmwoI2EpIiBvcGFjaXR5PSIuMDUiLz48L3N2Zz4=")` }} />
@@ -844,7 +844,7 @@ export default function PulseCheckTeamWorkspacePage() {
                 <motion.p initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="mt-3 max-w-3xl text-sm leading-7 text-zinc-400">
                   {isAthleteWorkspace
                     ? athleteHeroSummary
-                    : `${organization?.displayName || 'Organization'} is active. Staff, athletes, and invite state now live in the same team-scoped workspace.`}
+                    : `Welcome to your team's home base. Manage your staff and athletes, send invites, and follow how everyone's doing — all in one place.`}
                 </motion.p>
               </div>
 
@@ -853,9 +853,9 @@ export default function PulseCheckTeamWorkspacePage() {
                   !consentComplete ? (
                     <Link
                       href={`/PulseCheck/post-activation?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
-                      className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-black transition-all hover:opacity-90"
-                      style={{ background: '#E0FE10' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(224,254,16,0.35)'; }}
+                      className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition-all hover:opacity-90"
+                      style={{ background: '#7C3AED' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(124,58,237,0.35)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
                     >
                       Finish Setup
@@ -867,9 +867,9 @@ export default function PulseCheckTeamWorkspacePage() {
                         type="button"
                         onClick={handleLaunchBaseline}
                         disabled={athleteTaskLoading}
-                        className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-black transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                        style={{ background: '#E0FE10' }}
-                        onMouseEnter={(e) => { if (!athleteTaskLoading) (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(224,254,16,0.35)'; }}
+                        className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                        style={{ background: '#7C3AED' }}
+                        onMouseEnter={(e) => { if (!athleteTaskLoading) (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(124,58,237,0.35)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
                       >
                         {athleteTaskLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
@@ -904,9 +904,9 @@ export default function PulseCheckTeamWorkspacePage() {
                       </Link>
                       <Link
                         href="/PulseCheck"
-                        className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-black transition-all hover:opacity-90"
-                        style={{ background: '#E0FE10' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(224,254,16,0.35)'; }}
+                        className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition-all hover:opacity-90"
+                        style={{ background: '#7C3AED' }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(124,58,237,0.35)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
                       >
                         Go to Today
@@ -920,16 +920,16 @@ export default function PulseCheckTeamWorkspacePage() {
                       href={`/PulseCheck/post-activation?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
                       className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-zinc-300 transition-all hover:border-white/20 hover:text-white hover:bg-white/[0.07] backdrop-blur-sm"
                     >
-                      Manage Onboarding
+                      Invites & onboarding
                     </Link>
                     <Link
-                      href="/PulseCheck"
-                      className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-black transition-all hover:opacity-90"
-                      style={{ background: '#E0FE10' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(224,254,16,0.35)'; }}
+                      href={`/coach/sports-intelligence-reports?teamId=${encodeURIComponent(teamId)}`}
+                      className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition-all hover:opacity-90"
+                      style={{ background: '#7C3AED' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(124,58,237,0.35)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
                     >
-                      Open PulseCheck
+                      View athlete reports
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   </>
@@ -945,7 +945,7 @@ export default function PulseCheckTeamWorkspacePage() {
                   exit={{ opacity: 0, y: -8, height: 0 }}
                   className={`mt-6 rounded-2xl border px-4 py-3 text-sm ${
                     message.type === 'success'
-                      ? 'border-[#E0FE10]/20 bg-[#E0FE10]/[0.06] text-[#E0FE10]'
+                      ? 'border-[#7C3AED]/20 bg-[#7C3AED]/[0.06] text-[#7C3AED]'
                       : 'border-red-500/20 bg-red-500/[0.06] text-red-300'
                   }`}
                 >
@@ -959,13 +959,13 @@ export default function PulseCheckTeamWorkspacePage() {
           {isAthleteWorkspace ? (
             <div className="mt-8 space-y-6">
               <div className={`grid gap-6 ${showAthleteVisionProSummary ? 'xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]' : ''}`}>
-                <div className="rounded-[30px] border border-zinc-800 bg-[radial-gradient(circle_at_top_left,_rgba(224,254,16,0.12),_transparent_38%),#091326] p-6">
+                <div className="rounded-[30px] border border-zinc-800 bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,0.12),_transparent_38%),#091326] p-6">
                   <div className="flex items-start gap-4">
-                    <div className="rounded-2xl border border-[#E0FE10]/25 bg-[#E0FE10]/10 p-3">
+                    <div className="rounded-2xl border border-[#7C3AED]/25 bg-[#7C3AED]/10 p-3">
                       {requiredTasksComplete ? (
-                        <CheckCircle2 className="h-6 w-6 text-[#E0FE10]" />
+                        <CheckCircle2 className="h-6 w-6 text-[#7C3AED]" />
                       ) : (
-                        <Lock className="h-6 w-6 text-[#E0FE10]" />
+                        <Lock className="h-6 w-6 text-[#7C3AED]" />
                       )}
                     </div>
                     <div className="flex-1">
@@ -985,13 +985,13 @@ export default function PulseCheckTeamWorkspacePage() {
 
                   <div className="mt-6 grid gap-4 md:grid-cols-3">
                     {[
-                      { label: 'Required Tasks', value: requiredTasksComplete || baselineComplete ? '2 / 2' : '1 / 2', sub: 'Consent plus in-app baseline', accent: '#E0FE10' },
+                      { label: 'Required Tasks', value: requiredTasksComplete || baselineComplete ? '2 / 2' : '1 / 2', sub: 'Consent plus in-app baseline', accent: '#7C3AED' },
                       { label: 'Current Assignments', value: athleteCurrentAssignmentCount, sub: requiredTasksComplete ? 'Ready for you now' : 'These appear after your baseline', accent: '#3B82F6' },
                       { label: 'Today\'s Nora Task', value: requiredTasksComplete && todayTaskName ? todayTaskName : requiredTasksComplete && nextProgramName ? nextProgramName : 'After your baseline', sub: todayTaskSubtitle, accent: '#8B5CF6' },
                     ].map((stat) => (
                       <div key={stat.label} className="rounded-[20px] border border-white/8 bg-black/25 p-4" style={{ borderColor: `${stat.accent}18` }}>
                         <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{stat.label}</div>
-                        <div className="mt-3 text-2xl font-bold capitalize" style={{ color: stat.accent !== '#E0FE10' ? '#fff' : stat.accent }}>{stat.value}</div>
+                        <div className="mt-3 text-2xl font-bold capitalize" style={{ color: stat.accent !== '#7C3AED' ? '#fff' : stat.accent }}>{stat.value}</div>
                         <div className="mt-1 text-sm text-zinc-400">{stat.sub}</div>
                       </div>
                     ))}
@@ -1029,13 +1029,13 @@ export default function PulseCheckTeamWorkspacePage() {
                 </div>
 
                 <div className="mt-6 grid gap-4 lg:grid-cols-3">
-                  <div className="rounded-[22px] border bg-black/25 p-5" style={{ borderColor: consentComplete ? 'rgba(224,254,16,0.2)' : 'rgba(255,255,255,0.07)' }}>
+                  <div className="rounded-[22px] border bg-black/25 p-5" style={{ borderColor: consentComplete ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.07)' }}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Required</div>
                         <div className="mt-2 text-lg font-semibold text-white">Getting Started Consent</div>
                       </div>
-                      <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: consentComplete ? '#E0FE10' : '#FCD34D', background: consentComplete ? 'rgba(224,254,16,0.1)' : 'rgba(252,211,77,0.1)', border: `1px solid ${consentComplete ? 'rgba(224,254,16,0.25)' : 'rgba(252,211,77,0.2)'}` }}>
+                      <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: consentComplete ? '#7C3AED' : '#FCD34D', background: consentComplete ? 'rgba(124,58,237,0.1)' : 'rgba(252,211,77,0.1)', border: `1px solid ${consentComplete ? 'rgba(124,58,237,0.25)' : 'rgba(252,211,77,0.2)'}` }}>
                         {consentComplete ? 'Complete' : 'Pending'}
                       </div>
                     </div>
@@ -1044,13 +1044,13 @@ export default function PulseCheckTeamWorkspacePage() {
                     </p>
                   </div>
 
-                  <div className="rounded-[22px] border bg-black/25 p-5" style={{ borderColor: baselineComplete ? 'rgba(224,254,16,0.2)' : baselineStarted ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.07)' }}>
+                  <div className="rounded-[22px] border bg-black/25 p-5" style={{ borderColor: baselineComplete ? 'rgba(124,58,237,0.2)' : baselineStarted ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.07)' }}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Required</div>
                         <div className="mt-2 text-lg font-semibold text-white">In-App Baseline</div>
                       </div>
-                      <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: baselineComplete ? '#E0FE10' : baselineStarted ? '#3B82F6' : '#a1a1aa', background: baselineComplete ? 'rgba(224,254,16,0.1)' : baselineStarted ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.06)', border: `1px solid ${baselineComplete ? 'rgba(224,254,16,0.25)' : baselineStarted ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.1)'}` }}>
+                      <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: baselineComplete ? '#7C3AED' : baselineStarted ? '#3B82F6' : '#a1a1aa', background: baselineComplete ? 'rgba(124,58,237,0.1)' : baselineStarted ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.06)', border: `1px solid ${baselineComplete ? 'rgba(124,58,237,0.25)' : baselineStarted ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.1)'}` }}>
                         {baselineComplete ? 'Complete' : baselineStarted ? 'In Progress' : 'Ready'}
                       </div>
                     </div>
@@ -1061,9 +1061,9 @@ export default function PulseCheckTeamWorkspacePage() {
                       type="button"
                       disabled={athleteTaskLoading || baselineComplete}
                       onClick={handleLaunchBaseline}
-                      className="mt-5 inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-black transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                      style={{ background: '#E0FE10' }}
-                      onMouseEnter={(e) => { if (!baselineComplete) (e.currentTarget as HTMLElement).style.boxShadow = '0 0 18px rgba(224,254,16,0.4)'; }}
+                      className="mt-5 inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ background: '#7C3AED' }}
+                      onMouseEnter={(e) => { if (!baselineComplete) (e.currentTarget as HTMLElement).style.boxShadow = '0 0 18px rgba(124,58,237,0.4)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
                     >
                       {athleteTaskLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
@@ -1071,13 +1071,13 @@ export default function PulseCheckTeamWorkspacePage() {
                     </button>
                   </div>
 
-                  <div className="rounded-[22px] border bg-black/25 p-5" style={{ borderColor: visionProTaskState === 'completed' ? 'rgba(224,254,16,0.2)' : visionProTaskState === 'queued' ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.07)' }}>
+                  <div className="rounded-[22px] border bg-black/25 p-5" style={{ borderColor: visionProTaskState === 'completed' ? 'rgba(124,58,237,0.2)' : visionProTaskState === 'queued' ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.07)' }}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Optional</div>
                         <div className="mt-2 text-lg font-semibold text-white">Vision Pro Session</div>
                       </div>
-                      <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: visionProTaskState === 'completed' ? '#E0FE10' : visionProTaskState === 'queued' ? '#8B5CF6' : '#71717a', background: visionProTaskState === 'completed' ? 'rgba(224,254,16,0.1)' : visionProTaskState === 'queued' ? 'rgba(139,92,246,0.1)' : 'rgba(255,255,255,0.05)', border: `1px solid ${visionProTaskState === 'completed' ? 'rgba(224,254,16,0.25)' : visionProTaskState === 'queued' ? 'rgba(139,92,246,0.25)' : 'rgba(255,255,255,0.08)'}` }}>
+                      <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: visionProTaskState === 'completed' ? '#7C3AED' : visionProTaskState === 'queued' ? '#8B5CF6' : '#71717a', background: visionProTaskState === 'completed' ? 'rgba(124,58,237,0.1)' : visionProTaskState === 'queued' ? 'rgba(139,92,246,0.1)' : 'rgba(255,255,255,0.05)', border: `1px solid ${visionProTaskState === 'completed' ? 'rgba(124,58,237,0.25)' : visionProTaskState === 'queued' ? 'rgba(139,92,246,0.25)' : 'rgba(255,255,255,0.08)'}` }}>
                         {visionProTaskState === 'completed' ? 'Complete' : visionProTaskState === 'queued' ? 'Queued' : 'Optional'}
                       </div>
                     </div>
@@ -1087,7 +1087,7 @@ export default function PulseCheckTeamWorkspacePage() {
                   </div>
                 </div>
 
-                <div className={`mt-6 rounded-[20px] border px-5 py-4 text-sm ${ requiredTasksComplete ? 'border-[#E0FE10]/20 bg-[#E0FE10]/[0.05] text-[#E0FE10]' : 'border-amber-500/20 bg-amber-500/[0.05] text-amber-200' }`}>
+                <div className={`mt-6 rounded-[20px] border px-5 py-4 text-sm ${ requiredTasksComplete ? 'border-[#7C3AED]/20 bg-[#7C3AED]/[0.05] text-[#7C3AED]' : 'border-amber-500/20 bg-amber-500/[0.05] text-amber-200' }`}>
                   {requiredTasksComplete
                     ? todayDailyAssignment
                       ? `Today's Nora task is ${todayTaskIsActive ? 'ready' : dailyTaskStatusLabel(todayDailyAssignment.status).toLowerCase()}: ${todayTaskName || 'Nora task'}.`
@@ -1274,14 +1274,13 @@ export default function PulseCheckTeamWorkspacePage() {
             <div className="grid gap-4">
               <div className="rounded-[28px] border border-zinc-800 bg-[#091326] p-5">
                 <div className="flex items-center gap-3">
-                  <ClipboardList className="h-5 w-5 text-amber-300" />
-                  <div className="text-base font-semibold text-white">Migration Status</div>
+                  <ClipboardList className="h-5 w-5" style={{ color: '#a78bfa' }} />
+                  <div className="text-base font-semibold text-white">Good to know</div>
                 </div>
                 <div className="mt-4 space-y-3 text-sm leading-7 text-zinc-300">
-                  <div>Team memberships and team-access invites are now the primary source of truth for staff and athlete access.</div>
-                  <div>The roster shown here is resolved entirely from PulseCheck team memberships, not from legacy coach-connection collections.</div>
-                  <div>Per-athlete staff assignment now lives on `TeamMembership.allowedAthleteIds` instead of `coach-staff`.</div>
-                  <div>Current athlete invite policy: <span className="font-medium text-white">{invitePolicyLabel(team.defaultInvitePolicy)}</span>.</div>
+                  <div>Everyone on your team — staff and athletes — joins through the invite links you send.</div>
+                  <div>You decide who can see which athletes using the visibility controls on each staff member.</div>
+                  <div>Right now, athlete invites can be created by: <span className="font-medium text-white">{invitePolicyLabel(team.defaultInvitePolicy)}</span>.</div>
                 </div>
               </div>
 
@@ -1311,7 +1310,7 @@ export default function PulseCheckTeamWorkspacePage() {
               <div className="rounded-[28px] border border-zinc-800 bg-[#091326] p-5">
                 <div className="flex items-center gap-3">
                   <Bell className="h-5 w-5 text-cyan-300" />
-                  <div className="text-base font-semibold text-white">Notification Posture</div>
+                  <div className="text-base font-semibold text-white">Notifications</div>
                 </div>
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3 text-sm text-zinc-300">
@@ -1332,14 +1331,14 @@ export default function PulseCheckTeamWorkspacePage() {
               <div className="rounded-[28px] border border-zinc-800 bg-[#091326] p-5">
                 <div className="flex items-center gap-3">
                   <Shield className="h-5 w-5 text-purple-300" />
-                  <div className="text-base font-semibold text-white">Roster Visibility Scope</div>
+                  <div className="text-base font-semibold text-white">Who you can see</div>
                 </div>
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3 text-sm text-zinc-300">
-                    Current scope: {scopeLabel(membership.rosterVisibilityScope)}
+                    Your access: {scopeLabel(membership.rosterVisibilityScope)}
                   </div>
                   <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3 text-sm text-zinc-300">
-                    Visible athletes right now: {athleteRoster.length}
+                    Athletes you can see: {athleteRoster.length}
                   </div>
                 </div>
               </div>
@@ -1352,8 +1351,8 @@ export default function PulseCheckTeamWorkspacePage() {
                 <div className="flex items-center gap-3">
                   <Users className="h-5 w-5 text-amber-300" />
                   <div>
-                    <div className="text-lg font-semibold text-white">Staff and Adult Team Members</div>
-                    <div className="text-sm text-zinc-400">Migrated from the old staff surface into team-scoped memberships.</div>
+                    <div className="text-lg font-semibold text-white">Your staff</div>
+                    <div className="text-sm text-zinc-400">Coaches and staff who help you run the team.</div>
                   </div>
                 </div>
                 <Link
@@ -1458,7 +1457,7 @@ export default function PulseCheckTeamWorkspacePage() {
                   <Waves className="h-5 w-5 text-emerald-300" />
                   <div>
                     <div className="text-lg font-semibold text-white">Athlete Roster</div>
-                    <div className="text-sm text-zinc-400">Team-scoped athlete list with consent and baseline readiness.</div>
+                    <div className="text-sm text-zinc-400">Your athletes, with their consent and baseline status.</div>
                   </div>
                 </div>
                 <Link

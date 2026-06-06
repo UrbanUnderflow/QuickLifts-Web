@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pulse Check - Design System v1.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700,800,900&display=swap">
 <style>
 :root {
   --page-bg: #070711;
@@ -26,8 +27,9 @@
   --text-28: rgba(255,255,255,0.28);
   --text-25: rgba(255,255,255,0.25);
   --sidebar-w: 260px;
-  --font-display: 'Syne', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
+  --font-display: 'Switzer', sans-serif;
+  --font-body: 'Switzer', sans-serif;
+  --font-serif: 'Fraunces', serif;
   --font-mono: 'DM Mono', monospace;
 }
 
@@ -99,7 +101,7 @@ body {
 .sidebar-logo-name {
   font-family: var(--font-display);
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--lime);
   letter-spacing: -0.3px;
 }
@@ -187,7 +189,7 @@ body {
 .cover-title {
   font-family: var(--font-display);
   font-size: 60px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.0;
   letter-spacing: -1.5px;
   margin-bottom: 20px;
@@ -228,7 +230,7 @@ body {
 .section-title {
   font-family: var(--font-display);
   font-size: 36px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.5px;
   margin-bottom: 12px;
   line-height: 1.1;
@@ -501,7 +503,7 @@ code {
 .principle-num {
   font-family: var(--font-display);
   font-size: 32px;
-  font-weight: 800;
+  font-weight: 700;
   color: rgba(124,58,237,0.3);
   line-height: 1;
   margin-bottom: 8px;
@@ -674,7 +676,7 @@ code {
   <p class="cover-sub">The complete visual language, component library, copy voice, and AI design instructions for every Pulse Check screen. Do not invent outside this system - extend it intentionally.</p>
   <div class="cover-pills">
     <span class="cover-pill">Glassmorphic Dark</span>
-    <span class="cover-pill">Syne + DM Sans</span>
+    <span class="cover-pill">Switzer + Switzer</span>
     <span class="cover-pill">Athlete-First Copy</span>
     <span class="cover-pill">SwiftUI + Web</span>
   </div>
@@ -735,33 +737,34 @@ code {
 <section class="section" id="typography">
   <div class="section-eyebrow">02 - Typography</div>
   <h2 class="section-title">Type System</h2>
-  <p class="section-desc">Two fonts. No exceptions. Syne for anything that needs to command attention. DM Sans for everything the athlete reads.</p>
+  <p class="section-desc">One grotesque, used with intent. <strong>Switzer</strong> carries everything &mdash; from oversized lowercase display down to the smallest UI label. <strong>Fraunces</strong>, a refined serif, appears only as an editorial accent. <strong>DM Mono</strong> handles data and code. The beauty is in the contrast: a heavy, neutral sans set against one elegant serif moment, separated by hairline rules and tiny letter-spaced caps.</p>
 
   <h3>Font Families</h3>
   <div class="two-col">
     <div class="glass">
-      <div class="glass-title">Syne</div>
-      <div class="glass-desc">Display - Headlines - Metrics - AI output</div>
-      <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:var(--text-100);line-height:1.1;margin-bottom:8px;">The quick mind</div>
-      <ul><li>Weights: 700, 800 only</li><li>Use for: page titles, hero names, pillar %, metric values, insight quotes</li><li>Never use below 14pt</li></ul>
+      <div class="glass-title">Switzer</div>
+      <div class="glass-desc">Display + Body + UI &mdash; the workhorse grotesque</div>
+      <div style="font-family:'Switzer',sans-serif;font-size:34px;font-weight:700;letter-spacing:-0.03em;color:var(--text-100);line-height:1.02;margin-bottom:10px;">decided. shipped.</div>
+      <div style="font-family:'Switzer',sans-serif;font-size:15px;font-weight:400;color:var(--text-65);line-height:1.6;margin-bottom:8px;">Clarity under pressure. Every word earns its place.</div>
+      <ul><li>Display: 600&ndash;800, lowercase, tight tracking (&minus;0.02 to &minus;0.04em)</li><li>Body &amp; UI: 400&ndash;600</li><li>One family from hero headline to caption</li></ul>
     </div>
     <div class="glass">
-      <div class="glass-title">DM Sans</div>
-      <div class="glass-desc">Body - UI - Labels - Copy</div>
-      <div style="font-family:'DM Sans',sans-serif;font-size:15px;font-weight:400;color:var(--text-65);line-height:1.6;margin-bottom:8px;">Clarity under pressure. Every word earns its place.</div>
-      <ul><li>Weights: 400, 500, 600 only</li><li>Use for: all body copy, labels, tags, row values, CTAs, navigation</li><li>Never use 700+ weight</li></ul>
+      <div class="glass-title" style="font-family:'Fraunces',serif;font-style:italic;font-weight:500;">Fraunces</div>
+      <div class="glass-desc">Serif accent &mdash; used sparingly, for editorial moments</div>
+      <div style="font-family:'Fraunces',serif;font-size:34px;font-weight:500;font-style:italic;color:var(--text-100);line-height:1.05;margin-bottom:10px;">the quiet edge</div>
+      <ul><li>Use for: a single accent word, a pull-quote, a wordmark</li><li>Italic 400&ndash;600 for warmth &mdash; never for UI labels or data</li><li>One serif moment per surface, maximum</li></ul>
     </div>
   </div>
 
   <h3>Type Scale</h3>
-  <div class="type-specimen"><div class="type-sample" style="font-family:'Syne',sans-serif;font-size:26px;font-weight:800;letter-spacing:-0.5px;">Page Title</div><div class="type-meta">Syne 800 - 26pt<br>tracking -0.5 - white 100%</div></div>
-  <div class="type-specimen"><div class="type-sample" style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;letter-spacing:-0.3px;">Hero Name</div><div class="type-meta">Syne 800 - 22pt<br>tracking -0.3 - white 100%</div></div>
-  <div class="type-specimen"><div class="type-sample" style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;">100%</div><div class="type-meta">Syne 800 - 24pt<br>Pillar percentage</div></div>
-  <div class="type-specimen"><div class="type-sample" style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;">0</div><div class="type-meta">Syne 800 - 28pt<br>Metric value</div></div>
-  <div class="type-specimen"><div class="type-sample" style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;line-height:1.4;">Composure is your clearest edge today.</div><div class="type-meta">Syne 700 - 16pt<br>line-height 1.4 - Insight quote</div></div>
-  <div class="type-specimen"><div class="type-sample" style="font-size:10.5px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--lime);">WHAT NORA SEES IN YOU</div><div class="type-meta">DM Sans 600 - 10.5pt<br>uppercase - lime - tracking 1.5</div></div>
-  <div class="type-specimen"><div class="type-sample" style="font-size:13.5px;color:rgba(255,255,255,0.88);">Body copy that an athlete reads during onboarding, in the profile screen, or inside a chat with Nora.</div><div class="type-meta">DM Sans 400 - 13-14.5pt<br>white 88% - lh 1.55</div></div>
-  <div class="type-specimen"><div class="type-sample" style="font-size:11px;color:rgba(255,255,255,0.38);">Supporting description text, timestamps, metadata</div><div class="type-meta">DM Sans 400 - 11pt<br>white 38%</div></div>
+  <div class="type-specimen"><div class="type-sample" style="font-family:'Switzer', sans-serif;font-size:26px;font-weight: 700;letter-spacing:-0.5px;">Page Title</div><div class="type-meta">Switzer 700 - 26pt<br>tracking -0.5 - white 100%</div></div>
+  <div class="type-specimen"><div class="type-sample" style="font-family:'Switzer', sans-serif;font-size:22px;font-weight: 700;letter-spacing:-0.3px;">Hero Name</div><div class="type-meta">Switzer 700 - 22pt<br>tracking -0.3 - white 100%</div></div>
+  <div class="type-specimen"><div class="type-sample" style="font-family:'Switzer', sans-serif;font-size:24px;font-weight: 700;">100%</div><div class="type-meta">Switzer 700 - 24pt<br>Pillar percentage</div></div>
+  <div class="type-specimen"><div class="type-sample" style="font-family:'Switzer', sans-serif;font-size:28px;font-weight: 700;">0</div><div class="type-meta">Switzer 700 - 28pt<br>Metric value</div></div>
+  <div class="type-specimen"><div class="type-sample" style="font-family:'Switzer', sans-serif;font-size:16px;font-weight:700;line-height:1.4;">Composure is your clearest edge today.</div><div class="type-meta">Switzer 700 - 16pt<br>line-height 1.4 - Insight quote</div></div>
+  <div class="type-specimen"><div class="type-sample" style="font-size:10.5px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--lime);">WHAT NORA SEES IN YOU</div><div class="type-meta">Switzer 600 - 10.5pt<br>uppercase - lime - tracking 1.5</div></div>
+  <div class="type-specimen"><div class="type-sample" style="font-size:13.5px;color:rgba(255,255,255,0.88);">Body copy that an athlete reads during onboarding, in the profile screen, or inside a chat with Nora.</div><div class="type-meta">Switzer 400 - 13-14.5pt<br>white 88% - lh 1.55</div></div>
+  <div class="type-specimen"><div class="type-sample" style="font-size:11px;color:rgba(255,255,255,0.38);">Supporting description text, timestamps, metadata</div><div class="type-meta">Switzer 400 - 11pt<br>white 38%</div></div>
 </section>
 
 <section class="section" id="spacing">
@@ -874,7 +877,7 @@ Circle()
     <ul>
       <li>Outer ring: 72pt diameter - conic-gradient(from [rotatingdeg], #7C3AED, #D4EA04, #10B981, #7C3AED) - 2.5pt padding</li>
       <li>Inner circle: background linear-gradient(135deg, #1A1228, #0F1E14) - 50% radius</li>
-      <li>Initials: Syne 800 - 22pt - white</li>
+      <li>Initials: Switzer 700 - 22pt - white</li>
       <li>Animation: rotate conic-gradient at ~0.4deg/frame (~10deg/sec at 24fps)</li>
       <li>SwiftUI: AngularGradient + @State rotation via .linear(duration:5).repeatForever()</li>
     </ul>
@@ -895,7 +898,7 @@ Circle()
   </div>
   <div class="glass" style="padding:14px 18px;">
     <table class="token-table">
-      <tr><td>Font</td><td>DM Sans 600 - 10.5pt - uppercase - tracking 1.5</td></tr>
+      <tr><td>Font</td><td>Switzer 600 - 10.5pt - uppercase - tracking 1.5</td></tr>
       <tr><td>No background</td><td>plain text label - never in a pill or box</td></tr>
       <tr><td>Margin bottom</td><td>10-12pt before section content</td></tr>
     </table>
@@ -909,7 +912,7 @@ Circle()
       <ul>
         <li>Background: #D4EA04 solid</li>
         <li>Text: #0A0A14 - NOT white</li>
-        <li>Font: DM Sans 700 - 12-13pt</li>
+        <li>Font: Switzer 700 - 12-13pt</li>
         <li>Radius: 12-14pt</li>
       </ul>
     </div>
@@ -920,7 +923,7 @@ Circle()
         <li>Background: rgba(255,255,255,0.06)</li>
         <li>Border: 0.5px rgba(255,255,255,0.10)</li>
         <li>Text: rgba(255,255,255,0.65)</li>
-        <li>Font: DM Sans 500 - 12-13pt</li>
+        <li>Font: Switzer 500 - 12-13pt</li>
       </ul>
     </div>
     <div class="glass">
@@ -941,9 +944,9 @@ Circle()
     <ul>
       <li>Grid: 3 equal columns - gap 10pt - border-radius 18pt</li>
       <li>Icon chip: 30-32pt square - 9-10pt radius - tinted bg + border - 13-14pt SVG stroke icon</li>
-      <li>Percentage: Syne 800 - 24pt - white - margin-top 9pt after icon</li>
-      <li>Pillar name: DM Sans 600 - 12pt - white 80% - margin-top 4pt</li>
-      <li>Sub-description: DM Sans 400 - 10pt - white 32% - line-height 1.3</li>
+      <li>Percentage: Switzer 700 - 24pt - white - margin-top 9pt after icon</li>
+      <li>Pillar name: Switzer 600 - 12pt - white 80% - margin-top 4pt</li>
+      <li>Sub-description: Switzer 400 - 10pt - white 32% - line-height 1.3</li>
       <li>Composure = Blue tint - Focus = Purple tint - Decision = Green tint</li>
     </ul>
   </div>
@@ -953,9 +956,9 @@ Circle()
     <div class="glass-desc">Used inside a glass card for structured profile data</div>
     <ul>
       <li>Padding: 11pt vertical - border-bottom 0.5px rgba(255,255,255,0.05) - last row: no border</li>
-      <li>Left: icon chip (28pt - 8pt radius - white 6% bg - white 8% border) + key label (DM Sans 400 - 13pt - white 42%)</li>
-      <li>Actionable values: DM Sans 500 - 13pt - #D4EA04 + chevron (white 20%)</li>
-      <li>Static values: DM Sans 500 - 13pt - white 78% - no chevron</li>
+      <li>Left: icon chip (28pt - 8pt radius - white 6% bg - white 8% border) + key label (Switzer 400 - 13pt - white 42%)</li>
+      <li>Actionable values: Switzer 500 - 13pt - #D4EA04 + chevron (white 20%)</li>
+      <li>Static values: Switzer 500 - 13pt - white 78% - no chevron</li>
       <li>Email / long values: 11pt - white 42%</li>
     </ul>
   </div>
@@ -1225,8 +1228,8 @@ Circle()
 
   <div class="glass">
     <table class="token-table">
-      <tr><td style="color:var(--lime);font-weight:600;">Section 1</td><td>Status bar - time (Syne 700 - 15pt) + signal/wifi/battery</td></tr>
-      <tr><td style="color:var(--lime);font-weight:600;">Section 2</td><td>Page header - "Profile" Syne 800 26pt + gear icon button (38pt circle)</td></tr>
+      <tr><td style="color:var(--lime);font-weight:600;">Section 1</td><td>Status bar - time (Switzer 700 - 15pt) + signal/wifi/battery</td></tr>
+      <tr><td style="color:var(--lime);font-weight:600;">Section 2</td><td>Page header - "Profile" Switzer 700 26pt + gear icon button (38pt circle)</td></tr>
       <tr><td style="color:var(--lime);font-weight:600;">Section 3</td><td>Hero card - spinning avatar ring (72pt) + name + sport + 2 tag pills + full-width lime ghost CTA</td></tr>
       <tr><td style="color:var(--lime);font-weight:600;">Section 4</td><td>What Nora Sees - lime eyebrow + signal badge + muted desc + nested insight box (quote + 2 CTAs)</td></tr>
       <tr><td style="color:var(--lime);font-weight:600;">Section 5</td><td>Pillar cards - 3-column standalone grid, no wrapper (Composure/Focus/Decision)</td></tr>
@@ -1276,7 +1279,7 @@ Circle()
         <li>Background: rgba(255,255,255, 0.055)</li>
         <li>Border: 0.5px rgba(255,255,255, 0.10)</li>
         <li>Radius: 20pt all corners, 6pt top-left</li>
-        <li>Text: DM Sans 400 - 14.5pt - white 88%</li>
+        <li>Text: Switzer 400 - 14.5pt - white 88%</li>
       </ul>
     </div>
     <div class="glass purple">
@@ -1285,7 +1288,7 @@ Circle()
         <li>Background: rgba(124,58,237, 0.18)</li>
         <li>Border: 0.5px rgba(124,58,237, 0.35)</li>
         <li>Radius: 20pt all corners, 6pt bottom-right</li>
-        <li>Text: DM Sans 400 - 14.5pt - white 88%</li>
+        <li>Text: Switzer 400 - 14.5pt - white 88%</li>
       </ul>
     </div>
   </div>
@@ -1310,7 +1313,7 @@ Circle()
   </div>
   <div class="glass" style="margin-bottom:10px;">
     <div class="glass-title">Step 4 - Apply typography from the scale</div>
-    <ul><li>Syne bold for AI output and key metrics - DM Sans for everything the athlete reads - Never outside the type scale - Never pure white/black text - use rgba opacities</li></ul>
+    <ul><li>Switzer bold for AI output and key metrics - Switzer for everything the athlete reads - Never outside the type scale - Never pure white/black text - use rgba opacities</li></ul>
   </div>
   <div class="glass" style="margin-bottom:10px;">
     <div class="glass-title">Step 5 - Apply color semantics</div>
@@ -1406,20 +1409,20 @@ Tag pill:     20pt (capsule)
 Detail icon:  8pt</code></pre>
 
       <h4>Type scale</h4>
-      <pre><code>Page title:  Syne 800 - 26pt - -0.5
-Hero name:   Syne 800 - 22pt - -0.3
-Pillar %:    Syne 800 - 24pt
-Metric val:  Syne 800 - 28pt
-Insight:     Syne 700 - 16pt - lh 1.4
-Eyebrow:     DM Sans 600 - 10.5pt - UPPER
-Card title:  DM Sans 600 - 12.5pt
-Body:        DM Sans 400 - 13-14.5pt
-Support:     DM Sans 400 - 11pt
-Status:      DM Sans 600 - 11pt - semantic
-Row key:     DM Sans 400 - 13pt - 42%
-Row val:     DM Sans 500 - 12.5pt - lime
-Timestamp:   DM Sans 400 - 10pt - 25%
-Tag text:    DM Sans 500 - 11.5pt</code></pre>
+      <pre><code>Page title:  Switzer 700 - 26pt - -0.5
+Hero name:   Switzer 700 - 22pt - -0.3
+Pillar %:    Switzer 700 - 24pt
+Metric val:  Switzer 700 - 28pt
+Insight:     Switzer 700 - 16pt - lh 1.4
+Eyebrow:     Switzer 600 - 10.5pt - UPPER
+Card title:  Switzer 600 - 12.5pt
+Body:        Switzer 400 - 13-14.5pt
+Support:     Switzer 400 - 11pt
+Status:      Switzer 600 - 11pt - semantic
+Row key:     Switzer 400 - 13pt - 42%
+Row val:     Switzer 500 - 12.5pt - lime
+Timestamp:   Switzer 400 - 10pt - 25%
+Tag text:    Switzer 500 - 11.5pt</code></pre>
 
       <h4>Blob placement</h4>
       <pre><code>Blob 1 (Purple #7C3AED @ 0.20)

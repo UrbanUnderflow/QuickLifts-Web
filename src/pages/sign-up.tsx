@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { browserPopupRedirectResolver, createUserWithEmailAndPassword, GoogleAuthProvider, OAuthProvider, signInWithPopup } from 'firebase/auth';
 import { doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../api/firebase/config';
 import { User, SubscriptionType, SubscriptionPlatform, UserLevel } from '../api/firebase/user';
@@ -32,6 +32,7 @@ const SignUpPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeProvider, setActiveProvider] = useState<'google' | 'apple' | null>(null);
   const [isImageUploading, setIsImageUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -172,6 +173,144 @@ const SignUpPage: React.FC = () => {
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  // Derive a valid, reasonably-unique username for social sign-ups (no username
+  // field is shown for Google/Apple). Format matches validUsernameFormat.
+  const usernameFromEmail = (email: string) => {
+    const base = (email.split('@')[0] || 'pulse').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 14) || 'pulse';
+    const suffix = Math.floor(1000 + Math.random() * 9000);
+    return `${base}_${suffix}`.slice(0, 20);
+  };
+
+  // Google / Apple sign-up. New accounts get a Firestore user doc; returning
+  // accounts just sign in and route through. Legal acceptance is still required.
+  const handleSocialAuth = async (provider: 'google' | 'apple') => {
+    if (isLoading) return;
+
+    if (!hasAcceptedLegal) {
+      setErrors((prev) => ({ ...prev, legal: 'You must agree to the Terms and Privacy Policy to create an account' }));
+      return;
+    }
+
+    setIsLoading(true);
+    setActiveProvider(provider);
+    setError(null);
+
+    try {
+      const authProvider =
+        provider === 'google'
+          ? (() => {
+              const p = new GoogleAuthProvider();
+              p.addScope('email');
+              p.addScope('profile');
+              return p;
+            })()
+          : (() => {
+              const p = new OAuthProvider('apple.com');
+              p.addScope('email');
+              p.addScope('name');
+              return p;
+            })();
+
+      const result = await signInWithPopup(auth, authProvider, browserPopupRedirectResolver);
+      const firebaseUser = result.user;
+      const email = firebaseUser.email || '';
+
+      if (!email) {
+        setError('That account did not share an email address. Try signing up with email instead.');
+        return;
+      }
+
+      const legalSource = provider === 'google' ? 'web-signup-social-google' : 'web-signup-social-apple';
+
+      // Only create a Firestore doc the first time this account is seen.
+      const existing = await userService.fetchUserFromFirestore(firebaseUser.uid).catch(() => null);
+      if (!existing) {
+        let uname = usernameFromEmail(email);
+        try {
+          await claimUsername(firebaseUser.uid, uname);
+        } catch {
+          uname = usernameFromEmail(email);
+          try {
+            await claimUsername(firebaseUser.uid, uname);
+          } catch {
+            /* fall through and create the user doc with the generated name */
+          }
+        }
+
+        const userData: any = {
+          id: firebaseUser.uid,
+          email,
+          username: uname,
+          displayName: firebaseUser.displayName || uname,
+          role: isCoachSignUp ? 'coach' : 'athlete',
+          registrationComplete: true,
+          subscriptionType: SubscriptionType.unsubscribed,
+          subscriptionPlatform: SubscriptionPlatform.Web,
+          level: UserLevel.Novice,
+          goal: [],
+          bodyWeight: [],
+          macros: {},
+          profileImage: {
+            profileImageURL: firebaseUser.photoURL || '',
+            imageOffsetWidth: 0,
+            imageOffsetHeight: 0,
+          },
+          bio: '',
+          additionalGoals: '',
+          blockedUsers: [],
+          encouragement: [],
+          isCurrentlyActive: false,
+          videoCount: 0,
+          creator: null,
+          winner: null,
+          legalAcceptance: buildCurrentLegalAcceptance(legalSource),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        if (
+          typeof partnerType === 'string' &&
+          typeof partnerId === 'string' &&
+          ['brand', 'gym', 'runClub'].includes(partnerType)
+        ) {
+          userData.partnerSource = {
+            type: partnerType as 'brand' | 'gym' | 'runClub',
+            partnerId,
+          };
+        }
+
+        const user = new User(firebaseUser.uid, userData);
+        await userService.createUser(firebaseUser.uid, user);
+        cacheCurrentLegalAcceptance(firebaseUser.uid, legalSource);
+      }
+
+      setSuccess(true);
+      setTimeout(() => {
+        if (redirect && typeof redirect === 'string') {
+          router.push(redirect);
+        } else if (isCoachSignUp) {
+          router.push('/coach/dashboard');
+        } else {
+          router.push('/dashboard');
+        }
+      }, 1200);
+    } catch (error: any) {
+      console.error('Social sign-up error:', error);
+      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+        setError('Sign-in was cancelled.');
+      } else if (error.code === 'auth/popup-blocked') {
+        setError('Enable popups for this site and try again.');
+      } else if (error.code === 'auth/account-exists-with-different-credential') {
+        setError('An account already exists with that email using a different sign-in method.');
+      } else {
+        setError('Failed to sign in. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+      setActiveProvider(null);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -610,6 +749,43 @@ const SignUpPage: React.FC = () => {
             )}
           </button>
         </form>
+
+        {/* Social sign-up */}
+        <div className="mt-6 space-y-3">
+          <div className="flex items-center gap-3">
+            <span className="h-px flex-1 bg-zinc-800" />
+            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">or continue with</span>
+            <span className="h-px flex-1 bg-zinc-800" />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handleSocialAuth('google')}
+            disabled={isLoading || isImageUploading}
+            className="flex w-full items-center justify-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {activeProvider === 'google' ? (
+              <Loader2 className="animate-spin" size={20} />
+            ) : (
+              <img src="/google-logo.svg" alt="" aria-hidden="true" className="h-5 w-5" />
+            )}
+            {isCoachSignUp ? 'Sign up' : 'Continue'} with Google
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSocialAuth('apple')}
+            disabled={isLoading || isImageUploading}
+            className="flex w-full items-center justify-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {activeProvider === 'apple' ? (
+              <Loader2 className="animate-spin" size={20} />
+            ) : (
+              <img src="/apple-logo.svg" alt="" aria-hidden="true" className="h-5 w-5" />
+            )}
+            {isCoachSignUp ? 'Sign up' : 'Continue'} with Apple
+          </button>
+        </div>
 
         {/* Sign In Link */}
         <div className="text-center mt-6">

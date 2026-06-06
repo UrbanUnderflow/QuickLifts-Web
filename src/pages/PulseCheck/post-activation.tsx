@@ -110,6 +110,46 @@ const Toggle = ({
   </button>
 );
 
+// Canonical PulseCheck brand tokens (see public/pulsecheck-design-system.html).
+const PC = {
+  pageBg: '#070711',
+  deepBg: '#0B0B1C',
+  purple: '#7C3AED',
+  purpleSoft: '#a78bfa',
+  cardBorder: 'rgba(255,255,255,0.10)',
+};
+
+const WIZARD_STEPS = ['Your profile', 'Invite staff', 'Invite athletes', "You're set"];
+
+const Stepper = ({ current }: { current: number }) => (
+  <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
+    {WIZARD_STEPS.map((label, index) => {
+      const stepNumber = index + 1;
+      const done = stepNumber < current;
+      const active = stepNumber === current;
+      return (
+        <React.Fragment key={label}>
+          <div className="flex items-center gap-2">
+            <span
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition"
+              style={{
+                background: active || done ? PC.purple : 'rgba(255,255,255,0.06)',
+                color: active || done ? '#fff' : '#71717a',
+              }}
+            >
+              {done ? <CheckCircle2 className="h-4 w-4" /> : stepNumber}
+            </span>
+            <span className="text-xs font-semibold" style={{ color: active ? '#fff' : done ? PC.purpleSoft : '#71717a' }}>
+              {label}
+            </span>
+          </div>
+          {stepNumber < WIZARD_STEPS.length ? <span className="h-px w-5 bg-white/10" /> : null}
+        </React.Fragment>
+      );
+    })}
+  </div>
+);
+
 export default function PulseCheckPostActivationPage() {
   const router = useRouter();
   const currentUser = useUser();
@@ -126,6 +166,7 @@ export default function PulseCheckPostActivationPage() {
   const [creatingAdultInvite, setCreatingAdultInvite] = useState(false);
   const [creatingAthleteInvite, setCreatingAthleteInvite] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [step, setStep] = useState(1);
 
   const [profileForm, setProfileForm] = useState({
     displayName: '',
@@ -314,7 +355,9 @@ export default function PulseCheckPostActivationPage() {
       userService.nonUICurrentUser = refreshedUser;
       await refreshContext();
       setProfileImageFile(null);
-      setMessage({ type: 'success', text: 'Your post-activation setup was saved.' });
+      setMessage({ type: 'success', text: 'Profile saved — nice. Let’s bring your team in.' });
+      setStep(2);
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       console.error('[PulseCheck post-activation] Failed to save profile:', error);
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to save your setup.' });
@@ -409,8 +452,8 @@ export default function PulseCheckPostActivationPage() {
 
   if (currentUserLoading || initializing) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#05070c] text-white">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
+      <div className="flex min-h-screen items-center justify-center text-white" style={{ background: PC.pageBg }}>
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: PC.purpleSoft }} />
       </div>
     );
   }
@@ -421,18 +464,19 @@ export default function PulseCheckPostActivationPage() {
 
   if (!membership || membership.role !== 'team-admin') {
     return (
-      <div className="min-h-screen bg-[#05070c] px-4 py-16 text-white">
-        <div className="mx-auto max-w-3xl rounded-[32px] border border-zinc-800 bg-[#090f1c] p-10 text-center shadow-2xl">
-          <Shield className="mx-auto h-10 w-10 text-amber-300" />
-          <h1 className="mt-6 text-3xl font-semibold">This setup lane is reserved for team admins</h1>
+      <div className="min-h-screen px-4 py-16 text-white" style={{ background: PC.pageBg }}>
+        <div className="mx-auto max-w-3xl rounded-[32px] border p-10 text-center shadow-2xl" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
+          <Shield className="mx-auto h-10 w-10" style={{ color: PC.purpleSoft }} />
+          <h1 className="mt-6 text-3xl font-bold">This setup is just for team admins</h1>
           <p className="mt-4 text-sm leading-7 text-zinc-300">
-            Your account is active, but this page is only for the initial team-admin handoff and profile setup.
+            Your account is active — this page is only for the coach setting up the team. Head to your workspace to get going.
           </p>
           <Link
             href={`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
-            className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
+            className="mt-8 inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+            style={{ background: PC.purple }}
           >
-            Open Team Workspace
+            Go to my workspace
             <ChevronRight className="h-4 w-4" />
           </Link>
         </div>
@@ -441,74 +485,57 @@ export default function PulseCheckPostActivationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#05070c] text-white">
+    <div className="relative min-h-screen overflow-hidden text-white" style={{ background: PC.pageBg, fontFamily: 'Switzer, sans-serif' }}>
       <Head>
-        <title>PulseCheck Post-Activation Setup</title>
+        <title>Set up your PulseCheck team</title>
         <meta name="robots" content="noindex,nofollow" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..700&display=swap"
+          rel="stylesheet"
+        />
+          <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700,800,900&display=swap" />
       </Head>
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-8 md:px-6 md:py-10">
-        <section className="rounded-[36px] border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.14),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(250,204,21,0.10),_transparent_35%),#07101d] p-6 shadow-2xl md:p-8">
-          <div className="grid gap-8 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-            <div className="space-y-6">
-              <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-zinc-500">Post-Activation Setup</p>
-                <h1 className="mt-3 text-4xl font-semibold tracking-tight">Shape how you operate inside {team?.displayName || 'your team'}</h1>
-                <p className="mt-4 max-w-xl text-sm leading-7 text-zinc-300">
-                  Your admin access is already live. This page defines your operating identity, then hands you into adult and athlete onboarding.
-                </p>
-              </div>
+      <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.20) 0%, transparent 70%)' }} />
 
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="rounded-3xl border border-zinc-800 bg-black/20 p-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">Container</div>
-                  <div className="mt-3 text-lg font-semibold text-white">{organization?.displayName || 'Organization'}</div>
-                  <div className="mt-1 text-sm text-zinc-400">{team?.displayName || 'Team'}</div>
-                </div>
-                <div className="rounded-3xl border border-zinc-800 bg-black/20 p-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">Adult Links</div>
-                  <div className="mt-3 text-3xl font-semibold text-white">{adultInviteLinks.length}</div>
-                  <div className="mt-1 text-sm text-zinc-400">Active secondary admin / staff / coach links</div>
-                </div>
-                <div className="rounded-3xl border border-zinc-800 bg-black/20 p-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">Athlete Links</div>
-                  <div className="mt-3 text-3xl font-semibold text-white">{athleteInviteLinks.length}</div>
-                  <div className="mt-1 text-sm text-zinc-400">Live athlete onboarding links</div>
-                </div>
-              </div>
-
-              <div className="rounded-[28px] border border-amber-400/20 bg-amber-400/[0.06] p-5">
-                <div className="flex items-center gap-3">
-                  <Sparkles className="h-5 w-5 text-amber-300" />
-                  <div className="text-sm font-semibold text-white">Recommended sequence</div>
-                </div>
-                <div className="mt-3 grid gap-3 text-sm text-zinc-300 md:grid-cols-3">
-                  <div>1. Define your name, title, photo, notifications, and operating role.</div>
-                  <div>2. Add the adults who will help run the team.</div>
-                  <div>3. Start athlete onboarding once the adult lane is established.</div>
-                </div>
-              </div>
-
-              {message ? (
-                <div
-                  className={`rounded-2xl border px-4 py-3 text-sm ${
-                    message.type === 'success'
-                      ? 'border-green-500/20 bg-green-500/[0.06] text-green-200'
-                      : 'border-red-500/20 bg-red-500/[0.06] text-red-200'
-                  }`}
-                >
-                  {message.text}
-                </div>
-              ) : null}
+      <main className="relative mx-auto w-full max-w-3xl px-4 py-8 md:px-6 md:py-10">
+        {/* Brand + progress header */}
+        <div className="mb-6 flex flex-col gap-5">
+          <div className="flex items-center gap-3">
+            <img src="/pulsecheck-logo.svg" alt="PulseCheck" width={36} height={36} className="rounded-[10px]" />
+            <span className="text-base font-bold tracking-tight" style={{ fontFamily: 'Switzer, sans-serif' }}>PulseCheck</span>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>Let's set up {team?.displayName || 'your team'}</p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl" style={{ fontFamily: 'Switzer, sans-serif' }}>
+              A few quick steps and you're live
+            </h1>
+          </div>
+          <Stepper current={step} />
+          {message ? (
+            <div
+              className={`rounded-2xl border px-4 py-3 text-sm ${
+                message.type === 'success'
+                  ? 'border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-200'
+                  : 'border-red-500/20 bg-red-500/[0.06] text-red-200'
+              }`}
+            >
+              {message.text}
             </div>
+          ) : null}
+        </div>
 
-            <div className="grid gap-6">
-              <form onSubmit={handleSaveProfile} className="rounded-[30px] border border-zinc-800 bg-[#091326] p-6">
+        <section>
+          <div className="grid gap-6">
+              {step === 1 && (
+              <form onSubmit={handleSaveProfile} className="rounded-[30px] border p-6" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
                 <div className="flex items-center gap-3">
-                  <UserRound className="h-5 w-5 text-cyan-300" />
+                  <UserRound className="h-5 w-5" style={{ color: PC.purpleSoft }} />
                   <div>
-                    <div className="text-lg font-semibold text-white">1. Complete Your Profile</div>
-                    <div className="text-sm text-zinc-400">Define who you are and how PulseCheck should treat your admin lane.</div>
+                    <div className="text-lg font-semibold text-white">Tell us about you</div>
+                    <div className="text-sm text-zinc-400">Your name, photo, and how you'll use PulseCheck with your team.</div>
                   </div>
                 </div>
 
@@ -730,32 +757,27 @@ export default function PulseCheckPostActivationPage() {
                   </div>
                 ) : null}
 
-                <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                <div className="mt-6">
                   <button
                     type="submit"
                     disabled={savingProfile}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    style={{ background: PC.purple }}
                   >
                     {savingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                    {savingProfile ? 'Saving Setup...' : 'Save Profile and Role'}
+                    {savingProfile ? 'Saving…' : 'Save & continue'}
                   </button>
-                  <Link
-                    href={`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-zinc-700 px-5 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
-                  >
-                    Preview Team Workspace
-                    <ChevronRight className="h-4 w-4" />
-                  </Link>
                 </div>
               </form>
+              )}
 
-              <div className="grid gap-6 xl:grid-cols-2">
-                <form onSubmit={handleCreateAdultInvite} className="rounded-[30px] border border-zinc-800 bg-[#091326] p-6">
+              {step === 2 && (
+                <form onSubmit={handleCreateAdultInvite} className="rounded-[30px] border p-6" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
                   <div className="flex items-center gap-3">
-                    <Users className="h-5 w-5 text-amber-300" />
+                    <Users className="h-5 w-5" style={{ color: PC.purpleSoft }} />
                     <div>
-                      <div className="text-lg font-semibold text-white">2. Invite Adults</div>
-                      <div className="text-sm text-zinc-400">Secondary admins, coaches, and staff should enter before athletes.</div>
+                      <div className="text-lg font-semibold text-white">Bring your staff in</div>
+                      <div className="text-sm text-zinc-400">Invite the coaches and staff who'll help run the team. Optional — you can do this anytime.</div>
                     </div>
                   </div>
 
@@ -872,20 +894,39 @@ export default function PulseCheckPostActivationPage() {
                       ))
                     )}
                   </div>
+                  <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-5">
+                    <button type="button" onClick={() => setStep(1)} className="text-sm font-semibold text-zinc-400 transition hover:text-white">
+                      ← Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep(3);
+                        if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                      style={{ background: PC.purple }}
+                    >
+                      {adultInviteLinks.length > 0 ? 'Continue' : 'Skip for now'}
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
                 </form>
+              )}
 
-                <form onSubmit={handleCreateAthleteInvite} className="rounded-[30px] border border-zinc-800 bg-[#091326] p-6">
+              {step === 3 && (
+                <form onSubmit={handleCreateAthleteInvite} className="rounded-[30px] border p-6" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
                   <div className="flex items-center gap-3">
-                    <Waves className="h-5 w-5 text-emerald-300" />
+                    <Waves className="h-5 w-5" style={{ color: PC.purpleSoft }} />
                     <div>
-                      <div className="text-lg font-semibold text-white">3. Invite Athletes</div>
-                      <div className="text-sm text-zinc-400">Open this lane after your own identity and team-adult setup are in place.</div>
+                      <div className="text-lg font-semibold text-white">Invite your athletes</div>
+                      <div className="text-sm text-zinc-400">Send athletes their link now, or come back to this anytime from your workspace.</div>
                     </div>
                   </div>
 
                   {!canInviteAthletes ? (
-                    <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] px-4 py-4 text-sm leading-7 text-zinc-300">
-                      Save your admin profile first. That locks in your operating role and opens the athlete lane.
+                    <div className="mt-5 rounded-2xl border px-4 py-4 text-sm leading-7 text-zinc-300" style={{ borderColor: 'rgba(124,58,237,0.25)', background: 'rgba(124,58,237,0.06)' }}>
+                      Save your profile first — that opens up athlete invites.
                     </div>
                   ) : null}
 
@@ -963,50 +1004,76 @@ export default function PulseCheckPostActivationPage() {
                       ))
                     )}
                   </div>
-                </form>
-              </div>
-
-              <div className="rounded-[30px] border border-zinc-800 bg-[#091326] p-6">
-                <div className="flex items-center gap-3">
-                  <ChevronRight className="h-5 w-5 text-cyan-300" />
-                  <div>
-                    <div className="text-lg font-semibold text-white">4. Landing Routing</div>
-                    <div className="text-sm text-zinc-400">Your saved operating role shapes the focus of the shared team workspace.</div>
-                  </div>
-                </div>
-
-                <div className="mt-5 grid gap-4 md:grid-cols-3">
-                  {operatingRoleOptions.map((option) => (
-                    <div
-                      key={option.value}
-                      className={`rounded-[24px] border bg-gradient-to-br p-4 ${
-                        profileForm.operatingRole === option.value
-                          ? option.accent
-                          : 'border-zinc-800 from-black/20 to-black/10'
-                      }`}
+                  <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-5">
+                    <button type="button" onClick={() => setStep(2)} className="text-sm font-semibold text-zinc-400 transition hover:text-white">
+                      ← Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep(4);
+                        if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                      style={{ background: PC.purple }}
                     >
-                      <div className="text-sm font-semibold text-white">{option.label}</div>
-                      <div className="mt-2 text-sm leading-6 text-zinc-400">{option.description}</div>
-                    </div>
-                  ))}
-                </div>
+                      {athleteInviteLinks.length > 0 ? 'Finish setup' : 'Skip for now'}
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </form>
+              )}
 
-                <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                  <Link
-                    href={`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-black transition hover:bg-cyan-200"
-                  >
-                    Open My Team Workspace
-                    <ChevronRight className="h-4 w-4" />
-                  </Link>
-                  <div className="inline-flex items-center gap-2 rounded-2xl border border-zinc-800 px-4 py-3 text-sm text-zinc-400">
-                    {setupSaved ? <CheckCircle2 className="h-4 w-4 text-green-300" /> : <Loader2 className="h-4 w-4 text-zinc-500" />}
-                    {setupSaved ? 'Profile step complete' : 'Save your profile to lock in routing'}
+              {step === 4 && (
+                <div className="rounded-[30px] border p-8 text-center" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
+                  <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-2xl" style={{ background: 'rgba(124,58,237,0.16)' }}>
+                    <CheckCircle2 className="h-8 w-8" style={{ color: PC.purpleSoft }} />
+                  </div>
+                  <h2 className="mt-5 text-3xl font-bold text-white" style={{ fontFamily: 'Switzer, sans-serif' }}>
+                    You're all set, Coach 🎉
+                  </h2>
+                  <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-zinc-300">
+                    {team?.displayName || 'Your team'} is live. As your athletes join, you'll see their readiness and mental-performance
+                    signals right in your workspace.
+                  </p>
+
+                  <div className="mx-auto mt-6 grid max-w-xl gap-3 text-left sm:grid-cols-3">
+                    {[
+                      { icon: Users, label: 'Staff invited', value: adultInviteLinks.length },
+                      { icon: Waves, label: 'Athletes invited', value: athleteInviteLinks.length },
+                      { icon: Sparkles, label: 'Profile', value: setupSaved ? 'Ready' : '—' },
+                    ].map((stat) => (
+                      <div key={stat.label} className="rounded-2xl border p-4" style={{ borderColor: PC.cardBorder, background: 'rgba(255,255,255,0.03)' }}>
+                        <stat.icon className="h-4 w-4" style={{ color: PC.purpleSoft }} />
+                        <div className="mt-3 text-2xl font-bold text-white">{stat.value}</div>
+                        <div className="mt-1 text-xs uppercase tracking-[0.16em] text-zinc-500">{stat.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                    <Link
+                      href={`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                      style={{ background: PC.purple }}
+                    >
+                      Open my workspace
+                      <ChevronRight className="h-4 w-4" />
+                    </Link>
+                    {athleteInviteLinks.length === 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setStep(3)}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border px-6 py-3 text-sm font-semibold text-white transition hover:border-white/30"
+                        style={{ borderColor: PC.cardBorder }}
+                      >
+                        Invite athletes first
+                      </button>
+                    ) : null}
                   </div>
                 </div>
-              </div>
+              )}
             </div>
-          </div>
         </section>
       </main>
     </div>

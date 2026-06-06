@@ -50,6 +50,7 @@ import type {
   PulseCheckAuntEdnaClinicianProfile,
   PulseCheckClinicianBridgeMode,
   PulseCheckClinicianProfileType,
+  PulseCheckInviteActivity,
   PulseCheckInviteLink,
   PulseCheckInvitePolicy,
   PulseCheckOrganization,
@@ -252,6 +253,33 @@ const toDateValue = (value?: Timestamp | Date | null) => {
   if (value instanceof Date) return value;
   if (typeof value.toDate === 'function') return value.toDate();
   return null;
+};
+
+// Derives the activation funnel status for an admin-activation link: whether the
+// activation email was sent, whether the recipient opened the link, and whether they
+// have onboarded (redeemed). "Onboarded" comes from the link's redeemed state; "opened"
+// from recorded page-view/authenticated-view activity.
+const summarizeAdminActivation = (
+  link: PulseCheckInviteLink | null | undefined,
+  activity: PulseCheckInviteActivity[] | undefined
+) => {
+  const events = activity || [];
+  const openEvent = events.find(
+    (event) => event.eventType === 'page-view' || event.eventType === 'authenticated-view'
+  );
+  const redeemEvent = events.find((event) => event.eventType === 'redeem-succeeded');
+  const onboarded = link?.status === 'redeemed' || Boolean(redeemEvent);
+  return {
+    sent: link?.lastEmailStatus === 'sent' || (link?.emailSendCount || 0) > 0,
+    sendFailed: link?.lastEmailStatus === 'failed',
+    sentAt: link?.lastEmailSentAt || null,
+    sendCount: link?.emailSendCount || 0,
+    opened: Boolean(openEvent) || onboarded,
+    openedAt: openEvent?.createdAt || null,
+    onboarded,
+    onboardedAt: link?.redeemedAt || redeemEvent?.createdAt || null,
+    onboardedBy: link?.redeemedByEmail || '',
+  };
 };
 
 const getOrganizationStatusDisplay = (status?: PulseCheckOrganizationStatus): StatusDisplay => {
@@ -673,6 +701,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [pilotSubmitting, setPilotSubmitting] = useState(false);
   const [cohortSubmitting, setCohortSubmitting] = useState(false);
   const [cohortInviteCreatingId, setCohortInviteCreatingId] = useState<string | null>(null);
+  const [pilotInviteCreatingId, setPilotInviteCreatingId] = useState<string | null>(null);
   const [activationCreatingTeamId, setActivationCreatingTeamId] = useState<string | null>(null);
   const [clinicianLinkCreatingProfileId, setClinicianLinkCreatingProfileId] = useState<string | null>(null);
   const [adminLinkCreatingEmail, setAdminLinkCreatingEmail] = useState<string | null>(null);
@@ -687,6 +716,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [onboardingModal, setOnboardingModal] = useState<OnboardingModalState | null>(null);
   const [additionalAdminForm, setAdditionalAdminForm] = useState({ name: '', email: '' });
   const [additionalAdminSubmitting, setAdditionalAdminSubmitting] = useState(false);
+  // Email-of-recipient currently being sent/resent an activation email (admin channel).
+  const [activationEmailSendingEmail, setActivationEmailSendingEmail] = useState<string | null>(null);
+  // Per-token invite activity loaded for the open onboarding modal (opened / onboarded status).
+  const [modalActivityByToken, setModalActivityByToken] = useState<Record<string, PulseCheckInviteActivity[]>>({});
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [organizationImageUploadingId, setOrganizationImageUploadingId] = useState<string | null>(null);
   const [teamImageUploadingId, setTeamImageUploadingId] = useState<string | null>(null);
@@ -845,6 +878,20 @@ const PulseCheckProvisioningPage: React.FC = () => {
     });
     return nextMap;
   }, [inviteLinks]);
+  // Reusable athlete invites that enroll straight into a pilot with NO cohort.
+  const reusablePilotInviteByPilotId = useMemo(() => {
+    const nextMap = new Map<string, PulseCheckInviteLink>();
+    inviteLinks.forEach((link) => {
+      if (link.status !== 'active') return;
+      if (link.redemptionMode !== 'general') return;
+      if (link.inviteType !== 'team-access') return;
+      if (link.teamMembershipRole !== 'athlete') return;
+      if (!link.pilotId) return;
+      if (link.cohortId) return;
+      if (!nextMap.has(link.pilotId)) nextMap.set(link.pilotId, link);
+    });
+    return nextMap;
+  }, [inviteLinks]);
   const inviteLinksByClinicianProfileId = useMemo(() => {
     const nextMap = new Map<string, PulseCheckInviteLink[]>();
     inviteLinks.forEach((link) => {
@@ -882,6 +929,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
               : null,
             adminActivationLinks:
               (inviteLinksByTeamId.get(team.id) || []).filter((link) => link.inviteType === 'admin-activation' && link.status === 'active'),
+            // All admin-activation links for this team regardless of status (active +
+            // redeemed + revoked) — lets the card/modal reflect sent and onboarded state.
+            adminActivationLinksAll:
+              (inviteLinksByTeamId.get(team.id) || []).filter((link) => link.inviteType === 'admin-activation'),
             clinicianOnboardingLink:
               team.defaultClinicianProfileId
                 ? (inviteLinksByClinicianProfileId.get(team.defaultClinicianProfileId) || []).find(
@@ -914,6 +965,25 @@ const PulseCheckProvisioningPage: React.FC = () => {
       organizationActiveCount: organizations.filter((organization) => getOrganizationFilterStatus(organization.status) === 'active').length,
     }),
     [organizations, teams, pilots, pilotCohorts]
+  );
+  // The wizard always operates on a single organization. For a brand-new org
+  // that's wizardOrganizationId; when the wizard is opened against an existing
+  // org (e.g. add team / jump to a later step) it's carried on teamForm. Scope
+  // every in-wizard team picker to this org so we never surface other orgs' teams.
+  const wizardOrganizationContextId = wizardOrganizationId || teamForm.organizationId || '';
+  const wizardTeams = useMemo(
+    () =>
+      wizardOrganizationContextId
+        ? teams.filter((team) => team.organizationId === wizardOrganizationContextId)
+        : teams,
+    [teams, wizardOrganizationContextId]
+  );
+  const wizardPilots = useMemo(
+    () =>
+      wizardOrganizationContextId
+        ? pilots.filter((pilot) => pilot.organizationId === wizardOrganizationContextId)
+        : pilots,
+    [pilots, wizardOrganizationContextId]
   );
   const selectedActivationTeam = useMemo(
     () => teams.find((team) => team.id === activationDraft.teamId) || null,
@@ -979,6 +1049,50 @@ const PulseCheckProvisioningPage: React.FC = () => {
       return link.inviteType === 'clinician-onboarding' && link.clinicianProfileId === onboardingModal.clinicianProfile.id;
     });
   }, [inviteLinks, onboardingModal]);
+
+  // Admin-activation links for the open modal's team, including redeemed/revoked, so
+  // the status panel can reflect a recipient who has already onboarded.
+  const onboardingModalAdminLinks = useMemo(() => {
+    if (!onboardingModal || onboardingModal.channel !== 'admin') return [];
+    return inviteLinks.filter(
+      (link) =>
+        link.inviteType === 'admin-activation' &&
+        link.organizationId === onboardingModal.organization.id &&
+        link.teamId === onboardingModal.team.id
+    );
+  }, [inviteLinks, onboardingModal]);
+
+  // Load per-link activity (opened / redeem events) for the admin links shown in the
+  // open onboarding modal so we can surface whether the recipient has viewed it.
+  useEffect(() => {
+    if (!onboardingModal || onboardingModal.channel !== 'admin') return;
+    const tokens = onboardingModalAdminLinks.map((link) => link.token).filter(Boolean);
+    if (tokens.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      tokens.map(async (token) => {
+        try {
+          const activity = await pulseCheckProvisioningService.listInviteActivityByToken(token);
+          return [token, activity] as const;
+        } catch (error) {
+          console.error('[PulseCheckProvisioning] Failed to load invite activity:', error);
+          return [token, [] as PulseCheckInviteActivity[]] as const;
+        }
+      })
+    ).then((entries) => {
+      if (cancelled) return;
+      setModalActivityByToken((current) => {
+        const next = { ...current };
+        entries.forEach(([token, activity]) => {
+          next[token] = activity;
+        });
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [onboardingModal, onboardingModalAdminLinks]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -1179,6 +1293,36 @@ const PulseCheckProvisioningPage: React.FC = () => {
       targetEmail: firstTeam.defaultAdminEmail || '',
     });
   }, [teams, activationDraft.teamId]);
+
+  // While the wizard is open against a specific org, never let the team/pilot
+  // pickers hold a selection from a different org — coerce them back to a team
+  // that belongs to the current organization so we can't generate links or
+  // pilots for the wrong org even if a stale selection was carried in.
+  useEffect(() => {
+    if (!isProvisioningModalOpen || !wizardOrganizationContextId) return;
+
+    setActivationDraft((current) => {
+      if (wizardTeams.some((team) => team.id === current.teamId)) return current;
+      const fallback = wizardTeams[0];
+      if (!fallback) return current;
+      return {
+        teamId: fallback.id,
+        channel: fallback.defaultEscalationRoute === 'clinician' ? 'clinician' : 'admin',
+        targetEmail: fallback.defaultAdminEmail || '',
+      };
+    });
+
+    setPilotForm((current) => {
+      if (!current.teamId || wizardTeams.some((team) => team.id === current.teamId)) return current;
+      const fallback = wizardTeams[0];
+      return fallback ? { ...current, teamId: fallback.id, organizationId: fallback.organizationId } : current;
+    });
+
+    setCohortForm((current) => {
+      if (!current.pilotId || wizardPilots.some((pilot) => pilot.id === current.pilotId)) return current;
+      return { ...current, pilotId: '' };
+    });
+  }, [isProvisioningModalOpen, wizardOrganizationContextId, wizardTeams, wizardPilots]);
 
   useEffect(() => {
     if (!selectedActivationTeam) return;
@@ -2216,6 +2360,44 @@ const PulseCheckProvisioningPage: React.FC = () => {
     }
   };
 
+  // Create a reusable athlete invite that drops the redeemer directly into the
+  // pilot with no cohort — for pilots that aren't using cohorts.
+  const handleCreatePilotInviteLink = async (pilot: PulseCheckPilot) => {
+    setPilotInviteCreatingId(pilot.id);
+    setMessage(null);
+
+    try {
+      const inviteId = await pulseCheckProvisioningService.createTeamAccessInviteLink({
+        organizationId: pilot.organizationId,
+        teamId: pilot.teamId,
+        teamMembershipRole: 'athlete',
+        pilotId: pilot.id,
+        pilotName: pilot.name,
+        // No cohortId/cohortName: enrolls straight into the pilot.
+        redemptionMode: 'general',
+        createdByUserId: currentUser?.id || '',
+        createdByEmail: currentUser?.email || '',
+      });
+
+      const refreshedInviteLinks = await pulseCheckProvisioningService.listInviteLinks();
+      setInviteLinks(refreshedInviteLinks);
+      const createdInvite = refreshedInviteLinks.find((invite) => invite.id === inviteId);
+      // Past the click gesture here, so we can't copy. The button flips to
+      // "Copy Invite" and copies synchronously on the next tap.
+      setMessage({
+        type: 'success',
+        text: createdInvite?.activationUrl
+          ? `Reusable athlete invite ready for ${pilot.name} — tap Copy Invite to copy it.`
+          : `Reusable athlete invite created for ${pilot.name}.`,
+      });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to create pilot athlete invite:', error);
+      setMessage({ type: 'error', text: 'Failed to create pilot athlete invite.' });
+    } finally {
+      setPilotInviteCreatingId(null);
+    }
+  };
+
   const handleOpenOnboardingModal = (input: OnboardingModalState) => {
     setOnboardingModal(input);
     setAdditionalAdminForm({ name: '', email: '' });
@@ -2278,6 +2460,96 @@ const PulseCheckProvisioningPage: React.FC = () => {
     if (typeof window === 'undefined') return;
 
     window.location.href = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
+  // Deliberately sends (or resends) the PulseCheck admin-activation email to one
+  // recipient via Mailgun. Generates an activation link first if none exists yet, so
+  // an admin only enters the system when we choose to send — no auto-send anywhere.
+  const handleSendActivationEmailNow = async (input: {
+    organization: PulseCheckOrganization;
+    team: PulseCheckTeam;
+    recipientName?: string;
+    recipientEmail: string;
+    existingLink?: PulseCheckInviteLink | null;
+  }) => {
+    const { organization, team, recipientName, recipientEmail } = input;
+    const normalizedEmail = recipientEmail.trim();
+    if (!normalizedEmail) {
+      setMessage({ type: 'error', text: 'A recipient email is required before sending.' });
+      return;
+    }
+
+    setActivationEmailSendingEmail(normalizedEmail);
+    setMessage(null);
+
+    try {
+      // Resolve an active activation link for this recipient, creating one if needed.
+      let link =
+        input.existingLink && input.existingLink.status === 'active' ? input.existingLink : null;
+      if (!link) {
+        const created = await handleCreateAdminActivationLink(team, normalizedEmail);
+        if (!created) {
+          return;
+        }
+        const refreshedLinks = await pulseCheckProvisioningService.listTeamInviteLinks(team.id);
+        link =
+          refreshedLinks.find(
+            (candidate) =>
+              candidate.inviteType === 'admin-activation' &&
+              candidate.status === 'active' &&
+              (candidate.targetEmail || '').toLowerCase() === normalizedEmail.toLowerCase()
+          ) || null;
+      }
+
+      if (!link) {
+        setMessage({ type: 'error', text: 'Could not resolve an activation link to send.' });
+        return;
+      }
+
+      const response = await fetch('/.netlify/functions/send-pulsecheck-admin-activation-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toEmail: normalizedEmail,
+          activationUrl: link.activationUrl,
+          recipientName: recipientName || '',
+          organizationName: organization.displayName,
+          teamName: team.displayName,
+          senderName: currentUser?.displayName || currentUser?.email || 'the PulseCheck team',
+        }),
+      });
+
+      const result = await response.json().catch(() => ({ success: false, error: 'Bad response' }));
+      const success = response.ok && result?.success === true;
+
+      await pulseCheckProvisioningService.recordAdminActivationEmailResult({
+        token: link.token,
+        success,
+        messageId: result?.messageId,
+        sentByUserId: currentUser?.id || '',
+        sentByEmail: currentUser?.email || '',
+        targetEmail: normalizedEmail,
+        organizationId: organization.id,
+        teamId: team.id,
+        errorMessage: success ? '' : String(result?.error || 'Send failed'),
+      });
+
+      await loadData();
+
+      if (success) {
+        setMessage({ type: 'success', text: `Activation email sent to ${normalizedEmail}.` });
+      } else {
+        setMessage({
+          type: 'error',
+          text: `Failed to send activation email to ${normalizedEmail}: ${result?.error || 'unknown error'}`,
+        });
+      }
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to send activation email:', error);
+      setMessage({ type: 'error', text: 'Failed to send activation email.' });
+    } finally {
+      setActivationEmailSendingEmail(null);
+    }
   };
 
   const handleAddAdditionalAdmin = async () => {
@@ -2590,9 +2862,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
           <link
-            href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap"
+            href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Fraunces:opsz,wght@9..144,300..700&display=swap"
             rel="stylesheet"
           />
+          <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700,800,900&display=swap" />
         </Head>
         <style jsx global>{`
           .pcp-org-dashboard,
@@ -2619,9 +2892,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
             --t1: rgba(255, 255, 255, 0.95);
             --t2: rgba(255, 255, 255, 0.52);
             --t3: rgba(255, 255, 255, 0.28);
-            --fd: 'Syne', sans-serif;
+            --fd: 'Switzer', sans-serif;
             --fm: 'DM Mono', monospace;
-            --fb: 'DM Sans', sans-serif;
+            --fb: 'Switzer', sans-serif;
             min-height: 100vh;
             background: var(--bg);
             color: var(--t1);
@@ -2719,7 +2992,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-org-list { padding: 12px 36px 40px; }
           .pcp-org-row { border: 0.5px solid var(--mb); border-radius: 14px; margin-bottom: 8px; overflow: hidden; transition: border-color 0.2s; }
           .pcp-org-row:hover, .pcp-org-row.open { border-color: rgba(255, 255, 255, 0.1); }
-          .pcp-org-hd { display: flex; align-items: center; padding: 0 16px 0 0; cursor: pointer; user-select: none; background: var(--glass); min-height: 62px; transition: background 0.15s; }
+          .pcp-org-title { background: var(--glass); position: relative; }
+          .pcp-org-status-tr { position: absolute; top: 12px; right: 12px; z-index: 2; }
+          .pcp-org-hd { display: flex; align-items: center; padding: 0 16px 0 0; cursor: pointer; user-select: none; min-height: 62px; transition: background 0.15s; }
           .pcp-org-hd:hover { background: var(--glassh); }
           .pcp-org-chev { width: 42px; height: 62px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
           .pcp-org-chev svg { width: 13px; height: 13px; color: var(--t3); transition: transform 0.2s; }
@@ -2730,9 +3005,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-org-name { font-size: 14px; font-weight: 600; letter-spacing: -0.2px; margin-bottom: 2px; }
           .pcp-org-meta { font-size: 11px; color: var(--t3); font-family: var(--fm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 520px; }
           .pcp-org-counts { display: flex; gap: 5px; margin-right: 12px; }
-          .pcp-mc { font-size: 10px; font-weight: 500; padding: 3px 7px; border-radius: 9999px; background: rgba(255, 255, 255, 0.04); border: 0.5px solid rgba(255, 255, 255, 0.07); color: var(--t3); font-family: var(--fm); white-space: nowrap; }
+          .pcp-mc { display: inline-flex; align-items: center; line-height: 1; font-size: 10px; font-weight: 500; padding: 4px 7px; border-radius: 9999px; background: rgba(255, 255, 255, 0.04); border: 0.5px solid rgba(255, 255, 255, 0.07); color: var(--t3); font-family: var(--fm); white-space: nowrap; }
           .pcp-org-actions { display: flex; align-items: center; gap: 6px; margin-left: 10px; }
-          .pcp-status { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 9px; border-radius: 9999px; white-space: nowrap; }
+          .pcp-status { display: inline-flex; align-items: center; line-height: 1; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 9px; border-radius: 9999px; white-space: nowrap; }
           .pcp-s-prov { background: var(--amber-d); border: 0.5px solid rgba(245, 166, 35, 0.22); color: var(--amber); }
           .pcp-s-ready { background: var(--blue-d); border: 0.5px solid rgba(96, 165, 250, 0.22); color: var(--blue); }
           .pcp-s-active { background: var(--green-d); border: 0.5px solid rgba(74, 222, 128, 0.22); color: var(--green); }
@@ -2790,11 +3065,13 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-ob-empty { font-size: 10px; color: var(--t3); font-style: italic; margin-top: 1px; line-height: 1.5; }
           .pcp-c-empty { font-size: 11px; color: var(--t3); font-style: italic; padding: 4px 0; }
           .pcp-empty-panel { padding: 24px 18px; border-radius: 14px; border: 0.5px dashed rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.02); text-align: center; color: var(--t2); font-size: 12px; }
-          .pcp-org-overview { padding: 16px 16px 0 54px; }
+          .pcp-org-overview { padding: 16px 16px 16px 54px; }
           .pcp-org-grid,
           .pcp-team-grid { display: grid; gap: 12px; }
           .pcp-org-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); }
           .pcp-team-card { margin: 12px 16px 0 54px; }
+          .pcp-pilot-card { margin: 10px 16px 0 80px; }
+          .pcp-pilot-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
           .pcp-team-shell { padding: 12px 0 4px 0; }
           .pcp-team-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.9fr); margin-bottom: 12px; }
           .pcp-card { border-radius: 14px; border: 0.5px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02); padding: 14px; }
@@ -2942,6 +3219,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
             .pcp-tracker-grid { grid-template-columns: 1fr; }
             .pcp-org-overview { padding-left: 18px; }
             .pcp-team-card { margin-left: 18px; margin-right: 16px; }
+            .pcp-pilot-card { margin-left: 28px; margin-right: 16px; }
+            .pcp-pilot-grid { grid-template-columns: 1fr; }
             .pcp-team-shell { padding-left: 0; }
             .pcp-pilot-panel.open { grid-template-columns: 1fr; padding-left: 80px; }
             .pcp-pilot-settings-grid { grid-template-columns: 1fr; }
@@ -2958,6 +3237,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
             .pcp-org-hd, .pcp-team-hd { flex-wrap: wrap; padding-right: 12px; }
             .pcp-org-counts, .pcp-org-actions, .pcp-t-right { width: 100%; margin: 0 0 12px 54px; flex-wrap: wrap; }
             .pcp-org-meta { white-space: normal; }
+            .pcp-pilot-card { margin-left: 14px; }
             .pcp-pilot-panel.open { padding-left: 18px; }
             .pcp-modal-ft { flex-direction: column; align-items: stretch; gap: 10px; }
             .pcp-modal-ft-r { justify-content: space-between; }
@@ -3161,6 +3441,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
                         className={`pcp-org-row ${organizationExpanded ? 'open' : ''} pcp-fade-in`}
                         style={{ animationDelay: `${0.14 + organizationIndex * 0.05}s` }}
                       >
+                        <div className="pcp-org-title">
+                        <span className={`pcp-status pcp-org-status-tr ${getDashboardStatusClassName(orgStatus)}`}>{orgStatus.label}</span>
                         <div className="pcp-org-hd" onClick={() => toggleOrganizationRow(organization.id)}>
                           <div className="pcp-org-chev"><ChevronDown /></div>
                           <div className="pcp-org-ico"><Building2 /></div>
@@ -3182,8 +3464,6 @@ const PulseCheckProvisioningPage: React.FC = () => {
                             <span className="pcp-mc">{totalPilotCount} pilot{totalPilotCount === 1 ? '' : 's'}</span>
                             <span className="pcp-mc">{totalCohortCount} cohort{totalCohortCount === 1 ? '' : 's'}</span>
                           </div>
-
-                          <span className={`pcp-status ${getDashboardStatusClassName(orgStatus)}`}>{orgStatus.label}</span>
 
                           <div className="pcp-org-actions">
                             <button
@@ -3217,7 +3497,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           </div>
                         </div>
 
-                        <div className="pcp-org-body">
+                        {organizationExpanded ? (
                           <div className="pcp-org-overview">
                             <div className="pcp-org-grid">
                               <div className="pcp-card">
@@ -3323,7 +3603,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
                               </div>
                             </div>
                           </div>
+                          ) : null}
+                          </div>
 
+                        <div className="pcp-org-body">
                           {bundledTeams.length === 0 ? (
                             <div className="pcp-team-body" style={{ display: 'block' }}>
                               <div style={{ padding: '12px 16px 12px 54px' }}>
@@ -3331,7 +3614,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                               </div>
                             </div>
                           ) : (
-                            bundledTeams.map(({ team, pilots: bundledPilots, clinicianProfile, adminActivationLinks, clinicianOnboardingLink }) => {
+                            bundledTeams.map(({ team, pilots: bundledPilots, clinicianProfile, adminActivationLinks, adminActivationLinksAll, clinicianOnboardingLink }) => {
                               const teamCollapsed = collapsedTeamIds.has(team.id);
                               const teamArtworkOpen = expandedOrgCardKeys.has(`${team.id}:artwork`);
                               const teamCommercialOpen = expandedOrgCardKeys.has(`${team.id}:commercial`);
@@ -3340,6 +3623,12 @@ const PulseCheckProvisioningPage: React.FC = () => {
                               const teamIntakeCardOpen = expandedOrgCardKeys.has(`${team.id}:intakecard`);
                               const teamStatus = getTeamStatusDisplay(team.status);
                               const activeAdminLink = adminActivationLinks[0] || null;
+                              // Once any activation email is sent, the card flips from
+                              // "Send Activation Email" to "Manage Activations".
+                              const allAdminLinks = adminActivationLinksAll || [];
+                              const activationEmailSent = allAdminLinks.some(
+                                (link) => (link.emailSendCount || 0) > 0 || link.lastEmailStatus === 'sent'
+                              );
                               const teamCommercialDraft = teamCommercialDrafts[team.id] || team.commercialConfig;
                               const teamPreviewImage = resolvePulseCheckInvitePreviewImage(
                                 team.invitePreviewImageUrl,
@@ -3664,12 +3953,12 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                             <div className="pcp-link-card">
                                               <div className="pcp-link-card-main">
                                                 <div className="pcp-preview-title" style={{ fontSize: '12px', marginBottom: 0 }}>
-                                                  PulseCheck admin onboarding
+                                                  PulseCheck admin activation
                                                 </div>
                                                 <div className="pcp-link-card-copy">
-                                                  {activeAdminLink
-                                                    ? `${activeAdminLink.targetEmail || team.defaultAdminEmail || 'No email set'} · ${adminActivationLinks.length} active link${adminActivationLinks.length === 1 ? '' : 's'}`
-                                                    : 'No admin onboarding link has been issued yet.'}
+                                                  {activationEmailSent
+                                                    ? `${activeAdminLink?.targetEmail || team.defaultAdminEmail || 'No email set'} · activation email sent — manage status below.`
+                                                    : 'No activation email sent yet. You choose when the admin is invited in.'}
                                                 </div>
                                               </div>
                                               <button
@@ -3686,7 +3975,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                 }}
                                               >
                                                 <MailPlus />
-                                                {activeAdminLink ? 'Resend' : 'Generate'}
+                                                {activationEmailSent ? 'Manage Activations' : 'Send Activation Email'}
                                               </button>
                                             </div>
                                           </div>
@@ -3892,33 +4181,48 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                         const pilotStudyModeSaving = pilotStudyModeSavingId === pilot.id;
 
                                         return (
-                                          <React.Fragment key={pilot.id}>
+                                          <div key={pilot.id} className="pcp-card pcp-pilot-card" style={{ paddingBottom: pilotExpanded ? 18 : 14, scrollMarginTop: 16 }}>
                                             <div
-                                              className={`pcp-pilot-row ${pilotExpanded ? 'open' : ''}`}
+                                              className="pcp-team-hd"
+                                              style={{ cursor: 'pointer', padding: 0, minHeight: 0 }}
                                               onClick={() => togglePilotRow(pilot.id)}
                                             >
-                                              <div className="pcp-p-indent" />
-                                              <div className="pcp-p-dot" />
-                                              <div className="pcp-p-info">
+                                              <ChevronDown
+                                                style={{ width: 16, height: 16, flexShrink: 0, marginRight: 10, color: 'rgba(255,255,255,0.5)', transform: pilotExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+                                              />
+                                              <div className="pcp-t-av"><ClipboardList /></div>
+                                              <div className="pcp-t-info">
                                                 <div className="pcp-level-eyebrow">Pilot</div>
-                                                <div className="pcp-p-name">{pilot.name}</div>
-                                                <div className="pcp-p-meta">
+                                                <div className="pcp-t-name">{pilot.name}</div>
+                                                <div className="pcp-t-meta">
                                                   {[
                                                     toDateValue(pilot.startAt)?.toLocaleDateString() || 'not scheduled',
                                                     toDateValue(pilot.endAt)?.toLocaleDateString() || 'open ended',
                                                     `${formatEnumLabel(pilot.studyMode).toLowerCase()} mode`,
                                                     pilot.checkpointCadence || 'no cadence',
-                                                    `${cohorts.length} cohort${cohorts.length === 1 ? '' : 's'}`,
                                                   ].join(' · ')}
                                                 </div>
                                               </div>
-                                              <div className="pcp-p-right">
+                                              <div className="pcp-t-right">
+                                                <span className="pcp-mc">{cohorts.length} cohort{cohorts.length === 1 ? '' : 's'}</span>
                                                 <span className={`pcp-status ${getDashboardStatusClassName(pilotStatus)}`}>{pilotStatus.label}</span>
-                                                <div className="pcp-p-chev"><ChevronDown /></div>
+                                                <button
+                                                  type="button"
+                                                  className="pcp-ab pcp-ab-g"
+                                                  onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    handleOpenProvisioningModal('cohort', { pilotId: pilot.id });
+                                                  }}
+                                                >
+                                                  <Plus />
+                                                  Add Cohort
+                                                </button>
                                               </div>
                                             </div>
 
-                                            <div className={`pcp-pilot-panel ${pilotExpanded ? 'open' : ''}`}>
+                                            {pilotExpanded ? (
+                                            <div className="pcp-team-body" style={{ display: 'block', marginTop: 12 }}>
+                                              <div className="pcp-pilot-grid">
                                               <div className="pcp-pilot-settings">
                                                 <div className="pcp-pp-lbl">Pilot Settings</div>
                                                 <div className="pcp-pilot-settings-copy">
@@ -3972,20 +4276,45 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                 </div>
                                               </div>
                                               <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-                                                  <div className="pcp-pp-lbl" style={{ marginBottom: 0 }}>Cohorts</div>
-                                                  <button
-                                                    type="button"
-                                                    className="pcp-ab pcp-ab-g"
-                                                    onClick={(event) => {
-                                                      event.stopPropagation();
-                                                      handleOpenProvisioningModal('cohort', { pilotId: pilot.id });
-                                                    }}
-                                                  >
-                                                    <Plus />
-                                                    Add Cohort
-                                                  </button>
-                                                </div>
+                                                <div className="pcp-pp-lbl">Cohorts</div>
+                                                {(() => {
+                                                  const reusablePilotInvite = reusablePilotInviteByPilotId.get(pilot.id) || null;
+                                                  const creatingPilotInvite = pilotInviteCreatingId === pilot.id;
+                                                  return (
+                                                    <div className="pcp-cohort-item">
+                                                      <div style={{ minWidth: 0, flex: 1 }}>
+                                                        <div className="pcp-level-eyebrow">Athlete · direct to pilot</div>
+                                                        <div className="pcp-ci-name">No cohort needed</div>
+                                                        <div className="pcp-ci-meta">
+                                                          {reusablePilotInvite
+                                                            ? 'Reusable link · enrolls athletes straight into the pilot'
+                                                            : 'Create a reusable link that adds athletes to the pilot without a cohort'}
+                                                        </div>
+                                                      </div>
+                                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                                        <button
+                                                          type="button"
+                                                          className="pcp-ab pcp-ab-g"
+                                                          onClick={(event) => {
+                                                            event.stopPropagation();
+                                                            if (reusablePilotInvite?.activationUrl) {
+                                                              copyInviteToClipboard(
+                                                                reusablePilotInvite.activationUrl,
+                                                                `Reusable invite for ${pilot.name} copied to clipboard.`
+                                                              );
+                                                            } else {
+                                                              void handleCreatePilotInviteLink(pilot);
+                                                            }
+                                                          }}
+                                                          disabled={creatingPilotInvite}
+                                                        >
+                                                          {creatingPilotInvite ? <Loader2 /> : <Clipboard />}
+                                                          {reusablePilotInvite ? 'Copy Invite' : 'Create Invite'}
+                                                        </button>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })()}
                                                 {cohorts.length === 0 ? (
                                                   <div className="pcp-c-empty">No cohorts attached yet.</div>
                                                 ) : (
@@ -4094,17 +4423,17 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                   <div>
                                                     <div className="pcp-ob-type">
                                                       PulseCheck Admin
-                                                      {adminActivationLinks.length > 0 ? ` · ${adminActivationLinks.length} active` : ''}
+                                                      {activationEmailSent ? ' · email sent' : ''}
                                                     </div>
-                                                    {activeAdminLink ? (
-                                                      <div className="pcp-ob-val">{activeAdminLink.targetEmail || team.defaultAdminEmail || 'No email set'}</div>
+                                                    {activeAdminLink || activationEmailSent ? (
+                                                      <div className="pcp-ob-val">{activeAdminLink?.targetEmail || team.defaultAdminEmail || 'No email set'}</div>
                                                     ) : (
-                                                      <div className="pcp-ob-empty">No link issued yet</div>
+                                                      <div className="pcp-ob-empty">No activation email sent yet</div>
                                                     )}
                                                   </div>
                                                   <button
                                                     type="button"
-                                                    className={`pcp-ab ${activeAdminLink ? 'pcp-ab-t' : 'pcp-ab-t'}`}
+                                                    className="pcp-ab pcp-ab-t"
                                                     onClick={(event) => {
                                                       event.stopPropagation();
                                                       handleOpenOnboardingModal({
@@ -4116,12 +4445,14 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                     }}
                                                   >
                                                     <MailPlus />
-                                                    {activeAdminLink ? 'Resend' : 'Generate'}
+                                                    {activationEmailSent ? 'Manage Activations' : 'Send Activation Email'}
                                                   </button>
                                                 </div>
                                               </div>
+                                              </div>
                                             </div>
-                                          </React.Fragment>
+                                            ) : null}
+                                          </div>
                                         );
                                       })
                                     )}
@@ -4585,7 +4916,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                     <div className="pcp-info-box">
                       Generate a unique onboarding link. Regenerating a link revokes the prior active link for the same recipient.
                     </div>
-                    {teams.length === 0 ? (
+                    {wizardTeams.length === 0 ? (
                       <div className="pcp-empty-panel">Create at least one team before generating onboarding links.</div>
                     ) : (
                       <>
@@ -4597,7 +4928,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                               value={activationDraft.teamId}
                               onChange={(event) => setActivationDraft((current) => ({ ...current, teamId: event.target.value }))}
                             >
-                              {teams.map((team) => {
+                              {wizardTeams.map((team) => {
                                 const organization = organizations.find((organization) => organization.id === team.organizationId);
                                 return (
                                   <option key={team.id} value={team.id}>
@@ -4665,7 +4996,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           onChange={(event) => handlePilotFieldChange('teamId', event.target.value)}
                         >
                           <option value="">Select a team</option>
-                          {teams.map((team) => {
+                          {wizardTeams.map((team) => {
                             const organization = organizations.find((item) => item.id === team.organizationId);
                             return (
                               <option key={team.id} value={team.id}>
@@ -4842,7 +5173,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           disabled={skipCohortForNow}
                         >
                           <option value="">Select a pilot</option>
-                          {pilots.map((pilot) => {
+                          {wizardPilots.map((pilot) => {
                             const team = teams.find((item) => item.id === pilot.teamId);
                             return (
                               <option key={pilot.id} value={pilot.id}>
@@ -5015,15 +5346,6 @@ const PulseCheckProvisioningPage: React.FC = () => {
                         : `${onboardingModal.clinicianProfile.displayName} is the current clinician routing target for this team.`}
                     </p>
                   </div>
-
-                  <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                    <p className="text-xs uppercase tracking-wide text-zinc-500">Link Behavior</p>
-                    <p className="mt-2 text-sm text-zinc-300">
-                      {onboardingModal.channel === 'admin'
-                        ? 'Generate a unique onboarding link per admin email. Regenerating for the same email revokes the old link and the old link stops working.'
-                        : 'There is one active clinician onboarding link for this clinician profile. Regenerating it revokes the old link and the old link stops working.'}
-                    </p>
-                  </div>
                 </div>
 
                 {onboardingModal.channel === 'admin' ? (
@@ -5063,11 +5385,33 @@ const PulseCheckProvisioningPage: React.FC = () => {
                         </div>
                       ) : (
                         onboardingAdminRecipients.map((recipient) => {
-                          const activeLink =
-                            onboardingModalLinks.find((link) => (link.targetEmail || '').toLowerCase() === recipient.email.toLowerCase()) || null;
+                          const recipientLinks = onboardingModalAdminLinks.filter(
+                            (link) => (link.targetEmail || '').toLowerCase() === recipient.email.toLowerCase()
+                          );
+                          const activeLink = recipientLinks.find((link) => link.status === 'active') || null;
+                          // Prefer the active link for status; otherwise fall back to a redeemed
+                          // link so an already-onboarded admin still shows their funnel state.
+                          const statusLink =
+                            activeLink || recipientLinks.find((link) => link.status === 'redeemed') || recipientLinks[0] || null;
+                          const activity = statusLink ? modalActivityByToken[statusLink.token] : undefined;
+                          const status = summarizeAdminActivation(statusLink, activity);
                           const isGenerating =
                             activationCreatingTeamId === onboardingModal.team.id &&
                             adminLinkCreatingEmail?.toLowerCase() === recipient.email.toLowerCase();
+                          const isSending = activationEmailSendingEmail?.toLowerCase() === recipient.email.toLowerCase();
+
+                          const StatusRow = ({ done, doneLabel, pendingLabel }: { done: boolean; doneLabel: string; pendingLabel: string }) => (
+                            <div className="flex items-center gap-2 text-xs">
+                              <span
+                                className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${
+                                  done ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-700/50 text-zinc-500'
+                                }`}
+                              >
+                                {done ? '✓' : '○'}
+                              </span>
+                              <span className={done ? 'text-zinc-200' : 'text-zinc-500'}>{done ? doneLabel : pendingLabel}</span>
+                            </div>
+                          );
 
                           return (
                             <div key={recipient.email} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
@@ -5083,28 +5427,61 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                           : 'Additional'}
                                     </span>
                                   </div>
-                                  <p className="mt-1 text-xs text-zinc-400">{recipient.email}</p>
+                                  <p className="mt-1 text-xs text-zinc-400">
+                                    Sending to: <span className="text-zinc-200">{recipient.email}</span>
+                                  </p>
+
+                                  {/* Activation funnel: sent → opened → onboarded */}
+                                  <div className="mt-3 space-y-1.5 rounded-xl border border-zinc-800 bg-black/30 px-3 py-3">
+                                    <StatusRow
+                                      done={status.sent}
+                                      doneLabel={`Email sent${status.sentAt ? ` · ${formatTimestamp(status.sentAt)}` : ''}${
+                                        status.sendCount > 1 ? ` · ${status.sendCount} sends` : ''
+                                      }`}
+                                      pendingLabel={status.sendFailed ? 'Last send failed — try again' : 'Not sent yet'}
+                                    />
+                                    <StatusRow
+                                      done={status.opened}
+                                      doneLabel={`Opened the activation link${status.openedAt ? ` · ${formatTimestamp(status.openedAt)}` : ''}`}
+                                      pendingLabel="Not opened yet"
+                                    />
+                                    <StatusRow
+                                      done={status.onboarded}
+                                      doneLabel={`Onboarded${status.onboardedAt ? ` · ${formatTimestamp(status.onboardedAt)}` : ''}${
+                                        status.onboardedBy ? ` · ${status.onboardedBy}` : ''
+                                      }`}
+                                      pendingLabel="Not onboarded yet"
+                                    />
+                                  </div>
+
                                   {activeLink ? (
                                     <>
                                       <div className="mt-3 rounded-xl border border-zinc-800 bg-black/30 px-3 py-3">
                                         <p className="break-all text-xs leading-6 text-white">{activeLink.activationUrl}</p>
                                       </div>
-                                      <p className="mt-1 text-[11px] text-zinc-500">Created: {formatTimestamp(activeLink.createdAt)}</p>
+                                      <p className="mt-1 text-[11px] text-zinc-500">Link created: {formatTimestamp(activeLink.createdAt)}</p>
                                     </>
-                                  ) : (
-                                    <p className="mt-3 text-xs text-zinc-500">No active onboarding link yet for this admin.</p>
-                                  )}
+                                  ) : null}
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2 xl:max-w-[240px] xl:justify-end">
+                                  {/* Primary, deliberate action: actually send/resend the activation email. */}
                                   <button
                                     type="button"
-                                    onClick={() => void handleCreateAdminActivationLink(onboardingModal.team, recipient.email)}
-                                    disabled={isGenerating}
+                                    onClick={() =>
+                                      void handleSendActivationEmailNow({
+                                        organization: onboardingModal.organization,
+                                        team: onboardingModal.team,
+                                        recipientName: recipient.name,
+                                        recipientEmail: recipient.email,
+                                        existingLink: activeLink,
+                                      })
+                                    }
+                                    disabled={isSending || isGenerating}
                                     className="inline-flex items-center gap-1.5 rounded-xl bg-amber-400 px-3 py-2 text-xs font-semibold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
                                   >
-                                    {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                                    {activeLink ? 'Regenerate Link' : 'Generate Link'}
+                                    {isSending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailPlus className="h-3.5 w-3.5" />}
+                                    {status.sent ? 'Resend Email' : 'Send Now'}
                                   </button>
                                   {activeLink ? (
                                     <>
@@ -5127,11 +5504,12 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                       </a>
                                       <button
                                         type="button"
-                                        onClick={() => handleSendOnboardingEmail(activeLink)}
-                                        className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-white"
+                                        onClick={() => void handleCreateAdminActivationLink(onboardingModal.team, recipient.email)}
+                                        disabled={isGenerating}
+                                        className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                                       >
-                                        <MailPlus className="h-3.5 w-3.5" />
-                                        Draft Email
+                                        {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                                        Regenerate
                                       </button>
                                     </>
                                   ) : null}

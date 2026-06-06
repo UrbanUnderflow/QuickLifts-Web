@@ -483,9 +483,10 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Fraunces:opsz,wght@9..144,300..700&display=swap"
           rel="stylesheet"
         />
+          <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700,800,900&display=swap" />
       </Head>
 
       <div className="pilot-dashboard-theme pilot-font-body min-h-screen text-white">
@@ -1002,11 +1003,11 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
           }
 
           .pilot-font-display {
-            font-family: 'Syne', sans-serif;
+            font-family: 'Switzer', sans-serif;
           }
 
           .pilot-font-body {
-            font-family: 'DM Sans', sans-serif;
+            font-family: 'Switzer', sans-serif;
           }
 
           .pilot-font-mono {

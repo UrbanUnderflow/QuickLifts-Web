@@ -1746,7 +1746,7 @@ const ResultsView: React.FC<{
             Now that you are scored, here is the thinking behind every option, including the strongest answer for each scenario.
           </p>
         </div>
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid items-start gap-4 lg:grid-cols-2">
           {assessment.questions.map((question, i) => (
             <AnswerReviewCard
               key={question.id}

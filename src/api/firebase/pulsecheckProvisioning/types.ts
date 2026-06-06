@@ -25,7 +25,9 @@ export type PulseCheckInviteActivityEventType =
   | 'redeem-started'
   | 'redeem-succeeded'
   | 'redeem-failed'
-  | 'follow-up-requested';
+  | 'follow-up-requested'
+  | 'email-sent';
+export type PulseCheckInviteEmailStatus = 'sent' | 'failed';
 export type PulseCheckInviteActivityEmailSource = 'authenticated-user' | 'manual-follow-up' | 'unknown';
 export type PulseCheckOrganizationMembershipRole = 'org-admin' | 'implementation-observer';
 export type PulseCheckOperatingRole = 'admin-only' | 'admin-plus-coach' | 'admin-plus-support-staff';
@@ -649,6 +651,13 @@ export interface PulseCheckInviteLink {
   redeemedByUserId?: string;
   redeemedByEmail?: string;
   redeemedAt?: Timestamp | null;
+  // Activation-email send tracking (admin-activation links). Stamped each time an
+  // admin manually sends/resends the activation email from the provisioning console.
+  lastEmailStatus?: PulseCheckInviteEmailStatus;
+  lastEmailSentAt?: Timestamp | null;
+  lastEmailSentByEmail?: string;
+  lastEmailMessageId?: string;
+  emailSendCount?: number;
 }
 
 export interface PulseCheckInviteActivity {
