@@ -1,4 +1,5 @@
 import type { Handler } from '@netlify/functions';
+import { sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
 
 /**
  * send-pulsecheck-admin-activation-email
@@ -6,7 +7,7 @@ import type { Handler } from '@netlify/functions';
  * Sends a branded PulseCheck admin-activation email containing the activation
  * link for a team admin. This is a deliberate, manually-triggered send from the
  * provisioning console — admins control exactly when the recipient is invited in.
- * Uses Mailgun (consistent with send-onboarding-email / send-password-reset-email).
+ * Uses the shared Brevo transactional sender.
  *
  * POST body:
  *   toEmail          (required) – recipient admin email
@@ -136,45 +137,6 @@ function renderActivationEmail(opts: {
   return { subject, html };
 }
 
-async function sendMailgunEmail(
-  to: string,
-  subject: string,
-  html: string
-): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const apiKey = process.env.MAILGUN_API_KEY || '';
-  const domain = process.env.MAILGUN_DOMAIN || '';
-  const fromEmail = process.env.MAILGUN_FROM_EMAIL || 'Pulse <noreply@fitwithpulse.ai>';
-
-  if (!apiKey || !domain) {
-    console.error('[send-pulsecheck-admin-activation-email] Missing Mailgun credentials');
-    return { success: false, error: 'Missing Mailgun credentials' };
-  }
-
-  const formData = new URLSearchParams();
-  formData.append('from', fromEmail);
-  formData.append('to', to);
-  formData.append('subject', subject);
-  formData.append('html', html);
-
-  const response = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Basic ${Buffer.from(`api:${apiKey}`).toString('base64')}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: formData.toString(),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[send-pulsecheck-admin-activation-email] Mailgun error:', errorText);
-    return { success: false, error: errorText };
-  }
-
-  const json = await response.json();
-  return { success: true, messageId: json.id };
-}
-
 export const handler: Handler = async (event) => {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -224,7 +186,25 @@ export const handler: Handler = async (event) => {
       senderName,
     });
 
-    const result = await sendMailgunEmail(toEmail, subject, html);
+    const result = await sendBrevoTransactionalEmail({
+      toEmail,
+      toName: recipientName || toEmail,
+      subject,
+      htmlContent: html,
+      tags: ['pulsecheck', 'admin-activation', 'manual-admin-send'],
+      sender: {
+        email: process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai',
+        name: 'PulseCheck',
+      },
+      headers: {
+        'X-Mailin-custom': JSON.stringify({
+          emailType: 'pulsecheck-admin-activation',
+          organizationName: organizationName || null,
+          teamName: teamName || null,
+        }),
+      },
+      bypassDailyRecipientLimit: true,
+    });
 
     if (!result.success) {
       return {

@@ -71,6 +71,10 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
     teamId: string;
     teamName: string;
   } | null>(null);
+  // When someone activates via Apple/Google with an email that differs from the
+  // provisioned institutional one, we ask where PulseCheck updates should go
+  // (institutional pre-selected) before finishing redemption.
+  const [emailChoice, setEmailChoice] = useState<{ socialEmail: string; selected: string } | null>(null);
 
   useEffect(() => {
     setCreateForm((current) => ({
@@ -114,12 +118,24 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
     };
   }, [invite.targetEmail]);
 
+  // TEMP QA hook — preview the email-routing modal without a real OAuth login.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('previewEmailModal') === '1' && invite.targetEmail) {
+      setEmailChoice({ socialEmail: 'coach.personal@icloud.com', selected: invite.targetEmail });
+    }
+  }, [invite.targetEmail]);
+
   const normalizedTargetEmail = useMemo(() => invite.targetEmail.trim().toLowerCase(), [invite.targetEmail]);
   const normalizedAuthEmail = useMemo(() => authUser?.email?.trim().toLowerCase() || '', [authUser]);
   const authEmailMatchesInvite = !normalizedTargetEmail || !normalizedAuthEmail || normalizedTargetEmail === normalizedAuthEmail;
 
-  const completeRedeem = async () => {
-    const result = await pulseCheckProvisioningService.redeemAdminActivationInvite(invite.token);
+  const completeRedeem = async (notificationEmail?: string) => {
+    const result = await pulseCheckProvisioningService.redeemAdminActivationInvite(
+      invite.token,
+      notificationEmail || invite.targetEmail || undefined
+    );
     setRedeemedState({
       organizationId: result.organizationId,
       organizationName: result.organizationName,
@@ -302,10 +318,6 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
         await signOut(auth);
         throw new Error('That account did not share an email address. Try email & password instead.');
       }
-      if (normalizedTargetEmail && email !== normalizedTargetEmail) {
-        await signOut(auth);
-        throw new Error(`This invite is restricted to ${invite.targetEmail}.`);
-      }
 
       // First time through, stand up the PulseCheck admin user document.
       const existingUser = await userService.fetchUserFromFirestore(user.uid).catch(() => null);
@@ -319,7 +331,15 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
         await createPulseCheckAdminUser(user, username);
       }
 
-      await completeRedeem();
+      // The invite link itself is the authorization, so Apple/Google is allowed
+      // even when its email differs from the institutional one. When it differs,
+      // ask the coach where updates should land before finishing.
+      if (normalizedTargetEmail && email !== normalizedTargetEmail) {
+        setEmailChoice({ socialEmail: user.email || email, selected: invite.targetEmail });
+        return;
+      }
+
+      await completeRedeem(invite.targetEmail || email);
     } catch (error) {
       console.error('[pulsecheck-admin-activation] Social sign-in failed:', error);
       const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: string }).code) : '';
@@ -352,6 +372,26 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
       setMessage({
         type: 'error',
         text: error instanceof Error ? error.message : 'Failed to redeem invite.',
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Finish redemption after the coach picks where updates should go.
+  const confirmEmailChoice = async () => {
+    if (!emailChoice || submitting) return;
+    const chosen = emailChoice.selected;
+    setSubmitting(true);
+    setMessage(null);
+    try {
+      await completeRedeem(chosen);
+      setEmailChoice(null);
+    } catch (error) {
+      console.error('[pulsecheck-admin-activation] Failed to finish activation:', error);
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to finish activation.',
       });
     } finally {
       setSubmitting(false);
@@ -737,6 +777,67 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
           </div>
         </section>
       </main>
+
+      {/* Email-routing choice after social sign-in with a non-institutional email */}
+      {emailChoice ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(4,4,12,0.72)', backdropFilter: 'blur(6px)' }}
+        >
+          <div className="w-full max-w-md rounded-[24px] border p-6 shadow-2xl" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
+            <span
+              className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
+              style={{ background: 'rgba(124,58,237,0.14)', color: PC.purpleSoft }}
+            >
+              <Sparkles className="h-3.5 w-3.5" /> One quick thing
+            </span>
+            <h2 className="mt-3 text-2xl font-bold text-white" style={displayFont}>Where should updates go?</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-400">
+              You signed in with a different email than the one your organization set up. Choose where PulseCheck should send reports and updates &mdash; you can change this anytime.
+            </p>
+
+            <div className="mt-5 space-y-2.5">
+              {[
+                { value: invite.targetEmail, tag: 'Institutional · recommended' },
+                { value: emailChoice.socialEmail, tag: 'Your sign-in email' },
+              ].map((opt) => {
+                const active = emailChoice.selected.trim().toLowerCase() === opt.value.trim().toLowerCase();
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setEmailChoice((current) => (current ? { ...current, selected: opt.value } : current))}
+                    className="flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition"
+                    style={{ borderColor: active ? PC.purple : PC.cardBorder, background: active ? 'rgba(124,58,237,0.12)' : 'rgba(255,255,255,0.025)' }}
+                  >
+                    <span
+                      className="flex h-5 w-5 flex-none items-center justify-center rounded-full border"
+                      style={{ borderColor: active ? PC.purple : 'rgba(255,255,255,0.3)', background: active ? PC.purple : 'transparent' }}
+                    >
+                      {active ? <CheckCircle2 className="h-4 w-4 text-white" /> : null}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-white">{opt.value}</span>
+                      <span className="block text-[11px] uppercase tracking-[0.14em]" style={{ color: active ? PC.purpleSoft : 'rgba(255,255,255,0.4)' }}>{opt.tag}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void confirmEmailChoice()}
+              disabled={submitting}
+              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition disabled:opacity-60"
+              style={{ background: PC.purple }}
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+              {submitting ? 'Finishing…' : 'Confirm & continue'}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

@@ -2463,8 +2463,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
   };
 
   // Deliberately sends (or resends) the PulseCheck admin-activation email to one
-  // recipient via Mailgun. Generates an activation link first if none exists yet, so
-  // an admin only enters the system when we choose to send — no auto-send anywhere.
+  // recipient via the shared Brevo transactional sender. Generates an activation
+  // link first if none exists yet, so an admin only enters the system when we
+  // choose to send — no auto-send anywhere.
   const handleSendActivationEmailNow = async (input: {
     organization: PulseCheckOrganization;
     team: PulseCheckTeam;

@@ -3517,7 +3517,10 @@ export const pulseCheckProvisioningService = {
     });
   },
 
-  async redeemAdminActivationInvite(token: string): Promise<RedeemPulseCheckAdminActivationResult> {
+  async redeemAdminActivationInvite(
+    token: string,
+    notificationEmail?: string
+  ): Promise<RedeemPulseCheckAdminActivationResult> {
     const currentUser = auth.currentUser;
     if (!currentUser) {
       throw new Error('You must be signed in to redeem this invite.');
@@ -3532,7 +3535,10 @@ export const pulseCheckProvisioningService = {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${idToken}`,
           },
-          body: JSON.stringify({ token: normalizeString(token) }),
+          body: JSON.stringify({
+            token: normalizeString(token),
+            notificationEmail: normalizeEmail(notificationEmail),
+          }),
         });
 
         const payload = await response.json().catch(() => null);
@@ -3564,10 +3570,11 @@ export const pulseCheckProvisioningService = {
             throw new Error('Invite is no longer active.');
           }
 
+          // Bearer authorization (single-use invite token) + authenticated session,
+          // so Apple/Google sign-in works even when the identity email differs from
+          // the provisioned institutional address. Contact email recorded separately.
           const targetEmail = normalizeEmail(invite.targetEmail);
-          if (targetEmail && targetEmail !== userEmail) {
-            throw new Error(`This invite is restricted to ${invite.targetEmail}.`);
-          }
+          const resolvedNotificationEmail = normalizeEmail(notificationEmail) || targetEmail || userEmail;
 
           const organizationId = normalizeString(invite.organizationId);
           const teamId = normalizeString(invite.teamId);
@@ -3605,6 +3612,7 @@ export const pulseCheckProvisioningService = {
               organizationId,
               userId,
               email: userEmail,
+              notificationEmail: resolvedNotificationEmail,
               role: 'org-admin',
               status: 'active',
               grantedByInviteToken: token,
@@ -3622,6 +3630,7 @@ export const pulseCheckProvisioningService = {
               teamId,
               userId,
               email: userEmail,
+              notificationEmail: resolvedNotificationEmail,
               role: 'team-admin',
               title: 'Organization Admin',
               permissionSetId: permissionSetByRole['team-admin'],
@@ -3668,6 +3677,7 @@ export const pulseCheckProvisioningService = {
               status: 'redeemed',
               redeemedByUserId: userId,
               redeemedByEmail: userEmail,
+              notificationEmail: resolvedNotificationEmail,
               redeemedAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             },

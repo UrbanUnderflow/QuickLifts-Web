@@ -89,6 +89,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!token) {
     return res.status(400).json({ error: 'Invite token is required.' });
   }
+  // Optional: where the admin wants PulseCheck updates delivered. Lets someone
+  // sign in with Apple/Google while still routing comms to their institutional
+  // address. Defaults to the invite's institutional target email below.
+  const notificationEmailInput = normalizeEmail(req.body?.notificationEmail);
 
   try {
     const decoded = await admin.auth().verifyIdToken(idToken);
@@ -116,10 +120,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         throw new Error('Invite is no longer active.');
       }
 
+      // Authorization here is bearer (possession of the unguessable, single-use
+      // invite token) plus an authenticated session — so a coach can activate via
+      // Apple/Google even when that identity email differs from the institutional
+      // address the invite was provisioned to. We record both the auth identity
+      // (redeemedByEmail) and the chosen contact address (notificationEmail).
       const targetEmail = normalizeEmail(invite.targetEmail);
-      if (targetEmail && targetEmail !== userEmail) {
-        throw new Error(`This invite is restricted to ${invite.targetEmail}.`);
-      }
+      const notificationEmail = notificationEmailInput || targetEmail || userEmail;
 
       const organizationId = normalizeString(invite.organizationId);
       const teamId = normalizeString(invite.teamId);
@@ -179,6 +186,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           organizationId,
           userId,
           email: userEmail,
+          notificationEmail,
           role: 'org-admin',
           status: 'active',
           grantedByInviteToken: token,
@@ -197,6 +205,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           teamId,
           userId,
           email: userEmail,
+          notificationEmail,
           role: 'team-admin',
           title: 'Organization Admin',
           permissionSetId: 'pulsecheck-team-admin-v1',
@@ -244,6 +253,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           status: 'redeemed',
           redeemedByUserId: userId,
           redeemedByEmail: userEmail,
+          notificationEmail,
           redeemedAt: now,
           updatedAt: now,
         },
