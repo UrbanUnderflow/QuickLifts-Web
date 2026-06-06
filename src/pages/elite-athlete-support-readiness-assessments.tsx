@@ -160,7 +160,7 @@ const domainConfig: Record<DomainKey, { label: string; icon: LucideIcon; descrip
   escalation: {
     label: 'Escalation readiness',
     icon: AlertTriangle,
-    description: 'Referral timing, notification order, emergency pathways, and safety exceptions.',
+    description: 'Referral timing, notification order, emergency steps, and safety exceptions.',
   },
   privacyTrust: {
     label: 'Privacy and trust',
@@ -200,7 +200,7 @@ const scoreBands: ScoreBand[] = [
     range: '0-49',
     tone: 'Baseline education needed',
     accent: COLORS.rose,
-    summary: 'This stakeholder needs foundational education before being relied on inside an athlete support pathway.',
+    summary: 'This stakeholder needs foundational education before being relied on inside an athlete support system.',
   },
   {
     label: 'Developing',
@@ -567,7 +567,7 @@ const assessments: StakeholderAssessment[] = [
         scenario: 'A player makes a visible mistake in front of the team.',
         options: [
           { label: 'Make the mistake public', detail: 'Use embarrassment as accountability.', score: 0 },
-          { label: 'Bench without explanation', detail: 'Create consequence but no learning path.', score: 1 },
+          { label: 'Bench without explanation', detail: 'Create consequence but no way to learn from it.', score: 1 },
           { label: 'Tell them to forget it', detail: 'Move on quickly without a reset strategy.', score: 2 },
           { label: 'Cue the next action', detail: 'Keep correction specific, short, and task-focused.', score: 3 },
           { label: 'Reset, cue, and return', detail: 'Use a practiced reset and protect the athlete from feeling like the mistake defines them.', score: 4 },
@@ -824,7 +824,7 @@ const assessments: StakeholderAssessment[] = [
           { label: 'Offer your opinion as clearance', detail: 'Treat your personal read as a clearance decision.', score: 1 },
           { label: 'Dodge it and stay quiet', detail: 'Avoid the question without routing it.', score: 2 },
           { label: 'Stay in scope and route the decision', detail: 'Share what is yours to share and move clearance to the right owner.', score: 3 },
-          { label: 'Name the scope and protect the process', detail: 'State that mental clearance sits with the licensed clinician, share minimum necessary, and follow the pathway.', score: 4 },
+          { label: 'Name the scope and protect the process', detail: 'State that mental clearance sits with the licensed clinician, share minimum necessary, and follow the protocol.', score: 4 },
         ],
       },
       {
@@ -837,7 +837,7 @@ const assessments: StakeholderAssessment[] = [
           { label: 'Finish the session, then follow up', detail: 'Treat it as something to address later.', score: 0 },
           { label: 'Reassure and send them home', detail: 'Offer support but take no protective action.', score: 1 },
           { label: 'Schedule a referral for later', detail: 'Route it through normal, non-urgent channels.', score: 2 },
-          { label: 'Do not leave them alone and activate the crisis pathway', detail: 'Stay with them, contact the clinical or crisis owner, and follow emergency protocol.', score: 3 },
+          { label: 'Do not leave them alone and activate the crisis plan', detail: 'Stay with them, contact the clinical or crisis owner, and follow emergency protocol.', score: 3 },
           { label: 'Initiate emergency response and document', detail: 'Do not leave them alone, activate emergency services or EAP per protocol, notify the clinical owner, and document the event.', score: 4 },
         ],
       },
@@ -1169,7 +1169,7 @@ const AssessmentCard: React.FC<{
               </div>
               <div>
                 <div className="text-2xl font-semibold text-stone-900">{assessment.trainingPrice}</div>
-                <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">Training path</div>
+                <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">Training</div>
               </div>
               <div>
                 <div className="text-2xl font-semibold text-stone-900">0-100</div>
@@ -1199,13 +1199,13 @@ const HubView: React.FC<{
         <div className="max-w-3xl">
           <div className="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-white/80 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-600">
             <ClipboardCheck className="h-3.5 w-3.5" />
-            Readiness assessments
+            Mental performance readiness
           </div>
           <h1 className="mt-7 max-w-3xl text-4xl font-bold leading-[1.02] tracking-tight text-stone-900 sm:text-6xl">
             Every athlete is shaped by the people around them.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-stone-500">
-            Readiness checks for the parents, coaches, and athletic trainers who support elite athletes. Each one shows you where you are strong, flags the safety moments that matter most, and points you to what to learn next.
+            Mental-performance readiness checks for the parents, coaches, and athletic trainers who support elite athletes. Each one shows you where you are strong, flags the safety moments that matter most, and points you to what to learn next.
           </p>
         </div>
 
@@ -1213,7 +1213,7 @@ const HubView: React.FC<{
           {[
             { label: 'Readiness score', value: '0-100', icon: Gauge },
             { label: 'Scenario judgment', value: 'Role-based', icon: Target },
-            { label: 'Training path', value: 'Separate cost', icon: GraduationCap },
+            { label: 'Training', value: 'Separate cost', icon: GraduationCap },
           ].map((item) => {
             const Icon = item.icon;
             return (
@@ -1235,9 +1235,9 @@ const HubView: React.FC<{
       >
         <div className="mb-7 max-w-3xl">
           <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">Assessment suite</p>
-          <h2 className="mt-2 text-3xl font-semibold text-stone-900">Three role-specific readiness pathways</h2>
+          <h2 className="mt-2 text-3xl font-semibold text-stone-900">A readiness check for the people who support the athlete</h2>
           <p className="mt-3 text-base leading-7 text-stone-500">
-            Each one has its own scoring lens and learning path, so you are measured against what your role actually does.
+            Each one walks you through real situations you may experience as a parent, a coach, or an athletic trainer supporting your athlete's mental performance.
           </p>
         </div>
 
@@ -1842,16 +1842,16 @@ const EliteAthleteSupportReadinessAssessmentsPage: NextPage = () => {
       <PageHead
         metaData={{
           pageId: 'elite-athlete-support-readiness-assessments',
-          pageTitle: 'Elite Athlete Support Readiness Assessments | Pulse Intelligence Labs',
+          pageTitle: 'Mental Performance Readiness Assessments | Pulse Intelligence Labs',
           metaDescription:
-            'Interactive readiness assessments for parents, coaches, and athletic trainers supporting elite athletes through pressure, readiness, referral, and return-to-training pathways.',
-          ogTitle: 'Elite Athlete Support Readiness Assessments',
+            'Interactive readiness assessments for parents, coaches, and athletic trainers supporting elite athletes through pressure, recovery, communication, and knowing when to get help.',
+          ogTitle: 'Mental Performance Readiness Assessments',
           ogDescription:
-            'Assess stakeholder readiness across mental performance literacy, pressure support, role boundaries, and escalation pathways.',
+            'Assess how ready parents, coaches, and athletic trainers are to support an athlete under pressure, read the warning signs, and know when to get help.',
           ogImage: 'https://pulseintelligencelabs.com/pil-og.png',
           ogType: 'website',
           twitterCard: 'summary_large_image',
-          twitterTitle: 'Elite Athlete Support Readiness Assessments',
+          twitterTitle: 'Mental Performance Readiness Assessments',
           twitterDescription:
             'Role-specific readiness scoring for the support system around elite athletes.',
           lastUpdated: new Date().toISOString(),

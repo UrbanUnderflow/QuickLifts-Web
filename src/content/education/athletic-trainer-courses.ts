@@ -198,7 +198,7 @@ const reinforcingTheCurriculum: Course = {
           bigIdea: 'Convergence across mood, sleep, and eating is the signal that a dip has crossed into clinical.',
           body: [
             'A dip in performance with low mood, poor sleep, and weight loss over two weeks could be overtraining — or it could be clinically relevant. The tell is convergence and duration: several changes, in the same direction, that persist. Screen the pattern and refer when it points past performance.',
-            'You are not diagnosing. You are recognizing that the pattern has crossed a threshold and routing it into the appropriate clinical or support lane without waiting for it to worsen. Any direct safety statement overrides all of this and goes straight to the crisis pathway.',
+            'You are not diagnosing. You are recognizing that the pattern has crossed a threshold and routing it into the appropriate clinical or support lane without waiting for it to worsen. Any direct safety statement overrides all of this and goes straight to the crisis plan.',
           ],
           keyPoints: [
             'Convergence + duration moves it from performance to clinical.',
@@ -213,7 +213,7 @@ const reinforcingTheCurriculum: Course = {
           bigIdea: 'Clinical and mental clearance sit with the licensed clinician — protect the process while staying useful.',
           body: [
             'When a coach asks you to "just tell them they are fine to play," the right answer protects both the athlete and your scope. You can share what is yours to share — observations, readiness, physical status — while making clear that mental clearance belongs to the licensed clinician, and routing the decision there.',
-            'Share the minimum necessary, follow the pathway, and document the basis. Holding scope is not unhelpful; it is what keeps the athlete safe and the system trustworthy.',
+            'Share the minimum necessary, follow the protocol, and document the basis. Holding scope is not unhelpful; it is what keeps the athlete safe and the system trustworthy.',
           ],
           keyPoints: [
             'Mental clearance is the clinician\'s call, not yours.',

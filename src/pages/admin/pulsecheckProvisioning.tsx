@@ -22,8 +22,10 @@ import {
 } from 'lucide-react';
 import type { Timestamp } from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
+import { useDispatch } from 'react-redux';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { useUser } from '../../hooks/useUser';
+import { showToast } from '../../redux/toastSlice';
 import GuidedTour, { type GuidedTourStep } from '../../components/onboarding/GuidedTour';
 import { storage } from '../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
@@ -636,6 +638,7 @@ const CollapsibleCard: React.FC<{
 
 const PulseCheckProvisioningPage: React.FC = () => {
   const currentUser = useUser();
+  const dispatch = useDispatch();
   const [organizations, setOrganizations] = useState<PulseCheckOrganization[]>([]);
   const [teams, setTeams] = useState<PulseCheckTeam[]>([]);
   const [pilots, setPilots] = useState<PulseCheckPilot[]>([]);
@@ -644,6 +647,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [inviteLinks, setInviteLinks] = useState<PulseCheckInviteLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [orgForm, setOrgForm] = useState<CreatePulseCheckOrganizationInput>(defaultOrganizationForm);
+  // The org created during the current wizard run. When set, re-saving the org
+  // step updates it instead of creating a duplicate (so Back → edit works).
+  const [wizardOrganizationId, setWizardOrganizationId] = useState<string | null>(null);
   const [teamForm, setTeamForm] = useState<CreatePulseCheckTeamInput>(defaultTeamForm);
   const [pilotForm, setPilotForm] = useState<CreatePulseCheckPilotInput>(defaultPilotForm);
   const [cohortForm, setCohortForm] = useState<CreatePulseCheckPilotCohortInput>(defaultCohortForm);
@@ -1567,29 +1573,47 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
     setOrgSubmitting(true);
     setMessage(null);
+    const isExistingOrg = Boolean(wizardOrganizationId);
 
     try {
-      const createdId = await pulseCheckProvisioningService.createOrganization({
-        ...orgForm,
-        implementationOwnerUserId: currentUser?.id || '',
-        implementationOwnerEmail: currentUser?.email || '',
-      });
+      let organizationId = wizardOrganizationId || '';
+      if (isExistingOrg) {
+        // Already created this org earlier in the wizard — update it so going
+        // Back to edit doesn't create a duplicate.
+        await pulseCheckProvisioningService.updateOrganization(organizationId, {
+          ...orgForm,
+          implementationOwnerUserId: currentUser?.id || '',
+          implementationOwnerEmail: currentUser?.email || '',
+        });
+      } else {
+        organizationId = await pulseCheckProvisioningService.createOrganization({
+          ...orgForm,
+          implementationOwnerUserId: currentUser?.id || '',
+          implementationOwnerEmail: currentUser?.email || '',
+        });
+        setWizardOrganizationId(organizationId);
+      }
 
-      setOrgForm(defaultOrganizationForm);
+      // Keep orgForm populated so Back → edit shows the entered values.
       await loadData();
       setTeamForm((current) => ({
         ...current,
-        organizationId: createdId,
+        organizationId,
         defaultAdminName: current.defaultAdminName || orgForm.primaryCustomerAdminName || '',
         defaultAdminEmail: current.defaultAdminEmail || orgForm.primaryCustomerAdminEmail || '',
       }));
-      setExpandedOrganizationIds((current) => (current.includes(createdId) ? current : [...current, createdId]));
+      setExpandedOrganizationIds((current) => (current.includes(organizationId) ? current : [...current, organizationId]));
       setActiveWizardStep('team');
-      setMessage({ type: 'success', text: 'Organization created. You can now create the first team under it.' });
+      setMessage({
+        type: 'success',
+        text: isExistingOrg
+          ? 'Organization updated.'
+          : 'Organization created. You can now create the first team under it.',
+      });
       return true;
     } catch (error) {
-      console.error('[PulseCheckProvisioning] Failed to create organization:', error);
-      setMessage({ type: 'error', text: 'Failed to create organization.' });
+      console.error('[PulseCheckProvisioning] Failed to save organization:', error);
+      setMessage({ type: 'error', text: `Failed to ${isExistingOrg ? 'update' : 'create'} organization.` });
       return false;
     } finally {
       setOrgSubmitting(false);
@@ -2120,7 +2144,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   // navigator.clipboard.writeText after an await loses user activation and the
   // browser denies it. Falls back to execCommand, then to showing the link.
   const copyInviteToClipboard = (text: string, successText: string) => {
-    const onDone = () => setMessage({ type: 'success', text: successText });
+    const onDone = () => dispatch(showToast({ message: successText, type: 'success', duration: 2500 }));
     const fallback = () => {
       try {
         const textarea = document.createElement('textarea');
@@ -2319,6 +2343,13 @@ const PulseCheckProvisioningPage: React.FC = () => {
       setIsProvisioningModalOpen(true);
       setActiveWizardStep(step);
       setSkipCohortForNow(false);
+
+      // Starting a brand-new organization wizard: reset the org form + tracked
+      // id so it opens blank and the first save creates (not updates).
+      if (step === 'org') {
+        setOrgForm(defaultOrganizationForm);
+        setWizardOrganizationId(null);
+      }
 
       const nextOrganizationId = options?.organizationId;
       if (nextOrganizationId) {

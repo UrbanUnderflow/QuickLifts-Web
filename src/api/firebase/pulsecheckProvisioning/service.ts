@@ -2501,6 +2501,24 @@ export const pulseCheckProvisioningService = {
     return docRef.id;
   },
 
+  async updateOrganization(organizationId: string, input: CreatePulseCheckOrganizationInput): Promise<void> {
+    const normalizedId = normalizeString(organizationId);
+    if (!normalizedId) {
+      throw new Error('Organization id is required.');
+    }
+    await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizedId), {
+      displayName: normalizeString(input.displayName),
+      legalName: normalizeString(input.legalName),
+      organizationType: normalizeString(input.organizationType),
+      primaryCustomerAdminName: normalizeString(input.primaryCustomerAdminName),
+      primaryCustomerAdminEmail: normalizeString(input.primaryCustomerAdminEmail),
+      defaultStudyPosture: input.defaultStudyPosture,
+      defaultClinicianBridgeMode: input.defaultClinicianBridgeMode,
+      notes: normalizeString(input.notes),
+      updatedAt: serverTimestamp(),
+    });
+  },
+
   async addOrganizationAdminContact(input: {
     organizationId: string;
     name?: string;
