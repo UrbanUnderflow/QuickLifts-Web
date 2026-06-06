@@ -2,6 +2,7 @@ const { admin, getFirebaseAdminApp, headers, initializeFirebaseAdmin } = require
 const { buildEmailDedupeKey, sendBrevoTransactionalEmail } = require('./utils/sendBrevoTransactionalEmail');
 
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
+const TEAMS_COLLECTION = 'pulsecheck-teams';
 const SPORT_CONFIG_COLLECTION = 'company-config';
 const SPORT_CONFIG_DOCUMENT = 'pulsecheck-sports';
 const REPORTS_ROOT_COLLECTION = 'teams';
@@ -286,6 +287,21 @@ async function resolveUserEmail(db, userId) {
   return normalizeEmail(userSnap.data()?.email);
 }
 
+// Add-on report recipients configured in the onboarding playbook (step 9). These
+// merge with the membership-derived list so any send path picks them up.
+async function getTrackerRecipientEmails(db, teamId) {
+  try {
+    const snap = await db.collection(TEAMS_COLLECTION).doc(teamId).get();
+    if (!snap.exists) return [];
+    const tracker = snap.data()?.implementationMetadata?.onboardingTracker;
+    const emails = tracker?.reportRecipientEmails;
+    return Array.isArray(emails) ? emails : [];
+  } catch (error) {
+    console.error('[send-sports-intelligence-report-email] Failed to read tracker recipients:', error);
+    return [];
+  }
+}
+
 async function listRecipients(db, teamId) {
   const snapshot = await db
     .collection(TEAM_MEMBERSHIPS_COLLECTION)
@@ -305,6 +321,28 @@ async function listRecipients(db, teamId) {
       role: normalizeString(data.role),
       membershipId: docSnap.id,
       name: normalizeString(data.displayName || data.name || data.title) || email,
+    });
+  }
+  return Array.from(byEmail.values());
+}
+
+// Merge admin-configured add-on emails (from the onboarding playbook) into the
+// membership-derived recipient list, deduping by email and never overriding a
+// recipient already resolved from a real membership.
+function mergeExtraRecipients(recipients, extraEmails) {
+  const byEmail = new Map();
+  for (const recipient of recipients) {
+    if (recipient.email) byEmail.set(recipient.email, recipient);
+  }
+  for (const raw of Array.isArray(extraEmails) ? extraEmails : []) {
+    const email = normalizeEmail(raw);
+    if (!email || byEmail.has(email)) continue;
+    byEmail.set(email, {
+      email,
+      userId: '',
+      role: 'add-on',
+      membershipId: null,
+      name: email,
     });
   }
   return Array.from(byEmail.values());
@@ -381,6 +419,7 @@ exports.handler = async function handler(event) {
     const body = JSON.parse(event.body || '{}');
     const teamId = normalizeString(body.teamId);
     const reportId = normalizeString(body.reportId);
+    const extraRecipientEmails = Array.isArray(body.extraRecipientEmails) ? body.extraRecipientEmails : [];
 
     if (!teamId || !reportId) {
       return json(400, { success: false, error: 'teamId and reportId are required.' });
@@ -427,7 +466,11 @@ exports.handler = async function handler(event) {
       });
     }
 
-    const recipients = await listRecipients(db, teamId);
+    const trackerExtras = await getTrackerRecipientEmails(db, teamId);
+    const recipients = mergeExtraRecipients(
+      await listRecipients(db, teamId),
+      [...extraRecipientEmails, ...trackerExtras]
+    );
     if (recipients.length === 0) {
       await markReportFailure(reportRef, 'No active coach or staff recipients were found for this team.', auditResult);
       return json(404, {
@@ -543,5 +586,6 @@ exports._private = {
   collectCoachFacingStrings,
   enforceLocalLanguagePosture,
   formatWeekLabel,
+  mergeExtraRecipients,
   renderEmailHtml,
 };

@@ -686,6 +686,7 @@ export async function sendBrevoTransactionalEmail(args: {
   bypassDailyRecipientLimit?: boolean;
   dailyRecipientLimit?: number;
   dailyRecipientMetadata?: Record<string, any>;
+  attachment?: Array<{ content: string; name: string }>;
 }): Promise<SequenceEmailSendResult> {
   const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
   if (!apiKey) {
@@ -786,6 +787,9 @@ export async function sendBrevoTransactionalEmail(args: {
   }
   if (args.bcc && args.bcc.length > 0) {
     payload.bcc = args.bcc;
+  }
+  if (args.attachment && args.attachment.length > 0) {
+    payload.attachment = args.attachment;
   }
 
   if (args.scheduledAt) {

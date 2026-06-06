@@ -1126,26 +1126,31 @@ const PulseCheckProvisioningPage: React.FC = () => {
       next.delete(focusTeam);
       return next;
     });
-    // Open the (collapsed-by-default) intake editor card so the deep-link lands on it.
-    setExpandedOrgCardKeys((prev) => {
-      if (prev.has(`${focusTeam}:intakecard`)) return prev;
-      const next = new Set(prev);
-      next.add(`${focusTeam}:intakecard`);
-      return next;
-    });
     const focusIntake = params.get('focusIntake');
-    const targetTeam = teams.find((team) => team.id === focusTeam);
-    if (targetTeam && (focusIntake === 'athlete' || focusIntake === 'coach')) {
-      const kind = focusIntake as PulseCheckIntakeKind;
-      const existing = targetTeam.intake?.[kind]?.questions || [];
-      if (existing.length === 0) {
-        const key = `${focusTeam}:${kind}`;
-        setTeamIntakeDrafts((prev) => (prev[key] ? prev : { ...prev, [key]: getDefaultPulseCheckIntakeForm(kind).questions }));
+    const isIntakeFocus = focusIntake === 'athlete' || focusIntake === 'coach';
+    if (isIntakeFocus) {
+      // Open the (collapsed-by-default) intake editor card so the deep-link lands on it.
+      setExpandedOrgCardKeys((prev) => {
+        if (prev.has(`${focusTeam}:intakecard`)) return prev;
+        const next = new Set(prev);
+        next.add(`${focusTeam}:intakecard`);
+        return next;
+      });
+      const targetTeam = teams.find((team) => team.id === focusTeam);
+      if (targetTeam) {
+        const kind = focusIntake as PulseCheckIntakeKind;
+        const existing = targetTeam.intake?.[kind]?.questions || [];
+        if (existing.length === 0) {
+          const key = `${focusTeam}:${kind}`;
+          setTeamIntakeDrafts((prev) => (prev[key] ? prev : { ...prev, [key]: getDefaultPulseCheckIntakeForm(kind).questions }));
+        }
       }
     }
 
     window.setTimeout(() => {
-      const el = document.getElementById(`pcp-intake-${focusTeam}`);
+      const el =
+        document.getElementById(isIntakeFocus ? `pcp-intake-${focusTeam}` : `pcp-team-${focusTeam}`) ||
+        document.getElementById(`pcp-team-${focusTeam}`);
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 400);
   }, [loading, intakeFocusHandled, teams]);
@@ -3343,7 +3348,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                               const teamPlanBypass = derivePulseCheckTeamPlanBypass(teamCommercialDraft);
 
                               return (
-                                <div key={team.id} className="pcp-card pcp-team-card" style={{ paddingBottom: 20 }}>
+                                <div key={team.id} id={`pcp-team-${team.id}`} className="pcp-card pcp-team-card" style={{ paddingBottom: 20, scrollMarginTop: 16 }}>
                                   <div
                                     className="pcp-team-hd"
                                     style={{ cursor: 'pointer', padding: 0, minHeight: 0 }}

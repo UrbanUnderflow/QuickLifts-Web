@@ -210,7 +210,17 @@ export interface CoachReportRecipientAudit {
   email: string;
   userId?: string;
   role?: string;
+  membershipId?: string | null;
+  messageId?: string | null;
+  skipped?: boolean;
   sentAt?: unknown;
+}
+
+export interface CoachReportEmailDelivery {
+  sentCount?: number;
+  skippedCount?: number;
+  lastSentAt?: unknown;
+  failed?: Array<{ email: string; error: string }>;
 }
 
 export interface StoredCoachReport {
@@ -230,6 +240,8 @@ export interface StoredCoachReport {
   publishedBy?: string;
   sentAt?: unknown;
   sentTo?: CoachReportRecipientAudit[];
+  emailDelivery?: CoachReportEmailDelivery;
+  lastEmailError?: string;
 }
 
 export interface CoachReportDraftInput {
@@ -541,6 +553,17 @@ export const listDrafts = async (filter: ListCoachReportDraftsFilter): Promise<S
   return snapshot.docs.map(fromReportSnapshot);
 };
 
+// The earliest report for a team — used by the onboarding playbook to surface the
+// delivery status of the very first snapshot a coach receives.
+export const getFirstReportForTeam = async (teamId: string): Promise<StoredCoachReport | null> => {
+  const scopedTeamId = normalizeRequiredId(teamId, 'teamId');
+  const snapshot = await getDocs(
+    query(reportCollectionRef(scopedTeamId), orderBy('createdAt', 'asc'), limit(1))
+  );
+  const first = snapshot.docs[0];
+  return first ? fromReportSnapshot(first) : null;
+};
+
 export const listSentForTeam = async (teamId: string, maxResults = 25): Promise<StoredCoachReport[]> => {
   const scopedTeamId = normalizeRequiredId(teamId, 'teamId');
   const snapshot = await getDocs(
@@ -646,4 +669,5 @@ export const pulsecheckCoachReportService = {
   listDrafts,
   getReport,
   listSentForTeam,
+  getFirstReportForTeam,
 };

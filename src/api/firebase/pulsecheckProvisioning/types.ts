@@ -54,6 +54,7 @@ export type PulseCheckOnboardingTrackerStepId =
   | 'weekly-snapshot'
   | 'stakeholder-cadence';
 export type PulseCheckOnboardingTrackerStepStatus = 'pending' | 'in-progress' | 'complete' | 'blocked';
+export type PulseCheckReportCadence = 'weekly' | 'daily';
 
 export interface PulseCheckOnboardingTrackerStepState {
   status: PulseCheckOnboardingTrackerStepStatus;
@@ -71,6 +72,11 @@ export interface PulseCheckOnboardingTrackerState {
   launchTargetDate?: string;
   weeklySnapshotDay?: string;
   stakeholderCadence?: string;
+  // Step 9 (weekly snapshot) report config. Cadence drives the expected first-report
+  // date; reportRecipientEmails are add-on recipients merged with the membership-derived
+  // list at send time.
+  reportCadence?: PulseCheckReportCadence;
+  reportRecipientEmails?: string[];
   notes?: string;
   updatedByUserId?: string;
   updatedByEmail?: string;

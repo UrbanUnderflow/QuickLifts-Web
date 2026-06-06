@@ -3,6 +3,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import {
   AlertTriangle,
+  ArrowDownToLine,
   ArrowRight,
   BadgeCheck,
   BookOpenCheck,
@@ -13,11 +14,13 @@ import {
   ChevronRight,
   ClipboardCheck,
   ClipboardList,
+  Clock,
   Copy,
   HeartPulse,
   HelpCircle,
   Laptop,
   Loader2,
+  Mail,
   MailPlus,
   Map as MapIcon,
   MessageSquareText,
@@ -31,17 +34,24 @@ import {
   Target,
   Users2,
   Watch,
+  XCircle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
+import { useDispatch } from 'react-redux';
 import { useUser } from '../../hooks/useUser';
+import { showToast } from '../../redux/toastSlice';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import type {
   PulseCheckOrganization,
   PulseCheckTeam,
   PulseCheckTeamMembership,
+  PulseCheckPilot,
+  PulseCheckPilotCohort,
   PulseCheckOnboardingTrackerStepId,
   PulseCheckOnboardingTrackerStepStatus,
+  PulseCheckOnboardingTrackerState,
+  PulseCheckReportCadence,
 } from '../../api/firebase/pulsecheckProvisioning/types';
 import {
   TEAM_ONBOARDING_TRACKER_STEPS,
@@ -49,15 +59,19 @@ import {
   getTeamOnboardingStepStatus,
   getTeamOnboardingProgress,
 } from '../../api/firebase/pulsecheckProvisioning/onboardingTracker';
+import { pulsecheckCoachReportService } from '../../api/firebase/pulsecheckCoachReports';
+import type { StoredCoachReport } from '../../api/firebase/pulsecheckCoachReports';
 
 type PhaseSection = {
   eyebrow: string;
+  short: string;
   title: string;
   owner: string;
   timing: string;
   icon: LucideIcon;
+  summary: string;
   objective: string;
-  actions: string[];
+  actions: Array<{ lead: string; detail: string }>;
   outputs: string[];
 };
 
@@ -118,17 +132,19 @@ const currentState = [
 const phases: PhaseSection[] = [
   {
     eyebrow: 'Step 1',
+    short: 'Intake',
     title: 'Intake — learn the team before you build anything',
     owner: 'You (PulseCheck)',
     timing: 'Before setup',
     icon: ClipboardList,
+    summary: 'Learn everything about the team on paper before you touch the software.',
     objective: 'Get the full picture of the organization so you can set them up correctly and walk into launch day with no surprises.',
     actions: [
-      'Get the basics: organization name, who’s sponsoring it, whether this is a paid rollout or a pilot, the sport, the team name, the launch date, and who the key people are.',
-      'List every adult involved — head coach, assistants, performance staff, athletic trainer, admin sponsor — with their role, email, phone, and the access each one should have.',
-      'Nail down the roster: how many athletes, their age range, any parent-consent needs, where the list comes from, and whether they join by a team link or individual invites.',
-      'Sort out devices: what athletes already have, what we’re providing, which wearables, charging, pairing, and how the room gets set up on launch day.',
-      'Agree on who handles what before anyone is invited: everyday questions, tech problems, looping in a counselor, and what to do if something urgent comes up.',
+      { lead: 'Get the basics', detail: 'Organization name, who’s sponsoring it, paid rollout or pilot, the sport, team name, launch date, and the key people.' },
+      { lead: 'List every adult', detail: 'Head coach, assistants, performance staff, athletic trainer, admin sponsor — with role, email, phone, and the access each one needs.' },
+      { lead: 'Nail down the roster', detail: 'How many athletes, their age range, any parent-consent needs, where the list comes from, and whether they join by team link or individual invites.' },
+      { lead: 'Sort out devices', detail: 'What athletes already have, what we’re providing, which wearables, charging, pairing, and how the room gets set up.' },
+      { lead: 'Agree on who handles what', detail: 'Everyday questions, tech problems, looping in a counselor, and what to do if something urgent comes up.' },
     ],
     outputs: [
       'A filled-in intake record',
@@ -140,17 +156,19 @@ const phases: PhaseSection[] = [
   },
   {
     eyebrow: 'Step 2',
+    short: 'Software setup',
     title: 'Set them up in the software',
     owner: 'You (PulseCheck)',
     timing: 'Right after intake',
     icon: Building2,
+    summary: 'Build the organization, team, and access so everything’s ready before the first coach call.',
     objective: 'Build the organization, team, and access in the setup console so everything is ready before the first coach call.',
     actions: [
-      'Open the setup console and create the organization — display name, legal name, type, the main admin contact, and whether it’s a pilot or a full rollout.',
-      'Create the team with its sport, season, status, plan, billing model, roster rules, and who to contact if something needs escalating.',
-      'If it’s a pilot or phased rollout, create the pilot and its group. Keep group names simple and obvious, like “Varsity Football, Spring 2026.”',
-      'Generate the admin and coach invite links. Click through each one to confirm it drops the person into the right organization, team, and role.',
-      'Before the kickoff call, double-check the support contacts, counselor-bridge setting, billing setup, and the team’s preview screens.',
+      { lead: 'Create the organization', detail: 'Display name, legal name, type, the main admin contact, and whether it’s a pilot or a full rollout.' },
+      { lead: 'Create the team', detail: 'Sport, season, status, plan, billing model, roster rules, and who to contact if something needs escalating.' },
+      { lead: 'Add a pilot group (if needed)', detail: 'For a pilot or phased rollout. Keep names obvious, like “Varsity Football, Spring 2026.”' },
+      { lead: 'Generate invite links', detail: 'Admin and coach links. Click each one to confirm it drops the person into the right organization, team, and role.' },
+      { lead: 'Double-check before kickoff', detail: 'Support contacts, counselor-bridge setting, billing setup, and the team’s preview screens.' },
     ],
     outputs: [
       'Organization and team created',
@@ -162,17 +180,19 @@ const phases: PhaseSection[] = [
   },
   {
     eyebrow: 'Step 3',
+    short: 'Kickoff',
     title: 'Meeting 1 — coach kickoff',
     owner: 'You + the head coach',
     timing: '30–45 min',
     icon: MessageSquareText,
+    summary: 'Get the coach comfortable with what PulseCheck does before any hands-on training.',
     objective: 'Get the coach comfortable — what PulseCheck does, what to expect, and why it’s worth their time — before any hands-on training.',
     actions: [
-      'Start with the goal: what does this organization want to learn, how will they know it’s working, and what will PulseCheck keep an eye on the first month?',
-      'Walk through who’s who: you, the coach, assistants, athletes, the athletic trainer, the sponsor, and who to contact for help.',
-      'Lay out what’s coming: the three meetings, how devices get handed out, how athletes get set up, and what the coach is responsible for once it’s live.',
-      'Preview what they’ll see: the dashboard, team trends, reports, their follow-up list, the roster, check-in rates, and mental training activity.',
-      'Be clear about the line: PulseCheck helps coaches support their athletes — it is not an emergency service and does not replace the organization’s safety plan.',
+      { lead: 'Start with the goal', detail: 'What the organization wants to learn, how they’ll know it’s working, and what PulseCheck watches the first month.' },
+      { lead: 'Walk through who’s who', detail: 'You, the coach, assistants, athletes, the athletic trainer, the sponsor, and who to contact for help.' },
+      { lead: 'Lay out what’s coming', detail: 'The three meetings, how devices get handed out, how athletes get set up, and what the coach owns once it’s live.' },
+      { lead: 'Preview the dashboard', detail: 'Team trends, reports, their follow-up list, the roster, check-in rates, and mental training activity.' },
+      { lead: 'Be clear about the line', detail: 'PulseCheck helps coaches support athletes — it’s not an emergency service and doesn’t replace the safety plan.' },
     ],
     outputs: [
       'Coach knows the plan',
@@ -183,18 +203,20 @@ const phases: PhaseSection[] = [
   },
   {
     eyebrow: 'Step 4',
+    short: 'Training',
     title: 'Meeting 2 — dashboard & report training',
     owner: 'You + the coaching staff',
     timing: '60 min',
     icon: Laptop,
+    summary: 'Teach coaches to read the dashboard and reports on their own, then act on what they see.',
     objective: 'Teach coaches to read the dashboard and reports on their own, and turn what they see into the right supportive action.',
     actions: [
-      'Open the dashboard together and point out the team summary cards, the current report, the trend wording, and the roster table.',
-      'Teach a set reading order for every report: team snapshot, the changes that matter, how much data backs it up, individual flags, suggested follow-up, and what to watch next.',
-      'Show what’s worth noticing: a lasting change, a sudden drop-off, missing data, slipping check-ins, signs of fatigue, recovery patterns, and the same follow-up coming up again.',
-      'Show what not to read too much into: a single odd day, patchy wearable data, one missed check-in, or a report made before there’s enough data behind it.',
-      'Walk through Mental Training — what’s assigned, the practice scenarios, who’s completing them, and why a coach’s response should stay supportive, never a punishment.',
-      'Cover what PulseCheck can and can’t see, and exactly when to use the organization’s safety plan versus when PulseCheck staff will follow up separately.',
+      { lead: 'Tour the dashboard together', detail: 'Team summary cards, the current report, the trend wording, and the roster table.' },
+      { lead: 'Teach one reading order', detail: 'Team snapshot, the changes that matter, how much data backs it, individual flags, suggested follow-up, what to watch next.' },
+      { lead: 'Show what’s worth noticing', detail: 'A lasting change, a sudden drop-off, missing data, slipping check-ins, fatigue, recovery patterns, and repeat follow-ups.' },
+      { lead: 'Show what not to over-read', detail: 'A single odd day, patchy wearable data, one missed check-in, or a report made before there’s enough data.' },
+      { lead: 'Walk through Mental Training', detail: 'What’s assigned, the practice scenarios, who’s completing them, and why a coach’s response stays supportive — never a punishment.' },
+      { lead: 'Cover what PulseCheck can’t see', detail: 'And exactly when to use the safety plan versus when PulseCheck staff follow up separately.' },
     ],
     outputs: [
       'Coach can read a report without you narrating it',
@@ -205,18 +227,20 @@ const phases: PhaseSection[] = [
   },
   {
     eyebrow: 'Step 5',
+    short: 'Launch day',
     title: 'Meeting 3 — team launch day',
     owner: 'You + the full team',
     timing: '45–75 min',
     icon: Smartphone,
+    summary: 'Get athletes into the app, devices synced, and the first check-in and session done together.',
     objective: 'Get athletes into the app, devices synced, the first check-in done, and the first mental training session run together.',
     actions: [
-      'Set the room up first: device stations, charging, QR codes or invite links, a coach table, and someone dedicated to troubleshooting.',
-      'Hand out devices, check names, match device IDs where needed, and write down anything missing or that needs replacing.',
-      'Walk athletes through it: install the app, make an account, the consent screens, joining the team, basic profile, and turning on notifications.',
-      'Pair and sync the wearables. Before anyone leaves, each athlete is either fully connected or on a follow-up list.',
-      'Teach daily check-ins: when to do them, what an honest answer looks like, how it helps their coach, and how PulseCheck keeps it private.',
-      'Run the first session as a group so athletes get the rhythm before they’re ever asked to do one on their own.',
+      { lead: 'Set the room up first', detail: 'Device stations, charging, QR codes or invite links, a coach table, and someone on troubleshooting.' },
+      { lead: 'Hand out devices', detail: 'Check names, match device IDs where needed, and note anything missing or that needs replacing.' },
+      { lead: 'Walk athletes through setup', detail: 'Install the app, make an account, consent screens, join the team, basic profile, and notifications.' },
+      { lead: 'Pair and sync wearables', detail: 'Before anyone leaves, each athlete is either fully connected or on a follow-up list.' },
+      { lead: 'Teach daily check-ins', detail: 'When to do them, what an honest answer looks like, how it helps their coach, and how PulseCheck keeps it private.' },
+      { lead: 'Run the first session together', detail: 'As a group, so athletes get the rhythm before they ever do one on their own.' },
     ],
     outputs: [
       'Athletes invited and joined',
@@ -228,17 +252,19 @@ const phases: PhaseSection[] = [
   },
   {
     eyebrow: 'Step 6',
+    short: 'First 30 days',
     title: 'The first 30 days',
     owner: 'You + coach success',
     timing: 'First 30 days, then ongoing',
     icon: CalendarClock,
+    summary: 'Keep data reviews, coach support, and stakeholder updates predictable so the org feels looked after.',
     objective: 'Make the organization feel looked after, and keep the data reviews, coach support, and stakeholder updates predictable.',
     actions: [
-      'During launch week, check in daily: who’s joined, are devices syncing, are check-ins happening, are reports ready, and is anything stuck?',
-      'Send the coach a weekly snapshot: where the team is, how consistent check-ins are, what changed that matters, and what to follow up on.',
-      'Every two weeks, meet with the coach and sponsor to go over trends, how it’s being used, open questions, risks, and what to do next.',
-      'Keep one shared issue log for devices, access, roster changes, and report questions — so the organization never has to explain the same problem twice.',
-      'At 30 days, review the whole thing: usage, coach engagement, athlete completion, device reliability, report quality, and whether they’re ready to grow.',
+      { lead: 'Check in daily during launch week', detail: 'Who’s joined, are devices syncing, are check-ins happening, are reports ready, is anything stuck?' },
+      { lead: 'Send a weekly snapshot', detail: 'Where the team is, how consistent check-ins are, what changed that matters, and what to follow up on.' },
+      { lead: 'Meet every two weeks', detail: 'With the coach and sponsor — trends, usage, open questions, risks, and what to do next.' },
+      { lead: 'Keep one shared issue log', detail: 'Devices, access, roster changes, report questions — so no one explains the same problem twice.' },
+      { lead: 'Run a 30-day review', detail: 'Usage, coach engagement, athlete completion, device reliability, report quality, and readiness to grow.' },
     ],
     outputs: [
       'Daily launch-week notes',
@@ -524,6 +550,144 @@ const STEP_ACTIONS: Partial<Record<PulseCheckOnboardingTrackerStepId, Array<{ ki
   ],
 };
 
+// Single-event meeting steps get a date picker + calendar/email actions.
+const MEETING_STEP_TITLES: Partial<Record<PulseCheckOnboardingTrackerStepId, string>> = {
+  'coach-kickoff': 'Meeting 1 — Coach kickoff',
+  'dashboard-training': 'Meeting 2 — Dashboard & report training',
+  'team-rollout': 'Meeting 3 — Team launch day',
+  'stakeholder-cadence': 'Stakeholder check-in — first',
+};
+
+// Launch-day activity steps run in the live Launch-Day Mode room view.
+const LAUNCH_DAY_STEP_IDS = new Set<PulseCheckOnboardingTrackerStepId>(['first-check-in', 'first-training']);
+
+const icsStamp = (iso: string) => new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+
+const isoToLocalInput = (iso: string): string => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+const buildMeetingGoogleUrl = (opts: { title: string; details: string; startISO: string; endISO: string }) => {
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: opts.title,
+    dates: `${icsStamp(opts.startISO)}/${icsStamp(opts.endISO)}`,
+    details: opts.details,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+};
+
+const buildMeetingIcs = (opts: { title: string; details: string; startISO: string; endISO: string }) => {
+  const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  return [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Pulse Intelligence Labs//PulseCheck//EN', 'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    `UID:pulsecheck-${icsStamp(opts.startISO)}-${Math.random().toString(36).slice(2, 8)}@fitwithpulse.ai`,
+    `DTSTAMP:${icsStamp(new Date().toISOString())}`,
+    `DTSTART:${icsStamp(opts.startISO)}`,
+    `DTEND:${icsStamp(opts.endISO)}`,
+    `SUMMARY:${esc(opts.title)}`,
+    `DESCRIPTION:${esc(opts.details)}`,
+    'END:VEVENT', 'END:VCALENDAR',
+  ].join('\r\n');
+};
+
+const downloadIcsFile = (filename: string, content: string) => {
+  const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
+// Step 9 (weekly snapshot) report config helpers.
+const REPORT_CADENCE_OFFSET_DAYS: Record<PulseCheckReportCadence, number> = { weekly: 7, daily: 2 };
+const REPORT_RECIPIENT_ROLES = new Set<string>(['team-admin', 'coach', 'performance-staff']);
+
+type ReportDeliveryRecipient = {
+  email: string;
+  role?: string | null;
+  status: string;
+  ok?: boolean;
+  date?: string | null;
+  skipped?: boolean;
+  messageId?: string | null;
+};
+type ReportDeliveryStatus = {
+  deliveryStatus: string;
+  sentAt?: unknown;
+  sentCount?: number;
+  recipients: ReportDeliveryRecipient[];
+};
+
+// Brevo event name -> coach-readable label.
+const DELIVERY_LABEL: Record<string, string> = {
+  requests: 'Accepted',
+  delivered: 'Delivered',
+  opened: 'Opened',
+  clicks: 'Clicked',
+  deferred: 'Deferred',
+  sent: 'Sent',
+  pending: 'Pending',
+  skipped: 'Skipped',
+  unknown: 'Unknown',
+  hardBounces: 'Bounced',
+  softBounces: 'Soft bounce',
+  blocked: 'Blocked',
+  spam: 'Spam',
+  invalid: 'Invalid',
+  error: 'Error',
+  unsubscribed: 'Unsubscribed',
+};
+type DeliveryTone = 'good' | 'bad' | 'pending';
+const DELIVERY_BADGE: Record<DeliveryTone, string> = {
+  good: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300',
+  bad: 'border-rose-400/30 bg-rose-400/10 text-rose-300',
+  pending: 'border-white/10 bg-white/[0.05] text-slate-400',
+};
+const deliveryTone = (recipient: ReportDeliveryRecipient): DeliveryTone => {
+  if (recipient.skipped) return 'pending';
+  if (recipient.ok === false) return 'bad';
+  if (['delivered', 'opened', 'clicks'].includes(recipient.status)) return 'good';
+  return 'pending';
+};
+
+const formatShortDate = (iso: string): string => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const addDaysISO = (iso: string, days: number): string => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + days);
+  return d.toISOString();
+};
+
+const toISOFromTimestamp = (value: unknown): string => {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  const anyVal = value as { toDate?: () => Date; seconds?: number };
+  if (typeof anyVal.toDate === 'function') {
+    try {
+      return anyVal.toDate().toISOString();
+    } catch {
+      return '';
+    }
+  }
+  if (typeof anyVal.seconds === 'number') return new Date(anyVal.seconds * 1000).toISOString();
+  return '';
+};
+
 const getTeamNextStepLabel = (team: PulseCheckTeam): string => {
   const next = TEAM_ONBOARDING_TRACKER_STEPS.find(
     (step) => getTeamOnboardingStepStatus(team, step.id) !== 'complete'
@@ -534,10 +698,38 @@ const getTeamNextStepLabel = (team: PulseCheckTeam): string => {
 const PulseCheckOnboardingOverviewPage: React.FC = () => {
   const [activeTemplateId, setActiveTemplateId] = useState(onboardingTemplates[0].id);
   const [copiedTemplateId, setCopiedTemplateId] = useState<string | null>(null);
+  const [expandedPhases, setExpandedPhases] = useState<Set<number>>(() => new Set([0]));
+
+  const togglePhase = useCallback((index: number) => {
+    setExpandedPhases((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }, []);
+
+  const openPhase = useCallback((index: number) => {
+    setExpandedPhases((current) => {
+      const next = new Set(current);
+      next.add(index);
+      return next;
+    });
+    if (typeof document !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        document.getElementById(`playbook-step-${index}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  }, []);
 
   const currentUser = useUser();
+  const dispatch = useDispatch();
+  const [savingDueKey, setSavingDueKey] = useState<string | null>(null);
+  const [emailingInviteKey, setEmailingInviteKey] = useState<string | null>(null);
   const [organizations, setOrganizations] = useState<PulseCheckOrganization[]>([]);
   const [teams, setTeams] = useState<PulseCheckTeam[]>([]);
+  const [pilots, setPilots] = useState<PulseCheckPilot[]>([]);
+  const [cohorts, setCohorts] = useState<PulseCheckPilotCohort[]>([]);
   const [boardLoading, setBoardLoading] = useState(true);
   const [boardError, setBoardError] = useState<string | null>(null);
   const [savingStepKey, setSavingStepKey] = useState<string | null>(null);
@@ -547,6 +739,30 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
   const [membershipsByTeam, setMembershipsByTeam] = useState<Record<string, PulseCheckTeamMembership[]>>({});
   const [membershipsLoading, setMembershipsLoading] = useState<Record<string, boolean>>({});
   const [copiedActionKey, setCopiedActionKey] = useState<string | null>(null);
+  // Step 9 — weekly snapshot report config + delivery.
+  const [firstReportByTeam, setFirstReportByTeam] = useState<Record<string, StoredCoachReport | null>>({});
+  const [firstReportLoading, setFirstReportLoading] = useState<Record<string, boolean>>({});
+  const [deliveryByKey, setDeliveryByKey] = useState<Record<string, ReportDeliveryStatus>>({});
+  const [deliveryLoadingKey, setDeliveryLoadingKey] = useState<string | null>(null);
+  const [recipientDraft, setRecipientDraft] = useState<Record<string, string>>({});
+  const [savingTrackerKey, setSavingTrackerKey] = useState<string | null>(null);
+
+  const loadFirstReport = useCallback(async (teamId: string) => {
+    setFirstReportLoading((current) => ({ ...current, [teamId]: true }));
+    try {
+      const report = await pulsecheckCoachReportService.getFirstReportForTeam(teamId);
+      setFirstReportByTeam((current) => ({ ...current, [teamId]: report }));
+    } catch (error) {
+      console.error('[PulseCheckOnboardingOverview] Failed to load first report:', error);
+      setFirstReportByTeam((current) => ({ ...current, [teamId]: null }));
+    } finally {
+      setFirstReportLoading((current) => {
+        const next = { ...current };
+        delete next[teamId];
+        return next;
+      });
+    }
+  }, []);
 
   const loadTeamMemberships = useCallback(async (teamId: string) => {
     setMembershipsLoading((current) => ({ ...current, [teamId]: true }));
@@ -577,12 +793,16 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
     setBoardLoading(true);
     setBoardError(null);
     try {
-      const [orgs, allTeams] = await Promise.all([
+      const [orgs, allTeams, allPilots, allCohorts] = await Promise.all([
         pulseCheckProvisioningService.listOrganizations(),
         pulseCheckProvisioningService.listTeams(),
+        pulseCheckProvisioningService.listPilots(),
+        pulseCheckProvisioningService.listPilotCohorts(),
       ]);
       setOrganizations(orgs);
       setTeams(allTeams);
+      setPilots(allPilots);
+      setCohorts(allCohorts);
     } catch (error) {
       console.error('[PulseCheckOnboardingOverview] Failed to load onboarding board:', error);
       setBoardError('Could not load the onboarding board. Refresh to try again.');
@@ -603,6 +823,15 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
       }
     });
   }, [expandedTeamIds, membershipsByTeam, membershipsLoading, loadTeamMemberships]);
+
+  // Lazily load the first coach report for expanded teams (for step 9 delivery status).
+  useEffect(() => {
+    expandedTeamIds.forEach((teamId) => {
+      if (firstReportByTeam[teamId] === undefined && !firstReportLoading[teamId]) {
+        void loadFirstReport(teamId);
+      }
+    });
+  }, [expandedTeamIds, firstReportByTeam, firstReportLoading, loadFirstReport]);
 
   const toggleTeamExpanded = (teamId: string) => {
     setExpandedTeamIds((current) => {
@@ -683,11 +912,206 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
     }
   };
 
+  const getStepDueDate = (team: PulseCheckTeam, stepId: PulseCheckOnboardingTrackerStepId): string =>
+    team.implementationMetadata?.onboardingTracker?.steps?.[stepId]?.dueDate || '';
+
+  const handleStepDueDateChange = async (
+    team: PulseCheckTeam,
+    stepId: PulseCheckOnboardingTrackerStepId,
+    dueDate: string
+  ) => {
+    const savingKey = `${team.id}:${stepId}:date`;
+    const currentTracker = team.implementationMetadata?.onboardingTracker || {};
+    const currentStep = currentTracker.steps?.[stepId] || { status: 'pending' as PulseCheckOnboardingTrackerStepStatus };
+    setSavingDueKey(savingKey);
+    setBoardError(null);
+
+    setTeams((current) =>
+      current.map((item) => {
+        if (item.id !== team.id) return item;
+        const meta = item.implementationMetadata ?? {
+          provisioningPath: 'pulsecheck-hierarchy' as const,
+          legacySignupPathUsed: false,
+          canaryTarget: false,
+        };
+        const tracker = meta.onboardingTracker || {};
+        return {
+          ...item,
+          implementationMetadata: {
+            ...meta,
+            onboardingTracker: {
+              ...tracker,
+              steps: { ...(tracker.steps || {}), [stepId]: { ...(tracker.steps?.[stepId] || { status: 'pending' }), dueDate } },
+            },
+          },
+        };
+      })
+    );
+
+    try {
+      await pulseCheckProvisioningService.updateTeamOnboardingTracker({
+        teamId: team.id,
+        onboardingTracker: {
+          ...currentTracker,
+          steps: {
+            ...(currentTracker.steps || {}),
+            [stepId]: { ...currentStep, dueDate, updatedByUserId: currentUser?.id || '', updatedByEmail: currentUser?.email || '' },
+          },
+        },
+        updatedByUserId: currentUser?.id || '',
+        updatedByEmail: currentUser?.email || '',
+      });
+    } catch (error) {
+      console.error('[PulseCheckOnboardingOverview] Failed to save meeting date:', error);
+      setBoardError('Could not save the meeting date. Refreshing the latest data.');
+      await loadBoard();
+    } finally {
+      setSavingDueKey((current) => (current === savingKey ? null : current));
+    }
+  };
+
+  const handleEmailMeetingInvite = async (
+    team: PulseCheckTeam,
+    stepId: PulseCheckOnboardingTrackerStepId,
+    title: string,
+    startISO: string
+  ) => {
+    const toEmail = team.defaultAdminEmail || '';
+    if (!toEmail || !startISO) return;
+    const key = `${team.id}:${stepId}`;
+    setEmailingInviteKey(key);
+    try {
+      const orgName = organizationsById.get(team.organizationId)?.displayName || '';
+      const response = await fetch('/.netlify/functions/send-pulsecheck-meeting-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toEmail,
+          toName: team.defaultAdminName || '',
+          meetingTitle: title,
+          startISO,
+          teamName: team.displayName,
+          organizationName: orgName,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result?.success) {
+        dispatch(showToast({ message: `Calendar invite emailed to ${toEmail}.`, type: 'success', duration: 2800 }));
+      } else {
+        dispatch(showToast({ message: result?.error || 'Could not email the invite.', type: 'error', duration: 3200 }));
+      }
+    } catch (error) {
+      console.error('[PulseCheckOnboardingOverview] Failed to email meeting invite:', error);
+      dispatch(showToast({ message: 'Could not email the invite.', type: 'error', duration: 3200 }));
+    } finally {
+      setEmailingInviteKey((current) => (current === key ? null : current));
+    }
+  };
+
+  // Patch tracker-level (non-step) fields like report cadence and recipient list.
+  const updateTrackerFields = async (
+    team: PulseCheckTeam,
+    patch: Partial<PulseCheckOnboardingTrackerState>,
+    savingKey: string
+  ) => {
+    const currentTracker = team.implementationMetadata?.onboardingTracker || {};
+    setSavingTrackerKey(savingKey);
+    setBoardError(null);
+
+    setTeams((current) =>
+      current.map((item) => {
+        if (item.id !== team.id) return item;
+        const meta = item.implementationMetadata ?? {
+          provisioningPath: 'pulsecheck-hierarchy' as const,
+          legacySignupPathUsed: false,
+          canaryTarget: false,
+        };
+        const tracker = meta.onboardingTracker || {};
+        return {
+          ...item,
+          implementationMetadata: { ...meta, onboardingTracker: { ...tracker, ...patch } },
+        };
+      })
+    );
+
+    try {
+      await pulseCheckProvisioningService.updateTeamOnboardingTracker({
+        teamId: team.id,
+        onboardingTracker: { ...currentTracker, ...patch },
+        updatedByUserId: currentUser?.id || '',
+        updatedByEmail: currentUser?.email || '',
+      });
+    } catch (error) {
+      console.error('[PulseCheckOnboardingOverview] Failed to save report settings:', error);
+      setBoardError('Could not save the report settings. Refreshing the latest data.');
+      await loadBoard();
+    } finally {
+      setSavingTrackerKey((current) => (current === savingKey ? null : current));
+    }
+  };
+
+  const getReportRecipients = (team: PulseCheckTeam): string[] =>
+    team.implementationMetadata?.onboardingTracker?.reportRecipientEmails || [];
+
+  const handleReportCadenceChange = (team: PulseCheckTeam, cadence: PulseCheckReportCadence) =>
+    void updateTrackerFields(team, { reportCadence: cadence }, `${team.id}:cadence`);
+
+  const handleAddReportRecipient = (team: PulseCheckTeam) => {
+    const draft = (recipientDraft[team.id] || '').trim().toLowerCase();
+    if (!draft) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft)) {
+      dispatch(showToast({ message: 'Enter a valid email address.', type: 'error', duration: 2600 }));
+      return;
+    }
+    const existing = getReportRecipients(team);
+    if (existing.some((email) => email.toLowerCase() === draft)) {
+      setRecipientDraft((current) => ({ ...current, [team.id]: '' }));
+      return;
+    }
+    setRecipientDraft((current) => ({ ...current, [team.id]: '' }));
+    void updateTrackerFields(team, { reportRecipientEmails: [...existing, draft] }, `${team.id}:recipients`);
+  };
+
+  const handleRemoveReportRecipient = (team: PulseCheckTeam, email: string) => {
+    const existing = getReportRecipients(team);
+    void updateTrackerFields(
+      team,
+      { reportRecipientEmails: existing.filter((entry) => entry !== email) },
+      `${team.id}:recipients`
+    );
+  };
+
+  const handleCheckDeliveryStatus = async (team: PulseCheckTeam, reportId: string) => {
+    const key = `${team.id}:${reportId}`;
+    setDeliveryLoadingKey(key);
+    try {
+      const response = await fetch('/.netlify/functions/pulsecheck-report-delivery-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId: team.id, reportId }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result?.success) {
+        setDeliveryByKey((current) => ({ ...current, [key]: result as ReportDeliveryStatus }));
+      } else {
+        dispatch(showToast({ message: result?.error || 'Could not check delivery status.', type: 'error', duration: 3000 }));
+      }
+    } catch (error) {
+      console.error('[PulseCheckOnboardingOverview] Failed to check delivery status:', error);
+      dispatch(showToast({ message: 'Could not check delivery status.', type: 'error', duration: 3000 }));
+    } finally {
+      setDeliveryLoadingKey((current) => (current === key ? null : current));
+    }
+  };
+
   const organizationsById = useMemo(() => {
     const map = new Map<string, PulseCheckOrganization>();
     organizations.forEach((org) => map.set(org.id, org));
     return map;
   }, [organizations]);
+
+  const teamIdsWithPilot = useMemo(() => new Set(pilots.map((pilot) => pilot.teamId)), [pilots]);
+  const teamIdsWithCohort = useMemo(() => new Set(cohorts.map((cohort) => cohort.teamId)), [cohorts]);
 
   const boardSummary = useMemo(() => {
     let live = 0;
@@ -1019,6 +1443,275 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
                                             </div>
                                           </div>
 
+                                          {step.id === 'provisioning' ? (
+                                            <div className="mt-3 flex flex-col gap-3 border-t border-white/10 pt-3 sm:flex-row sm:items-end sm:justify-between">
+                                              <div className="flex items-end gap-2">
+                                                {[
+                                                  { label: 'Org', done: true },
+                                                  { label: 'Team', done: true },
+                                                  { label: 'Pilot', done: teamIdsWithPilot.has(team.id) },
+                                                  { label: 'Cohort', done: teamIdsWithCohort.has(team.id) },
+                                                ].map((seg) => (
+                                                  <div key={seg.label} className="flex flex-col items-center gap-1">
+                                                    <span className={`h-1.5 w-12 rounded-full ${seg.done ? 'bg-emerald-400' : 'bg-white/10'}`} />
+                                                    <span className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${seg.done ? 'text-slate-300' : 'text-slate-600'}`}>
+                                                      {seg.label}
+                                                    </span>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                              <Link
+                                                href={`/admin/pulsecheckProvisioning?focusOrg=${encodeURIComponent(team.organizationId)}&focusTeam=${encodeURIComponent(team.id)}`}
+                                                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#00d4aa]/30 bg-[#00d4aa]/10 px-3 py-1.5 text-xs font-semibold text-[#00d4aa] transition hover:bg-[#00d4aa]/20"
+                                              >
+                                                Open Provisioning
+                                                <ArrowRight className="h-3.5 w-3.5" />
+                                              </Link>
+                                            </div>
+                                          ) : null}
+
+                                          {step.id === 'device-sync' ? (
+                                            <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                                              <p className="text-[11px] text-slate-400">
+                                                Track which device each athlete has synced and how consistently they&apos;re wearing it.
+                                              </p>
+                                              <Link
+                                                href={`/admin/pulsecheckDeviceDashboard?focusOrg=${encodeURIComponent(team.organizationId)}&focusTeam=${encodeURIComponent(team.id)}`}
+                                                className="inline-flex flex-shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#00d4aa]/30 bg-[#00d4aa]/10 px-3 py-1.5 text-xs font-semibold text-[#00d4aa] transition hover:bg-[#00d4aa]/20"
+                                              >
+                                                <Smartphone className="h-3.5 w-3.5" />
+                                                Open Device Dashboard
+                                                <ArrowRight className="h-3.5 w-3.5" />
+                                              </Link>
+                                            </div>
+                                          ) : null}
+
+                                          {MEETING_STEP_TITLES[step.id] ? (() => {
+                                            const due = getStepDueDate(team, step.id);
+                                            const title = `${MEETING_STEP_TITLES[step.id]} · ${team.displayName}`;
+                                            const details = step.description;
+                                            const endISO = due ? new Date(new Date(due).getTime() + 60 * 60 * 1000).toISOString() : '';
+                                            const emailing = emailingInviteKey === `${team.id}:${step.id}`;
+                                            const savingDate = savingDueKey === `${team.id}:${step.id}:date`;
+                                            const btnClass = 'inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-semibold text-slate-200 transition hover:bg-white/[0.07] disabled:opacity-40';
+                                            return (
+                                              <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                                                <label className="flex items-center gap-2 text-xs text-slate-400">
+                                                  <span>Scheduled</span>
+                                                  <input
+                                                    type="datetime-local"
+                                                    value={isoToLocalInput(due)}
+                                                    onChange={(event) => void handleStepDueDateChange(team, step.id, event.target.value ? new Date(event.target.value).toISOString() : '')}
+                                                    className="rounded-lg border border-white/10 bg-black/40 px-2 py-1 text-xs text-white focus:border-[#00d4aa]/40 focus:outline-none"
+                                                  />
+                                                  {savingDate ? <Loader2 className="h-3 w-3 animate-spin text-[#00d4aa]" /> : null}
+                                                </label>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                  <button type="button" className={btnClass} disabled={!due} onClick={() => window.open(buildMeetingGoogleUrl({ title, details, startISO: due, endISO }), '_blank', 'noopener')}>
+                                                    <CalendarClock className="h-3.5 w-3.5" /> Google
+                                                  </button>
+                                                  <button type="button" className={btnClass} disabled={!due} onClick={() => downloadIcsFile('pulsecheck-meeting.ics', buildMeetingIcs({ title, details, startISO: due, endISO }))}>
+                                                    <ArrowDownToLine className="h-3.5 w-3.5" /> .ics
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#00d4aa]/30 bg-[#00d4aa]/10 px-2.5 py-1.5 text-[11px] font-semibold text-[#00d4aa] transition hover:bg-[#00d4aa]/20 disabled:opacity-40"
+                                                    disabled={!due || !team.defaultAdminEmail || emailing}
+                                                    title={!team.defaultAdminEmail ? 'Add an admin email on the team to email the invite' : undefined}
+                                                    onClick={() => void handleEmailMeetingInvite(team, step.id, title, due)}
+                                                  >
+                                                    {emailing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailPlus className="h-3.5 w-3.5" />}
+                                                    Email coach
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            );
+                                          })() : null}
+
+                                          {step.id === 'weekly-snapshot' ? (() => {
+                                            const tracker = team.implementationMetadata?.onboardingTracker;
+                                            const cadence: PulseCheckReportCadence = tracker?.reportCadence || 'weekly';
+                                            const launchISO = getStepDueDate(team, 'team-rollout') || tracker?.launchTargetDate || '';
+                                            const expectedISO = launchISO ? addDaysISO(launchISO, REPORT_CADENCE_OFFSET_DAYS[cadence]) : '';
+                                            const savingCadence = savingTrackerKey === `${team.id}:cadence`;
+                                            const savingRecipients = savingTrackerKey === `${team.id}:recipients`;
+                                            const report = firstReportByTeam[team.id];
+                                            const loadingReport = !!firstReportLoading[team.id];
+                                            const addOns = getReportRecipients(team);
+                                            const members = membershipsByTeam[team.id];
+                                            const derived = (members || []).filter((member) => REPORT_RECIPIENT_ROLES.has(member.role));
+                                            const deliveryKey = report ? `${team.id}:${report.id}` : '';
+                                            const delivery = deliveryKey ? deliveryByKey[deliveryKey] : undefined;
+                                            const checkingDelivery = deliveryLoadingKey === deliveryKey;
+                                            const chipBtn = 'inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-semibold text-slate-200 transition hover:bg-white/[0.07] disabled:opacity-40';
+                                            const reportSentCount = report?.emailDelivery?.sentCount ?? report?.sentTo?.length ?? 0;
+                                            return (
+                                              <div className="mt-3 space-y-3 border-t border-white/10 pt-3">
+                                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                                  <label className="flex items-center gap-2 text-xs text-slate-400">
+                                                    <span>Report cadence</span>
+                                                    <select
+                                                      value={cadence}
+                                                      disabled={savingCadence}
+                                                      onChange={(event) => handleReportCadenceChange(team, event.target.value as PulseCheckReportCadence)}
+                                                      className="rounded-lg border border-white/10 bg-black/40 px-2.5 py-1.5 text-xs text-white focus:border-[#00d4aa]/40 focus:outline-none disabled:opacity-60"
+                                                    >
+                                                      <option value="weekly">Weekly</option>
+                                                      <option value="daily">Daily</option>
+                                                    </select>
+                                                    {savingCadence ? <Loader2 className="h-3 w-3 animate-spin text-[#00d4aa]" /> : null}
+                                                  </label>
+                                                  <p className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                                                    <Clock className="h-3.5 w-3.5 text-slate-500" />
+                                                    {expectedISO ? (
+                                                      <span>
+                                                        First report expected <span className="font-semibold text-slate-200">{formatShortDate(expectedISO)}</span>
+                                                        {' · '}{cadence === 'daily' ? 'then daily' : 'then weekly'}
+                                                      </span>
+                                                    ) : (
+                                                      <span>Set Meeting 3 (launch day) to project the first report date</span>
+                                                    )}
+                                                  </p>
+                                                </div>
+
+                                                <div className="rounded-lg border border-white/10 bg-black/20 p-2.5">
+                                                  <div className="flex items-center justify-between gap-2">
+                                                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">First report delivery</p>
+                                                    {report ? (
+                                                      <button type="button" className={chipBtn} disabled={checkingDelivery} onClick={() => void handleCheckDeliveryStatus(team, report.id)}>
+                                                        {checkingDelivery ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                                                        Check delivery
+                                                      </button>
+                                                    ) : null}
+                                                  </div>
+                                                  <div className="mt-2 text-xs">
+                                                    {loadingReport ? (
+                                                      <span className="flex items-center gap-1.5 text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Looking for the first report…</span>
+                                                    ) : !report ? (
+                                                      <span className="text-slate-400">No report generated yet.{expectedISO ? ` Expected by ${formatShortDate(expectedISO)}.` : ''}</span>
+                                                    ) : (() => {
+                                                      const ds = report.deliveryStatus || (report.reviewStatus === 'sent' ? 'sent' : 'not_sent');
+                                                      const sentAtISO = toISOFromTimestamp(report.sentAt);
+                                                      if (ds === 'sent') {
+                                                        return (
+                                                          <span className="flex items-center gap-1.5 text-emerald-300">
+                                                            <CheckCircle2 className="h-3.5 w-3.5" />
+                                                            Delivered{sentAtISO ? ` ${formatShortDate(sentAtISO)}` : ''} to {reportSentCount} recipient{reportSentCount === 1 ? '' : 's'}
+                                                          </span>
+                                                        );
+                                                      }
+                                                      if (ds === 'failed') {
+                                                        return (
+                                                          <span className="flex items-center gap-1.5 text-rose-300">
+                                                            <XCircle className="h-3.5 w-3.5" />
+                                                            Send failed{report.lastEmailError ? ` — ${report.lastEmailError}` : ''}
+                                                          </span>
+                                                        );
+                                                      }
+                                                      return (
+                                                        <span className="flex items-center gap-1.5 text-amber-300">
+                                                          <Clock className="h-3.5 w-3.5" /> Draft ready · not sent yet
+                                                        </span>
+                                                      );
+                                                    })()}
+                                                  </div>
+                                                  {delivery && delivery.recipients?.length ? (
+                                                    <ul className="mt-2 space-y-1 border-t border-white/10 pt-2">
+                                                      {delivery.recipients.map((recipient) => (
+                                                        <li key={`${recipient.email}:${recipient.messageId || ''}`} className="flex items-center justify-between gap-2 text-[11px]">
+                                                          <span className="truncate text-slate-300">{recipient.email}</span>
+                                                          <span className={`inline-flex flex-shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-semibold ${DELIVERY_BADGE[deliveryTone(recipient)]}`}>
+                                                            {DELIVERY_LABEL[recipient.status] || recipient.status}
+                                                          </span>
+                                                        </li>
+                                                      ))}
+                                                    </ul>
+                                                  ) : null}
+                                                </div>
+
+                                                <div className="rounded-lg border border-white/10 bg-black/20 p-2.5">
+                                                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Who the report goes to</p>
+                                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                                    {!members ? (
+                                                      <span className="text-[11px] text-slate-500">{membershipsLoading[team.id] ? 'Loading team…' : 'Expand to load team recipients'}</span>
+                                                    ) : derived.length === 0 ? (
+                                                      <span className="text-[11px] text-slate-500">No coach or staff on the roster yet</span>
+                                                    ) : (
+                                                      derived.map((member) => (
+                                                        <span key={member.id} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[11px] text-slate-300">
+                                                          {member.email || member.title || member.role}
+                                                          <span className="text-slate-500">· {member.role}</span>
+                                                        </span>
+                                                      ))
+                                                    )}
+                                                  </div>
+                                                  <p className="mt-3 text-[11px] text-slate-500">Add-on recipients (merged with the team list above when reports send):</p>
+                                                  {addOns.length ? (
+                                                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                                      {addOns.map((email) => (
+                                                        <span key={email} className="inline-flex items-center gap-1 rounded-full border border-[#00d4aa]/30 bg-[#00d4aa]/10 px-2 py-0.5 text-[11px] text-[#00d4aa]">
+                                                          <Mail className="h-3 w-3" />
+                                                          {email}
+                                                          <button type="button" onClick={() => handleRemoveReportRecipient(team, email)} className="ml-0.5 text-[#00d4aa]/70 transition hover:text-[#00d4aa]">
+                                                            <XCircle className="h-3 w-3" />
+                                                          </button>
+                                                        </span>
+                                                      ))}
+                                                    </div>
+                                                  ) : null}
+                                                  <div className="mt-2 flex items-center gap-2">
+                                                    <input
+                                                      type="email"
+                                                      placeholder="add email…"
+                                                      value={recipientDraft[team.id] || ''}
+                                                      onChange={(event) => setRecipientDraft((current) => ({ ...current, [team.id]: event.target.value }))}
+                                                      onKeyDown={(event) => {
+                                                        if (event.key === 'Enter') {
+                                                          event.preventDefault();
+                                                          handleAddReportRecipient(team);
+                                                        }
+                                                      }}
+                                                      className="flex-1 rounded-lg border border-white/10 bg-black/40 px-2.5 py-1.5 text-xs text-white focus:border-[#00d4aa]/40 focus:outline-none"
+                                                    />
+                                                    <button type="button" className={chipBtn} disabled={savingRecipients} onClick={() => handleAddReportRecipient(team)}>
+                                                      {savingRecipients ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailPlus className="h-3.5 w-3.5" />}
+                                                      Add
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            );
+                                          })() : null}
+
+                                          {LAUNCH_DAY_STEP_IDS.has(step.id) ? (() => {
+                                            const members = membershipsByTeam[team.id];
+                                            const loadingMembers = !!membershipsLoading[team.id];
+                                            let readout: string;
+                                            if (step.id === 'first-training') {
+                                              if (!members) {
+                                                readout = loadingMembers ? 'First session · counting…' : 'Run the first session with the team on launch day.';
+                                              } else {
+                                                const athletes = members.filter((member) => member.role === 'athlete');
+                                                const done = athletes.filter((member) => member.athleteOnboarding?.baselinePathStatus === 'complete').length;
+                                                readout = `First session · ${done}/${athletes.length} athletes done`;
+                                              }
+                                            } else {
+                                              readout = 'Run the first check-in with the team on launch day.';
+                                            }
+                                            return (
+                                              <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                                                <p className="text-xs text-slate-400">{readout}</p>
+                                                <Link
+                                                  href={`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(team.organizationId)}&teamId=${encodeURIComponent(team.id)}&mode=launch-day`}
+                                                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#00d4aa]/30 bg-[#00d4aa]/10 px-3 py-1.5 text-xs font-semibold text-[#00d4aa] transition hover:bg-[#00d4aa]/20"
+                                                >
+                                                  Open Launch-Day Mode
+                                                  <ArrowRight className="h-3.5 w-3.5" />
+                                                </Link>
+                                              </div>
+                                            );
+                                          })() : null}
+
                                           {STEP_ACTIONS[step.id] ? (
                                             <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
                                               {STEP_ACTIONS[step.id]!.map((action) => {
@@ -1128,66 +1821,117 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
           </section>
 
           <section className="rounded-2xl border border-white/10 bg-[#0d1119] p-5 sm:p-7">
-            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">The Six Steps</p>
                 <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">From first call to a steady rhythm</h2>
               </div>
               <p className="max-w-xl text-sm leading-6 text-slate-400">
-                Do these in order. Skip one and the software might still technically work — but the rollout will feel confusing and shaky to the coach.
+                Do these in order. Tap a step to see exactly what it means and how to run it.
               </p>
             </div>
 
-            <div className="space-y-4">
-              {phases.map((phase) => {
-                const Icon = phase.icon;
-                return (
-                  <article key={phase.title} className="rounded-2xl border border-white/10 bg-white/[0.025] p-5">
-                    <div className="flex flex-col gap-5 lg:flex-row">
-                      <div className="lg:w-72 lg:flex-shrink-0">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#00d4aa]/30 bg-[#00d4aa]/10 text-[#00d4aa]">
-                            <Icon className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">{phase.eyebrow}</p>
-                            <p className="mt-1 text-sm text-slate-400">{phase.timing}</p>
-                          </div>
-                        </div>
-                        <h3 className="mt-4 text-xl font-semibold leading-tight text-white">{phase.title}</h3>
-                        <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-slate-300">
-                          <span className="text-slate-500">Owner: </span>
-                          {phase.owner}
-                        </div>
-                      </div>
+            {/* At-a-glance stepper — jump straight to any step */}
+            <div className="mb-4 flex flex-wrap gap-2">
+              {phases.map((phase, index) => (
+                <button
+                  key={phase.title}
+                  type="button"
+                  onClick={() => openPhase(index)}
+                  className="group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] py-1.5 pl-1.5 pr-3 text-xs font-medium text-slate-300 transition hover:border-[#00d4aa]/40 hover:bg-[#00d4aa]/10 hover:text-white"
+                >
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#00d4aa]/15 text-[10px] font-semibold text-[#00d4aa]">
+                    {index + 1}
+                  </span>
+                  {phase.short}
+                </button>
+              ))}
+            </div>
 
+            <div className="mb-3 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() =>
+                  setExpandedPhases((current) =>
+                    current.size === phases.length ? new Set() : new Set(phases.map((_, index) => index))
+                  )
+                }
+                className="text-xs font-medium text-slate-400 transition hover:text-[#00d4aa]"
+              >
+                {expandedPhases.size === phases.length ? 'Collapse all' : 'Expand all'}
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {phases.map((phase, index) => {
+                const Icon = phase.icon;
+                const open = expandedPhases.has(index);
+                return (
+                  <article
+                    key={phase.title}
+                    id={`playbook-step-${index}`}
+                    className={`scroll-mt-24 overflow-hidden rounded-2xl border transition ${
+                      open ? 'border-[#00d4aa]/30 bg-white/[0.03]' : 'border-white/10 bg-white/[0.02]'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => togglePhase(index)}
+                      className="flex w-full items-center gap-4 p-4 text-left transition hover:bg-white/[0.025] sm:p-5"
+                    >
+                      <span className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-[#00d4aa]/30 bg-[#00d4aa]/10 text-[#00d4aa]">
+                        <Icon className="h-5 w-5" />
+                        <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#00d4aa] text-[11px] font-bold text-[#06100e]">
+                          {index + 1}
+                        </span>
+                      </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm leading-6 text-slate-300">{phase.objective}</p>
-                        <div className="mt-5 grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#00d4aa]">{phase.eyebrow}</span>
+                          <span className="text-[11px] text-slate-500">· {phase.timing}</span>
+                        </div>
+                        <h3 className="mt-0.5 text-base font-semibold leading-tight text-white sm:text-lg">{phase.title}</h3>
+                        <p className="mt-1 text-sm leading-6 text-slate-400">{phase.summary}</p>
+                      </div>
+                      <ChevronDown
+                        className={`h-5 w-5 flex-shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180 text-[#00d4aa]' : ''}`}
+                      />
+                    </button>
+
+                    {open && (
+                      <div className="border-t border-white/10 px-4 pb-5 pt-4 sm:px-5">
+                        <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-1.5 text-xs text-slate-300">
+                          <span className="text-slate-500">Owner</span>
+                          <span className="font-medium text-white">{phase.owner}</span>
+                        </div>
+                        <div className="grid gap-5 lg:grid-cols-[1.4fr_0.6fr]">
                           <div>
                             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Required Steps</p>
-                            <div className="space-y-3">
+                            <div className="space-y-2.5">
                               {phase.actions.map((action) => (
-                                <div key={action} className="flex gap-3 text-sm leading-6 text-slate-300">
-                                  <ChevronRight className="mt-1 h-4 w-4 flex-shrink-0 text-[#00d4aa]" />
-                                  <span>{action}</span>
+                                <div key={action.lead} className="flex gap-3 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2.5">
+                                  <ChevronRight className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#00d4aa]" />
+                                  <p className="text-sm leading-6 text-slate-400">
+                                    <span className="font-semibold text-white">{action.lead}.</span> {action.detail}
+                                  </p>
                                 </div>
                               ))}
                             </div>
                           </div>
                           <div>
-                            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Outputs</p>
+                            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">You’ll walk away with</p>
                             <div className="space-y-2">
                               {phase.outputs.map((output) => (
-                                <div key={output} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-300">
-                                  {output}
+                                <div key={output} className="flex items-start gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-300">
+                                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-[#00d4aa]" />
+                                  <span>{output}</span>
                                 </div>
                               ))}
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </article>
                 );
               })}

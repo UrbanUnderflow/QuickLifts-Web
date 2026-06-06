@@ -18,18 +18,18 @@ export type TeamOnboardingTrackerStepDefinition = {
 
 export const TEAM_ONBOARDING_TRACKER_STEPS: TeamOnboardingTrackerStepDefinition[] = [
   {
+    id: 'provisioning',
+    label: 'Create organization & team',
+    owner: 'PulseCheck',
+    meeting: 'Before kickoff',
+    description: 'Create the organization, team, and — when the rollout uses them — the pilot and cohort, in provisioning.',
+  },
+  {
     id: 'intake',
     label: 'Intake done',
     owner: 'PulseCheck',
     meeting: 'Before kickoff',
     description: 'Sponsor, coach list, rough roster, launch date, support route, and device plan are all confirmed.',
-  },
-  {
-    id: 'provisioning',
-    label: 'Set up in the software',
-    owner: 'PulseCheck',
-    meeting: 'Before kickoff',
-    description: 'Organization, team, any pilot group, billing, and invite settings are configured.',
   },
   {
     id: 'coach-kickoff',
