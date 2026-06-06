@@ -26,6 +26,27 @@ export const TRAINING_MENTAL_GAME_WHITE_PAPER_METADATA = {
   featuredImage: '/research-training-mental-game-white-paper.webp',
 };
 
+export interface ResearchArticleOverride {
+  title: string;
+  subtitle: string;
+  excerpt: string;
+  category: string;
+  author: string;
+  authorTitle?: string;
+  readTime: string;
+  contentType: 'article' | 'white-paper';
+  featured: boolean;
+  visibility?: 'public' | 'unlisted';
+  listed?: boolean;
+  passwordProtected?: boolean;
+  status: 'draft' | 'published' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+  publishedAt: string;
+  featuredImage?: string;
+  content: string;
+}
+
 export const TRAINING_MENTAL_GAME_WHITE_PAPER_CONTENT = `
 :::abstract
 Mental performance is widely acknowledged as a critical factor in athletic competition, yet the tools available to train it have not kept pace with the systems used to develop physical capacity. Most existing approaches fall into one of two categories: clinical sport psychology delivered through conversation, or consumer-facing brain training apps built on generic cognitive tasks with limited evidence of transfer to sport-specific contexts. Neither approach provides athletes and coaches with a structured, measurable, progressive training system for the cognitive-perceptual and state-regulation skills that determine performance under pressure.
@@ -467,7 +488,7 @@ Mental performance training deserves the same rigor as physical performance trai
 :::
 `;
 
-export const getResearchArticleOverride = (slug: string) => {
+export const getResearchArticleOverride = (slug: string): ResearchArticleOverride | null => {
   if (slug === AUNTEDNA_ESCALATION_WHITE_PAPER_SLUG) {
     return {
       ...AUNTEDNA_ESCALATION_WHITE_PAPER_METADATA,

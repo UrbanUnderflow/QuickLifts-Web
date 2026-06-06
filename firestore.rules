@@ -80,6 +80,7 @@ service cloud.firestore {
         'pulsecheck-off-limits-config',
         'pulsecheck-translation-table',
         'pulsecheck-user-revenue-summaries',
+        'researchArticleAccess',
         'revenue-calculations',
         'university-prospects',
         'venture-prospects'

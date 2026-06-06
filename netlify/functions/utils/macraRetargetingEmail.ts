@@ -15,6 +15,10 @@ const {
   normalizePlan,
   signMacraOfferLink,
 } = require('./macraStripe');
+const {
+  MACRA_MIXPANEL_EVENTS,
+  safeTrackMacraWebOfferEvent,
+} = require('./mixpanelAnalytics');
 
 type SendResponse = {
   success: boolean;
@@ -434,6 +438,9 @@ export function createMacraRetargetingEmailHandler(config: MacraRetargetingEmail
         campaignId: config.sequenceId,
         userId: userId || null,
         product: 'macra',
+        ctaUrlMode: config.ctaUrlMode || 'macra',
+        plan: config.checkoutPlan || null,
+        checkoutCampaignId: checkoutUrl ? MACRA_WEB_OFFER_CAMPAIGN_ID : null,
       };
       const idempotencyMetadata = idempotencyKey
         ? {
@@ -471,6 +478,30 @@ export function createMacraRetargetingEmailHandler(config: MacraRetargetingEmail
 
       if (userId && !isTest && !sendResult.skipped) {
         await markRetargetingSent({ userId, config, messageId: sendResult.messageId });
+      }
+
+      if (!isTest && !sendResult.skipped) {
+        await safeTrackMacraWebOfferEvent({
+          eventName: MACRA_MIXPANEL_EVENTS.retargetingEmailSent,
+          userId,
+          email: recipient.toEmail,
+          insertId: `macra-retargeting:${config.sequenceId}:email-sent:${sendResult.messageId || userId || recipient.toEmail}`,
+          properties: {
+            email_provider: 'brevo',
+            email_sequence_id: config.sequenceId,
+            sequence_id: config.sequenceId,
+            sequence_state_key: config.stateKey,
+            campaign_id: config.sequenceId,
+            brevo_message_id: sendResult.messageId || null,
+            recipient_email: recipient.toEmail,
+            recipient_name: recipient.toName || null,
+            cta_url_mode: config.ctaUrlMode || 'macra',
+            checkout_campaign_id: checkoutUrl ? MACRA_WEB_OFFER_CAMPAIGN_ID : null,
+            plan: config.checkoutPlan || null,
+            scheduled_at: scheduledAt || null,
+            is_test: false,
+          },
+        });
       }
 
       return {

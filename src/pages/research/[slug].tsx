@@ -21,6 +21,7 @@ const FEATURED_IMAGE_BY_SLUG: Record<string, string> = {
   'ai-supported-escalation-human-clinical-handoff-and-return-to-training-pathways':
     '/auntedna-mark.png',
 };
+const RESEARCH_ARTICLE_ACCESS_COLLECTION = 'researchArticleAccess';
 
 const normalizeResearchArticleCopy = (content: string) =>
   content
@@ -28,11 +29,19 @@ const normalizeResearchArticleCopy = (content: string) =>
     .replace(/\bthe Kill Switch\b/g, 'the Reset Switch')
     .replace(/\bKill Switch\b/g, 'Reset Switch');
 
+const hasResearchArticlePasswordProtection = (article: unknown) =>
+  typeof article === 'object' &&
+  article !== null &&
+  'passwordProtected' in article &&
+  (article as { passwordProtected?: unknown }).passwordProtected === true;
+
 const resolveResearchArticleAccessState = (
   slug: string,
   cookies: Partial<Record<string, string>>,
+  article?: { passwordProtected?: boolean } | null,
+  cookieSecretSeed?: string,
 ) => {
-  const isProtected = isResearchArticlePasswordProtected(slug);
+  const isProtected = isResearchArticlePasswordProtected(slug) || article?.passwordProtected === true;
   if (!isProtected) {
     return {
       isProtected: false,
@@ -42,7 +51,7 @@ const resolveResearchArticleAccessState = (
   }
 
   const accessCookie = cookies[getResearchArticleAccessCookieName(slug)];
-  const isUnlocked = verifyResearchArticleAccessCookieValue(slug, accessCookie);
+  const isUnlocked = verifyResearchArticleAccessCookieValue(slug, accessCookie, cookieSecretSeed);
   return {
     isProtected,
     isLocked: !isUnlocked,
@@ -235,7 +244,7 @@ export const getServerSideProps: GetServerSideProps = async ({ params, query, re
   const localArticleOverride = getResearchArticleOverride(slug);
 
   if (localArticleOverride) {
-    const articleAccess = resolveResearchArticleAccessState(slug, req.cookies);
+    const articleAccess = resolveResearchArticleAccessState(slug, req.cookies, localArticleOverride);
     if (articleAccess.isProtected) {
       res.setHeader('Cache-Control', 'private, no-store, max-age=0');
     }
@@ -295,7 +304,7 @@ export const getServerSideProps: GetServerSideProps = async ({ params, query, re
       data = await getFirestoreDocFallback('researchArticles', slug, forceDevFirebase);
     }
 
-    if (!data && !localArticleOverride) {
+    if (!data) {
       return { notFound: true };
     }
 
@@ -325,36 +334,51 @@ export const getServerSideProps: GetServerSideProps = async ({ params, query, re
       }
     }
 
-    const articleOverride = localArticleOverride;
     const resolvedAuthorTitle =
       authorTitle ||
-      String(articleOverride?.authorTitle || data?.authorTitle || '');
-    const fallbackPublishedAt = articleOverride?.publishedAt || null;
-    const fallbackUpdatedAt = articleOverride?.updatedAt || fallbackPublishedAt;
-    const fallbackCreatedAt = articleOverride?.createdAt || fallbackPublishedAt;
+      String(data?.authorTitle || '');
 
     // Serialize Firestore timestamps
     const featuredImage =
-      (typeof articleOverride?.featuredImage === 'string' && articleOverride.featuredImage) ||
       (typeof data?.featuredImage === 'string' && data.featuredImage) ||
       FEATURED_IMAGE_BY_SLUG[slug] ||
       '';
 
-    const articleAccess = resolveResearchArticleAccessState(slug, req.cookies);
+    let accessCookieSecretSeed: string | undefined;
+    const isStoredPasswordProtected =
+      hasResearchArticlePasswordProtection(data) &&
+      !isResearchArticlePasswordProtected(slug);
+
+    if (isStoredPasswordProtected) {
+      try {
+        const accessDoc = await db.collection(RESEARCH_ARTICLE_ACCESS_COLLECTION).doc(slug).get();
+        const accessData = accessDoc.exists ? accessDoc.data() : null;
+        accessCookieSecretSeed =
+          typeof accessData?.passwordHash === 'string' ? accessData.passwordHash : undefined;
+      } catch (accessError) {
+        console.warn('[research] Stored access lookup failed:', accessError);
+      }
+    }
+
+    const articleAccess = resolveResearchArticleAccessState(
+      slug,
+      req.cookies,
+      data,
+      accessCookieSecretSeed,
+    );
     if (articleAccess.isProtected) {
       res.setHeader('Cache-Control', 'private, no-store, max-age=0');
     }
 
     const articleData = {
       ...(data || {}),
-      ...(articleOverride || {}),
       slug,
       authorTitle: resolvedAuthorTitle,
       featuredImage,
-      content: articleAccess.isLocked ? '' : normalizeResearchArticleCopy(String(articleOverride?.content || data?.content || '')),
-      createdAt: data?.createdAt?.toDate?.()?.toISOString() || fallbackCreatedAt,
-      updatedAt: data?.updatedAt?.toDate?.()?.toISOString() || fallbackUpdatedAt,
-      publishedAt: data?.publishedAt?.toDate?.()?.toISOString() || fallbackPublishedAt,
+      content: articleAccess.isLocked ? '' : normalizeResearchArticleCopy(String(data?.content || '')),
+      createdAt: data?.createdAt?.toDate?.()?.toISOString() || null,
+      updatedAt: data?.updatedAt?.toDate?.()?.toISOString() || null,
+      publishedAt: data?.publishedAt?.toDate?.()?.toISOString() || null,
     };
 
     // Build OG image URL — ensure absolute
@@ -452,6 +476,9 @@ interface DynamicArticle {
   featured: boolean;
   featuredImage?: string;
   contentType?: 'article' | 'white-paper';
+  visibility?: 'public' | 'unlisted';
+  listed?: boolean;
+  passwordProtected?: boolean;
   status: string;
   createdAt: string | null;
   updatedAt: string | null;

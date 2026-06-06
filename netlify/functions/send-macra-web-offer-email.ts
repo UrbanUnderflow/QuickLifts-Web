@@ -322,6 +322,25 @@ export const handler: Handler = async (event) => {
           is_test: false,
         },
       });
+
+      await safeTrackMacraWebOfferEvent({
+        eventName: MACRA_MIXPANEL_EVENTS.retargetingEmailSent,
+        userId,
+        email: recipient.toEmail,
+        insertId: `macra-retargeting:${MACRA_WEB_OFFER_CAMPAIGN_ID}:email-sent:${sendResult.messageId || userId || recipient.toEmail}`,
+        properties: {
+          plan,
+          email_provider: 'brevo',
+          email_sequence_id: MACRA_WEB_OFFER_CAMPAIGN_ID,
+          sequence_id: MACRA_WEB_OFFER_CAMPAIGN_ID,
+          sequence_state_key: 'webOffer24h',
+          campaign_id: MACRA_WEB_OFFER_CAMPAIGN_ID,
+          brevo_message_id: sendResult.messageId || null,
+          recipient_email: recipient.toEmail,
+          recipient_name: recipient.toName || null,
+          is_test: false,
+        },
+      });
     }
 
     return {

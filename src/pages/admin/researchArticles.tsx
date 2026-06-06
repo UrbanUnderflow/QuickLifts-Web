@@ -12,7 +12,7 @@ import {
     orderBy,
     Timestamp,
 } from 'firebase/firestore';
-import { db, storage } from '../../api/firebase/config';
+import { auth, db, getFirebaseModeRequestHeaders, storage } from '../../api/firebase/config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
     FileText,
@@ -44,7 +44,9 @@ import {
     ChevronDown,
     ChevronUp,
     Zap,
-    Trash
+    Trash,
+    Lock,
+    Link2,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -62,6 +64,9 @@ interface ResearchArticle {
     featured: boolean;
     featuredImage?: string;
     contentType?: 'article' | 'white-paper';
+    visibility?: 'public' | 'unlisted';
+    listed?: boolean;
+    passwordProtected?: boolean;
     status: 'draft' | 'published' | 'archived';
     createdAt: Timestamp;
     updatedAt: Timestamp;
@@ -81,6 +86,7 @@ const normalizeResearchArticle = (
 const CATEGORIES = [
     'Metabolic Health',
     'Performance Science',
+    'Clinical Safety',
     'Technology',
     'Wearables',
     'Nutrition',
@@ -148,7 +154,20 @@ const ArticleListItem: React.FC<ArticleListItemProps> = ({ article, isSelected, 
             <h3 className="font-medium text-stone-900 text-sm leading-snug line-clamp-2">
                 {article.title}
             </h3>
-            <StatusBadge status={article.status} />
+            <div className="flex flex-col items-end gap-1.5">
+                <StatusBadge status={article.status} />
+                {article.passwordProtected ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600">
+                        <Lock className="h-3 w-3" />
+                        Protected
+                    </span>
+                ) : article.visibility === 'unlisted' || article.listed === false ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-white px-2 py-0.5 text-[11px] font-medium text-stone-500">
+                        <Link2 className="h-3 w-3" />
+                        Link only
+                    </span>
+                ) : null}
+            </div>
         </div>
         <div className="flex items-center gap-2 text-xs text-stone-500">
             <span>{article.category}</span>
@@ -228,6 +247,9 @@ const ResearchArticlesAdmin: React.FC = () => {
         featuredImage: '',
         featured: false,
         contentType: 'article' as 'article' | 'white-paper',
+        visibility: 'public' as 'public' | 'unlisted',
+        passwordProtected: false,
+        accessPassword: '',
     });
 
     // Visual enhancements state
@@ -331,6 +353,56 @@ const ResearchArticlesAdmin: React.FC = () => {
         setTimeout(() => setMessage(null), 4000);
     };
 
+    const getAdminRequestHeaders = async () => {
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+            throw new Error('Sign in again before updating article access.');
+        }
+
+        const idToken = await currentUser.getIdToken();
+        return {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+            ...(currentUser.email ? { 'x-admin-email': currentUser.email } : {}),
+            ...getFirebaseModeRequestHeaders(),
+        };
+    };
+
+    const syncResearchArticleAccess = async (slug: string, previousPasswordProtected: boolean) => {
+        const nextPasswordProtected = formData.passwordProtected;
+        const password = formData.accessPassword.trim();
+
+        if (nextPasswordProtected && !password && !previousPasswordProtected) {
+            throw new Error('Add a password before turning on protected access.');
+        }
+
+        if (nextPasswordProtected && !password) {
+            return;
+        }
+
+        if (!nextPasswordProtected && !previousPasswordProtected) {
+            return;
+        }
+
+        const response = await fetch('/api/admin/research-articles/access', {
+            method: 'POST',
+            headers: await getAdminRequestHeaders(),
+            body: JSON.stringify({
+                slug,
+                passwordProtected: nextPasswordProtected,
+                ...(password ? { password } : {}),
+            }),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(payload.error || 'Failed to update article access.');
+        }
+    };
+
+    const resolveArticleVisibility = () =>
+        formData.passwordProtected ? 'unlisted' : formData.visibility;
+
     // ─── Form Handlers ─────────────────────────────────────────────
     const resetForm = () => {
         setFormData({
@@ -343,6 +415,9 @@ const ResearchArticlesAdmin: React.FC = () => {
             featuredImage: '',
             featured: false,
             contentType: 'article' as 'article' | 'white-paper',
+            visibility: 'public' as 'public' | 'unlisted',
+            passwordProtected: false,
+            accessPassword: '',
         });
     };
 
@@ -364,6 +439,9 @@ const ResearchArticlesAdmin: React.FC = () => {
             featuredImage: article.featuredImage || '',
             featured: article.featured,
             contentType: (article.contentType || 'article') as 'article' | 'white-paper',
+            visibility: (article.visibility || (article.listed === false ? 'unlisted' : 'public')) as 'public' | 'unlisted',
+            passwordProtected: article.passwordProtected === true,
+            accessPassword: '',
         });
         setSelectedArticle(article);
         setIsEditing(true);
@@ -385,6 +463,9 @@ const ResearchArticlesAdmin: React.FC = () => {
                 featuredImage: selectedArticle.featuredImage || '',
                 featured: selectedArticle.featured,
                 contentType: (selectedArticle.contentType || 'article') as 'article' | 'white-paper',
+                visibility: (selectedArticle.visibility || (selectedArticle.listed === false ? 'unlisted' : 'public')) as 'public' | 'unlisted',
+                passwordProtected: selectedArticle.passwordProtected === true,
+                accessPassword: '',
             });
         } else {
             resetForm();
@@ -398,11 +479,28 @@ const ResearchArticlesAdmin: React.FC = () => {
             return;
         }
 
+        const accessPassword = formData.accessPassword.trim();
+        if (formData.passwordProtected && !accessPassword && (isCreating || selectedArticle?.passwordProtected !== true)) {
+            showMessage('error', 'Add a password before turning on protected access.');
+            return;
+        }
+
+        if (accessPassword && accessPassword.length < 8) {
+            showMessage('error', 'Password must be at least 8 characters.');
+            return;
+        }
+
         setSaving(true);
         try {
             const slug = generateSlug(formData.title);
             const readTime = calculateReadTime(formData.content);
             const now = Timestamp.now();
+            const visibility = resolveArticleVisibility();
+            const articleAccessFields = {
+                visibility,
+                listed: visibility === 'public' && formData.passwordProtected !== true,
+                passwordProtected: formData.passwordProtected,
+            };
 
             if (isCreating) {
                 // Create new article
@@ -418,6 +516,7 @@ const ResearchArticlesAdmin: React.FC = () => {
                     featured: formData.featured,
                     featuredImage: formData.featuredImage,
                     contentType: formData.contentType,
+                    ...articleAccessFields,
                     status: publish ? 'published' : 'draft',
                     createdAt: now,
                     updatedAt: now,
@@ -425,6 +524,7 @@ const ResearchArticlesAdmin: React.FC = () => {
                 };
 
                 await setDoc(doc(db, 'researchArticles', slug), newArticle);
+                await syncResearchArticleAccess(slug, false);
                 showMessage('success', publish ? 'Article published!' : 'Draft saved!');
             } else if (selectedArticle) {
                 // Update existing article
@@ -440,6 +540,7 @@ const ResearchArticlesAdmin: React.FC = () => {
                     featured: formData.featured,
                     featuredImage: formData.featuredImage,
                     contentType: formData.contentType,
+                    ...articleAccessFields,
                     updatedAt: now,
                     ...(publish && selectedArticle.status !== 'published'
                         ? { status: 'published', publishedAt: now }
@@ -448,6 +549,7 @@ const ResearchArticlesAdmin: React.FC = () => {
                 };
 
                 await updateDoc(doc(db, 'researchArticles', selectedArticle.id), updates);
+                await syncResearchArticleAccess(selectedArticle.id, selectedArticle.passwordProtected === true);
                 showMessage('success', publish ? 'Article published!' : 'Changes saved!');
             }
 
@@ -923,6 +1025,9 @@ const ResearchArticlesAdmin: React.FC = () => {
                                                         featuredImage: article.featuredImage || '',
                                                         featured: article.featured,
                                                         contentType: (article.contentType || 'article') as 'article' | 'white-paper',
+                                                        visibility: (article.visibility || (article.listed === false ? 'unlisted' : 'public')) as 'public' | 'unlisted',
+                                                        passwordProtected: article.passwordProtected === true,
+                                                        accessPassword: '',
                                                     });
                                                 }}
                                             />
@@ -1099,6 +1204,82 @@ const ResearchArticlesAdmin: React.FC = () => {
                                                     <span className="text-sm text-stone-700">Featured article</span>
                                                 </label>
                                             </div>
+                                        </div>
+
+                                        {/* Access Settings */}
+                                        <div className="rounded-xl border border-stone-200 bg-stone-50/70 p-4">
+                                            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                                <div className="max-w-xl">
+                                                    <div className="flex items-center gap-2">
+                                                        <Lock className="h-4 w-4 text-stone-500" />
+                                                        <h3 className="text-sm font-semibold text-stone-900">Article access</h3>
+                                                    </div>
+                                                    <p className="mt-1 text-xs leading-5 text-stone-500">
+                                                        Use direct-link access and password protection for private white papers or partner review drafts.
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-500">
+                                                    <Link2 className="h-3.5 w-3.5" />
+                                                    {formData.passwordProtected || formData.visibility === 'unlisted' ? 'Direct link only' : 'Public listing'}
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-4 grid gap-4 md:grid-cols-2">
+                                                <div>
+                                                    <label className="block text-xs font-medium text-stone-500 mb-1.5">Listing visibility</label>
+                                                    <select
+                                                        value={formData.passwordProtected ? 'unlisted' : formData.visibility}
+                                                        disabled={formData.passwordProtected}
+                                                        onChange={(e) => setFormData({ ...formData, visibility: e.target.value as 'public' | 'unlisted' })}
+                                                        className="w-full px-3 py-2 rounded-lg border border-stone-200 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 bg-white disabled:bg-stone-100 disabled:text-stone-500"
+                                                    >
+                                                        <option value="public">Show on research page</option>
+                                                        <option value="unlisted">Direct link only</option>
+                                                    </select>
+                                                    {formData.passwordProtected && (
+                                                        <p className="mt-1.5 text-xs text-stone-400">
+                                                            Password-protected articles are kept off the public research list.
+                                                        </p>
+                                                    )}
+                                                </div>
+
+                                                <div>
+                                                    <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-stone-200 bg-white px-3 py-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={formData.passwordProtected}
+                                                            onChange={(e) => setFormData({
+                                                                ...formData,
+                                                                passwordProtected: e.target.checked,
+                                                                visibility: e.target.checked ? 'unlisted' : formData.visibility,
+                                                                accessPassword: e.target.checked ? formData.accessPassword : '',
+                                                            })}
+                                                            className="w-4 h-4 rounded border-stone-300 text-stone-900 focus:ring-stone-900"
+                                                        />
+                                                        <span className="text-sm font-medium text-stone-700">Require password</span>
+                                                    </label>
+                                                    <p className="mt-1.5 text-xs text-stone-400">
+                                                        The password is stored as a server-side hash, not inside the public article document.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {formData.passwordProtected && (
+                                                <div className="mt-4">
+                                                    <label className="block text-xs font-medium text-stone-500 mb-1.5">Access password</label>
+                                                    <input
+                                                        type="password"
+                                                        value={formData.accessPassword}
+                                                        onChange={(e) => setFormData({ ...formData, accessPassword: e.target.value })}
+                                                        placeholder={selectedArticle?.passwordProtected ? 'Leave blank to keep current password' : 'Set access password'}
+                                                        autoComplete="new-password"
+                                                        className="w-full px-3 py-2 rounded-lg border border-stone-200 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 bg-white"
+                                                    />
+                                                    <p className="mt-1.5 text-xs text-stone-400">
+                                                        Enter a new password to set or change access. Clearing protected access removes the saved password record.
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Excerpt */}
@@ -1344,6 +1525,17 @@ const ResearchArticlesAdmin: React.FC = () => {
                                     <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between bg-stone-50">
                                         <div className="flex items-center gap-3">
                                             <StatusBadge status={selectedArticle.status} />
+                                            {selectedArticle.passwordProtected ? (
+                                                <span className="inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-600">
+                                                    <Lock className="h-3.5 w-3.5" />
+                                                    Password protected
+                                                </span>
+                                            ) : selectedArticle.visibility === 'unlisted' || selectedArticle.listed === false ? (
+                                                <span className="inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-500">
+                                                    <Link2 className="h-3.5 w-3.5" />
+                                                    Direct link only
+                                                </span>
+                                            ) : null}
                                             <span className="text-sm text-stone-500">
                                                 {selectedArticle.status === 'published'
                                                     ? `Published ${formatDate(selectedArticle.publishedAt)}`

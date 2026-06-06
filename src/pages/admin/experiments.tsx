@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   BarChart3,
   CheckCircle2,
+  Copy,
   Database,
   FlaskConical,
   Plus,
@@ -331,6 +332,11 @@ const formatAdminDate = (value: unknown): string => {
     hour: 'numeric',
     minute: '2-digit',
   });
+};
+
+const formatIsoTimestamp = (value: unknown): string | null => {
+  const millis = scoreMillis(value);
+  return millis ? new Date(millis).toISOString() : null;
 };
 
 const getFirstString = (sources: Array<Record<string, any> | null | undefined>, paths: string[]): string => {
@@ -1271,6 +1277,111 @@ const ExperimentResultsPanel: React.FC<{
     .filter((variant) => variant.assignments > 0)
     .sort((left, right) => primaryMetricRate(right) - primaryMetricRate(left))[0];
   const aggregateFineGrainedEvents = results?.aggregateValidation?.fineGrainedEvents || {};
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
+
+  const copyResultsToClipboard = async () => {
+    if (!results) return;
+
+    const variantPerformance = results.variants.map((variant) => ({
+      variantId: variant.variantId,
+      variantName: variant.variantName,
+      assignments: variant.assignments,
+      exactAssignments: variant.exactAssignments,
+      inferredAssignments: variant.inferredAssignments,
+      onboardingCompletions: variant.onboardingCompletions,
+      qualifiedUsers: variant.qualifiedUsers,
+      paywallViews: variant.paywallViews,
+      ctaTaps: variant.ctaTaps,
+      checkoutStarts: variant.checkoutStarts,
+      appleCancels: variant.appleCancels,
+      trialStarts: variant.trialStarts,
+      trialRate: variant.trialRate,
+      trialRateLabel: formatPercent(variant.trialStarts, variant.assignments),
+      paidConversions: variant.paidConversions,
+      paidRate: variant.paidRate,
+      paidRateLabel: formatPercent(variant.paidConversions, variant.assignments),
+      liftVsBaseline: variant.liftVsBaseline,
+      liftVsBaselineLabel: formatSignedPercent(variant.liftVsBaseline),
+    }));
+
+    const diagnosticBreakdownByVariant = results.variants.map((variant) => ({
+      variantId: variant.variantId,
+      variantName: variant.variantName,
+      assignedUsers: variant.assignments,
+      checkpoints: {
+        valuePreviewViews: variant.valuePreviewViews,
+        pricingDisclosureViews: variant.pricingDisclosureViews,
+        trialConfidenceViews: variant.trialConfidenceViews,
+        planSelections: variant.planSelections,
+        ctaTaps: variant.ctaTaps,
+        checkoutStarts: variant.checkoutStarts,
+        purchaseBridgeViews: variant.purchaseBridgeViews,
+        purchaseBridgeContinues: variant.purchaseBridgeContinues,
+        appleCancels: variant.appleCancels,
+        cancelFeedbackPresented: variant.cancelFeedbackPresented,
+        cancelFeedbackSubmitted: variant.cancelFeedbackSubmitted,
+        trialActivationScreens: variant.trialActivationScreens,
+        trialActivationPrimaryActions: variant.trialActivationPrimaryActions,
+      },
+    }));
+
+    const payload = {
+      reportType: 'macra-experiment-results-dashboard',
+      copiedAt: new Date().toISOString(),
+      experimentId: results.experimentId,
+      snapshotGeneratedAt: formatIsoTimestamp(results.generatedAt),
+      snapshotGeneratedAtLabel: formatAdminDate(results.generatedAt),
+      assignmentSalt: results.assignmentSalt,
+      primaryMetric: {
+        key: results.configSnapshot?.primaryMetric || '',
+        label: primaryMetricLabel,
+        usesPaidPrimaryMetric,
+        bestVariant: bestVariant ? {
+          variantId: bestVariant.variantId,
+          variantName: bestVariant.variantName,
+          assignments: bestVariant.assignments,
+          count: primaryMetricCount(bestVariant),
+          rate: primaryMetricRate(bestVariant),
+          rateLabel: formatPercent(primaryMetricCount(bestVariant), bestVariant.assignments),
+        } : null,
+      },
+      summary: {
+        loadedUsers: results.loadedUsers,
+        assignedUsers: results.assignedUsers,
+        exactAssignments: results.exactAssignments,
+        inferredAssignments: results.inferredAssignments,
+        unknownAssignments: results.unknownAssignments,
+        qualityLabel: results.qualityLabel,
+      },
+      dataInputs: results.dataInputs || null,
+      aggregateValidation: results.aggregateValidation || null,
+      variantPerformance,
+      diagnosticBreakdownByVariant,
+      unknownSamples: results.unknownSamples || [],
+      configSnapshot: results.configSnapshot,
+    };
+
+    const report = [
+      'Macra Experiment Results Export',
+      `Generated: ${new Date().toLocaleString()}`,
+      `Snapshot: ${formatAdminDate(results.generatedAt)}`,
+      `Loaded users: ${results.loadedUsers}`,
+      '',
+      '```json',
+      JSON.stringify(payload, null, 2),
+      '```',
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(report);
+      setCopyStatus('copied');
+      window.setTimeout(() => setCopyStatus('idle'), 1600);
+    } catch (error) {
+      console.error('[Experiments] Failed to copy results export', error);
+      setCopyStatus('error');
+      window.setTimeout(() => setCopyStatus('idle'), 2400);
+    }
+  };
 
   if (!results) {
     return (
@@ -1311,14 +1422,23 @@ const ExperimentResultsPanel: React.FC<{
               Last generated {formatAdminDate(results.generatedAt)} from {results.loadedUsers} Macra onboarding users.
             </p>
           </div>
-          <button
-            onClick={onBackfill}
-            disabled={backfilling}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#E0FE10] px-4 py-2 text-sm font-black text-black transition hover:bg-[#c9e70e] disabled:opacity-50"
-          >
-            <Database className={`h-4 w-4 ${backfilling ? 'animate-pulse' : ''}`} />
-            {backfilling ? 'Backfilling...' : 'Refresh results'}
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => void copyResultsToClipboard()}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-4 py-2 text-sm font-bold text-zinc-200 transition hover:border-[#E0FE10]/60 hover:text-[#E0FE10]"
+            >
+              {copyStatus === 'copied' ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copyStatus === 'copied' ? 'Copied' : copyStatus === 'error' ? 'Copy failed' : 'Copy results'}
+            </button>
+            <button
+              onClick={onBackfill}
+              disabled={backfilling}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#E0FE10] px-4 py-2 text-sm font-black text-black transition hover:bg-[#c9e70e] disabled:opacity-50"
+            >
+              <Database className={`h-4 w-4 ${backfilling ? 'animate-pulse' : ''}`} />
+              {backfilling ? 'Backfilling...' : 'Refresh results'}
+            </button>
+          </div>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">

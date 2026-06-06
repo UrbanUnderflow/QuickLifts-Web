@@ -43,6 +43,7 @@ interface Article {
   contentType?: 'article' | 'white-paper';
   visibility?: 'public' | 'unlisted';
   listed?: boolean;
+  passwordProtected?: boolean;
   status: 'draft' | 'published' | 'archived';
   createdAt: Timestamp;
   publishedAt?: Timestamp;
@@ -98,6 +99,7 @@ const normalizeRestArticle = (document: FirestoreRestDocument): Article | null =
     contentType: (restString(fields.contentType) || 'article') as Article['contentType'],
     visibility: (restString(fields.visibility) || 'public') as Article['visibility'],
     listed: fields.listed?.booleanValue,
+    passwordProtected: restBoolean(fields.passwordProtected),
     status,
     createdAt,
     publishedAt,
@@ -130,6 +132,7 @@ const localResearchArticleToArticle = (
     contentType: item.contentType,
     visibility: 'visibility' in item ? item.visibility : undefined,
     listed: 'listed' in item ? item.listed : undefined,
+    passwordProtected: 'passwordProtected' in item && item.passwordProtected === true,
     status: item.status,
     createdAt,
     publishedAt,
@@ -185,7 +188,7 @@ const articleFeaturedImage = (article: Article) => article.featuredImage || FEAT
 const readActionLabel = (article: Article) => (isWhitePaper(article) ? 'Read white paper' : 'Read article');
 
 const isListedArticle = (article: Article) =>
-  article.visibility !== 'unlisted' && article.listed !== false;
+  article.visibility !== 'unlisted' && article.listed !== false && article.passwordProtected !== true;
 
 // ─── Article card component ────────────────────────────────────────
 const ArticleCard: React.FC<{ article: Article; index: number }> = ({ article, index }) => {

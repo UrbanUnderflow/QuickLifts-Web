@@ -14,6 +14,8 @@ export const AUNTEDNA_ESCALATION_WHITE_PAPER_METADATA = {
   contentType: 'white-paper' as const,
   featured: false,
   visibility: 'unlisted' as const,
+  listed: false,
+  passwordProtected: true,
   status: 'published' as const,
   createdAt: '2026-06-05T00:00:00.000Z',
   updatedAt: '2026-06-05T00:00:00.000Z',

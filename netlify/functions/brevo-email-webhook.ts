@@ -43,6 +43,11 @@ const MACRA_BREVO_EVENT_TO_MIXPANEL: Partial<Record<BrevoWebhookEvent['event'], 
   opened: MACRA_MIXPANEL_EVENTS.emailOpened,
   click: MACRA_MIXPANEL_EVENTS.emailClicked,
 };
+const MACRA_BREVO_EVENT_TO_RETARGETING_MIXPANEL: Partial<Record<BrevoWebhookEvent['event'], string>> = {
+  delivered: MACRA_MIXPANEL_EVENTS.retargetingEmailDelivered,
+  opened: MACRA_MIXPANEL_EVENTS.retargetingEmailOpened,
+  click: MACRA_MIXPANEL_EVENTS.retargetingEmailClicked,
+};
 const MACRA_BREVO_ISSUE_EVENTS = new Set<BrevoWebhookEvent['event']>([
   'soft_bounce',
   'hard_bounce',
@@ -51,6 +56,14 @@ const MACRA_BREVO_ISSUE_EVENTS = new Set<BrevoWebhookEvent['event']>([
   'spam',
   'unsubscribe',
 ]);
+const MACRA_RETARGETING_SEQUENCE_STATE_KEYS: Record<string, string> = {
+  'macra-web-offer-24h-v1': 'webOffer24h',
+  'macra-paywall-cancel-trust-v1': 'paywallCancelTrust',
+  'macra-web-offer-proof-v1': 'webOfferProof',
+  'macra-paywall-view-value-v1': 'paywallViewValue',
+  'macra-no-trial-7d-challenge-v1': 'noTrial7dChallenge',
+  'macra-trial-no-activation-24h-v1': 'trialNoActivation24h',
+};
 
 const buildBrevoEmailLogDocId = (messageId: string) =>
   `brevo_${encodeURIComponent(messageId).slice(0, 900)}`;
@@ -192,40 +205,41 @@ const applyStatusUpdate = (
   }
 };
 
-const updateMacraEmailSequenceStatus = async (args: {
+const updateMacraRetargetingEmailSequenceStatus = async (args: {
   userId: string;
+  stateKey: string;
   eventType: BrevoWebhookEvent['event'];
   email: string;
   messageId?: string;
   link?: string;
   now: Date;
 }) => {
-  const { userId, eventType, email, messageId, link, now } = args;
-  if (!userId) return;
+  const { userId, stateKey, eventType, email, messageId, link, now } = args;
+  if (!userId || !stateKey) return;
 
   const stateUpdate: Record<string, any> = {
-    webOffer24hLastEmailEvent: eventType,
-    webOffer24hLastEmailEventAt: now,
-    webOffer24hLastEmailEventEmail: email || null,
-    webOffer24hLastUpdatedAt: now,
+    [`${stateKey}LastEmailEvent`]: eventType,
+    [`${stateKey}LastEmailEventAt`]: now,
+    [`${stateKey}LastEmailEventEmail`]: email || null,
+    [`${stateKey}LastUpdatedAt`]: now,
   };
 
   if (messageId) {
-    stateUpdate.webOffer24hEmailMessageId = messageId;
+    stateUpdate[`${stateKey}EmailMessageId`] = messageId;
   }
 
   switch (eventType) {
     case 'delivered':
-      stateUpdate.webOffer24hDeliveredAt = now;
+      stateUpdate[`${stateKey}DeliveredAt`] = now;
       break;
     case 'opened':
-      stateUpdate.webOffer24hOpenedAt = now;
-      stateUpdate.webOffer24hOpenCount = admin.firestore.FieldValue.increment(1);
+      stateUpdate[`${stateKey}OpenedAt`] = now;
+      stateUpdate[`${stateKey}OpenCount`] = admin.firestore.FieldValue.increment(1);
       break;
     case 'click':
-      stateUpdate.webOffer24hClickedAt = now;
-      stateUpdate.webOffer24hClickCount = admin.firestore.FieldValue.increment(1);
-      stateUpdate.webOffer24hClickedLink = link || null;
+      stateUpdate[`${stateKey}ClickedAt`] = now;
+      stateUpdate[`${stateKey}ClickCount`] = admin.firestore.FieldValue.increment(1);
+      stateUpdate[`${stateKey}ClickedLink`] = link || null;
       break;
     case 'soft_bounce':
     case 'hard_bounce':
@@ -233,8 +247,8 @@ const updateMacraEmailSequenceStatus = async (args: {
     case 'deferred':
     case 'spam':
     case 'unsubscribe':
-      stateUpdate.webOffer24hStatus = `email_${eventType}`;
-      stateUpdate.webOffer24hEmailIssueAt = now;
+      stateUpdate[`${stateKey}Status`] = `email_${eventType}`;
+      stateUpdate[`${stateKey}EmailIssueAt`] = now;
       break;
   }
 
@@ -456,6 +470,8 @@ export const handler: Handler = async (event) => {
       let product: string | null = null;
       let userId: string | null = null;
       let plan: string | null = null;
+      let ctaUrlMode: string | null = null;
+      let checkoutCampaignId: string | null = null;
       
       if (webhookEvent['X-Mailin-custom']) {
         try {
@@ -470,18 +486,23 @@ export const handler: Handler = async (event) => {
           product = custom.product || null;
           userId = custom.userId || null;
           plan = custom.plan || null;
+          ctaUrlMode = custom.ctaUrlMode || null;
+          checkoutCampaignId = custom.checkoutCampaignId || null;
         } catch (e) {
           console.warn('[brevo-webhook] Failed to parse X-Mailin-custom:', e);
         }
       }
 
-      if (
-        product === 'macra' &&
-        (emailSequenceId === 'macra-web-offer-24h-v1' || campaignId === 'macra-web-offer-24h-v1') &&
-        userId
-      ) {
-        await updateMacraEmailSequenceStatus({
+      const macraSequenceId =
+        [emailSequenceId, campaignId].find((sequenceId) =>
+          Boolean(sequenceId && MACRA_RETARGETING_SEQUENCE_STATE_KEYS[sequenceId])
+        ) || '';
+      const macraStateKey = MACRA_RETARGETING_SEQUENCE_STATE_KEYS[macraSequenceId];
+
+      if (product === 'macra' && macraStateKey && userId) {
+        await updateMacraRetargetingEmailSequenceStatus({
           userId,
+          stateKey: macraStateKey,
           eventType,
           email,
           messageId,
@@ -489,34 +510,56 @@ export const handler: Handler = async (event) => {
           now,
         });
 
-        const mixpanelEventName =
-          MACRA_BREVO_EVENT_TO_MIXPANEL[eventType] ||
-          (MACRA_BREVO_ISSUE_EVENTS.has(eventType) ? MACRA_MIXPANEL_EVENTS.emailIssue : null);
+        const baseInsertParts = [
+          macraSequenceId,
+          `email-${eventType}`,
+          messageId || userId,
+          webhookEvent.ts_event || webhookEvent.ts || webhookEvent.ts_epoch || Date.now(),
+          eventType === 'click' ? link || '' : '',
+        ].filter(Boolean);
+        const commonProperties = {
+          plan,
+          email_provider: 'brevo',
+          email_sequence_id: macraSequenceId,
+          sequence_id: macraSequenceId,
+          sequence_state_key: macraStateKey,
+          campaign_id: campaignId || macraSequenceId,
+          cta_url_mode: ctaUrlMode || null,
+          checkout_campaign_id: checkoutCampaignId || null,
+          brevo_message_id: messageId || null,
+          brevo_event_type: eventType,
+          recipient_email: email || null,
+          clicked_link: eventType === 'click' ? link || null : null,
+          time: webhookEvent.ts_event || webhookEvent.ts || webhookEvent.ts_epoch || Math.floor(now.getTime() / 1000),
+        };
+        const retargetingMixpanelEventName =
+          MACRA_BREVO_EVENT_TO_RETARGETING_MIXPANEL[eventType] ||
+          (MACRA_BREVO_ISSUE_EVENTS.has(eventType) ? MACRA_MIXPANEL_EVENTS.retargetingEmailIssue : null);
 
-        if (mixpanelEventName) {
+        if (retargetingMixpanelEventName) {
           await safeTrackMacraWebOfferEvent({
-            eventName: mixpanelEventName,
+            eventName: retargetingMixpanelEventName,
             userId,
             email,
-            insertId: [
-              'macra-web-offer',
-              `email-${eventType}`,
-              messageId || userId,
-              webhookEvent.ts_event || webhookEvent.ts || webhookEvent.ts_epoch || Date.now(),
-              eventType === 'click' ? link || '' : '',
-            ].filter(Boolean).join(':'),
-            properties: {
-              plan,
-              email_provider: 'brevo',
-              email_sequence_id: emailSequenceId || MACRA_WEB_OFFER_CAMPAIGN_ID,
-              campaign_id: campaignId || MACRA_WEB_OFFER_CAMPAIGN_ID,
-              brevo_message_id: messageId || null,
-              brevo_event_type: eventType,
-              recipient_email: email || null,
-              clicked_link: eventType === 'click' ? link || null : null,
-              time: webhookEvent.ts_event || webhookEvent.ts || webhookEvent.ts_epoch || Math.floor(now.getTime() / 1000),
-            },
+            insertId: ['macra-retargeting', ...baseInsertParts].join(':'),
+            properties: commonProperties,
           });
+        }
+
+        if (macraSequenceId === MACRA_WEB_OFFER_CAMPAIGN_ID) {
+          const mixpanelEventName =
+            MACRA_BREVO_EVENT_TO_MIXPANEL[eventType] ||
+            (MACRA_BREVO_ISSUE_EVENTS.has(eventType) ? MACRA_MIXPANEL_EVENTS.emailIssue : null);
+
+          if (mixpanelEventName) {
+            await safeTrackMacraWebOfferEvent({
+              eventName: mixpanelEventName,
+              userId,
+              email,
+              insertId: ['macra-web-offer', ...baseInsertParts].join(':'),
+              properties: commonProperties,
+            });
+          }
         }
       }
 

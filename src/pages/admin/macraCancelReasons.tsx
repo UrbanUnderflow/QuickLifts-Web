@@ -3,6 +3,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import {
   AlertCircle,
+  BarChart3,
   Check,
   Copy,
   Eye,
@@ -104,6 +105,12 @@ const getUserName = (row: MacraCancelReasonRow) =>
 
 const getUserEmail = (row: MacraCancelReasonRow) => row.email || row.user?.email || '';
 
+const getReasonLabel = (row: MacraCancelReasonRow) => row.reasonLabel || humanize(row.reason);
+
+const getReasonKey = (row: MacraCancelReasonRow) => row.reason || row.reasonLabel || 'unknown_reason';
+
+const formatIsoDate = (value: FirestoreDateLike) => toDate(value)?.toISOString() || null;
+
 const stringifySearchValue = (value: unknown) => {
   if (!value) return '';
   if (typeof value === 'string') return value;
@@ -121,6 +128,38 @@ const chunkItems = <T,>(items: T[], size: number) => {
   }
   return chunks;
 };
+
+const buildCancelReasonExport = (row: MacraCancelReasonRow, index: number) => ({
+  row: index + 1,
+  id: row.id,
+  userId: row.userId || '',
+  email: getUserEmail(row),
+  displayName: getUserName(row),
+  reason: row.reason || '',
+  reasonLabel: getReasonLabel(row),
+  trigger: row.trigger || '',
+  triggerLabel: humanize(row.trigger),
+  source: row.source || '',
+  selectedPlanId: row.selectedPlanId || '',
+  selectedPlanPeriod: row.selectedPlanPeriod || '',
+  selectedPlanPeriodLabel: humanize(row.selectedPlanPeriod),
+  surface: row.surface || '',
+  app: row.app || '',
+  isScreenDemo: Boolean(row.isScreenDemo),
+  createdAtIso: formatIsoDate(row.createdAt),
+  capturedAtIso: formatIsoDate(row.capturedAt),
+  user: row.user ? {
+    id: row.user.id,
+    displayName: row.user.displayName || '',
+    username: row.user.username || '',
+    email: row.user.email || '',
+    subscriptionType: row.user.subscriptionType || '',
+    registrationEntryPoint: row.user.registrationEntryPoint || '',
+    hasCompletedMacraOnboarding: Boolean(row.user.hasCompletedMacraOnboarding),
+    macraPaywallCancelFeedbackCount: row.user.macraPaywallCancelFeedbackCount || 0,
+  } : null,
+  metadata: row.metadata || {},
+});
 
 const MacraCancelReasonsAdminPage: React.FC = () => {
   const [rows, setRows] = useState<MacraCancelReasonRow[]>([]);
@@ -182,6 +221,8 @@ const MacraCancelReasonsAdminPage: React.FC = () => {
     loadRows();
   }, []);
 
+  const productionRows = useMemo(() => rows.filter(row => !row.isScreenDemo), [rows]);
+
   const reasonOptions = useMemo(() => {
     const reasons = Array.from(new Set(rows.map(row => row.reason || row.reasonLabel).filter(Boolean))) as string[];
     return reasons.sort((left, right) => humanize(left).localeCompare(humanize(right)));
@@ -214,10 +255,9 @@ const MacraCancelReasonsAdminPage: React.FC = () => {
   }, [rows, search, reasonFilter, hideScreenDemo]);
 
   const stats = useMemo(() => {
-    const productionRows = rows.filter(row => !row.isScreenDemo);
     const users = new Set(productionRows.map(row => row.userId).filter(Boolean));
     const reasonCounts = productionRows.reduce<Record<string, number>>((acc, row) => {
-      const key = row.reasonLabel || humanize(row.reason);
+      const key = getReasonLabel(row);
       acc[key] = (acc[key] || 0) + 1;
       return acc;
     }, {});
@@ -229,7 +269,50 @@ const MacraCancelReasonsAdminPage: React.FC = () => {
       topReasonLabel: topReason?.[0] || 'None yet',
       topReasonCount: topReason?.[1] || 0,
     };
-  }, [rows]);
+  }, [productionRows, rows.length]);
+
+  const reasonChartRows = useMemo(() => {
+    const buckets = new Map<string, {
+      key: string;
+      label: string;
+      count: number;
+      users: Set<string>;
+      planCounts: Map<string, number>;
+    }>();
+
+    productionRows.forEach(row => {
+      const key = getReasonKey(row);
+      const bucket = buckets.get(key) || {
+        key,
+        label: getReasonLabel(row),
+        count: 0,
+        users: new Set<string>(),
+        planCounts: new Map<string, number>(),
+      };
+      bucket.count += 1;
+      if (row.userId) bucket.users.add(row.userId);
+      const planLabel = humanize(row.selectedPlanPeriod || row.selectedPlanId || 'unknown_plan');
+      bucket.planCounts.set(planLabel, (bucket.planCounts.get(planLabel) || 0) + 1);
+      buckets.set(key, bucket);
+    });
+
+    return Array.from(buckets.values())
+      .map(bucket => {
+        const topPlan = Array.from(bucket.planCounts.entries()).sort((a, b) => b[1] - a[1])[0];
+        return {
+          key: bucket.key,
+          label: bucket.label,
+          count: bucket.count,
+          uniqueUsers: bucket.users.size,
+          percent: stats.total ? Math.round((bucket.count / stats.total) * 100) : 0,
+          topPlanLabel: topPlan?.[0] || 'Unknown',
+          topPlanCount: topPlan?.[1] || 0,
+        };
+      })
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [productionRows, stats.total]);
+
+  const maxReasonCount = Math.max(...reasonChartRows.map(row => row.count), 1);
 
   const copyToClipboard = async (value: string, id: string) => {
     try {
@@ -239,6 +322,42 @@ const MacraCancelReasonsAdminPage: React.FC = () => {
     } catch (err) {
       console.error('Failed to copy:', err);
     }
+  };
+
+  const copyReasonChartToClipboard = async () => {
+    const payload = {
+      reportType: 'macra-cancel-reasons-chart',
+      generatedAt: new Date().toISOString(),
+      collection: COLLECTION_NAME,
+      loadedResponseCount: rows.length,
+      productionResponseCount: stats.total,
+      screenDemoCount: stats.screenDemo,
+      uniqueUserCount: stats.uniqueUsers,
+      filters: {
+        search: search.trim(),
+        reasonFilter,
+        hideScreenDemo,
+        visibleResponseCount: filteredRows.length,
+      },
+      summary: {
+        topReasonLabel: stats.topReasonLabel,
+        topReasonCount: stats.topReasonCount,
+      },
+      reasonChart: reasonChartRows,
+      loadedResponses: rows.map(buildCancelReasonExport),
+    };
+
+    const report = [
+      'Macra Cancel Reasons Chart Export',
+      `Generated: ${new Date().toLocaleString()}`,
+      `Loaded responses: ${rows.length}`,
+      '',
+      '```json',
+      JSON.stringify(payload, null, 2),
+      '```',
+    ].join('\n');
+
+    await copyToClipboard(report, 'reason-chart');
   };
 
   return (
@@ -282,6 +401,59 @@ const MacraCancelReasonsAdminPage: React.FC = () => {
             <MetricCard label="Unique users" value={stats.uniqueUsers.toString()} />
             <MetricCard label="Top reason" value={stats.topReasonLabel} caption={stats.topReasonCount ? `${stats.topReasonCount} response${stats.topReasonCount === 1 ? '' : 's'}` : 'No responses'} />
             <MetricCard label="Screen demo" value={stats.screenDemo.toString()} caption={hideScreenDemo ? 'Hidden from table' : 'Visible in table'} />
+          </div>
+
+          <div className="mb-6 rounded-xl border border-[#343941] bg-[#1a1e24] p-4">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#d7ff00]/10 text-[#d7ff00]">
+                  <BarChart3 className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-500">Reason chart</p>
+                  <p className="mt-1 text-sm text-gray-400">
+                    Production cancellation reasons with user counts and plan mix.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => void copyReasonChartToClipboard()}
+                disabled={rows.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#343941] bg-[#111317] px-4 py-2 text-sm font-semibold text-gray-200 transition hover:border-[#d7ff00]/50 hover:text-[#d7ff00] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {copiedId === 'reason-chart' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copiedId === 'reason-chart' ? 'Copied' : 'Copy chart'}
+              </button>
+            </div>
+
+            {reasonChartRows.length === 0 ? (
+              <div className="rounded-lg border border-[#343941] bg-[#111317] px-4 py-6 text-sm text-gray-400">
+                No production cancel reasons loaded yet.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {reasonChartRows.map(row => (
+                  <div key={row.key} className="grid grid-cols-1 gap-2 lg:grid-cols-[220px_1fr_170px] lg:items-center">
+                    <div>
+                      <p className="truncate text-sm font-semibold text-white">{row.label}</p>
+                      <p className="mt-0.5 font-mono text-xs text-gray-500">{row.key}</p>
+                    </div>
+                    <div className="h-9 overflow-hidden rounded-lg border border-[#343941] bg-[#111317]">
+                      <div
+                        className="flex h-full min-w-[44px] items-center justify-end rounded-r-md bg-[#d7ff00]/80 px-3 text-sm font-bold text-[#111317]"
+                        style={{ width: `${Math.max(8, (row.count / maxReasonCount) * 100)}%` }}
+                      >
+                        {row.count}
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      {row.percent}% · {row.uniqueUsers} user{row.uniqueUsers === 1 ? '' : 's'} · {row.topPlanLabel}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="mb-6 rounded-xl border border-[#343941] bg-[#1a1e24] p-4">
@@ -390,7 +562,7 @@ const MacraCancelReasonsAdminPage: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-4 py-4 align-top">
-                          <p className="font-semibold text-white">{row.reasonLabel || humanize(row.reason)}</p>
+                          <p className="font-semibold text-white">{getReasonLabel(row)}</p>
                           <p className="mt-1 font-mono text-xs text-gray-500">{row.reason || 'unknown_reason'}</p>
                         </td>
                         <td className="px-4 py-4 align-top text-gray-300">{humanize(row.trigger)}</td>
