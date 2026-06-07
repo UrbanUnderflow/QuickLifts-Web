@@ -106,6 +106,7 @@ service cloud.firestore {
     function isExplicitlyRuledCollection(collectionName) {
       return collectionName in [
         'beta-applications',
+        'coach-nora-vault',
         'company-config',
         'document-notes',
         'programming-access',
@@ -429,6 +430,18 @@ service cloud.firestore {
       allow update: if isCanonicalRootUserUpdate(userId);
 
       allow read: if true;
+    }
+
+    // Train Nora knowledge vault. Each entry is owned by the coach whose uid
+    // equals coachId. The owning coach manages their entries; any signed-in
+    // user (e.g. a linked athlete's Nora) may read so it can answer questions
+    // from the coach's shared context.
+    match /coach-nora-vault/{entryId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.coachId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && resource.data.coachId == request.auth.uid;
     }
 
     // Compatibility fallback: unknown collections are no longer public. They

@@ -33,6 +33,10 @@ type AssignmentRecord = {
   protocolVariantId?: string;
   protocolLabel?: string;
   protocolVariantLabel?: string;
+  curriculumSlateId?: string;
+  curriculumSlotIndex?: number;
+  curriculumIsDueToday?: boolean;
+  isPrimaryForDate?: boolean;
   createdAt: number;
   updatedAt: number;
   status?: string;
@@ -61,7 +65,20 @@ type ResponsivenessSummary = {
 };
 
 function parseRecipients(): string[] {
-  return ['tre@fitwithpulse.ai'];
+  const raw =
+    process.env.PULSECHECK_PROTOCOL_MONITORING_ALERT_RECIPIENTS ||
+    process.env.PROTOCOL_MONITORING_ALERT_RECIPIENTS ||
+    'tre@fitwithpulse.ai';
+
+  const recipients = Array.from(
+    new Set(
+      raw
+        .split(',')
+        .map((email) => email.trim())
+        .filter((email) => email.includes('@'))
+    )
+  );
+  return recipients.length ? recipients : ['tre@fitwithpulse.ai'];
 }
 
 function toUtcDayKey(ms: number): string {
@@ -86,6 +103,28 @@ function formatRateStats(current: number, baseline: number) {
   return `${formatPercent(current)} current vs ${formatPercent(baseline)} baseline (${delta >= 0 ? '+' : ''}${formatPercent(delta)})`;
 }
 
+function isCurriculumSlateAssignment(assignment: AssignmentRecord) {
+  return (
+    Boolean(assignment.curriculumSlateId) ||
+    typeof assignment.curriculumSlotIndex === 'number' ||
+    typeof assignment.curriculumIsDueToday === 'boolean' ||
+    typeof assignment.isPrimaryForDate === 'boolean'
+  );
+}
+
+function isMonitorableProtocolAssignment(assignment: AssignmentRecord) {
+  if (!assignment.protocolId) return false;
+  if (!isCurriculumSlateAssignment(assignment)) return true;
+
+  // Six-slot curriculum slates write queued protocol docs up front. For ops
+  // volume monitoring, count only the protocol that is actually due today.
+  return (
+    assignment.isPrimaryForDate === true ||
+    assignment.curriculumIsDueToday === true ||
+    assignment.curriculumSlotIndex === 1
+  );
+}
+
 function countBy<T>(items: T[], keyFn: (item: T) => string): Array<[string, number]> {
   const counts = new Map<string, number>();
   for (const item of items) {
@@ -97,7 +136,7 @@ function countBy<T>(items: T[], keyFn: (item: T) => string): Array<[string, numb
 }
 
 function buildVolumeAlert(assignments: AssignmentRecord[], windowStartMs: number, baselineStartMs: number): AlertItem | null {
-  const protocolAssignments = assignments.filter((assignment) => Boolean(assignment.protocolId));
+  const protocolAssignments = assignments.filter(isMonitorableProtocolAssignment);
   const currentAssignments = protocolAssignments.filter((assignment) => assignment.createdAt >= windowStartMs);
   const baselineAssignments = protocolAssignments.filter((assignment) => assignment.createdAt >= baselineStartMs && assignment.createdAt < windowStartMs);
   const currentCount = currentAssignments.length;
@@ -117,9 +156,9 @@ function buildVolumeAlert(assignments: AssignmentRecord[], windowStartMs: number
 
   return {
     kind: 'assignment_volume',
-    title: 'Protocol assignment volume spike',
+    title: 'Primary protocol assignment volume spike',
     severity: 'critical',
-    summary: `Protocol assignment volume jumped to ${currentCount} in the last 24 hours.`,
+    summary: `Primary protocol assignment volume jumped to ${currentCount} in the last 24 hours.`,
     detailLines: [
       `Baseline average over the prior 7 days: ${baselineAverage.toFixed(1)} assignments per day.`,
       `Spike threshold: ${spikeThreshold} assignments in 24h.`,
@@ -137,7 +176,8 @@ function buildDeferOverrideAlert(events: AssignmentEventRecord[], assignmentsByI
 
   const latestOutcomeByAssignment = new Map<string, AssignmentEventRecord>();
   for (const event of meaningfulEvents) {
-    if (!assignmentsById.get(event.assignmentId)?.protocolId) continue;
+    const assignment = assignmentsById.get(event.assignmentId);
+    if (!assignment || !isMonitorableProtocolAssignment(assignment)) continue;
     const existing = latestOutcomeByAssignment.get(event.assignmentId);
     if (!existing || event.eventAt > existing.eventAt) {
       latestOutcomeByAssignment.set(event.assignmentId, event);
@@ -291,7 +331,7 @@ function renderEmailHtml(args: {
           <div style="margin-top:18px;padding:16px;border-radius:16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
               <div>
-                <div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#94a3b8;">Current assignment count</div>
+                <div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#94a3b8;">Current primary protocol count</div>
                 <div style="font-size:22px;font-weight:800;margin-top:4px;">${args.currentAssignmentCount}</div>
               </div>
               <div>
@@ -308,7 +348,7 @@ function renderEmailHtml(args: {
               </div>
             </div>
             <div style="margin-top:12px;color:#cbd5e1;font-size:13px;line-height:1.7;">
-              Baseline assignment average: <strong>${args.baselineAssignmentAverage.toFixed(1)}</strong> per day
+              Baseline primary protocol average: <strong>${args.baselineAssignmentAverage.toFixed(1)}</strong> per day
               <br/>
               ${escapeHtml(formatRateStats(args.deferOverrideRate, args.baselineDeferOverrideRate))}
             </div>
@@ -350,6 +390,10 @@ async function loadAssignmentsSince(db: FirebaseFirestore.Firestore, sinceMs: nu
       protocolVariantId: typeof data.protocolVariantId === 'string' ? data.protocolVariantId : undefined,
       protocolLabel: typeof data.protocolLabel === 'string' ? data.protocolLabel : undefined,
       protocolVariantLabel: typeof data.protocolVariantLabel === 'string' ? data.protocolVariantLabel : undefined,
+      curriculumSlateId: typeof data.curriculumSlateId === 'string' ? data.curriculumSlateId : undefined,
+      curriculumSlotIndex: typeof data.curriculumSlotIndex === 'number' ? data.curriculumSlotIndex : undefined,
+      curriculumIsDueToday: typeof data.curriculumIsDueToday === 'boolean' ? data.curriculumIsDueToday : undefined,
+      isPrimaryForDate: typeof data.isPrimaryForDate === 'boolean' ? data.isPrimaryForDate : undefined,
       createdAt: Number(data.createdAt || 0),
       updatedAt: Number(data.updatedAt || 0),
       status: typeof data.status === 'string' ? data.status : undefined,
@@ -401,7 +445,7 @@ export const handler: Handler = async () => {
   const now = new Date();
   const nowMs = now.getTime();
   const currentWindowStartMs = nowMs - CURRENT_WINDOW_MS;
-  const baselineWindowStartMs = nowMs - BASELINE_WINDOW_MS;
+  const baselineWindowStartMs = currentWindowStartMs - BASELINE_WINDOW_MS;
   const adminUrl = `${getBaseSiteUrl()}/admin/systemOverview`;
   const recipients = parseRecipients();
 
@@ -434,13 +478,19 @@ export const handler: Handler = async () => {
       if (gate.send) alerts.push(negativeAlert);
     }
 
-    const protocolAssignments = assignments.filter((assignment) => Boolean(assignment.protocolId));
+    const protocolAssignments = assignments.filter(isMonitorableProtocolAssignment);
+    const protocolAssignmentIds = new Set(protocolAssignments.map((assignment) => assignment.id));
+    const protocolOutcomeEvents = events.filter(
+      (event) =>
+        protocolAssignmentIds.has(event.assignmentId) &&
+        ['completed', 'deferred', 'overridden'].includes(event.eventType)
+    );
     const currentAssignments = protocolAssignments.filter((assignment) => assignment.createdAt >= currentWindowStartMs);
     const baselineAssignments = protocolAssignments.filter((assignment) => assignment.createdAt >= baselineWindowStartMs && assignment.createdAt < currentWindowStartMs);
-    const currentResolved = events.filter((event) => event.eventAt >= currentWindowStartMs && ['completed', 'deferred', 'overridden'].includes(event.eventType)).length;
-    const baselineResolved = events.filter((event) => event.eventAt >= baselineWindowStartMs && event.eventAt < currentWindowStartMs && ['completed', 'deferred', 'overridden'].includes(event.eventType)).length;
-    const currentRejected = events.filter((event) => event.eventAt >= currentWindowStartMs && ['deferred', 'overridden'].includes(event.eventType)).length;
-    const baselineRejected = events.filter((event) => event.eventAt >= baselineWindowStartMs && event.eventAt < currentWindowStartMs && ['deferred', 'overridden'].includes(event.eventType)).length;
+    const currentResolved = protocolOutcomeEvents.filter((event) => event.eventAt >= currentWindowStartMs).length;
+    const baselineResolved = protocolOutcomeEvents.filter((event) => event.eventAt >= baselineWindowStartMs && event.eventAt < currentWindowStartMs).length;
+    const currentRejected = protocolOutcomeEvents.filter((event) => event.eventAt >= currentWindowStartMs && ['deferred', 'overridden'].includes(event.eventType)).length;
+    const baselineRejected = protocolOutcomeEvents.filter((event) => event.eventAt >= baselineWindowStartMs && event.eventAt < currentWindowStartMs && ['deferred', 'overridden'].includes(event.eventType)).length;
 
     const currentRate = currentResolved > 0 ? currentRejected / currentResolved : 0;
     const baselineRate = baselineResolved > 0 ? baselineRejected / baselineResolved : 0;

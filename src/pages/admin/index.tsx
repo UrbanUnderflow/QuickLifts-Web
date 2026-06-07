@@ -46,6 +46,12 @@ const AdminCard: React.FC<AdminCardProps> = ({ title, description, icon, link })
 
 const adminCardsData = [
   {
+    title: "Coach Dashboard v2 (Demo)",
+    description: "New coach dashboard with the clean PulseCheck sidebar layout — Home, Athlete Alerts, Team Roster, Train Nora knowledge vault, Reports. Mock data, no auth required, for design review.",
+    icon: <Users2 className="w-5 h-5" />,
+    link: "/coach/dashboard-v2-demo"
+  },
+  {
     title: "Group Meet",
     description: "Create tracked availability requests, generate one link per invitee, and collect scheduling responses by deadline.",
     icon: <Calendar className="w-5 h-5" />,

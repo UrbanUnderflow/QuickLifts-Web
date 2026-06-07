@@ -922,6 +922,7 @@ const toInviteLink = (id: string, data: Record<string, any>): PulseCheckInviteLi
   lastEmailSentByEmail: data.lastEmailSentByEmail || '',
   lastEmailMessageId: data.lastEmailMessageId || '',
   emailSendCount: Math.max(0, Number(data.emailSendCount || 0)),
+  prefilledProfileImageUrl: normalizeString(data.prefilledProfileImageUrl),
 });
 
 const normalizeInviteActivityEventType = (value: unknown): PulseCheckInviteActivityEventType => {
@@ -1451,6 +1452,22 @@ export const pulseCheckProvisioningService = {
       userId: normalizeString(input.sentByUserId),
       ...(input.success ? {} : { errorMessage: normalizeString(input.errorMessage), needsFollowUp: true }),
       createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  // Front-load onboarding data onto an admin-activation invite so the coach's
+  // post-activation flow opens pre-populated. Currently the profile photo.
+  async setAdminActivationInvitePrefill(
+    token: string,
+    prefill: { profileImageUrl?: string }
+  ): Promise<void> {
+    const normalizedToken = normalizeString(token);
+    if (!normalizedToken) return;
+
+    const inviteDocRef = doc(db, INVITE_LINKS_COLLECTION, normalizedToken);
+    await updateDoc(inviteDocRef, {
+      prefilledProfileImageUrl: normalizeString(prefill.profileImageUrl),
       updatedAt: serverTimestamp(),
     });
   },

@@ -32,6 +32,14 @@ service firebase.storage {
       allow write: if isAdmin();
     }
 
+    // Train Nora knowledge vault uploads. Files live under the owning coach's
+    // uid; only that coach may write. Any signed-in user may read (e.g. a
+    // linked athlete's Nora pulling shared context).
+    match /coach-nora-vault/{coachId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == coachId;
+    }
+
     // Default deny for everything else (tight by default).
     match /{allPaths=**} {
       allow read, write: if false;

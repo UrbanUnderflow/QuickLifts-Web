@@ -1,6 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { speakStep, stopNarration } from '../../../utils/tts';
+import { buildNoraOnboardingWelcome } from '../../../lib/noraOnboardingVoice';
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { browserPopupRedirectResolver, createUserWithEmailAndPassword, fetchSignInMethodsForEmail, GoogleAuthProvider, OAuthProvider, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut, type User as FirebaseAuthUser } from 'firebase/auth';
 import { AlertTriangle, ArrowRight, CheckCircle2, Eye, EyeOff, Loader2, LogOut, Sparkles, Users, type LucideIcon } from 'lucide-react';
@@ -20,6 +23,7 @@ type AdminActivationPageProps = {
     organizationName: string;
     teamName: string;
     status: string;
+    prefilledProfileImageUrl: string;
   };
 };
 
@@ -48,6 +52,11 @@ const ValueRow = ({ icon: Icon, title, body }: { icon: LucideIcon; title: string
 );
 
 const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
+  const router = useRouter();
+  // Screen Demo mode: bypass auth entirely so anyone can click straight through
+  // the onboarding flow. Gated behind ?demo=1 (see /admin/screenDemo).
+  const isDemo = router.query.demo === '1';
+  const demoNextUrl = `/PulseCheck/post-activation?organizationId=${encodeURIComponent(invite.organizationId)}&teamId=${encodeURIComponent(invite.teamId)}&orgName=${encodeURIComponent(invite.organizationName)}&teamName=${encodeURIComponent(invite.teamName)}&demo=1`;
   const [mode, setMode] = useState<AuthMode>('create-account');
   const [authReady, setAuthReady] = useState(false);
   const [authUser, setAuthUser] = useState<FirebaseAuthUser | null>(null);
@@ -155,7 +164,9 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
       bodyWeight: [],
       macros: {},
       profileImage: {
-        profileImageURL: '',
+        // Front-loaded by the admin before activation (see provisioning console),
+        // so the coach's onboarding opens with their photo already set.
+        profileImageURL: invite.prefilledProfileImageUrl || '',
         imageOffsetWidth: 0,
         imageOffsetHeight: 0,
       },
@@ -184,6 +195,10 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
   const handleCreateAccount = async (event: React.FormEvent) => {
     event.preventDefault();
     if (submitting) return;
+    if (isDemo) {
+      void router.push(demoNextUrl);
+      return;
+    }
 
     const email = createForm.email.trim().toLowerCase();
     const username = normalizeUsername(createForm.username);
@@ -240,6 +255,10 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
   const handleSignIn = async (event: React.FormEvent) => {
     event.preventDefault();
     if (submitting) return;
+    if (isDemo) {
+      void router.push(demoNextUrl);
+      return;
+    }
 
     const email = signInForm.email.trim().toLowerCase();
     if (!email || !signInForm.password) {
@@ -280,6 +299,10 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
   // offered here because the invite is keyed on email.
   const handleSocialAuth = async (provider: 'google' | 'apple') => {
     if (submitting) return;
+    if (isDemo) {
+      void router.push(demoNextUrl);
+      return;
+    }
 
     setSubmitting(true);
     setActiveProvider(provider);
@@ -408,6 +431,29 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
   const serifAccent: React.CSSProperties = { fontFamily: 'Fraunces, serif', fontStyle: 'italic' };
   const coachFirstName = (invite.targetName || '').trim().split(/\s+/)[0] || '';
 
+  // Nora greets the coach by name when they open the link. Browsers block audio
+  // autoplay without a gesture, so we fire on the first interaction with the page
+  // (and only once). Uses the global Nora ElevenLabs voice (see /admin/ai-voice).
+  const noraGreetedRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (invite.status && invite.status !== 'active') return;
+
+    const greet = () => {
+      if (noraGreetedRef.current) return;
+      noraGreetedRef.current = true;
+      events.forEach((event) => window.removeEventListener(event, greet));
+      void speakStep(buildNoraOnboardingWelcome(coachFirstName), { fallbackToBrowser: false }).catch(() => {});
+    };
+    const events: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'touchstart'];
+    events.forEach((event) => window.addEventListener(event, greet, { passive: true }));
+
+    return () => {
+      events.forEach((event) => window.removeEventListener(event, greet));
+      stopNarration();
+    };
+  }, [coachFirstName, invite.status]);
+
   return (
     <div className="relative min-h-screen overflow-hidden text-white" style={{ background: PC.pageBg, fontFamily: 'Switzer, sans-serif' }}>
       <Head>
@@ -421,6 +467,13 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
         />
           <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700,800,900&display=swap" />
       </Head>
+
+      {isDemo ? (
+        <div className="sticky top-0 z-40 flex items-center justify-center gap-2 px-4 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-white" style={{ background: PC.purple }}>
+          <Sparkles className="h-3.5 w-3.5" />
+          Screen Demo — auth is bypassed. Press continue with empty fields to walk the flow.
+        </div>
+      ) : null}
 
       {/* Ambient brand glow */}
       <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.22) 0%, transparent 70%)' }} />
@@ -944,6 +997,7 @@ export const getServerSideProps: GetServerSideProps<AdminActivationPageProps> = 
           organizationName,
           teamName,
           status: String(invite.status || 'active'),
+          prefilledProfileImageUrl: String(invite.prefilledProfileImageUrl || ''),
         },
       },
     };

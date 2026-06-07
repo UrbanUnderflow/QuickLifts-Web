@@ -658,6 +658,9 @@ export interface PulseCheckInviteLink {
   lastEmailSentByEmail?: string;
   lastEmailMessageId?: string;
   emailSendCount?: number;
+  // Front-loaded onboarding data an admin sets before the coach activates, so the
+  // post-activation flow opens pre-populated. Extensible; starts with the photo.
+  prefilledProfileImageUrl?: string;
 }
 
 export interface PulseCheckInviteActivity {

@@ -156,6 +156,10 @@ export default function PulseCheckPostActivationPage() {
   const currentUserLoading = useUserLoading();
   const organizationId = typeof router.query.organizationId === 'string' ? router.query.organizationId : '';
   const teamId = typeof router.query.teamId === 'string' ? router.query.teamId : '';
+  // Screen Demo mode (see /admin/screenDemo): bypass auth + real saves so the
+  // onboarding can be walked end-to-end. Strictly gated — real flow untouched.
+  const isDemo = router.query.demo === '1';
+  const demoTeamName = typeof router.query.teamName === 'string' ? router.query.teamName : 'Your team';
 
   const [membership, setMembership] = useState<PulseCheckTeamMembership | null>(null);
   const [organization, setOrganization] = useState<PulseCheckOrganization | null>(null);
@@ -253,6 +257,15 @@ export default function PulseCheckPostActivationPage() {
   }, [currentUser]);
 
   useEffect(() => {
+    if (!isDemo) return;
+    setProfileForm((current) => ({
+      ...current,
+      displayName: current.displayName || 'Tre',
+      title: current.title || 'Head Coach',
+    }));
+  }, [isDemo]);
+
+  useEffect(() => {
     if (!membership) return;
     setProfileForm((current) => ({
       ...current,
@@ -302,6 +315,11 @@ export default function PulseCheckPostActivationPage() {
 
   const handleSaveProfile = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (isDemo) {
+      setMessage(null);
+      setStep(2);
+      return;
+    }
     if (!currentUser || !membership || !organization || !team) return;
 
     const displayName = profileForm.displayName.trim();
@@ -450,7 +468,7 @@ export default function PulseCheckPostActivationPage() {
     }
   };
 
-  if (currentUserLoading || initializing) {
+  if (!isDemo && (currentUserLoading || initializing)) {
     return (
       <div className="flex min-h-screen items-center justify-center text-white" style={{ background: PC.pageBg }}>
         <Loader2 className="h-8 w-8 animate-spin" style={{ color: PC.purpleSoft }} />
@@ -458,11 +476,11 @@ export default function PulseCheckPostActivationPage() {
     );
   }
 
-  if (!currentUser) {
+  if (!isDemo && !currentUser) {
     return null;
   }
 
-  if (!membership || membership.role !== 'team-admin') {
+  if (!isDemo && (!membership || membership.role !== 'team-admin')) {
     return (
       <div className="min-h-screen px-4 py-16 text-white" style={{ background: PC.pageBg }}>
         <div className="mx-auto max-w-3xl rounded-[32px] border p-10 text-center shadow-2xl" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
@@ -498,6 +516,13 @@ export default function PulseCheckPostActivationPage() {
           <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700,800,900&display=swap" />
       </Head>
 
+      {isDemo ? (
+        <div className="sticky top-0 z-40 flex items-center justify-center gap-2 px-4 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-white" style={{ background: PC.purple }}>
+          <Sparkles className="h-3.5 w-3.5" />
+          Screen Demo — nothing is saved. Advance through each step to reach the dashboard.
+        </div>
+      ) : null}
+
       <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.20) 0%, transparent 70%)' }} />
 
       <main className="relative mx-auto w-full max-w-3xl px-4 py-8 md:px-6 md:py-10">
@@ -508,7 +533,7 @@ export default function PulseCheckPostActivationPage() {
             <span className="text-base font-bold tracking-tight" style={{ fontFamily: 'Switzer, sans-serif' }}>PulseCheck</span>
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>Let's set up {team?.displayName || 'your team'}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>Let's set up {team?.displayName || (isDemo ? demoTeamName : 'your team')}</p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl" style={{ fontFamily: 'Switzer, sans-serif' }}>
               A few quick steps and you're live
             </h1>
@@ -546,7 +571,7 @@ export default function PulseCheckPostActivationPage() {
                         <img src={profileImagePreview} alt="Profile preview" className="h-full w-full object-cover" />
                       ) : (
                         <span className="text-4xl font-semibold text-zinc-500">
-                          {(profileForm.displayName || currentUser.displayName || currentUser.username || 'U').charAt(0).toUpperCase()}
+                          {(profileForm.displayName || currentUser?.displayName || currentUser?.username || 'U').charAt(0).toUpperCase()}
                         </span>
                       )}
                     </div>
@@ -559,7 +584,7 @@ export default function PulseCheckPostActivationPage() {
                         onChange={(event) => {
                           const file = event.target.files?.[0] || null;
                           setProfileImageFile(file);
-                          setProfileImagePreview(file ? URL.createObjectURL(file) : currentUser.profileImage?.profileImageURL || '');
+                          setProfileImagePreview(file ? URL.createObjectURL(file) : currentUser?.profileImage?.profileImageURL || '');
                         }}
                       />
                     </label>
@@ -1033,7 +1058,7 @@ export default function PulseCheckPostActivationPage() {
                     You're all set, Coach 🎉
                   </h2>
                   <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-zinc-300">
-                    {team?.displayName || 'Your team'} is live. As your athletes join, you'll see their readiness and mental-performance
+                    {team?.displayName || (isDemo ? demoTeamName : 'Your team')} is live. As your athletes join, you'll see their readiness and mental-performance
                     signals right in your workspace.
                   </p>
 
@@ -1053,11 +1078,15 @@ export default function PulseCheckPostActivationPage() {
 
                   <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
                     <Link
-                      href={`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
+                      href={
+                        isDemo
+                          ? '/coach/dashboard/demo'
+                          : `/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`
+                      }
                       className="inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
                       style={{ background: PC.purple }}
                     >
-                      Open my workspace
+                      {isDemo ? 'Open the coach dashboard' : 'Open my workspace'}
                       <ChevronRight className="h-4 w-4" />
                     </Link>
                     {athleteInviteLinks.length === 0 ? (

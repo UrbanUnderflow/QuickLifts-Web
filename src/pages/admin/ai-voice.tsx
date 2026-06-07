@@ -15,6 +15,7 @@ import type { SimAudioAssetRef } from '../../api/firebase/mentaltraining/audioAs
 import type { PulseCheckProtocolDefinition } from '../../api/firebase/mentaltraining';
 import { SIM_VARIANTS_COLLECTION } from '../../api/firebase/mentaltraining/collections';
 import { persistVoiceConfig, speakStep, stopNarration } from '../../utils/tts';
+import { NORA_DYNAMIC_LINES, type NoraDynamicLine } from '../../lib/noraOnboardingVoice';
 import { resolvePulseCheckFunctionUrl } from '../../api/firebase/mentaltraining/pulseCheckFunctionsUrl';
 import {
   AiVoiceConfig,
@@ -1798,6 +1799,9 @@ const AdminAiVoice: React.FC = () => {
   const [punctuationPauses, setPunctuationPauses] = useState(true);
   const [sampleText, setSampleText] = useState(sampleScripts[0]);
   const [voiceExpanded, setVoiceExpanded] = useState(true);
+  // Dynamic Nora lines (name inserted at play time, synthesized on the fly).
+  const [dynamicLineName, setDynamicLineName] = useState('Tre');
+  const [dynamicLinePlayingId, setDynamicLinePlayingId] = useState<string | null>(null);
 
   // Sound effects state
   const [playingSound, setPlayingSound] = useState<string | null>(null);
@@ -2657,6 +2661,38 @@ const AdminAiVoice: React.FC = () => {
 
   const handleStop = () => { stopNarration(); setPlaying(false); };
 
+  // Dynamic Nora line preview — same voice config as the main preview, but the
+  // text is built with the entered name and synthesized on the fly.
+  const handlePlayDynamicLine = async (line: NoraDynamicLine) => {
+    setError(null);
+    stopNarration();
+    setPlaying(false);
+    setDynamicLinePlayingId(line.id);
+    try {
+      const choice: VoiceChoice =
+        provider === 'elevenlabs'
+          ? {
+              provider: 'elevenlabs',
+              id: selectedVoiceId,
+              label: voiceLabel,
+              presetId: selectedPresetId,
+              settings: shouldUseElevenLabsVoiceDefaults(selectedPresetId) ? null : elevenLabsSettings,
+              punctuationPauses,
+            }
+          : { provider: 'openai', id: selectedVoiceId, label: voiceLabel };
+      await speakStep(
+        line.build(dynamicLineName),
+        { onEnd: () => setDynamicLinePlayingId(null), onError: () => setDynamicLinePlayingId(null), fallbackToBrowser: false },
+        choice
+      );
+    } catch {
+      setError('Preview failed. Check provider API key and voice settings.');
+      setDynamicLinePlayingId(null);
+    }
+  };
+
+  const handleStopDynamicLine = () => { stopNarration(); setDynamicLinePlayingId(null); };
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -3224,6 +3260,54 @@ const AdminAiVoice: React.FC = () => {
                         <Save className="w-4 h-4" />
                         {saving ? 'Saving…' : 'Save Default Voice'}
                       </button>
+                    </div>
+
+                    {/* Dynamic Nora lines — name is inserted at play time, so these
+                        are synthesized live (no stored file) using the voice above. */}
+                    <div className="mt-8 rounded-2xl border border-white/10 bg-zinc-950/40 p-5">
+                      <div className="flex flex-col gap-1">
+                        <div className="text-white font-medium">Dynamic Nora Lines</div>
+                        <div className="text-xs text-zinc-500">
+                          Personalized lines that insert a name on the fly (no stored MP3). Type a name and play it with the current voice.
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex items-center gap-3">
+                        <label className="text-xs text-zinc-400">Coach name</label>
+                        <input
+                          value={dynamicLineName}
+                          onChange={(e) => setDynamicLineName(e.target.value)}
+                          placeholder="Tre"
+                          className="w-48 rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/10"
+                        />
+                      </div>
+
+                      <div className="mt-4 space-y-3">
+                        {NORA_DYNAMIC_LINES.map((line) => {
+                          const isPlaying = dynamicLinePlayingId === line.id;
+                          return (
+                            <div key={line.id} className="rounded-xl border border-zinc-800 bg-black/30 p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-semibold text-white">{line.label}</div>
+                                  <div className="mt-0.5 text-xs text-zinc-500">{line.description}</div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => (isPlaying ? handleStopDynamicLine() : void handlePlayDynamicLine(line))}
+                                  className="flex flex-shrink-0 items-center gap-2 rounded-xl bg-zinc-800 border border-zinc-700 px-4 py-2 text-sm text-white transition-colors hover:bg-zinc-700"
+                                >
+                                  {isPlaying ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                                  {isPlaying ? 'Stop' : 'Play'}
+                                </button>
+                              </div>
+                              <div className="mt-3 rounded-lg border border-white/5 bg-zinc-900/60 px-3 py-2 text-sm italic text-zinc-300">
+                                “{line.build(dynamicLineName)}”
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 </motion.div>

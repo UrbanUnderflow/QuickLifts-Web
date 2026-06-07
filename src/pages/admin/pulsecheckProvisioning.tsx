@@ -10,6 +10,7 @@ import {
   Download,
   ExternalLink,
   HeartPulse,
+  Image as ImageIcon,
   Loader2,
   MailPlus,
   MoreHorizontal,
@@ -723,6 +724,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [organizationImageUploadingId, setOrganizationImageUploadingId] = useState<string | null>(null);
   const [teamImageUploadingId, setTeamImageUploadingId] = useState<string | null>(null);
+  const [coachPhotoUploadingToken, setCoachPhotoUploadingToken] = useState<string | null>(null);
   const [sportOptions, setSportOptions] = useState<PulseCheckSportConfigurationEntry[]>(() => getDefaultPulseCheckSports());
   const [teamCommercialDrafts, setTeamCommercialDrafts] = useState<Record<string, PulseCheckTeamCommercialConfig>>({});
   const [isProvisioningModalOpen, setIsProvisioningModalOpen] = useState(false);
@@ -1406,6 +1408,36 @@ const PulseCheckProvisioningPage: React.FC = () => {
       }
     },
     [loadData, uploadInvitePreviewImage]
+  );
+
+  // Front-load a profile photo onto an admin-activation invite, so the coach's
+  // onboarding opens with their photo already set (and changeable from there).
+  const handleCoachProfilePrefillUpload = useCallback(
+    async (token: string, file?: File | null) => {
+      if (!file || !token) return;
+
+      setCoachPhotoUploadingToken(token);
+      setMessage(null);
+
+      try {
+        const extension = file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+        const fileName = `${Date.now()}-${sanitizeStorageSegment(file.name.replace(/\.[^.]+$/, ''))}.${sanitizeStorageSegment(extension || 'jpg')}`;
+        const path = `pulsecheck/provisioning/admin-activation/${sanitizeStorageSegment(token)}/profile/${fileName}`;
+        const fileRef = storageRef(storage, path);
+        await uploadBytes(fileRef, file, { contentType: file.type || 'image/jpeg' });
+        const downloadUrl = await getDownloadURL(fileRef);
+
+        await pulseCheckProvisioningService.setAdminActivationInvitePrefill(token, { profileImageUrl: downloadUrl });
+        await loadData();
+        setMessage({ type: 'success', text: 'Coach profile photo pre-loaded. It will be set when they activate.' });
+      } catch (error) {
+        console.error('[PulseCheckProvisioning] Failed to pre-load coach profile photo:', error);
+        setMessage({ type: 'error', text: 'Failed to upload the coach profile photo.' });
+      } finally {
+        setCoachPhotoUploadingToken((current) => (current === token ? null : current));
+      }
+    },
+    [loadData]
   );
 
   const handleRevertTeamInviteImage = useCallback(
@@ -5461,6 +5493,43 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                         <p className="break-all text-xs leading-6 text-white">{activeLink.activationUrl}</p>
                                       </div>
                                       <p className="mt-1 text-[11px] text-zinc-500">Link created: {formatTimestamp(activeLink.createdAt)}</p>
+
+                                      {/* Front-load onboarding: pre-set the coach's profile photo */}
+                                      <div className="mt-3 flex items-center gap-3 rounded-xl border border-zinc-800 bg-black/30 px-3 py-3">
+                                        <div className="flex h-12 w-12 flex-none items-center justify-center overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900">
+                                          {activeLink.prefilledProfileImageUrl ? (
+                                            <img src={activeLink.prefilledProfileImageUrl} alt="Pre-loaded coach photo" className="h-full w-full object-cover" />
+                                          ) : (
+                                            <ImageIcon className="h-4 w-4 text-zinc-600" />
+                                          )}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400">Pre-load profile photo</p>
+                                          <p className="mt-0.5 text-[11px] leading-4 text-zinc-500">
+                                            {activeLink.prefilledProfileImageUrl
+                                              ? 'Set — the coach starts onboarding with this photo and can change it.'
+                                              : 'Optional. Appears already filled in when the coach onboards.'}
+                                          </p>
+                                          <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-white">
+                                            {coachPhotoUploadingToken === activeLink.token ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                                            {coachPhotoUploadingToken === activeLink.token
+                                              ? 'Uploading…'
+                                              : activeLink.prefilledProfileImageUrl
+                                                ? 'Change photo'
+                                                : 'Upload photo'}
+                                            <input
+                                              type="file"
+                                              accept="image/*"
+                                              className="hidden"
+                                              disabled={coachPhotoUploadingToken === activeLink.token}
+                                              onChange={(event) => {
+                                                void handleCoachProfilePrefillUpload(activeLink.token, event.target.files?.[0] || null);
+                                                event.currentTarget.value = '';
+                                              }}
+                                            />
+                                          </label>
+                                        </div>
+                                      </div>
                                     </>
                                   ) : null}
                                 </div>
