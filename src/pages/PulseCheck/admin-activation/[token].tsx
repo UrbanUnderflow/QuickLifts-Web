@@ -118,15 +118,6 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
     };
   }, [invite.targetEmail]);
 
-  // TEMP QA hook — preview the email-routing modal without a real OAuth login.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('previewEmailModal') === '1' && invite.targetEmail) {
-      setEmailChoice({ socialEmail: 'coach.personal@icloud.com', selected: invite.targetEmail });
-    }
-  }, [invite.targetEmail]);
-
   const normalizedTargetEmail = useMemo(() => invite.targetEmail.trim().toLowerCase(), [invite.targetEmail]);
   const normalizedAuthEmail = useMemo(() => authUser?.email?.trim().toLowerCase() || '', [authUser]);
   const authEmailMatchesInvite = !normalizedTargetEmail || !normalizedAuthEmail || normalizedTargetEmail === normalizedAuthEmail;
@@ -449,26 +440,20 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                 <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ background: 'rgba(124,58,237,0.14)', color: PC.purpleSoft }}>
                   <Sparkles className="h-3.5 w-3.5" /> You're invited
                 </span>
-                {/* Jump-style headline: words bounce across baselines, mixing the
-                    Switzer grotesque with a Fraunces italic accent. */}
+                {/* Grotesque + serif-italic accent on one clean baseline — the
+                    Switzer/Fraunces + color contrast, kept composed and serious. */}
                 <h1
                   className="text-4xl font-extrabold leading-[1.04] tracking-tight text-white md:text-5xl"
                   style={displayFont}
                 >
-                  <span className="mr-[0.18em] inline-block" style={{ transform: 'translateY(-0.05em) rotate(-2deg)' }}>
-                    Welcome
-                  </span>
+                  <span className="mr-[0.2em]">Welcome</span>
                   <span
-                    className="mr-[0.26em] inline-block"
-                    style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontWeight: 500, fontSize: '0.78em', color: PC.purpleSoft, transform: 'translateY(0.16em) rotate(1.5deg)' }}
+                    className="mr-[0.16em]"
+                    style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontWeight: 500, fontSize: '0.82em', color: PC.purpleSoft }}
                   >
                     Coach
                   </span>
-                  {coachFirstName ? (
-                    <span className="inline-block" style={{ transform: 'translateY(-0.09em) rotate(-1deg)' }}>
-                      {coachFirstName}
-                    </span>
-                  ) : null}
+                  {coachFirstName ? <span>{coachFirstName}</span> : null}
                 </h1>
                 <p className="max-w-xl text-sm leading-7 text-zinc-300">
                   <span className="text-[1.08em] text-white" style={serifAccent}>{invite.organizationName}</span> invited you to lead{' '}
