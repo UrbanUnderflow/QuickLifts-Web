@@ -6,6 +6,17 @@ import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, serv
 import { convertFirestoreTimestamp, formatDate } from '../../utils/formatDate';
 import CoachLayout from '../../components/CoachLayout';
 import { motion } from 'framer-motion';
+import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
+import type { PulseCheckTeamMembershipRole } from '../../api/firebase/pulsecheckProvisioning/types';
+
+// Roles a coach may assign to staff. team-admin and clinician are intentionally
+// excluded — those gate org-wide access and crisis routing and must be issued by
+// an admin from the provisioning console (see the permissions/visibility model).
+const COACH_ASSIGNABLE_ROLES: { value: PulseCheckTeamMembershipRole; label: string }[] = [
+  { value: 'coach', label: 'Coach' },
+  { value: 'performance-staff', label: 'Performance Staff' },
+  { value: 'support-staff', label: 'Support Staff' },
+];
 
 type StaffMember = {
   id: string;
@@ -40,7 +51,9 @@ const StaffPage: React.FC = () => {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<PulseCheckTeamMembershipRole>('support-staff');
   const [sending, setSending] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [athletes, setAthletes] = useState<AthleteSummary[]>([]);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -150,27 +163,104 @@ const StaffPage: React.FC = () => {
     [staff, searchQuery]
   );
 
+  // Resolve the coach's org/team context for issuing team-access invites.
+  const resolveTeamContext = async () => {
+    if (!currentUser?.id) return null;
+    const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
+    const staffMembership = memberships.find((m) => m.role !== 'athlete') || memberships[0];
+    if (!staffMembership?.teamId) return null;
+    let organizationName = '';
+    let teamName = '';
+    try {
+      const team = await pulseCheckProvisioningService.getTeam(staffMembership.teamId);
+      teamName = team?.displayName || '';
+      if (staffMembership.organizationId) {
+        const org = await pulseCheckProvisioningService.getOrganization(staffMembership.organizationId);
+        organizationName = org?.displayName || '';
+      }
+    } catch {
+      /* names are best-effort */
+    }
+    return {
+      organizationId: staffMembership.organizationId || '',
+      teamId: staffMembership.teamId,
+      organizationName,
+      teamName,
+    };
+  };
+
+  // Create a team-access invite link (same pattern as provisioning) and return
+  // its shareable activation URL. `reusable` → a durable copy link; otherwise a
+  // single-use link bound to the target email.
+  const createStaffInviteLink = async (opts: {
+    role: PulseCheckTeamMembershipRole;
+    targetEmail?: string;
+    reusable: boolean;
+  }) => {
+    const ctx = await resolveTeamContext();
+    if (!ctx) {
+      throw new Error('No team is linked to your account yet. Ask your admin to add you to a team first.');
+    }
+    const token = await pulseCheckProvisioningService.createTeamAccessInviteLink({
+      organizationId: ctx.organizationId,
+      teamId: ctx.teamId,
+      teamMembershipRole: opts.role,
+      targetEmail: opts.targetEmail || undefined,
+      redemptionMode: opts.reusable ? 'general' : 'single-use',
+      createdByUserId: currentUser?.id,
+      createdByEmail: currentUser?.email,
+    });
+    const links = await pulseCheckProvisioningService.listTeamInviteLinks(ctx.teamId);
+    const link = links.find((l) => l.token === token || l.id === token);
+    const activationUrl =
+      link?.activationUrl ||
+      `${typeof window !== 'undefined' ? window.location.origin : ''}/PulseCheck/team-invite/${token}`;
+    return { activationUrl, ...ctx };
+  };
+
+  const roleLabel = (role: PulseCheckTeamMembershipRole) =>
+    COACH_ASSIGNABLE_ROLES.find((r) => r.value === role)?.label || 'Staff';
+
+  // Copy a durable (reusable) invite link for the selected role.
+  const copyInviteLink = async () => {
+    setCopying(true);
+    try {
+      const { activationUrl } = await createStaffInviteLink({ role: inviteRole, reusable: true });
+      await navigator.clipboard.writeText(activationUrl);
+      setToast('Invite link copied');
+      setTimeout(() => setToast(null), 2500);
+    } catch (e: any) {
+      setToast(e.message || 'Failed to create invite link');
+      setTimeout(() => setToast(null), 3500);
+    } finally {
+      setCopying(false);
+    }
+  };
+
   const sendInvite = async () => {
     if (!inviteEmail) return;
     setSending(true);
     try {
-      const base = typeof window !== 'undefined' ? window.location.origin : '';
-      const inviteUrl = `${base}/PulseCheck/login?legacyFlow=coach-staff-migration`;
-      const signUpUrl = `${base}/PulseCheck/coach`;
-      const res = await fetch('/.netlify/functions/send-staff-invite-email', {
+      // Single-use, email-bound team-access link, then send via Brevo.
+      const { activationUrl, organizationName, teamName } = await createStaffInviteLink({
+        role: inviteRole,
+        targetEmail: inviteEmail,
+        reusable: false,
+      });
+      const res = await fetch('/.netlify/functions/send-pulsecheck-team-invite-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           toEmail: inviteEmail,
-          coachName: currentUser?.username || 'a Pulse coach',
-          inviteUrl,
-          signUpUrl,
-          message:
-            'PulseCheck now provisions team access through team invites and admin activation. Use the coach setup page to create an account, then your admin can issue the correct team invite.'
-        })
+          activationUrl,
+          organizationName,
+          teamName,
+          roleLabel: roleLabel(inviteRole),
+          senderName: currentUser?.displayName || currentUser?.username || 'your coach',
+        }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Failed to send invite');
+      const data = await res.json().catch(() => ({ success: false }));
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to send invite');
       // Persist invited staff to Firestore (coach-staff member)
       if (currentUser?.id) {
         const id = inviteEmail.toLowerCase();
@@ -386,7 +476,20 @@ const StaffPage: React.FC = () => {
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
             <div className="bg-zinc-900 w-full max-w-md rounded-xl p-6 border border-zinc-800">
               <h3 className="text-xl font-semibold mb-2">Invite Staff</h3>
-              <p className="text-zinc-400 text-sm mb-4">Enter the email of the person you wish to add as staff. They will receive an email invitation.</p>
+              <p className="text-zinc-400 text-sm mb-4">Pick their role, then email the invite or copy a link. Redeeming it adds them to your team in that role.</p>
+
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">Role</label>
+              <select
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value as PulseCheckTeamMembershipRole)}
+                className="mb-3 w-full appearance-none rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-white focus:border-[#E0FE10] focus:outline-none"
+              >
+                {COACH_ASSIGNABLE_ROLES.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">Email</label>
               <input
                 type="email"
                 value={inviteEmail}
@@ -394,11 +497,21 @@ const StaffPage: React.FC = () => {
                 placeholder="name@example.com"
                 className="w-full bg-zinc-800 text-white px-4 py-2 rounded-lg border border-zinc-700 focus:outline-none focus:border-[#E0FE10]"
               />
-              <div className="flex items-center justify-end gap-3 mt-5">
-                <button onClick={()=>setShowModal(false)} className="px-4 py-2 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">Cancel</button>
-                <button onClick={sendInvite} disabled={sending || !inviteEmail} className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black disabled:opacity-50">
-                  {sending ? 'Sending...' : 'Send Invite'}
+
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                <button
+                  onClick={copyInviteLink}
+                  disabled={copying}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50"
+                >
+                  {copying ? 'Creating link…' : 'Copy invite link'}
                 </button>
+                <div className="flex items-center gap-3">
+                  <button onClick={()=>setShowModal(false)} className="px-4 py-2 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">Cancel</button>
+                  <button onClick={sendInvite} disabled={sending || !inviteEmail} className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black font-semibold disabled:opacity-50">
+                    {sending ? 'Sending...' : 'Send Invite'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

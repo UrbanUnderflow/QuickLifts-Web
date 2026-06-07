@@ -65,6 +65,9 @@ export interface CoachReportMeta {
   reportId?: string;
   teamId: string;
   teamName?: string;
+  /** Institution / organization the team belongs to (e.g. school, club, pro org).
+   *  Rendered as "{organizationName} · {teamName}" in the report header. */
+  organizationName?: string;
   sportId: string;
   sportName?: string;
   reportType?: CoachReportType;

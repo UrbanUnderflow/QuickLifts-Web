@@ -105,6 +105,7 @@ const defaultTeamForm: CreatePulseCheckTeamInput = {
   displayName: '',
   teamType: 'sport-team',
   sportOrProgram: '',
+  sportId: '',
   defaultAdminName: '',
   defaultAdminEmail: '',
   defaultInvitePolicy: 'admin-and-staff',
@@ -1570,6 +1571,18 @@ const PulseCheckProvisioningPage: React.FC = () => {
           organizationId: String(value),
           defaultAdminName: nextOrganization?.primaryCustomerAdminName || '',
           defaultAdminEmail: nextOrganization?.primaryCustomerAdminEmail || '',
+        };
+      }
+
+      if (field === 'sportOrProgram') {
+        // Capture both the display name and the stable SportConfiguration id so the
+        // sport stays resolvable (icon/config) even if its label is later renamed.
+        const name = String(value);
+        const matched = teamSportOptions.find((sport) => sport.name === name);
+        return {
+          ...current,
+          sportOrProgram: name,
+          sportId: matched && !matched.id.startsWith('legacy-') ? matched.id : '',
         };
       }
 

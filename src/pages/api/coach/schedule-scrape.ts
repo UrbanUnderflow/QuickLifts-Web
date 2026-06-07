@@ -1,33 +1,16 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import OpenAI from 'openai';
 
 /**
- * Coach Schedule Scraper
+ * Coach Schedule — page fetcher
  * ------------------------------------------------------------------
- * Takes a published schedule URL (e.g. an athletics site's competition
- * schedule) and returns a clean, structured list of events that the
- * Schedule tab animates into the coach's calendar.
+ * Fetches a published schedule URL server-side (no CORS) and reduces it
+ * to readable text. The actual event extraction (LLM) happens client-side
+ * through the shared openai-bridge so we reuse the configured key + auth +
+ * per-feature rate limits. See `coachScheduleService.scrapeUrl`.
  *
  * POST /api/coach/schedule-scrape  { url: string }
- *   -> { sourceTitle: string, events: ScheduleEventDraft[] }
- *
- * Two steps:
- *   1) Fetch the page HTML (server-side, no CORS) and reduce it to
- *      readable text — schedules are almost always in tables/lists.
- *   2) Hand that text to gpt-4o-mini with a strict JSON schema and let
- *      it normalize dates, opponents, times, and locations.
+ *   -> { title: string, text: string }
  */
-
-type ScrapedEvent = {
-  title: string;
-  date: string; // YYYY-MM-DD
-  endDate?: string;
-  time?: string;
-  location?: string;
-  opponent?: string;
-  type: 'practice' | 'meeting' | 'lift' | 'competition' | 'travel' | 'event';
-  notes?: string;
-};
 
 const FETCH_TIMEOUT_MS = 12000;
 const MAX_TEXT_CHARS = 16000;
@@ -119,32 +102,6 @@ function htmlToText(html: string): { title: string; text: string } {
   return { title, text: text.slice(0, MAX_TEXT_CHARS) };
 }
 
-const SYSTEM_PROMPT = `You extract a sports/team schedule from the text of a web page.
-
-Return STRICT JSON only, no markdown, in this exact shape:
-{
-  "sourceTitle": "<a short name for this schedule, e.g. 'Men's Track & Field 2026'>",
-  "events": [
-    {
-      "title": "<short label — for competitions use 'vs. <Opponent>' or the meet name>",
-      "date": "<YYYY-MM-DD>",
-      "endDate": "<YYYY-MM-DD, only if the event spans multiple days, else omit>",
-      "time": "<e.g. '3:30 PM', 'All Day', or 'TBA' — omit if unknown>",
-      "location": "<city/venue if shown, else omit>",
-      "opponent": "<opponent or host for competitions, else omit>",
-      "type": "competition | practice | meeting | lift | travel | event",
-      "notes": "<anything useful like 'Home', 'Away', 'Conference', else omit>"
-    }
-  ]
-}
-
-Rules:
-- Only include real scheduled events you can see in the text. Never invent events, dates, or opponents.
-- Resolve dates to full YYYY-MM-DD. If the page shows a year context, use it; otherwise infer the season's year from surrounding text. If a date is genuinely ambiguous, omit that event.
-- Most items on an athletics schedule page are competitions; classify accordingly.
-- Keep titles tight. Prefer 'vs. Florida State' over a long sentence.
-- If you find no events, return an empty "events" array.`;
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -163,11 +120,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'That doesn’t look like a valid link.' });
   }
 
-  const apiKey = process.env.OPEN_AI_SECRET_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'Schedule import is not configured (missing API key).' });
-  }
-
   try {
     const html = await fetchHtml(normalizedUrl);
     const { title, text } = htmlToText(html);
@@ -176,50 +128,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(422).json({ error: 'Couldn’t read anything useful from that page.' });
     }
 
-    const openai = new OpenAI({ apiKey });
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      temperature: 0.1,
-      max_tokens: 3000,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: `Page title: ${title || '(none)'}\nURL: ${normalizedUrl}\n\nPAGE TEXT:\n${text}`,
-        },
-      ],
-    });
-
-    const raw = completion.choices?.[0]?.message?.content || '{}';
-    let parsed: { sourceTitle?: string; events?: ScrapedEvent[] };
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return res.status(502).json({ error: 'Nora couldn’t make sense of that schedule.' });
-    }
-
-    const ISO = /^\d{4}-\d{2}-\d{2}$/;
-    const events = (Array.isArray(parsed.events) ? parsed.events : [])
-      .filter((e) => e && typeof e.title === 'string' && ISO.test(String(e.date)))
-      .map((e) => ({
-        title: String(e.title).trim().slice(0, 140),
-        date: e.date,
-        endDate: ISO.test(String(e.endDate)) ? e.endDate : undefined,
-        time: e.time ? String(e.time).trim().slice(0, 40) : undefined,
-        location: e.location ? String(e.location).trim().slice(0, 120) : undefined,
-        opponent: e.opponent ? String(e.opponent).trim().slice(0, 120) : undefined,
-        type: e.type,
-        notes: e.notes ? String(e.notes).trim().slice(0, 200) : undefined,
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-
-    return res.status(200).json({
-      sourceTitle: (parsed.sourceTitle || title || 'Imported schedule').toString().trim().slice(0, 120),
-      events,
-    });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ title, text });
   } catch (err: any) {
-    console.error('[schedule-scrape] failed', normalizedUrl, err?.message);
-    return res.status(500).json({ error: err?.message || 'Failed to import that schedule.' });
+    console.error('[schedule-scrape] fetch failed', normalizedUrl, err?.message);
+    return res.status(500).json({ error: err?.message || 'Failed to read that link.' });
   }
 }

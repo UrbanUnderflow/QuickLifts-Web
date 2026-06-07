@@ -2800,6 +2800,23 @@ const normalizeSportArray = (value: unknown): PulseCheckSportConfigurationEntry[
 
 export const getDefaultPulseCheckSports = () => cloneSports(DEFAULT_PULSECHECK_SPORTS);
 
+/**
+ * Resolve the configured sport entry for a provisioned team so callers can read the
+ * sport's emoji/config wherever it's needed (e.g. the coach report header icon).
+ * Prefers the stable `sportId` captured at provisioning — rename-proof — and falls
+ * back to matching by display name for legacy teams stored before `sportId` existed.
+ */
+export const resolvePulseCheckSportForTeam = (
+  sports: PulseCheckSportConfigurationEntry[],
+  team: { sportId?: string | null; sportOrProgram?: string | null }
+): PulseCheckSportConfigurationEntry | undefined => {
+  const byId = team.sportId ? sports.find((sport) => sport.id === team.sportId) : undefined;
+  if (byId) return byId;
+  const name = (team.sportOrProgram || '').trim().toLowerCase();
+  if (!name) return undefined;
+  return sports.find((sport) => sport.name.trim().toLowerCase() === name);
+};
+
 // --- Report-policy enforcement helpers ---------------------------------------------------
 //
 // These helpers are the runtime gates referenced in the Sports Intelligence Report Outlines

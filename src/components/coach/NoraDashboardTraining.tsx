@@ -16,9 +16,14 @@ export type DashboardTrainingStep = {
   title: string;
   body: string;
   target?: string;
-  // Timed spotlight cues: when the clip crosses `atFrac` of its duration, the
-  // element matched by `selector` gets a highlight ring (and scrolls into view).
-  highlights?: { atFrac: number; selector: string }[];
+  // Timed cues fired as the clip crosses `atFrac` of its duration. Default kind
+  // 'highlight' rings the `selector`. The interactive kinds drive the FIRST
+  // athlete readiness card so Nora can demonstrate hovers + the acknowledge press.
+  highlights?: {
+    atFrac: number;
+    selector?: string;
+    kind?: 'highlight' | 'card' | 'mood' | 'checkin' | 'escalation' | 'ack';
+  }[];
 };
 
 export const TRAINING_STEPS: DashboardTrainingStep[] = [
@@ -50,6 +55,20 @@ export const TRAINING_STEPS: DashboardTrainingStep[] = [
       "We can't train the mind if athletes aren't doing the work. Athletes who stay above 80% adherence see roughly a 30% lift in readiness over a season — so when it dips, that's your cue to step in.",
     highlights: [{ atFrac: 0.0, selector: '#tile-adherence' }],
   },
+  {
+    id: 'athlete-card',
+    audio: '/audio/nora/nora-dashboard-athlete-card.mp3',
+    title: 'The Athlete Readiness card',
+    body:
+      "Each athlete's full read: 14-day mood, check-in frequency, what's driving it, escalation status, and a one-tap acknowledge. Hover any day for the detail.",
+    highlights: [
+      { atFrac: 0.0, kind: 'card' },
+      { atFrac: 0.18, kind: 'mood' },
+      { atFrac: 0.45, kind: 'checkin' },
+      { atFrac: 0.72, kind: 'escalation' },
+      { atFrac: 0.9, kind: 'ack' },
+    ],
+  },
 ];
 
 const PURPLE = '#a78bfa';
@@ -61,6 +80,7 @@ const NoraDashboardTraining: React.FC = () => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const cueIndexRef = useRef(0);
   const highlightedElRef = useRef<Element | null>(null);
+  const hoveredElRef = useRef<Element | null>(null);
 
   const step = TRAINING_STEPS[stepIndex];
   const isLast = stepIndex === TRAINING_STEPS.length - 1;
@@ -69,6 +89,15 @@ const NoraDashboardTraining: React.FC = () => {
     if (highlightedElRef.current) {
       highlightedElRef.current.classList.remove('nora-train-highlight');
       highlightedElRef.current = null;
+    }
+  }, []);
+
+  // Programmatic hover: React derives onMouseEnter/Leave from mouseover/out, so
+  // dispatching those triggers the card's real hover panels.
+  const clearHover = useCallback(() => {
+    if (hoveredElRef.current) {
+      hoveredElRef.current.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+      hoveredElRef.current = null;
     }
   }, []);
 
@@ -91,6 +120,7 @@ const NoraDashboardTraining: React.FC = () => {
       if (!audio) return;
       cueIndexRef.current = 0;
       clearHighlight();
+      clearHover();
       try {
         audio.src = s.audio;
         audio.currentTime = 0;
@@ -102,10 +132,67 @@ const NoraDashboardTraining: React.FC = () => {
         setSpeaking(false);
       }
     },
-    [clearHighlight]
+    [clearHighlight, clearHover]
   );
 
-  // Fire a step's spotlight cues as the clip plays past each `atFrac`.
+  const hoverEl = useCallback(
+    (el: Element | null | undefined) => {
+      if (!el) return;
+      clearHover();
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      hoveredElRef.current = el;
+    },
+    [clearHover]
+  );
+
+  const isColored = (el: Element) => {
+    const bg = getComputedStyle(el).backgroundColor;
+    return bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent';
+  };
+
+  // Run a single cue: ring an element, or drive the first athlete card's
+  // interactive states (hover panels + acknowledge press) for the demo.
+  const runCue = useCallback(
+    (cue: { selector?: string; kind?: string }) => {
+      if (typeof document === 'undefined') return;
+      const kind = cue.kind || 'highlight';
+      if (kind === 'highlight') {
+        if (cue.selector) applyHighlight(cue.selector);
+        return;
+      }
+      const card = document.querySelector('[data-athlete-card]');
+      if (!card) return;
+      if (kind === 'card') {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        clearHighlight();
+        card.classList.add('nora-train-highlight');
+        highlightedElRef.current = card;
+        return;
+      }
+      if (kind === 'mood') {
+        const squares = Array.from(card.querySelectorAll('[data-mood-square]'));
+        hoverEl(squares.find(isColored) || squares[Math.floor(squares.length / 2)]);
+        return;
+      }
+      if (kind === 'checkin') {
+        const dots = Array.from(card.querySelectorAll('[data-checkin-dot]'));
+        hoverEl(dots.find(isColored) || dots[dots.length - 1]);
+        return;
+      }
+      if (kind === 'escalation') {
+        hoverEl(card.querySelector('[data-escalation]'));
+        return;
+      }
+      if (kind === 'ack') {
+        clearHover();
+        (card.querySelector('[data-acknowledge]') as HTMLElement | null)?.click();
+      }
+    },
+    [applyHighlight, clearHighlight, hoverEl, clearHover]
+  );
+
+  // Fire a step's cues as the clip plays past each `atFrac`.
   const handleTimeUpdate = useCallback(
     (e: React.SyntheticEvent<HTMLAudioElement>) => {
       const a = e.currentTarget;
@@ -113,11 +200,11 @@ const NoraDashboardTraining: React.FC = () => {
       if (!cues || !cues.length) return;
       if (!a.duration || !Number.isFinite(a.duration)) return;
       while (cueIndexRef.current < cues.length && a.currentTime >= a.duration * cues[cueIndexRef.current].atFrac) {
-        applyHighlight(cues[cueIndexRef.current].selector);
+        runCue(cues[cueIndexRef.current]);
         cueIndexRef.current += 1;
       }
     },
-    [step, applyHighlight]
+    [step, runCue]
   );
 
   // When the step changes, optionally focus a dashboard element, then narrate.
@@ -143,7 +230,8 @@ const NoraDashboardTraining: React.FC = () => {
     }
     setSpeaking(false);
     clearHighlight();
-  }, [clearHighlight]);
+    clearHover();
+  }, [clearHighlight, clearHover]);
 
   const handleNext = useCallback(() => {
     if (isLast) {

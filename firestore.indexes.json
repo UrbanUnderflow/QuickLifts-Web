@@ -1212,6 +1212,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "appsflyer-macra-raw-rows",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "product",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "eventDate",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [

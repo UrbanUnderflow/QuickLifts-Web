@@ -29,20 +29,48 @@ import {
   Plus,
   Wallet,
   TrendingUp,
+  ArrowLeft,
+  ArrowRight,
+  ChevronRight,
+  ChevronLeft,
+  Wind,
+  Activity,
+  Heart,
+  BellRing,
+  ShieldCheck,
+  HeartPulse,
+  CheckCircle2,
+  Lock,
+  Moon,
+  ClipboardList,
+  Eye,
+  Zap,
+  Star,
+  TrendingDown,
+  Mail,
+  CalendarDays,
 } from 'lucide-react';
 import CoachProtectedRoute from '../../components/CoachProtectedRoute';
 import AthleteReadinessCard from '../../components/AthleteReadinessCard';
 import { escalationRecordsService } from '../../api/firebase/escalation/service';
+import { getCategoryLabel, EscalationCategory } from '../../api/firebase/escalation/types';
 import { loadTeamDeviceStatuses } from '../../api/firebase/pulsecheckDeviceMonitor';
 import { useUser } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import {
-  getLatestSportsIntelligenceReportForCoach,
+  listSentSportsIntelligenceReportsForCoach,
   type CoachReportListItem,
 } from '../../api/firebase/pulsecheckCoachReportAccess';
 import { noraVaultService, NoraVaultEntry } from '../../api/firebase/coach/noraVaultService';
 import ScheduleBoard from '../../components/coach/ScheduleBoard';
+import CoachReportView from '../../components/coach-reports/CoachReportView';
+import { getDefaultPulseCheckSports } from '../../api/firebase/pulsecheckSportConfig';
+import {
+  COACH_REPORT_DEMO_EXAMPLES,
+  buildDemoCoachSurface,
+  getSportColor,
+} from '../../api/firebase/pulsecheckSportReportDemos';
 
 type CoachAthlete = {
   id: string;
@@ -58,6 +86,7 @@ type CoachAthlete = {
   activeEscalationTier?: number;
   deviceCoveragePct?: number;
   deviceConnected?: boolean;
+  deviceDailyPresence?: boolean[];
 };
 
 type StatusKey = 'optimal' | 'flagged' | 'elevated' | 'escalated' | 'pending';
@@ -73,6 +102,229 @@ const STATUS_META: Record<StatusKey, { dot: string; text: string; label: string 
 const daysSince = (d?: Date): number | null => {
   if (!d || isNaN(d.getTime())) return null;
   return Math.floor((Date.now() - d.getTime()) / 86400000);
+};
+
+const firstNameOf = (name?: string): string => (name ? name.trim().split(/\s+/)[0] : 'Your athlete');
+
+const relativeWhen = (d?: Date): string => {
+  const days = daysSince(d);
+  if (days === null) return 'recently';
+  if (days === 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return `${days}d ago`;
+};
+
+// ---------------------------------------------------------------------------
+// Athlete Alerts — Tier 2 (consent-based) + Tier 3 (clinical monitoring)
+// ---------------------------------------------------------------------------
+//
+// Only Tier 2 and Tier 3 escalations reach this board.
+//  • Tier 2 (Elevated Risk) is CONSENT-BASED: Nora only offers to notify a staff
+//    member who is onboarded on the athlete's team, and the athlete must
+//    explicitly choose that person. So a Tier 2 alert lands here only when the
+//    athlete picked *this* coach — `notifiedCoachName` is the proof of consent.
+//  • Tier 3 (Critical Risk) is MONITORING/AWARENESS: Nora, PulseCheck, and
+//    AuntEdna have already initiated the mandatory clinical handoff. The coach
+//    isn't being asked to intervene — they're being kept aware, with guardrails.
+//
+// The shape mirrors the real EscalationRecord fields so the live dashboard maps
+// records straight in (see alertsFromEscalationRecords) with no UI changes.
+
+export type AlertActionStatus = 'completed' | 'active' | 'queued';
+
+export type AlertNoraAction = {
+  label: string;
+  detail: string;
+  status: AlertActionStatus;
+};
+
+export type AthleteAlert = {
+  id: string;
+  athleteId: string;
+  athleteName: string;
+  tier: 2 | 3;
+  category: string;                 // coach-safe label, e.g. "Anxiety Indicators"
+  flaggedAt?: Date;
+  lastCheckIn?: Date;
+  summary: string;                  // Nora's coach-facing narrative — no clinical detail
+  noraActions: AlertNoraAction[];   // what Nora has already done / queued
+  recommendation: string;
+  // Tier 2 — consent
+  notifiedCoachName?: string;       // the staffer the athlete chose to notify (this coach)
+  // Tier 3 — clinical monitoring
+  handoffStatus?: 'initiated' | 'connecting' | 'engaged';
+  clinicalContact?: string;         // e.g. "the care team" / "Dr. Liz Carter"
+  metrics?: { label: string; value: string; flag?: string }[];
+};
+
+type StepState = 'done' | 'active' | 'pending';
+type AlertStep = { label: string; state: StepState };
+
+// The "what's being done" trail a coach reads at a glance, per tier.
+const buildAlertSteps = (a: AthleteAlert): AlertStep[] => {
+  const supportActive = a.noraActions.some((n) => n.status === 'active' || n.status === 'queued');
+  const supportTouched = a.noraActions.length > 0;
+  if (a.tier === 2) {
+    return [
+      { label: 'Nora flagged it', state: 'done' },
+      {
+        label: 'In-the-moment support',
+        state: supportTouched ? (supportActive ? 'active' : 'done') : 'done',
+      },
+      { label: 'You were notified', state: a.notifiedCoachName ? 'done' : 'pending' },
+    ];
+  }
+  // Tier 3
+  const handoff = a.handoffStatus ?? 'initiated';
+  return [
+    { label: 'Nora flagged it', state: 'done' },
+    { label: 'Support deployed', state: supportTouched ? 'done' : 'done' },
+    {
+      label: 'Clinical handoff',
+      state: handoff === 'engaged' ? 'done' : 'active',
+    },
+    { label: 'Care team engaged', state: handoff === 'engaged' ? 'done' : 'pending' },
+  ];
+};
+
+const HANDOFF_LABEL: Record<NonNullable<AthleteAlert['handoffStatus']>, string> = {
+  initiated: 'Handoff initiated',
+  connecting: 'Connecting care',
+  engaged: 'Care team engaged',
+};
+
+// Live mapping: turn real EscalationRecords (already filtered to this coach by
+// the service query) into coach-safe alerts. Deliberately conservative — no raw
+// classification reasoning is shown to coaches; copy stays coach English.
+export const alertsFromEscalationRecords = (
+  records: Array<{
+    id: string;
+    userId: string;
+    tier: number;
+    category: string;
+    handoffStatus?: string;
+    createdAt?: number;
+  }>,
+  nameByAthlete: Map<string, string>,
+  coachName: string
+): AthleteAlert[] =>
+  records
+    .filter((r) => r.tier === 2 || r.tier === 3)
+    .map((r) => {
+      const tier = (r.tier === 3 ? 3 : 2) as 2 | 3;
+      const name = nameByAthlete.get(r.userId) || 'Athlete';
+      const first = firstNameOf(name);
+      const flaggedAt = r.createdAt ? new Date(r.createdAt * 1000) : undefined;
+      const category = getCategoryLabel(r.category as EscalationCategory);
+      if (tier === 2) {
+        return {
+          id: r.id,
+          athleteId: r.userId,
+          athleteName: name,
+          tier,
+          category,
+          flaggedAt,
+          lastCheckIn: flaggedAt,
+          notifiedCoachName: coachName,
+          summary: `${first} hit an elevated-concern moment and chose to loop you in. Nora has been supporting them in the conversation.`,
+          noraActions: [],
+          recommendation: `Check in privately before ${first}'s next session. Keep it supportive — you don't need to reference specifics.`,
+        } as AthleteAlert;
+      }
+      const handoff =
+        r.handoffStatus === 'completed'
+          ? 'engaged'
+          : r.handoffStatus === 'initiated'
+          ? 'connecting'
+          : 'initiated';
+      return {
+        id: r.id,
+        athleteId: r.userId,
+        athleteName: name,
+        tier,
+        category,
+        flaggedAt,
+        lastCheckIn: flaggedAt,
+        handoffStatus: handoff,
+        clinicalContact: 'the care team',
+        summary: `${first} is being supported through clinical care. This is beyond coaching scope — Nora and PulseCheck have already connected them with the right help.`,
+        noraActions: [],
+        recommendation: `No coaching action needed. Avoid discussing performance or availability with ${first} today — the care team has this.`,
+      } as AthleteAlert;
+    });
+
+// ---------------------------------------------------------------------------
+// Mental-readiness curriculum (self-guided PulseCheck modules)
+// ---------------------------------------------------------------------------
+// When an athlete is on the clinical watch list (a Tier 3 escalation), the
+// self-guided modules are AUTO-PAUSED and the athlete is walled off from the
+// curriculum — clinical care leads, not self-serve content. The coach sees this
+// as a locked, read-only state.
+
+type CurriculumModule = {
+  id: string;
+  name: string;
+  detail: string;
+  icon: React.ElementType;
+  color: string;
+};
+
+const MENTAL_READINESS_MODULES: CurriculumModule[] = [
+  { id: 'breath', name: 'Breath & Regulation', detail: 'Box breathing and in-the-moment resets', icon: Wind, color: '#22D3EE' },
+  { id: 'routine', name: 'Pre-Competition Routine', detail: 'A repeatable, calming game-day warm-up', icon: ClipboardList, color: '#E0FE10' },
+  { id: 'confidence', name: 'Confidence Anchoring', detail: 'Anchor words and highlight-reel recall', icon: Star, color: '#10B981' },
+  { id: 'focus', name: 'Focus & Reset', detail: 'Interrupt rumination, refocus under pressure', icon: Zap, color: '#F59E0B' },
+  { id: 'visualize', name: 'Visualization', detail: 'Mental rehearsal of key game scenarios', icon: Eye, color: '#8B5CF6' },
+  { id: 'recovery', name: 'Sleep & Recovery', detail: 'Wind-down habits and recovery tracking', icon: Moon, color: '#3B82F6' },
+];
+
+type ModuleStatus = 'completed' | 'in-progress' | 'locked';
+type ModuleProgress = { module: CurriculumModule; status: ModuleStatus; pct: number };
+
+const strHash = (s: string): number => {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+};
+
+// Deterministic demo progress — further along the more sessions logged and the
+// healthier the sentiment. A real curriculum service would replace this.
+const buildCurriculum = (a: CoachAthlete): ModuleProgress[] => {
+  const reach = Math.max(
+    0,
+    Math.min(
+      MENTAL_READINESS_MODULES.length,
+      Math.round(a.totalSessions / 24 + ((a.sentimentScore ?? 0) + 0.7))
+    )
+  );
+  const base = strHash(a.id);
+  return MENTAL_READINESS_MODULES.map((m, i) => {
+    if (i < reach) return { module: m, status: 'completed' as const, pct: 100 };
+    if (i === reach) return { module: m, status: 'in-progress' as const, pct: 20 + ((base >> i) % 65) };
+    return { module: m, status: 'locked' as const, pct: 0 };
+  });
+};
+
+// Sentiment band → coach-friendly mood label + color.
+const moodMeta = (score: number): { label: string; color: string } => {
+  if (score >= 0.25) return { label: 'Good', color: '#22C55E' };
+  if (score >= -0.1) return { label: 'Mixed', color: '#F59E0B' };
+  if (score >= -0.4) return { label: 'Low', color: '#F97316' };
+  return { label: 'Very low', color: '#EF4444' };
+};
+
+type SentimentTrend = 'improving' | 'declining' | 'steady';
+
+// Input is newest-first daily scores; positive delta = improving.
+const trendOf = (recentFirst: number[]): SentimentTrend => {
+  const scored = recentFirst.filter((v) => v !== 0);
+  if (scored.length < 4) return 'steady';
+  const avg = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / (xs.length || 1);
+  const recent = avg(scored.slice(0, Math.ceil(scored.length / 2)));
+  const older = avg(scored.slice(Math.ceil(scored.length / 2)));
+  if (recent - older > 0.08) return 'improving';
+  if (recent - older < -0.08) return 'declining';
+  return 'steady';
 };
 
 const deriveStatus = (a: CoachAthlete): StatusKey => {
@@ -163,6 +415,8 @@ const todayLabel = () =>
 
 interface CoachDashboardShellProps {
   athletes: CoachAthlete[];
+  /** Tier 2 (consent) + Tier 3 (clinical) alerts for the Athlete Alerts tab. */
+  alerts?: AthleteAlert[];
   loadingAthletes: boolean;
   coachName: string;
   coachEmail?: string;
@@ -176,6 +430,7 @@ interface CoachDashboardShellProps {
 
 export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   athletes,
+  alerts = [],
   loadingAthletes,
   coachName,
   coachEmail,
@@ -187,11 +442,13 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   const router = useRouter();
   const [view, setView] = useState<ViewKey>('home');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
-  const alertCount = useMemo(
-    () => athletes.filter((a) => ['elevated', 'escalated'].includes(deriveStatus(a))).length,
-    [athletes]
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
+  const selectedAthlete = useMemo(
+    () => athletes.find((a) => a.id === selectedAthleteId) ?? null,
+    [athletes, selectedAthleteId]
   );
+
+  const alertCount = alerts.length;
   const inboxUnread = useMemo(
     () => (isDemo ? buildInboxThreads(athletes).filter((t) => t.unread).length : 0),
     [athletes, isDemo]
@@ -244,9 +501,11 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
     <div className="flex flex-col h-full py-4 px-3">
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-2 mb-5">
-        <div className="w-7 h-7 rounded-lg bg-[#E0FE10]/15 flex items-center justify-center flex-shrink-0">
-          <Shield className="w-4 h-4 text-[#E0FE10]" />
-        </div>
+        <img
+          src="/pulseCheckIcon.png"
+          alt="PulseCheck"
+          className="w-7 h-7 rounded-lg flex-shrink-0"
+        />
         <div className="leading-tight">
           <div className="text-sm font-bold text-white">PulseCheck</div>
           <div className="text-[8px] text-zinc-500 uppercase tracking-widest">Coaching Platform</div>
@@ -351,17 +610,28 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                   transition={{ duration: 0.2 }}
                 >
                   {view === 'home' && (
-                    <HomeSection athletes={athletes} loading={loadingAthletes} isDemo={isDemo} />
+                    <HomeSection
+                      athletes={athletes}
+                      loading={loadingAthletes}
+                      isDemo={isDemo}
+                      onSelectAthlete={setSelectedAthleteId}
+                    />
                   )}
-                  {view === 'alerts' && <AlertsSection athletes={athletes} loading={loadingAthletes} />}
+                  {view === 'alerts' && <AlertsSection alerts={alerts} loading={loadingAthletes} />}
                   {view === 'inbox' && <InboxSection athletes={athletes} loading={loadingAthletes} isDemo={isDemo} />}
-                  {view === 'roster' && <RosterSection athletes={athletes} loading={loadingAthletes} />}
+                  {view === 'roster' && (
+                    <RosterSection
+                      athletes={athletes}
+                      loading={loadingAthletes}
+                      onSelectAthlete={setSelectedAthleteId}
+                    />
+                  )}
                   {view === 'staff' && <StaffSection isDemo={isDemo} coachName={coachName} />}
                   {view === 'nora' && (
                     <TrainNoraSection coachId={coachId} coachName={coachName} athletes={athletes} />
                   )}
                   {view === 'schedule' && <ScheduleSection coachId={coachId} isDemo={isDemo} />}
-                  {view === 'reports' && <ReportsSection coachId={coachId} />}
+                  {view === 'reports' && <ReportsSection coachId={coachId} isDemo={isDemo} />}
                   {view === 'earnings' && earningsEnabled && (
                     <EarningsSection athletes={athletes} isDemo={isDemo} revenueSharePct={revenueSharePct} />
                   )}
@@ -371,6 +641,12 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
             </div>
           </div>
         </div>
+
+        <AthleteProfileDrawer
+          athlete={selectedAthlete}
+          alerts={alerts}
+          onClose={() => setSelectedAthleteId(null)}
+        />
       </div>
   );
 };
@@ -378,6 +654,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
 const CoachDashboardV2: React.FC = () => {
   const currentUser = useUser();
   const [athletes, setAthletes] = useState<CoachAthlete[]>([]);
+  const [alerts, setAlerts] = useState<AthleteAlert[]>([]);
   const [loadingAthletes, setLoadingAthletes] = useState(true);
   const [earnings, setEarnings] = useState<{ enabled: boolean; sharePct: number }>({
     enabled: false,
@@ -407,7 +684,7 @@ const CoachDashboardV2: React.FC = () => {
           const coachTeamIds = Array.from(
             new Set(memberships.filter((m) => m.role !== 'athlete').map((m) => m.teamId))
           );
-          const deviceByAthlete = new Map<string, { pct: number; connected: boolean }>();
+          const deviceByAthlete = new Map<string, { pct: number; connected: boolean; presence: boolean[] }>();
           const deviceResults = await Promise.all(
             coachTeamIds.map((t) => loadTeamDeviceStatuses(t).catch(() => null))
           );
@@ -417,6 +694,7 @@ const CoachDashboardV2: React.FC = () => {
               deviceByAthlete.set(s.athleteUserId, {
                 pct: s.wearCoveragePct,
                 connected: s.connectionStatus === 'synced',
+                presence: s.dailyPresence,
               });
             }
           }
@@ -425,7 +703,15 @@ const CoachDashboardV2: React.FC = () => {
             activeEscalationTier: tierByAthlete.get(a.id) ?? 0,
             deviceCoveragePct: deviceByAthlete.get(a.id)?.pct,
             deviceConnected: deviceByAthlete.get(a.id)?.connected,
+            deviceDailyPresence: deviceByAthlete.get(a.id)?.presence,
           }));
+          // Tier 2/3 alerts for the Athlete Alerts tab. The service query already
+          // filters to records where coachId === this coach, so every Tier 2 here
+          // reflects the athlete's explicit consent to notify this coach.
+          const nameByAthlete = new Map(list.map((a) => [a.id, a.displayName]));
+          const coachDisplay = currentUser?.displayName || currentUser?.username || 'you';
+          const builtAlerts = alertsFromEscalationRecords(escalations as any, nameByAthlete, coachDisplay);
+          if (!cancelled) setAlerts(builtAlerts);
         } catch (enrichErr) {
           console.warn('[dashboard-v2] athlete enrichment failed (non-blocking)', enrichErr);
         }
@@ -481,6 +767,7 @@ const CoachDashboardV2: React.FC = () => {
       </Head>
       <CoachDashboardShell
         athletes={athletes}
+        alerts={alerts}
         loadingAthletes={loadingAthletes}
         coachName={coachName}
         coachEmail={currentUser?.email}
@@ -496,11 +783,12 @@ const CoachDashboardV2: React.FC = () => {
 // Home
 // ---------------------------------------------------------------------------
 
-const HomeSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean; isDemo?: boolean }> = ({
-  athletes,
-  loading,
-  isDemo,
-}) => {
+const HomeSection: React.FC<{
+  athletes: CoachAthlete[];
+  loading: boolean;
+  isDemo?: boolean;
+  onSelectAthlete: (id: string) => void;
+}> = ({ athletes, loading, isDemo, onSelectAthlete }) => {
   const counts = useMemo(() => {
     const c: Record<StatusKey, number> = {
       optimal: 0,
@@ -562,24 +850,41 @@ const HomeSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean; isDemo
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {athletes.map((a) => (
-            <AthleteReadinessCard
+            // Click the card body to open the profile, but let the card's own
+            // controls (acknowledge / check-in / mood-day hovers) keep working.
+            <div
               key={a.id}
-              demo={isDemo}
-              athlete={{
-                id: a.id,
-                displayName: a.displayName,
-                email: a.email,
-                profileImageUrl: a.profileImageUrl,
-                conversationCount: a.conversationCount,
-                totalSessions: a.totalSessions,
-                weeklyGoalProgress: a.weeklyGoalProgress,
-                sentimentScore: a.sentimentScore,
-                lastActiveDate: a.lastActiveDate,
-                activeEscalationTier: a.activeEscalationTier,
-                deviceCoveragePct: a.deviceCoveragePct,
-                deviceConnected: a.deviceConnected,
+              data-athlete-card={a.id}
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest('button,a,input,textarea')) return;
+                onSelectAthlete(a.id);
               }}
-            />
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onSelectAthlete(a.id);
+              }}
+              className="cursor-pointer rounded-3xl focus:outline-none focus:ring-1 focus:ring-[#E0FE10]/40"
+            >
+              <AthleteReadinessCard
+                demo={isDemo}
+                athlete={{
+                  id: a.id,
+                  displayName: a.displayName,
+                  email: a.email,
+                  profileImageUrl: a.profileImageUrl,
+                  conversationCount: a.conversationCount,
+                  totalSessions: a.totalSessions,
+                  weeklyGoalProgress: a.weeklyGoalProgress,
+                  sentimentScore: a.sentimentScore,
+                  lastActiveDate: a.lastActiveDate,
+                  activeEscalationTier: a.activeEscalationTier,
+                  deviceCoveragePct: a.deviceCoveragePct,
+                  deviceConnected: a.deviceConnected,
+                  deviceDailyPresence: a.deviceDailyPresence,
+                }}
+              />
+            </div>
           ))}
         </div>
       )}
@@ -591,101 +896,370 @@ const HomeSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean; isDemo
 // Athlete Alerts
 // ---------------------------------------------------------------------------
 
-const AlertsSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean }> = ({
-  athletes,
+// The horizontal "what's being done" trail shown on every alert card.
+const StepTrail: React.FC<{ steps: AlertStep[]; tone: 'amber' | 'rose' }> = ({ steps, tone }) => {
+  const activeColor = tone === 'amber' ? '#F59E0B' : '#A78BFA';
+  return (
+    <div className="flex items-center">
+      {steps.map((s, i) => {
+        const isLast = i === steps.length - 1;
+        return (
+          <React.Fragment key={s.label}>
+            <div className="flex flex-col items-center gap-1.5 flex-shrink-0" style={{ width: 78 }}>
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center"
+                style={{
+                  background:
+                    s.state === 'done'
+                      ? 'rgba(34,197,94,0.16)'
+                      : s.state === 'active'
+                      ? `${activeColor}22`
+                      : 'rgba(113,113,122,0.14)',
+                  border:
+                    s.state === 'done'
+                      ? '1px solid rgba(34,197,94,0.4)'
+                      : s.state === 'active'
+                      ? `1px solid ${activeColor}66`
+                      : '1px solid rgba(113,113,122,0.3)',
+                }}
+              >
+                {s.state === 'done' ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
+                ) : s.state === 'active' ? (
+                  <span
+                    className="w-2 h-2 rounded-full animate-pulse"
+                    style={{ background: activeColor }}
+                  />
+                ) : (
+                  <span className="w-2 h-2 rounded-full bg-zinc-600" />
+                )}
+              </div>
+              <span
+                className={`text-[9px] leading-tight text-center ${
+                  s.state === 'pending' ? 'text-zinc-600' : 'text-zinc-400'
+                }`}
+              >
+                {s.label}
+              </span>
+            </div>
+            {!isLast && (
+              <div
+                className="h-px flex-1 -mt-4"
+                style={{
+                  background:
+                    s.state === 'done'
+                      ? 'rgba(34,197,94,0.35)'
+                      : 'rgba(113,113,122,0.25)',
+                }}
+              />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+};
+
+const NoraActionRow: React.FC<{ action: AlertNoraAction }> = ({ action }) => {
+  const meta =
+    action.status === 'completed'
+      ? { chip: 'bg-green-500/15 text-green-400 border-green-500/25', label: 'Completed' }
+      : action.status === 'active'
+      ? { chip: 'bg-[#A78BFA]/15 text-[#A78BFA] border-[#A78BFA]/25', label: 'Active' }
+      : { chip: 'bg-zinc-700/40 text-zinc-500 border-zinc-600/30', label: 'Queued' };
+  return (
+    <div className="flex items-start gap-3 p-2.5 rounded-lg bg-zinc-800/40 border border-zinc-700/30">
+      <Sparkle />
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-medium text-white">{action.label}</div>
+        <div className="text-[11px] text-zinc-500 leading-relaxed mt-0.5">{action.detail}</div>
+      </div>
+      <span className={`text-[9px] px-2 py-0.5 rounded-full border flex-shrink-0 ${meta.chip}`}>
+        {meta.label}
+      </span>
+    </div>
+  );
+};
+
+const Sparkle: React.FC = () => (
+  <div className="w-7 h-7 rounded-lg bg-[#A78BFA]/12 border border-[#A78BFA]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+    <Brain className="w-3.5 h-3.5 text-[#A78BFA]" />
+  </div>
+);
+
+// ── Tier 2 — consent-based. Lives in the horizontal-scroll lane. ──
+const Tier2AlertCard: React.FC<{ alert: AthleteAlert }> = ({ alert }) => {
+  const [expanded, setExpanded] = useState(false);
+  const first = firstNameOf(alert.athleteName);
+  const steps = buildAlertSteps(alert);
+  return (
+    <div
+      className="snap-start flex-shrink-0 w-[340px] rounded-2xl p-5 flex flex-col"
+      style={{
+        background: 'linear-gradient(135deg, rgba(249,115,22,0.08) 0%, rgba(245,158,11,0.05) 100%)',
+        border: '1px solid rgba(249,115,22,0.28)',
+      }}
+    >
+      <div className="flex items-start gap-3 mb-3">
+        <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+          <AlertTriangle className="w-5 h-5 text-orange-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-white truncate">{alert.athleteName}</div>
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30 font-semibold">
+              {alert.category}
+            </span>
+            <span className="text-[10px] text-zinc-500">· {relativeWhen(alert.flaggedAt)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Consent — why this alert reached this coach */}
+      <div className="flex items-center gap-2 rounded-lg bg-orange-500/8 border border-orange-500/20 px-3 py-2 mb-3">
+        <BellRing className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />
+        <span className="text-[11px] text-zinc-300 leading-snug">
+          <span className="text-orange-300 font-medium">{first} chose to notify you</span> about this.
+        </span>
+      </div>
+
+      <p className="text-sm text-zinc-300 leading-relaxed mb-4">{alert.summary}</p>
+
+      <div className="mb-4">
+        <StepTrail steps={steps} tone="amber" />
+      </div>
+
+      {/* Expandable: what Nora has already done */}
+      {alert.noraActions.length > 0 && (
+        <>
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center justify-between w-full text-left mb-2"
+          >
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">
+              What Nora has done ({alert.noraActions.length})
+            </span>
+            <ChevronRight
+              className={`w-3.5 h-3.5 text-zinc-500 transition-transform ${expanded ? 'rotate-90' : ''}`}
+            />
+          </button>
+          <AnimatePresence initial={false}>
+            {expanded && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="space-y-1.5 mb-3">
+                  {alert.noraActions.map((n) => (
+                    <NoraActionRow key={n.label} action={n} />
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </>
+      )}
+
+      {/* Recommendation + action */}
+      <div className="rounded-xl bg-zinc-800/50 border border-zinc-700/30 p-3 mb-3 mt-auto">
+        <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide mb-1">
+          Recommended next step
+        </div>
+        <p className="text-xs text-zinc-300 leading-relaxed">{alert.recommendation}</p>
+      </div>
+      <button className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95 transition">
+        <MessageSquare className="w-4 h-4" /> Message {first}
+      </button>
+    </div>
+  );
+};
+
+// ── Tier 3 — clinical monitoring/awareness. Vertical stack. ──
+const Tier3MonitorCard: React.FC<{ alert: AthleteAlert }> = ({ alert }) => {
+  const [expanded, setExpanded] = useState(false);
+  const first = firstNameOf(alert.athleteName);
+  const steps = buildAlertSteps(alert);
+  const handoffLabel = alert.handoffStatus ? HANDOFF_LABEL[alert.handoffStatus] : 'Handoff initiated';
+  return (
+    <div
+      className="rounded-2xl p-5"
+      style={{
+        background: 'linear-gradient(135deg, rgba(167,139,250,0.08) 0%, rgba(99,102,241,0.05) 100%)',
+        border: '1px solid rgba(167,139,250,0.28)',
+      }}
+    >
+      <div className="flex items-start gap-3 mb-3">
+        <div className="w-10 h-10 rounded-xl bg-[#A78BFA]/20 flex items-center justify-center flex-shrink-0">
+          <ShieldCheck className="w-5 h-5 text-[#A78BFA]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-white">{alert.athleteName}</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#A78BFA]/20 text-[#A78BFA] border border-[#A78BFA]/30 font-semibold">
+              In clinical care
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className="text-[10px] text-zinc-500">{alert.category}</span>
+            <span className="text-[10px] text-zinc-600">· flagged {relativeWhen(alert.flaggedAt)}</span>
+          </div>
+        </div>
+        <span className="text-[9px] px-2 py-1 rounded-full bg-green-500/12 text-green-400 border border-green-500/25 font-semibold flex items-center gap-1 flex-shrink-0">
+          <HeartPulse className="w-3 h-3" /> {handoffLabel}
+        </span>
+      </div>
+
+      <p className="text-sm text-zinc-300 leading-relaxed mb-4">{alert.summary}</p>
+
+      <div className="mb-4">
+        <StepTrail steps={steps} tone="rose" />
+      </div>
+
+      {alert.noraActions.length > 0 && (
+        <>
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center justify-between w-full text-left mb-2"
+          >
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">
+              Care steps taken ({alert.noraActions.length})
+            </span>
+            <ChevronRight
+              className={`w-3.5 h-3.5 text-zinc-500 transition-transform ${expanded ? 'rotate-90' : ''}`}
+            />
+          </button>
+          <AnimatePresence initial={false}>
+            {expanded && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="space-y-1.5 mb-3">
+                  {alert.noraActions.map((n) => (
+                    <NoraActionRow key={n.label} action={n} />
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </>
+      )}
+
+      {/* Guardrail — this is awareness, not a coaching task */}
+      <div className="rounded-xl bg-[#A78BFA]/8 border border-[#A78BFA]/25 p-3 flex items-start gap-2.5">
+        <Shield className="w-4 h-4 text-[#A78BFA] flex-shrink-0 mt-0.5" />
+        <div>
+          <div className="text-[10px] font-semibold text-[#A78BFA] uppercase tracking-wide mb-1">
+            Your role right now
+          </div>
+          <p className="text-xs text-zinc-300 leading-relaxed">{alert.recommendation}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AlertsSection: React.FC<{ alerts: AthleteAlert[]; loading: boolean }> = ({
+  alerts,
   loading,
 }) => {
-  const flagged = useMemo(
+  const tier2 = useMemo(
     () =>
-      athletes
-        .map((a) => ({ a, status: deriveStatus(a) }))
-        .filter(({ status }) => status === 'elevated' || status === 'escalated')
-        .sort((x, y) => (x.a.sentimentScore ?? 0) - (y.a.sentimentScore ?? 0)),
-    [athletes]
+      alerts
+        .filter((a) => a.tier === 2)
+        .sort((x, y) => (y.flaggedAt?.getTime() ?? 0) - (x.flaggedAt?.getTime() ?? 0)),
+    [alerts]
+  );
+  const tier3 = useMemo(
+    () =>
+      alerts
+        .filter((a) => a.tier === 3)
+        .sort((x, y) => (y.flaggedAt?.getTime() ?? 0) - (x.flaggedAt?.getTime() ?? 0)),
+    [alerts]
   );
 
   if (loading) return <LoadingBlock label="Scanning athlete check-ins…" />;
 
-  if (flagged.length === 0) {
+  if (alerts.length === 0) {
     return (
       <EmptyBlock
         icon={Flame}
         title="All clear"
-        body="No athletes are showing elevated or escalated signals right now. Alerts surface automatically when sentiment drops or a check-in flags concern."
+        body="No active alerts. Nora surfaces an athlete here only when they ask you to be notified, or when a situation has moved into clinical care."
       />
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
+      <style jsx>{`
+        .alerts-scroll::-webkit-scrollbar {
+          height: 6px;
+        }
+        .alerts-scroll::-webkit-scrollbar-thumb {
+          background: rgba(113, 113, 122, 0.35);
+          border-radius: 9999px;
+        }
+        .alerts-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+      `}</style>
       <div className="flex items-center justify-between">
         <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
           Athlete Alerts
         </div>
         <span className="text-[10px] px-2 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25 font-bold">
-          {flagged.length} ACTIVE
+          {alerts.length} ACTIVE
         </span>
       </div>
 
-      {flagged.map(({ a, status }) => {
-        const isCritical = status === 'escalated';
-        const stale = daysSince(a.lastActiveDate);
-        return (
-          <div
-            key={a.id}
-            className="rounded-2xl overflow-hidden p-5"
-            style={{
-              background: isCritical
-                ? 'linear-gradient(135deg, rgba(239,68,68,0.10) 0%, rgba(185,28,28,0.06) 100%)'
-                : 'linear-gradient(135deg, rgba(249,115,22,0.08) 0%, rgba(239,68,68,0.05) 100%)',
-              border: isCritical
-                ? '1px solid rgba(239,68,68,0.35)'
-                : '1px solid rgba(249,115,22,0.25)',
-            }}
-          >
-            <div className="flex items-start gap-3 mb-4">
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                  isCritical ? 'bg-red-500/20' : 'bg-orange-500/20'
-                }`}
-              >
-                <AlertTriangle className={`w-5 h-5 ${isCritical ? 'text-red-400' : 'text-orange-400'}`} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold text-white">Nora Alert — {a.displayName}</span>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full border ${
-                      isCritical
-                        ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                        : 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-                    }`}
-                  >
-                    {STATUS_META[status].label}
-                  </span>
-                </div>
-                <div className="text-xs text-zinc-500 mt-0.5">
-                  Last check-in {stale === null ? 'unknown' : stale === 0 ? 'today' : `${stale}d ago`}
-                </div>
-              </div>
-            </div>
-
-            <p className="text-sm text-zinc-300 leading-relaxed mb-4">
-              {a.displayName}&apos;s recent sentiment is trending{' '}
-              <span className={isCritical ? 'text-red-400 font-semibold' : 'text-orange-400 font-semibold'}>
-                {isCritical ? 'sharply negative' : 'downward'}
-              </span>
-              . Reach out to check in before their next session.
-            </p>
-
-            <div className="grid grid-cols-3 gap-3">
-              <MetricTile label="Mood" value={a.sentimentScore?.toFixed(2) ?? '—'} />
-              <MetricTile label="Conversations" value={a.conversationCount} />
-              <MetricTile label="Sessions" value={a.totalSessions} />
-            </div>
+      {/* ── Tier 2 — athletes who asked you to know (consent-based) ── */}
+      {tier2.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <BellRing className="w-4 h-4 text-orange-400" />
+            <h3 className="text-sm font-semibold text-white">They asked you to know</h3>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/25 font-bold">
+              {tier2.length}
+            </span>
           </div>
-        );
-      })}
+          <p className="text-xs text-zinc-500 mb-3 max-w-2xl">
+            Nora detected an elevated-concern moment and these athletes explicitly chose to loop you
+            in. A direct, supportive check-in goes a long way.
+          </p>
+          <div className="flex gap-4 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory alerts-scroll">
+            {tier2.map((a) => (
+              <Tier2AlertCard key={a.id} alert={a} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Tier 3 — being handled by clinical care (monitoring) ── */}
+      {tier3.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <ShieldCheck className="w-4 h-4 text-[#A78BFA]" />
+            <h3 className="text-sm font-semibold text-white">Being handled by clinical care</h3>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#A78BFA]/15 text-[#A78BFA] border border-[#A78BFA]/25 font-bold">
+              {tier3.length}
+            </span>
+          </div>
+          <p className="text-xs text-zinc-500 mb-3 max-w-2xl">
+            Nora, PulseCheck, and AuntEdna have already stepped in for these athletes. This is for
+            your awareness — no coaching action needed, just care and discretion.
+          </p>
+          <div className="space-y-3">
+            {tier3.map((a) => (
+              <Tier3MonitorCard key={a.id} alert={a} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -774,14 +1348,46 @@ const InboxSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean; isDem
 // Staff
 // ---------------------------------------------------------------------------
 
-type StaffRow = { id: string; name: string; role: string; email: string; status: 'active' | 'invited' };
+type StaffRow = {
+  id: string;
+  name: string;
+  role: string;
+  email: string;
+  status: 'active' | 'invited';
+  avatarUrl?: string;
+  joinedAt?: string; // ISO date the staffer was onboarded (active members)
+};
 
 const DEMO_STAFF: StaffRow[] = [
-  { id: 's1', name: 'Coach Mayo', role: 'Head Coach', email: 'coach.mayo@fitwithpulse.ai', status: 'active' },
-  { id: 's2', name: 'Dana Reyes', role: 'Assistant Coach', email: 'dana.reyes@example.com', status: 'active' },
-  { id: 's3', name: 'Priya Nair', role: 'Athletic Trainer', email: 'priya.nair@example.com', status: 'active' },
+  { id: 's1', name: 'Coach Mayo', role: 'Head Coach', email: 'coach.mayo@fitwithpulse.ai', status: 'active', joinedAt: '2024-08-15' },
+  { id: 's2', name: 'Dana Reyes', role: 'Assistant Coach', email: 'dana.reyes@example.com', status: 'active', joinedAt: '2025-01-10' },
+  { id: 's3', name: 'Priya Nair', role: 'Athletic Trainer', email: 'priya.nair@example.com', status: 'active', joinedAt: '2025-09-03' },
   { id: 's4', name: 'Marcus Hill', role: 'Performance Staff', email: 'marcus.hill@example.com', status: 'invited' },
 ];
+
+// Human-readable tenure since onboarding, e.g. "1 yr 9 mo" / "3 mo".
+const formatTenure = (joinedAt?: string): string | null => {
+  if (!joinedAt) return null;
+  const start = new Date(joinedAt);
+  if (isNaN(start.getTime())) return null;
+  const now = new Date();
+  let months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+  if (now.getDate() < start.getDate()) months -= 1;
+  if (months < 1) return 'New this month';
+  const years = Math.floor(months / 12);
+  const rem = months % 12;
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years} yr`);
+  if (rem > 0) parts.push(`${rem} mo`);
+  return parts.join(' ');
+};
+
+const formatJoined = (joinedAt?: string): string | null => {
+  if (!joinedAt) return null;
+  const d = new Date(joinedAt);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+};
 
 const StaffSection: React.FC<{ isDemo?: boolean; coachName: string }> = ({ isDemo }) => {
   const [staff, setStaff] = useState<StaffRow[]>(isDemo ? DEMO_STAFF : []);
@@ -857,32 +1463,67 @@ const StaffSection: React.FC<{ isDemo?: boolean; coachName: string }> = ({ isDem
           body="Invite assistant coaches, trainers, and performance staff to help run the team. They'll get access based on the role you assign."
         />
       ) : (
-        <div className="space-y-2">
-          {staff.map((s) => (
-            <div
-              key={s.id}
-              className="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/40 border border-zinc-700/30"
-            >
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#E0FE10]/25 to-green-500/15 border border-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
-                <span className="text-xs font-bold text-[#E0FE10]">{initialsOf(s.name)}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-white truncate">{s.name}</div>
-                <div className="text-xs text-zinc-500 truncate">
-                  {s.role} · {s.email}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {staff.map((s) => {
+            const tenure = formatTenure(s.joinedAt);
+            const joined = formatJoined(s.joinedAt);
+            return (
+              <div
+                key={s.id}
+                className="relative flex flex-col p-4 rounded-2xl bg-zinc-800/40 border border-zinc-700/30 hover:border-zinc-600/50 transition-colors"
+              >
+                {/* Status badge — top right */}
+                <span
+                  className={`absolute top-3 right-3 text-[10px] px-2 py-1 rounded-full border font-semibold ${
+                    s.status === 'active'
+                      ? 'bg-green-500/15 text-green-400 border-green-500/25'
+                      : 'bg-amber-500/15 text-amber-400 border-amber-500/25'
+                  }`}
+                >
+                  {s.status === 'active' ? 'Active' : 'Invited'}
+                </span>
+
+                {/* Header: avatar + name + role */}
+                <div className="flex items-center gap-3">
+                  {s.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={s.avatarUrl}
+                      alt={s.name}
+                      className="w-14 h-14 rounded-full object-cover border border-[#E0FE10]/20 flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#E0FE10]/25 to-green-500/15 border border-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-base font-bold text-[#E0FE10]">{initialsOf(s.name)}</span>
+                    </div>
+                  )}
+                  <div className="min-w-0 pr-14">
+                    <div className="text-base font-semibold text-white truncate">{s.name}</div>
+                    <div className="text-xs font-medium text-[#E0FE10]/80 truncate">{s.role}</div>
+                  </div>
+                </div>
+
+                {/* Details */}
+                <div className="mt-4 space-y-2 border-t border-zinc-700/30 pt-3">
+                  <div className="flex items-center gap-2 text-xs text-zinc-400 min-w-0">
+                    <Mail className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+                    <span className="truncate">{s.email}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-zinc-400">
+                    <CalendarDays className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+                    {s.status === 'active' && tenure ? (
+                      <span>
+                        {tenure} on platform
+                        {joined && <span className="text-zinc-600"> · since {joined}</span>}
+                      </span>
+                    ) : (
+                      <span className="text-zinc-500">Awaiting acceptance</span>
+                    )}
+                  </div>
                 </div>
               </div>
-              <span
-                className={`text-[10px] px-2 py-1 rounded-full border font-semibold ${
-                  s.status === 'active'
-                    ? 'bg-green-500/15 text-green-400 border-green-500/25'
-                    : 'bg-amber-500/15 text-amber-400 border-amber-500/25'
-                }`}
-              >
-                {s.status === 'active' ? 'Active' : 'Invited'}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -890,13 +1531,361 @@ const StaffSection: React.FC<{ isDemo?: boolean; coachName: string }> = ({ isDem
 };
 
 // ---------------------------------------------------------------------------
+// Athlete Profile — slide-over drawer opened from the roster
+// ---------------------------------------------------------------------------
+
+const Sparkline: React.FC<{ values: number[]; color: string }> = ({ values, color }) => {
+  if (values.length < 2) {
+    return <div className="h-12 flex items-center text-[11px] text-zinc-600">Not enough data yet</div>;
+  }
+  const w = 280;
+  const h = 48;
+  const pad = 4;
+  const min = -1;
+  const max = 1;
+  const pts = values
+    .map((v, i) => {
+      const x = pad + (i / (values.length - 1)) * (w - 2 * pad);
+      const y = pad + (1 - (v - min) / (max - min)) * (h - 2 * pad);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+  return (
+    <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="h-12">
+      <line x1={pad} x2={w - pad} y1={h / 2} y2={h / 2} stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
+      <polyline
+        points={pts}
+        fill="none"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+};
+
+const ProfileStat: React.FC<{ label: string; value: React.ReactNode; sub?: string; color?: string }> = ({
+  label,
+  value,
+  sub,
+  color,
+}) => (
+  <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
+    <div className="text-lg font-bold text-white" style={color ? { color } : undefined}>
+      {value}
+    </div>
+    <div className="text-[10px] text-zinc-500 uppercase tracking-wide mt-0.5">{label}</div>
+    {sub && <div className="text-[10px] text-zinc-600 mt-0.5">{sub}</div>}
+  </div>
+);
+
+const AthleteProfileDrawer: React.FC<{
+  athlete: CoachAthlete | null;
+  alerts: AthleteAlert[];
+  onClose: () => void;
+}> = ({ athlete, alerts, onClose }) => {
+  const [history, setHistory] = useState<{ score: number; messages: number }[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  useEffect(() => {
+    if (!athlete) return;
+    let cancelled = false;
+    setLoadingHistory(true);
+    setHistory([]);
+    coachService
+      .getDailySentimentHistory(athlete.id, 28)
+      .then((rows: any[]) => {
+        if (cancelled) return;
+        // Service returns newest-first; keep that order for trend math.
+        setHistory(rows.map((r) => ({ score: r.sentimentScore ?? 0, messages: r.messageCount ?? 0 })));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingHistory(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [athlete?.id]);
+
+  // Lock body scroll + ESC to close while open.
+  useEffect(() => {
+    if (!athlete) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [athlete, onClose]);
+
+  const tier3 = athlete ? alerts.find((a) => a.athleteId === athlete.id && a.tier === 3) : undefined;
+  const tier2 = athlete ? alerts.find((a) => a.athleteId === athlete.id && a.tier === 2) : undefined;
+  const walledOff = !!tier3;
+
+  const status = athlete ? deriveStatus(athlete) : 'pending';
+  const mood = moodMeta(athlete?.sentimentScore ?? 0);
+  const recentScores = history.map((h) => h.score);
+  const trend = trendOf(recentScores);
+  const checkinsLast7 = history.slice(0, 7).filter((h) => h.messages > 0).length;
+  const curriculum = athlete ? buildCurriculum(athlete) : [];
+  const completedModules = curriculum.filter((c) => c.status === 'completed').length;
+
+  const trendMeta: Record<SentimentTrend, { label: string; color: string; icon: React.ElementType }> = {
+    improving: { label: 'Improving', color: '#22C55E', icon: TrendingUp },
+    declining: { label: 'Declining', color: '#F97316', icon: TrendingDown },
+    steady: { label: 'Steady', color: '#A1A1AA', icon: Activity },
+  };
+  const TrendIcon = trendMeta[trend].icon;
+  const first = firstNameOf(athlete?.displayName);
+
+  return (
+    <AnimatePresence>
+      {athlete && (
+        <motion.div
+          className="fixed inset-0 z-50 flex justify-end"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+
+          {/* Panel */}
+          <motion.aside
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', stiffness: 320, damping: 34 }}
+            className="relative w-full max-w-xl h-full overflow-y-auto border-l border-zinc-800/70"
+            style={{ background: 'linear-gradient(180deg, #111113 0%, #0a0a0b 100%)' }}
+          >
+            {/* Header */}
+            <div className="sticky top-0 z-10 px-6 py-4 border-b border-zinc-800/60 bg-[#111113]/90 backdrop-blur flex items-start gap-3">
+              {athlete.profileImageUrl ? (
+                <img
+                  src={athlete.profileImageUrl}
+                  alt={athlete.displayName}
+                  className="h-12 w-12 rounded-full object-cover ring-1 ring-white/10 flex-shrink-0"
+                />
+              ) : (
+                <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-zinc-800 text-sm font-bold text-zinc-200 ring-1 ring-white/10">
+                  {initialsOf(athlete.displayName)}
+                </span>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-lg font-bold text-white truncate">{athlete.displayName}</div>
+                <div className="flex items-center gap-1.5 text-xs text-zinc-500 truncate">
+                  <Mail className="w-3 h-3" /> {athlete.email}
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="w-8 h-8 rounded-lg bg-zinc-800/60 border border-zinc-700/40 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition flex-shrink-0"
+                aria-label="Close profile"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-6">
+              {/* Walled-off / watch-list banner (Tier 3) */}
+              {walledOff && (
+                <div className="rounded-2xl p-4 border" style={{ background: 'rgba(167,139,250,0.08)', borderColor: 'rgba(167,139,250,0.35)' }}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Lock className="w-4 h-4 text-[#A78BFA]" />
+                    <span className="text-sm font-bold text-white">On clinical watch list</span>
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#A78BFA]/20 text-[#A78BFA] border border-[#A78BFA]/30 font-bold uppercase tracking-wide">
+                      Curriculum paused
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-300 leading-relaxed">
+                    A Tier 3 escalation automatically placed {first} on the watch list. Self-guided
+                    PulseCheck modules are paused while clinical care leads
+                    {tier3?.clinicalContact ? ` (${tier3.clinicalContact})` : ''}. Your role is awareness
+                    and discretion — no coaching action needed.
+                  </p>
+                </div>
+              )}
+
+              {/* Two distinct signals: readiness (sentiment) + care (escalation) */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1.5">Readiness signal</div>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${STATUS_META[status].dot}`} />
+                    <span className={`text-sm font-semibold ${STATUS_META[status].text}`}>
+                      {STATUS_META[status].label}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-zinc-600 mt-1">From recent check-in sentiment</div>
+                </div>
+                <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1.5">Care &amp; escalation</div>
+                  {walledOff ? (
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#A78BFA]" />
+                      <span className="text-sm font-semibold text-[#A78BFA]">In clinical care</span>
+                    </div>
+                  ) : tier2 ? (
+                    <div className="flex items-center gap-2">
+                      <BellRing className="w-3.5 h-3.5 text-orange-400" />
+                      <span className="text-sm font-semibold text-orange-400">Tier 2 — notified you</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Check className="w-3.5 h-3.5 text-green-400" />
+                      <span className="text-sm font-semibold text-green-400">No active escalation</span>
+                    </div>
+                  )}
+                  <div className="text-[10px] text-zinc-600 mt-1">Authoritative care state</div>
+                </div>
+              </div>
+
+              {/* Sentiment / mood trend */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Mood · last 28 days</h3>
+                  <span className="flex items-center gap-1 text-xs font-medium" style={{ color: trendMeta[trend].color }}>
+                    <TrendIcon className="w-3.5 h-3.5" /> {trendMeta[trend].label}
+                  </span>
+                </div>
+                <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
+                  {loadingHistory ? (
+                    <div className="h-12 flex items-center text-[11px] text-zinc-600">Loading trend…</div>
+                  ) : (
+                    <Sparkline values={[...recentScores].reverse()} color={mood.color} />
+                  )}
+                  <div className="flex items-center justify-between text-[10px] text-zinc-600 mt-1">
+                    <span>28 days ago</span>
+                    <span>Today ▸</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3 mt-3">
+                  <ProfileStat label="Current mood" value={mood.label} color={mood.color} />
+                  <ProfileStat label="Check-ins" value={`${checkinsLast7}/7`} sub="last 7 days" />
+                  <ProfileStat label="Conversations" value={athlete.conversationCount} />
+                </div>
+              </div>
+
+              {/* Check-in / engagement stats */}
+              <div>
+                <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">Engagement</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <ProfileStat label="Sessions" value={athlete.totalSessions} />
+                  <ProfileStat label="Weekly goal" value={`${athlete.weeklyGoalProgress}%`} />
+                  <ProfileStat
+                    label="Last check-in"
+                    value={daysSince(athlete.lastActiveDate) === 0 ? 'Today' : relativeWhen(athlete.lastActiveDate)}
+                  />
+                </div>
+              </div>
+
+              {/* Care detail — what's being done (Tier 2 or Tier 3) */}
+              {(tier3 || tier2) && (
+                <div>
+                  <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">
+                    {tier3 ? 'Care steps taken' : 'What Nora has done'}
+                  </h3>
+                  <div className="space-y-1.5">
+                    {(tier3 ?? tier2)!.noraActions.map((n) => (
+                      <NoraActionRow key={n.label} action={n} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Mental readiness curriculum */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
+                    Mental readiness curriculum
+                  </h3>
+                  {walledOff ? (
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#A78BFA]/15 text-[#A78BFA] border border-[#A78BFA]/25 font-semibold flex items-center gap-1">
+                      <Lock className="w-3 h-3" /> Paused
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-zinc-500">
+                      {completedModules}/{curriculum.length} complete
+                    </span>
+                  )}
+                </div>
+                <div className={`space-y-2 ${walledOff ? 'opacity-50 pointer-events-none select-none' : ''}`}>
+                  {curriculum.map(({ module: m, status: ms, pct }) => {
+                    const Icon = m.icon;
+                    const effectiveStatus: ModuleStatus = walledOff ? 'locked' : ms;
+                    return (
+                      <div
+                        key={m.id}
+                        className="flex items-center gap-3 p-2.5 rounded-xl bg-zinc-800/40 border border-zinc-700/30"
+                      >
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{ backgroundColor: `${m.color}15` }}
+                        >
+                          <Icon className="w-4 h-4" style={{ color: m.color }} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-white">{m.name}</div>
+                          <div className="text-[10px] text-zinc-500 truncate">{m.detail}</div>
+                          {!walledOff && effectiveStatus === 'in-progress' && (
+                            <div className="mt-1.5 h-1 bg-zinc-700/50 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: m.color }} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-shrink-0">
+                          {walledOff ? (
+                            <Lock className="w-4 h-4 text-zinc-600" />
+                          ) : effectiveStatus === 'completed' ? (
+                            <CheckCircle2 className="w-4 h-4 text-green-400" />
+                          ) : effectiveStatus === 'in-progress' ? (
+                            <span className="text-[10px] text-zinc-400 font-medium">{pct}%</span>
+                          ) : (
+                            <Lock className="w-4 h-4 text-zinc-700" />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {walledOff && (
+                  <p className="text-[10px] text-zinc-600 mt-2 leading-relaxed">
+                    Modules resume automatically once {first} is cleared from clinical care.
+                  </p>
+                )}
+              </div>
+
+              {/* Footer actions */}
+              <div className="pt-1">
+                {walledOff ? (
+                  <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 text-center text-xs text-zinc-500">
+                    Messaging routes through the care team while {first} is on the watch list.
+                  </div>
+                ) : (
+                  <button className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95 transition">
+                    <MessageSquare className="w-4 h-4" /> Message {first}
+                  </button>
+                )}
+              </div>
+            </div>
+          </motion.aside>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Team Roster
 // ---------------------------------------------------------------------------
 
-const RosterSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean }> = ({
-  athletes,
-  loading,
-}) => {
+const RosterSection: React.FC<{
+  athletes: CoachAthlete[];
+  loading: boolean;
+  onSelectAthlete: (id: string) => void;
+}> = ({ athletes, loading, onSelectAthlete }) => {
   const rows = useMemo(
     () =>
       athletes
@@ -979,10 +1968,19 @@ const RosterSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean }> = 
             return (
               <motion.div
                 key={a.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => onSelectAthlete(a.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelectAthlete(a.id);
+                  }
+                }}
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: Math.min(i * 0.02, 0.4) }}
-                className="grid grid-cols-[1fr_110px_90px] sm:grid-cols-[1fr_1fr_120px] gap-0 items-center px-3 py-2.5 border-b border-zinc-800/50 text-sm hover:bg-zinc-800/40"
+                className="grid grid-cols-[1fr_110px_90px] sm:grid-cols-[1fr_1fr_120px] gap-0 items-center px-3 py-2.5 border-b border-zinc-800/50 text-sm hover:bg-zinc-800/40 cursor-pointer focus:outline-none focus:bg-zinc-800/50"
               >
                 <div className="flex min-w-0 items-center gap-2.5">
                   {a.profileImageUrl ? (
@@ -1542,21 +2540,193 @@ const NoraChatPanel: React.FC<{
 // Reports
 // ---------------------------------------------------------------------------
 
-const ReportsSection: React.FC<{ coachId?: string }> = ({ coachId }) => {
+// Shared row chrome for a delivered-report list item (demo + live).
+const ReportRow: React.FC<{
+  onClick: () => void;
+  accent: string;
+  title: string;
+  isLatest?: boolean;
+  cadenceLabel?: string;
+  meta: React.ReactNode;
+}> = ({ onClick, accent, title, isLatest, cadenceLabel, meta }) => (
+  <button
+    onClick={onClick}
+    className="group flex items-center gap-4 rounded-2xl border border-white/10 bg-zinc-900/50 p-4 text-left transition hover:-translate-y-0.5 hover:border-zinc-600 hover:bg-zinc-900/80"
+  >
+    <div
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+      style={{ background: `${accent}1f`, color: accent }}
+    >
+      <FileText className="h-5 w-5" />
+    </div>
+    <div className="min-w-0 flex-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-semibold text-white">{title}</span>
+        {isLatest && (
+          <span className="rounded-full border border-[#E0FE10]/20 bg-[#E0FE10]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#E0FE10]">
+            Latest
+          </span>
+        )}
+        {cadenceLabel && (
+          <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+            {cadenceLabel}
+          </span>
+        )}
+      </div>
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">{meta}</div>
+    </div>
+    <ArrowRight className="h-4 w-4 shrink-0 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-zinc-300" />
+  </button>
+);
+
+const ReportsArchiveHeader: React.FC<{ children?: React.ReactNode }> = ({ children }) => (
+  <div>
+    <div className="text-lg font-bold text-white">Reports</div>
+    <p className="text-sm text-zinc-400 mt-1 max-w-2xl leading-relaxed">{children}</p>
+  </div>
+);
+
+// --- Demo archive -----------------------------------------------------------
+// A coach's Reports tab is the archive of every report delivered to *their* team —
+// one team, one sport, weekly or daily per their provisioning. The demo coach is set
+// to a weekly read; we synthesize a believable delivery history and render the full
+// report inline on click so a coach can be walked through how to read one. (Live
+// archives load from Firestore — see ReportsSection below.)
+const DEMO_REPORT_SPORT_ID = 'basketball';
+// Institution + team for the demo coach's archive. Mirrors a provisioned team
+// (organization · team) so the report header reads natively. The sport icon is
+// resolved from the SportConfiguration lookup, not hardcoded.
+const DEMO_REPORT_ORG_NAME = 'The Athletic Mind Council';
+const DEMO_REPORT_TEAM_NAME = "Men's Basketball";
+
+type DemoDeliveredReport = {
+  id: string;
+  weekLabel: string;
+  deliveredAt: Date;
+  deliveredLabel: string;
+  adherencePct: number;
+  followUps: number;
+  isLatest: boolean;
+};
+
+const buildDemoDeliveredReports = (): DemoDeliveredReport[] => {
+  const fmtDay = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const fmtFull = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  // Anchor on the most recent Sunday so deliveries read like a real weekly cadence.
+  const anchor = new Date();
+  anchor.setHours(0, 0, 0, 0);
+  anchor.setDate(anchor.getDate() - anchor.getDay());
+  return Array.from({ length: 10 }).map((_, i) => {
+    const deliveredAt = new Date(anchor);
+    deliveredAt.setDate(anchor.getDate() - i * 7);
+    const weekEnd = new Date(deliveredAt);
+    weekEnd.setDate(deliveredAt.getDate() - 1);
+    const weekStart = new Date(weekEnd);
+    weekStart.setDate(weekEnd.getDate() - 6);
+    return {
+      id: `demo-weekly-${i}`,
+      weekLabel: `Week of ${fmtDay(weekStart)} – ${fmtDay(weekEnd)}, ${weekEnd.getFullYear()}`,
+      deliveredAt,
+      deliveredLabel: fmtFull(deliveredAt),
+      adherencePct: Math.round((0.84 - (i % 4) * 0.04) * 100),
+      followUps: i % 3,
+      isLatest: i === 0,
+    };
+  });
+};
+
+const DemoReportsArchive: React.FC = () => {
+  const reports = useMemo(buildDemoDeliveredReports, []);
+  const sport = useMemo(
+    () => getDefaultPulseCheckSports().find((s) => s.id === DEMO_REPORT_SPORT_ID),
+    [],
+  );
+  const demo = COACH_REPORT_DEMO_EXAMPLES[DEMO_REPORT_SPORT_ID];
+  const accent = getSportColor(DEMO_REPORT_SPORT_ID).primary;
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const selected = useMemo(() => reports.find((r) => r.id === selectedId) || null, [reports, selectedId]);
+
+  if (selected && sport && demo) {
+    const surface = buildDemoCoachSurface(demo, sport, selected.deliveredLabel);
+    // Make the opened report match the row the coach clicked, and read as this
+    // coach's own team. Shallow-clone the adherence block so we never mutate the
+    // shared fixture.
+    surface.meta.weekLabel = selected.weekLabel;
+    surface.meta.organizationName = DEMO_REPORT_ORG_NAME;
+    surface.meta.teamName = DEMO_REPORT_TEAM_NAME;
+    surface.adherence = { ...surface.adherence, overallAdherencePct: selected.adherencePct / 100 };
+    // Bleed the dashboard content padding so the report fills the view natively.
+    return (
+      <div className="-mx-4 -mt-6 sm:-mx-6">
+        <div className="px-4 pb-3 pt-4 sm:px-6">
+          <button
+            onClick={() => setSelectedId(null)}
+            className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            All reports
+          </button>
+        </div>
+        <CoachReportView embedded report={surface} sport={sport} generatedAtLabel={selected.deliveredLabel} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <ReportsArchiveHeader>
+        Every Sports Intelligence report delivered to your team, newest first. Your team is on a{' '}
+        <span className="font-medium text-zinc-200">weekly</span> read — cadence (weekly or daily) is set during
+        onboarding. Open any report to see the full read.
+      </ReportsArchiveHeader>
+
+      <div className="grid gap-3">
+        {reports.map((r) => (
+          <ReportRow
+            key={r.id}
+            onClick={() => setSelectedId(r.id)}
+            accent={accent}
+            title={r.weekLabel}
+            isLatest={r.isLatest}
+            cadenceLabel="Weekly"
+            meta={(
+              <>
+                <span className="inline-flex items-center gap-1">
+                  <Calendar className="h-3.5 w-3.5" /> Delivered {r.deliveredLabel}
+                </span>
+                <span>{r.adherencePct}% adherence</span>
+                <span>{r.followUps === 0 ? 'No follow-ups' : `${r.followUps} follow-up${r.followUps > 1 ? 's' : ''}`}</span>
+              </>
+            )}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const formatDeliveredDate = (d?: Date) =>
+  d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date pending';
+
+const ReportsSection: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coachId, isDemo }) => {
   const router = useRouter();
-  const [report, setReport] = useState<CoachReportListItem | null>(null);
+  const [reports, setReports] = useState<CoachReportListItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    if (!coachId) return;
+    if (isDemo || !coachId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    getLatestSportsIntelligenceReportForCoach(coachId)
-      .then((r) => {
-        if (!cancelled) setReport(r);
+    listSentSportsIntelligenceReportsForCoach(coachId)
+      .then((rs) => {
+        if (!cancelled) setReports(rs);
       })
       .catch(() => {
-        if (!cancelled) setReport(null);
+        if (!cancelled) setReports([]);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -1564,47 +2734,51 @@ const ReportsSection: React.FC<{ coachId?: string }> = ({ coachId }) => {
     return () => {
       cancelled = true;
     };
-  }, [coachId]);
+  }, [coachId, isDemo]);
+
+  // Demo dashboards have no live archive — synthesize a delivery history instead.
+  if (isDemo) return <DemoReportsArchive />;
 
   if (loading) return <LoadingBlock label="Loading reports…" />;
 
-  if (!report) {
+  if (reports.length === 0) {
     return (
       <EmptyBlock
         icon={BarChart3}
         title="No reports yet"
-        body="Your latest Sports Intelligence report will appear here once it's generated for your team."
+        body="Every Sports Intelligence report delivered to your team will appear here, newest first."
       />
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
-        Latest Sports Intelligence Report
-      </div>
-      <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <div className="text-lg font-bold text-white">{report.title || 'Sports Intelligence Report'}</div>
-            <div className="text-sm text-zinc-400 mt-1">
-              {[report.teamName, report.weekLabel].filter(Boolean).join(' • ')}
-            </div>
-          </div>
-          {typeof report.adherence?.overallAdherencePct === 'number' && (
-            <span className="text-xs px-2.5 py-1 rounded-full bg-[#E0FE10]/10 text-[#E0FE10] border border-[#E0FE10]/20 font-medium">
-              {Math.round(report.adherence.overallAdherencePct)}% adherence
-            </span>
-          )}
-        </div>
-        {report.href && (
-          <button
+    <div className="space-y-5">
+      <ReportsArchiveHeader>
+        Every Sports Intelligence report delivered to your team, newest first. Open any report to see the full read.
+      </ReportsArchiveHeader>
+
+      <div className="grid gap-3">
+        {reports.map((report, index) => (
+          <ReportRow
+            key={`${report.teamId}-${report.reportId}`}
             onClick={() => router.push(report.href)}
-            className="mt-4 px-4 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95"
-          >
-            Open report
-          </button>
-        )}
+            accent="#E0FE10"
+            title={report.weekLabel || report.title || 'Sports Intelligence Report'}
+            isLatest={index === 0}
+            meta={(
+              <>
+                <span className="inline-flex items-center gap-1">
+                  <Calendar className="h-3.5 w-3.5" /> Delivered{' '}
+                  {formatDeliveredDate(report.sentAt || report.publishedAt || report.generatedAt)}
+                </span>
+                {typeof report.adherence?.overallAdherencePct === 'number' && (
+                  <span>{Math.round(report.adherence.overallAdherencePct)}% adherence</span>
+                )}
+                {report.teamName && <span className="text-zinc-600">{report.teamName}</span>}
+              </>
+            )}
+          />
+        ))}
       </div>
     </div>
   );

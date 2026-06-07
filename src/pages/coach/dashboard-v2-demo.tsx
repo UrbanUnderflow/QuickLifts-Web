@@ -1,8 +1,13 @@
 import React from 'react';
 import Head from 'next/head';
-import { CoachDashboardShell } from './dashboard-v2';
+import { CoachDashboardShell, AthleteAlert } from './dashboard-v2';
 import { coachService, DailySentimentRecord } from '../../api/firebase/coach/service';
 import { noraVaultService, NoraVaultEntry } from '../../api/firebase/coach/noraVaultService';
+import {
+  coachScheduleService,
+  ScheduleEvent,
+  ScheduleEventDraft,
+} from '../../api/firebase/coach/coachScheduleService';
 import NoraDashboardTraining from '../../components/coach/NoraDashboardTraining';
 
 const DEMO_COACH_ID = 'demo-coach';
@@ -41,6 +46,113 @@ const demoAthletes: DemoAthlete[] = Array.from({ length: 16 }).map((_, i) => {
   };
 });
 
+const hoursAgo = (h: number) => new Date(Date.now() - h * 3600000);
+
+// Hand-authored alerts for the walkthrough. Only Tier 2 (consent-based) and
+// Tier 3 (clinical) reach this board.
+//  • Every Tier 2 below was explicitly consented to *Coach Mayo* (the demo coach).
+//    An athlete who picked a different staffer — or "don't notify anyone" — would
+//    never appear here; that's the whole point of the consent gate.
+//  • Tier 3 is awareness only: Nora, PulseCheck, and AuntEdna have already acted.
+const demoAlerts: AthleteAlert[] = [
+  // ── Tier 2 — consent-based (horizontal lane) ──
+  {
+    id: 'al-morgan',
+    athleteId: 'demo-a8',
+    athleteName: 'Morgan Thompson',
+    tier: 2,
+    category: 'Anxiety Indicators',
+    flaggedAt: hoursAgo(3),
+    lastCheckIn: hoursAgo(3),
+    notifiedCoachName: 'Coach Mayo',
+    summary:
+      "Morgan's been carrying a lot of pre-competition pressure this week — their check-ins point to anxiety that keeps resurfacing. Their body's fine; this is in the head.",
+    noraActions: [
+      { label: 'Box Breathing', detail: 'Ran 4 rounds together — settled in the moment.', status: 'completed' },
+      { label: 'Anchor Word reset', detail: 'Re-locked Morgan’s anchor word to a calm baseline.', status: 'completed' },
+      { label: 'Competition Walkthrough', detail: 'Queued a mental rehearsal before the next session.', status: 'queued' },
+    ],
+    recommendation:
+      "Pull Morgan aside before the next session for a quick, low-key check-in. You don't need to mention the specifics — just let them know you've got them.",
+  },
+  {
+    id: 'al-skyler',
+    athleteId: 'demo-a16',
+    athleteName: 'Skyler Patel',
+    tier: 2,
+    category: 'Persistent Distress',
+    flaggedAt: hoursAgo(7),
+    lastCheckIn: hoursAgo(7),
+    notifiedCoachName: 'Coach Mayo',
+    summary:
+      "Skyler's mood has been trending low for several days running — not a one-off bad day. They opened up to Nora and chose to bring you into the loop.",
+    noraActions: [
+      { label: 'Grounding check-in', detail: 'Walked through a short grounding exercise.', status: 'completed' },
+      { label: 'Daily mood follow-ups', detail: 'Nora is checking in each morning this week.', status: 'active' },
+    ],
+    recommendation:
+      "A warm, unhurried conversation matters more than advice here. Ask how they're doing and listen — let Skyler lead.",
+  },
+  {
+    id: 'al-alex',
+    athleteId: 'demo-a2',
+    athleteName: 'Alex Morgan',
+    tier: 2,
+    category: 'Injury-Related',
+    flaggedAt: hoursAgo(26),
+    lastCheckIn: hoursAgo(26),
+    notifiedCoachName: 'Coach Mayo',
+    summary:
+      "Alex is struggling with the mental side of their recovery — frustration about the timeline and feeling disconnected from the team. They asked that you know.",
+    noraActions: [
+      { label: 'Highlight Reel', detail: 'Replayed peak-performance memories to rebuild confidence.', status: 'completed' },
+      { label: 'Reframe rehab as training', detail: 'Reframing exercise to keep Alex engaged in recovery.', status: 'active' },
+    ],
+    recommendation:
+      "Keep Alex involved with the team even while they're out. A small role or a check-in on their rehab goals goes a long way.",
+  },
+  // ── Tier 3 — clinical monitoring / awareness (stack) ──
+  {
+    id: 'al-jordan',
+    athleteId: 'demo-a3',
+    athleteName: 'Jordan King',
+    tier: 3,
+    category: 'Severe Distress',
+    flaggedAt: hoursAgo(5),
+    lastCheckIn: hoursAgo(5),
+    handoffStatus: 'engaged',
+    clinicalContact: 'Dr. Liz Carter',
+    summary:
+      "Jordan shared some things this morning that go beyond what coaching should hold. Nora moved quickly and a licensed clinician is now engaged and supporting them.",
+    noraActions: [
+      { label: 'Safety check completed', detail: 'Nora confirmed Jordan was safe in the moment.', status: 'completed' },
+      { label: 'Clinical handoff to AuntEdna', detail: 'Full context securely packaged and routed to care.', status: 'completed' },
+      { label: 'Care team connected', detail: 'Dr. Liz Carter is now engaged with Jordan.', status: 'completed' },
+    ],
+    recommendation:
+      "No coaching action needed. Please don't discuss performance or availability with Jordan today — the care team has this. Keep things normal and discreet around the group.",
+  },
+  {
+    id: 'al-devon',
+    athleteId: 'demo-a10',
+    athleteName: 'Devon Washington',
+    tier: 3,
+    category: 'Rapid Deterioration',
+    flaggedAt: hoursAgo(1),
+    lastCheckIn: hoursAgo(1),
+    handoffStatus: 'connecting',
+    clinicalContact: 'the care team',
+    summary:
+      "Devon's check-ins shifted sharply in a short window. Nora flagged it as beyond coaching scope and a clinical handoff is underway right now.",
+    noraActions: [
+      { label: 'Safety check completed', detail: 'Nora confirmed Devon was safe in the moment.', status: 'completed' },
+      { label: 'Clinical handoff to AuntEdna', detail: 'Connecting Devon with a licensed clinician.', status: 'active' },
+    ],
+    recommendation:
+      "No coaching action needed yet. Hold off on any performance conversations — you'll get an update once the care team is fully engaged.",
+  },
+];
+
 const seedVault: NoraVaultEntry[] = [
   {
     id: 'seed-1',
@@ -76,6 +188,45 @@ const seedVault: NoraVaultEntry[] = [
   },
 ];
 
+// A couple of recurring items already on the calendar before any import.
+const seedSchedule: ScheduleEvent[] = [
+  {
+    id: 'sched-seed-1',
+    coachId: DEMO_COACH_ID,
+    title: 'Team meeting',
+    date: '2026-06-08',
+    time: '7:00 AM',
+    location: 'Film room',
+    type: 'meeting',
+    source: 'manual',
+    createdAt: new Date(),
+  },
+  {
+    id: 'sched-seed-2',
+    coachId: DEMO_COACH_ID,
+    title: 'Practice',
+    date: '2026-06-09',
+    time: '3:30 PM',
+    type: 'practice',
+    source: 'manual',
+    createdAt: new Date(),
+  },
+];
+
+// Canned result for the link-import walkthrough (no network/LLM in demo) —
+// a believable 2026–27 men's track & field season.
+const demoScrapeEvents: ScheduleEventDraft[] = [
+  { title: 'FSU Season Opener', date: '2026-12-05', time: 'All Day', location: 'Tallahassee, FL', type: 'competition', notes: 'Home' },
+  { title: 'Clemson Invitational', date: '2027-01-16', time: 'TBA', location: 'Clemson, SC', opponent: 'Clemson', type: 'competition', notes: 'Away' },
+  { title: 'Carolina Challenge', date: '2027-01-23', time: 'All Day', location: 'Clemson, SC', type: 'competition' },
+  { title: 'Tiger Paw Invitational', date: '2027-02-13', time: 'All Day', location: 'Clemson, SC', type: 'competition' },
+  { title: 'ACC Indoor Championships', date: '2027-02-26', endDate: '2027-02-28', time: 'All Day', location: 'Louisville, KY', type: 'competition', notes: 'Conference' },
+  { title: 'NCAA Indoor Championships', date: '2027-03-12', endDate: '2027-03-13', time: 'All Day', location: 'Virginia Beach, VA', type: 'competition' },
+  { title: 'Florida Relays', date: '2027-03-27', time: 'All Day', location: 'Gainesville, FL', opponent: 'Florida', type: 'competition', notes: 'Away' },
+  { title: 'Tom Jones Memorial', date: '2027-04-17', time: 'All Day', location: 'Gainesville, FL', type: 'competition' },
+  { title: 'ACC Outdoor Championships', date: '2027-05-13', endDate: '2027-05-15', time: 'All Day', location: 'Atlanta, GA', type: 'competition', notes: 'Conference' },
+];
+
 const toYYYYMMDD = (d: Date) => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -94,8 +245,15 @@ const CoachDashboardV2Demo: React.FC = () => {
     const originalVaultAddNote = noraVaultService.addNote.bind(noraVaultService);
     const originalVaultAddFile = noraVaultService.addFile.bind(noraVaultService);
     const originalVaultDelete = noraVaultService.deleteEntry.bind(noraVaultService);
+    const originalSchedGet = coachScheduleService.getEvents.bind(coachScheduleService);
+    const originalSchedAdd = coachScheduleService.addEvent.bind(coachScheduleService);
+    const originalSchedAddMany = coachScheduleService.addEvents.bind(coachScheduleService);
+    const originalSchedDelete = coachScheduleService.deleteEvent.bind(coachScheduleService);
+    const originalSchedScrape = coachScheduleService.scrapeUrl.bind(coachScheduleService);
 
     let vault = [...seedVault];
+    let schedule = [...seedSchedule];
+    let schedCounter = 0;
 
     const buildHistory = (athlete: DemoAthlete, days = 28): DailySentimentRecord[] => {
       const today = new Date();
@@ -188,6 +346,37 @@ const CoachDashboardV2Demo: React.FC = () => {
       vault = vault.filter((e) => e.id !== entry.id);
     }) as any;
 
+    // Schedule: in-memory, no Firebase.
+    const buildEvent = (draft: ScheduleEventDraft): ScheduleEvent => ({
+      ...draft,
+      id: `sched-local-${++schedCounter}`,
+      coachId: DEMO_COACH_ID,
+      source: draft.source || 'manual',
+      createdAt: new Date(),
+    });
+    coachScheduleService.getEvents = (async () => [...schedule]) as any;
+    coachScheduleService.addEvent = (async (_coachId: string, draft: ScheduleEventDraft) => {
+      const created = buildEvent(draft);
+      schedule = [...schedule, created];
+      return created;
+    }) as any;
+    coachScheduleService.addEvents = (async (_coachId: string, drafts: ScheduleEventDraft[]) => {
+      const created = drafts.map(buildEvent);
+      schedule = [...schedule, ...created];
+      return created;
+    }) as any;
+    coachScheduleService.deleteEvent = (async (eventId: string) => {
+      schedule = schedule.filter((e) => e.id !== eventId);
+    }) as any;
+    coachScheduleService.scrapeUrl = (async (url: string) => {
+      // Simulate the fetch+parse round-trip so the writing animation has a beat.
+      await new Promise((r) => setTimeout(r, 1100));
+      return {
+        sourceTitle: 'Men’s Track & Field — 2026–27 Schedule',
+        events: demoScrapeEvents.map((e) => ({ ...e, source: 'link' as const, sourceUrl: url })),
+      };
+    }) as any;
+
     setMockReady(true);
 
     return () => {
@@ -198,6 +387,11 @@ const CoachDashboardV2Demo: React.FC = () => {
       noraVaultService.addNote = originalVaultAddNote;
       noraVaultService.addFile = originalVaultAddFile;
       noraVaultService.deleteEntry = originalVaultDelete;
+      coachScheduleService.getEvents = originalSchedGet;
+      coachScheduleService.addEvent = originalSchedAdd;
+      coachScheduleService.addEvents = originalSchedAddMany;
+      coachScheduleService.deleteEvent = originalSchedDelete;
+      coachScheduleService.scrapeUrl = originalSchedScrape;
     };
   }, []);
 
@@ -212,6 +406,7 @@ const CoachDashboardV2Demo: React.FC = () => {
       {mockReady && (
         <CoachDashboardShell
           athletes={demoAthletes as any}
+          alerts={demoAlerts}
           loadingAthletes={false}
           coachName="Coach Mayo"
           coachEmail="coach.mayo@fitwithpulse.ai"

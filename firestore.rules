@@ -107,6 +107,7 @@ service cloud.firestore {
       return collectionName in [
         'beta-applications',
         'coach-nora-vault',
+        'coach-team-schedule',
         'company-config',
         'document-notes',
         'programming-access',
@@ -437,6 +438,17 @@ service cloud.firestore {
     // user (e.g. a linked athlete's Nora) may read so it can answer questions
     // from the coach's shared context.
     match /coach-nora-vault/{entryId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.coachId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && resource.data.coachId == request.auth.uid;
+    }
+
+    // Team schedule (Coach Dashboard v2 → Schedule tab). Same ownership model as
+    // the Nora vault: any signed-in athlete/coach can read, only the owning coach
+    // can write. Athlete-facing Nora reads these to answer "when's our next meet?".
+    match /coach-team-schedule/{eventId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn()
         && request.resource.data.coachId == request.auth.uid;

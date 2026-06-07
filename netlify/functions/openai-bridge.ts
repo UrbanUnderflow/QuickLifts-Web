@@ -33,6 +33,9 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   macraMealNote: { maxTokens: 1500, modelPattern: /gpt-4o|gpt-4/i },
   noraNutritionChat: { maxTokens: 700, modelPattern: /gpt-4o|gpt-4/i }, // Macra: Nora coach Q&A
   pulsecheckSportIntelligence: { maxTokens: 8000, modelPattern: /gpt-4o|gpt-4/i },
+  // Coach Dashboard v2 → Schedule tab: parse a scraped schedule page into
+  // structured events. Needs headroom for a full season of JSON.
+  coachScheduleImport: { maxTokens: 4000, modelPattern: /gpt-4o|gpt-4/i },
   // Admin-only: classify legacy challenges into ChallengeType enum (admin lever).
   classifyChallengeType: { maxTokens: 300, modelPattern: /gpt-4o-mini|gpt-4o/i },
   // Default bounds for generic actions

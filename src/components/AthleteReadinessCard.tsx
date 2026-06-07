@@ -1,11 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   User,
   MessageCircle,
   ArrowUpRight,
   ArrowDownRight,
   Minus,
-  TrendingUp,
   Watch,
   Sparkles,
   ShieldAlert,
@@ -13,7 +12,6 @@ import {
 } from 'lucide-react';
 import { coachService, DailySentimentRecord } from '../api/firebase/coach/service';
 import CoachAthleteMessagingModal from './CoachAthleteMessagingModal';
-import AthleteDetailsModal from './AthleteDetailsModal';
 import { useUser } from '../hooks/useUser';
 
 // Lean "triage" readiness card: status-led, one-glance trend + why + daily
@@ -33,7 +31,29 @@ interface AthleteData {
   activeEscalationTier?: number;
   deviceCoveragePct?: number;
   deviceConnected?: boolean;
+  deviceDailyPresence?: boolean[];
 }
+
+// Trend-level theme extraction from a day's check-in messages (no transcripts).
+const TOPIC_RULES: { label: string; rx: RegExp }[] = [
+  { label: 'Sleep', rx: /\b(sleep|insomnia|tired|exhaust|rest)\b/i },
+  { label: 'Stress', rx: /\b(stress|stressed|overwhelm|pressure)\b/i },
+  { label: 'Anxiety', rx: /\b(anxious|anxiety|worried|worry|nervous)\b/i },
+  { label: 'Mood', rx: /\b(sad|down|depress|low)\b/i },
+  { label: 'Fatigue', rx: /\b(fatigue|drained|burnt|burnout)\b/i },
+  { label: 'Injury', rx: /\b(injur|hurt|pain|sore)\b/i },
+  { label: 'Competition', rx: /\b(game|match|compete|competition|meet)\b/i },
+  { label: 'Confidence', rx: /\b(confiden|doubt|believe|nerves)\b/i },
+];
+const extractTopics = (messages: string[]): string[] => {
+  const text = messages.join(' ').toLowerCase();
+  const out: string[] = [];
+  for (const r of TOPIC_RULES) {
+    if (r.rx.test(text)) out.push(r.label);
+    if (out.length >= 3) break;
+  }
+  return out;
+};
 
 type StatusKey = 'optimal' | 'flagged' | 'elevated' | 'escalated' | 'pending';
 
@@ -75,10 +95,34 @@ type DayDetail = DayPoint & {
 };
 
 // Escalation tiers (mirrors the escalation system; demo derives them from status).
-const TIER: Record<number, { label: string; pathway: string; color: string }> = {
-  1: { label: 'Tier 1 · Monitor', pathway: "You've been notified — check in when you can.", color: '#3B82F6' },
-  2: { label: 'Tier 2 · Elevated risk', pathway: 'Support pathway active, with athlete consent.', color: '#F97316' },
-  3: { label: 'Tier 3 · Critical', pathway: 'Urgent — support pathway activated immediately.', color: '#EF4444' },
+const TIER: Record<
+  number,
+  { label: string; pathway: string; color: string; means: string; action: string; indicators: string[] }
+> = {
+  1: {
+    label: 'Tier 1 · Monitor',
+    pathway: "You've been notified — check in when you can.",
+    color: '#3B82F6',
+    means: 'Concerns worth your attention — not an immediate clinical risk.',
+    action: "You've been notified. Check in with the athlete when convenient.",
+    indicators: ['Performance stress', 'Fatigue', 'Emotional variability'],
+  },
+  2: {
+    label: 'Tier 2 · Elevated risk',
+    pathway: 'Support pathway active, with athlete consent.',
+    color: '#F97316',
+    means: 'Elevated distress that may benefit from professional support.',
+    action: 'Support pathway activated with athlete consent — routing in progress.',
+    indicators: ['Persistent distress', 'Anxiety', 'Recurring concerns'],
+  },
+  3: {
+    label: 'Tier 3 · Critical',
+    pathway: 'Urgent — support pathway activated immediately.',
+    color: '#EF4444',
+    means: 'Critical safety concern requiring immediate professional intervention.',
+    action: 'Support pathway activated immediately — a human professional is engaged.',
+    indicators: ['Severe distress', 'Safety risk', 'Crisis indicators'],
+  },
 };
 
 const deriveTier = (status: StatusKey, sentiment: number, provided?: number): number => {
@@ -113,7 +157,6 @@ const deriveThemes = (id: string, status: StatusKey): string[] => {
 const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> = ({ athlete, demo }) => {
   const [history, setHistory] = useState<DailySentimentRecord[] | null>(null);
   const [messagingOpen, setMessagingOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const currentUser = useUser();
 
   useEffect(() => {
@@ -144,9 +187,11 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
       const has = !!rec && rec.messageCount > 0;
       const score = has ? rec!.sentimentScore : 0;
       const h = hashStr(`${athlete.id}:${ymd(d)}`);
-      // Per-day device/modules/topics are demo-only synth (no real per-day source
-      // wired yet); on live they stay empty so the tooltip shows real data only.
-      const device = demo && has ? h % 5 !== 0 : false;
+      // Device per-day: real from the device monitor's dailyPresence on live
+      // (index aligned oldest→today), synth in demo. Modules/topics stay demo-only
+      // synth here; live topics are fetched lazily on hover.
+      const di = out.length; // 0 = oldest … 13 = today
+      const device = demo ? (has ? h % 5 !== 0 : false) : (athlete.deviceDailyPresence?.[di] ?? false);
       const modules = demo && has ? Math.min(3, score < -0.3 ? h % 2 : 1 + (h % 3)) : 0;
       const moodLabel = !has ? 'No check-in' : score >= 0.3 ? 'Good' : score >= -0.3 ? 'Mixed' : 'Low';
       let topics: string[] = [];
@@ -158,17 +203,41 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
       out.push({ has, score, date: d, moodLabel, device, modules, topics });
     }
     return out;
-  }, [history, athlete.id, demo]);
+  }, [history, athlete.id, demo, athlete.deviceDailyPresence]);
 
-  // Per-day hover tooltip state.
+  // Per-day hover tooltip state. On live, the day's themes are fetched lazily
+  // from that day's check-in messages (trend-level keywords only).
   const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
-  const onDayEnter = useCallback((idx: number, e: React.MouseEvent) => {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const half = 116; // ~half the tooltip width; keep it on screen
-    const x = Math.max(half + 8, Math.min((typeof window !== 'undefined' ? window.innerWidth : 1280) - half - 8, r.left + r.width / 2));
-    setHover({ idx, x, y: r.top });
-  }, []);
+  const [dayTopics, setDayTopics] = useState<Record<string, string[]>>({});
+  const fetchedDaysRef = useRef<Set<string>>(new Set());
+  const onDayEnter = useCallback(
+    (idx: number, e: React.MouseEvent) => {
+      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const half = 116; // ~half the tooltip width; keep it on screen
+      const x = Math.max(half + 8, Math.min((typeof window !== 'undefined' ? window.innerWidth : 1280) - half - 8, r.left + r.width / 2));
+      setHover({ idx, x, y: r.top });
+      if (demo) return;
+      const d = last14[idx];
+      if (!d || !d.has) return;
+      const key = ymd(d.date);
+      if (fetchedDaysRef.current.has(key)) return;
+      fetchedDaysRef.current.add(key);
+      coachService
+        .getMessagesForDate(athlete.id, key)
+        .then((msgs) => setDayTopics((prev) => ({ ...prev, [key]: extractTopics(msgs || []) })))
+        .catch(() => undefined);
+    },
+    [demo, last14, athlete.id]
+  );
   const onDayLeave = useCallback(() => setHover(null), []);
+
+  // Escalation banner hover → shows what's being done about it.
+  const [escHover, setEscHover] = useState<{ x: number; y: number } | null>(null);
+  const onEscEnter = useCallback((e: React.MouseEvent) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setEscHover({ x: r.left + r.width / 2, y: r.top });
+  }, []);
+  const onEscLeave = useCallback(() => setEscHover(null), []);
 
   // Last 7 days of check-ins (did they show up?).
   const checkins = useMemo(() => last14.slice(-7).map((d) => d.has), [last14]);
@@ -237,7 +306,8 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
   return (
     <>
       <div
-        className="relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/60 p-4 transition-all hover:border-white/20"
+        data-athlete-card
+        className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/60 p-4 transition-all hover:border-white/20"
         style={{ boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)` }}
       >
         {/* Status accent line — stays lit even when acknowledged (monitor view) */}
@@ -267,10 +337,14 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
           </span>
         </div>
 
-        {/* Risk / escalation context — only for athletes who need it */}
-        {tier > 0 && (
+        {/* Escalation banner — only for Tier 2/3. Tier 1 (Monitor) is conveyed
+            by the status chip alone; no explicit label needed. */}
+        {tier >= 2 && (
           <div
-            className="mt-3 flex items-start gap-2 rounded-lg border px-2.5 py-2"
+            data-escalation
+            onMouseEnter={onEscEnter}
+            onMouseLeave={onEscLeave}
+            className="mt-3 flex cursor-help items-start gap-2 rounded-lg border px-2.5 py-2"
             style={{ borderColor: `${TIER[tier].color}55`, background: `${TIER[tier].color}14` }}
           >
             <ShieldAlert className="mt-0.5 h-3.5 w-3.5 flex-none" style={{ color: TIER[tier].color }} />
@@ -332,6 +406,7 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
               return (
                 <span
                   key={i}
+                  data-checkin-dot
                   onMouseEnter={(e) => onDayEnter(absIdx, e)}
                   onMouseLeave={onDayLeave}
                   className="h-2.5 w-2.5 cursor-pointer rounded-[3px]"
@@ -364,8 +439,8 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
           )}
         </div>
 
-        {/* Actions */}
-        <div className="mt-4 space-y-2">
+        {/* Actions — pinned to the bottom so they align across cards of differing height */}
+        <div className="mt-auto space-y-2 pt-4">
           {isAttention &&
             (acked ? (
               <div className="flex items-center justify-between rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-[12px] text-emerald-300">
@@ -379,28 +454,20 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
             ) : (
               <button
                 type="button"
+                data-acknowledge
                 onClick={() => setAcked(true)}
                 className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[12px] font-medium text-zinc-400 transition hover:bg-white/[0.07] hover:text-zinc-200"
               >
                 <Check className="h-3.5 w-3.5" /> I&apos;ve got this — acknowledge
               </button>
             ))}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setDetailsOpen(true)}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[13px] font-medium text-zinc-300 transition hover:bg-white/[0.08]"
-            >
-              <TrendingUp className="h-4 w-4" /> Details
-            </button>
-            <button
-              type="button"
-              onClick={() => setMessagingOpen(true)}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#E0FE10] px-3 py-2 text-[13px] font-semibold text-black transition hover:brightness-105"
-            >
-              <MessageCircle className="h-4 w-4" /> {urgent ? 'Check in now' : 'Message'}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setMessagingOpen(true)}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#E0FE10] px-3 py-2 text-[13px] font-semibold text-black transition hover:brightness-105"
+          >
+            <MessageCircle className="h-4 w-4" /> {urgent ? 'Check in now' : 'Message'}
+          </button>
         </div>
       </div>
 
@@ -410,6 +477,8 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
         (() => {
           const d = last14[hover.idx];
           const c = d.has ? moodColor(d.score) : '#71717a';
+          const showDevice = demo || (!!athlete.deviceDailyPresence && athlete.deviceDailyPresence.length > 0);
+          const topics = demo ? d.topics : dayTopics[ymd(d.date)] || [];
           return (
             <div
               className="pointer-events-none fixed z-[70]"
@@ -430,23 +499,23 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
                       <span className="text-zinc-500">Check-in</span>
                       <span className="text-zinc-200">Completed</span>
                     </div>
-                    {demo && (
-                      <>
-                        <div className="flex justify-between">
-                          <span className="text-zinc-500">Device</span>
-                          <span className={d.device ? 'text-emerald-300' : 'text-zinc-400'}>{d.device ? 'Worn' : 'Not worn'}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-zinc-500">Modules</span>
-                          <span className="text-zinc-200">{d.modules}/3</span>
-                        </div>
-                      </>
+                    {showDevice && (
+                      <div className="flex justify-between">
+                        <span className="text-zinc-500">Device</span>
+                        <span className={d.device ? 'text-emerald-300' : 'text-zinc-400'}>{d.device ? 'Worn' : 'Not worn'}</span>
+                      </div>
                     )}
-                    {d.topics.length > 0 && (
+                    {demo && (
+                      <div className="flex justify-between">
+                        <span className="text-zinc-500">Modules</span>
+                        <span className="text-zinc-200">{d.modules}/3</span>
+                      </div>
+                    )}
+                    {topics.length > 0 && (
                       <div className="pt-1">
                         <span className="text-zinc-500">Needed support with</span>
                         <div className="mt-1 flex flex-wrap gap-1">
-                          {d.topics.map((t) => (
+                          {topics.map((t) => (
                             <span key={t} className="rounded-full border border-white/10 bg-white/[0.05] px-1.5 py-0.5 text-[10px] text-zinc-300">
                               {t}
                             </span>
@@ -463,6 +532,43 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
           );
         })()}
 
+      {/* Escalation hover — what's being done about it */}
+      {escHover && tier >= 2 && (
+        <div
+          className="pointer-events-none fixed z-[70]"
+          style={{ left: escHover.x, top: escHover.y, transform: 'translate(-50%, calc(-100% - 10px))' }}
+        >
+          <div className="w-64 rounded-xl border border-white/10 bg-zinc-900/[0.98] p-3 shadow-2xl backdrop-blur">
+            <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
+              <span className="text-xs font-semibold" style={{ color: TIER[tier].color }}>{TIER[tier].label}</span>
+              <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: `${TIER[tier].color}22`, color: TIER[tier].color }}>
+                Active
+              </span>
+            </div>
+            <div className="mt-2 space-y-2 text-[11px] leading-4">
+              <div>
+                <span className="text-zinc-500">What this means</span>
+                <p className="mt-0.5 text-zinc-300">{TIER[tier].means}</p>
+              </div>
+              <div>
+                <span className="text-zinc-500">Action taken</span>
+                <p className="mt-0.5 text-zinc-300">{TIER[tier].action}</p>
+              </div>
+              <div>
+                <span className="text-zinc-500">Common indicators</span>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {TIER[tier].indicators.map((ind) => (
+                    <span key={ind} className="rounded-full border border-white/10 bg-white/[0.05] px-1.5 py-0.5 text-[10px] text-zinc-300">
+                      {ind}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {currentUser && (
         <CoachAthleteMessagingModal
           isOpen={messagingOpen}
@@ -473,13 +579,6 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
           coachName={currentUser.displayName || currentUser.username || 'Coach'}
         />
       )}
-      <AthleteDetailsModal
-        isOpen={detailsOpen}
-        onClose={() => setDetailsOpen(false)}
-        athleteId={athlete.id}
-        athleteName={athlete.displayName}
-        onStartMessaging={() => setMessagingOpen(true)}
-      />
     </>
   );
 };
@@ -507,6 +606,7 @@ const MoodStrip: React.FC<{
         return (
           <span
             key={i}
+            data-mood-square
             onMouseEnter={(e) => onEnter(i, e)}
             onMouseLeave={onLeave}
             className="h-5 flex-1 cursor-pointer rounded-[3px]"

@@ -588,11 +588,11 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                   </Link>
                 </div>
               </div>
-            ) : !authReady ? (
+            ) : !authReady && !isDemo ? (
               <div className="flex min-h-[420px] items-center justify-center">
                 <Loader2 className="h-6 w-6 animate-spin" style={{ color: PC.purpleSoft }} />
               </div>
-            ) : authUser ? (
+            ) : authUser && !isDemo ? (
               <div className="space-y-6">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>Almost there</p>

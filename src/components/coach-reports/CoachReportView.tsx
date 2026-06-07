@@ -19,7 +19,26 @@ interface CoachReportViewProps {
   report: CoachReportCoachSurface;
   sport: PulseCheckSportConfigurationEntry;
   generatedAtLabel?: string;
+  /** When rendered inside the coach dashboard (vs. the standalone full-page route),
+   *  drop the card chrome (border / rounding / shadow) so it reads as a native panel
+   *  and bleeds edge-to-edge. The accent gradient + top strip are kept. */
+  embedded?: boolean;
 }
+
+// Split a combined "Institution · Team" name (legacy fixtures store them joined)
+// into its parts, preferring explicit meta.organizationName when present.
+const resolveOrgAndTeam = (meta: CoachReportCoachSurface['meta']): { org?: string; team?: string } => {
+  const rawTeam = (meta.teamName || '').trim();
+  if (meta.organizationName?.trim()) {
+    return { org: meta.organizationName.trim(), team: rawTeam || undefined };
+  }
+  const separatorMatch = rawTeam.match(/\s+[·•|]\s+/);
+  if (separatorMatch) {
+    const [org, ...rest] = rawTeam.split(separatorMatch[0]);
+    return { org: org.trim() || undefined, team: rest.join(separatorMatch[0]).trim() || undefined };
+  }
+  return { team: rawTeam || undefined };
+};
 
 const STATE_TONE: Record<string, { label: string; bg: string; ring: string; text: string }> = {
   solid: { label: 'Solid', bg: 'bg-emerald-500/12', ring: 'ring-emerald-400/40', text: 'text-emerald-300' },
@@ -158,11 +177,14 @@ const buildCalendarItems = (actions: CoachReportCoachSurface['coachActions']) =>
 const translationFor = (policy?: PulseCheckSportReportPolicy) => (text: string) =>
   applyCoachLanguageTranslations(text, policy);
 
-const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, generatedAtLabel }) => {
+const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, generatedAtLabel, embedded = false }) => {
   const policy = sport.reportPolicy;
   const colors = getSportColor(sport.id);
   const accent = report.meta.primarySportColor || colors.primary;
   const soft = report.meta.primarySportColorSoft || colors.soft;
+  const { org: organizationName, team: teamDisplayName } = resolveOrgAndTeam(report.meta);
+  const headerSubline = [organizationName, teamDisplayName].filter(Boolean).join(' · ');
+  const reportTitleName = teamDisplayName || sport.name;
   const translate = translationFor(policy);
   const topLine = composeReportTopLine(report.topLine, { sportName: sport.name });
   const watchlistGate = enforceNamedAthleteWatchlist(report.watchlist || []);
@@ -200,7 +222,9 @@ const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, genera
 
   return (
     <article
-      className="min-h-full overflow-hidden rounded-b-3xl border border-zinc-800 bg-[#070912] text-zinc-100 shadow-2xl"
+      className={`min-h-full overflow-hidden text-zinc-100 ${
+        embedded ? '' : 'rounded-b-3xl border border-zinc-800 bg-[#070912] shadow-2xl'
+      }`}
       style={{
         background: `
           radial-gradient(ellipse 110% 55% at 50% -20%, ${accent}20 0%, transparent 58%),
@@ -225,13 +249,13 @@ const CoachReportView: React.FC<CoachReportViewProps> = ({ report, sport, genera
                   <p className="text-[11px] font-medium uppercase tracking-[0.22em]" style={{ color: accent }}>
                     Pulse Sports Intelligence
                   </p>
-                  <p className="mt-0.5 text-xs text-zinc-500">{report.meta.teamName}</p>
+                  <p className="mt-0.5 text-xs text-zinc-500">{headerSubline || report.meta.teamName}</p>
                 </div>
               </div>
               <h1
                 className="mt-5 text-[38px] font-semibold leading-[1.08] text-white sm:text-[50px]"
               >
-                {sport.name} — This Week
+                {reportTitleName} — This Week
               </h1>
               <p className="mt-3 text-sm text-zinc-400">{report.meta.weekLabel}</p>
             </div>

@@ -9,9 +9,11 @@ import {
   GameDayLookFor,
   NamedAthleteWatchEntry,
   ReportDimensionStateMap,
+  type PulseCheckSportConfigurationEntry,
 } from './pulsecheckSportConfig';
 import type {
   CoachReportAdherenceBlock,
+  CoachReportCoachSurface,
   CoachReportTeamReadinessBlock,
 } from './pulsecheckCoachReports';
 
@@ -1341,3 +1343,52 @@ export const COACH_REPORT_DEMO_EXAMPLES: Record<string, CoachReportDemoExample> 
     closer: 'We\'ll send the next one Sunday morning. By then we\'ll have a full four weeks and the read will tighten. Reply with questions — we read every one.',
   },
 };
+
+const DEMO_ADHERENCE_FALLBACK: CoachReportAdherenceBlock = {
+  wearRate7d: 0.84,
+  noraCheckinCompletion7d: 0.76,
+  protocolOrSimCompletion7d: 0.68,
+  trainingOrNutritionCoverage7d: 0.91,
+  overallAdherencePct: 0.72,
+  categoriesReady: 3,
+  categoriesTotal: 4,
+  deviceCoveragePct: 0.84,
+  noraCompletionPct: 0.76,
+  protocolSimulationCompletionPct: 0.68,
+  trainingNutritionCoveragePct: 0.91,
+  confidenceLabel: 'Usable read',
+  summary: 'Coverage is usable. We held back anything thin.',
+};
+
+// Single source of truth for turning a demo fixture into the coach-facing
+// surface CoachReportView renders. Used by the public /coach-report-demo route
+// and the in-dashboard Reports walkthrough so both render identically. Demo-only:
+// no Firestore reads, no reviewer-only evidence.
+export const buildDemoCoachSurface = (
+  demo: CoachReportDemoExample,
+  sport: PulseCheckSportConfigurationEntry,
+  generatedAtLabel: string,
+): CoachReportCoachSurface => ({
+  meta: {
+    teamId: `demo-${sport.id}`,
+    teamName: demo.meta.teamName || `${sport.name} Team`,
+    sportId: sport.id,
+    sportName: sport.name,
+    reportType: 'weekly',
+    weekStart: '2026-04-21',
+    weekLabel: demo.meta.weekLabel,
+    generatedAt: generatedAtLabel,
+    primarySportColor: demo.meta.primarySportColor,
+    primarySportColorSoft: demo.meta.primarySportColorSoft,
+  },
+  topLine: demo.topLine,
+  teamReadiness: demo.teamReadiness,
+  dimensionState: demo.dimensionState || {},
+  watchlist: demo.watchlist,
+  coachActions: demo.coachActions,
+  gameDayLookFors: demo.gameDayLookFors || [],
+  noteOpener: demo.noteOpener,
+  teamSynthesis: demo.teamSynthesis,
+  closer: demo.closer,
+  adherence: demo.adherence || DEMO_ADHERENCE_FALLBACK,
+});

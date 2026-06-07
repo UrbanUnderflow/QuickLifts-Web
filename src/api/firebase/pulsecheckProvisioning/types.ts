@@ -444,7 +444,13 @@ export interface PulseCheckTeam {
   organizationId: string;
   displayName: string;
   teamType: string;
+  /** Human-readable sport/program label (e.g. "Track & Field"). Source of truth
+   *  for display across all team surfaces. */
   sportOrProgram: string;
+  /** Stable SportConfiguration id (e.g. "track-field"). Rename-proof key for
+   *  resolving the sport's icon / config downstream. Optional for legacy teams
+   *  provisioned before this field existed — resolve by name as a fallback. */
+  sportId?: string;
   invitePreviewImageUrl?: string;
   legacySource?: 'legacy-coach-roster';
   legacyCoachId?: string;
@@ -478,6 +484,9 @@ export interface CreatePulseCheckTeamInput {
   displayName: string;
   teamType: string;
   sportOrProgram: string;
+  /** Stable SportConfiguration id captured at provisioning so the sport stays
+   *  resolvable even if its display name is later renamed. */
+  sportId?: string;
   invitePreviewImageUrl?: string;
   legacySource?: 'legacy-coach-roster';
   legacyCoachId?: string;

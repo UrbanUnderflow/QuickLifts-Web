@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import Head from 'next/head';
 import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
-import CoachReportView, { CoachReportCoachSurface } from '../../components/coach-reports/CoachReportView';
+import CoachReportView from '../../components/coach-reports/CoachReportView';
 import {
   PulseCheckSportConfigurationEntry,
   getDefaultPulseCheckSports,
@@ -10,6 +10,7 @@ import {
 import {
   COACH_REPORT_DEMO_EXAMPLES,
   CoachReportDemoExample,
+  buildDemoCoachSurface,
   getSportColor,
 } from '../../api/firebase/pulsecheckSportReportDemos';
 
@@ -36,49 +37,6 @@ export const assertCoachReportDemoSource = (
   }
   return report;
 };
-
-const toDemoCoachSurface = (
-  demo: CoachReportDemoExample,
-  sport: PulseCheckSportConfigurationEntry,
-  generatedAtLabel: string,
-): CoachReportCoachSurface => ({
-  meta: {
-    teamId: `demo-${sport.id}`,
-    teamName: demo.meta.teamName,
-    sportId: sport.id,
-    sportName: sport.name,
-    reportType: 'weekly',
-    weekStart: '2026-04-21',
-    weekLabel: demo.meta.weekLabel,
-    generatedAt: generatedAtLabel,
-    primarySportColor: demo.meta.primarySportColor,
-    primarySportColorSoft: demo.meta.primarySportColorSoft,
-  },
-  topLine: demo.topLine,
-  teamReadiness: demo.teamReadiness,
-  dimensionState: demo.dimensionState || {},
-  watchlist: demo.watchlist,
-  coachActions: demo.coachActions,
-  gameDayLookFors: demo.gameDayLookFors || [],
-  noteOpener: demo.noteOpener,
-  teamSynthesis: demo.teamSynthesis,
-  closer: demo.closer,
-  adherence: demo.adherence || {
-    wearRate7d: 0.84,
-    noraCheckinCompletion7d: 0.76,
-    protocolOrSimCompletion7d: 0.68,
-    trainingOrNutritionCoverage7d: 0.91,
-    overallAdherencePct: 0.72,
-    categoriesReady: 3,
-    categoriesTotal: 4,
-    deviceCoveragePct: 0.84,
-    noraCompletionPct: 0.76,
-    protocolSimulationCompletionPct: 0.68,
-    trainingNutritionCoveragePct: 0.91,
-    confidenceLabel: 'Usable read',
-    summary: 'Coverage is usable. We held back anything thin.',
-  },
-});
 
 const useReportData = (sportId: string | undefined): PageState => {
   return useMemo(() => {
@@ -145,7 +103,7 @@ const CoachReportDemoPage: React.FC = () => {
         <title>{sport.name} — Sports Intelligence Report</title>
         <meta name="robots" content="noindex, nofollow" />
       </Head>
-      <CoachReportView report={toDemoCoachSurface(verifiedDemo, sport, generatedAtLabel)} sport={sport} generatedAtLabel={generatedAtLabel} />
+      <CoachReportView report={buildDemoCoachSurface(verifiedDemo, sport, generatedAtLabel)} sport={sport} generatedAtLabel={generatedAtLabel} />
     </>
   );
 };

@@ -11,7 +11,7 @@ import {
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
-import { db } from '../config';
+import { db, auth } from '../config';
 
 /**
  * Coach Team Schedule
@@ -185,32 +185,122 @@ class CoachScheduleService {
   }
 
   /**
-   * Import a published schedule from a URL. Hits the server-side scraper
-   * (fetch + LLM extraction) and returns drafts the UI can animate in and
-   * then persist with addEvents. Does NOT write to Firestore itself, so
-   * the Schedule tab controls the "Nora is writing it in" sequence.
+   * Import a published schedule from a URL. Two hops:
+   *   1) `/api/coach/schedule-scrape` fetches the page server-side (no CORS)
+   *      and returns its readable text.
+   *   2) The shared **openai-bridge** (`/api/openai/v1/chat/completions`,
+   *      feature `coachScheduleImport`) turns that text into structured
+   *      events — reusing the configured OpenAI key + auth + rate limits.
+   * Returns drafts the UI animates in and then persists with addEvents.
+   * Does NOT write to Firestore itself, so the Schedule tab controls the
+   * "Nora is writing it in" sequence.
    *
    * Overridden in demo mode to return canned events with no network call.
    */
   async scrapeUrl(url: string): Promise<{ sourceTitle: string; events: ScheduleEventDraft[] }> {
-    const res = await fetch('/api/coach/schedule-scrape', {
+    // 1) Fetch + clean the page text.
+    const pageRes = await fetch('/api/coach/schedule-scrape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
     });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data?.error || `Couldn’t import that link (${res.status}).`);
+    const page = await pageRes.json().catch(() => ({}));
+    if (!pageRes.ok) {
+      throw new Error(page?.error || `Couldn’t read that link (${pageRes.status}).`);
     }
-    return {
-      sourceTitle: data.sourceTitle || 'Imported schedule',
-      events: (Array.isArray(data.events) ? data.events : []).map((e: any) => ({
-        ...e,
+    const { title, text } = page as { title?: string; text?: string };
+    if (!text || !text.trim()) {
+      throw new Error('Couldn’t read anything useful from that page.');
+    }
+
+    // 2) Extract events through the openai-bridge (authed, keyed in Netlify).
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) throw new Error('Please sign in again to import a schedule.');
+
+    const aiRes = await fetch('/api/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${idToken}`,
+        'openai-organization': 'coachScheduleImport',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.1,
+        max_tokens: 4000,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: SCHEDULE_EXTRACTION_PROMPT },
+          {
+            role: 'user',
+            content: `Page title: ${title || '(none)'}\nURL: ${url}\n\nPAGE TEXT:\n${text}`,
+          },
+        ],
+      }),
+    });
+    if (!aiRes.ok) {
+      const errText = await aiRes.text().catch(() => '');
+      throw new Error(`Nora couldn’t read that schedule (${aiRes.status}). ${errText.slice(0, 160)}`.trim());
+    }
+    const completion = await aiRes.json().catch(() => ({}));
+    const raw = completion?.choices?.[0]?.message?.content || '{}';
+    let parsed: { sourceTitle?: string; events?: any[] };
+    try {
+      parsed = JSON.parse(
+        String(raw).replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```\s*$/, '').trim()
+      );
+    } catch {
+      throw new Error('Nora couldn’t make sense of that schedule.');
+    }
+
+    const ISO = /^\d{4}-\d{2}-\d{2}$/;
+    const events: ScheduleEventDraft[] = (Array.isArray(parsed.events) ? parsed.events : [])
+      .filter((e) => e && typeof e.title === 'string' && ISO.test(String(e.date)))
+      .map((e) => ({
+        title: String(e.title).trim().slice(0, 140),
+        date: e.date,
+        endDate: ISO.test(String(e.endDate)) ? e.endDate : undefined,
+        time: e.time ? String(e.time).trim().slice(0, 40) : undefined,
+        location: e.location ? String(e.location).trim().slice(0, 120) : undefined,
+        opponent: e.opponent ? String(e.opponent).trim().slice(0, 120) : undefined,
+        type: normalizeType(e.type),
+        notes: e.notes ? String(e.notes).trim().slice(0, 200) : undefined,
         source: 'link' as const,
         sourceUrl: url,
-      })),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      sourceTitle: (parsed.sourceTitle || title || 'Imported schedule').toString().trim().slice(0, 120),
+      events,
     };
   }
 }
+
+const SCHEDULE_EXTRACTION_PROMPT = `You extract a sports/team schedule from the text of a web page.
+
+Return STRICT JSON only, no markdown, in this exact shape:
+{
+  "sourceTitle": "<a short name for this schedule, e.g. 'Men's Track & Field 2026'>",
+  "events": [
+    {
+      "title": "<short label — for competitions use 'vs. <Opponent>' or the meet name>",
+      "date": "<YYYY-MM-DD>",
+      "endDate": "<YYYY-MM-DD, only if the event spans multiple days, else omit>",
+      "time": "<e.g. '3:30 PM', 'All Day', or 'TBA' — omit if unknown>",
+      "location": "<city/venue if shown, else omit>",
+      "opponent": "<opponent or host for competitions, else omit>",
+      "type": "competition | practice | meeting | lift | travel | event",
+      "notes": "<anything useful like 'Home', 'Away', 'Conference', else omit>"
+    }
+  ]
+}
+
+Rules:
+- Only include real scheduled events you can see in the text. Never invent events, dates, or opponents.
+- Resolve dates to full YYYY-MM-DD. If the page shows a year context, use it; otherwise infer the season's year from surrounding text. If a date is genuinely ambiguous, omit that event.
+- Most items on an athletics schedule page are competitions; classify accordingly.
+- Keep titles tight. Prefer 'vs. Florida State' over a long sentence.
+- If you find no events, return an empty "events" array.`;
 
 export const coachScheduleService = new CoachScheduleService();
