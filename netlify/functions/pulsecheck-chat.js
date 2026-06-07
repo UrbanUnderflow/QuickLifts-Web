@@ -1020,6 +1020,58 @@ async function getAthleteMentalProgress(db, userId) {
   return snap.data() || null;
 }
 
+/**
+ * Coach "Train Nora" knowledge vault. The athlete's linked coach(es) add notes,
+ * schedules, and files in the web Train Nora surface (collection `coach-nora-vault`).
+ * We pull the text content and render it so Nora can answer team-logistics questions
+ * ("what time is the team meeting?"). Returns '' when there is nothing to inject.
+ */
+async function getCoachVaultContext(db, userData) {
+  try {
+    const connectedCoaches = Array.isArray(userData?.connectedCoaches) ? userData.connectedCoaches : [];
+    const coachIds = connectedCoaches
+      .map((c) => (c && typeof c === 'object' ? c.coachId : (typeof c === 'string' ? c : null)))
+      .filter(Boolean);
+    if (!coachIds.length) return '';
+
+    // Firestore `in` filters cap at 10 values; athletes almost always have one coach.
+    const scopedCoachIds = coachIds.slice(0, 10);
+    const snap = await db
+      .collection('coach-nora-vault')
+      .where('coachId', 'in', scopedCoachIds)
+      .get();
+    if (snap.empty) return '';
+
+    const entries = snap.docs
+      .map((doc) => doc.data() || {})
+      .map((data) => {
+        const content = typeof data.content === 'string' ? data.content.trim() : '';
+        if (!content) return null; // only entries with text Nora can reason over
+        const title = typeof data.title === 'string' && data.title.trim() ? data.title.trim() : 'Note';
+        const category = typeof data.category === 'string' ? data.category.trim() : '';
+        let createdMs = 0;
+        const created = data.createdAt;
+        if (created && typeof created.toDate === 'function') createdMs = created.toDate().getTime();
+        else if (typeof created === 'number') createdMs = created < 1e12 ? created * 1000 : created;
+        return { title, category, content, createdMs };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.createdMs - a.createdMs)
+      .slice(0, 25); // cap to protect the token budget
+
+    if (!entries.length) return '';
+
+    const lines = entries
+      .map((e) => `- ${e.category ? `${e.title} (${e.category})` : e.title}: ${e.content}`)
+      .join('\n');
+
+    return `\n\n## Team & Coach Info (shared by the athlete's coach):\n${lines}\n\nUse this to answer questions about team logistics — schedules, meeting and practice times, locations, policies, and routines the coach has shared. If the athlete asks about a detail not covered here, say you don't have that detail yet rather than guessing.`;
+  } catch (e) {
+    console.error('[pulsecheck-chat] Error loading coach vault context:', e);
+    return '';
+  }
+}
+
 async function recoverSnapshotFromSavedConversation({
   db,
   userId,
@@ -1619,7 +1671,10 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       ? `\n\n## Active Coaching Directive:\n${coachDirective}`
       : '';
 
-    let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${assignmentContextSection}${snapshotContextSection}${contextInstructions}${coachDirectiveSection}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nDo not repeat the same headspace, energy, confidence, or readiness read from your previous message.\nInstead, acknowledge their answer and advance the topic.`;
+    // Coach knowledge vault — team logistics the athlete's coach shared via "Train Nora".
+    const vaultContextSection = await getCoachVaultContext(db, userDataForPrefs);
+
+    let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${vaultContextSection}${assignmentContextSection}${snapshotContextSection}${contextInstructions}${coachDirectiveSection}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nDo not repeat the same headspace, energy, confidence, or readiness read from your previous message.\nInstead, acknowledge their answer and advance the topic.`;
     
     // Legacy support: If iOS still sends systemPromptContext (old version), use it but log a warning
     if (systemPromptContext && !healthContext) {

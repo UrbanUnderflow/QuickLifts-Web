@@ -7,7 +7,6 @@ import {
   Flame,
   Users,
   Brain,
-  ClipboardList,
   Calendar,
   BarChart3,
   Settings as SettingsIcon,
@@ -80,7 +79,6 @@ type ViewKey =
   | 'alerts'
   | 'roster'
   | 'nora'
-  | 'library'
   | 'schedule'
   | 'reports'
   | 'settings';
@@ -90,7 +88,6 @@ const NAV: { key: ViewKey; label: string; icon: React.ElementType }[] = [
   { key: 'alerts', label: 'Athlete Alerts', icon: Flame },
   { key: 'roster', label: 'Team Roster', icon: Users },
   { key: 'nora', label: 'Train Nora', icon: Brain },
-  { key: 'library', label: 'Training Library', icon: ClipboardList },
   { key: 'schedule', label: 'Schedule', icon: Calendar },
   { key: 'reports', label: 'Reports', icon: BarChart3 },
   { key: 'settings', label: 'Settings', icon: SettingsIcon },
@@ -275,7 +272,6 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                   {view === 'alerts' && <AlertsSection athletes={athletes} loading={loadingAthletes} />}
                   {view === 'roster' && <RosterSection athletes={athletes} loading={loadingAthletes} />}
                   {view === 'nora' && <TrainNoraSection coachId={coachId} />}
-                  {view === 'library' && <LibrarySection />}
                   {view === 'schedule' && <ScheduleSection />}
                   {view === 'reports' && <ReportsSection coachId={coachId} />}
                   {view === 'settings' && <SettingsSection coachName={coachName} email={coachEmail} />}
@@ -982,29 +978,6 @@ const ReportsSection: React.FC<{ coachId?: string }> = ({ coachId }) => {
 // Library / Schedule / Settings (lean but functional shells)
 // ---------------------------------------------------------------------------
 
-const LibrarySection: React.FC = () => {
-  const router = useRouter();
-  return (
-    <div className="space-y-4">
-      <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Training Library</div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <LinkCard
-          icon={Brain}
-          title="Mental Training"
-          body="Nora-guided sims and protocols you can assign to athletes."
-          onClick={() => router.push('/coach/mental-training')}
-        />
-        <LinkCard
-          icon={ClipboardList}
-          title="Routines"
-          body="Build and manage training routines for your athletes."
-          onClick={() => router.push('/coach/dashboard')}
-        />
-      </div>
-    </div>
-  );
-};
-
 const ScheduleSection: React.FC = () => (
   <EmptyBlock
     icon={Calendar}
@@ -1053,24 +1026,6 @@ const MetricTile: React.FC<{ label: string; value: React.ReactNode }> = ({ label
     <div className="text-sm font-bold text-white">{value}</div>
     <div className="text-[10px] text-zinc-500 uppercase tracking-wide mt-0.5">{label}</div>
   </div>
-);
-
-const LinkCard: React.FC<{ icon: React.ElementType; title: string; body: string; onClick: () => void }> = ({
-  icon: Icon,
-  title,
-  body,
-  onClick,
-}) => (
-  <button
-    onClick={onClick}
-    className="text-left rounded-xl bg-zinc-900/50 border border-white/5 p-4 hover:border-[#E0FE10]/30 transition-colors"
-  >
-    <div className="w-9 h-9 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center mb-2">
-      <Icon className="w-4 h-4 text-[#E0FE10]" />
-    </div>
-    <div className="text-sm font-semibold text-white">{title}</div>
-    <div className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{body}</div>
-  </button>
 );
 
 const LoadingBlock: React.FC<{ label: string }> = ({ label }) => (
