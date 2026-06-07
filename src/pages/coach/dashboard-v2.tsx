@@ -52,11 +52,16 @@ import {
   Copy,
 } from 'lucide-react';
 import CoachProtectedRoute from '../../components/CoachProtectedRoute';
+import CoachProfileEditModal from '../../components/coach/CoachProfileEditModal';
 import AthleteReadinessCard from '../../components/AthleteReadinessCard';
 import { escalationRecordsService } from '../../api/firebase/escalation/service';
 import { getCategoryLabel, EscalationCategory } from '../../api/firebase/escalation/types';
 import { loadTeamDeviceStatuses } from '../../api/firebase/pulsecheckDeviceMonitor';
+import { useDispatch } from 'react-redux';
 import { useUser } from '../../hooks/useUser';
+import { setUser } from '../../redux/userSlice';
+import { showToast } from '../../redux/toastSlice';
+import { userService } from '../../api/firebase/user';
 import { coachService } from '../../api/firebase/coach';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import {
@@ -431,6 +436,14 @@ interface CoachDashboardShellProps {
   coachName: string;
   coachEmail?: string;
   coachId?: string;
+  /** Optional staff title for the sidebar presence tile (defaults to "Head Coach"). */
+  coachTitle?: string;
+  /** Bio shown in the profile editor. */
+  coachBio?: string;
+  /** Profile photo URL for the sidebar presence tile. */
+  coachAvatarUrl?: string;
+  /** Persist edits made in the profile modal. Omitted in demo (edits stay local). */
+  onSaveProfile?: (next: { name: string; title: string; bio: string; avatarUrl: string }) => Promise<void>;
   isDemo?: boolean;
   /** Earnings tab is shown only when this team has referral kickback on AND the
    *  current user is the configured revenue recipient. */
@@ -448,6 +461,10 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   coachName,
   coachEmail,
   coachId,
+  coachTitle,
+  coachBio,
+  coachAvatarUrl,
+  onSaveProfile,
   isDemo = false,
   earningsEnabled = false,
   revenueSharePct = 0,
@@ -463,6 +480,38 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   const canSeeTier3 = can('athletic_trainer');
   const [view, setView] = useState<ViewKey>('home');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  // Local mirror of the coach's presence/profile so edits show immediately in the
+  // sidebar tile (and demo edits have somewhere to live).
+  const [profile, setProfile] = useState({
+    name: coachName,
+    title: coachTitle || 'Head Coach',
+    bio: coachBio || '',
+    avatarUrl: coachAvatarUrl || '',
+  });
+  // Resync from props when they load/change and the editor isn't open.
+  useEffect(() => {
+    if (!profileOpen) {
+      setProfile({
+        name: coachName,
+        title: coachTitle || 'Head Coach',
+        bio: coachBio || '',
+        avatarUrl: coachAvatarUrl || '',
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachName, coachTitle, coachBio, coachAvatarUrl]);
+
+  const handleSaveProfile = useCallback(
+    async (next: { name: string; title: string; bio: string; avatarUrl: string }) => {
+      // Demo mode is a no-op: the editor is fully interactive for walkthroughs,
+      // but Save changes nothing (no local update, no Firebase write).
+      if (isDemo) return;
+      setProfile(next); // optimistic — reflect in the sidebar tile right away
+      if (onSaveProfile) await onSaveProfile(next);
+    },
+    [isDemo, onSaveProfile]
+  );
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
   const selectedAthlete = useMemo(
     () => athletes.find((a) => a.id === selectedAthleteId) ?? null,
@@ -568,16 +617,30 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
         </div>
       </div>
 
-      {/* Coach identity */}
-      <div className="flex items-center gap-2.5 px-2 py-3 rounded-xl bg-zinc-800/30 border border-zinc-700/20 mb-5">
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#E0FE10]/30 to-green-500/20 border border-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
-          <span className="text-xs font-bold text-[#E0FE10]">{initialsOf(coachName)}</span>
+      {/* Coach identity — tap to edit profile */}
+      <button
+        type="button"
+        onClick={() => {
+          setProfileOpen(true);
+          setMobileNavOpen(false);
+        }}
+        className="w-full flex items-center gap-2.5 px-2 py-3 rounded-xl bg-zinc-800/30 border border-zinc-700/20 mb-5 text-left transition-colors hover:bg-zinc-800/60 hover:border-zinc-600/40"
+        aria-label="Edit your profile"
+      >
+        <div className="w-9 h-9 rounded-full overflow-hidden bg-gradient-to-br from-[#E0FE10]/30 to-green-500/20 border border-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
+          {profile.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={profile.avatarUrl} alt={profile.name} className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-xs font-bold text-[#E0FE10]">{initialsOf(profile.name)}</span>
+          )}
         </div>
-        <div className="leading-tight min-w-0">
-          <div className="text-xs font-semibold text-white truncate">{coachName}</div>
-          <div className="text-[9px] text-zinc-500">Head Coach</div>
+        <div className="leading-tight min-w-0 flex-1">
+          <div className="text-xs font-semibold text-white truncate">{profile.name}</div>
+          <div className="text-[9px] text-zinc-500 truncate">{profile.title || 'Head Coach'}</div>
         </div>
-      </div>
+        <ChevronRight className="w-3.5 h-3.5 text-zinc-600 flex-shrink-0" />
+      </button>
 
       <NavList onPick={() => setMobileNavOpen(false)} />
 
@@ -713,12 +776,23 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
           canSeeTier3={canSeeTier3}
           onClose={() => setSelectedAthleteId(null)}
         />
+
+        <CoachProfileEditModal
+          isOpen={profileOpen}
+          onClose={() => setProfileOpen(false)}
+          isDemo={isDemo}
+          initial={profile}
+          onSave={handleSaveProfile}
+        />
+
+        <NoraChatFab coachId={coachId} coachName={coachName} athletes={athletes} />
       </div>
   );
 };
 
 const CoachDashboardV2: React.FC = () => {
   const currentUser = useUser();
+  const dispatch = useDispatch();
   const [athletes, setAthletes] = useState<CoachAthlete[]>([]);
   const [alerts, setAlerts] = useState<AthleteAlert[]>([]);
   const [loadingAthletes, setLoadingAthletes] = useState(true);
@@ -861,6 +935,43 @@ const CoachDashboardV2: React.FC = () => {
 
   const coachName = currentUser?.displayName || currentUser?.username || 'Coach';
 
+  // Persist coach profile edits to the user doc and refresh Redux so the change
+  // shows everywhere (sidebar tile, etc.) without a reload.
+  const handleSaveProfile = useCallback(
+    async (next: { name: string; title: string; bio: string; avatarUrl: string }) => {
+      if (!currentUser?.id) return;
+      try {
+        await userService.updateUser(currentUser.id, {
+          displayName: next.name,
+          coachTitle: next.title,
+          bio: next.bio,
+          profileImage: {
+            ...(currentUser.profileImage?.toDictionary?.() || {}),
+            profileImageURL: next.avatarUrl || '',
+          },
+          updatedAt: new Date(),
+        });
+        // Keep the Redux currentUser in sync.
+        const dict = currentUser.toDictionary();
+        dispatch(
+          setUser({
+            ...dict,
+            displayName: next.name,
+            coachTitle: next.title,
+            bio: next.bio,
+            profileImage: { ...(dict.profileImage || {}), profileImageURL: next.avatarUrl || '' },
+          })
+        );
+        dispatch(showToast({ message: 'Profile updated', type: 'success' }));
+      } catch (err) {
+        console.error('[dashboard-v2] failed to save coach profile', err);
+        dispatch(showToast({ message: 'Could not save your profile. Please try again.', type: 'error' }));
+        throw err;
+      }
+    },
+    [currentUser, dispatch]
+  );
+
   return (
     <CoachProtectedRoute requiresActiveSubscription={false}>
       <Head>
@@ -873,6 +984,10 @@ const CoachDashboardV2: React.FC = () => {
         coachName={coachName}
         coachEmail={currentUser?.email}
         coachId={currentUser?.id}
+        coachTitle={currentUser?.coachTitle}
+        coachBio={currentUser?.bio}
+        coachAvatarUrl={currentUser?.profileImage?.profileImageURL}
+        onSaveProfile={handleSaveProfile}
         earningsEnabled={earnings.enabled}
         revenueSharePct={earnings.sharePct}
         viewerCapabilities={viewerCapabilities}
@@ -3080,6 +3195,68 @@ const NoraChatPanel: React.FC<{
         </button>
       </div>
     </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Floating "Ask Nora" bubble — persistent chat entry point, bottom-left so it
+// never collides with the bottom-right training card. Opens the same Nora chat
+// panel in a popover.
+// ---------------------------------------------------------------------------
+
+const NoraChatFab: React.FC<{
+  coachId?: string;
+  coachName?: string;
+  athletes: CoachAthlete[];
+}> = ({ coachId, coachName, athletes }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.98 }}
+            transition={{ duration: 0.18 }}
+            className="fixed bottom-24 left-5 z-[58] w-[370px] max-w-[calc(100vw-2.5rem)]"
+          >
+            <NoraChatPanel
+              coachId={coachId}
+              coachName={coachName}
+              athletes={athletes}
+              onClose={() => setOpen(false)}
+              onNoteSaved={() => {}}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <button
+        data-nora-chat-fab
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Ask Nora"
+        className="fixed bottom-5 left-5 z-[58] flex items-center gap-2.5 rounded-full border border-purple-400/30 bg-[#0d0d1a]/90 py-2 pl-2 pr-4 shadow-[0_12px_40px_rgba(0,0,0,0.5)] backdrop-blur transition-colors hover:border-purple-400/60"
+      >
+        <span className="relative flex h-8 w-8 flex-none items-center justify-center">
+          <span
+            className="h-8 w-8 rounded-full"
+            style={{
+              background:
+                'radial-gradient(circle at 32% 28%, rgba(255,255,255,0.55), #a78bfa 45%, #6d28d9 100%)',
+              boxShadow: '0 0 14px rgba(167,139,250,0.5)',
+            }}
+          />
+          {!open && (
+            <span
+              className="absolute inset-0 animate-ping rounded-full opacity-40"
+              style={{ background: 'rgba(167,139,250,0.5)' }}
+            />
+          )}
+        </span>
+        <span className="text-sm font-semibold text-white">{open ? 'Close' : 'Ask Nora'}</span>
+      </button>
+    </>
   );
 };
 

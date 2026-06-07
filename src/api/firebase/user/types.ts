@@ -61,6 +61,8 @@ export class User {
   height?: UserHeight;
   location?: Location;
   bio: string;
+  /** Optional staff title shown on coach surfaces (e.g. "Head Coach"). */
+  coachTitle?: string;
   fcmToken?: string;
   workoutBuddy?: string;
   workoutBuddyUser?: ShortUser;
@@ -106,6 +108,7 @@ export class User {
     this.height = data.height || null;
     this.location = data.location || null;
     this.bio = data.bio || '';
+    this.coachTitle = data.coachTitle || '';
     this.fcmToken = data.fcmToken || '';
     this.workoutBuddy = data.workoutBuddy || '';
     this.workoutBuddyUser = data.workoutBuddyUser || null;
@@ -208,6 +211,7 @@ export class User {
       height: this.height,
       location: this.location,
       bio: this.bio,
+      coachTitle: this.coachTitle ?? '',
       fcmToken: this.fcmToken,
       workoutBuddy: this.workoutBuddy,
       workoutBuddyUser: this.workoutBuddyUser,

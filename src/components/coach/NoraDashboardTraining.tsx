@@ -152,6 +152,17 @@ export const TRAINING_STEPS: DashboardTrainingStep[] = [
       { atFrac: 0.0, kind: 'click', selector: '[data-report-row]' },
     ],
   },
+  {
+    id: 'wrap-up',
+    audio: '/audio/nora/nora-dashboard-wrapup.mp3',
+    title: "You're all set",
+    body:
+      "That's your dashboard at a glance. Look around — and if you ever get stuck, tap the chat bubble down here to ask me anything, or to have me walk through this again. Looking forward to getting your athletes mentally prepared to dominate.",
+    highlights: [
+      { atFrac: 0.0, kind: 'nav', selector: '[data-nav="home"]' },
+      { atFrac: 0.36, kind: 'highlight', selector: '[data-nora-chat-fab]' },
+    ],
+  },
 ];
 
 const PURPLE = '#a78bfa';
@@ -164,6 +175,19 @@ const NoraDashboardTraining: React.FC = () => {
   const cueIndexRef = useRef(0);
   const highlightedElRef = useRef<Element | null>(null);
   const hoveredElRef = useRef<Element | null>(null);
+
+  // --- Voice-reactive orb -----------------------------------------------------
+  // The orb's glow + ripple track the live amplitude of Nora's clip (via a Web
+  // Audio analyser), so it flashes on syllables and settles in the gaps —
+  // cadence-locked to her speech instead of a constant ping.
+  const orbCoreRef = useRef<HTMLSpanElement | null>(null);
+  const orbRingRef = useRef<HTMLSpanElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const meterBufRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const levelRef = useRef(0);
 
   const step = TRAINING_STEPS[stepIndex];
   const isLast = stepIndex === TRAINING_STEPS.length - 1;
@@ -196,6 +220,95 @@ const NoraDashboardTraining: React.FC = () => {
     },
     [clearHighlight]
   );
+
+  // Paint the orb for a given amplitude level (0..1). Direct DOM writes (no
+  // React state) so it can update every animation frame cheaply.
+  const paintOrb = useCallback((lvl: number) => {
+    const core = orbCoreRef.current;
+    const ring = orbRingRef.current;
+    if (core) {
+      core.style.transform = `scale(${(1 + lvl * 0.16).toFixed(3)})`;
+      core.style.boxShadow = `0 0 ${(8 + lvl * 30).toFixed(1)}px rgba(167,139,250,${(0.38 + lvl * 0.5).toFixed(3)})`;
+    }
+    if (ring) {
+      ring.style.transform = `scale(${(1 + lvl * 1.5).toFixed(3)})`;
+      ring.style.opacity = `${(lvl * 0.6).toFixed(3)}`;
+    }
+  }, []);
+
+  // Lazily build audio context → source → analyser. Routing the element through
+  // a MediaElementSource silences it while the context is suspended, so we only
+  // wire it once the context is actually running (after a gesture/resume). Until
+  // then the clip plays normally with the static glow; the next play retries.
+  const ensureAudioGraph = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || typeof window === 'undefined' || sourceRef.current) return;
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    if (!audioCtxRef.current) {
+      try {
+        audioCtxRef.current = new Ctx();
+      } catch {
+        return;
+      }
+    }
+    const ctx = audioCtxRef.current;
+    const build = () => {
+      if (sourceRef.current || ctx.state !== 'running') return;
+      try {
+        const src = ctx.createMediaElementSource(audio);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.6;
+        src.connect(analyser);
+        analyser.connect(ctx.destination);
+        sourceRef.current = src;
+        analyserRef.current = analyser;
+        meterBufRef.current = new Uint8Array(new ArrayBuffer(analyser.fftSize));
+      } catch {
+        // Already wired or blocked — keep the static glow.
+      }
+    };
+    if (ctx.state === 'running') build();
+    else ctx.resume().then(build).catch(() => {});
+  }, []);
+
+  const stopMeter = useCallback(
+    (reset = true) => {
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      levelRef.current = 0;
+      if (reset) paintOrb(0);
+    },
+    [paintOrb]
+  );
+
+  const runMeter = useCallback(() => {
+    const analyser = analyserRef.current;
+    const buf = meterBufRef.current;
+    if (analyser && buf) {
+      analyser.getByteTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) {
+        const x = (buf[i] - 128) / 128;
+        sum += x * x;
+      }
+      const rms = Math.sqrt(sum / buf.length); // ~0..0.4 for speech
+      const target = Math.min(1, rms * 3.4); // normalize into a lively range
+      // Fast attack on syllable onsets, slower release through the gaps.
+      const prev = levelRef.current;
+      const next = target > prev ? prev + (target - prev) * 0.6 : prev + (target - prev) * 0.14;
+      levelRef.current = next;
+      paintOrb(next);
+    }
+    rafRef.current = requestAnimationFrame(runMeter);
+  }, [paintOrb]);
+
+  const startMeter = useCallback(() => {
+    if (rafRef.current == null) rafRef.current = requestAnimationFrame(runMeter);
+  }, [runMeter]);
 
   const playStep = useCallback(
     (s: DashboardTrainingStep) => {
@@ -312,8 +425,15 @@ const NoraDashboardTraining: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIndex, dismissed]);
 
-  // Clean up any lingering highlight on unmount.
-  useEffect(() => clearHighlight, [clearHighlight]);
+  // Clean up any lingering highlight + audio graph on unmount.
+  useEffect(
+    () => () => {
+      clearHighlight();
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      audioCtxRef.current?.close().catch(() => {});
+    },
+    [clearHighlight]
+  );
 
   const stop = useCallback(() => {
     const audio = audioRef.current;
@@ -324,9 +444,10 @@ const NoraDashboardTraining: React.FC = () => {
       } catch {}
     }
     setSpeaking(false);
+    stopMeter();
     clearHighlight();
     clearHover();
-  }, [clearHighlight, clearHover]);
+  }, [clearHighlight, clearHover, stopMeter]);
 
   const handleNext = useCallback(() => {
     if (isLast) {
@@ -350,11 +471,24 @@ const NoraDashboardTraining: React.FC = () => {
       <audio
         ref={audioRef}
         playsInline
-        onPlay={() => setSpeaking(true)}
+        onPlay={() => {
+          setSpeaking(true);
+          ensureAudioGraph();
+          startMeter();
+        }}
         onTimeUpdate={handleTimeUpdate}
-        onEnded={() => setSpeaking(false)}
-        onPause={() => setSpeaking(false)}
-        onError={() => setSpeaking(false)}
+        onEnded={() => {
+          setSpeaking(false);
+          stopMeter();
+        }}
+        onPause={() => {
+          setSpeaking(false);
+          stopMeter();
+        }}
+        onError={() => {
+          setSpeaking(false);
+          stopMeter();
+        }}
       />
       <style>{`
         .nora-train-highlight {
@@ -372,20 +506,30 @@ const NoraDashboardTraining: React.FC = () => {
           {/* Header */}
           <div className="flex items-center gap-2.5 border-b border-white/10 px-4 py-3">
             <span className="relative flex h-7 w-7 flex-none items-center justify-center">
+              {/* Ripple ring — scale + opacity driven by live voice amplitude. */}
               <span
-                className="h-7 w-7 rounded-full"
+                ref={orbRingRef}
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: 'rgba(167,139,250,0.5)',
+                  opacity: 0,
+                  transform: 'scale(1)',
+                  transformOrigin: 'center',
+                  willChange: 'transform, opacity',
+                }}
+              />
+              {/* Core orb — glow + subtle scale pulse on each syllable. */}
+              <span
+                ref={orbCoreRef}
+                className="relative h-7 w-7 rounded-full"
                 style={{
                   background:
                     'radial-gradient(circle at 32% 28%, rgba(255,255,255,0.55), #a78bfa 45%, #6d28d9 100%)',
-                  boxShadow: speaking ? '0 0 16px rgba(167,139,250,0.7)' : '0 0 8px rgba(167,139,250,0.35)',
+                  boxShadow: '0 0 8px rgba(167,139,250,0.35)',
+                  transformOrigin: 'center',
+                  willChange: 'transform, box-shadow',
                 }}
               />
-              {speaking && (
-                <span
-                  className="absolute inset-0 animate-ping rounded-full opacity-50"
-                  style={{ background: 'rgba(167,139,250,0.5)' }}
-                />
-              )}
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold leading-none text-white">Nora</p>
