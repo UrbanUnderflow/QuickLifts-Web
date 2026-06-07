@@ -885,6 +885,29 @@ export const getServerSideProps: GetServerSideProps<AdminActivationPageProps> = 
   const forceDevFirebase = query.devFirebase === '1';
   if (!token) return { notFound: true };
 
+  // Screen Demo mode (?demo=1): serve a fully self-contained mock invite so the
+  // coach-onboarding flow can be walked end-to-end in any environment, without a
+  // real seeded invite in Firebase. Mirrors /admin/screenDemo's promise of
+  // "bypasses login and backend writes." Keep in sync with the client demo path.
+  if (query.demo === '1') {
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+    return {
+      props: {
+        invite: {
+          token,
+          organizationId: 'demo-org',
+          teamId: 'demo-team',
+          targetEmail: 'coach@demo.pulsecheck',
+          targetName: 'Jordan Lee',
+          organizationName: 'Demo Athletics',
+          teamName: 'Varsity Football',
+          status: 'active',
+          prefilledProfileImageUrl: '',
+        },
+      },
+    };
+  }
+
   try {
     const admin = (await import('../../../lib/firebase-admin')).default;
 
