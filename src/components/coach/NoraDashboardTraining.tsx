@@ -22,7 +22,7 @@ export type DashboardTrainingStep = {
   highlights?: {
     atFrac: number;
     selector?: string;
-    kind?: 'highlight' | 'card' | 'mood' | 'checkin' | 'escalation' | 'ack';
+    kind?: 'highlight' | 'nav' | 'click' | 'card' | 'mood' | 'checkin' | 'escalation' | 'ack';
   }[];
 };
 
@@ -67,6 +67,31 @@ export const TRAINING_STEPS: DashboardTrainingStep[] = [
       { atFrac: 0.45, kind: 'checkin' },
       { atFrac: 0.72, kind: 'escalation' },
       { atFrac: 0.9, kind: 'ack' },
+    ],
+  },
+  {
+    id: 'staff',
+    audio: '/audio/nora/nora-dashboard-staff.mp3',
+    title: 'Your staff',
+    body:
+      "The people who support your athletes. Every staffer gets a role — and that role sets what they can see. Coaches and trainers get full visibility; a team manager gets administrative access without the athlete data.",
+    highlights: [
+      { atFrac: 0.0, kind: 'nav', selector: '[data-nav="staff"]' },
+      { atFrac: 0.5, kind: 'highlight', selector: '[data-staff-card]' },
+      { atFrac: 0.82, kind: 'highlight', selector: '[data-staff-perms]' },
+    ],
+  },
+  {
+    id: 'staff-invite',
+    audio: '/audio/nora/nora-dashboard-staff-invite.mp3',
+    title: 'Inviting staff',
+    body:
+      "Invite a member by email, or copy a link to share directly. Either way it opens a panel where you set exactly what they can access — before the invitation ever goes out.",
+    highlights: [
+      { atFrac: 0.0, kind: 'highlight', selector: '[data-invite-trigger]' },
+      { atFrac: 0.42, kind: 'click', selector: '[data-invite-trigger]' },
+      { atFrac: 0.62, kind: 'highlight', selector: '[data-invite-perms]' },
+      { atFrac: 0.85, kind: 'highlight', selector: '[data-invite-copy]' },
     ],
   },
 ];
@@ -159,6 +184,18 @@ const NoraDashboardTraining: React.FC = () => {
       const kind = cue.kind || 'highlight';
       if (kind === 'highlight') {
         if (cue.selector) applyHighlight(cue.selector);
+        return;
+      }
+      // Switch dashboard tabs (the nav buttons own the view state), then ring it.
+      if (kind === 'nav') {
+        if (!cue.selector) return;
+        (document.querySelector(cue.selector) as HTMLElement | null)?.click();
+        applyHighlight(cue.selector);
+        return;
+      }
+      // Fire a real click (e.g. open the invite modal) without ringing.
+      if (kind === 'click') {
+        if (cue.selector) (document.querySelector(cue.selector) as HTMLElement | null)?.click();
         return;
       }
       const card = document.querySelector('[data-athlete-card]');

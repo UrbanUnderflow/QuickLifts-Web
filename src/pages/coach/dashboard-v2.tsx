@@ -49,6 +49,7 @@ import {
   TrendingDown,
   Mail,
   CalendarDays,
+  Copy,
 } from 'lucide-react';
 import CoachProtectedRoute from '../../components/CoachProtectedRoute';
 import AthleteReadinessCard from '../../components/AthleteReadinessCard';
@@ -1348,21 +1349,55 @@ const InboxSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean; isDem
 // Staff
 // ---------------------------------------------------------------------------
 
+// What a staffer is allowed to touch. Multi-select — a person can hold several.
+//  • administrative  → update the schedule, train Nora (but no athlete data)
+//  • coaching        → athlete insights, reports, coaching curriculum
+//  • athletic_trainer→ the medical peek: Tier 3 escalation detail
+type StaffPermission = 'administrative' | 'coaching' | 'athletic_trainer';
+
+const STAFF_PERMISSIONS: {
+  key: StaffPermission;
+  label: string;
+  blurb: string;
+  icon: React.ElementType;
+}[] = [
+  { key: 'administrative', label: 'Administrative', blurb: 'Update the schedule and train Nora', icon: ClipboardList },
+  { key: 'coaching', label: 'Coaching', blurb: 'Athlete insights, reports, and coaching curriculum', icon: BarChart3 },
+  { key: 'athletic_trainer', label: 'Athletic Trainer', blurb: 'See Tier 3 escalation detail', icon: HeartPulse },
+];
+
+const PERMISSION_META: Record<StaffPermission, { label: string; icon: React.ElementType }> =
+  Object.fromEntries(STAFF_PERMISSIONS.map((p) => [p.key, { label: p.label, icon: p.icon }])) as Record<
+    StaffPermission,
+    { label: string; icon: React.ElementType }
+  >;
+
+// Best-fit role label from the granted permissions (purely cosmetic).
+const deriveStaffRole = (perms: StaffPermission[]): string => {
+  const has = (p: StaffPermission) => perms.includes(p);
+  if (has('coaching') && has('athletic_trainer')) return 'Coach / Trainer';
+  if (has('athletic_trainer')) return 'Athletic Trainer';
+  if (has('coaching')) return 'Coach';
+  if (has('administrative')) return 'Team Manager';
+  return 'Staff';
+};
+
 type StaffRow = {
   id: string;
   name: string;
   role: string;
   email: string;
   status: 'active' | 'invited';
+  permissions: StaffPermission[];
   avatarUrl?: string;
   joinedAt?: string; // ISO date the staffer was onboarded (active members)
 };
 
 const DEMO_STAFF: StaffRow[] = [
-  { id: 's1', name: 'Coach Mayo', role: 'Head Coach', email: 'coach.mayo@fitwithpulse.ai', status: 'active', joinedAt: '2024-08-15' },
-  { id: 's2', name: 'Dana Reyes', role: 'Assistant Coach', email: 'dana.reyes@example.com', status: 'active', joinedAt: '2025-01-10' },
-  { id: 's3', name: 'Priya Nair', role: 'Athletic Trainer', email: 'priya.nair@example.com', status: 'active', joinedAt: '2025-09-03' },
-  { id: 's4', name: 'Marcus Hill', role: 'Performance Staff', email: 'marcus.hill@example.com', status: 'invited' },
+  { id: 's1', name: 'Coach Mayo', role: 'Head Coach', email: 'coach.mayo@fitwithpulse.ai', status: 'active', joinedAt: '2024-08-15', permissions: ['administrative', 'coaching', 'athletic_trainer'] },
+  { id: 's2', name: 'Dana Reyes', role: 'Assistant Coach', email: 'dana.reyes@example.com', status: 'active', joinedAt: '2025-01-10', permissions: ['coaching'] },
+  { id: 's3', name: 'Priya Nair', role: 'Athletic Trainer', email: 'priya.nair@example.com', status: 'active', joinedAt: '2025-09-03', permissions: ['coaching', 'athletic_trainer'] },
+  { id: 's4', name: 'Marcus Hill', role: 'Team Manager', email: 'marcus.hill@example.com', status: 'invited', permissions: ['administrative'] },
 ];
 
 // Human-readable tenure since onboarding, e.g. "1 yr 9 mo" / "3 mo".
@@ -1393,17 +1428,45 @@ const StaffSection: React.FC<{ isDemo?: boolean; coachName: string }> = ({ isDem
   const [staff, setStaff] = useState<StaffRow[]>(isDemo ? DEMO_STAFF : []);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [email, setEmail] = useState('');
+  const [perms, setPerms] = useState<StaffPermission[]>(['coaching']);
+  const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  const inviteLink = 'https://fitwithpulse.ai/coach/join/team-demo';
+
+  const openInvite = () => {
+    setPerms(['coaching']);
+    setEmail('');
+    setCopied(false);
+    setInviteOpen(true);
+  };
+
+  const togglePerm = (k: StaffPermission) =>
+    setPerms((prev) => (prev.includes(k) ? prev.filter((p) => p !== k) : [...prev, k]));
+
+  const copyLink = () => {
+    try {
+      navigator.clipboard?.writeText(inviteLink);
+    } catch {}
+    setCopied(true);
+    setToast('Invite link copied — the permissions you set travel with it.');
+  };
 
   const sendInvite = () => {
     const e = email.trim();
-    if (!e) return;
+    if (!e || perms.length === 0) return;
     setStaff((prev) => [
-      { id: `inv-${prev.length + 1}-${e}`, name: e.split('@')[0], role: 'Staff', email: e, status: 'invited' },
+      {
+        id: `inv-${prev.length + 1}-${e}`,
+        name: e.split('@')[0],
+        role: deriveStaffRole(perms),
+        email: e,
+        status: 'invited',
+        permissions: [...perms],
+      },
       ...prev,
     ]);
     setToast(`Invite sent to ${e}.`);
-    setEmail('');
     setInviteOpen(false);
   };
 
@@ -1413,12 +1476,22 @@ const StaffSection: React.FC<{ isDemo?: boolean; coachName: string }> = ({ isDem
         <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
           Staff {staff.length > 0 && <span className="text-zinc-600">({staff.length})</span>}
         </div>
-        <button
-          onClick={() => setInviteOpen((o) => !o)}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95"
-        >
-          <Plus className="w-4 h-4" /> Invite staff
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            data-invite-copylink
+            onClick={openInvite}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-700/50 text-zinc-300 text-sm font-medium hover:bg-zinc-800/40"
+          >
+            <Link2 className="w-4 h-4" /> Copy link
+          </button>
+          <button
+            data-invite-trigger
+            onClick={openInvite}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95"
+          >
+            <Plus className="w-4 h-4" /> Invite member
+          </button>
+        </div>
       </div>
 
       {toast && (
@@ -1427,31 +1500,118 @@ const StaffSection: React.FC<{ isDemo?: boolean; coachName: string }> = ({ isDem
         </div>
       )}
 
+      {/* Invite modal — set permissions before the invitation goes out */}
       <AnimatePresence>
         {inviteOpen && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[55] flex items-center justify-center p-4"
           >
-            <div className="flex items-center gap-2 rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
-              <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') sendInvite();
-                }}
-                placeholder="staff@school.edu"
-                className="flex-1 bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
-              />
-              <button
-                onClick={sendInvite}
-                className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95"
-              >
-                Send
-              </button>
-            </div>
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setInviteOpen(false)} />
+            <motion.div
+              data-invite-modal
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              className="relative z-10 w-full max-w-md rounded-2xl border border-zinc-700/50 bg-[#0d0d12] shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
+                <div>
+                  <div className="text-base font-semibold text-white">Invite a staff member</div>
+                  <div className="text-xs text-zinc-500">Choose what they can access, then send.</div>
+                </div>
+                <button
+                  onClick={() => setInviteOpen(false)}
+                  className="rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="px-5 py-4 space-y-4">
+                {/* Permissions */}
+                <div data-invite-perms className="space-y-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                    Permissions
+                  </div>
+                  {STAFF_PERMISSIONS.map((p) => {
+                    const on = perms.includes(p.key);
+                    const Icon = p.icon;
+                    return (
+                      <button
+                        key={p.key}
+                        data-perm={p.key}
+                        onClick={() => togglePerm(p.key)}
+                        className={`w-full flex items-start gap-3 rounded-xl border p-3 text-left transition-colors ${
+                          on
+                            ? 'border-[#E0FE10]/40 bg-[#E0FE10]/[0.06]'
+                            : 'border-zinc-700/40 bg-zinc-800/30 hover:border-zinc-600/60'
+                        }`}
+                      >
+                        <span
+                          className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border ${
+                            on ? 'border-[#E0FE10] bg-[#E0FE10] text-black' : 'border-zinc-600'
+                          }`}
+                        >
+                          {on && <Check className="h-3.5 w-3.5" />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1.5 text-sm font-medium text-white">
+                            <Icon className="h-3.5 w-3.5 text-[#E0FE10]/80" />
+                            {p.label}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-zinc-500">{p.blurb}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Email invite */}
+                <div className="space-y-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                    Invite by email
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') sendInvite();
+                      }}
+                      placeholder="staff@school.edu"
+                      className="flex-1 bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
+                    />
+                    <button
+                      onClick={sendInvite}
+                      disabled={!email.trim() || perms.length === 0}
+                      className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Send
+                    </button>
+                  </div>
+                </div>
+
+                {/* Copy link */}
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-700/40 bg-zinc-800/30 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="text-xs font-medium text-zinc-300">Or share a link</div>
+                    <div className="truncate text-[11px] text-zinc-600">{inviteLink}</div>
+                  </div>
+                  <button
+                    data-invite-copy
+                    onClick={copyLink}
+                    className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-zinc-700/50 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
+                  >
+                    {copied ? <Check className="h-3.5 w-3.5 text-[#E0FE10]" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copied ? 'Copied' : 'Copy link'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1470,6 +1630,7 @@ const StaffSection: React.FC<{ isDemo?: boolean; coachName: string }> = ({ isDem
             return (
               <div
                 key={s.id}
+                data-staff-card
                 className="relative flex flex-col p-4 rounded-2xl bg-zinc-800/40 border border-zinc-700/30 hover:border-zinc-600/50 transition-colors"
               >
                 {/* Status badge — top right */}
@@ -1520,6 +1681,23 @@ const StaffSection: React.FC<{ isDemo?: boolean; coachName: string }> = ({ isDem
                       <span className="text-zinc-500">Awaiting acceptance</span>
                     )}
                   </div>
+                  {s.permissions.length > 0 && (
+                    <div data-staff-perms className="flex flex-wrap gap-1.5 pt-0.5">
+                      {s.permissions.map((p) => {
+                        const meta = PERMISSION_META[p];
+                        const Icon = meta.icon;
+                        return (
+                          <span
+                            key={p}
+                            className="inline-flex items-center gap-1 rounded-full border border-zinc-700/50 bg-zinc-900/50 px-2 py-0.5 text-[10px] font-medium text-zinc-300"
+                          >
+                            <Icon className="h-3 w-3 text-[#E0FE10]/70" />
+                            {meta.label}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             );
