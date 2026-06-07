@@ -1497,6 +1497,50 @@ export const pulseCheckProvisioningService = {
       });
   },
 
+  /**
+   * All onboarded staff (non-athlete members) under an organization, deduped by
+   * user across the org's teams, with display names resolved. Used to pick the
+   * single revenue recipient who owns a team's referral kickback / earnings.
+   */
+  async listOrganizationStaffMembers(
+    organizationId: string
+  ): Promise<Array<{ userId: string; name: string; email?: string; role: PulseCheckTeamMembership['role']; title?: string }>> {
+    const orgId = normalizeString(organizationId);
+    if (!orgId) return [];
+    const snapshot = await getDocs(
+      query(collection(db, TEAM_MEMBERSHIPS_COLLECTION), where('organizationId', '==', orgId))
+    );
+    const byUser = new Map<string, { userId: string; email?: string; role: PulseCheckTeamMembership['role']; title?: string }>();
+    snapshot.docs.forEach((docSnap) => {
+      const membership = toTeamMembership(docSnap.id, docSnap.data() as Record<string, any>);
+      if (!membership.userId || membership.role === 'athlete') return;
+      if (!byUser.has(membership.userId)) {
+        byUser.set(membership.userId, {
+          userId: membership.userId,
+          email: membership.email,
+          role: membership.role,
+          title: membership.title,
+        });
+      }
+    });
+    const withNames = await Promise.all(
+      Array.from(byUser.values()).map(async (row) => {
+        let name = row.email || 'Staff member';
+        try {
+          const userSnap = await getDoc(doc(db, 'users', row.userId));
+          if (userSnap.exists()) {
+            const data = userSnap.data() as Record<string, any>;
+            name = data.displayName || data.username || row.email || 'Staff member';
+          }
+        } catch {
+          // best-effort — fall back to email
+        }
+        return { ...row, name };
+      })
+    );
+    return withNames.sort((left, right) => left.name.localeCompare(right.name));
+  },
+
   async getOrganization(organizationId: string): Promise<PulseCheckOrganization | null> {
     const snapshot = await getDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizeString(organizationId)));
     if (!snapshot.exists()) return null;
@@ -3091,6 +3135,8 @@ export const pulseCheckProvisioningService = {
 
   async savePostActivationSetup(input: SavePulseCheckPostActivationSetupInput): Promise<void> {
     const membershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, normalizeString(input.teamMembershipId));
+    const smsEnabled = Boolean(input.notificationPreferences?.sms);
+    const phone = normalizeString(input.phone);
     await updateDoc(membershipRef, {
       title: normalizeString(input.title),
       operatingRole: input.operatingRole,
@@ -3098,6 +3144,10 @@ export const pulseCheckProvisioningService = {
         ...defaultNotificationPreferences(),
         ...(input.notificationPreferences || {}),
       },
+      // Persist the phone for SMS escalation alerts. Stamp consent when SMS is on
+      // and a number is present; clear the stamp if the member opts back out.
+      phone,
+      smsConsentAt: smsEnabled && phone ? serverTimestamp() : null,
       ...(input.intakeResponses
         ? {
             coachIntakeResponses: normalizeIntakeResponses(input.intakeResponses),

@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, XCircle, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical, Settings2, Wallet, ClipboardCheck, ClipboardList, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, XCircle, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical, Settings2, Wallet, ClipboardCheck, ClipboardList, ShieldAlert, ShieldCheck, MonitorPlay } from 'lucide-react';
 import { useDispatch } from 'react-redux';
 import { toggleDevMode } from '../../redux/devModeSlice';
 import { initializeFirebase, isUsingDevFirebase } from '../../api/firebase/config';
@@ -46,10 +46,10 @@ const AdminCard: React.FC<AdminCardProps> = ({ title, description, icon, link })
 
 const adminCardsData = [
   {
-    title: "Coach Dashboard v2 (Demo)",
-    description: "New coach dashboard with the clean PulseCheck sidebar layout — Home, Athlete Alerts, Team Roster, Train Nora knowledge vault, Reports. Mock data, no auth required, for design review.",
-    icon: <Users2 className="w-5 h-5" />,
-    link: "/coach/dashboard-v2-demo"
+    title: "Screen Demos",
+    description: "Home for all demo screens — walk real PulseCheck UI flows end-to-end with no auth or data (coach onboarding, coach dashboard v2, and more).",
+    icon: <MonitorPlay className="w-5 h-5" />,
+    link: "/admin/screenDemo"
   },
   {
     title: "Group Meet",

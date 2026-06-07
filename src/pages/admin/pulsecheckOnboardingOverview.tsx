@@ -25,10 +25,12 @@ import {
   Map as MapIcon,
   MessageSquareText,
   MonitorCheck,
+  Pencil,
   RefreshCw,
   Rocket,
   Search,
   ShieldCheck,
+  SkipForward,
   Smartphone,
   Sparkles,
   Target,
@@ -73,6 +75,8 @@ type PhaseSection = {
   objective: string;
   actions: Array<{ lead: string; detail: string }>;
   outputs: string[];
+  cta?: { label: string; href: string };
+  preview?: 'intake';
 };
 
 type CadenceItem = {
@@ -119,7 +123,7 @@ const currentState = [
     title: 'The setup console',
     status: 'Where you build it',
     icon: Building2,
-    copy: 'This is where you create the organization, team, pilot group, and invite links, and set billing and support. The six steps below turn that tool into a clear order of operations.',
+    copy: 'This is where you create the organization, team, pilot group, and invite links, and set billing and support. The ten steps below turn that tool into a clear order of operations.',
   },
   {
     title: 'Launch day',
@@ -129,15 +133,43 @@ const currentState = [
   },
 ];
 
+// These ten phases mirror TEAM_ONBOARDING_TRACKER_STEPS (the live dashboard's
+// source of truth) one-to-one and in the same order, so the playbook card and
+// the dashboard never drift on step count, naming, or sequence.
 const phases: PhaseSection[] = [
   {
     eyebrow: 'Step 1',
-    short: 'Intake',
-    title: 'Intake — learn the team before you build anything',
+    short: 'Create org & team',
+    title: 'Create the organization & team',
     owner: 'You (PulseCheck)',
-    timing: 'Before setup',
+    timing: 'Before kickoff',
+    icon: Building2,
+    summary: 'Stand up the organization, team, and access in the setup console so everything’s ready before the first coach call.',
+    objective: 'Build the organization, team, and — when the rollout uses them — the pilot and cohort, so everything is ready before the first coach call.',
+    actions: [
+      { lead: 'Create the organization', detail: 'Display name, legal name, type, the main admin contact, and whether it’s a pilot or a full rollout.' },
+      { lead: 'Create the team', detail: 'Sport, season, status, plan, billing model, roster rules, and who to contact if something needs escalating.' },
+      { lead: 'Add a pilot group (if needed)', detail: 'For a pilot or phased rollout. Keep names obvious, like “Varsity Football, Spring 2026.”' },
+      { lead: 'Generate invite links', detail: 'Admin and coach links. Click each one to confirm it drops the person into the right organization, team, and role.' },
+      { lead: 'Double-check before kickoff', detail: 'Support contacts, counselor-bridge setting, billing setup, and the team’s preview screens.' },
+    ],
+    outputs: [
+      'Organization and team created',
+      'Pilot group created (if needed)',
+      'Coach and staff invite links ready',
+      'A plan for getting athletes in',
+      'Setup notes written down',
+    ],
+    cta: { label: 'Open Provisioning Dashboard', href: '/admin/pulsecheckProvisioning' },
+  },
+  {
+    eyebrow: 'Step 2',
+    short: 'Intake',
+    title: 'Intake — confirm the team before launch',
+    owner: 'You (PulseCheck)',
+    timing: 'Before kickoff',
     icon: ClipboardList,
-    summary: 'Learn everything about the team on paper before you touch the software.',
+    summary: 'Confirm everything about the team on paper — sponsor, staff, roster, launch date, support route, and devices — so there are no surprises.',
     objective: 'Get the full picture of the organization so you can set them up correctly and walk into launch day with no surprises.',
     actions: [
       { lead: 'Get the basics', detail: 'Organization name, who’s sponsoring it, paid rollout or pilot, the sport, team name, launch date, and the key people.' },
@@ -153,37 +185,14 @@ const phases: PhaseSection[] = [
       'A device count and delivery plan',
       'Clear notes on who to contact for what',
     ],
-  },
-  {
-    eyebrow: 'Step 2',
-    short: 'Software setup',
-    title: 'Set them up in the software',
-    owner: 'You (PulseCheck)',
-    timing: 'Right after intake',
-    icon: Building2,
-    summary: 'Build the organization, team, and access so everything’s ready before the first coach call.',
-    objective: 'Build the organization, team, and access in the setup console so everything is ready before the first coach call.',
-    actions: [
-      { lead: 'Create the organization', detail: 'Display name, legal name, type, the main admin contact, and whether it’s a pilot or a full rollout.' },
-      { lead: 'Create the team', detail: 'Sport, season, status, plan, billing model, roster rules, and who to contact if something needs escalating.' },
-      { lead: 'Add a pilot group (if needed)', detail: 'For a pilot or phased rollout. Keep names obvious, like “Varsity Football, Spring 2026.”' },
-      { lead: 'Generate invite links', detail: 'Admin and coach links. Click each one to confirm it drops the person into the right organization, team, and role.' },
-      { lead: 'Double-check before kickoff', detail: 'Support contacts, counselor-bridge setting, billing setup, and the team’s preview screens.' },
-    ],
-    outputs: [
-      'Organization and team created',
-      'Pilot group created (if needed)',
-      'Coach and staff invite links ready',
-      'A plan for getting athletes in',
-      'Setup notes written down',
-    ],
+    preview: 'intake',
   },
   {
     eyebrow: 'Step 3',
     short: 'Kickoff',
     title: 'Meeting 1 — coach kickoff',
     owner: 'You + the head coach',
-    timing: '30–45 min',
+    timing: 'Meeting 1 · 30–45 min',
     icon: MessageSquareText,
     summary: 'Get the coach comfortable with what PulseCheck does before any hands-on training.',
     objective: 'Get the coach comfortable — what PulseCheck does, what to expect, and why it’s worth their time — before any hands-on training.',
@@ -206,7 +215,7 @@ const phases: PhaseSection[] = [
     short: 'Training',
     title: 'Meeting 2 — dashboard & report training',
     owner: 'You + the coaching staff',
-    timing: '60 min',
+    timing: 'Meeting 2 · 60 min',
     icon: Laptop,
     summary: 'Teach coaches to read the dashboard and reports on their own, then act on what they see.',
     objective: 'Teach coaches to read the dashboard and reports on their own, and turn what they see into the right supportive action.',
@@ -227,49 +236,129 @@ const phases: PhaseSection[] = [
   },
   {
     eyebrow: 'Step 5',
-    short: 'Launch day',
-    title: 'Meeting 3 — team launch day',
-    owner: 'You + the full team',
-    timing: '45–75 min',
-    icon: Smartphone,
-    summary: 'Get athletes into the app, devices synced, and the first check-in and session done together.',
-    objective: 'Get athletes into the app, devices synced, the first check-in done, and the first mental training session run together.',
+    short: 'Launch plan',
+    title: 'Meeting 3 — book and plan launch day',
+    owner: 'You + the head coach',
+    timing: 'Meeting 3',
+    icon: ClipboardCheck,
+    summary: 'Lock the room plan, invite flow, delivery support, and athlete agenda so launch day runs clean.',
+    objective: 'Have the room plan, invite flow, delivery support, troubleshooting, and athlete agenda ready for launch day.',
     actions: [
-      { lead: 'Set the room up first', detail: 'Device stations, charging, QR codes or invite links, a coach table, and someone on troubleshooting.' },
-      { lead: 'Hand out devices', detail: 'Check names, match device IDs where needed, and note anything missing or that needs replacing.' },
-      { lead: 'Walk athletes through setup', detail: 'Install the app, make an account, consent screens, join the team, basic profile, and notifications.' },
-      { lead: 'Pair and sync wearables', detail: 'Before anyone leaves, each athlete is either fully connected or on a follow-up list.' },
-      { lead: 'Teach daily check-ins', detail: 'When to do them, what an honest answer looks like, how it helps their coach, and how PulseCheck keeps it private.' },
-      { lead: 'Run the first session together', detail: 'As a group, so athletes get the rhythm before they ever do one on their own.' },
+      { lead: 'Plan the room', detail: 'Device stations, charging, QR codes or invite links, a coach table, and someone on troubleshooting.' },
+      { lead: 'Confirm the invite flow', detail: 'Team link or individual invites — and test one end to end so athletes land in the right team and role.' },
+      { lead: 'Line up delivery support', detail: 'Who’s on troubleshooting, where backup devices are, and how anything urgent gets escalated.' },
+      { lead: 'Write the athlete agenda', detail: 'The order launch day runs in — devices, setup, first check-in, first session — so nothing gets missed.' },
+      { lead: 'Confirm the date and time', detail: 'Lock launch day on the calendar with the coach and everyone who needs to be in the room.' },
     ],
     outputs: [
-      'Athletes invited and joined',
-      'Device sync status recorded',
-      'First check-in done by the group',
-      'First session done together',
-      'Follow-up list for anyone absent or with device trouble',
+      'Room and station plan ready',
+      'Invite flow tested end to end',
+      'Delivery support assigned',
+      'Athlete agenda written',
+      'Launch day booked on the calendar',
     ],
   },
   {
     eyebrow: 'Step 6',
-    short: 'First 30 days',
-    title: 'The first 30 days',
+    short: 'Devices',
+    title: 'Devices synced',
+    owner: 'You + the full team',
+    timing: 'Launch day',
+    icon: Watch,
+    summary: 'Hand out devices, pair wearables, and reconcile the count so every athlete is connected or logged for follow-up.',
+    objective: 'Reconcile the device count and get every athlete connected or on a clear follow-up list.',
+    actions: [
+      { lead: 'Hand out devices', detail: 'Check names, match device IDs where needed, and note anything missing or that needs replacing.' },
+      { lead: 'Walk athletes through setup', detail: 'Install the app, make an account, consent screens, join the team, basic profile, and notifications.' },
+      { lead: 'Pair and sync wearables', detail: 'Before anyone leaves, each athlete is either fully connected or on a follow-up list.' },
+      { lead: 'Reconcile the count', detail: 'Devices handed out versus the roster — record every gap so none slip through.' },
+    ],
+    outputs: [
+      'Devices handed out and matched',
+      'Wearables paired and syncing',
+      'Device sync status recorded',
+      'Follow-up list for anyone absent or with device trouble',
+    ],
+  },
+  {
+    eyebrow: 'Step 7',
+    short: 'First check-in',
+    title: 'First check-in done',
+    owner: 'Coach + athletes',
+    timing: 'Launch day',
+    icon: HeartPulse,
+    summary: 'Athletes finish the first check-in and know when honest daily input is expected.',
+    objective: 'Get the group through the first check-in and set the expectation for honest daily input.',
+    actions: [
+      { lead: 'Teach daily check-ins', detail: 'When to do them, what an honest answer looks like, how it helps their coach, and how PulseCheck keeps it private.' },
+      { lead: 'Run the first check-in together', detail: 'As a group, so everyone gets the rhythm before they ever do one on their own.' },
+      { lead: 'Set the daily expectation', detail: 'When check-ins are due and what consistency should look like week to week.' },
+    ],
+    outputs: [
+      'First check-in done by the group',
+      'Athletes know the daily routine',
+      'Check-in expectations set',
+    ],
+  },
+  {
+    eyebrow: 'Step 8',
+    short: 'First session',
+    title: 'First mental training session done',
+    owner: 'Coach + athletes',
+    timing: 'Launch day',
+    icon: Sparkles,
+    summary: 'Athletes finish the first mental training session with PulseCheck staff in the room.',
+    objective: 'Run the first mental training session together so athletes get the rhythm before doing one on their own.',
+    actions: [
+      { lead: 'Run the first session together', detail: 'As a group, with PulseCheck staff present to answer questions in the moment.' },
+      { lead: 'Show what’s assigned', detail: 'The practice scenarios, who’s completing them, and where athletes find the next one.' },
+      { lead: 'Frame the coach’s role', detail: 'A coach’s response to sessions stays supportive — never a punishment for what shows up.' },
+    ],
+    outputs: [
+      'First session done together',
+      'Athletes know how sessions work',
+      'Coach knows how to talk about sessions',
+    ],
+  },
+  {
+    eyebrow: 'Step 9',
+    short: 'Weekly snapshot',
+    title: 'Weekly snapshot live',
     owner: 'You + coach success',
-    timing: 'First 30 days, then ongoing',
-    icon: CalendarClock,
-    summary: 'Keep data reviews, coach support, and stakeholder updates predictable so the org feels looked after.',
-    objective: 'Make the organization feel looked after, and keep the data reviews, coach support, and stakeholder updates predictable.',
+    timing: 'Post-launch',
+    icon: BookOpenCheck,
+    summary: 'The weekly report day, its owner, and how it reaches the coach are all set.',
+    objective: 'Make the weekly report predictable — a set day, a clear owner, and a known delivery route to the coach.',
     actions: [
       { lead: 'Check in daily during launch week', detail: 'Who’s joined, are devices syncing, are check-ins happening, are reports ready, is anything stuck?' },
-      { lead: 'Send a weekly snapshot', detail: 'Where the team is, how consistent check-ins are, what changed that matters, and what to follow up on.' },
+      { lead: 'Set the weekly snapshot', detail: 'Where the team is, how consistent check-ins are, what changed that matters, and what to follow up on.' },
+      { lead: 'Confirm the day and owner', detail: 'Which day the snapshot goes out and exactly who is responsible for sending it.' },
+      { lead: 'Confirm how it reaches the coach', detail: 'Email or dashboard — and that the coach can actually read it on their own.' },
+    ],
+    outputs: [
+      'Daily launch-week notes',
+      'Weekly snapshot scheduled',
+      'Owner and delivery route set',
+      'Coach can read the report on their own',
+    ],
+  },
+  {
+    eyebrow: 'Step 10',
+    short: 'Stakeholder cadence',
+    title: 'Stakeholder check-ins set',
+    owner: 'You (PulseCheck)',
+    timing: 'Post-launch',
+    icon: CalendarClock,
+    summary: 'Coach and sponsor check-ins are booked every two weeks with an owner and an action log.',
+    objective: 'Keep coach and sponsor updates predictable — with an owner and a shared action log — and run a 30-day review.',
+    actions: [
       { lead: 'Meet every two weeks', detail: 'With the coach and sponsor — trends, usage, open questions, risks, and what to do next.' },
       { lead: 'Keep one shared issue log', detail: 'Devices, access, roster changes, report questions — so no one explains the same problem twice.' },
       { lead: 'Run a 30-day review', detail: 'Usage, coach engagement, athlete completion, device reliability, report quality, and readiness to grow.' },
     ],
     outputs: [
-      'Daily launch-week notes',
-      'Weekly coach snapshots',
-      'Notes and action items every two weeks',
+      'Check-ins booked every two weeks',
+      'An owner and action log in place',
       'An up-to-date issue log',
       'A 30-day review',
     ],
@@ -747,6 +836,376 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
   const [recipientDraft, setRecipientDraft] = useState<Record<string, string>>({});
   const [savingTrackerKey, setSavingTrackerKey] = useState<string | null>(null);
 
+  // ── Nora voice walkthrough (plays on landing → "Begin" modal → scroll) ──
+  const introAudioRef = React.useRef<HTMLAudioElement | null>(null);
+  const introStartedRef = React.useRef(false);
+  const [introPlaying, setIntroPlaying] = useState(false);
+  const [showBeginModal, setShowBeginModal] = useState(false);
+  // Glowing "Skip Training" button — shows when Nora starts, fades out ~8s later.
+  const [showSkipButton, setShowSkipButton] = useState(false);
+  const [skipHiding, setSkipHiding] = useState(false);
+  // Second beat: Nora narrates the live dashboard, then cues the scroll to the
+  // ten-step playbook below.
+  const dashboardAudioRef = React.useRef<HTMLAudioElement | null>(null);
+  const [dashboardNarrating, setDashboardNarrating] = useState(false);
+  // Third beat: Nora walks Step 1 (provisioning); fourth beat: Step 2 (intake).
+  const step1AudioRef = React.useRef<HTMLAudioElement | null>(null);
+  const step2AudioRef = React.useRef<HTMLAudioElement | null>(null);
+  const step1StartedRef = React.useRef(false);
+  const step2StartedRef = React.useRef(false);
+  const [step1Narrating, setStep1Narrating] = useState(false);
+  const [step2Narrating, setStep2Narrating] = useState(false);
+  // Fifth beat: Nora centers the three meeting cards (Steps 3–5) and gives the
+  // overview of the three onboarding meetings.
+  const meetingsAudioRef = React.useRef<HTMLAudioElement | null>(null);
+  const meetingsStartedRef = React.useRef(false);
+  const [meetingsNarrating, setMeetingsNarrating] = useState(false);
+  // Final beat: launch day → post-launch (Steps 6–10). Nora scrolls through the
+  // five cards as she narrates each.
+  const launchAudioRef = React.useRef<HTMLAudioElement | null>(null);
+  const launchStartedRef = React.useRef(false);
+  const launchWaypointRef = React.useRef(0);
+  const [launchNarrating, setLaunchNarrating] = useState(false);
+  // When Nora says "click the … button", center that step's button and flash a
+  // highlight ring for a few seconds.
+  const ctaCueFiredRef = React.useRef<Set<number>>(new Set());
+  const [highlightedCtaIndex, setHighlightedCtaIndex] = useState<number | null>(null);
+
+  const highlightStepCta = useCallback((index: number) => {
+    if (typeof document === 'undefined') return;
+    document
+      .getElementById(`playbook-cta-${index}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedCtaIndex(index);
+    window.setTimeout(() => setHighlightedCtaIndex((cur) => (cur === index ? null : cur)), 5000);
+  }, []);
+
+  // Fire a step's CTA cue `lead` seconds before its clip ends — right as the
+  // "just click…" line begins.
+  const makeCtaCue = useCallback(
+    (index: number, lead: number) => (e: React.SyntheticEvent<HTMLAudioElement>) => {
+      const a = e.currentTarget;
+      if (ctaCueFiredRef.current.has(index)) return;
+      if (!a.duration || !Number.isFinite(a.duration)) return;
+      if (a.duration - a.currentTime <= lead) {
+        ctaCueFiredRef.current.add(index);
+        highlightStepCta(index);
+      }
+    },
+    [highlightStepCta]
+  );
+  const handleStep1TimeUpdate = useMemo(() => makeCtaCue(0, 9.5), [makeCtaCue]);
+  const handleStep2TimeUpdate = useMemo(() => makeCtaCue(1, 6.5), [makeCtaCue]);
+
+  // Expand a step's card and play its narration clip (once).
+  const startStepNarration = useCallback(
+    (
+      index: number,
+      audioRef: React.MutableRefObject<HTMLAudioElement | null>,
+      startedRef: React.MutableRefObject<boolean>,
+      setNarrating: (v: boolean) => void
+    ) => {
+      if (startedRef.current) return;
+      startedRef.current = true;
+      ctaCueFiredRef.current.delete(index);
+      setExpandedPhases((current) => {
+        const next = new Set(current);
+        next.add(index);
+        return next;
+      });
+      const audio = audioRef.current;
+      if (!audio) return;
+      try {
+        audio.currentTime = 0;
+        const played = audio.play();
+        if (played && typeof played.then === 'function') {
+          played.then(() => setNarrating(true)).catch(() => setNarrating(false));
+        }
+      } catch {
+        setNarrating(false);
+      }
+    },
+    []
+  );
+
+  const startStep1Narration = useCallback(
+    () => startStepNarration(0, step1AudioRef, step1StartedRef, setStep1Narrating),
+    [startStepNarration]
+  );
+
+  // Step 1 done (or skipped) → scroll to Step 2 and narrate it.
+  const goToStep2 = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    document.getElementById('playbook-step-1')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.setTimeout(
+      () => startStepNarration(1, step2AudioRef, step2StartedRef, setStep2Narrating),
+      1000
+    );
+  }, [startStepNarration]);
+
+  const finishStep1 = useCallback(() => {
+    const audio = step1AudioRef.current;
+    if (audio) {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {}
+    }
+    setStep1Narrating(false);
+    goToStep2();
+  }, [goToStep2]);
+
+  // Play the three-meetings overview without expanding any single card.
+  const startMeetingsNarration = useCallback(() => {
+    if (meetingsStartedRef.current) return;
+    meetingsStartedRef.current = true;
+    const audio = meetingsAudioRef.current;
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+      const played = audio.play();
+      if (played && typeof played.then === 'function') {
+        played.then(() => setMeetingsNarrating(true)).catch(() => setMeetingsNarrating(false));
+      }
+    } catch {
+      setMeetingsNarrating(false);
+    }
+  }, []);
+
+  // Step 2 done (or skipped) → center the three meeting cards and narrate them.
+  const goToMeetings = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    // Center on the middle card (Step 4) so the trio sits in the viewport.
+    document.getElementById('playbook-step-3')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    window.setTimeout(startMeetingsNarration, 1000);
+  }, [startMeetingsNarration]);
+
+  const finishStep2 = useCallback(() => {
+    const audio = step2AudioRef.current;
+    if (audio) {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {}
+    }
+    setStep2Narrating(false);
+    goToMeetings();
+  }, [goToMeetings]);
+
+  // Scroll waypoints (0-based playbook step index) keyed to a fraction of the
+  // launch clip, so the right card is centered as Nora reaches it.
+  const launchWaypoints = useMemo(
+    () => [
+      { frac: 0.3, idx: 6 }, // Step 7 — first check-in
+      { frac: 0.48, idx: 7 }, // Step 8 — first session (baseline / sim / protocol)
+      { frac: 0.7, idx: 8 }, // Step 9 — weekly snapshot (first report)
+      { frac: 0.87, idx: 9 }, // Step 10 — stakeholder check-ins (first coach check-in)
+    ],
+    []
+  );
+
+  const handleLaunchTimeUpdate = useCallback(
+    (e: React.SyntheticEvent<HTMLAudioElement>) => {
+      const a = e.currentTarget;
+      if (!a.duration || !Number.isFinite(a.duration)) return;
+      while (
+        launchWaypointRef.current < launchWaypoints.length &&
+        a.currentTime >= a.duration * launchWaypoints[launchWaypointRef.current].frac
+      ) {
+        const wp = launchWaypoints[launchWaypointRef.current];
+        document
+          .getElementById(`playbook-step-${wp.idx}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        launchWaypointRef.current += 1;
+      }
+    },
+    [launchWaypoints]
+  );
+
+  const startLaunchNarration = useCallback(() => {
+    if (launchStartedRef.current) return;
+    launchStartedRef.current = true;
+    launchWaypointRef.current = 0;
+    const audio = launchAudioRef.current;
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+      const played = audio.play();
+      if (played && typeof played.then === 'function') {
+        played.then(() => setLaunchNarrating(true)).catch(() => setLaunchNarrating(false));
+      }
+    } catch {
+      setLaunchNarrating(false);
+    }
+  }, []);
+
+  // Meetings overview done (or skipped) → center the launch-day cards and narrate.
+  const goToLaunch = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    document.getElementById('playbook-step-5')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    window.setTimeout(startLaunchNarration, 1000);
+  }, [startLaunchNarration]);
+
+  const finishMeetings = useCallback(() => {
+    const audio = meetingsAudioRef.current;
+    if (audio) {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {}
+    }
+    setMeetingsNarrating(false);
+    goToLaunch();
+  }, [goToLaunch]);
+
+  const finishLaunch = useCallback(() => {
+    const audio = launchAudioRef.current;
+    if (audio) {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {}
+    }
+    setLaunchNarrating(false);
+  }, []);
+
+  const advanceToTenSteps = useCallback(() => {
+    const audio = dashboardAudioRef.current;
+    if (audio) {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {}
+    }
+    setDashboardNarrating(false);
+    if (typeof document !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        document.getElementById('ten-steps')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      // Let the scroll settle, then have Nora pick up with Step 1.
+      window.setTimeout(startStep1Narration, 1100);
+    }
+  }, [startStep1Narration]);
+
+  useEffect(() => {
+    if (!introPlaying) {
+      setShowSkipButton(false);
+      setSkipHiding(false);
+      return;
+    }
+    setShowSkipButton(true);
+    setSkipHiding(false);
+    const fadeTimer = window.setTimeout(() => setSkipHiding(true), 7600);
+    const hideTimer = window.setTimeout(() => setShowSkipButton(false), 8000);
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(hideTimer);
+    };
+  }, [introPlaying]);
+
+  // Reveal the "Begin" modal once Nora finishes (or the user skips).
+  const finishIntro = useCallback(() => {
+    const audio = introAudioRef.current;
+    if (audio) {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {}
+    }
+    setIntroPlaying(false);
+    setShowBeginModal(true);
+  }, []);
+
+  // Begin → close modal, scroll to the live dashboard, and let Nora narrate it.
+  // When her dashboard line finishes (or the operator skips), we scroll down to
+  // the ten-step playbook.
+  const beginWalkthrough = useCallback(() => {
+    setShowBeginModal(false);
+    if (typeof document !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        document
+          .getElementById('live-dashboard')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+    // Play synchronously inside the click handler to keep the user gesture so
+    // autoplay isn't blocked.
+    const audio = dashboardAudioRef.current;
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+      const played = audio.play();
+      if (played && typeof played.then === 'function') {
+        played.then(() => setDashboardNarrating(true)).catch(() => advanceToTenSteps());
+      }
+    } catch {
+      advanceToTenSteps();
+    }
+  }, [advanceToTenSteps]);
+
+  // On landing, try to autoplay Nora. Browsers block unmuted audio without a
+  // gesture, so fall back to the first pointer/key/scroll anywhere on the page.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    // Only run the intro once per browser session so revisits aren't noisy.
+    let alreadyPlayed = false;
+    try {
+      alreadyPlayed = window.sessionStorage.getItem('pulsecheck-onboarding-intro') === 'done';
+    } catch {}
+    if (alreadyPlayed) return;
+
+    const markPlayed = () => {
+      try {
+        window.sessionStorage.setItem('pulsecheck-onboarding-intro', 'done');
+      } catch {}
+    };
+
+    const start = () => {
+      if (introStartedRef.current) return;
+      const audio = introAudioRef.current;
+      if (!audio) return;
+      introStartedRef.current = true;
+      markPlayed();
+      audio.currentTime = 0;
+      audio
+        .play()
+        .then(() => setIntroPlaying(true))
+        .catch(() => {
+          // Playback rejected even after a gesture — skip straight to the modal.
+          setShowBeginModal(true);
+        });
+    };
+
+    // Attempt immediately (works on same-origin nav / recent interaction).
+    const immediate = window.setTimeout(() => {
+      const audio = introAudioRef.current;
+      if (!audio || introStartedRef.current) return;
+      audio.currentTime = 0;
+      audio
+        .play()
+        .then(() => {
+          introStartedRef.current = true;
+          markPlayed();
+          setIntroPlaying(true);
+        })
+        .catch(() => undefined); // blocked → wait for a gesture below
+    }, 200);
+
+    const events: Array<keyof WindowEventMap> = [
+      'pointerdown',
+      'touchstart',
+      'keydown',
+      'scroll',
+      'wheel',
+    ];
+    events.forEach((ev) => window.addEventListener(ev, start, { once: true, passive: true }));
+
+    return () => {
+      window.clearTimeout(immediate);
+      events.forEach((ev) => window.removeEventListener(ev, start));
+    };
+  }, []);
+
   const loadFirstReport = useCallback(async (teamId: string) => {
     setFirstReportLoading((current) => ({ ...current, [teamId]: true }));
     try {
@@ -1182,6 +1641,227 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
           <meta name="robots" content="noindex,nofollow" />
         </Head>
 
+        {/* Nora walkthrough audio — analyser-free, plays the scripted lines. */}
+        <audio
+          ref={introAudioRef}
+          src="/audio/nora/nora-onboarding-intro.mp3"
+          preload="auto"
+          playsInline
+          onPlay={() => setIntroPlaying(true)}
+          onEnded={finishIntro}
+          onError={() => {
+            setIntroPlaying(false);
+            setShowBeginModal(true);
+          }}
+        />
+        <audio
+          ref={dashboardAudioRef}
+          src="/audio/nora/nora-onboarding-dashboard.mp3"
+          preload="auto"
+          playsInline
+          onPlay={() => setDashboardNarrating(true)}
+          onEnded={advanceToTenSteps}
+          onError={advanceToTenSteps}
+        />
+        <audio
+          ref={step1AudioRef}
+          src="/audio/nora/nora-onboarding-step1.mp3"
+          preload="auto"
+          playsInline
+          onPlay={() => setStep1Narrating(true)}
+          onTimeUpdate={handleStep1TimeUpdate}
+          onEnded={finishStep1}
+          onError={finishStep1}
+        />
+        <audio
+          ref={step2AudioRef}
+          src="/audio/nora/nora-onboarding-step2.mp3"
+          preload="auto"
+          playsInline
+          onPlay={() => setStep2Narrating(true)}
+          onTimeUpdate={handleStep2TimeUpdate}
+          onEnded={finishStep2}
+          onError={finishStep2}
+        />
+        <audio
+          ref={meetingsAudioRef}
+          src="/audio/nora/nora-onboarding-meetings.mp3"
+          preload="auto"
+          playsInline
+          onPlay={() => setMeetingsNarrating(true)}
+          onEnded={finishMeetings}
+          onError={finishMeetings}
+        />
+        <audio
+          ref={launchAudioRef}
+          src="/audio/nora/nora-onboarding-launch.mp3"
+          preload="auto"
+          playsInline
+          onPlay={() => setLaunchNarrating(true)}
+          onTimeUpdate={handleLaunchTimeUpdate}
+          onEnded={finishLaunch}
+          onError={finishLaunch}
+        />
+
+        {/* Shared styles for the glowing, pulsating skip buttons. */}
+        <style>{`
+          @keyframes pcSkipPulse {
+            0%, 100% {
+              box-shadow: 0 0 18px 2px rgba(0,212,170,0.45), 0 0 0 0 rgba(0,212,170,0.55);
+              transform: scale(1);
+            }
+            50% {
+              box-shadow: 0 0 36px 9px rgba(0,212,170,0.8), 0 0 0 9px rgba(0,212,170,0);
+              transform: scale(1.06);
+            }
+          }
+          @keyframes pcSkipIn {
+            from { opacity: 0; transform: translateY(14px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .pc-skip-wrap {
+            animation: pcSkipIn 0.45s cubic-bezier(0.16,1,0.3,1) both;
+            transition: opacity 0.4s ease, transform 0.4s ease;
+          }
+          .pc-skip-wrap.pc-skip-out {
+            opacity: 0;
+            transform: translateY(14px);
+          }
+          .pc-skip-btn {
+            animation: pcSkipPulse 1.5s ease-in-out infinite;
+          }
+          @keyframes pcCtaHighlight {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(0,212,170,0), 0 0 18px rgba(0,212,170,0.35); }
+            50% { box-shadow: 0 0 0 6px rgba(0,212,170,0.5), 0 0 36px rgba(0,212,170,0.85); }
+          }
+          .pc-cta-highlight {
+            animation: pcCtaHighlight 1s ease-in-out infinite;
+            outline: 2px solid rgba(0,212,170,0.95);
+            outline-offset: 3px;
+          }
+        `}</style>
+
+        {/* Glowing "Skip Training" button — appears when Nora starts the intro
+            and fades out after ~8s so repeat visitors can bail fast. */}
+        {showSkipButton && (
+          <div className="pointer-events-none fixed inset-x-0 bottom-8 z-50 flex justify-center">
+            <div className={`pc-skip-wrap pointer-events-auto ${skipHiding ? 'pc-skip-out' : ''}`}>
+              <button
+                type="button"
+                onClick={finishIntro}
+                className="pc-skip-btn inline-flex items-center gap-2 rounded-full bg-[#00d4aa] px-6 py-3 text-sm font-bold text-[#06100e]"
+              >
+                <SkipForward className="h-4 w-4" />
+                Skip Training
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Glowing "Skip to the steps" button — shown while Nora narrates the
+            live dashboard so the operator can jump straight to the ten steps. */}
+        {dashboardNarrating && (
+          <div className="pointer-events-none fixed inset-x-0 bottom-8 z-50 flex justify-center">
+            <div className="pc-skip-wrap pointer-events-auto">
+              <button
+                type="button"
+                onClick={advanceToTenSteps}
+                className="pc-skip-btn inline-flex items-center gap-2 rounded-full bg-[#00d4aa] px-6 py-3 text-sm font-bold text-[#06100e]"
+              >
+                <SkipForward className="h-4 w-4" />
+                Skip to the steps
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Glowing skip button — shown while Nora narrates Step 1 (provisioning). */}
+        {step1Narrating && (
+          <div className="pointer-events-none fixed inset-x-0 bottom-8 z-50 flex justify-center">
+            <div className="pc-skip-wrap pointer-events-auto">
+              <button
+                type="button"
+                onClick={finishStep1}
+                className="pc-skip-btn inline-flex items-center gap-2 rounded-full bg-[#00d4aa] px-6 py-3 text-sm font-bold text-[#06100e]"
+              >
+                <SkipForward className="h-4 w-4" />
+                Skip step
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Glowing skip button — shown while Nora narrates Step 2 (intake). */}
+        {step2Narrating && (
+          <div className="pointer-events-none fixed inset-x-0 bottom-8 z-50 flex justify-center">
+            <div className="pc-skip-wrap pointer-events-auto">
+              <button
+                type="button"
+                onClick={finishStep2}
+                className="pc-skip-btn inline-flex items-center gap-2 rounded-full bg-[#00d4aa] px-6 py-3 text-sm font-bold text-[#06100e]"
+              >
+                <SkipForward className="h-4 w-4" />
+                Skip step
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Glowing skip button — shown while Nora gives the three-meetings overview. */}
+        {meetingsNarrating && (
+          <div className="pointer-events-none fixed inset-x-0 bottom-8 z-50 flex justify-center">
+            <div className="pc-skip-wrap pointer-events-auto">
+              <button
+                type="button"
+                onClick={finishMeetings}
+                className="pc-skip-btn inline-flex items-center gap-2 rounded-full bg-[#00d4aa] px-6 py-3 text-sm font-bold text-[#06100e]"
+              >
+                <SkipForward className="h-4 w-4" />
+                Skip section
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Glowing skip button — shown while Nora narrates launch day → post-launch. */}
+        {launchNarrating && (
+          <div className="pointer-events-none fixed inset-x-0 bottom-8 z-50 flex justify-center">
+            <div className="pc-skip-wrap pointer-events-auto">
+              <button
+                type="button"
+                onClick={finishLaunch}
+                className="pc-skip-btn inline-flex items-center gap-2 rounded-full bg-[#00d4aa] px-6 py-3 text-sm font-bold text-[#06100e]"
+              >
+                <SkipForward className="h-4 w-4" />
+                Skip section
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* "Begin" modal — appears once Nora finishes (or staff skips). */}
+        {showBeginModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
+            <div className="w-full max-w-md overflow-hidden rounded-2xl border border-[#00d4aa]/20 bg-[#0d1119] p-7 text-center shadow-[0_24px_80px_rgba(0,0,0,0.6)]">
+              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-[#00d4aa]/30 bg-[#00d4aa]/10">
+                <Sparkles className="h-7 w-7 text-[#00d4aa]" />
+              </div>
+              <h3 className="text-xl font-semibold tracking-tight text-white">Ready to begin?</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Let's start where every team you're onboarding stands right now. I'll take you to the live dashboard.
+              </p>
+              <button
+                type="button"
+                onClick={beginWalkthrough}
+                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#00d4aa] px-4 py-3 text-sm font-semibold text-[#06100e] transition hover:brightness-110"
+              >
+                Begin
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-5 py-8 sm:px-8 lg:px-10">
           <section className="overflow-hidden rounded-[18px] border border-white/10 bg-[#10141d]">
             <div className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[1.15fr_0.85fr] lg:p-10">
@@ -1237,7 +1917,7 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
           </section>
 
           {/* ===== Live birds-eye dashboard ===== */}
-          <section className="rounded-2xl border border-white/10 bg-[#0d1119] p-5 sm:p-7">
+          <section id="live-dashboard" className="scroll-mt-6 rounded-2xl border border-white/10 bg-[#0d1119] p-5 sm:p-7">
             <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">Live Dashboard</p>
@@ -1820,10 +2500,10 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
             })}
           </section>
 
-          <section className="rounded-2xl border border-white/10 bg-[#0d1119] p-5 sm:p-7">
+          <section id="ten-steps" className="scroll-mt-6 rounded-2xl border border-white/10 bg-[#0d1119] p-5 sm:p-7">
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">The Six Steps</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00d4aa]">The Ten Steps</p>
                 <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">From first call to a steady rhythm</h2>
               </div>
               <p className="max-w-xl text-sm leading-6 text-slate-400">
@@ -1900,9 +2580,23 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
 
                     {open && (
                       <div className="border-t border-white/10 px-4 pb-5 pt-4 sm:px-5">
-                        <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-1.5 text-xs text-slate-300">
-                          <span className="text-slate-500">Owner</span>
-                          <span className="font-medium text-white">{phase.owner}</span>
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                          <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-1.5 text-xs text-slate-300">
+                            <span className="text-slate-500">Owner</span>
+                            <span className="font-medium text-white">{phase.owner}</span>
+                          </div>
+                          {phase.cta && (
+                            <Link
+                              id={`playbook-cta-${index}`}
+                              href={phase.cta.href}
+                              className={`inline-flex items-center gap-2 rounded-lg bg-[#00d4aa] px-4 py-2.5 text-sm font-semibold text-[#06100e] shadow-[0_0_20px_rgba(0,212,170,0.35)] transition hover:brightness-110 ${
+                                highlightedCtaIndex === index ? 'pc-cta-highlight' : ''
+                              }`}
+                            >
+                              {phase.cta.label}
+                              <ArrowRight className="h-4 w-4" />
+                            </Link>
+                          )}
                         </div>
                         <div className="grid gap-5 lg:grid-cols-[1.4fr_0.6fr]">
                           <div>
@@ -1930,6 +2624,53 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
                             </div>
                           </div>
                         </div>
+                        {phase.preview === 'intake' && (
+                          <div className="mt-5">
+                            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Where you’ll edit it</p>
+                            <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5">
+                              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#00d4aa]/30 bg-[#00d4aa]/10 text-[#00d4aa]">
+                                    <ClipboardList className="h-4 w-4" />
+                                  </span>
+                                  <div>
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#00d4aa]">Provisioning console</p>
+                                    <p className="text-sm font-semibold text-white">Intake Surveys · Varsity Football</p>
+                                  </div>
+                                </div>
+                                <span
+                                  id={`playbook-cta-${index}`}
+                                  className={`inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-slate-200 ${
+                                    highlightedCtaIndex === index ? 'pc-cta-highlight' : ''
+                                  }`}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                  Edit
+                                </span>
+                              </div>
+                              <div className="space-y-2">
+                                <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs leading-5 text-slate-400">
+                                  <span className="text-slate-500">Athlete · Q1 · </span>
+                                  On a scale of 1–10, how mentally ready do you feel heading into this season?
+                                </div>
+                                <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs leading-5 text-slate-400">
+                                  <span className="text-slate-500">Coach · Q1 · </span>
+                                  What does a great season look like for this team?
+                                </div>
+                                <div className="flex items-start gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs leading-5 text-slate-400">
+                                  <ShieldCheck className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-[#00d4aa]" />
+                                  <span>
+                                    <span className="text-slate-500">Consent form · </span>
+                                    Operational v1 — signature required before launch
+                                  </span>
+                                </div>
+                              </div>
+                              <p className="mt-3 text-[11px] leading-5 text-slate-500">
+                                Preview — this is how the intake appears in the provisioning console once your org &amp; team are created. The default questions and consent forms are ready to go; tap <span className="font-medium text-slate-300">Edit</span> to tailor them.
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </article>

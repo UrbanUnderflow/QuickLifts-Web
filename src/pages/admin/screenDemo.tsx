@@ -38,14 +38,27 @@ const SCREEN_DEMOS: ScreenDemo[] = [
   {
     id: 'coach-onboarding',
     surface: 'Coach onboarding → dashboard',
-    title: 'Coach activation & first-run walkthrough',
+    title: 'Full coach onboarding sequence',
     description:
-      'Open the coach invite the way a new coach receives it, then click straight through — leave the sign-in fields empty and press continue — to walk the full onboarding and land on the dashboard as the coach sees it.',
+      'Exactly what a coach experiences after clicking their activation email link: the "You’re invited" welcome → profile, staff & athlete setup → the dashboard. Leave the sign-in fields empty and press continue — auth is bypassed so you can walk the whole flow end-to-end.',
     launchUrl: '/PulseCheck/admin-activation/f5382b83-caba-4b23-9305-47ffc4036eea?devFirebase=1&demo=1',
     steps: [
       { label: 'Activation', detail: 'The "You’re invited" welcome — press continue with empty fields to skip auth.' },
       { label: 'Set up', detail: 'Profile, staff invites, athlete invites — advance without saving anything real.' },
       { label: 'Dashboard', detail: 'Land on the coach dashboard with mock athletes, as in the walkthrough.' },
+    ],
+    status: 'live',
+  },
+  {
+    id: 'coach-dashboard-v2',
+    surface: 'Coach dashboard v2',
+    title: 'Coach Dashboard v2 (design review)',
+    description:
+      'The clean PulseCheck sidebar dashboard with mock data and no auth — for design review of the layout and flows.',
+    launchUrl: '/coach/dashboard-v2-demo',
+    steps: [
+      { label: 'Navigate', detail: 'Home, Athlete Alerts, Team Roster, Train Nora, Schedule, Reports.' },
+      { label: 'Mock data', detail: 'Athletes, alerts, and reports are mock — nothing writes to Firebase.' },
     ],
     status: 'live',
   },

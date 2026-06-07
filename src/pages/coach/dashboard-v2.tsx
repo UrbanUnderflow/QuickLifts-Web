@@ -20,11 +20,21 @@ import {
   UploadCloud,
   StickyNote,
   RefreshCw,
+  MessageSquare,
+  Send,
+  Check,
+  X,
+  Inbox,
+  UserCog,
+  Plus,
+  Wallet,
+  TrendingUp,
 } from 'lucide-react';
 import CoachProtectedRoute from '../../components/CoachProtectedRoute';
 import AthleteCard from '../../components/AthleteCard';
 import { useUser } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
+import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import {
   getLatestSportsIntelligenceReportForCoach,
   type CoachReportListItem,
@@ -74,22 +84,66 @@ const initialsOf = (name?: string): string => {
   return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || 'C';
 };
 
+type InboxThread = {
+  id: string;
+  name: string;
+  initials: string;
+  status: StatusKey;
+  lastMessage: string;
+  ts?: Date;
+  unread: boolean;
+};
+
+const INBOX_SAMPLES: Record<StatusKey, string> = {
+  escalated: "Coach, I've been really in my head before games. Can we talk?",
+  elevated: "Haven't been sleeping well this week — feeling pretty drained.",
+  flagged: 'Can we find time to talk about my role on Friday?',
+  optimal: 'Felt strong at practice today 💪 thanks for the push.',
+  pending: 'Hey coach, just checking in.',
+};
+
+// Demo-only: synthesize athlete→coach message threads from the roster so the
+// Inbox has realistic content for walkthroughs. Real messaging data wires in later.
+const buildInboxThreads = (athletes: CoachAthlete[]): InboxThread[] =>
+  athletes
+    .filter((a) => a.conversationCount > 0)
+    .map((a, i) => {
+      const status = deriveStatus(a);
+      return {
+        id: a.id,
+        name: a.displayName,
+        initials: initialsOf(a.displayName),
+        status,
+        lastMessage: INBOX_SAMPLES[status],
+        ts: a.lastActiveDate,
+        unread: status === 'escalated' || status === 'elevated' || i % 6 === 0,
+      };
+    })
+    .sort((x, y) => (y.ts?.getTime() || 0) - (x.ts?.getTime() || 0))
+    .slice(0, 14);
+
 type ViewKey =
   | 'home'
   | 'alerts'
+  | 'inbox'
   | 'roster'
+  | 'staff'
   | 'nora'
   | 'schedule'
   | 'reports'
+  | 'earnings'
   | 'settings';
 
 const NAV: { key: ViewKey; label: string; icon: React.ElementType }[] = [
-  { key: 'home', label: 'Home', icon: Home },
+  { key: 'home', label: 'Readiness Dashboard', icon: Home },
   { key: 'alerts', label: 'Athlete Alerts', icon: Flame },
+  { key: 'inbox', label: 'Inbox', icon: Inbox },
   { key: 'roster', label: 'Team Roster', icon: Users },
+  { key: 'staff', label: 'Staff', icon: UserCog },
   { key: 'nora', label: 'Train Nora', icon: Brain },
   { key: 'schedule', label: 'Schedule', icon: Calendar },
   { key: 'reports', label: 'Reports', icon: BarChart3 },
+  { key: 'earnings', label: 'Earnings', icon: Wallet },
   { key: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
 
@@ -106,6 +160,11 @@ interface CoachDashboardShellProps {
   coachName: string;
   coachEmail?: string;
   coachId?: string;
+  isDemo?: boolean;
+  /** Earnings tab is shown only when this team has referral kickback on AND the
+   *  current user is the configured revenue recipient. */
+  earningsEnabled?: boolean;
+  revenueSharePct?: number;
 }
 
 export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
@@ -114,6 +173,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   coachName,
   coachEmail,
   coachId,
+  isDemo = false,
+  earningsEnabled = false,
+  revenueSharePct = 0,
 }) => {
   const router = useRouter();
   const [view, setView] = useState<ViewKey>('home');
@@ -123,13 +185,27 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
     () => athletes.filter((a) => ['elevated', 'escalated'].includes(deriveStatus(a))).length,
     [athletes]
   );
+  const inboxUnread = useMemo(
+    () => (isDemo ? buildInboxThreads(athletes).filter((t) => t.unread).length : 0),
+    [athletes, isDemo]
+  );
+
+  const navItems = useMemo(
+    () => NAV.filter((item) => item.key !== 'earnings' || earningsEnabled),
+    [earningsEnabled]
+  );
 
   const NavList = ({ onPick }: { onPick?: () => void }) => (
     <nav className="flex-1 space-y-0.5">
-      {NAV.map((item) => {
+      {navItems.map((item) => {
         const active = view === item.key;
         const Icon = item.icon;
-        const showBadge = item.key === 'alerts' && alertCount > 0;
+        const badgeCount =
+          item.key === 'alerts' ? alertCount : item.key === 'inbox' ? inboxUnread : 0;
+        const badgeTone =
+          item.key === 'inbox'
+            ? 'bg-[#E0FE10]/15 text-[#E0FE10] border-[#E0FE10]/25'
+            : 'bg-red-500/20 text-red-400 border-red-500/25';
         return (
           <button
             key={item.key}
@@ -145,9 +221,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
           >
             <Icon className="w-4 h-4 flex-shrink-0" />
             <span className="flex-1 text-left">{item.label}</span>
-            {showBadge && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/25 font-bold">
-                {alertCount}
+            {badgeCount > 0 && (
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${badgeTone}`}>
+                {badgeCount}
               </span>
             )}
           </button>
@@ -270,10 +346,17 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                     <HomeSection athletes={athletes} loading={loadingAthletes} />
                   )}
                   {view === 'alerts' && <AlertsSection athletes={athletes} loading={loadingAthletes} />}
+                  {view === 'inbox' && <InboxSection athletes={athletes} loading={loadingAthletes} isDemo={isDemo} />}
                   {view === 'roster' && <RosterSection athletes={athletes} loading={loadingAthletes} />}
-                  {view === 'nora' && <TrainNoraSection coachId={coachId} />}
+                  {view === 'staff' && <StaffSection isDemo={isDemo} coachName={coachName} />}
+                  {view === 'nora' && (
+                    <TrainNoraSection coachId={coachId} coachName={coachName} athletes={athletes} />
+                  )}
                   {view === 'schedule' && <ScheduleSection />}
                   {view === 'reports' && <ReportsSection coachId={coachId} />}
+                  {view === 'earnings' && earningsEnabled && (
+                    <EarningsSection athletes={athletes} isDemo={isDemo} revenueSharePct={revenueSharePct} />
+                  )}
                   {view === 'settings' && <SettingsSection coachName={coachName} email={coachEmail} />}
                 </motion.div>
               </AnimatePresence>
@@ -288,6 +371,10 @@ const CoachDashboardV2: React.FC = () => {
   const currentUser = useUser();
   const [athletes, setAthletes] = useState<CoachAthlete[]>([]);
   const [loadingAthletes, setLoadingAthletes] = useState(true);
+  const [earnings, setEarnings] = useState<{ enabled: boolean; sharePct: number }>({
+    enabled: false,
+    sharePct: 0,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -310,6 +397,35 @@ const CoachDashboardV2: React.FC = () => {
     };
   }, [currentUser?.id]);
 
+  // Earnings tab is visible only when one of this coach's teams has referral
+  // kickback enabled AND this coach is the configured revenue recipient.
+  useEffect(() => {
+    let cancelled = false;
+    const loadEarnings = async () => {
+      if (!currentUser?.id) return;
+      try {
+        const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
+        for (const membership of memberships) {
+          if (membership.role === 'athlete') continue;
+          const team = await pulseCheckProvisioningService.getTeam(membership.teamId);
+          const cfg = team?.commercialConfig;
+          if (cfg?.referralKickbackEnabled && cfg.revenueRecipientUserId === currentUser.id) {
+            if (!cancelled) setEarnings({ enabled: true, sharePct: cfg.referralRevenueSharePct || 0 });
+            return;
+          }
+        }
+        if (!cancelled) setEarnings({ enabled: false, sharePct: 0 });
+      } catch (err) {
+        console.error('[dashboard-v2] failed to resolve earnings eligibility', err);
+        if (!cancelled) setEarnings({ enabled: false, sharePct: 0 });
+      }
+    };
+    loadEarnings();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id]);
+
   const coachName = currentUser?.displayName || currentUser?.username || 'Coach';
 
   return (
@@ -323,6 +439,8 @@ const CoachDashboardV2: React.FC = () => {
         coachName={coachName}
         coachEmail={currentUser?.email}
         coachId={currentUser?.id}
+        earningsEnabled={earnings.enabled}
+        revenueSharePct={earnings.sharePct}
       />
     </CoachProtectedRoute>
   );
@@ -496,6 +614,205 @@ const AlertsSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean }> = 
 };
 
 // ---------------------------------------------------------------------------
+// Inbox — athlete ↔ coach messages
+// ---------------------------------------------------------------------------
+
+const InboxSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean; isDemo?: boolean }> = ({
+  athletes,
+  loading,
+  isDemo,
+}) => {
+  const threads = useMemo(() => (isDemo ? buildInboxThreads(athletes) : []), [athletes, isDemo]);
+  const [readIds, setReadIds] = useState<Set<string>>(() => new Set());
+
+  if (loading) return <LoadingBlock label="Loading your inbox…" />;
+
+  if (threads.length === 0) {
+    return (
+      <EmptyBlock
+        icon={Inbox}
+        title="No messages yet"
+        body="When athletes message you from the app, their conversations land here — so you can reply and pick up where Nora left off."
+      />
+    );
+  }
+
+  const unreadCount = threads.filter((t) => t.unread && !readIds.has(t.id)).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Inbox</div>
+        {unreadCount > 0 && (
+          <span className="text-[10px] px-2 py-1 rounded-full bg-[#E0FE10]/15 text-[#E0FE10] border border-[#E0FE10]/25 font-bold">
+            {unreadCount} UNREAD
+          </span>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        {threads.map((t) => {
+          const meta = STATUS_META[t.status];
+          const unread = t.unread && !readIds.has(t.id);
+          const stale = daysSince(t.ts);
+          return (
+            <button
+              key={t.id}
+              onClick={() => setReadIds((prev) => new Set(prev).add(t.id))}
+              className={`w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-colors ${
+                unread
+                  ? 'bg-zinc-800/60 border-[#E0FE10]/20 hover:bg-zinc-800/80'
+                  : 'bg-zinc-800/30 border-zinc-700/30 hover:bg-zinc-800/50'
+              }`}
+            >
+              <div className="relative w-10 h-10 rounded-full bg-zinc-700/40 border border-zinc-600/30 flex items-center justify-center flex-shrink-0">
+                <span className="text-xs font-bold text-zinc-200">{t.initials}</span>
+                <span
+                  className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-zinc-900 ${meta.dot}`}
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm truncate ${unread ? 'font-bold text-white' : 'font-medium text-zinc-200'}`}>
+                    {t.name}
+                  </span>
+                  {unread && <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] flex-shrink-0" />}
+                  <span className="ml-auto text-[10px] text-zinc-500 flex-shrink-0">
+                    {stale === null ? '' : stale === 0 ? 'Today' : `${stale}d`}
+                  </span>
+                </div>
+                <div className={`text-xs mt-0.5 truncate ${unread ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                  {t.lastMessage}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Staff
+// ---------------------------------------------------------------------------
+
+type StaffRow = { id: string; name: string; role: string; email: string; status: 'active' | 'invited' };
+
+const DEMO_STAFF: StaffRow[] = [
+  { id: 's1', name: 'Coach Mayo', role: 'Head Coach', email: 'coach.mayo@fitwithpulse.ai', status: 'active' },
+  { id: 's2', name: 'Dana Reyes', role: 'Assistant Coach', email: 'dana.reyes@example.com', status: 'active' },
+  { id: 's3', name: 'Priya Nair', role: 'Athletic Trainer', email: 'priya.nair@example.com', status: 'active' },
+  { id: 's4', name: 'Marcus Hill', role: 'Performance Staff', email: 'marcus.hill@example.com', status: 'invited' },
+];
+
+const StaffSection: React.FC<{ isDemo?: boolean; coachName: string }> = ({ isDemo }) => {
+  const [staff, setStaff] = useState<StaffRow[]>(isDemo ? DEMO_STAFF : []);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [toast, setToast] = useState<string | null>(null);
+
+  const sendInvite = () => {
+    const e = email.trim();
+    if (!e) return;
+    setStaff((prev) => [
+      { id: `inv-${prev.length + 1}-${e}`, name: e.split('@')[0], role: 'Staff', email: e, status: 'invited' },
+      ...prev,
+    ]);
+    setToast(`Invite sent to ${e}.`);
+    setEmail('');
+    setInviteOpen(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
+          Staff {staff.length > 0 && <span className="text-zinc-600">({staff.length})</span>}
+        </div>
+        <button
+          onClick={() => setInviteOpen((o) => !o)}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95"
+        >
+          <Plus className="w-4 h-4" /> Invite staff
+        </button>
+      </div>
+
+      {toast && (
+        <div className="text-xs text-[#E0FE10] bg-[#E0FE10]/10 border border-[#E0FE10]/25 rounded-lg px-3 py-2">
+          {toast}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {inviteOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="flex items-center gap-2 rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') sendInvite();
+                }}
+                placeholder="staff@school.edu"
+                className="flex-1 bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
+              />
+              <button
+                onClick={sendInvite}
+                className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95"
+              >
+                Send
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {staff.length === 0 ? (
+        <EmptyBlock
+          icon={UserCog}
+          title="No staff yet"
+          body="Invite assistant coaches, trainers, and performance staff to help run the team. They'll get access based on the role you assign."
+        />
+      ) : (
+        <div className="space-y-2">
+          {staff.map((s) => (
+            <div
+              key={s.id}
+              className="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/40 border border-zinc-700/30"
+            >
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#E0FE10]/25 to-green-500/15 border border-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
+                <span className="text-xs font-bold text-[#E0FE10]">{initialsOf(s.name)}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-white truncate">{s.name}</div>
+                <div className="text-xs text-zinc-500 truncate">
+                  {s.role} · {s.email}
+                </div>
+              </div>
+              <span
+                className={`text-[10px] px-2 py-1 rounded-full border font-semibold ${
+                  s.status === 'active'
+                    ? 'bg-green-500/15 text-green-400 border-green-500/25'
+                    : 'bg-amber-500/15 text-amber-400 border-amber-500/25'
+                }`}
+              >
+                {s.status === 'active' ? 'Active' : 'Invited'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Team Roster
 // ---------------------------------------------------------------------------
 
@@ -615,12 +932,17 @@ const RosterSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean }> = 
 // Train Nora — knowledge vault
 // ---------------------------------------------------------------------------
 
-const TrainNoraSection: React.FC<{ coachId?: string }> = ({ coachId }) => {
+const TrainNoraSection: React.FC<{
+  coachId?: string;
+  coachName?: string;
+  athletes?: CoachAthlete[];
+}> = ({ coachId, coachName, athletes = [] }) => {
   const [entries, setEntries] = useState<NoraVaultEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState<{ name: string; pct: number } | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [noteTitle, setNoteTitle] = useState('');
   const [noteBody, setNoteBody] = useState('');
   const [noteCategory, setNoteCategory] = useState('');
@@ -717,6 +1039,16 @@ const TrainNoraSection: React.FC<{ coachId?: string }> = ({ coachId }) => {
       {/* Actions */}
       <div className="flex items-center gap-2 flex-wrap">
         <button
+          onClick={() => setChatOpen((o) => !o)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+            chatOpen
+              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+              : 'bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:brightness-110'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" /> Chat with Nora
+        </button>
+        <button
           onClick={() => fileInputRef.current?.click()}
           className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95"
         >
@@ -751,6 +1083,26 @@ const TrainNoraSection: React.FC<{ coachId?: string }> = ({ coachId }) => {
           {error}
         </div>
       )}
+
+      {/* Chat with Nora */}
+      <AnimatePresence>
+        {chatOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <NoraChatPanel
+              coachId={coachId}
+              coachName={coachName}
+              athletes={athletes}
+              onClose={() => setChatOpen(false)}
+              onNoteSaved={refresh}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Note composer */}
       <AnimatePresence>
@@ -903,6 +1255,199 @@ const VaultRow: React.FC<{ entry: NoraVaultEntry; onDelete: () => void }> = ({ e
 };
 
 // ---------------------------------------------------------------------------
+// Nora chat (train + insight)
+// ---------------------------------------------------------------------------
+
+type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+  savedNote?: { id: string; title: string; category?: string | null } | null;
+};
+
+const CHAT_SUGGESTIONS = [
+  'How is the team doing this week?',
+  'Who should I check on?',
+  'Remember: team meeting moved to 8 AM Mondays.',
+];
+
+const NoraChatPanel: React.FC<{
+  coachId?: string;
+  coachName?: string;
+  athletes: CoachAthlete[];
+  onClose: () => void;
+  onNoteSaved: () => void;
+}> = ({ coachId, coachName, athletes, onClose, onNoteSaved }) => {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const digest = useMemo(
+    () =>
+      athletes.map((a) => ({
+        id: a.id,
+        displayName: a.displayName,
+        status: deriveStatus(a),
+        sentimentScore: a.sentimentScore,
+        conversationCount: a.conversationCount,
+        totalSessions: a.totalSessions,
+        lastActiveDays: daysSince(a.lastActiveDate),
+      })),
+    [athletes]
+  );
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages, sending]);
+
+  const send = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || sending || !coachId) return;
+    setChatError(null);
+    const history = messages.map((m) => ({ role: m.role, content: m.content }));
+    const next: ChatMessage = { role: 'user', content: trimmed };
+    setMessages((prev) => [...prev, next]);
+    setInput('');
+    setSending(true);
+    try {
+      const res = await fetch('/api/pulsecheck/functions/coach-nora-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          coachId,
+          coachName,
+          message: trimmed,
+          history,
+          athletes: digest,
+        }),
+      });
+      if (!res.ok) throw new Error(`Nora is unavailable right now (${res.status}).`);
+      const data = await res.json();
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: data.reply || '…', savedNote: data.savedNote || null },
+      ]);
+      if (data.savedNote) onNoteSaved();
+    } catch (err: any) {
+      setChatError(err?.message || 'Something went wrong reaching Nora.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-purple-500/25 bg-gradient-to-br from-purple-500/8 to-blue-500/5 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-purple-500/15">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-purple-500/20 flex items-center justify-center">
+            <Brain className="w-4 h-4 text-purple-400" />
+          </div>
+          <div className="leading-tight">
+            <div className="text-sm font-bold text-white">Chat with Nora</div>
+            <div className="text-[10px] text-zinc-500">
+              Train her live, or ask about your athletes
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60"
+          aria-label="Close chat"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Thread */}
+      <div ref={scrollRef} className="max-h-[360px] overflow-y-auto px-4 py-4 space-y-3">
+        {messages.length === 0 && (
+          <div className="space-y-3">
+            <p className="text-sm text-zinc-400 leading-relaxed">
+              Tell me something to remember — like a schedule change or a team policy — and I&apos;ll
+              add it to the vault. Or ask how your athletes are doing; I talk with them every day.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {CHAT_SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => send(s)}
+                  className="text-[11px] px-2.5 py-1.5 rounded-full bg-zinc-800/60 border border-zinc-700/40 text-zinc-300 hover:border-purple-500/40 hover:text-purple-300 transition-colors"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((m, i) => (
+          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div
+              className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                m.role === 'user'
+                  ? 'bg-[#E0FE10] text-black'
+                  : 'bg-zinc-800/70 border border-zinc-700/40 text-zinc-100'
+              }`}
+            >
+              <div className="whitespace-pre-wrap">{m.content}</div>
+              {m.savedNote && (
+                <div className="mt-2 flex items-center gap-1.5 text-[11px] text-purple-300 bg-purple-500/15 border border-purple-500/25 rounded-lg px-2 py-1">
+                  <Check className="w-3 h-3 flex-shrink-0" />
+                  <span className="truncate">Added to vault: {m.savedNote.title}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {sending && (
+          <div className="flex justify-start">
+            <div className="bg-zinc-800/70 border border-zinc-700/40 rounded-2xl px-3.5 py-2.5">
+              <div className="flex gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce [animation-delay:-0.3s]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce [animation-delay:-0.15s]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {chatError && (
+        <div className="px-4 pb-2 text-[11px] text-red-400">{chatError}</div>
+      )}
+
+      {/* Composer */}
+      <div className="flex items-end gap-2 px-4 py-3 border-t border-purple-500/15">
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              send(input);
+            }
+          }}
+          placeholder="Message Nora… (e.g. “Remember the bus leaves at 6 AM Saturday.”)"
+          rows={1}
+          className="flex-1 resize-none bg-zinc-900/60 border border-zinc-700/40 rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-purple-500/40 max-h-32"
+        />
+        <button
+          onClick={() => send(input)}
+          disabled={sending || !input.trim()}
+          className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white disabled:opacity-40 hover:brightness-110 transition flex-shrink-0"
+          aria-label="Send"
+        >
+          <Send className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Reports
 // ---------------------------------------------------------------------------
 
@@ -975,6 +1520,117 @@ const ReportsSection: React.FC<{ coachId?: string }> = ({ coachId }) => {
 };
 
 // ---------------------------------------------------------------------------
+// Earnings — referral kickback (revenue recipient only)
+// ---------------------------------------------------------------------------
+
+const PRO_PRICE = 4.99;
+
+type Conversion = {
+  id: string;
+  name: string;
+  initials: string;
+  plan: string;
+  monthly: number;
+  cut: number;
+  date: Date;
+};
+
+const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; revenueSharePct?: number }> = ({
+  athletes,
+  isDemo,
+  revenueSharePct = 0,
+}) => {
+  // Demo defaults to a 20% share if provisioning hasn't set one, so the tab demonstrates real numbers.
+  const share = isDemo && !revenueSharePct ? 20 : revenueSharePct;
+  const fmt = (n: number) => `$${n.toFixed(2)}`;
+
+  const conversions = useMemo<Conversion[]>(() => {
+    if (!isDemo) return [];
+    return athletes
+      .filter((a) => a.conversationCount > 0 && deriveStatus(a) !== 'pending')
+      .filter((_, i) => i % 2 === 0)
+      .slice(0, 8)
+      .map((a, i) => ({
+        id: a.id,
+        name: a.displayName,
+        initials: initialsOf(a.displayName),
+        plan: 'Pulse Pro',
+        monthly: PRO_PRICE,
+        cut: +(PRO_PRICE * (share / 100)).toFixed(2),
+        date: new Date(Date.now() - (i * 4 + 1) * 86400000),
+      }));
+  }, [athletes, isDemo, share]);
+
+  const monthlyKickback = useMemo(() => conversions.reduce((sum, c) => sum + c.cut, 0), [conversions]);
+  const lifetime = +(monthlyKickback * 6.5).toFixed(2);
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-[#E0FE10]/20 bg-gradient-to-br from-[#E0FE10]/8 to-green-500/5 p-5">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/15 flex items-center justify-center">
+            <Wallet className="w-4 h-4 text-[#E0FE10]" />
+          </div>
+          <div>
+            <div className="text-sm font-bold text-white">Earnings</div>
+            <div className="text-xs text-zinc-500">Your referral kickback from athlete-paid conversions</div>
+          </div>
+        </div>
+        <p className="text-sm text-zinc-300 leading-relaxed">
+          When an athlete you invited subscribes to a paid plan,{' '}
+          <span className="text-[#E0FE10] font-medium">{share}%</span> of their subscription routes back to you.
+          Earnings update as athletes convert and renew.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatTile label="This month" value={fmt(monthlyKickback)} accent />
+        <StatTile label="Lifetime" value={fmt(lifetime)} />
+        <StatTile label="Converted referrals" value={conversions.length} dot="bg-green-400" />
+        <StatTile label="Revenue share" value={`${share}%`} />
+      </div>
+
+      <div>
+        <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">Recent conversions</div>
+        {conversions.length === 0 ? (
+          <EmptyBlock
+            icon={TrendingUp}
+            title="No conversions yet"
+            body="When athletes you invited subscribe to a paid plan, their conversions and your kickback show up here."
+          />
+        ) : (
+          <div className="space-y-2">
+            {conversions.map((c) => {
+              const stale = daysSince(c.date);
+              return (
+                <div
+                  key={c.id}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/40 border border-zinc-700/30"
+                >
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#E0FE10]/25 to-green-500/15 border border-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-bold text-[#E0FE10]">{c.initials}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-white truncate">{c.name}</div>
+                    <div className="text-xs text-zinc-500">
+                      {c.plan} · {fmt(c.monthly)}/mo · {stale === 0 ? 'today' : `${stale}d ago`}
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-sm font-bold text-[#E0FE10]">+{fmt(c.cut)}</div>
+                    <div className="text-[10px] text-zinc-500">/mo</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Library / Schedule / Settings (lean but functional shells)
 // ---------------------------------------------------------------------------
 
@@ -1006,7 +1662,7 @@ const SettingsSection: React.FC<{ coachName: string; email?: string }> = ({ coac
 // Small shared pieces
 // ---------------------------------------------------------------------------
 
-const StatTile: React.FC<{ label: string; value: number; accent?: boolean; dot?: string }> = ({
+const StatTile: React.FC<{ label: string; value: number | string; accent?: boolean; dot?: string }> = ({
   label,
   value,
   accent,

@@ -2713,6 +2713,7 @@ async function createEscalationRecord(db, userId, conversationId, messageId, tri
  */
 async function notifyCoachForEscalation(db, escalationId, userId, tier) {
   const { sendCoachEscalationEmail } = require('./utils/sendCoachEscalationEmail');
+  const { sendTwilioSms } = require('./utils/sendTwilioSms');
 
   // Find athlete's connected coach
   const connectionSnap = await db
@@ -2889,6 +2890,92 @@ async function notifyCoachForEscalation(db, escalationId, userId, tier) {
       });
     } catch (logErr) {
       console.warn('[notifyCoachForEscalation] Failed to write notification-logs for email exception (non-blocking):', logErr?.message || logErr);
+    }
+  }
+
+  // SMS the coach (non-blocking) — only for urgent tiers (Elevated/Critical),
+  // only when they opted into SMS alerts and have a phone on their PulseCheck
+  // membership. Privacy-safe: no athlete name or conversation content over SMS.
+  if ((Number(tier) || 0) >= EscalationTier.ElevatedRisk) {
+    try {
+      const normalizedCoachId = typeof targetCoachId === 'string' ? targetCoachId.trim() : '';
+      let smsPhone = '';
+      let smsMembershipId = '';
+      if (normalizedCoachId) {
+        const membershipSnap = await db
+          .collection('pulsecheck-team-memberships')
+          .where('userId', '==', normalizedCoachId)
+          .get();
+        for (const docSnap of membershipSnap.docs) {
+          const data = docSnap.data() || {};
+          const phone = typeof data.phone === 'string' ? data.phone.trim() : '';
+          if (data?.notificationPreferences?.sms === true && phone) {
+            smsPhone = phone;
+            smsMembershipId = docSnap.id;
+            break;
+          }
+        }
+      }
+
+      if (smsPhone) {
+        const baseUrl = (process.env.SITE_URL || '').trim().replace(/\/+$/, '') || 'https://fitwithpulse.ai';
+        const dashboardUrl = `${baseUrl}/coach/dashboard`;
+        const lead = (Number(tier) || 0) >= EscalationTier.CriticalRisk
+          ? 'PulseCheck URGENT: an athlete you support had a critical check-in and the team support pathway was activated.'
+          : 'PulseCheck: an athlete you support had an escalation and the support pathway was activated.';
+        const smsBody = `${lead} Open your dashboard: ${dashboardUrl} Reply STOP to opt out.`;
+        const smsResult = await sendTwilioSms({ to: smsPhone, body: smsBody });
+        console.log('[notifyCoachForEscalation] Coach SMS sent (best-effort):', {
+          success: smsResult?.success,
+          skipped: smsResult?.skipped,
+          tier,
+          coachId: targetCoachId,
+        });
+
+        try {
+          const FieldValue = admin.firestore.FieldValue;
+          await db.collection('notification-logs').add({
+            fcmToken: `sms:****${smsPhone.slice(-4)}`,
+            title: `Coach escalation SMS (Tier ${tier})`,
+            body: `Tier ${tier} support-path escalation SMS sent (privacy-safe).`,
+            notificationType: 'COACH_ESCALATION_SMS',
+            functionName: 'netlify/pulsecheck-chat.notifyCoachForEscalation',
+            success: !!smsResult?.success,
+            messageId: smsResult?.messageSid || null,
+            error: smsResult?.success
+              ? null
+              : { code: smsResult?.skipped ? 'SMS_SKIPPED' : 'SMS_FAILED', message: smsResult?.reason || smsResult?.error || 'SMS send failed or skipped' },
+            dataPayload: {
+              channel: 'sms',
+              coachId: targetCoachId,
+              athleteId: userId,
+              escalationId,
+              tier,
+              membershipId: smsMembershipId,
+              skipped: !!smsResult?.skipped,
+            },
+            recipients: [{
+              userId: targetCoachId,
+              deliveryChannel: 'sms',
+              success: !!smsResult?.success,
+              messageId: smsResult?.messageSid || null,
+            }],
+            timestamp: FieldValue.serverTimestamp(),
+            timestampEpoch: nowSec,
+            createdAt: FieldValue.serverTimestamp(),
+            version: '1.0',
+          });
+        } catch (logErr) {
+          console.warn('[notifyCoachForEscalation] Failed to write SMS notification-logs (non-blocking):', logErr?.message || logErr);
+        }
+      } else {
+        console.log('[notifyCoachForEscalation] Coach SMS skipped — no opted-in phone on file', {
+          coachId: targetCoachId,
+          tier,
+        });
+      }
+    } catch (smsErr) {
+      console.warn('[notifyCoachForEscalation] Coach SMS send failed (non-blocking):', smsErr?.message || smsErr);
     }
   }
 

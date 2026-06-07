@@ -68,6 +68,7 @@ import type {
   PulseCheckStudyPosture,
   PulseCheckTeam,
   PulseCheckTeamCommercialConfig,
+  PulseCheckTeamMembershipRole,
   PulseCheckTeamCommercialModel,
   PulseCheckTeamEscalationRoute,
   PulseCheckTeamPlanStatus,
@@ -191,6 +192,12 @@ const TEAM_REVENUE_RECIPIENT_ROLE_OPTIONS: Array<{ value: PulseCheckRevenueRecip
   { value: 'coach', label: 'Coach' },
   { value: 'organization-owner', label: 'Organization Owner' },
 ];
+
+// The revenue recipient is now a specific person; keep the legacy role field in
+// sync (best-effort) from the picked staff member's team role.
+const mapMembershipRoleToRecipientRole = (
+  role?: PulseCheckTeamMembershipRole
+): PulseCheckRevenueRecipientRole => (role === 'coach' ? 'coach' : 'team-admin');
 
 const PILOT_STUDY_MODE_OPTIONS: Array<{ value: PulseCheckPilotStudyMode; label: string }> = [
   { value: 'operational', label: 'Operational' },
@@ -727,6 +734,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [coachPhotoUploadingToken, setCoachPhotoUploadingToken] = useState<string | null>(null);
   const [sportOptions, setSportOptions] = useState<PulseCheckSportConfigurationEntry[]>(() => getDefaultPulseCheckSports());
   const [teamCommercialDrafts, setTeamCommercialDrafts] = useState<Record<string, PulseCheckTeamCommercialConfig>>({});
+  type OrgStaffOption = { userId: string; name: string; email?: string; role: PulseCheckTeamMembershipRole; title?: string };
+  const [orgStaffById, setOrgStaffById] = useState<Record<string, OrgStaffOption[]>>({});
   const [isProvisioningModalOpen, setIsProvisioningModalOpen] = useState(false);
   const [activeWizardStep, setActiveWizardStep] = useState<ProvisioningWizardStep>('org');
   const [organizationSearch, setOrganizationSearch] = useState('');
@@ -1215,6 +1224,21 @@ const PulseCheckProvisioningPage: React.FC = () => {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  // Load onboarded staff per org (for the revenue-recipient picker), once each.
+  useEffect(() => {
+    const orgIds = Array.from(new Set(teams.map((team) => team.organizationId).filter(Boolean)));
+    orgIds.forEach((orgId) => {
+      if (orgStaffById[orgId]) return;
+      void pulseCheckProvisioningService
+        .listOrganizationStaffMembers(orgId)
+        .then((staff) => setOrgStaffById((current) => ({ ...current, [orgId]: staff })))
+        .catch((error) => {
+          console.error('[PulseCheckProvisioning] Failed to load org staff:', error);
+          setOrgStaffById((current) => ({ ...current, [orgId]: [] }));
+        });
+    });
+  }, [teams, orgStaffById]);
 
   useEffect(() => {
     if (loading || typeof window === 'undefined') return;
@@ -3838,20 +3862,39 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                 </select>
                                               </label>
                                               <label className="pcp-fld">
-                                                <span className="pcp-flbl">Revenue Recipient Role</span>
+                                                <span className="pcp-flbl">Revenue Recipient</span>
                                                 <select
                                                   className="pcp-finp pcp-select"
-                                                  value={teamCommercialDraft.revenueRecipientRole}
-                                                  onChange={(event) =>
+                                                  value={teamCommercialDraft.revenueRecipientUserId || ''}
+                                                  onChange={(event) => {
+                                                    const userId = event.target.value;
+                                                    handleExistingTeamCommercialFieldChange(
+                                                      team.id,
+                                                      'revenueRecipientUserId',
+                                                      userId
+                                                    );
+                                                    const picked = (orgStaffById[team.organizationId] || []).find(
+                                                      (staff) => staff.userId === userId
+                                                    );
                                                     handleExistingTeamCommercialFieldChange(
                                                       team.id,
                                                       'revenueRecipientRole',
-                                                      event.target.value as PulseCheckRevenueRecipientRole
-                                                    )
-                                                  }
+                                                      mapMembershipRoleToRecipientRole(picked?.role)
+                                                    );
+                                                  }}
                                                 >
-                                                  {TEAM_REVENUE_RECIPIENT_ROLE_OPTIONS.map((option) => (
-                                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                                  <option value="">
+                                                    {orgStaffById[team.organizationId]
+                                                      ? orgStaffById[team.organizationId].length
+                                                        ? 'Select a staff member…'
+                                                        : 'No staff onboarded yet'
+                                                      : 'Loading staff…'}
+                                                  </option>
+                                                  {(orgStaffById[team.organizationId] || []).map((staff) => (
+                                                    <option key={staff.userId} value={staff.userId}>
+                                                      {staff.name}
+                                                      {staff.title ? ` · ${staff.title}` : ''}
+                                                    </option>
                                                   ))}
                                                 </select>
                                               </label>

@@ -1069,11 +1069,56 @@ ${transcript}`;
   };
 }
 
+const COACH_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
+
+// Resolve a coach's SMS target from their PulseCheck team membership(s):
+// only members who opted into SMS alerts AND have a phone on file qualify.
+// Prefers the membership tied to the escalating athlete's team when known.
+async function resolveCoachSmsTarget(coachUserId, preferredTeamId) {
+  const normalizedCoachId = normalizeString(coachUserId);
+  if (!normalizedCoachId) return null;
+  try {
+    const snap = await db
+      .collection(COACH_MEMBERSHIPS_COLLECTION)
+      .where('userId', '==', normalizedCoachId)
+      .get();
+    const candidates = [];
+    for (const docSnap of snap.docs) {
+      const data = docSnap.data() || {};
+      const smsEnabled = data?.notificationPreferences?.sms === true;
+      const phone = normalizeString(data.phone);
+      if (!smsEnabled || !phone) continue;
+      candidates.push({
+        membershipId: docSnap.id,
+        teamId: normalizeString(data.teamId),
+        phone,
+      });
+    }
+    if (candidates.length === 0) return null;
+    const teamId = normalizeString(preferredTeamId);
+    return (teamId && candidates.find((c) => c.teamId === teamId)) || candidates[0];
+  } catch (error) {
+    console.warn('[pulsecheck-escalation] Failed to resolve coach SMS target (non-blocking):', error?.message || error);
+    return null;
+  }
+}
+
+// Privacy-safe SMS copy — no athlete name or conversation content over SMS.
+function buildCoachEscalationSms({ tier, siteUrl }) {
+  const baseUrl = (siteUrl || process.env.SITE_URL || '').trim().replace(/\/+$/, '') || 'https://fitwithpulse.ai';
+  const dashboardUrl = `${baseUrl}/coach/dashboard`;
+  const lead = Number(tier) >= EscalationTier.CriticalRisk
+    ? 'PulseCheck URGENT: an athlete you support had a critical check-in and the team support pathway was activated.'
+    : 'PulseCheck: an athlete you support had an escalation and the support pathway was activated.';
+  return `${lead} Open your dashboard: ${dashboardUrl} Reply STOP to opt out.`;
+}
+
 /**
  * Notify coach of escalation (Tier 1 and above)
  */
 async function notifyCoach(body) {
   const { sendCoachEscalationEmail } = require('./utils/sendCoachEscalationEmail');
+  const { sendTwilioSms } = require('./utils/sendTwilioSms');
   const { escalationId, userId, coachId } = body;
 
   if (!escalationId || !userId) {
@@ -1321,6 +1366,70 @@ async function notifyCoach(body) {
       });
     } catch (logErr) {
       console.warn('[pulsecheck-escalation] Failed to write notification-logs for email exception (non-blocking):', logErr?.message || logErr);
+    }
+  }
+
+  // SMS the coach (non-blocking) — only for urgent, time-sensitive tiers
+  // (Elevated/Critical), only when they opted into SMS alerts and have a phone.
+  // Privacy-safe: no athlete name or conversation content over SMS.
+  if (tier >= EscalationTier.ElevatedRisk) {
+    try {
+      const smsTarget = await resolveCoachSmsTarget(targetCoachId, escalationForUpdate.teamId);
+      if (smsTarget?.phone) {
+        const siteUrl = process.env.SITE_URL || '';
+        const smsBody = buildCoachEscalationSms({ tier, siteUrl });
+        const smsResult = await sendTwilioSms({ to: smsTarget.phone, body: smsBody });
+        console.log('[pulsecheck-escalation] Coach SMS sent (best-effort):', {
+          success: smsResult?.success,
+          skipped: smsResult?.skipped,
+          tier,
+          coachId: targetCoachId,
+        });
+
+        try {
+          const FieldValue = admin.firestore.FieldValue;
+          await db.collection('notification-logs').add({
+            fcmToken: `sms:${smsTarget.phone.slice(-4).padStart(smsTarget.phone.length, '*')}`,
+            title: `Coach escalation SMS (Tier ${tier})`,
+            body: `Tier ${tier} support-path escalation SMS sent (privacy-safe).`,
+            notificationType: 'COACH_ESCALATION_SMS',
+            functionName: 'netlify/pulsecheck-escalation.notifyCoach',
+            success: !!smsResult?.success,
+            messageId: smsResult?.messageSid || null,
+            error: smsResult?.success
+              ? null
+              : { code: smsResult?.skipped ? 'SMS_SKIPPED' : 'SMS_FAILED', message: smsResult?.reason || smsResult?.error || 'SMS send failed or skipped' },
+            dataPayload: {
+              channel: 'sms',
+              coachId: targetCoachId,
+              athleteId: userId,
+              escalationId,
+              tier,
+              membershipId: smsTarget.membershipId,
+              skipped: !!smsResult?.skipped,
+            },
+            recipients: [{
+              userId: targetCoachId,
+              deliveryChannel: 'sms',
+              success: !!smsResult?.success,
+              messageId: smsResult?.messageSid || null,
+            }],
+            timestamp: FieldValue.serverTimestamp(),
+            timestampEpoch: nowSec,
+            createdAt: FieldValue.serverTimestamp(),
+            version: '1.0',
+          });
+        } catch (logErr) {
+          console.warn('[pulsecheck-escalation] Failed to write SMS notification-logs (non-blocking):', logErr?.message || logErr);
+        }
+      } else {
+        console.log('[pulsecheck-escalation] Coach SMS skipped — no opted-in phone on file', {
+          coachId: targetCoachId,
+          tier,
+        });
+      }
+    } catch (smsErr) {
+      console.warn('[pulsecheck-escalation] Coach SMS send failed (non-blocking):', smsErr?.message || smsErr);
     }
   }
 

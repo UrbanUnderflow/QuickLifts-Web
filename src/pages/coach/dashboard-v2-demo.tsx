@@ -215,6 +215,9 @@ const CoachDashboardV2Demo: React.FC = () => {
           coachName="Coach Mayo"
           coachEmail="coach.mayo@fitwithpulse.ai"
           coachId={DEMO_COACH_ID}
+          isDemo
+          earningsEnabled
+          revenueSharePct={20}
         />
       )}
     </>

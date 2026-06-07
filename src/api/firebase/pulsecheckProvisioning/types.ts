@@ -734,6 +734,10 @@ export interface PulseCheckTeamMembership {
   rosterVisibilityScope?: PulseCheckRosterVisibilityScope;
   allowedAthleteIds?: string[];
   notificationPreferences?: PulseCheckNotificationPreferences;
+  // E.164 phone (e.g. +13015551234) used for SMS escalation alerts. Captured
+  // during onboarding only when the member opts into SMS notifications.
+  phone?: string;
+  smsConsentAt?: Timestamp | null;
   athleteOnboarding?: PulseCheckAthleteOnboardingState;
   coachIntakeResponses?: PulseCheckIntakeResponses;
   coachIntakeFormVersion?: string;
@@ -828,6 +832,8 @@ export interface SavePulseCheckPostActivationSetupInput {
   title: string;
   operatingRole: PulseCheckOperatingRole;
   notificationPreferences: PulseCheckNotificationPreferences;
+  // E.164 phone for SMS escalation alerts. Required when notificationPreferences.sms is true.
+  phone?: string;
   profileImageUrl?: string;
   intakeResponses?: PulseCheckIntakeResponses;
   intakeFormVersion?: string;

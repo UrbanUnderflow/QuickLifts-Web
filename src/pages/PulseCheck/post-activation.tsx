@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Bell, CheckCircle2, ChevronRight, Copy, Loader2, Mail, Shield, Sparkles, UserRound, Users, Waves, Waypoints } from 'lucide-react';
+import { Bell, CheckCircle2, ChevronRight, Copy, Loader2, Mail, Shield, Sparkles, UserRound, Users, Waypoints } from 'lucide-react';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import { PULSECHECK_INTAKE_FORM_VERSION } from '../../api/firebase/pulsecheckProvisioning/types';
 import type {
@@ -76,6 +76,24 @@ const buildMailto = (invite: PulseCheckInviteLink, teamName: string, organizatio
   return `mailto:${invite.targetEmail || ''}?subject=${subject}&body=${body}`;
 };
 
+// Normalize loosely-typed phone input into E.164 (e.g. +13015551234).
+// Defaults bare 10-digit input to US (+1). Returns '' if it can't be normalized.
+const normalizePhoneToE164 = (raw: string): string => {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return '';
+  const hasPlus = trimmed.startsWith('+');
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return '';
+  if (hasPlus) {
+    return digits.length >= 10 && digits.length <= 15 ? `+${digits}` : '';
+  }
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length >= 11 && digits.length <= 15) return `+${digits}`;
+  return '';
+};
+
+const isValidE164 = (value: string): boolean => /^\+\d{10,15}$/.test(value);
+
 const Toggle = ({
   checked,
   onChange,
@@ -119,7 +137,36 @@ const PC = {
   cardBorder: 'rgba(255,255,255,0.10)',
 };
 
-const WIZARD_STEPS = ['Your profile', 'Invite staff', 'Invite athletes', "You're set"];
+// Build a throwaway invite link for the screen demo. Nothing is persisted — this
+// just mirrors the shape of a real created link so the UI (toast, link card, copy,
+// cleared form, "add another") behaves exactly as it would in production.
+const makeDemoInvite = (params: {
+  teamMembershipRole: PulseCheckTeamMembershipRole;
+  targetEmail: string;
+  recipientName?: string;
+  invitedTitle?: string;
+}): PulseCheckInviteLink => {
+  const token = `demo-${Math.random().toString(36).slice(2, 10)}`;
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
+  return {
+    id: token,
+    inviteType: 'team-access',
+    status: 'active',
+    redemptionMode: 'single-use',
+    organizationId: 'demo-organization',
+    teamId: 'demo-team',
+    teamMembershipRole: params.teamMembershipRole,
+    invitedTitle: params.invitedTitle || undefined,
+    recipientName: params.recipientName || undefined,
+    targetEmail: params.targetEmail,
+    token,
+    activationUrl: `${origin}/PulseCheck/team-invite/${token}`,
+    createdAt: null,
+    updatedAt: null,
+  };
+};
+
+const WIZARD_STEPS = ['Your profile', 'Invite staff', "You're set"];
 
 const Stepper = ({ current }: { current: number }) => (
   <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
@@ -168,13 +215,13 @@ export default function PulseCheckPostActivationPage() {
   const [initializing, setInitializing] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [creatingAdultInvite, setCreatingAdultInvite] = useState(false);
-  const [creatingAthleteInvite, setCreatingAthleteInvite] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [step, setStep] = useState(1);
 
   const [profileForm, setProfileForm] = useState({
     displayName: '',
     title: '',
+    phone: '',
     operatingRole: 'admin-only' as PulseCheckOperatingRole,
     notificationPreferences: {
       email: true,
@@ -192,10 +239,6 @@ export default function PulseCheckPostActivationPage() {
     targetEmail: '',
     invitedTitle: '',
     teamMembershipRole: 'coach' as PulseCheckTeamMembershipRole,
-  });
-  const [athleteInviteForm, setAthleteInviteForm] = useState({
-    recipientName: '',
-    targetEmail: '',
   });
 
   const refreshContext = async () => {
@@ -270,6 +313,7 @@ export default function PulseCheckPostActivationPage() {
     setProfileForm((current) => ({
       ...current,
       title: membership.title || current.title,
+      phone: membership.phone || current.phone,
       operatingRole: membership.operatingRole || current.operatingRole,
       notificationPreferences: membership.notificationPreferences || current.notificationPreferences,
     }));
@@ -295,13 +339,18 @@ export default function PulseCheckPostActivationPage() {
     () => activeInviteLinks.filter((invite) => invite.teamMembershipRole && invite.teamMembershipRole !== 'athlete'),
     [activeInviteLinks]
   );
-  const athleteInviteLinks = useMemo(
-    () => activeInviteLinks.filter((invite) => invite.teamMembershipRole === 'athlete'),
-    [activeInviteLinks]
-  );
-
-  const setupSaved = membership?.onboardingStatus === 'profile-complete' || membership?.onboardingStatus === 'complete';
-  const canInviteAthletes = Boolean(membership?.operatingRole && membership?.title?.trim());
+  const selectedRoleLabel =
+    operatingRoleOptions.find((option) => option.value === profileForm.operatingRole)?.label || '—';
+  const notificationSummary = useMemo(() => {
+    const prefs = profileForm.notificationPreferences;
+    const enabled = [
+      prefs.email && 'Email',
+      prefs.sms && 'SMS',
+      prefs.push && 'Push',
+      prefs.weeklyDigest && 'Weekly digest',
+    ].filter(Boolean);
+    return enabled.length ? enabled.join(' · ') : 'Off';
+  }, [profileForm.notificationPreferences]);
 
   const handleCopy = async (value: string, successText: string) => {
     try {
@@ -328,6 +377,21 @@ export default function PulseCheckPostActivationPage() {
       setMessage({ type: 'error', text: 'Name and title are required before continuing.' });
       return;
     }
+
+    // SMS escalation alerts require a phone number we can actually text.
+    const smsEnabled = profileForm.notificationPreferences.sms;
+    const normalizedPhone = normalizePhoneToE164(profileForm.phone);
+    if (smsEnabled) {
+      if (!profileForm.phone.trim()) {
+        setMessage({ type: 'error', text: 'Add a mobile number to receive SMS escalation alerts, or turn the toggle off.' });
+        return;
+      }
+      if (!isValidE164(normalizedPhone)) {
+        setMessage({ type: 'error', text: 'That phone number doesn’t look valid. Use a mobile number like (301) 555-1234.' });
+        return;
+      }
+    }
+
     if (!coachIntakeComplete) {
       setMessage({ type: 'error', text: 'Please answer the required intake questions before continuing.' });
       return;
@@ -363,6 +427,7 @@ export default function PulseCheckPostActivationPage() {
         title,
         operatingRole: profileForm.operatingRole,
         notificationPreferences: profileForm.notificationPreferences,
+        phone: smsEnabled ? normalizedPhone : '',
         profileImageUrl,
         ...(coachIntakeQuestions.length > 0
           ? { intakeResponses: coachIntakeAnswers, intakeFormVersion: coachIntakeFormVersion }
@@ -386,13 +451,32 @@ export default function PulseCheckPostActivationPage() {
 
   const handleCreateAdultInvite = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!currentUser || !organization || !team) return;
 
     const targetEmail = adultInviteForm.targetEmail.trim().toLowerCase();
     if (!targetEmail) {
       setMessage({ type: 'error', text: 'Adult invites require an email address.' });
       return;
     }
+
+    // Screen demo: simulate creation with a dummy link, no persistence.
+    if (isDemo) {
+      setCreatingAdultInvite(true);
+      setMessage(null);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const demoInvite = makeDemoInvite({
+        teamMembershipRole: adultInviteForm.teamMembershipRole,
+        targetEmail,
+        recipientName: adultInviteForm.recipientName.trim(),
+        invitedTitle: adultInviteForm.invitedTitle.trim(),
+      });
+      setInviteLinks((current) => [demoInvite, ...current]);
+      setAdultInviteForm({ recipientName: '', targetEmail: '', invitedTitle: '', teamMembershipRole: 'coach' });
+      setMessage({ type: 'success', text: 'Demo invite link created — add another, or continue. Nothing is saved.' });
+      setCreatingAdultInvite(false);
+      return;
+    }
+
+    if (!currentUser || !organization || !team) return;
 
     setCreatingAdultInvite(true);
     setMessage(null);
@@ -427,44 +511,6 @@ export default function PulseCheckPostActivationPage() {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to create adult invite.' });
     } finally {
       setCreatingAdultInvite(false);
-    }
-  };
-
-  const handleCreateAthleteInvite = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!currentUser || !organization || !team) return;
-    if (!canInviteAthletes) {
-      setMessage({ type: 'error', text: 'Save your post-activation profile before sending athlete invites.' });
-      return;
-    }
-
-    setCreatingAthleteInvite(true);
-    setMessage(null);
-
-    try {
-      const inviteId = await pulseCheckProvisioningService.createTeamAccessInviteLink({
-        organizationId: organization.id,
-        teamId: team.id,
-        teamMembershipRole: 'athlete',
-        targetEmail: athleteInviteForm.targetEmail.trim().toLowerCase(),
-        recipientName: athleteInviteForm.recipientName.trim(),
-        createdByUserId: currentUser.id,
-        createdByEmail: currentUser.email,
-      });
-
-      const updatedLinks = await pulseCheckProvisioningService.listTeamInviteLinks(team.id);
-      setInviteLinks(updatedLinks);
-      const createdInvite = updatedLinks.find((invite) => invite.id === inviteId);
-      if (createdInvite?.activationUrl) {
-        await navigator.clipboard.writeText(createdInvite.activationUrl);
-      }
-      setAthleteInviteForm({ recipientName: '', targetEmail: '' });
-      setMessage({ type: 'success', text: 'Athlete onboarding link created and copied.' });
-    } catch (error) {
-      console.error('[PulseCheck post-activation] Failed to create athlete invite:', error);
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to create athlete invite.' });
-    } finally {
-      setCreatingAthleteInvite(false);
     }
   };
 
@@ -517,9 +563,9 @@ export default function PulseCheckPostActivationPage() {
       </Head>
 
       {isDemo ? (
-        <div className="sticky top-0 z-40 flex items-center justify-center gap-2 px-4 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-white" style={{ background: PC.purple }}>
+        <div className="sticky top-0 z-40 flex items-center justify-center gap-2 px-4 py-2.5 text-center text-xs font-medium tracking-normal" style={{ background: 'rgba(124,58,237,0.12)', color: PC.purpleSoft, borderBottom: '1px solid rgba(124,58,237,0.22)' }}>
           <Sparkles className="h-3.5 w-3.5" />
-          Screen Demo — nothing is saved. Advance through each step to reach the dashboard.
+          Screen demo — nothing is saved. Advance through each step to reach the dashboard.
         </div>
       ) : null}
 
@@ -533,7 +579,7 @@ export default function PulseCheckPostActivationPage() {
             <span className="text-base font-bold tracking-tight" style={{ fontFamily: 'Switzer, sans-serif' }}>PulseCheck</span>
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>Let's set up {team?.displayName || (isDemo ? demoTeamName : 'your team')}</p>
+            <p className="text-sm font-medium tracking-tight" style={{ color: PC.purpleSoft }}>Let's set up {team?.displayName || (isDemo ? demoTeamName : 'your team')}</p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl" style={{ fontFamily: 'Switzer, sans-serif' }}>
               A few quick steps and you're live
             </h1>
@@ -593,7 +639,7 @@ export default function PulseCheckPostActivationPage() {
                   <div className="grid gap-4">
                     <div className="grid gap-4 md:grid-cols-2">
                       <label className="space-y-2">
-                        <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Name</span>
+                        <span className="text-xs tracking-normal text-zinc-500">Name</span>
                         <input
                           value={profileForm.displayName}
                           onChange={(event) => setProfileForm((current) => ({ ...current, displayName: event.target.value }))}
@@ -602,7 +648,7 @@ export default function PulseCheckPostActivationPage() {
                         />
                       </label>
                       <label className="space-y-2">
-                        <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Title</span>
+                        <span className="text-xs tracking-normal text-zinc-500">Title</span>
                         <input
                           value={profileForm.title}
                           onChange={(event) => setProfileForm((current) => ({ ...current, title: event.target.value }))}
@@ -613,7 +659,7 @@ export default function PulseCheckPostActivationPage() {
                     </div>
 
                     <div>
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Operating Role</div>
+                      <div className="text-xs tracking-normal text-zinc-500">Operating Role</div>
                       <div className="mt-3 grid gap-3">
                         {operatingRoleOptions.map((option) => (
                           <button
@@ -702,6 +748,28 @@ export default function PulseCheckPostActivationPage() {
                       description="Receive a regular recap of onboarding progress and team readiness."
                     />
                   </div>
+
+                  {profileForm.notificationPreferences.sms ? (
+                    <div className="mt-4 rounded-2xl border border-cyan-300/40 bg-cyan-400/[0.06] p-4">
+                      <label className="space-y-2 block">
+                        <span className="text-xs tracking-normal text-zinc-300">
+                          Mobile number for SMS alerts <span className="text-cyan-300">*</span>
+                        </span>
+                        <input
+                          type="tel"
+                          inputMode="tel"
+                          autoComplete="tel"
+                          value={profileForm.phone}
+                          onChange={(event) => setProfileForm((current) => ({ ...current, phone: event.target.value }))}
+                          className="w-full rounded-2xl border border-zinc-700 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
+                          placeholder="(301) 555-1234"
+                        />
+                      </label>
+                      <p className="mt-2 text-xs leading-5 text-zinc-400">
+                        We’ll only text you for urgent, time-sensitive escalations. Message &amp; data rates may apply. Reply STOP at any time to opt out.
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
 
                 {coachIntakeQuestions.length > 0 ? (
@@ -808,7 +876,7 @@ export default function PulseCheckPostActivationPage() {
 
                   <div className="mt-5 grid gap-4">
                     <label className="space-y-2">
-                      <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Role</span>
+                      <span className="text-xs tracking-normal text-zinc-500">Role</span>
                       <select
                         value={adultInviteForm.teamMembershipRole}
                         onChange={(event) =>
@@ -829,7 +897,7 @@ export default function PulseCheckPostActivationPage() {
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <label className="space-y-2">
-                        <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Name</span>
+                        <span className="text-xs tracking-normal text-zinc-500">Name</span>
                         <input
                           value={adultInviteForm.recipientName}
                           onChange={(event) => setAdultInviteForm((current) => ({ ...current, recipientName: event.target.value }))}
@@ -838,7 +906,7 @@ export default function PulseCheckPostActivationPage() {
                         />
                       </label>
                       <label className="space-y-2">
-                        <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Title</span>
+                        <span className="text-xs tracking-normal text-zinc-500">Title</span>
                         <input
                           value={adultInviteForm.invitedTitle}
                           onChange={(event) => setAdultInviteForm((current) => ({ ...current, invitedTitle: event.target.value }))}
@@ -849,7 +917,7 @@ export default function PulseCheckPostActivationPage() {
                     </div>
 
                     <label className="space-y-2">
-                      <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Email</span>
+                      <span className="text-xs tracking-normal text-zinc-500">Email</span>
                       <input
                         value={adultInviteForm.targetEmail}
                         onChange={(event) => setAdultInviteForm((current) => ({ ...current, targetEmail: event.target.value }))}
@@ -881,7 +949,7 @@ export default function PulseCheckPostActivationPage() {
                               <div className="text-sm font-semibold text-white">
                                 {invite.recipientName || invite.targetEmail || formatInviteRole(invite.teamMembershipRole)}
                               </div>
-                              <div className="mt-1 text-xs uppercase tracking-[0.16em] text-zinc-500">
+                              <div className="mt-1 text-xs tracking-normal text-zinc-500">
                                 {formatInviteRole(invite.teamMembershipRole)}
                                 {invite.invitedTitle ? ` • ${invite.invitedTitle}` : ''}
                               </div>
@@ -940,143 +1008,54 @@ export default function PulseCheckPostActivationPage() {
               )}
 
               {step === 3 && (
-                <form onSubmit={handleCreateAthleteInvite} className="rounded-[30px] border p-6" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
-                  <div className="flex items-center gap-3">
-                    <Waves className="h-5 w-5" style={{ color: PC.purpleSoft }} />
-                    <div>
-                      <div className="text-lg font-semibold text-white">Invite your athletes</div>
-                      <div className="text-sm text-zinc-400">Send athletes their link now, or come back to this anytime from your workspace.</div>
+                <div className="rounded-[30px] border p-8" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
+                  <div className="text-center">
+                    <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-2xl" style={{ background: 'rgba(124,58,237,0.16)' }}>
+                      <CheckCircle2 className="h-8 w-8" style={{ color: PC.purpleSoft }} />
+                    </div>
+                    <h2 className="mt-5 text-3xl font-bold text-white" style={{ fontFamily: 'Switzer, sans-serif' }}>
+                      You're all set, Coach 🎉
+                    </h2>
+                    <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-zinc-300">
+                      {team?.displayName || (isDemo ? demoTeamName : 'Your team')} is live. Next, we'll walk you through your
+                      dashboard — where you'll invite athletes, add more staff, and keep an eye on readiness.
+                    </p>
+                  </div>
+
+                  {/* Profile confirmation */}
+                  <div className="mx-auto mt-7 max-w-xl rounded-2xl border p-5" style={{ borderColor: PC.cardBorder, background: 'rgba(255,255,255,0.03)' }}>
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-[20px] border border-zinc-700 bg-zinc-900">
+                        {profileImagePreview ? (
+                          <img src={profileImagePreview} alt="Profile" className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-2xl font-semibold text-zinc-500">
+                            {(profileForm.displayName || 'C').charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-lg font-semibold text-white">{profileForm.displayName || 'Coach'}</div>
+                        {profileForm.title ? <div className="text-sm text-zinc-400">{profileForm.title}</div> : null}
+                        <div className="mt-1 text-xs text-zinc-500">{selectedRoleLabel}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border p-4" style={{ borderColor: PC.cardBorder }}>
+                        <Users className="h-4 w-4" style={{ color: PC.purpleSoft }} />
+                        <div className="mt-2 text-2xl font-bold text-white">{adultInviteLinks.length}</div>
+                        <div className="mt-1 text-xs tracking-normal text-zinc-500">Staff invited</div>
+                      </div>
+                      <div className="rounded-xl border p-4" style={{ borderColor: PC.cardBorder }}>
+                        <Sparkles className="h-4 w-4" style={{ color: PC.purpleSoft }} />
+                        <div className="mt-2 text-sm font-medium leading-6 text-white">{notificationSummary}</div>
+                        <div className="mt-1 text-xs tracking-normal text-zinc-500">Notifications</div>
+                      </div>
                     </div>
                   </div>
 
-                  {!canInviteAthletes ? (
-                    <div className="mt-5 rounded-2xl border px-4 py-4 text-sm leading-7 text-zinc-300" style={{ borderColor: 'rgba(124,58,237,0.25)', background: 'rgba(124,58,237,0.06)' }}>
-                      Save your profile first — that opens up athlete invites.
-                    </div>
-                  ) : null}
-
-                  <div className="mt-5 grid gap-4">
-                    <label className="space-y-2">
-                      <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Athlete Name</span>
-                      <input
-                        value={athleteInviteForm.recipientName}
-                        onChange={(event) => setAthleteInviteForm((current) => ({ ...current, recipientName: event.target.value }))}
-                        disabled={!canInviteAthletes}
-                        className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
-                        placeholder="Optional"
-                      />
-                    </label>
-                    <label className="space-y-2">
-                      <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Email</span>
-                      <input
-                        value={athleteInviteForm.targetEmail}
-                        onChange={(event) => setAthleteInviteForm((current) => ({ ...current, targetEmail: event.target.value }))}
-                        disabled={!canInviteAthletes}
-                        className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
-                        placeholder="Optional if you want an open team-athlete link"
-                      />
-                    </label>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={creatingAthleteInvite || !canInviteAthletes}
-                    className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-300 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {creatingAthleteInvite ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-                    {creatingAthleteInvite ? 'Creating Athlete Link...' : 'Generate Athlete Invite Link'}
-                  </button>
-
-                  <div className="mt-5 space-y-3">
-                    {athleteInviteLinks.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-4 text-sm text-zinc-500">
-                        No athlete invite links created yet.
-                      </div>
-                    ) : (
-                      athleteInviteLinks.slice(0, 4).map((invite) => (
-                        <div key={invite.id} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-semibold text-white">{invite.recipientName || invite.targetEmail || 'Open Athlete Link'}</div>
-                              <div className="mt-1 text-xs uppercase tracking-[0.16em] text-zinc-500">
-                                {invite.cohortName ? `Cohort Invite · ${invite.cohortName}` : 'Team Athlete Invite'}
-                              </div>
-                              {invite.pilotName ? <div className="mt-1 text-xs text-zinc-500">Pilot: {invite.pilotName}</div> : null}
-                            </div>
-                            <div className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-400">Active</div>
-                          </div>
-                          <div className="mt-3 break-all text-xs leading-6 text-zinc-400">{invite.activationUrl}</div>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(invite.activationUrl, 'Athlete link copied.')}
-                              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-semibold text-white transition hover:border-zinc-500"
-                            >
-                              <Copy className="h-3.5 w-3.5" />
-                              Copy
-                            </button>
-                            <a
-                              href={invite.activationUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-semibold text-white transition hover:border-zinc-500"
-                            >
-                              <Waypoints className="h-3.5 w-3.5" />
-                              Open
-                            </a>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-5">
-                    <button type="button" onClick={() => setStep(2)} className="text-sm font-semibold text-zinc-400 transition hover:text-white">
-                      ← Back
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStep(4);
-                        if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-                      style={{ background: PC.purple }}
-                    >
-                      {athleteInviteLinks.length > 0 ? 'Finish setup' : 'Skip for now'}
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {step === 4 && (
-                <div className="rounded-[30px] border p-8 text-center" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
-                  <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-2xl" style={{ background: 'rgba(124,58,237,0.16)' }}>
-                    <CheckCircle2 className="h-8 w-8" style={{ color: PC.purpleSoft }} />
-                  </div>
-                  <h2 className="mt-5 text-3xl font-bold text-white" style={{ fontFamily: 'Switzer, sans-serif' }}>
-                    You're all set, Coach 🎉
-                  </h2>
-                  <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-zinc-300">
-                    {team?.displayName || (isDemo ? demoTeamName : 'Your team')} is live. As your athletes join, you'll see their readiness and mental-performance
-                    signals right in your workspace.
-                  </p>
-
-                  <div className="mx-auto mt-6 grid max-w-xl gap-3 text-left sm:grid-cols-3">
-                    {[
-                      { icon: Users, label: 'Staff invited', value: adultInviteLinks.length },
-                      { icon: Waves, label: 'Athletes invited', value: athleteInviteLinks.length },
-                      { icon: Sparkles, label: 'Profile', value: setupSaved ? 'Ready' : '—' },
-                    ].map((stat) => (
-                      <div key={stat.label} className="rounded-2xl border p-4" style={{ borderColor: PC.cardBorder, background: 'rgba(255,255,255,0.03)' }}>
-                        <stat.icon className="h-4 w-4" style={{ color: PC.purpleSoft }} />
-                        <div className="mt-3 text-2xl font-bold text-white">{stat.value}</div>
-                        <div className="mt-1 text-xs uppercase tracking-[0.16em] text-zinc-500">{stat.label}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                  <div className="mt-7 flex items-center justify-center">
                     <Link
                       href={
                         isDemo
@@ -1086,19 +1065,9 @@ export default function PulseCheckPostActivationPage() {
                       className="inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
                       style={{ background: PC.purple }}
                     >
-                      {isDemo ? 'Open the coach dashboard' : 'Open my workspace'}
+                      {isDemo ? 'Confirm & open the coach dashboard' : 'Confirm & open my workspace'}
                       <ChevronRight className="h-4 w-4" />
                     </Link>
-                    {athleteInviteLinks.length === 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => setStep(3)}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl border px-6 py-3 text-sm font-semibold text-white transition hover:border-white/30"
-                        style={{ borderColor: PC.cardBorder }}
-                      >
-                        Invite athletes first
-                      </button>
-                    ) : null}
                   </div>
                 </div>
               )}

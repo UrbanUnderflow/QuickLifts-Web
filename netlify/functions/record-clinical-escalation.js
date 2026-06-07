@@ -50,6 +50,7 @@
 
 const { admin, getFirebaseAdminApp, headers, initializeFirebaseAdmin } = require('./config/firebase');
 const { buildEmailDedupeKey, sendBrevoTransactionalEmail } = require('./utils/sendBrevoTransactionalEmail');
+const { sendTwilioSms } = require('./utils/sendTwilioSms');
 
 const CLINICAL_ESCALATIONS_COLLECTION = 'pulsecheck-clinical-escalations';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
@@ -246,39 +247,7 @@ function buildClinicianSms({
 }
 
 async function sendClinicianSmsViaTwilio(phone, body) {
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_FROM_NUMBER;
-  if (!sid || !token || !from) {
-    return { skipped: true, reason: 'Twilio credentials not configured.' };
-  }
-  if (!phone) {
-    return { skipped: true, reason: 'No phone number on file.' };
-  }
-  try {
-    const params = new URLSearchParams();
-    params.append('To', phone);
-    params.append('From', from);
-    params.append('Body', body);
-    const response = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Basic ${Buffer.from(`${sid}:${token}`).toString('base64')}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: params.toString(),
-      },
-    );
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      return { skipped: false, success: false, error: data?.message || `Twilio ${response.status}` };
-    }
-    return { skipped: false, success: true, messageSid: data.sid || null };
-  } catch (error) {
-    return { skipped: false, success: false, error: error?.message || String(error) };
-  }
+  return sendTwilioSms({ to: phone, body });
 }
 
 async function setAthleteCrisisWall(db, athleteUserId, escalationId, reason) {
