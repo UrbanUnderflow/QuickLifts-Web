@@ -60,6 +60,15 @@ import { useUser } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import {
+  deriveMembershipAccessFromCapabilities,
+  normalizeStaffCapabilities,
+} from '../../api/firebase/pulsecheckProvisioning/staffCapabilities';
+import type {
+  PulseCheckInviteLink,
+  PulseCheckTeamMembership,
+  StaffPermission,
+} from '../../api/firebase/pulsecheckProvisioning/types';
+import {
   listSentSportsIntelligenceReportsForCoach,
   type CoachReportListItem,
 } from '../../api/firebase/pulsecheckCoachReportAccess';
@@ -427,6 +436,9 @@ interface CoachDashboardShellProps {
    *  current user is the configured revenue recipient. */
   earningsEnabled?: boolean;
   revenueSharePct?: number;
+  /** The signed-in coach's own staff capabilities — gates which tabs/details are
+   *  shown. Defaults to a full set (demo + safe fallback show everything). */
+  viewerCapabilities?: StaffPermission[];
 }
 
 export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
@@ -439,8 +451,16 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   isDemo = false,
   earningsEnabled = false,
   revenueSharePct = 0,
+  viewerCapabilities = ['administrative', 'coaching', 'athletic_trainer'],
 }) => {
   const router = useRouter();
+  // Demo always shows everything; live gates off the coach's own capabilities.
+  const can = useCallback(
+    (capability: StaffPermission) => isDemo || viewerCapabilities.includes(capability),
+    [isDemo, viewerCapabilities]
+  );
+  // athletic_trainer is the medical peek — Tier 3 escalation detail.
+  const canSeeTier3 = can('athletic_trainer');
   const [view, setView] = useState<ViewKey>('home');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
@@ -455,10 +475,45 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
     [athletes, isDemo]
   );
 
-  const navItems = useMemo(
-    () => NAV.filter((item) => item.key !== 'earnings' || earningsEnabled),
-    [earningsEnabled]
+  // Capability gating per tab:
+  //  • athlete-facing tabs (readiness, roster, inbox, reports) need coaching
+  //  • alerts needs coaching OR athletic_trainer (trainers watch escalations)
+  //  • staff / schedule / Train Nora need administrative OR coaching
+  //  • earnings keeps its existing revenue-recipient gate; settings is always on
+  const navAllowed = useCallback(
+    (key: ViewKey): boolean => {
+      switch (key) {
+        case 'home':
+        case 'roster':
+        case 'inbox':
+        case 'reports':
+          return can('coaching');
+        case 'alerts':
+          return can('coaching') || can('athletic_trainer');
+        case 'staff':
+        case 'schedule':
+        case 'nora':
+          return can('administrative') || can('coaching');
+        case 'earnings':
+          return earningsEnabled;
+        case 'settings':
+          return true;
+        default:
+          return true;
+      }
+    },
+    [can, earningsEnabled]
   );
+
+  const navItems = useMemo(() => NAV.filter((item) => navAllowed(item.key)), [navAllowed]);
+
+  // If the active tab becomes disallowed (capabilities narrowed after load), land
+  // the coach on the first tab they can actually see.
+  useEffect(() => {
+    if (navItems.length > 0 && !navItems.some((item) => item.key === view)) {
+      setView(navItems[0].key);
+    }
+  }, [navItems, view]);
 
   const NavList = ({ onPick }: { onPick?: () => void }) => (
     <nav className="flex-1 space-y-0.5">
@@ -618,7 +673,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       onSelectAthlete={setSelectedAthleteId}
                     />
                   )}
-                  {view === 'alerts' && <AlertsSection alerts={alerts} loading={loadingAthletes} />}
+                  {view === 'alerts' && (
+                    <AlertsSection alerts={alerts} loading={loadingAthletes} canSeeTier3={canSeeTier3} />
+                  )}
                   {view === 'inbox' && <InboxSection athletes={athletes} loading={loadingAthletes} isDemo={isDemo} />}
                   {view === 'roster' && (
                     <RosterSection
@@ -627,7 +684,14 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       onSelectAthlete={setSelectedAthleteId}
                     />
                   )}
-                  {view === 'staff' && <StaffSection isDemo={isDemo} coachName={coachName} />}
+                  {view === 'staff' && (
+                    <StaffSection
+                      isDemo={isDemo}
+                      coachName={coachName}
+                      coachId={coachId}
+                      coachEmail={coachEmail}
+                    />
+                  )}
                   {view === 'nora' && (
                     <TrainNoraSection coachId={coachId} coachName={coachName} athletes={athletes} />
                   )}
@@ -646,6 +710,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
         <AthleteProfileDrawer
           athlete={selectedAthlete}
           alerts={alerts}
+          canSeeTier3={canSeeTier3}
           onClose={() => setSelectedAthleteId(null)}
         />
       </div>
@@ -661,6 +726,16 @@ const CoachDashboardV2: React.FC = () => {
     enabled: false,
     sharePct: 0,
   });
+  // The signed-in coach's own staff capabilities for their active team. Drives
+  // feature gating (Reports/insights, Tier-3 detail, Schedule/Train Nora). Starts
+  // as all-three so the first paint isn't briefly locked, then narrows once the
+  // membership resolves. Falls back to a full set if capabilities can't be read,
+  // so we never lock an existing coach out of their own dashboard.
+  const [viewerCapabilities, setViewerCapabilities] = useState<StaffPermission[]>([
+    'administrative',
+    'coaching',
+    'athletic_trainer',
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -759,6 +834,31 @@ const CoachDashboardV2: React.FC = () => {
     };
   }, [currentUser?.id]);
 
+  // Resolve the coach's own capabilities from their team membership. Prefer the
+  // persisted staffCapabilities; fall back to the legacy role mapping; if nothing
+  // resolves, keep the permissive default so existing coaches aren't locked out.
+  useEffect(() => {
+    let cancelled = false;
+    const loadCapabilities = async () => {
+      if (!currentUser?.id) return;
+      try {
+        const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
+        const own = memberships.find((m) => m.role !== 'athlete');
+        if (!own) return; // no staff membership → keep permissive default
+        const caps = own.staffCapabilities?.length
+          ? normalizeStaffCapabilities(own.staffCapabilities)
+          : capabilitiesFromLegacyRole(own.role);
+        if (!cancelled && caps.length) setViewerCapabilities(caps);
+      } catch (err) {
+        console.error('[dashboard-v2] failed to resolve viewer capabilities', err);
+      }
+    };
+    loadCapabilities();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id]);
+
   const coachName = currentUser?.displayName || currentUser?.username || 'Coach';
 
   return (
@@ -775,6 +875,7 @@ const CoachDashboardV2: React.FC = () => {
         coachId={currentUser?.id}
         earningsEnabled={earnings.enabled}
         revenueSharePct={earnings.sharePct}
+        viewerCapabilities={viewerCapabilities}
       />
     </CoachProtectedRoute>
   );
@@ -1164,9 +1265,10 @@ const Tier3MonitorCard: React.FC<{ alert: AthleteAlert }> = ({ alert }) => {
   );
 };
 
-const AlertsSection: React.FC<{ alerts: AthleteAlert[]; loading: boolean }> = ({
+const AlertsSection: React.FC<{ alerts: AthleteAlert[]; loading: boolean; canSeeTier3?: boolean }> = ({
   alerts,
   loading,
+  canSeeTier3 = true,
 }) => {
   const tier2 = useMemo(
     () =>
@@ -1177,15 +1279,22 @@ const AlertsSection: React.FC<{ alerts: AthleteAlert[]; loading: boolean }> = ({
   );
   const tier3 = useMemo(
     () =>
-      alerts
-        .filter((a) => a.tier === 3)
-        .sort((x, y) => (y.flaggedAt?.getTime() ?? 0) - (x.flaggedAt?.getTime() ?? 0)),
-    [alerts]
+      // Tier 3 detail is the athletic_trainer "medical peek" — hide it entirely
+      // for staff without that capability.
+      canSeeTier3
+        ? alerts
+            .filter((a) => a.tier === 3)
+            .sort((x, y) => (y.flaggedAt?.getTime() ?? 0) - (x.flaggedAt?.getTime() ?? 0))
+        : [],
+    [alerts, canSeeTier3]
   );
 
   if (loading) return <LoadingBlock label="Scanning athlete check-ins…" />;
 
-  if (alerts.length === 0) {
+  // Count only what this viewer can actually see (Tier 3 may be gated off).
+  const visibleCount = tier2.length + tier3.length;
+
+  if (visibleCount === 0) {
     return (
       <EmptyBlock
         icon={Flame}
@@ -1214,7 +1323,7 @@ const AlertsSection: React.FC<{ alerts: AthleteAlert[]; loading: boolean }> = ({
           Athlete Alerts
         </div>
         <span className="text-[10px] px-2 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25 font-bold">
-          {alerts.length} ACTIVE
+          {visibleCount} ACTIVE
         </span>
       </div>
 
@@ -1353,7 +1462,8 @@ const InboxSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean; isDem
 //  • administrative  → update the schedule, train Nora (but no athlete data)
 //  • coaching        → athlete insights, reports, coaching curriculum
 //  • athletic_trainer→ the medical peek: Tier 3 escalation detail
-type StaffPermission = 'administrative' | 'coaching' | 'athletic_trainer';
+// StaffPermission is imported from the provisioning types (single source of truth);
+// the membership/invite model persists exactly these three capability keys.
 
 const STAFF_PERMISSIONS: {
   key: StaffPermission;
@@ -1424,15 +1534,137 @@ const formatJoined = (joinedAt?: string): string | null => {
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 };
 
-const StaffSection: React.FC<{ isDemo?: boolean; coachName: string }> = ({ isDemo }) => {
+// Best-effort ISO from a Firestore Timestamp / Date / {seconds} shape.
+const timestampToIso = (value: unknown): string | undefined => {
+  if (!value) return undefined;
+  const candidate = value as { toDate?: () => Date; seconds?: number };
+  if (typeof candidate.toDate === 'function') return candidate.toDate().toISOString();
+  if (typeof candidate.seconds === 'number') return new Date(candidate.seconds * 1000).toISOString();
+  if (value instanceof Date) return value.toISOString();
+  return undefined;
+};
+
+// Display fallback for legacy members/invites that predate staffCapabilities —
+// reverse of the derive table so existing rows still show sensible chips.
+const capabilitiesFromLegacyRole = (role?: string): StaffPermission[] => {
+  switch (role) {
+    case 'coach':
+      return ['coaching'];
+    case 'performance-staff':
+    case 'clinician':
+      return ['athletic_trainer'];
+    case 'support-staff':
+    case 'team-admin':
+      return ['administrative'];
+    default:
+      return [];
+  }
+};
+
+const staffRowFromMembership = (m: PulseCheckTeamMembership): StaffRow => {
+  const caps = m.staffCapabilities?.length ? m.staffCapabilities : capabilitiesFromLegacyRole(m.role);
+  const name = (m.title || '').trim() || (m.email || '').split('@')[0] || 'Staff member';
+  return {
+    id: m.id,
+    name,
+    role: (m.title || '').trim() || deriveStaffRole(caps),
+    email: m.email || '',
+    status: 'active',
+    permissions: caps,
+    joinedAt: timestampToIso(m.grantedAt) || timestampToIso(m.createdAt),
+  };
+};
+
+const staffRowFromInvite = (link: PulseCheckInviteLink): StaffRow => {
+  const caps = link.staffCapabilities?.length ? link.staffCapabilities : capabilitiesFromLegacyRole(link.teamMembershipRole);
+  const name = (link.recipientName || '').trim() || (link.targetEmail || '').split('@')[0] || 'Invited member';
+  return {
+    id: link.id,
+    name,
+    role: deriveStaffRole(caps),
+    email: link.targetEmail || '',
+    status: 'invited',
+    permissions: caps,
+  };
+};
+
+const DEMO_INVITE_LINK = 'https://fitwithpulse.ai/coach/join/team-demo';
+
+const StaffSection: React.FC<{
+  isDemo?: boolean;
+  coachName: string;
+  coachId?: string;
+  coachEmail?: string;
+}> = ({ isDemo, coachName, coachId, coachEmail }) => {
   const [staff, setStaff] = useState<StaffRow[]>(isDemo ? DEMO_STAFF : []);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [perms, setPerms] = useState<StaffPermission[]>(['coaching']);
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState(DEMO_INVITE_LINK);
+  const [busy, setBusy] = useState(false);
+  // Resolved active-team context for the signed-in coach (live mode only).
+  const [team, setTeam] = useState<{
+    organizationId: string;
+    teamId: string;
+    organizationName: string;
+    teamName: string;
+  } | null>(null);
 
-  const inviteLink = 'https://fitwithpulse.ai/coach/join/team-demo';
+  // Live load: resolve the coach's active team, then pull real members + pending
+  // invites. Demo never touches Firestore.
+  const loadStaff = useCallback(async () => {
+    if (isDemo || !coachId) return;
+    try {
+      const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(coachId);
+      const own = memberships.find((m) => m.role !== 'athlete');
+      if (!own) {
+        setStaff([]);
+        return;
+      }
+      const { teamId, organizationId } = own;
+      let teamName = 'your team';
+      let organizationName = 'your organization';
+      try {
+        const [t, org] = await Promise.all([
+          pulseCheckProvisioningService.getTeam(teamId),
+          pulseCheckProvisioningService.getOrganization(organizationId),
+        ]);
+        teamName = t?.displayName || teamName;
+        organizationName = org?.displayName || organizationName;
+      } catch {
+        /* names are cosmetic; fall back to generic labels */
+      }
+      setTeam({ organizationId, teamId, organizationName, teamName });
+
+      const [teamMembers, inviteLinks] = await Promise.all([
+        pulseCheckProvisioningService.listTeamMemberships(teamId).catch(() => [] as PulseCheckTeamMembership[]),
+        pulseCheckProvisioningService.listTeamInviteLinks(teamId).catch(() => [] as PulseCheckInviteLink[]),
+      ]);
+
+      const activeRows = teamMembers.filter((m) => m.role !== 'athlete').map(staffRowFromMembership);
+      const memberEmails = new Set(activeRows.map((r) => r.email.toLowerCase()).filter(Boolean));
+      const seenInviteEmails = new Set<string>();
+      const pendingRows = inviteLinks
+        .filter((l) => l.inviteType === 'team-access' && (l.targetEmail || '').length > 0 && l.status === 'active')
+        .map(staffRowFromInvite)
+        .filter((r) => {
+          const key = r.email.toLowerCase();
+          if (!key || memberEmails.has(key) || seenInviteEmails.has(key)) return false;
+          seenInviteEmails.add(key);
+          return true;
+        });
+
+      setStaff([...pendingRows, ...activeRows]);
+    } catch (err) {
+      console.error('[dashboard-v2] failed to load staff', err);
+    }
+  }, [coachId, isDemo]);
+
+  useEffect(() => {
+    void loadStaff();
+  }, [loadStaff]);
 
   const openInvite = () => {
     setPerms(['coaching']);
@@ -1444,30 +1676,158 @@ const StaffSection: React.FC<{ isDemo?: boolean; coachName: string }> = ({ isDem
   const togglePerm = (k: StaffPermission) =>
     setPerms((prev) => (prev.includes(k) ? prev.filter((p) => p !== k) : [...prev, k]));
 
-  const copyLink = () => {
+  const copyLink = async () => {
+    // Demo: copy the static walkthrough link, no writes.
+    if (isDemo) {
+      try {
+        navigator.clipboard?.writeText(inviteLink);
+      } catch {}
+      setCopied(true);
+      setToast('Invite link copied — the permissions you set travel with it.');
+      return;
+    }
+    if (!team || !coachId) {
+      setToast('Still resolving your team — try again in a moment.');
+      return;
+    }
+    setBusy(true);
     try {
-      navigator.clipboard?.writeText(inviteLink);
-    } catch {}
-    setCopied(true);
-    setToast('Invite link copied — the permissions you set travel with it.');
+      const derived = deriveMembershipAccessFromCapabilities(perms);
+      // Reusable (general) link carrying the chosen capabilities — anyone who
+      // redeems it joins with those permissions.
+      await pulseCheckProvisioningService.createTeamAccessInviteLink({
+        organizationId: team.organizationId,
+        teamId: team.teamId,
+        teamMembershipRole: derived.teamMembershipRole,
+        staffCapabilities: perms,
+        redemptionMode: 'general',
+        createdByUserId: coachId,
+        createdByEmail: coachEmail || '',
+      });
+      const links = await pulseCheckProvisioningService.listTeamInviteLinks(team.teamId);
+      const link = links.find(
+        (l) =>
+          l.inviteType === 'team-access' &&
+          !(l.targetEmail || '') &&
+          l.status === 'active' &&
+          l.teamMembershipRole === derived.teamMembershipRole
+      );
+      if (link?.activationUrl) {
+        setInviteLink(link.activationUrl);
+        try {
+          navigator.clipboard?.writeText(link.activationUrl);
+        } catch {}
+        setCopied(true);
+        setToast('Invite link copied — the permissions you set travel with it.');
+      } else {
+        setToast('Created the link but could not read it back. Refresh and try again.');
+      }
+    } catch (err) {
+      console.error('[dashboard-v2] failed to create shareable staff link', err);
+      setToast('Could not create the link. Try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const sendInvite = () => {
+  const sendInvite = async () => {
     const e = email.trim();
     if (!e || perms.length === 0) return;
-    setStaff((prev) => [
-      {
-        id: `inv-${prev.length + 1}-${e}`,
-        name: e.split('@')[0],
-        role: deriveStaffRole(perms),
-        email: e,
-        status: 'invited',
-        permissions: [...perms],
-      },
-      ...prev,
-    ]);
-    setToast(`Invite sent to ${e}.`);
-    setInviteOpen(false);
+
+    // Demo: local-state only, no Firestore writes (walkthrough behavior unchanged).
+    if (isDemo) {
+      setStaff((prev) => [
+        {
+          id: `inv-${prev.length + 1}-${e}`,
+          name: e.split('@')[0],
+          role: deriveStaffRole(perms),
+          email: e,
+          status: 'invited',
+          permissions: [...perms],
+        },
+        ...prev,
+      ]);
+      setToast(`Invite sent to ${e}.`);
+      setInviteOpen(false);
+      return;
+    }
+
+    if (!team || !coachId) {
+      setToast('Still resolving your team — try again in a moment.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const derived = deriveMembershipAccessFromCapabilities(perms);
+      await pulseCheckProvisioningService.createTeamAccessInviteLink({
+        organizationId: team.organizationId,
+        teamId: team.teamId,
+        teamMembershipRole: derived.teamMembershipRole,
+        staffCapabilities: perms,
+        redemptionMode: 'single-use',
+        targetEmail: e,
+        recipientName: e.split('@')[0],
+        createdByUserId: coachId,
+        createdByEmail: coachEmail || '',
+      });
+
+      // Resolve the just-created link to get its activation URL + token.
+      const links = await pulseCheckProvisioningService.listTeamInviteLinks(team.teamId);
+      const link = links.find(
+        (l) =>
+          l.inviteType === 'team-access' &&
+          (l.targetEmail || '').toLowerCase() === e.toLowerCase() &&
+          l.status === 'active'
+      );
+
+      let emailSent = false;
+      if (link?.activationUrl) {
+        try {
+          const resp = await fetch('/.netlify/functions/send-pulsecheck-team-invite-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              toEmail: e,
+              activationUrl: link.activationUrl,
+              recipientName: e.split('@')[0],
+              organizationName: team.organizationName,
+              teamName: team.teamName,
+              roleLabel: deriveStaffRole(perms),
+              senderName: coachName,
+            }),
+          });
+          const result = await resp.json().catch(() => ({ success: false }));
+          emailSent = resp.ok && result?.success === true;
+          // Record the send outcome on the invite link + an activity event.
+          await pulseCheckProvisioningService.recordAdminActivationEmailResult({
+            token: link.token,
+            success: emailSent,
+            messageId: result?.messageId,
+            sentByUserId: coachId,
+            sentByEmail: coachEmail || '',
+            targetEmail: e,
+            organizationId: team.organizationId,
+            teamId: team.teamId,
+            errorMessage: emailSent ? '' : String(result?.error || 'Send failed'),
+          });
+        } catch (mailErr) {
+          console.error('[dashboard-v2] staff invite email failed', mailErr);
+        }
+      }
+
+      setToast(
+        emailSent
+          ? `Invite sent to ${e}.`
+          : `Invite created for ${e} — email didn't send, share the link instead.`
+      );
+      setInviteOpen(false);
+      await loadStaff();
+    } catch (err) {
+      console.error('[dashboard-v2] failed to send staff invite', err);
+      setToast('Could not send the invite. Try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -1587,10 +1947,10 @@ const StaffSection: React.FC<{ isDemo?: boolean; coachName: string }> = ({ isDem
                     />
                     <button
                       onClick={sendInvite}
-                      disabled={!email.trim() || perms.length === 0}
+                      disabled={!email.trim() || perms.length === 0 || busy}
                       className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      Send
+                      {busy ? 'Sending…' : 'Send'}
                     </button>
                   </div>
                 </div>
@@ -1604,10 +1964,11 @@ const StaffSection: React.FC<{ isDemo?: boolean; coachName: string }> = ({ isDem
                   <button
                     data-invite-copy
                     onClick={copyLink}
-                    className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-zinc-700/50 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
+                    disabled={busy}
+                    className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-zinc-700/50 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {copied ? <Check className="h-3.5 w-3.5 text-[#E0FE10]" /> : <Copy className="h-3.5 w-3.5" />}
-                    {copied ? 'Copied' : 'Copy link'}
+                    {copied ? 'Copied' : busy ? 'Creating…' : 'Copy link'}
                   </button>
                 </div>
               </div>
@@ -1761,8 +2122,9 @@ const ProfileStat: React.FC<{ label: string; value: React.ReactNode; sub?: strin
 const AthleteProfileDrawer: React.FC<{
   athlete: CoachAthlete | null;
   alerts: AthleteAlert[];
+  canSeeTier3?: boolean;
   onClose: () => void;
-}> = ({ athlete, alerts, onClose }) => {
+}> = ({ athlete, alerts, canSeeTier3 = true, onClose }) => {
   const [history, setHistory] = useState<{ score: number; messages: number }[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
@@ -1797,7 +2159,10 @@ const AthleteProfileDrawer: React.FC<{
     return () => window.removeEventListener('keydown', onKey);
   }, [athlete, onClose]);
 
-  const tier3 = athlete ? alerts.find((a) => a.athleteId === athlete.id && a.tier === 3) : undefined;
+  // Tier 3 detail is the athletic_trainer medical peek; without that capability
+  // the drawer shows none of the clinical-watch banner or care detail.
+  const tier3 =
+    athlete && canSeeTier3 ? alerts.find((a) => a.athleteId === athlete.id && a.tier === 3) : undefined;
   const tier2 = athlete ? alerts.find((a) => a.athleteId === athlete.id && a.tier === 2) : undefined;
   const walledOff = !!tier3;
 
@@ -2285,7 +2650,7 @@ const TrainNoraSection: React.FC<{
   return (
     <div className="space-y-5">
       {/* Header / explainer */}
-      <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-500/8 to-blue-500/5 p-5">
+      <div data-nora-explainer className="rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-500/8 to-blue-500/5 p-5">
         <div className="flex items-center gap-2 mb-2">
           <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
             <Brain className="w-4 h-4 text-purple-400" />
@@ -2306,6 +2671,7 @@ const TrainNoraSection: React.FC<{
       {/* Actions */}
       <div className="flex items-center gap-2 flex-wrap">
         <button
+          data-nora-chat
           onClick={() => setChatOpen((o) => !o)}
           className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
             chatOpen
@@ -2316,12 +2682,14 @@ const TrainNoraSection: React.FC<{
           <MessageSquare className="w-4 h-4" /> Chat with Nora
         </button>
         <button
+          data-nora-upload
           onClick={() => fileInputRef.current?.click()}
           className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95"
         >
           <UploadCloud className="w-4 h-4" /> Upload files
         </button>
         <button
+          data-nora-note
           onClick={() => setNoteOpen((o) => !o)}
           className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40 text-zinc-200 text-sm hover:bg-zinc-700/60"
         >
@@ -2415,6 +2783,7 @@ const TrainNoraSection: React.FC<{
 
       {/* Dropzone */}
       <div
+        data-nora-dropzone
         onDragOver={(e) => {
           e.preventDefault();
           setDragOver(true);
@@ -2728,6 +3097,7 @@ const ReportRow: React.FC<{
   meta: React.ReactNode;
 }> = ({ onClick, accent, title, isLatest, cadenceLabel, meta }) => (
   <button
+    data-report-row
     onClick={onClick}
     className="group flex items-center gap-4 rounded-2xl border border-white/10 bg-zinc-900/50 p-4 text-left transition hover:-translate-y-0.5 hover:border-zinc-600 hover:bg-zinc-900/80"
   >

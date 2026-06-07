@@ -44,6 +44,15 @@ export type PulseCheckTeamMembershipRole =
   | 'support-staff'
   | 'clinician'
   | 'athlete';
+// Coach-facing staff capability model (Coach Dashboard → Staff tab). These three
+// checkboxes are the authoritative grant; the legacy role / operatingRole /
+// rosterVisibilityScope are derived from them (see staffCapabilities.ts) so
+// report-routing and iOS gating keep working. Multi-select — a person can hold
+// several.
+//  • administrative   → schedule + Train Nora, no athlete data
+//  • coaching         → athlete insights, reports, coaching curriculum, check-ins
+//  • athletic_trainer → Tier 3 escalation detail (the medical peek)
+export type StaffPermission = 'administrative' | 'coaching' | 'athletic_trainer';
 export type PulseCheckOnboardingTrackerStepId =
   | 'intake'
   | 'provisioning'
@@ -647,6 +656,10 @@ export interface PulseCheckInviteLink {
   cohortName?: string;
   clinicianProfileId?: string;
   teamMembershipRole?: PulseCheckTeamMembershipRole;
+  // Coach-granted staff capabilities (for team-access staff invites). Travels
+  // with the invite and is copied onto the membership on redeem. The legacy
+  // teamMembershipRole above is derived from these (see staffCapabilities.ts).
+  staffCapabilities?: StaffPermission[];
   invitedTitle?: string;
   recipientName?: string;
   targetEmail?: string;
@@ -739,6 +752,9 @@ export interface PulseCheckTeamMembership {
   role: PulseCheckTeamMembershipRole;
   title?: string;
   permissionSetId?: string;
+  // Authoritative coach-granted capabilities for staff members. role /
+  // operatingRole / rosterVisibilityScope below are derived from these.
+  staffCapabilities?: StaffPermission[];
   operatingRole?: PulseCheckOperatingRole;
   rosterVisibilityScope?: PulseCheckRosterVisibilityScope;
   allowedAthleteIds?: string[];
@@ -820,6 +836,10 @@ export interface CreatePulseCheckTeamAccessInviteInput {
   organizationId: string;
   teamId: string;
   teamMembershipRole: PulseCheckTeamMembershipRole;
+  // Capabilities the inviting coach granted. When provided, they are stamped on
+  // the invite link and (on redeem) copied to the membership; teamMembershipRole
+  // should be the value derived from these (see deriveMembershipAccessFromCapabilities).
+  staffCapabilities?: StaffPermission[];
   redemptionMode?: PulseCheckInviteLinkRedemptionMode;
   revokeExistingMatchingLinks?: boolean;
   pilotId?: string;
@@ -880,7 +900,11 @@ export interface SavePulseCheckAthleteOnboardingProgressInput {
 
 export interface UpdatePulseCheckTeamMembershipAccessInput {
   teamMembershipId: string;
-  rosterVisibilityScope: PulseCheckRosterVisibilityScope;
+  // Either pass staffCapabilities (coach Staff tab → "Edit permissions"), in which
+  // case role / operatingRole / rosterVisibilityScope are re-derived, or pass
+  // rosterVisibilityScope directly (team-workspace roster-scope editor).
+  staffCapabilities?: StaffPermission[];
+  rosterVisibilityScope?: PulseCheckRosterVisibilityScope;
   allowedAthleteIds?: string[];
   permissionSetId?: string;
 }

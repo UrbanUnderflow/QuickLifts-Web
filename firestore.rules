@@ -111,6 +111,9 @@ service cloud.firestore {
         'company-config',
         'document-notes',
         'programming-access',
+        'pulsecheck-invite-activities',
+        'pulsecheck-invite-links',
+        'pulsecheck-team-memberships',
         'round-exports',
         'signingRequests',
         'user-reports'
@@ -118,6 +121,39 @@ service cloud.firestore {
         || isAdminOnlyCollection(collectionName)
         || isPurchaseLogCollection(collectionName)
         || isLockedPrivateCollection(collectionName);
+    }
+
+    // PulseCheck provisioning helpers. Membership docs are keyed `${teamId}_${uid}`,
+    // so the requester's own membership on a team is a deterministic lookup.
+    function pcMembershipPath(teamId) {
+      return /databases/$(database)/documents/pulsecheck-team-memberships/$(teamId + '_' + request.auth.uid);
+    }
+    function pcCanManageTeam(teamId) {
+      return isSignedIn()
+        && exists(pcMembershipPath(teamId))
+        && (
+          get(pcMembershipPath(teamId)).data.role == 'team-admin'
+          || (
+            get(pcMembershipPath(teamId)).data.staffCapabilities is list
+            && (
+              'administrative' in get(pcMembershipPath(teamId)).data.staffCapabilities
+              || 'coaching' in get(pcMembershipPath(teamId)).data.staffCapabilities
+            )
+          )
+        );
+    }
+    // A redeeming user may flip an invite link to redeemed for themselves without
+    // being a team manager (mirrors the redeem transaction's invite-link write).
+    function pcIsInviteRedemptionUpdate() {
+      return isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'redeemedByUserId',
+          'redeemedByEmail',
+          'redeemedAt',
+          'redemptionCount',
+          'updatedAt'
+        ]);
     }
 
     function hasHumanUiAuditFields() {
@@ -454,6 +490,48 @@ service cloud.firestore {
         && request.resource.data.coachId == request.auth.uid;
       allow update, delete: if isSignedIn()
         && resource.data.coachId == request.auth.uid;
+    }
+
+    // PulseCheck staff invites. Reads stay open to signed-in clients (a not-yet-
+    // member must read an invite to redeem it; the dashboard lists a team's links),
+    // but only an admin or a manager of the link's team may issue or change one. A
+    // redeeming user may mark their own redemption. The redeem API route uses the
+    // Admin SDK and bypasses these rules.
+    match /pulsecheck-invite-links/{inviteId} {
+      allow read: if isSignedIn();
+      allow create: if isAdminUser() || pcCanManageTeam(request.resource.data.teamId);
+      allow update: if isAdminUser()
+        || pcCanManageTeam(resource.data.teamId)
+        || pcIsInviteRedemptionUpdate();
+      allow delete: if isAdminUser() || pcCanManageTeam(resource.data.teamId);
+    }
+
+    // PulseCheck team memberships (staff + athletes). Reads stay open to signed-in
+    // clients (iOS and the dashboard read memberships broadly). A user may write
+    // their own membership (onboarding / redemption), a team manager may adjust
+    // access for members of their team, and admins can do anything.
+    match /pulsecheck-team-memberships/{membershipId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (
+        isAdminUser()
+        || request.resource.data.userId == request.auth.uid
+        || pcCanManageTeam(request.resource.data.teamId)
+      );
+      allow update: if isSignedIn() && (
+        isAdminUser()
+        || resource.data.userId == request.auth.uid
+        || pcCanManageTeam(resource.data.teamId)
+      );
+      allow delete: if isAdminUser() || pcCanManageTeam(resource.data.teamId);
+    }
+
+    // PulseCheck invite activity log (page views, redemption events, email sends).
+    // Low-sensitivity telemetry: signed-in clients may append and read; only admins
+    // may mutate or remove existing entries.
+    match /pulsecheck-invite-activities/{activityId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdminUser();
     }
 
     // Compatibility fallback: unknown collections are no longer public. They

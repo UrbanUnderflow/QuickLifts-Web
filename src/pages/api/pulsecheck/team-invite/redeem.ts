@@ -11,6 +11,10 @@ import {
   resolvePilotEnrollmentStatus,
   resolveTeamMembershipOnboardingStatus,
 } from '../../../../api/firebase/pulsecheckProvisioning/accessState';
+import {
+  deriveMembershipAccessFromCapabilities,
+  normalizeStaffCapabilities,
+} from '../../../../api/firebase/pulsecheckProvisioning/staffCapabilities';
 import type {
   PulseCheckInviteLinkRedemptionMode,
   PulseCheckRequiredConsentDocument,
@@ -336,6 +340,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!organizationId || !teamId || !teamMembershipRole) {
         throw new Error('Invite is missing organization, team, or role context.');
       }
+      // Staff capabilities encoded on the invite (team-access staff invites). Copied
+      // onto the membership; the derived roster scope replaces the default below.
+      const staffCapabilities = normalizeStaffCapabilities(invite.staffCapabilities);
+      const derivedStaffAccess = staffCapabilities.length
+        ? deriveMembershipAccessFromCapabilities(staffCapabilities)
+        : null;
 
       const organizationRef = firestore.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
       const teamRef = firestore.collection(TEAMS_COLLECTION).doc(teamId);
@@ -447,7 +457,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           role: teamMembershipRole,
           title: invitedTitle || null,
           permissionSetId: permissionSetByRole[teamMembershipRole] || 'pulsecheck-team-member-v1',
-          rosterVisibilityScope: teamMembershipRole === 'athlete' ? 'none' : 'team',
+          rosterVisibilityScope: derivedStaffAccess
+            ? derivedStaffAccess.rosterVisibilityScope
+            : teamMembershipRole === 'athlete' ? 'none' : 'team',
+          ...(derivedStaffAccess
+            ? { staffCapabilities, operatingRole: derivedStaffAccess.operatingRole }
+            : {}),
           allowedAthleteIds: [],
           athleteOnboarding: nextAthleteOnboarding,
           onboardingStatus: nextMembershipOnboardingStatus,

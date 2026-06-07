@@ -17,6 +17,7 @@ import {
   PenLine,
   RefreshCw,
   FileText,
+  Plug,
 } from 'lucide-react';
 import {
   coachScheduleService,
@@ -151,6 +152,18 @@ const hostOf = (url: string): string => {
 };
 
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+// Common athletic-department scheduling/management tools the Pulse team can wire
+// Nora into during pilot setup. Display-only — the actual connection is handled
+// by our team, not self-serve OAuth.
+const SCHEDULE_INTEGRATIONS = [
+  'Teamworks',
+  'ArbiterSports',
+  'Hudl',
+  'Sidearm Sports',
+  'Google Calendar',
+  'Outlook',
+];
 
 type LiveEvent = ScheduleEvent & { live?: boolean };
 
@@ -370,7 +383,7 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
       </div>
 
       {/* Link import bar */}
-      <div className="rounded-2xl border border-zinc-700/40 bg-zinc-800/30 p-3">
+      <div data-schedule-url className="rounded-2xl border border-zinc-700/40 bg-zinc-800/30 p-3">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-2 flex-1 bg-zinc-900/60 border border-zinc-700/40 rounded-xl px-3 py-2 focus-within:border-purple-500/40">
             <Link2 className="w-4 h-4 text-zinc-500 flex-shrink-0" />
@@ -500,6 +513,7 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
 
       {/* Drop zone */}
       <div
+        data-schedule-dropzone
         onDragOver={(e) => {
           e.preventDefault();
           setDragOver(true);
@@ -525,6 +539,39 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
           )}
         </div>
         <div className="text-[11px] text-zinc-600 mt-1">Links get parsed by Nora · files up to 25MB</div>
+      </div>
+
+      {/* Third-party scheduling integrations — wired up by the Pulse team during pilot setup */}
+      <div
+        data-schedule-integrations
+        className="rounded-2xl border border-teal-500/20 bg-gradient-to-br from-teal-500/[0.06] to-purple-500/[0.04] p-5"
+      >
+        <div className="flex items-start gap-2.5 mb-3">
+          <div className="w-8 h-8 rounded-lg bg-teal-500/15 flex items-center justify-center flex-shrink-0">
+            <Plug className="w-4 h-4 text-teal-300" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-white">Connect your scheduling software</div>
+            <div className="text-xs text-zinc-500">
+              Already run your schedule through another tool? Nora can sync straight from it.
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {SCHEDULE_INTEGRATIONS.map((name) => (
+            <span
+              key={name}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700/50 bg-zinc-900/50 px-3 py-1.5 text-xs font-medium text-zinc-300"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-teal-400/70" />
+              {name}
+            </span>
+          ))}
+        </div>
+        <div className="mt-3 text-[11px] leading-relaxed text-zinc-500">
+          Our team makes these connections during pilot setup — tailoring Pulse Check to your institution,
+          your team, and your athletes.
+        </div>
       </div>
 
       {/* Source documents */}

@@ -19,6 +19,7 @@ import {
   resolvePilotEnrollmentStatus,
   resolveTeamMembershipOnboardingStatus,
 } from './accessState';
+import { deriveMembershipAccessFromCapabilities, normalizeStaffCapabilities } from './staffCapabilities';
 import type {
   CompletePulseCheckAthleteOnboardingInput,
   CreatePulseCheckPilotCohortInput,
@@ -62,6 +63,7 @@ import type {
   PulseCheckTeamMembership,
   PulseCheckTeamMembershipRole,
   PulseCheckTeamStatus,
+  StaffPermission,
   PulseCheckInviteLink,
   PulseCheckInviteActivity,
   PulseCheckInviteActivityEmailSource,
@@ -898,6 +900,7 @@ const toInviteLink = (id: string, data: Record<string, any>): PulseCheckInviteLi
   cohortName: data.cohortName || '',
   clinicianProfileId: data.clinicianProfileId || '',
   teamMembershipRole: data.teamMembershipRole || undefined,
+  staffCapabilities: normalizeStaffCapabilities(data.staffCapabilities),
   invitedTitle: data.invitedTitle || '',
   recipientName: data.recipientName || '',
   targetEmail: data.targetEmail || '',
@@ -996,6 +999,7 @@ const toTeamMembership = (id: string, data: Record<string, any>): PulseCheckTeam
   role: (data.role as PulseCheckTeamMembershipRole) || 'coach',
   title: data.title || '',
   permissionSetId: data.permissionSetId || '',
+  staffCapabilities: normalizeStaffCapabilities(data.staffCapabilities),
   operatingRole: data.operatingRole || undefined,
   notificationPreferences: {
     ...defaultNotificationPreferences(),
@@ -2976,6 +2980,7 @@ export const pulseCheckProvisioningService = {
   async createTeamAccessInviteLink(input: CreatePulseCheckTeamAccessInviteInput): Promise<string> {
     const normalizedTeamId = normalizeString(input.teamId);
     const normalizedRole = input.teamMembershipRole;
+    const normalizedStaffCapabilities = normalizeStaffCapabilities(input.staffCapabilities);
     const normalizedTargetEmail = normalizeEmail(input.targetEmail);
     const normalizedPilotId = normalizeString(input.pilotId);
     const normalizedCohortId = normalizeString(input.cohortId);
@@ -2986,7 +2991,11 @@ export const pulseCheckProvisioningService = {
       input.redemptionMode === 'single-use' ? 'single-use' : 'general';
     const shouldRevokeExistingMatchingLinks = input.revokeExistingMatchingLinks !== false;
     const normalizedOrganizationId = normalizeString(input.organizationId);
-    const inviteQuerySnapshot = await getDocs(collection(db, INVITE_LINKS_COLLECTION));
+    // Scope the de-dupe scan to this team rather than reading the whole collection
+    // so coach-side callers stay within team-scoped read rules (and it's cheaper).
+    const inviteQuerySnapshot = await getDocs(
+      query(collection(db, INVITE_LINKS_COLLECTION), where('teamId', '==', normalizedTeamId))
+    );
     const matchingLinkSnapshots = inviteQuerySnapshot.docs.filter((snapshot) => {
       const link = snapshot.data() as Record<string, any>;
       return (
@@ -3065,6 +3074,7 @@ export const pulseCheckProvisioningService = {
         cohortId: normalizedCohortId,
         cohortName: normalizeString(input.cohortName),
         teamMembershipRole: normalizedRole,
+        staffCapabilities: normalizedStaffCapabilities,
         targetEmail: normalizedTargetEmail,
         recipientName: normalizeString(input.recipientName),
         invitedTitle: normalizeString(input.invitedTitle),
@@ -3104,6 +3114,7 @@ export const pulseCheckProvisioningService = {
       cohortId: normalizedCohortId,
       cohortName: normalizeString(input.cohortName),
       teamMembershipRole: normalizedRole,
+      staffCapabilities: normalizedStaffCapabilities,
       targetEmail: normalizedTargetEmail,
       recipientName: normalizeString(input.recipientName),
       invitedTitle: normalizeString(input.invitedTitle),
@@ -3499,8 +3510,28 @@ export const pulseCheckProvisioningService = {
 
   async updateTeamMembershipAccess(input: UpdatePulseCheckTeamMembershipAccessInput): Promise<void> {
     const membershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, normalizeString(input.teamMembershipId));
+
+    // Staff capability edit (Coach Dashboard → Staff): persist capabilities and
+    // re-derive the legacy role / operatingRole / rosterVisibilityScope so report
+    // routing and iOS gating stay correct.
+    if (input.staffCapabilities) {
+      const capabilities = normalizeStaffCapabilities(input.staffCapabilities);
+      const derived = deriveMembershipAccessFromCapabilities(capabilities);
+      await updateDoc(membershipRef, {
+        staffCapabilities: capabilities,
+        role: derived.teamMembershipRole,
+        operatingRole: derived.operatingRole,
+        rosterVisibilityScope: derived.rosterVisibilityScope,
+        allowedAthleteIds: derived.rosterVisibilityScope === 'assigned' ? [...(input.allowedAthleteIds || [])] : [],
+        ...(input.permissionSetId ? { permissionSetId: normalizeString(input.permissionSetId) } : {}),
+        updatedAt: serverTimestamp(),
+      });
+      return;
+    }
+
+    // Roster-scope edit (team-workspace): direct rosterVisibilityScope update.
     await updateDoc(membershipRef, {
-      rosterVisibilityScope: input.rosterVisibilityScope,
+      rosterVisibilityScope: input.rosterVisibilityScope || 'team',
       allowedAthleteIds: input.rosterVisibilityScope === 'assigned' ? [...(input.allowedAthleteIds || [])] : [],
       ...(input.permissionSetId ? { permissionSetId: normalizeString(input.permissionSetId) } : {}),
       updatedAt: serverTimestamp(),
@@ -3831,6 +3862,10 @@ export const pulseCheckProvisioningService = {
           if (!organizationId || !teamId || !teamMembershipRole) {
             throw new Error('Invite is missing organization, team, or role context.');
           }
+          const staffCapabilities = normalizeStaffCapabilities(invite.staffCapabilities);
+          const derivedStaffAccess = staffCapabilities.length
+            ? deriveMembershipAccessFromCapabilities(staffCapabilities)
+            : null;
 
           const organizationRef = doc(db, ORGANIZATIONS_COLLECTION, organizationId);
           const teamRef = doc(db, TEAMS_COLLECTION, teamId);
@@ -3951,7 +3986,12 @@ export const pulseCheckProvisioningService = {
               role: teamMembershipRole,
               title: invitedTitle || null,
               permissionSetId: permissionSetByRole[teamMembershipRole] || 'pulsecheck-team-member-v1',
-              rosterVisibilityScope: teamMembershipRole === 'athlete' ? 'none' : 'team',
+              rosterVisibilityScope: derivedStaffAccess
+                ? derivedStaffAccess.rosterVisibilityScope
+                : teamMembershipRole === 'athlete' ? 'none' : 'team',
+              ...(derivedStaffAccess
+                ? { staffCapabilities, operatingRole: derivedStaffAccess.operatingRole }
+                : {}),
               allowedAthleteIds: [],
               athleteOnboarding: nextAthleteOnboarding,
               onboardingStatus: nextMembershipOnboardingStatus,

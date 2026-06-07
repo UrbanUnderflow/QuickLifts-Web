@@ -94,6 +94,64 @@ export const TRAINING_STEPS: DashboardTrainingStep[] = [
       { atFrac: 0.85, kind: 'highlight', selector: '[data-invite-copy]' },
     ],
   },
+  {
+    id: 'train-nora',
+    audio: '/audio/nora/nora-dashboard-train-intro.mp3',
+    title: 'Train Nora',
+    body:
+      "Teach me just about anything — your practice plan, the schedule, meeting times, team rules, even \"pack competition shoes the night before a game.\" Whatever you teach me, your athletes can ask me about.",
+    highlights: [
+      { atFrac: 0.0, kind: 'nav', selector: '[data-nav="nora"]' },
+      { atFrac: 0.22, kind: 'highlight', selector: '[data-nora-explainer]' },
+    ],
+  },
+  {
+    id: 'train-nora-modalities',
+    audio: '/audio/nora/nora-dashboard-train-modalities.mp3',
+    title: 'However it suits you',
+    body:
+      "Drag and drop PDFs and images right onto the vault, jot down a quick note, or just start a chat with me directly. Whatever's easiest for you.",
+    highlights: [
+      { atFrac: 0.2, kind: 'highlight', selector: '[data-nora-dropzone]' },
+      { atFrac: 0.5, kind: 'highlight', selector: '[data-nora-note]' },
+      { atFrac: 0.7, kind: 'highlight', selector: '[data-nora-chat]' },
+    ],
+  },
+  {
+    id: 'schedule',
+    audio: '/audio/nora/nora-dashboard-schedule.mp3',
+    title: 'Schedule',
+    body:
+      "A dedicated tab for your calendar. Paste a link to your team schedule, drag and drop a schedule PDF, or connect the scheduling tool your department already uses — our team wires that up during pilot setup.",
+    highlights: [
+      { atFrac: 0.0, kind: 'nav', selector: '[data-nav="schedule"]' },
+      { atFrac: 0.28, kind: 'highlight', selector: '[data-schedule-url]' },
+      { atFrac: 0.46, kind: 'highlight', selector: '[data-schedule-dropzone]' },
+      { atFrac: 0.62, kind: 'highlight', selector: '[data-schedule-integrations]' },
+    ],
+  },
+  {
+    id: 'reports',
+    audio: '/audio/nora/nora-dashboard-reports-intro.mp3',
+    title: 'Reports',
+    body:
+      "I send a report on whatever cadence fits — weekly or daily — straight to your inbox. Come to this tab anytime to read the current one or look back through past reports.",
+    highlights: [
+      { atFrac: 0.0, kind: 'nav', selector: '[data-nav="reports"]' },
+      { atFrac: 0.4, kind: 'highlight', selector: '[data-report-row]' },
+    ],
+  },
+  {
+    id: 'reports-detail',
+    audio: '/audio/nora/nora-dashboard-reports-detail.mp3',
+    title: 'The Sports Intelligence layer',
+    body:
+      "These aren't generic sport-psychology tips. The insights are shaped by your athletes' sport, your team dynamics, your training style, and how they behave — plus their physiology from their performance devices: recovery and training load. That's how I connect body to mind, so this work carries over to competition.",
+    highlights: [
+      // Open the latest report so the detail narration has it on screen.
+      { atFrac: 0.0, kind: 'click', selector: '[data-report-row]' },
+    ],
+  },
 ];
 
 const PURPLE = '#a78bfa';
