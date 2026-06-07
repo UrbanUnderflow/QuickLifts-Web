@@ -3,6 +3,7 @@ import Head from 'next/head';
 import { CoachDashboardShell } from './dashboard-v2';
 import { coachService, DailySentimentRecord } from '../../api/firebase/coach/service';
 import { noraVaultService, NoraVaultEntry } from '../../api/firebase/coach/noraVaultService';
+import NoraDashboardTraining from '../../components/coach/NoraDashboardTraining';
 
 const DEMO_COACH_ID = 'demo-coach';
 
@@ -220,6 +221,7 @@ const CoachDashboardV2Demo: React.FC = () => {
           revenueSharePct={20}
         />
       )}
+      {mockReady && <NoraDashboardTraining />}
     </>
   );
 };

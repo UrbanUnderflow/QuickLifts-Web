@@ -31,7 +31,9 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import CoachProtectedRoute from '../../components/CoachProtectedRoute';
-import AthleteCard from '../../components/AthleteCard';
+import AthleteReadinessCard from '../../components/AthleteReadinessCard';
+import { escalationRecordsService } from '../../api/firebase/escalation/service';
+import { loadTeamDeviceStatuses } from '../../api/firebase/pulsecheckDeviceMonitor';
 import { useUser } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
@@ -40,6 +42,7 @@ import {
   type CoachReportListItem,
 } from '../../api/firebase/pulsecheckCoachReportAccess';
 import { noraVaultService, NoraVaultEntry } from '../../api/firebase/coach/noraVaultService';
+import ScheduleBoard from '../../components/coach/ScheduleBoard';
 
 type CoachAthlete = {
   id: string;
@@ -51,6 +54,10 @@ type CoachAthlete = {
   totalSessions: number;
   weeklyGoalProgress: number;
   sentimentScore: number;
+  // Real-data enrichment (live dashboard). Optional so the demo path can omit them.
+  activeEscalationTier?: number;
+  deviceCoveragePct?: number;
+  deviceConnected?: boolean;
 };
 
 type StatusKey = 'optimal' | 'flagged' | 'elevated' | 'escalated' | 'pending';
@@ -209,6 +216,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
         return (
           <button
             key={item.key}
+            data-nav={item.key}
             onClick={() => {
               setView(item.key);
               onPick?.();
@@ -343,7 +351,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                   transition={{ duration: 0.2 }}
                 >
                   {view === 'home' && (
-                    <HomeSection athletes={athletes} loading={loadingAthletes} />
+                    <HomeSection athletes={athletes} loading={loadingAthletes} isDemo={isDemo} />
                   )}
                   {view === 'alerts' && <AlertsSection athletes={athletes} loading={loadingAthletes} />}
                   {view === 'inbox' && <InboxSection athletes={athletes} loading={loadingAthletes} isDemo={isDemo} />}
@@ -352,7 +360,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                   {view === 'nora' && (
                     <TrainNoraSection coachId={coachId} coachName={coachName} athletes={athletes} />
                   )}
-                  {view === 'schedule' && <ScheduleSection />}
+                  {view === 'schedule' && <ScheduleSection coachId={coachId} isDemo={isDemo} />}
                   {view === 'reports' && <ReportsSection coachId={coachId} />}
                   {view === 'earnings' && earningsEnabled && (
                     <EarningsSection athletes={athletes} isDemo={isDemo} revenueSharePct={revenueSharePct} />
@@ -382,8 +390,46 @@ const CoachDashboardV2: React.FC = () => {
       if (!currentUser?.id) return;
       setLoadingAthletes(true);
       try {
-        const list = await coachService.getConnectedAthletes(currentUser.id);
-        if (!cancelled) setAthletes(list as CoachAthlete[]);
+        const list = (await coachService.getConnectedAthletes(currentUser.id)) as CoachAthlete[];
+        // Real-data enrichment: active escalation tier + device wear. Both are
+        // single batch queries; best-effort so a failure never blocks the board.
+        let enriched = list;
+        try {
+          const [escalations, memberships] = await Promise.all([
+            escalationRecordsService.getActiveForCoach(currentUser.id).catch(() => []),
+            pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id).catch(() => []),
+          ]);
+          const tierByAthlete = new Map<string, number>();
+          for (const r of escalations) {
+            const prev = tierByAthlete.get(r.userId) ?? 0;
+            if ((r.tier ?? 0) > prev) tierByAthlete.set(r.userId, r.tier ?? 0);
+          }
+          const coachTeamIds = Array.from(
+            new Set(memberships.filter((m) => m.role !== 'athlete').map((m) => m.teamId))
+          );
+          const deviceByAthlete = new Map<string, { pct: number; connected: boolean }>();
+          const deviceResults = await Promise.all(
+            coachTeamIds.map((t) => loadTeamDeviceStatuses(t).catch(() => null))
+          );
+          for (const res of deviceResults) {
+            if (!res) continue;
+            for (const s of res.statuses) {
+              deviceByAthlete.set(s.athleteUserId, {
+                pct: s.wearCoveragePct,
+                connected: s.connectionStatus === 'synced',
+              });
+            }
+          }
+          enriched = list.map((a) => ({
+            ...a,
+            activeEscalationTier: tierByAthlete.get(a.id) ?? 0,
+            deviceCoveragePct: deviceByAthlete.get(a.id)?.pct,
+            deviceConnected: deviceByAthlete.get(a.id)?.connected,
+          }));
+        } catch (enrichErr) {
+          console.warn('[dashboard-v2] athlete enrichment failed (non-blocking)', enrichErr);
+        }
+        if (!cancelled) setAthletes(enriched);
       } catch (err) {
         console.error('[dashboard-v2] failed to load athletes', err);
         if (!cancelled) setAthletes([]);
@@ -450,9 +496,10 @@ const CoachDashboardV2: React.FC = () => {
 // Home
 // ---------------------------------------------------------------------------
 
-const HomeSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean }> = ({
+const HomeSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean; isDemo?: boolean }> = ({
   athletes,
   loading,
+  isDemo,
 }) => {
   const counts = useMemo(() => {
     const c: Record<StatusKey, number> = {
@@ -468,14 +515,40 @@ const HomeSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean }> = ({
     return c;
   }, [athletes]);
 
+  const adherence = useMemo(() => {
+    const total = athletes.length || 1;
+    const pct = (n: number) => Math.round((n / total) * 100);
+    if (isDemo) {
+      // Demo proxies so the walkthrough shows all three bars.
+      const checkedIn = athletes.filter((a) => deriveStatus(a) !== 'pending').length;
+      const deviceWorn = athletes.filter((a) => a.conversationCount > 0 || (a.weeklyGoalProgress ?? 0) > 0).length;
+      const modulesDone = athletes.filter((a) => (a.totalSessions ?? 0) >= 10).length;
+      return { checkIn: pct(checkedIn), device: pct(deviceWorn), modules: pct(modulesDone) as number | undefined };
+    }
+    // Live: real signals only. Check-in = checked in today; device = average wear
+    // coverage. Module completion has no batch source yet, so it's omitted rather
+    // than faked.
+    const checkedInToday = athletes.filter((a) => daysSince(a.lastActiveDate) === 0).length;
+    const withDevice = athletes.filter((a) => typeof a.deviceCoveragePct === 'number');
+    const device = withDevice.length
+      ? Math.round(withDevice.reduce((s, a) => s + (a.deviceCoveragePct || 0), 0) / withDevice.length)
+      : 0;
+    return { checkIn: pct(checkedInToday), device, modules: undefined as number | undefined };
+  }, [athletes, isDemo]);
+
   return (
     <div className="space-y-6">
       {/* Stat tiles */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatTile label="Total Athletes" value={athletes.length} accent />
-        <StatTile label="Optimal" value={counts.optimal} dot="bg-green-400" />
-        <StatTile label="Needs Attention" value={counts.elevated + counts.escalated} dot="bg-orange-400" />
-        <StatTile label="Pending Check-In" value={counts.pending} dot="bg-zinc-500" />
+        <StatTile id="tile-total" label="Total Athletes" value={athletes.length} accent />
+        <StatTile id="tile-optimal" label="Optimal" value={counts.optimal} dot="bg-green-400" />
+        <StatTile id="tile-attention" label="Needs Attention" value={counts.elevated + counts.escalated} dot="bg-orange-400" />
+        <AdherenceTile
+          id="tile-adherence"
+          checkIn={adherence.checkIn}
+          device={adherence.device}
+          modules={adherence.modules}
+        />
       </div>
 
       {loading ? (
@@ -489,8 +562,9 @@ const HomeSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean }> = ({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {athletes.map((a) => (
-            <AthleteCard
+            <AthleteReadinessCard
               key={a.id}
+              demo={isDemo}
               athlete={{
                 id: a.id,
                 displayName: a.displayName,
@@ -501,6 +575,9 @@ const HomeSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean }> = ({
                 weeklyGoalProgress: a.weeklyGoalProgress,
                 sentimentScore: a.sentimentScore,
                 lastActiveDate: a.lastActiveDate,
+                activeEscalationTier: a.activeEscalationTier,
+                deviceCoveragePct: a.deviceCoveragePct,
+                deviceConnected: a.deviceConnected,
               }}
             />
           ))}
@@ -840,8 +917,9 @@ const RosterSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean }> = 
     return c;
   }, [rows]);
 
-  const checkedIn = athletes.length - counts.pending;
-  const pct = athletes.length ? Math.round((checkedIn / athletes.length) * 100) : 0;
+  // "Checked in today" = athletes whose last Nora check-in was today.
+  const checkedInToday = athletes.filter((a) => daysSince(a.lastActiveDate) === 0).length;
+  const pct = athletes.length ? Math.round((checkedInToday / athletes.length) * 100) : 0;
 
   if (loading) return <LoadingBlock label="Building team roster…" />;
 
@@ -874,7 +952,7 @@ const RosterSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean }> = 
       {/* Progress */}
       <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 flex items-center gap-4">
         <div className="text-sm text-zinc-300 whitespace-nowrap">
-          <span className="text-white font-bold">{checkedIn}</span>/{athletes.length} checked in
+          <span className="text-white font-bold">{checkedInToday}</span>/{athletes.length} checked in today
         </div>
         <div className="flex-1 h-2 bg-zinc-700/50 rounded-full overflow-hidden">
           <motion.div
@@ -893,7 +971,7 @@ const RosterSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean }> = 
         <div className="grid grid-cols-[1fr_110px_90px] sm:grid-cols-[1fr_1fr_120px] gap-0 bg-zinc-800/60 border-b border-zinc-700/30 px-3 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wide">
           <div>Player</div>
           <div>Status</div>
-          <div className="text-right">Last Active</div>
+          <div className="text-right">Last Check-in</div>
         </div>
         <div className="max-h-[520px] overflow-y-auto">
           {rows.map(({ a, status }, i) => {
@@ -906,9 +984,22 @@ const RosterSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean }> = 
                 transition={{ delay: Math.min(i * 0.02, 0.4) }}
                 className="grid grid-cols-[1fr_110px_90px] sm:grid-cols-[1fr_1fr_120px] gap-0 items-center px-3 py-2.5 border-b border-zinc-800/50 text-sm hover:bg-zinc-800/40"
               >
-                <div className="min-w-0">
-                  <div className="font-medium text-white truncate">{a.displayName}</div>
-                  <div className="text-[11px] text-zinc-500 truncate">{a.email}</div>
+                <div className="flex min-w-0 items-center gap-2.5">
+                  {a.profileImageUrl ? (
+                    <img
+                      src={a.profileImageUrl}
+                      alt={a.displayName}
+                      className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-white/10"
+                    />
+                  ) : (
+                    <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-zinc-800 text-[11px] font-semibold text-zinc-300 ring-1 ring-white/10">
+                      {initialsOf(a.displayName)}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <div className="font-medium text-white truncate">{a.displayName}</div>
+                    <div className="text-[11px] text-zinc-500 truncate">{a.email}</div>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_META[status].dot}`} />
@@ -1634,12 +1725,8 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
 // Library / Schedule / Settings (lean but functional shells)
 // ---------------------------------------------------------------------------
 
-const ScheduleSection: React.FC = () => (
-  <EmptyBlock
-    icon={Calendar}
-    title="Schedule"
-    body="Add team events, practices, and meetings here. Tip: the same details you add in Train Nora (e.g. meeting times) are what Nora uses to answer athlete questions."
-  />
+const ScheduleSection: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coachId, isDemo }) => (
+  <ScheduleBoard coachId={coachId} isDemo={isDemo} />
 );
 
 const SettingsSection: React.FC<{ coachName: string; email?: string }> = ({ coachName, email }) => (
@@ -1662,13 +1749,14 @@ const SettingsSection: React.FC<{ coachName: string; email?: string }> = ({ coac
 // Small shared pieces
 // ---------------------------------------------------------------------------
 
-const StatTile: React.FC<{ label: string; value: number | string; accent?: boolean; dot?: string }> = ({
+const StatTile: React.FC<{ label: string; value: number | string; accent?: boolean; dot?: string; id?: string }> = ({
   label,
   value,
   accent,
   dot,
+  id,
 }) => (
-  <div className="rounded-xl bg-zinc-900/50 border border-white/5 p-4">
+  <div id={id} className="rounded-xl bg-zinc-900/50 border border-white/5 p-4">
     <div className="flex items-center gap-2 mb-1">
       {dot && <span className={`w-2 h-2 rounded-full ${dot}`} />}
       <span className="text-xs text-zinc-500">{label}</span>
@@ -1676,6 +1764,47 @@ const StatTile: React.FC<{ label: string; value: number | string; accent?: boole
     <div className={`text-2xl font-bold ${accent ? 'text-[#E0FE10]' : 'text-white'}`}>{value}</div>
   </div>
 );
+
+// Adherence — are athletes actually doing what they're supposed to? Tracks
+// check-ins, device wear, and module (simulation + protocol) completion.
+// NOTE: check-in % is derived from real status; device & module % currently use
+// activity proxies until per-athlete device/module telemetry is wired in.
+const AdherenceTile: React.FC<{
+  id?: string;
+  checkIn: number;
+  device: number;
+  modules?: number;
+}> = ({ id, checkIn, device, modules }) => {
+  const rows: { label: string; value: number }[] = [
+    { label: 'Checked in', value: checkIn },
+    { label: 'Device worn', value: device },
+    ...(modules !== undefined ? [{ label: 'Modules done', value: modules }] : []),
+  ];
+  const overall = Math.round(rows.reduce((s, r) => s + r.value, 0) / rows.length);
+  return (
+    <div id={id} className="rounded-xl bg-zinc-900/50 border border-white/5 p-4">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="w-2 h-2 rounded-full bg-[#E0FE10]" />
+        <span className="text-xs text-zinc-500">Adherence</span>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <span className="text-2xl font-bold text-white">{overall}</span>
+        <span className="text-sm font-semibold text-zinc-500">%</span>
+      </div>
+      <div className="mt-2 space-y-1">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-center gap-2">
+            <span className="w-[68px] flex-none text-[10px] uppercase tracking-wide text-zinc-500">{r.label}</span>
+            <span className="h-1 flex-1 overflow-hidden rounded-full bg-zinc-700/40">
+              <span className="block h-full rounded-full bg-[#E0FE10]/70" style={{ width: `${r.value}%` }} />
+            </span>
+            <span className="w-7 flex-none text-right text-[10px] font-medium text-zinc-400">{r.value}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 const MetricTile: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
   <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 text-center">
