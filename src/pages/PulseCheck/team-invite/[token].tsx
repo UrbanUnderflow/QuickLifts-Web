@@ -42,6 +42,7 @@ type TeamInvitePageProps = {
     teamMembershipRole: PulseCheckTeamMembershipRole;
     invitedTitle: string;
     recipientName: string;
+    prefilledProfileImageUrl: string;
     previewTitle: string;
     previewDescription: string;
     previewImageUrl: string;
@@ -332,7 +333,9 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
       id: user.uid,
       email: user.email || createForm.email.trim().toLowerCase(),
       username: normalizedName,
-      displayName: normalizedName,
+      // Preloaded name (set by the inviting coach) lands as the display name so it
+      // appears already filled in; falls back to the generated username.
+      displayName: invite.recipientName?.trim() || normalizedName,
       role: isAthlete ? 'athlete' : 'coach',
       registrationComplete: true,
       subscriptionType: isAthlete && teamPlanBypassesPaywall ? SubscriptionType.teamPlan : SubscriptionType.unsubscribed,
@@ -342,7 +345,8 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
       bodyWeight: [],
       macros: {},
       profileImage: {
-        profileImageURL: '',
+        // Preloaded staff photo (if the coach uploaded one when inviting).
+        profileImageURL: invite.prefilledProfileImageUrl || '',
         imageOffsetWidth: 0,
         imageOffsetHeight: 0,
       },
@@ -609,7 +613,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   }, [completionHref, redeemedState, redirectingAfterRedeem, router]);
 
   return (
-    <div className="min-h-screen bg-[#05070c] text-white">
+    <div className="relative min-h-screen overflow-hidden text-white" style={{ background: '#070711', fontFamily: 'Switzer, sans-serif' }}>
       <Head>
         <title>{invite.previewTitle}</title>
         <meta name="robots" content="noindex,nofollow" />
@@ -627,13 +631,26 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
         <meta name="twitter:title" content={invite.previewTitle} />
         <meta name="twitter:description" content={invite.previewDescription} />
         <meta name="twitter:image" content={invite.previewImageUrl} />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..700&display=swap"
+          rel="stylesheet"
+        />
+        <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700,800,900&display=swap" />
       </Head>
 
-      <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center px-4 py-10 md:px-6">
+      <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.20) 0%, transparent 70%)' }} />
+
+      <main className="relative mx-auto w-full max-w-6xl px-4 py-8 md:px-6 md:py-10">
+        <div className="mb-6 flex items-center gap-3">
+          <img src="/pulsecheck-logo.svg" alt="PulseCheck" width={36} height={36} className="rounded-[10px]" />
+          <span className="text-base font-bold tracking-tight" style={{ fontFamily: 'Switzer, sans-serif' }}>PulseCheck</span>
+        </div>
         <section className="grid w-full gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-          <div className="rounded-[32px] border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.12),_transparent_42%),#09111e] p-8 shadow-2xl">
+          <div className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,0.14),_transparent_42%),#0B0B1C] p-8 shadow-2xl">
               <div className="space-y-5">
-              <div className="overflow-hidden rounded-[24px] border border-cyan-500/20 bg-black/20">
+              <div className="overflow-hidden rounded-[24px] border border-white/10 bg-black/20">
                 <img
                   src={invite.previewImageUrl}
                   alt={invite.previewTitle}
@@ -641,8 +658,8 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 />
               </div>
 
-              <div className="inline-flex rounded-2xl border border-cyan-400/25 bg-cyan-400/10 p-3">
-                <Users className="h-6 w-6 text-cyan-200" />
+              <div className="inline-flex rounded-2xl border border-[#7C3AED]/30 bg-[#7C3AED]/10 p-3">
+                <Users className="h-6 w-6 text-[#a78bfa]" />
               </div>
 
               <div className="space-y-2">
@@ -657,7 +674,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     </>
                   ) : (
                     <>
-                      This invite grants <span className="font-medium text-white">{roleLabel[invite.teamMembershipRole]}</span> access
+                      You&apos;ve been invited to join <span className="font-medium text-white">{invite.teamName}</span>{' '}
                       inside <span className="font-medium text-white">{invite.organizationName}</span>.
                     </>
                   )}
@@ -666,18 +683,12 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
 
               {shouldPreferAppDownload ? null : (
                 <>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {/* Role/permissions are deliberately not shown to the invitee —
+                      that detail is reserved for the admin who sent the invite. */}
+                  <div className="grid grid-cols-1 gap-4">
                     <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
                       <div className="flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4 text-cyan-200" />
-                        <p className="text-sm font-semibold text-white">Role</p>
-                      </div>
-                      <p className="mt-3 text-sm text-zinc-300">{roleLabel[invite.teamMembershipRole]}</p>
-                    </div>
-
-                    <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                      <div className="flex items-center gap-2">
-                        <MailPlus className="h-4 w-4 text-cyan-200" />
+                        <MailPlus className="h-4 w-4 text-[#a78bfa]" />
                         <p className="text-sm font-semibold text-white">{isGeneralInvite ? 'Link Type' : 'Target Email'}</p>
                       </div>
                       <p className="mt-3 text-sm text-zinc-300">
@@ -706,7 +717,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   ) : null}
 
                   {isGeneralInvite ? (
-                    <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/[0.06] p-4 text-sm leading-7 text-cyan-50">
+                    <div className="rounded-2xl border border-[#7C3AED]/20 bg-[#7C3AED]/[0.06] p-4 text-sm leading-7 text-[#a78bfa]">
                       This is a reusable pilot access link. Each athlete who opens it can join this pilot from the same QR code or shared URL.
                     </div>
                   ) : null}
@@ -740,7 +751,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
             </div>
           </div>
 
-          <div className="rounded-[32px] border border-zinc-800 bg-[#090f1c] p-8 shadow-2xl">
+          <div className="rounded-[32px] border border-white/10 bg-[#0B0B1C] p-8 shadow-2xl">
             {message ? (
               <div
                 className={`mb-5 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
@@ -758,7 +769,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
               <button
                 type="button"
                 onClick={() => updateWebOnboardingPreference(false)}
-                className="mb-5 inline-flex items-center gap-2 rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/15"
+                className="mb-5 inline-flex items-center gap-2 rounded-2xl border border-[#7C3AED]/30 bg-[#7C3AED]/10 px-4 py-3 text-sm font-semibold text-[#a78bfa] transition hover:bg-[#7C3AED]/15"
               >
                 <Smartphone className="h-4 w-4" />
                 Prefer the iPhone app instead
@@ -800,8 +811,8 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
               </div>
             ) : shouldShowDownloadFirst ? (
               <div className="space-y-6">
-                <div className="inline-flex rounded-2xl border border-cyan-400/25 bg-cyan-400/10 p-3">
-                  <Smartphone className="h-6 w-6 text-cyan-200" />
+                <div className="inline-flex rounded-2xl border border-[#7C3AED]/30 bg-[#7C3AED]/10 p-3">
+                  <Smartphone className="h-6 w-6 text-[#a78bfa]" />
                 </div>
 
                 <div>
@@ -814,7 +825,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   </p>
                 </div>
 
-                <div className="rounded-3xl border border-cyan-400/15 bg-[linear-gradient(180deg,rgba(34,211,238,0.16),rgba(8,15,28,0.9))] p-5">
+                <div className="rounded-3xl border border-[#7C3AED]/15 bg-[linear-gradient(180deg,rgba(124,58,237,0.18),rgba(11,11,28,0.9))] p-5">
                   <div className="space-y-3">
                     <div className="text-sm font-semibold text-white">Recommended path</div>
                     <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-200">
@@ -831,12 +842,12 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     </a>
                     <a
                       href={invite.activationUrl}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-300/35 bg-cyan-400/[0.12] px-4 py-3 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.18]"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#7C3AED]/35 bg-[#7C3AED]/[0.12] px-4 py-3 text-sm font-semibold text-[#a78bfa] transition hover:bg-[#7C3AED]/[0.18]"
                     >
                       Join Now
                       <ArrowRight className="h-4 w-4" />
                     </a>
-                    <p className="text-xs uppercase tracking-[0.16em] text-cyan-100/70">Available on iPhone</p>
+                    <p className="text-xs uppercase tracking-[0.16em] text-[#a78bfa]/70">Available on iPhone</p>
                   </div>
                 </div>
 
@@ -899,7 +910,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                       type="button"
                       onClick={handleRedeemSignedInUser}
                       disabled={submitting}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-semibold text-black transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
                       {submitting ? 'Joining...' : 'Accept Invite'}
@@ -931,7 +942,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     onClick={() => setMode('create-account')}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
                       mode === 'create-account'
-                        ? 'border-cyan-300 bg-cyan-400/[0.12] text-white'
+                        ? 'border-[#7C3AED] bg-[#7C3AED]/[0.12] text-white'
                         : 'border-zinc-800 bg-black/20 text-zinc-300 hover:border-zinc-700'
                     }`}
                   >
@@ -947,7 +958,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     onClick={() => setMode('sign-in')}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
                       mode === 'sign-in'
-                        ? 'border-cyan-300 bg-cyan-400/[0.12] text-white'
+                        ? 'border-[#7C3AED] bg-[#7C3AED]/[0.12] text-white'
                         : 'border-zinc-800 bg-black/20 text-zinc-300 hover:border-zinc-700'
                     }`}
                   >
@@ -1005,7 +1016,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-semibold text-black transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
                       {submitting ? 'Creating Account...' : 'Create Account and Join'}
@@ -1037,7 +1048,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-semibold text-black transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
                       {submitting ? 'Signing In...' : 'Sign In and Join'}
@@ -1173,6 +1184,7 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
           teamMembershipRole: (String(invite.teamMembershipRole || 'coach') as PulseCheckTeamMembershipRole),
           invitedTitle: String(invite.invitedTitle || ''),
           recipientName: String(invite.recipientName || ''),
+          prefilledProfileImageUrl: String(invite.prefilledProfileImageUrl || ''),
           previewTitle,
           previewDescription,
           previewImageUrl,

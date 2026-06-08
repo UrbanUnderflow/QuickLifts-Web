@@ -15,13 +15,14 @@ export type NoraDynamicLine = {
 
 /**
  * The line Nora speaks the moment a coach opens their activation link.
- * e.g. "Welcome Coach Tre! Nora here, Let's get you onboarded."
+ * e.g. "Welcome, Coach Tre! Nora here. Let's get you signed up, and I'll walk
+ * you through your setup."
  */
 export function buildNoraOnboardingWelcome(coachName?: string): string {
   const name = (coachName || '').trim().split(/\s+/)[0] || '';
   return name
-    ? `Welcome Coach ${name}! Nora here, Let's get you onboarded.`
-    : `Welcome, Coach! Nora here, Let's get you onboarded.`;
+    ? `Welcome, Coach ${name}! Nora here. Let's get you signed up, and I'll walk you through your setup.`
+    : `Welcome, Coach! Nora here. Let's get you signed up, and I'll walk you through your setup.`;
 }
 
 // Registry of dynamic Nora lines surfaced in the AI voice library (/admin/ai-voice).

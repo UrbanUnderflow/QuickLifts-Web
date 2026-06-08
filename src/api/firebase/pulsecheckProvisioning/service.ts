@@ -2866,6 +2866,7 @@ export const pulseCheckProvisioningService = {
     organizationId: string;
     teamId: string;
     targetEmail?: string;
+    staffCapabilities?: StaffPermission[];
     createdByUserId?: string;
     createdByEmail?: string;
   }): Promise<string> {
@@ -2873,12 +2874,20 @@ export const pulseCheckProvisioningService = {
     const baseUrl = getCurrentSiteOrigin();
     const activationUrl = `${baseUrl}/PulseCheck/admin-activation/${token}${shouldStampDevFirebaseLinks() ? '?devFirebase=1' : ''}`;
 
+    // The admin always carries the administrative capability; coaching / athletic
+    // trainer layer on top. These are copied onto the membership at redeem, where
+    // operatingRole + rosterVisibilityScope are derived from them.
+    const staffCapabilities = Array.from(
+      new Set<StaffPermission>(['administrative', ...normalizeStaffCapabilities(input.staffCapabilities)])
+    );
+
     const payload = {
       inviteType: 'admin-activation',
       status: 'active',
       organizationId: normalizeString(input.organizationId),
       teamId: normalizeString(input.teamId),
       targetEmail: normalizeString(input.targetEmail),
+      staffCapabilities,
       token,
       activationUrl,
       createdByUserId: normalizeString(input.createdByUserId),
@@ -3078,6 +3087,7 @@ export const pulseCheckProvisioningService = {
         targetEmail: normalizedTargetEmail,
         recipientName: normalizeString(input.recipientName),
         invitedTitle: normalizeString(input.invitedTitle),
+        prefilledProfileImageUrl: normalizeString(input.prefilledProfileImageUrl),
         commercialSnapshot,
         token,
         activationUrl,
@@ -3118,6 +3128,7 @@ export const pulseCheckProvisioningService = {
       targetEmail: normalizedTargetEmail,
       recipientName: normalizeString(input.recipientName),
       invitedTitle: normalizeString(input.invitedTitle),
+      prefilledProfileImageUrl: normalizeString(input.prefilledProfileImageUrl),
       commercialSnapshot,
       token,
       activationUrl,
@@ -3152,7 +3163,9 @@ export const pulseCheckProvisioningService = {
     const phone = normalizeString(input.phone);
     await updateDoc(membershipRef, {
       title: normalizeString(input.title),
-      operatingRole: input.operatingRole,
+      // operatingRole is pre-assigned at provisioning/redeem; only overwrite if the
+      // caller explicitly passes one (legacy path), otherwise leave it untouched.
+      ...(input.operatingRole ? { operatingRole: input.operatingRole } : {}),
       notificationPreferences: {
         ...defaultNotificationPreferences(),
         ...(input.notificationPreferences || {}),
@@ -3723,6 +3736,14 @@ export const pulseCheckProvisioningService = {
             { merge: true }
           );
 
+          // Capabilities we pre-assigned at provisioning travel on the invite and
+          // land on the membership here, so the coach never picks an operating role.
+          // The org admin / founder seat always carries the full-access 'admin' grant.
+          const adminStaffCapabilities = Array.from(
+            new Set<StaffPermission>(['admin', ...normalizeStaffCapabilities(invite.staffCapabilities)])
+          );
+          const adminDerivedAccess = deriveMembershipAccessFromCapabilities(adminStaffCapabilities);
+
           transaction.set(
             teamMembershipRef,
             {
@@ -3731,10 +3752,14 @@ export const pulseCheckProvisioningService = {
               userId,
               email: userEmail,
               notificationEmail: resolvedNotificationEmail,
+              // The admin stays team-admin; coaching / athletic-trainer capabilities
+              // layer on via operatingRole + roster scope (both derived).
               role: 'team-admin',
               title: 'Organization Admin',
               permissionSetId: permissionSetByRole['team-admin'],
-              rosterVisibilityScope: 'team',
+              staffCapabilities: adminStaffCapabilities,
+              operatingRole: adminDerivedAccess.operatingRole,
+              rosterVisibilityScope: adminDerivedAccess.rosterVisibilityScope,
               allowedAthleteIds: [],
               onboardingStatus: 'pending-profile',
               grantedByInviteToken: token,

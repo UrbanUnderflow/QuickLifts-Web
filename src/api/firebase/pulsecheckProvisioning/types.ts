@@ -44,15 +44,19 @@ export type PulseCheckTeamMembershipRole =
   | 'support-staff'
   | 'clinician'
   | 'athlete';
-// Coach-facing staff capability model (Coach Dashboard → Staff tab). These three
+// Coach-facing staff capability model (Coach Dashboard → Staff tab). These
 // checkboxes are the authoritative grant; the legacy role / operatingRole /
 // rosterVisibilityScope are derived from them (see staffCapabilities.ts) so
 // report-routing and iOS gating keep working. Multi-select — a person can hold
 // several.
-//  • administrative   → schedule + Train Nora, no athlete data
+//  • admin            → full access: invite staff, assign permissions, every tab
+//  • administrative   → "Manager": schedule + Train Nora, no athlete data
 //  • coaching         → athlete insights, reports, coaching curriculum, check-ins
 //  • athletic_trainer → Tier 3 escalation detail (the medical peek)
-export type StaffPermission = 'administrative' | 'coaching' | 'athletic_trainer';
+// NOTE: the stored key stays 'administrative' (deployed firestore.rules + existing
+// memberships key off it); only its coach-facing label changed to "Manager". The
+// new 'admin' key is the superuser grant — inviting/assigning is admin-only.
+export type StaffPermission = 'admin' | 'administrative' | 'coaching' | 'athletic_trainer';
 export type PulseCheckOnboardingTrackerStepId =
   | 'intake'
   | 'provisioning'
@@ -849,6 +853,9 @@ export interface CreatePulseCheckTeamAccessInviteInput {
   targetEmail?: string;
   recipientName?: string;
   invitedTitle?: string;
+  // Optional profile photo the inviting coach pre-loaded for this staff member;
+  // stamped on the invite and applied to their profile when they redeem.
+  prefilledProfileImageUrl?: string;
   createdByUserId?: string;
   createdByEmail?: string;
 }
@@ -859,7 +866,10 @@ export interface SavePulseCheckPostActivationSetupInput {
   teamMembershipId: string;
   displayName: string;
   title: string;
-  operatingRole: PulseCheckOperatingRole;
+  // Operating role is pre-assigned at provisioning (derived from staff capabilities)
+  // and set on the membership at redeem, so the coach no longer picks it. Optional
+  // here; when omitted, savePostActivationSetup leaves the existing value untouched.
+  operatingRole?: PulseCheckOperatingRole;
   notificationPreferences: PulseCheckNotificationPreferences;
   // E.164 phone for SMS escalation alerts. Required when notificationPreferences.sms is true.
   phone?: string;

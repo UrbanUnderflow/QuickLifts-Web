@@ -8,12 +8,57 @@ import type { PulseCheckNotificationPreferences, PulseCheckOrganization, PulseCh
 import { userService } from '../../api/firebase/user';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 
+// Canonical PulseCheck brand tokens (see public/pulsecheck-design-system.html).
+const PC = {
+  pageBg: '#070711',
+  deepBg: '#0B0B1C',
+  purple: '#7C3AED',
+  purpleSoft: '#a78bfa',
+  cardBorder: 'rgba(255,255,255,0.10)',
+};
+
 const defaultPreferences: PulseCheckNotificationPreferences = {
   email: true,
   sms: false,
   push: true,
   weeklyDigest: true,
 };
+
+const NOTIFICATION_OPTIONS: { key: keyof PulseCheckNotificationPreferences; label: string; description: string }[] = [
+  { key: 'email', label: 'Email updates', description: 'Receive admin and onboarding activity summaries by email.' },
+  { key: 'sms', label: 'SMS escalation alerts', description: 'Turn on urgent text notifications for time-sensitive operational issues.' },
+  { key: 'push', label: 'Push notifications', description: 'Allow live activity prompts inside the PulseCheck experience.' },
+  { key: 'weeklyDigest', label: 'Weekly digest', description: 'Receive a regular recap of onboarding progress and team readiness.' },
+];
+
+// On-brand toggle — matches the activation onboarding (post-activation.tsx).
+const Toggle = ({
+  checked,
+  onChange,
+  label,
+  description,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+  description: string;
+}) => (
+  <button
+    type="button"
+    onClick={onChange}
+    className={`flex w-full items-start justify-between rounded-2xl border px-4 py-4 text-left transition ${
+      checked ? 'border-cyan-300/50 bg-cyan-400/[0.08]' : 'border-zinc-800 bg-black/20 hover:border-zinc-700'
+    }`}
+  >
+    <div>
+      <div className="text-sm font-semibold text-white">{label}</div>
+      <div className="mt-1 text-sm leading-6 text-zinc-400">{description}</div>
+    </div>
+    <div className={`mt-1 flex h-6 w-11 items-center rounded-full p-1 transition ${checked ? 'bg-cyan-300 justify-end' : 'bg-zinc-700 justify-start'}`}>
+      <div className="h-4 w-4 rounded-full bg-black" />
+    </div>
+  </button>
+);
 
 export default function PulseCheckMemberSetupPage() {
   const router = useRouter();
@@ -139,8 +184,8 @@ export default function PulseCheckMemberSetupPage() {
 
   if (currentUserLoading || loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#05070c] text-white">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
+      <div className="flex min-h-screen items-center justify-center text-white" style={{ background: PC.pageBg }}>
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: PC.purpleSoft }} />
       </div>
     );
   }
@@ -149,139 +194,151 @@ export default function PulseCheckMemberSetupPage() {
     return null;
   }
 
+  const inputClass =
+    'w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300';
+
   return (
-    <div className="min-h-screen bg-[#05070c] text-white">
+    <div className="relative min-h-screen overflow-hidden text-white" style={{ background: PC.pageBg, fontFamily: 'Switzer, sans-serif' }}>
       <Head>
         <title>PulseCheck Member Setup</title>
         <meta name="robots" content="noindex,nofollow" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..700&display=swap"
+          rel="stylesheet"
+        />
+        <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700,800,900&display=swap" />
       </Head>
 
-      <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-10 md:px-6">
-        <section className="grid w-full gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <div className="rounded-[32px] border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.12),_transparent_42%),#09111e] p-8 shadow-2xl">
-            <div className="space-y-5">
-              <div className="inline-flex rounded-2xl border border-cyan-400/25 bg-cyan-400/10 p-3">
-                <UserRound className="h-6 w-6 text-cyan-200" />
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Member Setup</p>
-                <h1 className="mt-2 text-3xl font-semibold">{team?.displayName || 'PulseCheck Team'}</h1>
-                <p className="mt-3 text-sm leading-7 text-zinc-300">
-                  Confirm your identity, title, and notification posture before entering the team workspace for {organization?.displayName || 'your organization'}.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-300">
-                Your assigned role is <span className="font-medium text-white">{membership.role}</span>. Roster scope and athlete visibility are controlled by the team admin.
+      <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.20) 0%, transparent 70%)' }} />
+
+      <main className="relative mx-auto w-full max-w-3xl px-4 py-8 md:px-6 md:py-10">
+        {/* Brand + header */}
+        <div className="mb-6 flex flex-col gap-5">
+          <div className="flex items-center gap-3">
+            <img src="/pulsecheck-logo.svg" alt="PulseCheck" width={36} height={36} className="rounded-[10px]" />
+            <span className="text-base font-bold tracking-tight" style={{ fontFamily: 'Switzer, sans-serif' }}>PulseCheck</span>
+          </div>
+          <div>
+            <p className="text-sm font-medium tracking-tight" style={{ color: PC.purpleSoft }}>Welcome to {team?.displayName || 'your team'}</p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl" style={{ fontFamily: 'Switzer, sans-serif' }}>
+              Finish setting up your access
+            </h1>
+          </div>
+          {message ? (
+            <div
+              className={`rounded-2xl border px-4 py-3 text-sm ${
+                message.type === 'success'
+                  ? 'border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-200'
+                  : 'border-red-500/20 bg-red-500/[0.06] text-red-200'
+              }`}
+            >
+              {message.text}
+            </div>
+          ) : null}
+        </div>
+
+        <form onSubmit={handleSubmit} className="rounded-[30px] border p-6" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
+          <div className="flex items-center gap-3">
+            <UserRound className="h-5 w-5" style={{ color: PC.purpleSoft }} />
+            <div>
+              <div className="text-lg font-semibold text-white">Tell us about you</div>
+              <div className="text-sm text-zinc-400">
+                Your assigned access is <span className="font-medium text-zinc-200">{membership.role}</span> — roster scope and athlete visibility are controlled by the team admin.
               </div>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="rounded-[32px] border border-zinc-800 bg-[#090f1c] p-8 shadow-2xl">
-            {message ? (
-              <div
-                className={`mb-5 rounded-2xl border px-4 py-3 text-sm ${
-                  message.type === 'success'
-                    ? 'border-green-500/20 bg-green-500/[0.06] text-green-200'
-                    : 'border-red-500/20 bg-red-500/[0.06] text-red-200'
-                }`}
-              >
-                {message.text}
+          <div className="mt-6 grid gap-5 md:grid-cols-[160px_minmax(0,1fr)]">
+            <div className="rounded-[28px] border border-zinc-800 bg-black/20 p-4">
+              <div className="mx-auto flex h-28 w-28 items-center justify-center overflow-hidden rounded-[24px] border border-zinc-700 bg-zinc-900">
+                {profileImagePreview ? (
+                  <img src={profileImagePreview} alt="Profile preview" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-4xl font-semibold text-zinc-500">
+                    {(form.displayName || currentUser.displayName || currentUser.username || 'U').charAt(0).toUpperCase()}
+                  </span>
+                )}
               </div>
-            ) : null}
+              <label className="mt-4 block cursor-pointer rounded-2xl border border-zinc-700 px-3 py-2 text-center text-sm font-medium text-white transition hover:border-[#7C3AED]">
+                Add Photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] || null;
+                    setProfileImageFile(file);
+                    setProfileImagePreview(file ? URL.createObjectURL(file) : currentUser.profileImage?.profileImageURL || '');
+                  }}
+                />
+              </label>
+            </div>
 
-            <div className="space-y-5">
-              <div className="rounded-[28px] border border-zinc-800 bg-black/20 p-5">
-                <div className="mx-auto flex h-28 w-28 items-center justify-center overflow-hidden rounded-[24px] border border-zinc-700 bg-zinc-900">
-                  {profileImagePreview ? (
-                    <img src={profileImagePreview} alt="Profile preview" className="h-full w-full object-cover" />
-                  ) : (
-                    <span className="text-4xl font-semibold text-zinc-500">
-                      {(form.displayName || currentUser.displayName || currentUser.username || 'U').charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </div>
-                <label className="mt-4 block cursor-pointer rounded-2xl border border-zinc-700 px-3 py-2 text-center text-sm font-medium text-white transition hover:border-cyan-300">
-                  Add Photo
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] || null;
-                      setProfileImageFile(file);
-                      setProfileImagePreview(file ? URL.createObjectURL(file) : currentUser.profileImage?.profileImageURL || '');
-                    }}
-                  />
-                </label>
-              </div>
-
-              <label className="block space-y-2">
-                <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Name</span>
+            <div className="grid gap-4">
+              <label className="space-y-2">
+                <span className="text-xs tracking-normal text-zinc-500">Name</span>
                 <input
                   value={form.displayName}
                   onChange={(event) => setForm((current) => ({ ...current, displayName: event.target.value }))}
-                  className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
+                  className={inputClass}
+                  placeholder="Alex Rivera"
                 />
               </label>
-
-              <label className="block space-y-2">
-                <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Title</span>
+              <label className="space-y-2">
+                <span className="text-xs tracking-normal text-zinc-500">Title</span>
                 <input
                   value={form.title}
                   onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-                  className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
+                  className={inputClass}
                   placeholder="Assistant Coach"
                 />
               </label>
+            </div>
+          </div>
 
-              <div className="rounded-[28px] border border-zinc-800 bg-black/20 p-5">
-                <div className="flex items-center gap-3">
-                  <Bell className="h-5 w-5 text-cyan-300" />
-                  <div className="text-base font-semibold text-white">Notification Preferences</div>
-                </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  {([
-                    ['email', 'Email updates'],
-                    ['sms', 'SMS alerts'],
-                    ['push', 'Push notifications'],
-                    ['weeklyDigest', 'Weekly digest'],
-                  ] as Array<[keyof PulseCheckNotificationPreferences, string]>).map(([key, label]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => handleToggle(key)}
-                      className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                        form.notificationPreferences[key]
-                          ? 'border-cyan-300/50 bg-cyan-400/[0.08] text-white'
-                          : 'border-zinc-800 bg-black/20 text-zinc-400 hover:border-zinc-700'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+          <div className="mt-6 rounded-[28px] border border-zinc-800 bg-black/20 p-5">
+            <div className="flex items-center gap-3">
+              <Bell className="h-5 w-5 text-cyan-300" />
+              <div>
+                <div className="text-base font-semibold text-white">Notification Preferences</div>
+                <div className="text-sm text-zinc-400">Start with sane defaults for ops, staff coordination, and team activity.</div>
               </div>
             </div>
-
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                {saving ? 'Saving...' : 'Complete Member Setup'}
-              </button>
-              <Link
-                href={`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-zinc-700 px-5 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
-              >
-                Skip for Now
-                <ChevronRight className="h-4 w-4" />
-              </Link>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {NOTIFICATION_OPTIONS.map((opt) => (
+                <Toggle
+                  key={opt.key}
+                  checked={form.notificationPreferences[opt.key]}
+                  onChange={() => handleToggle(opt.key)}
+                  label={opt.label}
+                  description={opt.description}
+                />
+              ))}
             </div>
-          </form>
-        </section>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ background: PC.purple }}
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              {saving ? 'Saving…' : 'Complete Member Setup'}
+            </button>
+            <Link
+              href={`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold text-white transition hover:border-white/30"
+              style={{ borderColor: PC.cardBorder }}
+            >
+              Skip for Now
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </form>
       </main>
     </div>
   );

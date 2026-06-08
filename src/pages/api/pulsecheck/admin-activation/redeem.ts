@@ -3,7 +3,12 @@ import admin from '../../../../lib/firebase-admin';
 import {
   getDefaultPulseCheckTeamCommercialConfig,
   type PulseCheckTeamCommercialConfig,
+  type StaffPermission,
 } from '../../../../api/firebase/pulsecheckProvisioning/types';
+import {
+  deriveMembershipAccessFromCapabilities,
+  normalizeStaffCapabilities,
+} from '../../../../api/firebase/pulsecheckProvisioning/staffCapabilities';
 
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
 const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
@@ -198,6 +203,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         { merge: true }
       );
 
+      // Capabilities pre-assigned at provisioning travel on the invite and land on
+      // the membership here, so the coach never has to pick an operating role.
+      // The org admin / founder seat always carries the full-access 'admin' grant.
+      const adminStaffCapabilities = Array.from(
+        new Set<StaffPermission>(['admin', ...normalizeStaffCapabilities(invite.staffCapabilities)])
+      );
+      const adminDerivedAccess = deriveMembershipAccessFromCapabilities(adminStaffCapabilities);
+
       transaction.set(
         teamMembershipRef,
         {
@@ -206,10 +219,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           userId,
           email: userEmail,
           notificationEmail,
+          // The admin stays team-admin; coaching / athletic-trainer capabilities
+          // layer on via operatingRole + roster scope (both derived).
           role: 'team-admin',
           title: 'Organization Admin',
           permissionSetId: 'pulsecheck-team-admin-v1',
-          rosterVisibilityScope: 'team',
+          staffCapabilities: adminStaffCapabilities,
+          operatingRole: adminDerivedAccess.operatingRole,
+          rosterVisibilityScope: adminDerivedAccess.rosterVisibilityScope,
           allowedAthleteIds: Array.isArray(reservedTeamMembership.allowedAthleteIds) ? reservedTeamMembership.allowedAthleteIds : [],
           onboardingStatus: reservedTeamMembership.onboardingStatus || 'pending-profile',
           grantedByInviteToken: token,

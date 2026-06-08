@@ -496,16 +496,15 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                 {/* Grotesque + serif-italic accent on one clean baseline — the
                     Switzer/Fraunces + color contrast, kept composed and serious. */}
                 <h1
-                  className="text-4xl font-extrabold leading-[1.04] tracking-tight text-white md:text-5xl"
+                  className="text-4xl font-extrabold leading-[1.04] tracking-tight text-white md:text-5xl [overflow-wrap:anywhere]"
                   style={displayFont}
                 >
-                  <span className="mr-[0.2em]">Welcome</span>
+                  <span>Welcome</span>{' '}
                   <span
-                    className="mr-[0.16em]"
                     style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontWeight: 500, fontSize: '0.82em', color: PC.purpleSoft }}
                   >
                     Coach
-                  </span>
+                  </span>{' '}
                   {coachFirstName ? <span>{coachFirstName}</span> : null}
                 </h1>
                 <p className="max-w-xl text-sm leading-7 text-zinc-300">

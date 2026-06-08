@@ -38,7 +38,7 @@ const SCREEN_DEMOS: ScreenDemo[] = [
   {
     id: 'coach-onboarding',
     surface: 'Coach onboarding → dashboard',
-    title: 'Full coach onboarding sequence',
+    title: 'Full Initial coach/admin onboarding sequence',
     description:
       'Exactly what a coach experiences after clicking their activation email link: the "You’re invited" welcome → profile, staff & athlete setup → the dashboard. Leave the sign-in fields empty and press continue — auth is bypassed so you can walk the whole flow end-to-end.',
     launchUrl: '/PulseCheck/admin-activation/f5382b83-caba-4b23-9305-47ffc4036eea?devFirebase=1&demo=1',
@@ -46,6 +46,20 @@ const SCREEN_DEMOS: ScreenDemo[] = [
       { label: 'Activation', detail: 'The "You’re invited" welcome — press continue with empty fields to skip auth.' },
       { label: 'Set up', detail: 'Profile, staff invites, athlete invites — advance without saving anything real.' },
       { label: 'Dashboard', detail: 'Land on the coach dashboard with mock athletes, as in the walkthrough.' },
+    ],
+    status: 'live',
+  },
+  {
+    id: 'staff-onboarding',
+    surface: 'Staff invite → onboarding',
+    title: 'Staff member activation & onboarding',
+    description:
+      'What a staff member experiences after a coach invites them from the "Invite a staff member" dialog: the activation email lands in their inbox → "Accept invite" → create their sign-in → member profile & notifications → into the team dashboard. The email and auth are simulated, so you can walk the whole flow end-to-end.',
+    launchUrl: '/PulseCheck/staff-onboarding-demo',
+    steps: [
+      { label: 'Activation email', detail: 'The "You’re invited / Accept invite" email a coach sends — opened right on screen.' },
+      { label: 'Accept & set up', detail: 'Create the staff sign-in, then member profile & notifications — nothing is saved.' },
+      { label: 'Dashboard', detail: 'Land in the team dashboard with mock data.' },
     ],
     status: 'live',
   },

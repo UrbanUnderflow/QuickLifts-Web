@@ -4,6 +4,7 @@ import Link from 'next/link';
 import {
   AlertTriangle,
   Building2,
+  Check,
   ChevronDown,
   Clipboard,
   ClipboardList,
@@ -30,6 +31,8 @@ import { showToast } from '../../redux/toastSlice';
 import GuidedTour, { type GuidedTourStep } from '../../components/onboarding/GuidedTour';
 import { storage } from '../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
+import { normalizeStaffCapabilities } from '../../api/firebase/pulsecheckProvisioning/staffCapabilities';
+import { STAFF_PERMISSIONS as ADMIN_PERMISSIONS } from '../../lib/staffPermissions';
 import {
   fetchPulseCheckSportConfiguration,
   getDefaultPulseCheckSports,
@@ -64,6 +67,7 @@ import type {
   PulseCheckPilotStudyMode,
   PulseCheckRequiredConsentDocument,
   PulseCheckRevenueRecipientRole,
+  StaffPermission,
   SurveyQuestion,
   PulseCheckStudyPosture,
   PulseCheckTeam,
@@ -724,6 +728,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [pilotStudyModeSavingId, setPilotStudyModeSavingId] = useState<string | null>(null);
   const [onboardingModal, setOnboardingModal] = useState<OnboardingModalState | null>(null);
   const [additionalAdminForm, setAdditionalAdminForm] = useState({ name: '', email: '' });
+  // Capabilities chosen per admin recipient (keyed by email). Defaults to
+  // administrative; stamped on the activation link when it's created/regenerated.
+  const [adminCapabilitiesByEmail, setAdminCapabilitiesByEmail] = useState<Record<string, StaffPermission[]>>({});
   const [additionalAdminSubmitting, setAdditionalAdminSubmitting] = useState(false);
   // Email-of-recipient currently being sent/resent an activation email (admin channel).
   const [activationEmailSendingEmail, setActivationEmailSendingEmail] = useState<string | null>(null);
@@ -2313,7 +2320,11 @@ const PulseCheckProvisioningPage: React.FC = () => {
     }
   };
 
-  const handleCreateAdminActivationLink = async (team: PulseCheckTeam, targetEmail?: string) => {
+  const handleCreateAdminActivationLink = async (
+    team: PulseCheckTeam,
+    targetEmail?: string,
+    staffCapabilities?: StaffPermission[],
+  ) => {
     if (!targetEmail?.trim()) {
       setMessage({ type: 'error', text: 'An admin email is required before generating an onboarding link.' });
       return false;
@@ -2328,6 +2339,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
         organizationId: team.organizationId,
         teamId: team.id,
         targetEmail,
+        staffCapabilities,
         createdByUserId: currentUser?.id || '',
         createdByEmail: currentUser?.email || '',
       });
@@ -2541,6 +2553,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
     recipientName?: string;
     recipientEmail: string;
     existingLink?: PulseCheckInviteLink | null;
+    staffCapabilities?: StaffPermission[];
   }) => {
     const { organization, team, recipientName, recipientEmail } = input;
     const normalizedEmail = recipientEmail.trim();
@@ -2557,7 +2570,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
       let link =
         input.existingLink && input.existingLink.status === 'active' ? input.existingLink : null;
       if (!link) {
-        const created = await handleCreateAdminActivationLink(team, normalizedEmail);
+        const created = await handleCreateAdminActivationLink(team, normalizedEmail, input.staffCapabilities);
         if (!created) {
           return;
         }
@@ -4508,35 +4521,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                   </div>
                                                 )}
 
-                                                <div className="pcp-ob-item">
-                                                  <div>
-                                                    <div className="pcp-ob-type">
-                                                      PulseCheck Admin
-                                                      {activationEmailSent ? ' · email sent' : ''}
-                                                    </div>
-                                                    {activeAdminLink || activationEmailSent ? (
-                                                      <div className="pcp-ob-val">{activeAdminLink?.targetEmail || team.defaultAdminEmail || 'No email set'}</div>
-                                                    ) : (
-                                                      <div className="pcp-ob-empty">No activation email sent yet</div>
-                                                    )}
-                                                  </div>
-                                                  <button
-                                                    type="button"
-                                                    className="pcp-ab pcp-ab-t"
-                                                    onClick={(event) => {
-                                                      event.stopPropagation();
-                                                      handleOpenOnboardingModal({
-                                                        channel: 'admin',
-                                                        organization,
-                                                        team,
-                                                        clinicianProfile,
-                                                      });
-                                                    }}
-                                                  >
-                                                    <MailPlus />
-                                                    {activationEmailSent ? 'Manage Activations' : 'Send Activation Email'}
-                                                  </button>
-                                                </div>
+                                                {/* The admin activation card lives at the team level (Support
+                                                    Route + Activation) — the admin is the team's admin, not the
+                                                    pilot's — so it's intentionally not rendered inside the pilot. */}
                                               </div>
                                               </div>
                                             </div>
@@ -5489,6 +5476,24 @@ const PulseCheckProvisioningPage: React.FC = () => {
                             adminLinkCreatingEmail?.toLowerCase() === recipient.email.toLowerCase();
                           const isSending = activationEmailSendingEmail?.toLowerCase() === recipient.email.toLowerCase();
 
+                          // Permissions this admin will carry. Administrative is always on;
+                          // defaults to the active link's stored capabilities, then to admin-only.
+                          const linkDefaultCaps = Array.from(
+                            new Set<StaffPermission>(['administrative', ...normalizeStaffCapabilities(activeLink?.staffCapabilities)])
+                          );
+                          const recipientCaps: StaffPermission[] = adminCapabilitiesByEmail[recipient.email] ?? linkDefaultCaps;
+                          const toggleAdminCap = (key: StaffPermission) => {
+                            if (key === 'administrative') return; // the admin always keeps admin
+                            setAdminCapabilitiesByEmail((prev) => {
+                              const base = prev[recipient.email] ?? linkDefaultCaps;
+                              const next = base.includes(key) ? base.filter((cap) => cap !== key) : [...base, key];
+                              return {
+                                ...prev,
+                                [recipient.email]: Array.from(new Set<StaffPermission>(['administrative', ...next])),
+                              };
+                            });
+                          };
+
                           const StatusRow = ({ done, doneLabel, pendingLabel }: { done: boolean; doneLabel: string; pendingLabel: string }) => (
                             <div className="flex items-center gap-2 text-xs">
                               <span
@@ -5541,6 +5546,47 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                       }`}
                                       pendingLabel="Not onboarded yet"
                                     />
+                                  </div>
+
+                                  {/* Permissions assigned to this admin (mirrors the dashboard staff model). */}
+                                  <div className="mt-3 space-y-1.5">
+                                    <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                                      Permissions
+                                    </div>
+                                    {ADMIN_PERMISSIONS.map((permission) => {
+                                      const on = recipientCaps.includes(permission.key);
+                                      const Icon = permission.icon;
+                                      const locked = permission.key === 'administrative';
+                                      return (
+                                        <button
+                                          key={permission.key}
+                                          type="button"
+                                          disabled={locked}
+                                          onClick={() => toggleAdminCap(permission.key)}
+                                          className={`flex w-full items-start gap-2.5 rounded-lg border p-2.5 text-left transition-colors ${
+                                            on
+                                              ? 'border-emerald-400/40 bg-emerald-400/[0.06]'
+                                              : 'border-zinc-800 bg-black/30 hover:border-zinc-700'
+                                          } ${locked ? 'cursor-default opacity-90' : ''}`}
+                                        >
+                                          <span
+                                            className={`mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${
+                                              on ? 'border-emerald-400 bg-emerald-400 text-black' : 'border-zinc-600'
+                                            }`}
+                                          >
+                                            {on && <Check className="h-3 w-3" />}
+                                          </span>
+                                          <span className="min-w-0">
+                                            <span className="flex items-center gap-1.5 text-xs font-medium text-white">
+                                              <Icon className="h-3 w-3 text-emerald-300/80" />
+                                              {permission.label}
+                                              {locked ? <span className="text-[9px] uppercase tracking-wide text-zinc-500">· always</span> : null}
+                                            </span>
+                                            <span className="mt-0.5 block text-[11px] text-zinc-500">{permission.blurb}</span>
+                                          </span>
+                                        </button>
+                                      );
+                                    })}
                                   </div>
 
                                   {activeLink ? (
@@ -5601,6 +5647,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                         recipientName: recipient.name,
                                         recipientEmail: recipient.email,
                                         existingLink: activeLink,
+                                        staffCapabilities: recipientCaps,
                                       })
                                     }
                                     disabled={isSending || isGenerating}
@@ -5630,7 +5677,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                       </a>
                                       <button
                                         type="button"
-                                        onClick={() => void handleCreateAdminActivationLink(onboardingModal.team, recipient.email)}
+                                        onClick={() => void handleCreateAdminActivationLink(onboardingModal.team, recipient.email, recipientCaps)}
                                         disabled={isGenerating}
                                         className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                                       >

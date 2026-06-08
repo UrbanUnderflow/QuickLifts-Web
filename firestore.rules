@@ -128,6 +128,10 @@ service cloud.firestore {
     function pcMembershipPath(teamId) {
       return /databases/$(database)/documents/pulsecheck-team-memberships/$(teamId + '_' + request.auth.uid);
     }
+    // Managing the team (inviting staff, assigning permissions) is admin-only.
+    // The legacy 'team-admin' role is the org founder/full-access seat and keeps
+    // access; the 'admin' staff capability is the new superuser grant. Manager
+    // ('administrative') and 'coaching' no longer manage the team.
     function pcCanManageTeam(teamId) {
       return isSignedIn()
         && exists(pcMembershipPath(teamId))
@@ -135,10 +139,7 @@ service cloud.firestore {
           get(pcMembershipPath(teamId)).data.role == 'team-admin'
           || (
             get(pcMembershipPath(teamId)).data.staffCapabilities is list
-            && (
-              'administrative' in get(pcMembershipPath(teamId)).data.staffCapabilities
-              || 'coaching' in get(pcMembershipPath(teamId)).data.staffCapabilities
-            )
+            && 'admin' in get(pcMembershipPath(teamId)).data.staffCapabilities
           )
         );
     }

@@ -50,6 +50,7 @@ import {
   Mail,
   CalendarDays,
   Copy,
+  Pencil,
 } from 'lucide-react';
 import CoachProtectedRoute from '../../components/CoachProtectedRoute';
 import CoachProfileEditModal from '../../components/coach/CoachProfileEditModal';
@@ -68,6 +69,7 @@ import {
   deriveMembershipAccessFromCapabilities,
   normalizeStaffCapabilities,
 } from '../../api/firebase/pulsecheckProvisioning/staffCapabilities';
+import { STAFF_PERMISSIONS } from '../../lib/staffPermissions';
 import type {
   PulseCheckInviteLink,
   PulseCheckTeamMembership,
@@ -475,12 +477,14 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   isDemo = false,
   earningsEnabled = false,
   revenueSharePct = 0,
-  viewerCapabilities = ['administrative', 'coaching', 'athletic_trainer'],
+  viewerCapabilities = ['admin', 'administrative', 'coaching', 'athletic_trainer'],
 }) => {
   const router = useRouter();
   // Demo always shows everything; live gates off the coach's own capabilities.
+  // 'admin' is the superuser grant, so it satisfies every capability check.
   const can = useCallback(
-    (capability: StaffPermission) => isDemo || viewerCapabilities.includes(capability),
+    (capability: StaffPermission) =>
+      isDemo || viewerCapabilities.includes('admin') || viewerCapabilities.includes(capability),
     [isDemo, viewerCapabilities]
   );
   // athletic_trainer is the medical peek — Tier 3 escalation detail.
@@ -534,8 +538,10 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   // Capability gating per tab:
   //  • athlete-facing tabs (readiness, roster, inbox, reports) need coaching
   //  • alerts needs coaching OR athletic_trainer (trainers watch escalations)
-  //  • staff / schedule / Train Nora need administrative OR coaching
+  //  • staff (invite staff, assign permissions) is admin-only
+  //  • schedule / Train Nora need manager (administrative) OR coaching
   //  • earnings keeps its existing revenue-recipient gate; settings is always on
+  // (admin satisfies every can() check, so admins see all of the above.)
   const navAllowed = useCallback(
     (key: ViewKey): boolean => {
       switch (key) {
@@ -547,6 +553,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
         case 'alerts':
           return can('coaching') || can('athletic_trainer');
         case 'staff':
+          // Any staff member can view the roster; inviting + editing permissions
+          // inside the tab are gated to admins (see StaffSection canInvite).
+          return can('coaching') || can('administrative') || can('athletic_trainer');
         case 'schedule':
         case 'nora':
           return can('administrative') || can('coaching');
@@ -760,6 +769,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       coachName={coachName}
                       coachId={coachId}
                       coachEmail={coachEmail}
+                      canInvite={can('admin')}
                     />
                   )}
                   {view === 'nora' && (
@@ -821,6 +831,7 @@ const CoachDashboard: React.FC = () => {
   // membership resolves. Falls back to a full set if capabilities can't be read,
   // so we never lock an existing coach out of their own dashboard.
   const [viewerCapabilities, setViewerCapabilities] = useState<StaffPermission[]>([
+    'admin',
     'administrative',
     'coaching',
     'athletic_trainer',
@@ -970,9 +981,16 @@ const CoachDashboard: React.FC = () => {
         const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
         const own = memberships.find((m) => m.role !== 'athlete');
         if (!own) return; // no staff membership → keep permissive default
-        const caps = own.staffCapabilities?.length
+        const resolved = own.staffCapabilities?.length
           ? normalizeStaffCapabilities(own.staffCapabilities)
           : capabilitiesFromLegacyRole(own.role);
+        // The team-admin role is the org-admin / founder seat — always full access,
+        // even on legacy memberships stamped before the admin/manager split (where
+        // staffCapabilities may only contain 'administrative').
+        const caps =
+          own.role === 'team-admin' && !resolved.includes('admin')
+            ? (['admin', ...resolved] as StaffPermission[])
+            : resolved;
         if (!cancelled && caps.length) setViewerCapabilities(caps);
       } catch (err) {
         console.error('[CoachDashboard] failed to resolve viewer capabilities', err);
@@ -1657,22 +1675,12 @@ const InboxSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean; isDem
 // ---------------------------------------------------------------------------
 
 // What a staffer is allowed to touch. Multi-select — a person can hold several.
-//  • administrative  → update the schedule, train Nora (but no athlete data)
+//  • admin           → full access: invite staff, assign permissions, every tab
+//  • administrative  → "Manager": update the schedule, train Nora (no athlete data)
 //  • coaching        → athlete insights, reports, coaching curriculum
 //  • athletic_trainer→ the medical peek: Tier 3 escalation detail
-// StaffPermission is imported from the provisioning types (single source of truth);
-// the membership/invite model persists exactly these three capability keys.
-
-const STAFF_PERMISSIONS: {
-  key: StaffPermission;
-  label: string;
-  blurb: string;
-  icon: React.ElementType;
-}[] = [
-  { key: 'administrative', label: 'Administrative', blurb: 'Update the schedule and train Nora', icon: ClipboardList },
-  { key: 'coaching', label: 'Coaching', blurb: 'Athlete insights, reports, and coaching curriculum', icon: BarChart3 },
-  { key: 'athletic_trainer', label: 'Athletic Trainer', blurb: 'See Tier 3 escalation detail', icon: HeartPulse },
-];
+// STAFF_PERMISSIONS is the shared single source (src/lib/staffPermissions) used by
+// the dashboard invite modal, the coach-onboarding staff step, and admin provisioning.
 
 const PERMISSION_META: Record<StaffPermission, { label: string; icon: React.ElementType }> =
   Object.fromEntries(STAFF_PERMISSIONS.map((p) => [p.key, { label: p.label, icon: p.icon }])) as Record<
@@ -1683,10 +1691,11 @@ const PERMISSION_META: Record<StaffPermission, { label: string; icon: React.Elem
 // Best-fit role label from the granted permissions (purely cosmetic).
 const deriveStaffRole = (perms: StaffPermission[]): string => {
   const has = (p: StaffPermission) => perms.includes(p);
+  if (has('admin')) return 'Admin';
   if (has('coaching') && has('athletic_trainer')) return 'Coach / Trainer';
   if (has('athletic_trainer')) return 'Athletic Trainer';
   if (has('coaching')) return 'Coach';
-  if (has('administrative')) return 'Team Manager';
+  if (has('administrative')) return 'Manager';
   return 'Staff';
 };
 
@@ -1702,10 +1711,10 @@ type StaffRow = {
 };
 
 const DEMO_STAFF: StaffRow[] = [
-  { id: 's1', name: 'Coach Mayo', role: 'Head Coach', email: 'coach.mayo@fitwithpulse.ai', status: 'active', joinedAt: '2024-08-15', permissions: ['administrative', 'coaching', 'athletic_trainer'] },
+  { id: 's1', name: 'Coach Mayo', role: 'Admin', email: 'coach.mayo@fitwithpulse.ai', status: 'active', joinedAt: '2024-08-15', permissions: ['admin'] },
   { id: 's2', name: 'Dana Reyes', role: 'Assistant Coach', email: 'dana.reyes@example.com', status: 'active', joinedAt: '2025-01-10', permissions: ['coaching'] },
   { id: 's3', name: 'Priya Nair', role: 'Athletic Trainer', email: 'priya.nair@example.com', status: 'active', joinedAt: '2025-09-03', permissions: ['coaching', 'athletic_trainer'] },
-  { id: 's4', name: 'Marcus Hill', role: 'Team Manager', email: 'marcus.hill@example.com', status: 'invited', permissions: ['administrative'] },
+  { id: 's4', name: 'Marcus Hill', role: 'Manager', email: 'marcus.hill@example.com', status: 'invited', permissions: ['administrative'] },
 ];
 
 // Human-readable tenure since onboarding, e.g. "1 yr 9 mo" / "3 mo".
@@ -1752,8 +1761,11 @@ const capabilitiesFromLegacyRole = (role?: string): StaffPermission[] => {
     case 'clinician':
       return ['athletic_trainer'];
     case 'support-staff':
-    case 'team-admin':
       return ['administrative'];
+    // team-admin is the org admin (the founder / full-access seat) — map to the new
+    // superuser cap so existing admins keep staff management after the split.
+    case 'team-admin':
+      return ['admin'];
     default:
       return [];
   }
@@ -1793,15 +1805,26 @@ const StaffSection: React.FC<{
   coachName: string;
   coachId?: string;
   coachEmail?: string;
-}> = ({ isDemo, coachName, coachId, coachEmail }) => {
+  // Inviting/assigning staff is admin-only. Non-admins can view the roster but
+  // never see the invite controls.
+  canInvite?: boolean;
+}> = ({ isDemo, coachName, coachId, coachEmail, canInvite = true }) => {
   const [staff, setStaff] = useState<StaffRow[]>(isDemo ? DEMO_STAFF : []);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [title, setTitle] = useState('');
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState('');
   const [perms, setPerms] = useState<StaffPermission[]>(['coaching']);
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState(DEMO_INVITE_LINK);
   const [busy, setBusy] = useState(false);
+  // Per-member permission editing (admin-only). Holds the row being edited.
+  const [editing, setEditing] = useState<StaffRow | null>(null);
+  const [editPerms, setEditPerms] = useState<StaffPermission[]>([]);
+  const [savingEdit, setSavingEdit] = useState(false);
   // Resolved active-team context for the signed-in coach (live mode only).
   const [team, setTeam] = useState<{
     organizationId: string;
@@ -1867,12 +1890,71 @@ const StaffSection: React.FC<{
   const openInvite = () => {
     setPerms(['coaching']);
     setEmail('');
+    setName('');
+    setTitle('');
+    setPhotoFile(null);
+    setPhotoPreview('');
     setCopied(false);
     setInviteOpen(true);
   };
 
+  // Upload the optional pre-loaded staff photo (live only), returning its URL.
+  const uploadStaffPhoto = async (): Promise<string> => {
+    if (!photoFile) return '';
+    try {
+      const { firebaseStorageService, UploadImageType } = await import('../../api/firebase/storage/service');
+      const upload = await firebaseStorageService.uploadImage(photoFile, UploadImageType.Profile);
+      return upload.downloadURL;
+    } catch (err) {
+      console.error('[CoachDashboard] staff photo upload failed', err);
+      return '';
+    }
+  };
+
   const togglePerm = (k: StaffPermission) =>
     setPerms((prev) => (prev.includes(k) ? prev.filter((p) => p !== k) : [...prev, k]));
+
+  // Open the per-member permission editor (admin-only, active members).
+  const openEdit = (row: StaffRow) => {
+    setEditing(row);
+    setEditPerms(row.permissions.length ? [...row.permissions] : ['coaching']);
+  };
+  const toggleEditPerm = (k: StaffPermission) =>
+    setEditPerms((prev) => (prev.includes(k) ? prev.filter((p) => p !== k) : [...prev, k]));
+
+  const saveEdit = async () => {
+    if (!editing || editPerms.length === 0) return;
+
+    // Demo: update local state only.
+    if (isDemo) {
+      setStaff((prev) =>
+        prev.map((s) =>
+          s.id === editing.id ? { ...s, permissions: [...editPerms], role: deriveStaffRole(editPerms) } : s
+        )
+      );
+      setToast(`Updated ${editing.name}'s permissions.`);
+      setEditing(null);
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      const derived = deriveMembershipAccessFromCapabilities(editPerms);
+      await pulseCheckProvisioningService.updateTeamMembershipAccess({
+        teamMembershipId: editing.id,
+        staffCapabilities: editPerms,
+        rosterVisibilityScope: derived.rosterVisibilityScope,
+      });
+      setToast(`Updated ${editing.name}'s permissions.`);
+      setEditing(null);
+      await loadStaff();
+    } catch (err) {
+      console.error('[CoachDashboard] failed to update staff permissions', err);
+      setToast('Could not update permissions. Try again.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const copyLink = async () => {
     // Demo: copy the static walkthrough link, no writes.
@@ -1930,6 +2012,11 @@ const StaffSection: React.FC<{
 
   const sendInvite = async () => {
     const e = email.trim();
+    const n = name.trim();
+    if (!n) {
+      setToast("Add the staff member's name first.");
+      return;
+    }
     if (!e || perms.length === 0) return;
 
     // Demo: local-state only, no Firestore writes (walkthrough behavior unchanged).
@@ -1937,15 +2024,16 @@ const StaffSection: React.FC<{
       setStaff((prev) => [
         {
           id: `inv-${prev.length + 1}-${e}`,
-          name: e.split('@')[0],
-          role: deriveStaffRole(perms),
+          name: n,
+          role: title.trim() || deriveStaffRole(perms),
           email: e,
           status: 'invited',
           permissions: [...perms],
+          avatarUrl: photoPreview || undefined,
         },
         ...prev,
       ]);
-      setToast(`Invite sent to ${e}.`);
+      setToast(`Invite sent to ${n}.`);
       setInviteOpen(false);
       return;
     }
@@ -1957,6 +2045,7 @@ const StaffSection: React.FC<{
     setBusy(true);
     try {
       const derived = deriveMembershipAccessFromCapabilities(perms);
+      const prefilledProfileImageUrl = await uploadStaffPhoto();
       await pulseCheckProvisioningService.createTeamAccessInviteLink({
         organizationId: team.organizationId,
         teamId: team.teamId,
@@ -1964,7 +2053,9 @@ const StaffSection: React.FC<{
         staffCapabilities: perms,
         redemptionMode: 'single-use',
         targetEmail: e,
-        recipientName: e.split('@')[0],
+        recipientName: n,
+        invitedTitle: title.trim(),
+        prefilledProfileImageUrl,
         createdByUserId: coachId,
         createdByEmail: coachEmail || '',
       });
@@ -1987,10 +2078,10 @@ const StaffSection: React.FC<{
             body: JSON.stringify({
               toEmail: e,
               activationUrl: link.activationUrl,
-              recipientName: e.split('@')[0],
+              recipientName: n,
               organizationName: team.organizationName,
               teamName: team.teamName,
-              roleLabel: deriveStaffRole(perms),
+              title: title.trim(),
               senderName: coachName,
             }),
           });
@@ -2034,22 +2125,24 @@ const StaffSection: React.FC<{
         <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
           Staff {staff.length > 0 && <span className="text-zinc-600">({staff.length})</span>}
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            data-invite-copylink
-            onClick={openInvite}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-700/50 text-zinc-300 text-sm font-medium hover:bg-zinc-800/40"
-          >
-            <Link2 className="w-4 h-4" /> Copy link
-          </button>
-          <button
-            data-invite-trigger
-            onClick={openInvite}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95"
-          >
-            <Plus className="w-4 h-4" /> Invite member
-          </button>
-        </div>
+        {canInvite && (
+          <div className="flex items-center gap-2">
+            <button
+              data-invite-copylink
+              onClick={openInvite}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-700/50 text-zinc-300 text-sm font-medium hover:bg-zinc-800/40"
+            >
+              <Link2 className="w-4 h-4" /> Copy link
+            </button>
+            <button
+              data-invite-trigger
+              onClick={openInvite}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95"
+            >
+              <Plus className="w-4 h-4" /> Invite member
+            </button>
+          </div>
+        )}
       </div>
 
       {toast && (
@@ -2090,6 +2183,45 @@ const StaffSection: React.FC<{
               </div>
 
               <div className="px-5 py-4 space-y-4">
+                {/* Who you're inviting — photo (optional) + name (required) + title (optional) */}
+                <div className="flex items-center gap-3">
+                  <label className="relative flex h-14 w-14 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-zinc-700/50 bg-zinc-800/40 hover:border-[#E0FE10]/40">
+                    {photoPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={photoPreview} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <ImageIcon className="h-5 w-5 text-zinc-500" />
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] || null;
+                        setPhotoFile(f);
+                        setPhotoPreview(f ? URL.createObjectURL(f) : '');
+                      }}
+                    />
+                  </label>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Name (required)"
+                      className="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
+                    />
+                    <input
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Title (optional) — e.g. Associate Head Coach"
+                      className="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-zinc-600">
+                  Photo &amp; title are optional and appear pre-filled when they join — they can change them. Name preloads their welcome email.
+                </p>
+
                 {/* Permissions */}
                 <div data-invite-perms className="space-y-2">
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
@@ -2145,7 +2277,7 @@ const StaffSection: React.FC<{
                     />
                     <button
                       onClick={sendInvite}
-                      disabled={!email.trim() || perms.length === 0 || busy}
+                      disabled={!email.trim() || !name.trim() || perms.length === 0 || busy}
                       className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {busy ? 'Sending…' : 'Send'}
@@ -2167,6 +2299,92 @@ const StaffSection: React.FC<{
                   >
                     {copied ? <Check className="h-3.5 w-3.5 text-[#E0FE10]" /> : <Copy className="h-3.5 w-3.5" />}
                     {copied ? 'Copied' : busy ? 'Creating…' : 'Copy link'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {editing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[55] flex items-center justify-center p-4"
+          >
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEditing(null)} />
+            <motion.div
+              data-edit-perms-modal
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              className="relative z-10 w-full max-w-md rounded-2xl border border-zinc-700/50 bg-[#0d0d12] shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
+                <div>
+                  <div className="text-base font-semibold text-white">Edit permissions</div>
+                  <div className="text-xs text-zinc-500">{editing.name}{editing.role ? ` · ${editing.role}` : ''}</div>
+                </div>
+                <button
+                  onClick={() => setEditing(null)}
+                  className="rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="px-5 py-4 space-y-4">
+                <div className="space-y-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                    Permissions
+                  </div>
+                  {STAFF_PERMISSIONS.map((p) => {
+                    const on = editPerms.includes(p.key);
+                    const Icon = p.icon;
+                    return (
+                      <button
+                        key={p.key}
+                        onClick={() => toggleEditPerm(p.key)}
+                        className={`w-full flex items-start gap-3 rounded-xl border p-3 text-left transition-colors ${
+                          on
+                            ? 'border-[#E0FE10]/40 bg-[#E0FE10]/[0.06]'
+                            : 'border-zinc-700/40 bg-zinc-800/30 hover:border-zinc-600/60'
+                        }`}
+                      >
+                        <span
+                          className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border ${
+                            on ? 'border-[#E0FE10] bg-[#E0FE10] text-black' : 'border-zinc-600'
+                          }`}
+                        >
+                          {on && <Check className="h-3.5 w-3.5" />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1.5 text-sm font-medium text-white">
+                            <Icon className="h-3.5 w-3.5 text-[#E0FE10]/80" />
+                            {p.label}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-zinc-500">{p.blurb}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    onClick={() => setEditing(null)}
+                    className="px-4 py-2 rounded-lg border border-zinc-700/50 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveEdit}
+                    disabled={editPerms.length === 0 || savingEdit}
+                    className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {savingEdit ? 'Saving…' : 'Save changes'}
                   </button>
                 </div>
               </div>
@@ -2256,6 +2474,14 @@ const StaffSection: React.FC<{
                         );
                       })}
                     </div>
+                  )}
+                  {canInvite && s.status === 'active' && (
+                    <button
+                      onClick={() => openEdit(s)}
+                      className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-[#E0FE10]/80 transition-colors hover:text-[#E0FE10]"
+                    >
+                      <Pencil className="h-3 w-3" /> Edit permissions
+                    </button>
                   )}
                 </div>
               </div>

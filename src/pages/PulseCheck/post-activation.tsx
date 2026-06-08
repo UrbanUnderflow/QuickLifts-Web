@@ -2,56 +2,23 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Bell, CheckCircle2, ChevronRight, Copy, Loader2, Mail, Shield, Sparkles, UserRound, Users, Waypoints } from 'lucide-react';
+import { Bell, Check, CheckCircle2, ChevronRight, Copy, Loader2, Mail, Shield, Sparkles, UserRound, Users, Waypoints } from 'lucide-react';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import { PULSECHECK_INTAKE_FORM_VERSION } from '../../api/firebase/pulsecheckProvisioning/types';
 import type {
   PulseCheckInviteLink,
   PulseCheckNotificationPreferences,
-  PulseCheckOperatingRole,
   PulseCheckOrganization,
   PulseCheckTeam,
   PulseCheckTeamMembership,
   PulseCheckTeamMembershipRole,
+  StaffPermission,
 } from '../../api/firebase/pulsecheckProvisioning/types';
+import { deriveMembershipAccessFromCapabilities } from '../../api/firebase/pulsecheckProvisioning/staffCapabilities';
+import { STAFF_PERMISSIONS } from '../../lib/staffPermissions';
 import { userService } from '../../api/firebase/user';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 
-const operatingRoleOptions: Array<{
-  value: PulseCheckOperatingRole;
-  label: string;
-  description: string;
-  accent: string;
-}> = [
-  {
-    value: 'admin-only',
-    label: 'Admin Only',
-    description: 'You coordinate setup, permissions, and staff onboarding without operating as a coach.',
-    accent: 'from-amber-400/20 to-orange-500/10 border-amber-400/25',
-  },
-  {
-    value: 'admin-plus-coach',
-    label: 'Admin + Coach',
-    description: 'You manage the team and also operate directly in the coaching lane.',
-    accent: 'from-cyan-400/20 to-sky-500/10 border-cyan-400/25',
-  },
-  {
-    value: 'admin-plus-support-staff',
-    label: 'Admin + Support Staff',
-    description: 'You manage the team and operate in performance, operations, or support workflows.',
-    accent: 'from-emerald-400/20 to-teal-500/10 border-emerald-400/25',
-  },
-];
-
-const adultRoleOptions: Array<{
-  value: PulseCheckTeamMembershipRole;
-  label: string;
-}> = [
-  { value: 'team-admin', label: 'Secondary Admin' },
-  { value: 'coach', label: 'Coach' },
-  { value: 'performance-staff', label: 'Performance Staff' },
-  { value: 'support-staff', label: 'Support Staff' },
-];
 
 const formatInviteRole = (role?: PulseCheckTeamMembershipRole) => {
   switch (role) {
@@ -222,7 +189,6 @@ export default function PulseCheckPostActivationPage() {
     displayName: '',
     title: '',
     phone: '',
-    operatingRole: 'admin-only' as PulseCheckOperatingRole,
     notificationPreferences: {
       email: true,
       sms: false,
@@ -238,8 +204,10 @@ export default function PulseCheckPostActivationPage() {
     recipientName: '',
     targetEmail: '',
     invitedTitle: '',
-    teamMembershipRole: 'coach' as PulseCheckTeamMembershipRole,
+    staffCapabilities: ['coaching'] as StaffPermission[],
   });
+  const [staffPhotoFile, setStaffPhotoFile] = useState<File | null>(null);
+  const [staffPhotoPreview, setStaffPhotoPreview] = useState('');
 
   const refreshContext = async () => {
     if (!currentUser?.id || !teamId) return;
@@ -314,7 +282,6 @@ export default function PulseCheckPostActivationPage() {
       ...current,
       title: membership.title || current.title,
       phone: membership.phone || current.phone,
-      operatingRole: membership.operatingRole || current.operatingRole,
       notificationPreferences: membership.notificationPreferences || current.notificationPreferences,
     }));
     setCoachIntakeAnswers(membership.coachIntakeResponses || {});
@@ -339,8 +306,6 @@ export default function PulseCheckPostActivationPage() {
     () => activeInviteLinks.filter((invite) => invite.teamMembershipRole && invite.teamMembershipRole !== 'athlete'),
     [activeInviteLinks]
   );
-  const selectedRoleLabel =
-    operatingRoleOptions.find((option) => option.value === profileForm.operatingRole)?.label || '—';
   const notificationSummary = useMemo(() => {
     const prefs = profileForm.notificationPreferences;
     const enabled = [
@@ -425,7 +390,6 @@ export default function PulseCheckPostActivationPage() {
         teamMembershipId: membership.id,
         displayName,
         title,
-        operatingRole: profileForm.operatingRole,
         notificationPreferences: profileForm.notificationPreferences,
         phone: smsEnabled ? normalizedPhone : '',
         profileImageUrl,
@@ -452,11 +416,13 @@ export default function PulseCheckPostActivationPage() {
   const handleCreateAdultInvite = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    const targetEmail = adultInviteForm.targetEmail.trim().toLowerCase();
-    if (!targetEmail) {
-      setMessage({ type: 'error', text: 'Adult invites require an email address.' });
+    const recipientName = adultInviteForm.recipientName.trim();
+    if (!recipientName) {
+      setMessage({ type: 'error', text: "Add the staff member's name first." });
       return;
     }
+    const targetEmail = adultInviteForm.targetEmail.trim().toLowerCase();
+    const derived = deriveMembershipAccessFromCapabilities(adultInviteForm.staffCapabilities);
 
     // Screen demo: simulate creation with a dummy link, no persistence.
     if (isDemo) {
@@ -464,13 +430,15 @@ export default function PulseCheckPostActivationPage() {
       setMessage(null);
       await new Promise((resolve) => setTimeout(resolve, 500));
       const demoInvite = makeDemoInvite({
-        teamMembershipRole: adultInviteForm.teamMembershipRole,
+        teamMembershipRole: derived.teamMembershipRole,
         targetEmail,
-        recipientName: adultInviteForm.recipientName.trim(),
+        recipientName,
         invitedTitle: adultInviteForm.invitedTitle.trim(),
       });
       setInviteLinks((current) => [demoInvite, ...current]);
-      setAdultInviteForm({ recipientName: '', targetEmail: '', invitedTitle: '', teamMembershipRole: 'coach' });
+      setAdultInviteForm({ recipientName: '', targetEmail: '', invitedTitle: '', staffCapabilities: ['coaching'] });
+      setStaffPhotoFile(null);
+      setStaffPhotoPreview('');
       setMessage({ type: 'success', text: 'Demo invite link created — add another, or continue. Nothing is saved.' });
       setCreatingAdultInvite(false);
       return;
@@ -482,13 +450,26 @@ export default function PulseCheckPostActivationPage() {
     setMessage(null);
 
     try {
+      let prefilledProfileImageUrl = '';
+      if (staffPhotoFile) {
+        try {
+          const { firebaseStorageService, UploadImageType } = await import('../../api/firebase/storage/service');
+          const upload = await firebaseStorageService.uploadImage(staffPhotoFile, UploadImageType.Profile);
+          prefilledProfileImageUrl = upload.downloadURL;
+        } catch (uploadError) {
+          console.error('[PulseCheck post-activation] staff photo upload failed', uploadError);
+        }
+      }
+
       const inviteId = await pulseCheckProvisioningService.createTeamAccessInviteLink({
         organizationId: organization.id,
         teamId: team.id,
-        teamMembershipRole: adultInviteForm.teamMembershipRole,
-        targetEmail,
-        recipientName: adultInviteForm.recipientName.trim(),
+        teamMembershipRole: derived.teamMembershipRole,
+        staffCapabilities: adultInviteForm.staffCapabilities,
+        targetEmail: targetEmail || undefined,
+        recipientName,
         invitedTitle: adultInviteForm.invitedTitle.trim(),
+        prefilledProfileImageUrl,
         createdByUserId: currentUser.id,
         createdByEmail: currentUser.email,
       });
@@ -503,8 +484,10 @@ export default function PulseCheckPostActivationPage() {
         recipientName: '',
         targetEmail: '',
         invitedTitle: '',
-        teamMembershipRole: 'coach',
+        staffCapabilities: ['coaching'],
       });
+      setStaffPhotoFile(null);
+      setStaffPhotoPreview('');
       setMessage({ type: 'success', text: 'Adult onboarding link created and copied.' });
     } catch (error) {
       console.error('[PulseCheck post-activation] Failed to create adult invite:', error);
@@ -656,27 +639,6 @@ export default function PulseCheckPostActivationPage() {
                           placeholder="Athletic Director"
                         />
                       </label>
-                    </div>
-
-                    <div>
-                      <div className="text-xs tracking-normal text-zinc-500">Operating Role</div>
-                      <div className="mt-3 grid gap-3">
-                        {operatingRoleOptions.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => setProfileForm((current) => ({ ...current, operatingRole: option.value }))}
-                            className={`rounded-[24px] border bg-gradient-to-br px-4 py-4 text-left transition ${
-                              profileForm.operatingRole === option.value
-                                ? `${option.accent} text-white`
-                                : 'border-zinc-800 from-black/20 to-black/10 text-zinc-300 hover:border-zinc-700'
-                            }`}
-                          >
-                            <div className="text-sm font-semibold">{option.label}</div>
-                            <div className="mt-2 text-sm leading-6 text-zinc-400">{option.description}</div>
-                          </button>
-                        ))}
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -875,49 +837,93 @@ export default function PulseCheckPostActivationPage() {
                   </div>
 
                   <div className="mt-5 grid gap-4">
-                    <label className="space-y-2">
-                      <span className="text-xs tracking-normal text-zinc-500">Role</span>
-                      <select
-                        value={adultInviteForm.teamMembershipRole}
-                        onChange={(event) =>
-                          setAdultInviteForm((current) => ({
-                            ...current,
-                            teamMembershipRole: event.target.value as PulseCheckTeamMembershipRole,
-                          }))
-                        }
-                        className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-300"
-                      >
-                        {adultRoleOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    {/* Optional photo + Name (required) + Title (optional) */}
+                    <div className="flex items-center gap-4">
+                      <label className="relative flex h-16 w-16 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-zinc-700 bg-black/20 transition hover:border-amber-300">
+                        {staffPhotoPreview ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={staffPhotoPreview} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <UserRound className="h-6 w-6 text-zinc-600" />
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0] || null;
+                            setStaffPhotoFile(file);
+                            setStaffPhotoPreview(file ? URL.createObjectURL(file) : '');
+                          }}
+                        />
+                      </label>
+                      <div className="grid flex-1 gap-3 md:grid-cols-2">
+                        <label className="space-y-2">
+                          <span className="text-xs tracking-normal text-zinc-500">Name (required)</span>
+                          <input
+                            value={adultInviteForm.recipientName}
+                            onChange={(event) => setAdultInviteForm((current) => ({ ...current, recipientName: event.target.value }))}
+                            className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-300"
+                            placeholder="Jordan Ellis"
+                          />
+                        </label>
+                        <label className="space-y-2">
+                          <span className="text-xs tracking-normal text-zinc-500">Title (optional)</span>
+                          <input
+                            value={adultInviteForm.invitedTitle}
+                            onChange={(event) => setAdultInviteForm((current) => ({ ...current, invitedTitle: event.target.value }))}
+                            className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-300"
+                            placeholder="Associate Head Coach"
+                          />
+                        </label>
+                      </div>
+                    </div>
 
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <label className="space-y-2">
-                        <span className="text-xs tracking-normal text-zinc-500">Name</span>
-                        <input
-                          value={adultInviteForm.recipientName}
-                          onChange={(event) => setAdultInviteForm((current) => ({ ...current, recipientName: event.target.value }))}
-                          className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-300"
-                          placeholder="Jordan Ellis"
-                        />
-                      </label>
-                      <label className="space-y-2">
-                        <span className="text-xs tracking-normal text-zinc-500">Title</span>
-                        <input
-                          value={adultInviteForm.invitedTitle}
-                          onChange={(event) => setAdultInviteForm((current) => ({ ...current, invitedTitle: event.target.value }))}
-                          className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-300"
-                          placeholder="Associate Head Coach"
-                        />
-                      </label>
+                    {/* Permissions — same capability model as the dashboard staff invite */}
+                    <div className="space-y-2">
+                      <span className="text-xs tracking-normal text-zinc-500">Permissions</span>
+                      <div className="grid gap-2">
+                        {STAFF_PERMISSIONS.map((permission) => {
+                          const on = adultInviteForm.staffCapabilities.includes(permission.key);
+                          const Icon = permission.icon;
+                          return (
+                            <button
+                              key={permission.key}
+                              type="button"
+                              onClick={() =>
+                                setAdultInviteForm((current) => ({
+                                  ...current,
+                                  staffCapabilities: current.staffCapabilities.includes(permission.key)
+                                    ? current.staffCapabilities.filter((capability) => capability !== permission.key)
+                                    : [...current.staffCapabilities, permission.key],
+                                }))
+                              }
+                              className={`flex items-start gap-3 rounded-2xl border p-3 text-left transition ${
+                                on ? 'border-amber-300/50 bg-amber-300/10' : 'border-zinc-800 bg-black/20 hover:border-zinc-700'
+                              }`}
+                            >
+                              <span
+                                className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border ${
+                                  on ? 'border-amber-300 bg-amber-300 text-black' : 'border-zinc-600'
+                                }`}
+                              >
+                                {on && <Check className="h-3.5 w-3.5" />}
+                              </span>
+                              <span className="min-w-0">
+                                <span className="flex items-center gap-1.5 text-sm font-medium text-white">
+                                  <Icon className="h-3.5 w-3.5 text-amber-300/80" />
+                                  {permission.label}
+                                </span>
+                                <span className="mt-0.5 block text-xs text-zinc-500">{permission.blurb}</span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     <label className="space-y-2">
-                      <span className="text-xs tracking-normal text-zinc-500">Email</span>
+                      <span className="text-xs tracking-normal text-zinc-500">Email (optional)</span>
                       <input
                         value={adultInviteForm.targetEmail}
                         onChange={(event) => setAdultInviteForm((current) => ({ ...current, targetEmail: event.target.value }))}
@@ -929,7 +935,7 @@ export default function PulseCheckPostActivationPage() {
 
                   <button
                     type="submit"
-                    disabled={creatingAdultInvite}
+                    disabled={creatingAdultInvite || !adultInviteForm.recipientName.trim()}
                     className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-300 px-5 py-3 text-sm font-semibold text-black transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {creatingAdultInvite ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
@@ -1037,7 +1043,6 @@ export default function PulseCheckPostActivationPage() {
                       <div className="min-w-0">
                         <div className="text-lg font-semibold text-white">{profileForm.displayName || 'Coach'}</div>
                         {profileForm.title ? <div className="text-sm text-zinc-400">{profileForm.title}</div> : null}
-                        <div className="mt-1 text-xs text-zinc-500">{selectedRoleLabel}</div>
                       </div>
                     </div>
 

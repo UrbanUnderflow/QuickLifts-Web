@@ -255,7 +255,7 @@ const StaffPage: React.FC = () => {
           activationUrl,
           organizationName,
           teamName,
-          roleLabel: roleLabel(inviteRole),
+          // Role/permission is admin-facing; the invite email shows title only (none here).
           senderName: currentUser?.displayName || currentUser?.username || 'your coach',
         }),
       });

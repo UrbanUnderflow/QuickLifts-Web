@@ -15,7 +15,9 @@ import { sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
  *   recipientName    (optional) – greeting name
  *   organizationName (optional) – org context
  *   teamName         (optional) – team context
- *   roleLabel        (optional) – human role label (e.g., "Performance Staff")
+ *   title            (optional) – the invitee's user-facing title (e.g., "Assistant
+ *                                 Coach"). Permission/role is admin-facing only and
+ *                                 is intentionally NOT shown to the invitee.
  *   senderName       (optional) – the coach/admin issuing the invite
  */
 
@@ -33,14 +35,14 @@ function renderTeamInviteEmail(opts: {
   recipientName?: string;
   organizationName?: string;
   teamName?: string;
-  roleLabel?: string;
+  title?: string;
   activationUrl: string;
   senderName?: string;
 }) {
   const name = (opts.recipientName || '').trim() || 'there';
   const organizationName = (opts.organizationName || 'your organization').trim();
   const teamName = (opts.teamName || '').trim();
-  const roleLabel = (opts.roleLabel || 'staff').trim();
+  const title = (opts.title || '').trim();
   const activationUrl = opts.activationUrl;
   const senderName = (opts.senderName || 'the PulseCheck team').trim();
 
@@ -86,7 +88,7 @@ function renderTeamInviteEmail(opts: {
                           Hey ${escapeHtml(name)}, ${escapeHtml(senderName)} invited you to join the team.
                         </p>
                         <p style="margin:0 0 16px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:14px;line-height:1.6;color:#000000;">
-                          ${teamName ? `Team: <span style="font-weight:700;">${escapeHtml(teamName)}</span><br/>` : ''}Organization: <span style="font-weight:700;">${escapeHtml(organizationName)}</span><br/>Role: <span style="font-weight:700;">${escapeHtml(roleLabel)}</span>
+                          ${teamName ? `Team: <span style="font-weight:700;">${escapeHtml(teamName)}</span><br/>` : ''}Organization: <span style="font-weight:700;">${escapeHtml(organizationName)}</span>${title ? `<br/>Title: <span style="font-weight:700;">${escapeHtml(title)}</span>` : ''}
                         </p>
                         <p style="margin:0 0 28px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:13px;line-height:1.6;color:#52525B;">
                           Accept the invite and sign in with this email to get set up.
@@ -145,7 +147,10 @@ export const handler: Handler = async (event) => {
     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ success: false, error: 'Invalid JSON body' }) };
   }
 
-  const { toEmail, activationUrl, recipientName, organizationName, teamName, roleLabel, senderName } = body;
+  // `title` is the invitee's user-facing title; `roleLabel`/`invitedTitle` accepted
+  // for backward-compat but the admin-facing permission/role is never shown.
+  const { toEmail, activationUrl, recipientName, organizationName, teamName, senderName } = body;
+  const title = body.title || body.invitedTitle || '';
 
   if (!toEmail || !activationUrl) {
     return {
@@ -160,7 +165,7 @@ export const handler: Handler = async (event) => {
       recipientName,
       organizationName,
       teamName,
-      roleLabel,
+      title,
       activationUrl,
       senderName,
     });
@@ -180,7 +185,7 @@ export const handler: Handler = async (event) => {
           emailType: 'pulsecheck-team-invite',
           organizationName: organizationName || null,
           teamName: teamName || null,
-          roleLabel: roleLabel || null,
+          title: title || null,
         }),
       },
       bypassDailyRecipientLimit: true,
