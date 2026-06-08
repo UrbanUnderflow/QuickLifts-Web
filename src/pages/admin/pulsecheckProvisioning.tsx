@@ -2620,15 +2620,19 @@ const PulseCheckProvisioningPage: React.FC = () => {
       await loadData();
 
       if (success) {
-        setMessage({ type: 'success', text: `Activation email sent to ${normalizedEmail}.` });
+        // Toast (z-[101]) so it's visible above the onboarding modal — the
+        // header banner (setMessage) sits behind the modal and goes unseen.
+        const sentText = `Activation email sent to ${normalizedEmail}.`;
+        dispatch(showToast({ message: sentText, type: 'success', duration: 3000 }));
+        setMessage({ type: 'success', text: sentText });
       } else {
-        setMessage({
-          type: 'error',
-          text: `Failed to send activation email to ${normalizedEmail}: ${result?.error || 'unknown error'}`,
-        });
+        const failText = `Failed to send activation email to ${normalizedEmail}: ${result?.error || 'unknown error'}`;
+        dispatch(showToast({ message: failText, type: 'error', duration: 4000 }));
+        setMessage({ type: 'error', text: failText });
       }
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to send activation email:', error);
+      dispatch(showToast({ message: 'Failed to send activation email.', type: 'error', duration: 4000 }));
       setMessage({ type: 'error', text: 'Failed to send activation email.' });
     } finally {
       setActivationEmailSendingEmail(null);

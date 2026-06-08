@@ -103,6 +103,8 @@ const StaffOnboardingDemoPage: React.FC = () => {
     displayName: DEMO.recipientName,
     title: DEMO.invitedTitle,
   });
+  // Local-only photo preview (demo never uploads) — mirrors member-setup.tsx.
+  const [photoPreview, setPhotoPreview] = useState('');
   const [notifications, setNotifications] = useState<Record<string, boolean>>({
     email: true,
     sms: false,
@@ -547,13 +549,27 @@ const StaffOnboardingDemoPage: React.FC = () => {
                 <div className="space-y-5">
                   <div className="rounded-[28px] border border-zinc-800 bg-black/20 p-5">
                     <div className="mx-auto flex h-28 w-28 items-center justify-center overflow-hidden rounded-[24px] border border-zinc-700 bg-zinc-900">
-                      <span className="text-4xl font-semibold text-zinc-500">
-                        {(setupForm.displayName || 'A').charAt(0).toUpperCase()}
-                      </span>
+                      {photoPreview ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={photoPreview} alt="Profile preview" className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="text-4xl font-semibold text-zinc-500">
+                          {(setupForm.displayName || 'A').charAt(0).toUpperCase()}
+                        </span>
+                      )}
                     </div>
-                    <div className="mt-4 block rounded-2xl border border-zinc-700 px-3 py-2 text-center text-sm font-medium text-white">
-                      Add Photo
-                    </div>
+                    <label className="mt-4 block cursor-pointer rounded-2xl border border-zinc-700 px-3 py-2 text-center text-sm font-medium text-white transition hover:border-[#7C3AED]">
+                      {photoPreview ? 'Change Photo' : 'Add Photo'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] || null;
+                          setPhotoPreview(file ? URL.createObjectURL(file) : '');
+                        }}
+                      />
+                    </label>
                   </div>
 
                   <label className="block space-y-2">

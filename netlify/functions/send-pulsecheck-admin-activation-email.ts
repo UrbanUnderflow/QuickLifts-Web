@@ -74,7 +74,7 @@ function renderActivationEmail(opts: {
                         <table role="presentation" cellpadding="0" cellspacing="0" width="64" height="64" style="width:64px;height:64px;border-radius:50%;background:#f4f4f5;margin-bottom:20px;">
                           <tr>
                             <td align="center" valign="middle" style="font-size:28px;">
-                              🛡️
+                              🧠
                             </td>
                           </tr>
                         </table>
@@ -84,7 +84,7 @@ function renderActivationEmail(opts: {
                         </h1>
 
                         <p style="margin:0 0 8px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:16px;line-height:1.6;color:#000000;">
-                          Hey ${escapeHtml(name)}, ${escapeHtml(senderName)} has set up an admin workspace for you.
+                          Hey ${escapeHtml(name)}, the PulseCheck team has set up an admin workspace for you.
                         </p>
 
                         <p style="margin:0 0 16px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:14px;line-height:1.6;color:#000000;">
@@ -121,6 +121,9 @@ function renderActivationEmail(opts: {
                   <p style="margin:0 0 8px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:11px;line-height:1.6;color:#52525B;">
                     © ${new Date().getFullYear()} Pulse Intelligence Labs, Inc.
                   </p>
+                  <p style="margin:0 0 8px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:11px;line-height:1.6;color:#52525B;">
+                    Need to reach us? Reply to this email or contact <a href="mailto:hello@fitwithpulse.ai" style="color:#000000;text-decoration:underline;">hello@fitwithpulse.ai</a>.
+                  </p>
                   <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:11px;line-height:1.6;color:#52525B;">
                     You received this email because an admin workspace was created for you on <a href="https://fitwithpulse.ai" style="color:#000000;text-decoration:underline;">PulseCheck</a>.
                   </p>
@@ -146,6 +149,25 @@ export const handler: Handler = async (event) => {
 
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers: corsHeaders, body: '' };
+  }
+
+  // Preview mode: GET ?preview=1 renders the REAL template (no send) so the exact
+  // admin-activation email is viewable in a browser — no Brevo key required.
+  // Override sample copy via query string (recipientName, organizationName, etc.).
+  if (event.httpMethod === 'GET' && event.queryStringParameters?.preview) {
+    const q = event.queryStringParameters || {};
+    const { html } = renderActivationEmail({
+      recipientName: q.recipientName || 'Tremaine Grant',
+      organizationName: q.organizationName || 'The Athletic Mind Council',
+      teamName: q.teamName || 'Track And Field',
+      senderName: q.senderName || 'the PulseCheck team',
+      activationUrl: q.activationUrl || 'https://fitwithpulse.ai/PulseCheck/admin-activation/preview-token',
+    });
+    return {
+      statusCode: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' },
+      body: html,
+    };
   }
 
   if (event.httpMethod !== 'POST') {
@@ -196,6 +218,8 @@ export const handler: Handler = async (event) => {
         email: process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai',
         name: 'PulseCheck',
       },
+      // Route replies to the shared inbox, not the inviter's personal address.
+      replyTo: { email: 'hello@fitwithpulse.ai', name: 'PulseCheck' },
       headers: {
         'X-Mailin-custom': JSON.stringify({
           emailType: 'pulsecheck-admin-activation',
