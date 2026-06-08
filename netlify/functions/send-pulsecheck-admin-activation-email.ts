@@ -62,7 +62,7 @@ function renderActivationEmail(opts: {
             <table role="presentation" cellpadding="0" cellspacing="0" width="640" style="max-width:640px;width:100%;">
               <tr>
                 <td align="center" style="padding: 6px 8px 18px 8px;">
-                  <img src="https://fitwithpulse.ai/pulse-logo.svg" alt="PulseCheck" width="140" height="auto" style="display:block;width:140px;height:auto;" />
+                  <img src="https://fitwithpulse.ai/pulseCheckIcon.png" alt="PulseCheck" width="64" height="64" style="display:block;width:64px;height:64px;border-radius:14px;" />
                 </td>
               </tr>
 
