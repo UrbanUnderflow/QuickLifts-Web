@@ -13,6 +13,12 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # Raise the Node.js heap for `next build`. The default heap (~2 GB on the
+  # build container) is exceeded while statically generating this app's pages,
+  # so the build worker is killed with "Reached heap limit / heap out of
+  # memory" (SIGABRT, exit 1). 4 GB clears it; bump higher if it recurs.
+  # Defined here (not just the Netlify UI) so every deploy inherits it from source.
+  NODE_OPTIONS = "--max-old-space-size=4096"
   # Netlify secret scanning disabled.
   #
   # Why: Netlify's pattern-based scanner matches `AIza...` (Google API key

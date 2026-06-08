@@ -200,6 +200,11 @@ async function handleSubscriptionCreated(subscription) {
   console.log(`[Webhook] Processing subscription created: ${subscription.id}`);
 
   try {
+    // Coaching subscription → reconcile onto the training doc. The
+    // checkout.session.completed handler already set the room active;
+    // this keeps paymentStatus correct if events arrive out of order.
+    if (await handleCoachingSubscriptionChange(subscription)) return;
+
     // Skip coach subscriptions (handled by coach webhook)
     if (subscription.metadata?.userType === 'coach') {
       console.log(`[Webhook] Skipping coach subscription: ${subscription.id}`);
@@ -312,11 +317,52 @@ async function handleSubscriptionCreated(subscription) {
   }
 }
 
+// Reconciles a coaching subscription's Stripe status back onto the
+// training doc so the member's room locks/unlocks automatically:
+//   active/trialing → paymentStatus 'active' (room unlocked)
+//   past_due/unpaid → 'pastDue' (locked)
+//   canceled/incomplete_expired → 'canceled' (locked, host keeps room)
+// Returns true when the subscription belongs to a coaching room.
+async function handleCoachingSubscriptionChange(subscription) {
+  const trainingId = subscription.metadata?.trainingId;
+  if (!trainingId || subscription.metadata?.payment_type !== 'coaching_subscription') return false;
+
+  let paymentStatus;
+  switch (subscription.status) {
+    case 'active':
+    case 'trialing':
+      paymentStatus = 'active';
+      break;
+    case 'past_due':
+    case 'unpaid':
+      paymentStatus = 'pastDue';
+      break;
+    default: // canceled, incomplete_expired, incomplete
+      paymentStatus = 'canceled';
+  }
+
+  try {
+    await db.collection('one-on-one-trainings').doc(trainingId).set({
+      paymentStatus,
+      stripeSubscriptionId: subscription.id,
+      updatedAt: new Date()
+    }, { merge: true });
+    console.log(`[Webhook] Coaching subscription ${subscription.id} → training ${trainingId} paymentStatus=${paymentStatus}`);
+  } catch (error) {
+    console.error(`[Webhook] Error reconciling coaching subscription ${subscription.id}: ${error.message}`);
+  }
+  return true;
+}
+
 // Handle subscription updated event
 async function handleSubscriptionUpdated(subscription) {
   console.log(`[Webhook] Processing subscription updated: ${subscription.id}`);
 
   try {
+    // Coaching subscriptions route to the training doc, not the user's
+    // platform subscription record.
+    if (await handleCoachingSubscriptionChange(subscription)) return;
+
     // Skip coach subscriptions (handled by coach webhook)
     if (subscription.metadata?.userType === 'coach') {
       console.log(`[Webhook] Skipping coach subscription update: ${subscription.id}`);
@@ -439,6 +485,9 @@ async function handleSubscriptionDeleted(subscription) {
   console.log(`[Webhook] Processing subscription deleted: ${subscription.id}`);
 
   try {
+    // Coaching subscription canceled → lock the member out of the room.
+    if (await handleCoachingSubscriptionChange(subscription)) return;
+
     // Skip coach subscriptions (handled by coach webhook)
     if (subscription.metadata?.userType === 'coach') {
       console.log(`[Webhook] Skipping coach subscription deletion: ${subscription.id}`);
@@ -673,10 +722,65 @@ async function handleInvoicePaid(invoice) {
   }
 }
 
+// Grants access to a paid 1-on-1 coaching room once checkout completes.
+// Flips the training doc to active + paid/active, locks the buyer in as
+// the member, stores the subscription id for recurring rooms, and writes
+// a transaction record. Mirrors the round recordPurchase pattern but
+// targets the `one-on-one-trainings` collection.
+async function handleCoachingCheckout(session) {
+  const metadata = session.metadata || {};
+  const trainingId = metadata.trainingId;
+  if (!trainingId) return false;
+
+  const buyerId = metadata.buyerId || session.client_reference_id;
+  const hostId = metadata.hostId || '';
+  const isSubscription = session.mode === 'subscription' || metadata.payment_type === 'coaching_subscription';
+
+  try {
+    const update = {
+      status: 'active',
+      paymentStatus: isSubscription ? 'active' : 'paid',
+      acceptedAt: Date.now() / 1000,
+      updatedAt: new Date()
+    };
+    if (buyerId) update.memberId = buyerId;
+    if (session.subscription) update.stripeSubscriptionId = session.subscription;
+
+    await db.collection('one-on-one-trainings').doc(trainingId).set(update, { merge: true });
+
+    await db.collection('transactions').add({
+      type: isSubscription ? 'coaching_subscription' : 'coaching_purchase',
+      trainingId,
+      ownerId: hostId,
+      buyerId: buyerId || null,
+      amount: (session.amount_total || 0) / 100,
+      currency: session.currency || 'usd',
+      sessionId: session.id,
+      paymentIntentId: session.payment_intent || null,
+      subscriptionId: session.subscription || null,
+      status: 'completed',
+      createdAt: new Date()
+    });
+
+    console.log(`[Webhook] Coaching checkout complete for training ${trainingId} (buyer ${buyerId}, subscription=${isSubscription})`);
+    return true;
+  } catch (error) {
+    console.error(`[Webhook] Error handling coaching checkout for ${trainingId}: ${error.message}`);
+    return true; // handled (don't fall through to challenge logic)
+  }
+}
+
 async function handleCheckoutSessionCompleted(session) {
   console.log('Processing checkout.session.completed event');
 
   try {
+    // 1-on-1 paid coaching takes priority — handle and return so it
+    // doesn't fall through to the round/challenge purchase path.
+    if (session.metadata?.trainingId) {
+      await handleCoachingCheckout(session);
+      return;
+    }
+
     // Extract necessary information from the session
     const { metadata, customer_email, customer, client_reference_id } = session;
     const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
