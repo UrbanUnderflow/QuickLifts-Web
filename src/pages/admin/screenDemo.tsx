@@ -64,6 +64,20 @@ const SCREEN_DEMOS: ScreenDemo[] = [
     status: 'live',
   },
   {
+    id: 'staff-invite-email',
+    surface: 'Staff invite → email template',
+    title: 'Staff invite email (live template)',
+    description:
+      'The exact transactional email a staff member receives when a coach invites them — from the dashboard "Invite a staff member" dialog or the "Bring your staff in" onboarding step. This renders the real template straight from send-pulsecheck-team-invite-email (the source of truth, not a rebuilt copy), so what you see here is what lands in their inbox. Override the sample copy via query params (?preview=1&recipientName=…&teamName=…).',
+    launchUrl: '/.netlify/functions/send-pulsecheck-team-invite-email?preview=1',
+    steps: [
+      { label: 'Subject', detail: '“You’re invited to join {team} on PulseCheck.”' },
+      { label: 'Body', detail: 'Greeting by name, org/team/title context, and the ACCEPT INVITE button with the embedded link.' },
+      { label: 'Live source', detail: 'Rendered by the real send function — edits to the template show up here immediately.' },
+    ],
+    status: 'live',
+  },
+  {
     id: 'coach-dashboard',
     surface: 'Coach dashboard',
     title: 'Coach Dashboard (demo)',

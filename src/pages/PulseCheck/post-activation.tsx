@@ -480,6 +480,44 @@ export default function PulseCheckPostActivationPage() {
       if (createdInvite?.activationUrl) {
         await navigator.clipboard.writeText(createdInvite.activationUrl);
       }
+
+      // If an email was provided, also send the invite email with the link
+      // embedded (same template/flow the dashboard "Invite a staff member"
+      // modal uses). The link is still created + copied either way.
+      let emailSent = false;
+      if (targetEmail && createdInvite?.activationUrl) {
+        try {
+          const resp = await fetch('/.netlify/functions/send-pulsecheck-team-invite-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              toEmail: targetEmail,
+              activationUrl: createdInvite.activationUrl,
+              recipientName,
+              organizationName: organization.displayName,
+              teamName: team.displayName,
+              title: adultInviteForm.invitedTitle.trim(),
+              senderName: currentUser.displayName || '',
+            }),
+          });
+          const result = await resp.json().catch(() => ({ success: false }));
+          emailSent = resp.ok && result?.success === true;
+          await pulseCheckProvisioningService.recordAdminActivationEmailResult({
+            token: createdInvite.token,
+            success: emailSent,
+            messageId: result?.messageId,
+            sentByUserId: currentUser.id,
+            sentByEmail: currentUser.email,
+            targetEmail,
+            organizationId: organization.id,
+            teamId: team.id,
+            errorMessage: emailSent ? '' : String(result?.error || 'Send failed'),
+          });
+        } catch (mailError) {
+          console.error('[PulseCheck post-activation] staff invite email failed', mailError);
+        }
+      }
+
       setAdultInviteForm({
         recipientName: '',
         targetEmail: '',
@@ -488,7 +526,14 @@ export default function PulseCheckPostActivationPage() {
       });
       setStaffPhotoFile(null);
       setStaffPhotoPreview('');
-      setMessage({ type: 'success', text: 'Adult onboarding link created and copied.' });
+      setMessage({
+        type: 'success',
+        text: targetEmail
+          ? emailSent
+            ? `Invite emailed to ${targetEmail} — link also copied.`
+            : `Link created and copied, but the email didn't send — share the link directly.`
+          : 'Adult onboarding link created and copied.',
+      });
     } catch (error) {
       console.error('[PulseCheck post-activation] Failed to create adult invite:', error);
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to create adult invite.' });

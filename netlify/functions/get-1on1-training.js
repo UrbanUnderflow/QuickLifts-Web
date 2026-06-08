@@ -3,18 +3,8 @@
 // coach + price before redirecting to Stripe Checkout.
 
 const { admin } = require('./config/firebase');
+const { priceLabel } = require('./lib/coaching');
 const db = admin.firestore();
-
-function priceLabel(pricing) {
-  if (!pricing || !pricing.amountCents) return null;
-  const dollars = pricing.amountCents / 100;
-  const amountStr = Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`;
-  if (pricing.mode === 'recurring') {
-    const suffix = pricing.interval === 'week' ? 'wk' : pricing.interval === 'year' ? 'yr' : 'mo';
-    return `${amountStr}/${suffix}`;
-  }
-  return `${amountStr} one-time`;
-}
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {

@@ -9,6 +9,7 @@
 
 const { admin } = require('./config/firebase');
 const Stripe = require('stripe');
+const { validatePaidTraining, platformFeeCents } = require('./lib/coaching');
 
 const db = admin.firestore();
 
@@ -58,20 +59,12 @@ exports.handler = async (event) => {
       return { statusCode: 404, headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ error: 'Training not found' }) };
     }
     const training = trainingSnap.data() || {};
-    const pricing = training.pricing || {};
 
-    if (pricing.mode !== 'oneTime') {
-      return { statusCode: 400, headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ error: 'Training is not a one-time paid room' }) };
+    const validation = validatePaidTraining(training, 'oneTime');
+    if (!validation.ok) {
+      return { statusCode: 400, headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ error: validation.error }) };
     }
-    const amount = Number(pricing.amountCents || 0);
-    if (!amount || amount < 50) {
-      return { statusCode: 400, headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ error: 'Invalid price' }) };
-    }
-    const currency = (pricing.currency || 'USD').toLowerCase();
-    const hostId = training.hostId;
-    if (!hostId) {
-      return { statusCode: 400, headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ error: 'Training has no host' }) };
-    }
+    const { amountCents: amount, currency, hostId, coachName } = validation;
 
     // Resolve the host's connected Stripe account.
     const hostSnap = await db.collection('users').doc(hostId).get();
@@ -81,9 +74,8 @@ exports.handler = async (event) => {
     }
 
     const stripe = getStripeClient(event);
-    const platformFee = Math.round(amount * 0.03);
+    const platformFee = platformFeeCents(amount);
     const origin = siteOrigin(event);
-    const coachName = training.hostInfo?.username || 'your coach';
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',

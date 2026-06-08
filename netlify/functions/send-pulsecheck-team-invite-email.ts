@@ -136,6 +136,28 @@ export const handler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers: corsHeaders, body: '' };
   }
+
+  // Preview mode: GET ?preview=1 renders the REAL template (no send) so the exact
+  // email a staff member receives is always viewable — the source of truth, not a
+  // hand-rebuilt copy. Override any field via query string (recipientName,
+  // organizationName, teamName, title, senderName, activationUrl).
+  if (event.httpMethod === 'GET' && event.queryStringParameters?.preview) {
+    const q = event.queryStringParameters || {};
+    const { html } = renderTeamInviteEmail({
+      recipientName: q.recipientName || 'Jordan',
+      organizationName: q.organizationName || 'Riverside Athletics',
+      teamName: q.teamName || "Men's Track & Field",
+      title: q.title || 'Assistant Coach',
+      senderName: q.senderName || 'Coach Taylor',
+      activationUrl: q.activationUrl || 'https://fitwithpulse.ai/PulseCheck/team-invite/preview-token',
+    });
+    return {
+      statusCode: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' },
+      body: html,
+    };
+  }
+
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ success: false, error: 'Method not allowed' }) };
   }

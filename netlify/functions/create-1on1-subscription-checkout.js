@@ -7,6 +7,7 @@
 
 const { admin } = require('./config/firebase');
 const Stripe = require('stripe');
+const { validatePaidTraining, PLATFORM_FEE_PERCENT } = require('./lib/coaching');
 
 const db = admin.firestore();
 
@@ -28,8 +29,6 @@ function siteOrigin(event) {
   }
   return process.env.SITE_URL || 'https://fitwithpulse.ai';
 }
-
-const VALID_INTERVALS = { week: 'week', month: 'month', year: 'year' };
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -57,21 +56,12 @@ exports.handler = async (event) => {
       return { statusCode: 404, headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ error: 'Training not found' }) };
     }
     const training = trainingSnap.data() || {};
-    const pricing = training.pricing || {};
 
-    if (pricing.mode !== 'recurring') {
-      return { statusCode: 400, headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ error: 'Training is not a recurring paid room' }) };
+    const validation = validatePaidTraining(training, 'recurring');
+    if (!validation.ok) {
+      return { statusCode: 400, headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ error: validation.error }) };
     }
-    const amount = Number(pricing.amountCents || 0);
-    if (!amount || amount < 50) {
-      return { statusCode: 400, headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ error: 'Invalid price' }) };
-    }
-    const interval = VALID_INTERVALS[pricing.interval || 'month'] || 'month';
-    const currency = (pricing.currency || 'USD').toLowerCase();
-    const hostId = training.hostId;
-    if (!hostId) {
-      return { statusCode: 400, headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ error: 'Training has no host' }) };
-    }
+    const { amountCents: amount, currency, interval, hostId, coachName } = validation;
 
     const hostSnap = await db.collection('users').doc(hostId).get();
     const connectedAccountId = hostSnap.exists ? hostSnap.data()?.creator?.stripeAccountId : null;
@@ -81,7 +71,6 @@ exports.handler = async (event) => {
 
     const stripe = getStripeClient(event);
     const origin = siteOrigin(event);
-    const coachName = training.hostInfo?.username || 'your coach';
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -103,7 +92,7 @@ exports.handler = async (event) => {
       subscription_data: {
         // Route every invoice to the coach's connected account, less 3%.
         transfer_data: { destination: connectedAccountId },
-        application_fee_percent: 3,
+        application_fee_percent: PLATFORM_FEE_PERCENT,
         metadata: {
           platform: 'pulse',
           trainingId,
