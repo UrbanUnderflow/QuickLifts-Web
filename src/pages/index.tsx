@@ -213,7 +213,7 @@ const MarketingContent: React.FC<{
           />
         </div>
         {/* Dark overlay for text readability */}
-        <div className="absolute inset-0 bg-gradient-to-br from-zinc-950/85 via-zinc-900/75 to-zinc-950/90"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-zinc-950/60 via-zinc-900/50 to-zinc-950/65"></div>
         {/* Enhanced Background Elements (subtle) */}
         <div className="absolute inset-0">
           <div className="absolute top-20 left-20 w-96 h-96 bg-[#E0FE10]/10 rounded-full filter blur-3xl animate-pulse"></div>

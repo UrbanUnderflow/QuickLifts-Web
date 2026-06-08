@@ -50,12 +50,12 @@ const SCREEN_DEMOS: ScreenDemo[] = [
     status: 'live',
   },
   {
-    id: 'coach-dashboard-v2',
-    surface: 'Coach dashboard v2',
-    title: 'Coach Dashboard v2 (design review)',
+    id: 'coach-dashboard',
+    surface: 'Coach dashboard',
+    title: 'Coach Dashboard (demo)',
     description:
       'The clean PulseCheck sidebar dashboard with mock data and no auth — for design review of the layout and flows.',
-    launchUrl: '/coach/dashboard-v2-demo',
+    launchUrl: '/coach/dashboard/demo',
     steps: [
       { label: 'Navigate', detail: 'Home, Athlete Alerts, Team Roster, Train Nora, Schedule, Reports.' },
       { label: 'Mock data', detail: 'Athletes, alerts, and reports are mock — nothing writes to Firebase.' },

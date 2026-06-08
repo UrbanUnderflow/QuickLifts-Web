@@ -1,6 +1,5 @@
 import React from 'react';
-import Head from 'next/head';
-import { CoachDashboardShell, AthleteAlert } from './dashboard-v2';
+import type { AthleteAlert } from '../../pages/coach/dashboard';
 import { coachService, DailySentimentRecord } from '../../api/firebase/coach/service';
 import { noraVaultService, NoraVaultEntry } from '../../api/firebase/coach/noraVaultService';
 import {
@@ -8,14 +7,21 @@ import {
   ScheduleEvent,
   ScheduleEventDraft,
 } from '../../api/firebase/coach/coachScheduleService';
-import NoraDashboardTraining from '../../components/coach/NoraDashboardTraining';
 
-const DEMO_COACH_ID = 'demo-coach';
+// ---------------------------------------------------------------------------
+// Shared demo dataset + service mocks for the coach dashboard.
+//
+// Used by BOTH the always-on demo page (/coach/dashboard/demo) and the live
+// dashboard's training mode (/coach/dashboard on first visit / ?training=1),
+// so the walkthrough data stays in lockstep across surfaces.
+// ---------------------------------------------------------------------------
+
+export const DEMO_COACH_ID = 'demo-coach';
 
 const firstNames = ['Tremaine', 'Alex', 'Jordan', 'Sam', 'Taylor', 'Riley', 'Casey', 'Morgan', 'Jamie', 'Devon', 'Avery', 'Cameron', 'Drew', 'Quinn', 'Reese', 'Skyler'];
 const lastNames = ['Grant', 'Morgan', 'King', 'Lee', 'Brooks', 'Chen', 'Rivera', 'Thompson', 'Okafor', 'Washington', 'Rodriguez', 'Williams', 'Johnson', 'Martinez', 'Davis', 'Patel'];
 
-type DemoAthlete = {
+export type DemoAthlete = {
   id: string;
   displayName: string;
   email: string;
@@ -27,7 +33,7 @@ type DemoAthlete = {
 };
 
 // Deterministic mock roster spanning every status bucket.
-const demoAthletes: DemoAthlete[] = Array.from({ length: 16 }).map((_, i) => {
+export const DEMO_ATHLETES: DemoAthlete[] = Array.from({ length: 16 }).map((_, i) => {
   const fname = firstNames[i % firstNames.length];
   const lname = lastNames[i % lastNames.length];
   // Spread sentiment from negative to positive across the roster.
@@ -54,7 +60,7 @@ const hoursAgo = (h: number) => new Date(Date.now() - h * 3600000);
 //    An athlete who picked a different staffer — or "don't notify anyone" — would
 //    never appear here; that's the whole point of the consent gate.
 //  • Tier 3 is awareness only: Nora, PulseCheck, and AuntEdna have already acted.
-const demoAlerts: AthleteAlert[] = [
+export const DEMO_ALERTS: AthleteAlert[] = [
   // ── Tier 2 — consent-based (horizontal lane) ──
   {
     id: 'al-morgan',
@@ -234,10 +240,18 @@ const toYYYYMMDD = (d: Date) => {
   return `${y}-${m}-${day}`;
 };
 
-const CoachDashboardV2Demo: React.FC = () => {
+// Apply in-memory mocks for the dashboard's coach services while `active`, and
+// restore the originals on deactivate/unmount. Returns whether the mocks are in
+// place (gate rendering on it so the shell never briefly hits real services).
+export function useDemoDashboardMocks(active: boolean): boolean {
   const [mockReady, setMockReady] = React.useState(false);
 
   React.useEffect(() => {
+    if (!active) {
+      setMockReady(false);
+      return;
+    }
+
     const originalGet = coachService.getDailySentimentHistory.bind(coachService);
     const originalProcess = (coachService as any).processSentimentForAthlete?.bind(coachService);
     const originalConvos = coachService.getAthleteConversations.bind(coachService);
@@ -279,18 +293,18 @@ const CoachDashboardV2Demo: React.FC = () => {
     };
 
     coachService.getDailySentimentHistory = (async (userId: string, days = 28) => {
-      const a = demoAthletes.find((x) => x.id === userId);
+      const a = DEMO_ATHLETES.find((x) => x.id === userId);
       return a ? buildHistory(a, days) : originalGet(userId, days);
     }) as any;
 
     (coachService as any).processSentimentForAthlete = async (userId: string, days = 28) => {
-      const a = demoAthletes.find((x) => x.id === userId);
+      const a = DEMO_ATHLETES.find((x) => x.id === userId);
       if (!a) return originalProcess ? originalProcess(userId, days) : [];
       return buildHistory(a, days);
     };
 
     coachService.getAthleteConversations = (async (athleteUserId: string) => {
-      const a = demoAthletes.find((x) => x.id === athleteUserId);
+      const a = DEMO_ATHLETES.find((x) => x.id === athleteUserId);
       if (!a) return originalConvos(athleteUserId);
       const start = new Date();
       start.setHours(10, 0, 0, 0);
@@ -392,33 +406,9 @@ const CoachDashboardV2Demo: React.FC = () => {
       coachScheduleService.addEvents = originalSchedAddMany;
       coachScheduleService.deleteEvent = originalSchedDelete;
       coachScheduleService.scrapeUrl = originalSchedScrape;
+      setMockReady(false);
     };
-  }, []);
+  }, [active]);
 
-  return (
-    <>
-      <Head>
-        <title>Coach Dashboard (Demo) | PulseCheck</title>
-      </Head>
-      <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-300 text-xs px-4 py-1.5 text-center">
-        Demo mode — mock data for walkthroughs. No real athletes or Firebase writes.
-      </div>
-      {mockReady && (
-        <CoachDashboardShell
-          athletes={demoAthletes as any}
-          alerts={demoAlerts}
-          loadingAthletes={false}
-          coachName="Coach Mayo"
-          coachEmail="coach.mayo@fitwithpulse.ai"
-          coachId={DEMO_COACH_ID}
-          isDemo
-          earningsEnabled
-          revenueSharePct={20}
-        />
-      )}
-      {mockReady && <NoraDashboardTraining />}
-    </>
-  );
-};
-
-export default CoachDashboardV2Demo;
+  return mockReady;
+}

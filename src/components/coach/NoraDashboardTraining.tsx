@@ -167,7 +167,7 @@ export const TRAINING_STEPS: DashboardTrainingStep[] = [
 
 const PURPLE = '#a78bfa';
 
-const NoraDashboardTraining: React.FC = () => {
+const NoraDashboardTraining: React.FC<{ onComplete?: () => void }> = ({ onComplete }) => {
   const [stepIndex, setStepIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [speaking, setSpeaking] = useState(false);
@@ -453,16 +453,18 @@ const NoraDashboardTraining: React.FC = () => {
     if (isLast) {
       stop();
       setDismissed(true);
+      onComplete?.();
       return;
     }
     stop();
     setStepIndex((i) => Math.min(i + 1, TRAINING_STEPS.length - 1));
-  }, [isLast, stop]);
+  }, [isLast, stop, onComplete]);
 
   const handleClose = useCallback(() => {
     stop();
     setDismissed(true);
-  }, [stop]);
+    onComplete?.();
+  }, [stop, onComplete]);
 
   if (dismissed) return null;
 
