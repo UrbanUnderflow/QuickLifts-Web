@@ -173,7 +173,8 @@ export default function PulseCheckMemberSetupPage() {
       const refreshedUser = await userService.fetchUserFromFirestore(currentUser.id);
       userService.nonUICurrentUser = refreshedUser;
       setMessage({ type: 'success', text: 'Your member setup is complete.' });
-      router.push(`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`);
+      // Converged: staff land on the coach dashboard (nav gated by capabilities).
+      router.push('/coach/dashboard');
     } catch (error) {
       console.error('[PulseCheck member setup] Failed to save setup:', error);
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to save your setup.' });
@@ -330,7 +331,7 @@ export default function PulseCheckMemberSetupPage() {
               {saving ? 'Saving…' : 'Complete Member Setup'}
             </button>
             <Link
-              href={`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
+              href="/coach/dashboard"
               className="inline-flex items-center justify-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold text-white transition hover:border-white/30"
               style={{ borderColor: PC.cardBorder }}
             >

@@ -22,6 +22,8 @@ import { SubscriptionPlatform, SubscriptionType, UserLevel, userService } from '
 import { resolvePulseCheckInvitePreviewImage } from '../../../utils/pulsecheckInviteLinks';
 
 const PULSECHECK_IOS_APP_STORE_URL = 'https://apps.apple.com/by/app/pulsecheck-mindset-coaching/id6747253393';
+// Placeholder until PulseCheck-Android is published — the listing goes live at this URL automatically.
+const PULSECHECK_ANDROID_PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.fitwithpulse.pulsecheck';
 
 type TeamInvitePageProps = {
   invite: {
@@ -455,7 +457,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
       return;
     }
     if (normalizedTargetEmail && email !== normalizedTargetEmail) {
-      setMessage({ type: 'error', text: `This invite is restricted to ${invite.targetEmail}.` });
+      setMessage({ type: 'error', text: `This invite was sent to ${invite.targetEmail}. Sign in with that email to join your team.` });
       return;
     }
     if (createForm.password !== createForm.confirmPassword) {
@@ -509,7 +511,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
       return;
     }
     if (normalizedTargetEmail && email !== normalizedTargetEmail) {
-      setMessage({ type: 'error', text: `This invite is restricted to ${invite.targetEmail}.` });
+      setMessage({ type: 'error', text: `This invite was sent to ${invite.targetEmail}. Sign in with that email to join your team.` });
       return;
     }
 
@@ -669,7 +671,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   {shouldPreferAppDownload ? (
                     <>
                       Pulse Check helps athletes build readiness, mindset, and performance habits with guided check-ins and coaching.
-                      Download the iPhone app to join <span className="font-medium text-white">{invite.teamName}</span> inside{' '}
+                      Download the app to join <span className="font-medium text-white">{invite.teamName}</span> inside{' '}
                       <span className="font-medium text-white">{invite.organizationName}</span>.
                     </>
                   ) : (
@@ -772,7 +774,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 className="mb-5 inline-flex items-center gap-2 rounded-2xl border border-[#7C3AED]/30 bg-[#7C3AED]/10 px-4 py-3 text-sm font-semibold text-[#a78bfa] transition hover:bg-[#7C3AED]/15"
               >
                 <Smartphone className="h-4 w-4" />
-                Prefer the iPhone app instead
+                Prefer the mobile app instead
               </button>
             ) : null}
 
@@ -816,10 +818,10 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 </div>
 
                 <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">iPhone-First Onboarding</p>
+                  <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">App-First Onboarding</p>
                   <h2 className="mt-2 text-3xl font-semibold text-white">Download the app to join this pilot</h2>
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
-                    Download Pulse Check on iPhone, then sign in with{' '}
+                    Download Pulse Check on your phone, then sign in with{' '}
                     <span className="font-medium text-white">{invite.targetEmail || 'your invited email'}</span> to continue into{' '}
                     <span className="font-medium text-white">{inviteScopeLabel}</span>.
                   </p>
@@ -831,15 +833,26 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-200">
                       Install the Pulse Check app, create your account with the invited email, then come back to this browser page and tap Join Now to finish entering the pilot in-app.
                     </div>
-                    <a
-                      href={PULSECHECK_IOS_APP_STORE_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
-                    >
-                      <Download className="h-4 w-4" />
-                      Download the Pulse Check App
-                    </a>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <a
+                        href={PULSECHECK_IOS_APP_STORE_URL}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
+                      >
+                        <Download className="h-4 w-4" />
+                        iPhone App Store
+                      </a>
+                      <a
+                        href={PULSECHECK_ANDROID_PLAY_STORE_URL}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
+                      >
+                        <Smartphone className="h-4 w-4" />
+                        Android Play Store
+                      </a>
+                    </div>
                     <a
                       href={invite.activationUrl}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#7C3AED]/35 bg-[#7C3AED]/[0.12] px-4 py-3 text-sm font-semibold text-[#a78bfa] transition hover:bg-[#7C3AED]/[0.18]"
@@ -847,13 +860,13 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                       Join Now
                       <ArrowRight className="h-4 w-4" />
                     </a>
-                    <p className="text-xs uppercase tracking-[0.16em] text-[#a78bfa]/70">Available on iPhone</p>
+                    <p className="text-xs uppercase tracking-[0.16em] text-[#a78bfa]/70">Available on iPhone and Android</p>
                   </div>
                 </div>
 
                 <div className="grid gap-3">
                   <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-300">
-                    1. Download the app on your iPhone.
+                    1. Download the app on your phone.
                   </div>
                   <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-300">
                     2. Sign in or create your account with the invited email.
@@ -862,7 +875,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     3. Come back to this browser page and tap Join Now to open the app and complete joining the pilot.
                   </div>
                   <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-300">
-                    4. If you do not have an iPhone device, use the web fallback below instead.
+                    4. If you cannot use the app on your phone, use the web fallback below instead.
                   </div>
                 </div>
 
@@ -871,7 +884,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   onClick={() => updateWebOnboardingPreference(true)}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
                 >
-                  I don&apos;t have an iPhone device
+                  Continue on the web instead
                   <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
@@ -891,9 +904,10 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
 
                 {!authEmailMatchesInvite ? (
                   <div className="space-y-4">
-                    <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4 text-sm leading-7 text-red-200">
-                      This invite is restricted to <span className="font-medium">{invite.targetEmail}</span>. Sign out and continue with
-                      the matching account.
+                    <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] p-4 text-sm leading-7 text-amber-100">
+                      This invite was sent to <span className="font-medium">{invite.targetEmail}</span>, but you're signed in as{' '}
+                      <span className="font-medium">{authUser.email}</span>. Sign out and sign back in with{' '}
+                      <span className="font-medium">{invite.targetEmail}</span> to join your team.
                     </div>
                     <button
                       type="button"
@@ -901,7 +915,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                       className="inline-flex items-center gap-2 rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
                     >
                       <LogOut className="h-4 w-4" />
-                      Sign Out
+                      Sign out &amp; switch account
                     </button>
                   </div>
                 ) : (
@@ -1119,11 +1133,15 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
     if (!invite) {
       invite = await getFirestoreDocFallback('pulsecheck-invite-links', token, forceDevFirebase);
     }
-    if (!invite) return { notFound: true };
+    // Friendly landing instead of a cold 404 when the invite can't be opened.
+    const unavailable = (reason: string) => ({
+      redirect: { destination: `/PulseCheck/invite-unavailable?reason=${encodeURIComponent(reason)}`, permanent: false },
+    });
+    if (!invite) return unavailable('not-found');
     const redemptionMode = invite.redemptionMode === 'general' ? 'general' : 'single-use';
     const effectiveStatus = resolveInviteStatus(invite.status, redemptionMode);
-    if (effectiveStatus !== 'active') return { notFound: true };
-    if (invite.inviteType !== 'team-access') return { notFound: true };
+    if (effectiveStatus !== 'active') return unavailable(effectiveStatus || 'default');
+    if (invite.inviteType !== 'team-access') return unavailable('default');
 
     let organizationName = 'PulseCheck Organization';
     let teamName = 'Team';

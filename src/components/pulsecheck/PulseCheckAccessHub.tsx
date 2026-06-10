@@ -58,9 +58,12 @@ export const teamDestinationForMembership = (membership: PulseCheckTeamMembershi
   if (membership.role === 'team-admin') {
     return membership.onboardingStatus === 'profile-complete' || membership.onboardingStatus === 'complete'
       ? {
-          destinationHref: `/PulseCheck/team-workspace?${baseQuery}`,
-          destinationLabel: 'Open Team Workspace',
-          nextStepLabel: 'Workspace and rollout controls',
+          // Converged coach/admin home: the new dashboard owns readiness, roster,
+          // staff + athlete invites. (Team-workspace remains reachable by URL for
+          // the admin-only controls not yet ported — invite policy, consent, scope.)
+          destinationHref: `/coach/dashboard`,
+          destinationLabel: 'Open Coach Dashboard',
+          nextStepLabel: 'Readiness, roster, and team controls',
         }
       : {
           destinationHref: `/PulseCheck/post-activation?${baseQuery}`,
@@ -98,9 +101,11 @@ export const teamDestinationForMembership = (membership: PulseCheckTeamMembershi
         nextStepLabel: 'Profile and notification setup',
       }
     : {
-        destinationHref: `/PulseCheck/team-workspace?${baseQuery}`,
-        destinationLabel: 'Open Team Workspace',
-        nextStepLabel: 'Operational team workspace',
+        // Staff (coach / performance-staff / support-staff / clinician) share the
+        // converged coach dashboard; nav is gated by their capabilities.
+        destinationHref: `/coach/dashboard`,
+        destinationLabel: 'Open Coach Dashboard',
+        nextStepLabel: 'Operational coach dashboard',
       };
 };
 

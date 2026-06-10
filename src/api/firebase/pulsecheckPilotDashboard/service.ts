@@ -1275,8 +1275,9 @@ const buildDefaultInviteConfig = (
   supportName: '',
   supportEmail: '',
   supportPhone: '',
-  iosAppUrl: 'https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729',
-  androidAppUrl: 'https://play.google.com/store/apps/details?id=ai.fitwithpulse.pulse',
+  iosAppUrl: 'https://apps.apple.com/by/app/pulsecheck-mindset-coaching/id6747253393',
+  // Placeholder until PulseCheck-Android is published — the listing goes live at this URL automatically.
+  androidAppUrl: 'https://play.google.com/store/apps/details?id=com.fitwithpulse.pulsecheck',
   createdAt: null,
   updatedAt: null,
 });

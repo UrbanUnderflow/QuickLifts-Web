@@ -241,7 +241,7 @@ function buildPhysicalDayRange(dateKey, timezone) {
   const dayWindow = buildDayWindow(dateKey, timezone);
   return {
     startIso: new Date(dayWindow.startAt * 1000).toISOString(),
-    endIso: new Date(dayWindow.endAt * 1000 - 1000).toISOString(),
+    endIso: new Date(dayWindow.endAt * 1000).toISOString(),
   };
 }
 
@@ -252,14 +252,40 @@ function computeSleepMidpointEpochSeconds(startIso, endIso) {
   return Math.round(((startMs + endMs) / 2) / 1000);
 }
 
+const OPTIONAL_FETCH_RETRY_DELAY_MS = 350;
+
+function sleepMs(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Optional lanes (biometrics, weight, daily summaries) must never fail the
+// sync — but they must not fail SILENTLY either. We saw Google reject valid
+// filters transiently (2026-06-10: INVALID_DATA_POINT_FILTER_* on every
+// biometrics lane for ~20h after API enablement, then clean with identical
+// requests), and nothing recorded the degradation. So: one retry for
+// transient rejections, and every final failure lands in `options.warnings`,
+// which flows to the fitbit source-status doc + the sync response.
 async function optionalGoogleHealthRequest(accessToken, path, options = {}) {
-  try {
-    return await googleHealthApiRequest(accessToken, path, options);
-  } catch (error) {
-    if ([204, 404].includes(error?.googleHealthStatus || error?.statusCode)) return null;
-    console.warn('[google-health-sync] optional Google Health fetch failed:', path, error?.message || error);
-    return null;
+  const { warnings, ...requestOptions } = options;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await googleHealthApiRequest(accessToken, path, requestOptions);
+    } catch (error) {
+      const status = error?.googleHealthStatus || error?.statusCode;
+      if ([204, 404].includes(status)) return null;
+      // Auth failures won't heal on retry; the required fetches surface them.
+      const isFinal = [401, 403].includes(status) || attempt === 1;
+      if (isFinal) {
+        console.warn('[google-health-sync] optional Google Health fetch failed:', path, error?.message || error);
+        if (Array.isArray(warnings)) {
+          warnings.push({ path, message: String(error?.message || error).slice(0, 300) });
+        }
+        return null;
+      }
+      await sleepMs(OPTIONAL_FETCH_RETRY_DELAY_MS);
+    }
   }
+  return null;
 }
 
 function dataPointsFromResponse(response) {
@@ -271,11 +297,13 @@ function dataPointsFromResponse(response) {
   ];
 }
 
-async function fetchPagedDataPoints(accessToken, path, query) {
+async function fetchPagedDataPoints(accessToken, path, query, warnings, options = {}) {
+  const maxPages = options.maxPages || 5;
   const dataPoints = [];
   let pageToken = '';
-  for (let page = 0; page < 5; page += 1) {
+  for (let page = 0; page < maxPages; page += 1) {
     const response = await optionalGoogleHealthRequest(accessToken, path, {
+      warnings,
       query: {
         ...(query || {}),
         ...(pageToken ? { pageToken } : {}),
@@ -285,13 +313,19 @@ async function fetchPagedDataPoints(accessToken, path, query) {
     pageToken = response?.nextPageToken || response?.next_page_token || '';
     if (!pageToken) break;
   }
-  return { dataPoints };
+  if (pageToken) {
+    const message = `pagination cap reached after ${maxPages} pages (${dataPoints.length} points); results truncated`;
+    console.warn('[google-health-sync]', message, path);
+    if (Array.isArray(warnings)) warnings.push({ path, message });
+  }
+  return { dataPoints, truncated: Boolean(pageToken) };
 }
 
-async function dailyRollUpDataType(accessToken, dataType, dateKey) {
+async function dailyRollUpDataType(accessToken, dataType, dateKey, warnings) {
   const range = buildCivilDayRange(dateKey);
   if (!range) return null;
   return optionalGoogleHealthRequest(accessToken, `/users/me/dataTypes/${dataType}/dataPoints:dailyRollUp`, {
+    warnings,
     method: 'POST',
     body: {
       range,
@@ -300,19 +334,19 @@ async function dailyRollUpDataType(accessToken, dataType, dateKey) {
   });
 }
 
-async function reconcileDataPoints(accessToken, dataType, query = {}) {
+async function reconcileDataPoints(accessToken, dataType, query = {}, warnings, options = {}) {
   return fetchPagedDataPoints(accessToken, `/users/me/dataTypes/${dataType}/dataPoints:reconcile`, {
     dataSourceFamily: GOOGLE_WEARABLES_SOURCE_FAMILY,
     pageSize: 1000,
     ...query,
-  });
+  }, warnings, options);
 }
 
-async function listDataPoints(accessToken, dataType, query = {}) {
+async function listDataPoints(accessToken, dataType, query = {}, warnings, options = {}) {
   return fetchPagedDataPoints(accessToken, `/users/me/dataTypes/${dataType}/dataPoints`, {
     pageSize: 1000,
     ...query,
-  });
+  }, warnings, options);
 }
 
 function payloadForDataType(point, dataType) {
@@ -354,6 +388,7 @@ function dataPointTime(point, payload) {
     payload?.sampleTime?.physicalTime ||
     payload?.sampleTime?.civilTime ||
     payload?.interval?.endTime ||
+    payload?.date ||
     point?.endTime ||
     point?.updateTime ||
     point?.createTime ||
@@ -451,12 +486,14 @@ function mapRecoveryPayload(data) {
       'value',
     ]),
     heartRateVariability: metricValue(data.dailyHeartRateVariability, 'daily-heart-rate-variability', [
+      'averageHeartRateVariabilityMilliseconds',
       'rmssdMillis',
       'rootMeanSquareSuccessiveDifferenceMs',
       'milliseconds',
       'value',
     ]),
     oxygenSaturation: metricValue(data.dailyOxygenSaturation, 'daily-oxygen-saturation', [
+      'averagePercentage',
       'percentage',
       'saturationPercentage',
       'oxygenSaturationPercentage',
@@ -468,12 +505,20 @@ function mapRecoveryPayload(data) {
       'rate',
       'value',
     ]),
-    sleepTemperatureDeviationCelsius: metricValue(data.dailySleepTemperatureDerivations, 'daily-sleep-temperature-derivations', [
-      'deviationCelsius',
-      'temperatureDeviationCelsius',
-      'value',
-    ]),
+    sleepTemperatureDeviationCelsius: sleepTemperatureDeviation(data.dailySleepTemperatureDerivations),
   });
+}
+
+function sleepTemperatureDeviation(dataPoints) {
+  const latest = latestDataPoint(dataPoints, 'daily-sleep-temperature-derivations');
+  if (!latest) return null;
+  const payload = latest.payload;
+  const explicit = firstNumeric(payload?.deviationCelsius, payload?.temperatureDeviationCelsius, payload?.value);
+  if (explicit !== null) return explicit;
+  const nightly = numberValue(payload?.nightlyTemperatureCelsius);
+  const baseline = numberValue(payload?.baselineTemperatureCelsius);
+  if (nightly === null || baseline === null) return null;
+  return Math.round((nightly - baseline) * 100) / 100;
 }
 
 function mapActivityPayload(data) {
@@ -570,6 +615,15 @@ function heartRateValues(dataPoints) {
     .filter((value) => value !== null);
 }
 
+function bodyWeightKilograms(dataPoints) {
+  const latest = latestDataPoint(dataPoints, 'weight');
+  if (!latest) return null;
+  const payload = latest.payload;
+  const grams = numberValue(payload?.weightGrams);
+  if (grams !== null) return Math.round((grams / 1000) * 100) / 100;
+  return firstNumeric(payload?.kilograms, payload?.kg, payload?.value);
+}
+
 function mapBiometricsPayload(data) {
   const samples = heartRateValues(data.heartRate);
   return compactObject({
@@ -584,12 +638,14 @@ function mapBiometricsPayload(data) {
       'value',
     ]),
     heartRateVariability: metricValue(data.dailyHeartRateVariability, 'daily-heart-rate-variability', [
+      'averageHeartRateVariabilityMilliseconds',
       'rmssdMillis',
       'rootMeanSquareSuccessiveDifferenceMs',
       'milliseconds',
       'value',
     ]),
     oxygenSaturation: metricValue(data.dailyOxygenSaturation, 'daily-oxygen-saturation', [
+      'averagePercentage',
       'percentage',
       'saturationPercentage',
       'oxygenSaturationPercentage',
@@ -602,11 +658,12 @@ function mapBiometricsPayload(data) {
       'value',
     ]),
     vo2Max: metricValue(data.dailyVo2Max, 'daily-vo2-max', [
+      'vo2Max',
       'vo2MillilitersPerMinuteKilogram',
       'mlPerKgMin',
       'value',
     ]),
-    bodyWeight: metricValue(data.weight, 'weight', ['kilograms', 'kg', 'value']),
+    bodyWeight: bodyWeightKilograms(data.weight),
     bodyFatPercentage: metricValue(data.bodyFat, 'body-fat', ['percentage', 'percent', 'value']),
   });
 }
@@ -618,12 +675,20 @@ function filterForInterval(dataType, dateKey, dateField = 'civil_start_time') {
 
 function filterForSample(dataType, startIso, endIso) {
   const filterKey = DATA_TYPE_FILTER_KEYS[dataType] || dataType;
-  return `${filterKey}.sample_time.physical_time >= "${startIso}" AND ${filterKey}.sample_time.physical_time <= "${endIso}"`;
+  // The dataPoints filter grammar only supports >= and < (AIP-160 subset).
+  return `${filterKey}.sample_time.physical_time >= "${startIso}" AND ${filterKey}.sample_time.physical_time < "${endIso}"`;
+}
+
+function filterForDailyDate(dataType, dateKey) {
+  const filterKey = DATA_TYPE_FILTER_KEYS[dataType] || dataType;
+  // Daily summary types filter on `{type}.date`, not sample_time.
+  return `${filterKey}.date >= "${dateKey}" AND ${filterKey}.date < "${shiftDateKey(dateKey, 1)}"`;
 }
 
 async function fetchGoogleHealthData(connection, dateKey, timezone) {
   const accessToken = connection.accessToken;
   const physicalRange = buildPhysicalDayRange(dateKey, timezone);
+  const fetchWarnings = [];
   const [
     steps,
     activeEnergyBurned,
@@ -643,45 +708,48 @@ async function fetchGoogleHealthData(connection, dateKey, timezone) {
     weight,
     bodyFat,
   ] = await Promise.all([
-    dailyRollUpDataType(accessToken, 'steps', dateKey),
-    dailyRollUpDataType(accessToken, 'active-energy-burned', dateKey),
-    dailyRollUpDataType(accessToken, 'active-minutes', dateKey),
-    dailyRollUpDataType(accessToken, 'active-zone-minutes', dateKey),
-    dailyRollUpDataType(accessToken, 'distance', dateKey),
-    dailyRollUpDataType(accessToken, 'total-calories', dateKey),
+    dailyRollUpDataType(accessToken, 'steps', dateKey, fetchWarnings),
+    dailyRollUpDataType(accessToken, 'active-energy-burned', dateKey, fetchWarnings),
+    dailyRollUpDataType(accessToken, 'active-minutes', dateKey, fetchWarnings),
+    dailyRollUpDataType(accessToken, 'active-zone-minutes', dateKey, fetchWarnings),
+    dailyRollUpDataType(accessToken, 'distance', dateKey, fetchWarnings),
+    dailyRollUpDataType(accessToken, 'total-calories', dateKey, fetchWarnings),
     reconcileDataPoints(accessToken, 'sleep', {
       filter: `${DATA_TYPE_FILTER_KEYS.sleep}.interval.civil_end_time >= "${dateKey}"`,
-    }),
+    }, fetchWarnings),
     reconcileDataPoints(accessToken, 'exercise', {
       filter: filterForInterval('exercise', dateKey),
-    }),
+    }, fetchWarnings),
+    // Continuous HR is the one high-volume lane: a full day at 1Hz is 86.4k
+    // samples. 10000 is the API's max page size; 10 pages covers the worst case.
     reconcileDataPoints(accessToken, 'heart-rate', {
+      pageSize: 10000,
       filter: filterForSample('heart-rate', physicalRange.startIso, physicalRange.endIso),
-    }),
+    }, fetchWarnings, { maxPages: 10 }),
     listDataPoints(accessToken, 'daily-heart-rate-variability', {
-      filter: filterForSample('daily-heart-rate-variability', physicalRange.startIso, physicalRange.endIso),
-    }),
+      filter: filterForDailyDate('daily-heart-rate-variability', dateKey),
+    }, fetchWarnings),
     listDataPoints(accessToken, 'daily-resting-heart-rate', {
-      filter: filterForSample('daily-resting-heart-rate', physicalRange.startIso, physicalRange.endIso),
-    }),
+      filter: filterForDailyDate('daily-resting-heart-rate', dateKey),
+    }, fetchWarnings),
     listDataPoints(accessToken, 'daily-oxygen-saturation', {
-      filter: filterForSample('daily-oxygen-saturation', physicalRange.startIso, physicalRange.endIso),
-    }),
+      filter: filterForDailyDate('daily-oxygen-saturation', dateKey),
+    }, fetchWarnings),
     listDataPoints(accessToken, 'daily-respiratory-rate', {
-      filter: filterForSample('daily-respiratory-rate', physicalRange.startIso, physicalRange.endIso),
-    }),
+      filter: filterForDailyDate('daily-respiratory-rate', dateKey),
+    }, fetchWarnings),
     listDataPoints(accessToken, 'daily-sleep-temperature-derivations', {
-      filter: filterForSample('daily-sleep-temperature-derivations', physicalRange.startIso, physicalRange.endIso),
-    }),
+      filter: filterForDailyDate('daily-sleep-temperature-derivations', dateKey),
+    }, fetchWarnings),
     listDataPoints(accessToken, 'daily-vo2-max', {
-      filter: filterForSample('daily-vo2-max', physicalRange.startIso, physicalRange.endIso),
-    }),
+      filter: filterForDailyDate('daily-vo2-max', dateKey),
+    }, fetchWarnings),
     listDataPoints(accessToken, 'weight', {
       filter: filterForSample('weight', physicalRange.startIso, physicalRange.endIso),
-    }),
+    }, fetchWarnings),
     listDataPoints(accessToken, 'body-fat', {
       filter: filterForSample('body-fat', physicalRange.startIso, physicalRange.endIso),
-    }),
+    }, fetchWarnings),
   ]);
 
   return {
@@ -703,10 +771,11 @@ async function fetchGoogleHealthData(connection, dateKey, timezone) {
     dailyVo2Max,
     weight,
     bodyFat,
+    fetchWarnings,
   };
 }
 
-function buildSourceStatusDocument({ userId, hasPayload, observedAt, syncAt, lastError }) {
+function buildSourceStatusDocument({ userId, hasPayload, observedAt, syncAt, lastError, fetchWarnings = [] }) {
   return {
     id: `${userId}_fitbit`,
     athleteUserId: userId,
@@ -717,6 +786,13 @@ function buildSourceStatusDocument({ userId, hasPayload, observedAt, syncAt, las
     lastObservedRecordAt: observedAt || null,
     lastErrorCode: lastError ? 'google_health_sync_failed' : null,
     lastErrorCategory: lastError ? 'google_health_sync' : null,
+    // Optional-lane fetch failures from the most recent sync. Empty on a
+    // clean run (merge overwrite clears stale warnings). Non-empty means the
+    // sync "succeeded" but one or more lanes (biometrics, weight, daily
+    // summaries) silently returned nothing — watch this when a device's
+    // metrics go missing from the canonical snapshot.
+    lastFetchWarningCount: fetchWarnings.length,
+    lastFetchWarnings: fetchWarnings.slice(0, 10),
     consentMetadata: {
       syncOrigin: 'pulsecheck_google_health_refresh',
       writer: 'google-health-sync.js',
@@ -917,7 +993,8 @@ async function syncGoogleHealthSnapshotForConnection({ userId, timezone, request
   const syncAt = Date.now() / 1000;
   const hasPayload = Object.values(payloads).some((payload) => Object.keys(payload).length > 0);
   const observedAt = hasPayload ? buildDayWindow(requestedDateKey, timezone).endAt : null;
-  const sourceStatusDoc = buildSourceStatusDocument({ userId, hasPayload, observedAt, syncAt, lastError: null });
+  const fetchWarnings = Array.isArray(googleHealthData.fetchWarnings) ? googleHealthData.fetchWarnings : [];
+  const sourceStatusDoc = buildSourceStatusDocument({ userId, hasPayload, observedAt, syncAt, lastError: null, fetchWarnings });
   const importedDomains = Object.entries(payloads)
     .filter(([, payload]) => Object.keys(payload).length > 0)
     .map(([domain]) => domain);
@@ -941,6 +1018,7 @@ async function syncGoogleHealthSnapshotForConnection({ userId, timezone, request
       ok: true,
       status: 'waiting_for_data',
       snapshotDateKey: requestedDateKey,
+      fetchWarnings,
       detail: 'Fitbit is connected, but no synced Google Health data was available for this date yet.',
     };
   }
@@ -992,6 +1070,7 @@ async function syncGoogleHealthSnapshotForConnection({ userId, timezone, request
     sourceRecordIds: sourceRecordDocs.map((record) => record.id),
     sourcesUsed: artifacts.snapshot.provenance.sourcesUsed,
     importedDomains,
+    fetchWarnings,
     detail: 'PulseCheck imported the latest Fitbit health context.',
   };
 }
@@ -1041,11 +1120,14 @@ exports.__test = {
   buildCivilDayRange,
   buildDayWindow,
   computeSleepMidpointEpochSeconds,
+  fetchPagedDataPoints,
+  listDataPoints,
   mapActivityPayload,
   mapBiometricsPayload,
   mapRecoveryPayload,
   mapSleepPayload,
   mapTrainingPayload,
+  optionalGoogleHealthRequest,
   selectSleepRecord,
   shouldWriteDomain,
   sumMetric,

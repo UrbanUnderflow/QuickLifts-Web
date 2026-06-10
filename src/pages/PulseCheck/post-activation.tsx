@@ -16,6 +16,7 @@ import type {
 } from '../../api/firebase/pulsecheckProvisioning/types';
 import { deriveMembershipAccessFromCapabilities } from '../../api/firebase/pulsecheckProvisioning/staffCapabilities';
 import { STAFF_PERMISSIONS } from '../../lib/staffPermissions';
+import { normalizePhoneToE164, isValidE164 } from '../../utils/phone';
 import { userService } from '../../api/firebase/user';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 
@@ -44,22 +45,6 @@ const buildMailto = (invite: PulseCheckInviteLink, teamName: string, organizatio
 };
 
 // Normalize loosely-typed phone input into E.164 (e.g. +13015551234).
-// Defaults bare 10-digit input to US (+1). Returns '' if it can't be normalized.
-const normalizePhoneToE164 = (raw: string): string => {
-  const trimmed = (raw || '').trim();
-  if (!trimmed) return '';
-  const hasPlus = trimmed.startsWith('+');
-  const digits = trimmed.replace(/\D/g, '');
-  if (!digits) return '';
-  if (hasPlus) {
-    return digits.length >= 10 && digits.length <= 15 ? `+${digits}` : '';
-  }
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length >= 11 && digits.length <= 15) return `+${digits}`;
-  return '';
-};
-
-const isValidE164 = (value: string): boolean => /^\+\d{10,15}$/.test(value);
 
 const Toggle = ({
   checked,
@@ -564,11 +549,15 @@ export default function PulseCheckPostActivationPage() {
             Your account is active — this page is only for the coach setting up the team. Head to your workspace to get going.
           </p>
           <Link
-            href={`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
+            href={
+              membership?.role === 'athlete'
+                ? `/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`
+                : '/coach/dashboard'
+            }
             className="mt-8 inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
             style={{ background: PC.purple }}
           >
-            Go to my workspace
+            {membership?.role === 'athlete' ? 'Go to my workspace' : 'Go to the coach dashboard'}
             <ChevronRight className="h-4 w-4" />
           </Link>
         </div>
@@ -1107,15 +1096,11 @@ export default function PulseCheckPostActivationPage() {
 
                   <div className="mt-7 flex items-center justify-center">
                     <Link
-                      href={
-                        isDemo
-                          ? '/coach/dashboard/demo'
-                          : `/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`
-                      }
+                      href={isDemo ? '/coach/dashboard/demo' : '/coach/dashboard'}
                       className="inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
                       style={{ background: PC.purple }}
                     >
-                      {isDemo ? 'Confirm & open the coach dashboard' : 'Confirm & open my workspace'}
+                      Confirm &amp; open the coach dashboard
                       <ChevronRight className="h-4 w-4" />
                     </Link>
                   </div>

@@ -198,8 +198,8 @@ function buildInviteConfig(now: number): PulseCheckPilotInviteConfig {
     supportName: 'PulseCheck Demo Ops',
     supportEmail: 'demo-ops@pulsecheck.test',
     supportPhone: '555-0106',
-    iosAppUrl: 'https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729',
-    androidAppUrl: 'https://play.google.com/store/apps/details?id=ai.fitwithpulse.pulse',
+    iosAppUrl: 'https://apps.apple.com/by/app/pulsecheck-mindset-coaching/id6747253393',
+    androidAppUrl: 'https://play.google.com/store/apps/details?id=com.fitwithpulse.pulsecheck',
     createdAt: asTimestamp(now),
     updatedAt: asTimestamp(now),
   } as PulseCheckPilotInviteConfig;

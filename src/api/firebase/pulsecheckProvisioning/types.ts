@@ -894,6 +894,9 @@ export interface CompletePulseCheckAthleteOnboardingInput {
   researchConsentVersion?: string;
   intakeResponses?: PulseCheckIntakeResponses;
   intakeFormVersion?: string;
+  // E.164 contact phone captured at intake so a team clinician can reach the
+  // athlete for a welfare check. Written to membership.phone.
+  phone?: string;
 }
 
 export interface SavePulseCheckAthleteOnboardingProgressInput {
@@ -906,6 +909,8 @@ export interface SavePulseCheckAthleteOnboardingProgressInput {
   researchConsentStatus?: PulseCheckResearchConsentStatus;
   intakeResponses?: PulseCheckIntakeResponses;
   intakeFormVersion?: string;
+  // E.164 contact phone (auto-saved as the athlete types it during intake).
+  phone?: string;
 }
 
 export interface UpdatePulseCheckTeamMembershipAccessInput {

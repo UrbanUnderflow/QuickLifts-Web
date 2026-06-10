@@ -232,6 +232,37 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       ],
     },
     {
+      id: 'pulsecheck-sports-intel-screen',
+      name: 'Unified Sports Intel Screen (Device-Agnostic)',
+      persona: 'Athletes',
+      outcome:
+        'Replace the Polar-only device detail screen with one aggregated Sports Intel read that accepts any connected performance device (Polar, Fitbit Air via Google Health, Oura Ring, Apple Watch), takes the best source per metric from the canonical snapshot merge, and shows per-metric "via <device>" source tags plus the sport-aware Nora read.',
+      entryPoints: [
+        'Home "N devices live" strip (NoraDailyView)',
+        'Your Devices sheet — every connected device card (WearablePickerSheet)',
+      ],
+      dependentServices: [
+        'Health context snapshot assembler (DOMAIN_PRECEDENCE per-domain source precedence)',
+        'HealthContextSnapshotReader (iOS canonical snapshot reads)',
+        'SportsIntelligenceReasoningLayer (sport-aware read generation)',
+        'SportsIntelComposer (snapshot → source-attributed metric rows)',
+        'PolarBleService (live-HR overlay, Polar signature device, today only)',
+      ],
+      firestoreCollections: ['health-context-snapshots', 'health-context-source-records', 'users/{uid}'],
+      integrations: ['Polar AccessLink + BLE', 'Google Health (Fitbit Air)', 'Oura Cloud', 'HealthKit'],
+      owner: 'PulseCheck Team',
+      releaseChannel: 'Beta',
+      status: 'beta',
+      sourceRefs: [
+        { label: 'Sports Intel Generalization Spec', path: '../PulseCheck/docs/specs/sports-intel-generalization-spec.md' },
+        { label: 'Sports Intel Models + Composer', path: '../PulseCheck/PulseCheck/Models/SportsIntelModels.swift' },
+        { label: 'Sports Intel View Model', path: '../PulseCheck/PulseCheck/ViewModels/SportsIntelViewModel.swift' },
+        { label: 'Sports Intel View', path: '../PulseCheck/PulseCheck/Views/SportsIntel/SportsIntelView.swift' },
+        { label: 'Domain Precedence (priority list)', path: '../QuickLifts-Web/src/api/firebase/healthContextSnapshotAssembler.ts' },
+        { label: 'Legacy Polar Detail Screen (retiring after parity)', path: '../PulseCheck/PulseCheck/Views/Settings/PolarDataDumpView.swift' },
+      ],
+    },
+    {
       id: 'pulsecheck-profile-snapshots-export',
       name: 'Canonical Profile Snapshot Pipeline',
       persona: 'Athletes, staff, and research operators',

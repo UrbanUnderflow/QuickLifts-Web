@@ -18,6 +18,7 @@ import { requiresReConsentForVersion } from '../../api/firebase/pulsecheckProvis
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import { PULSECHECK_INTAKE_FORM_VERSION } from '../../api/firebase/pulsecheckProvisioning/types';
 import { isDevAuthBypassEnabled } from '../../utils/devAuthBypass';
+import { normalizePhoneToE164, isValidE164 } from '../../utils/phone';
 import type {
   PulseCheckOrganization,
   PulseCheckPilot,
@@ -241,6 +242,9 @@ export default function PulseCheckAthleteOnboardingPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [displayName, setDisplayName] = useState('');
+  // E.164 contact phone so a team clinician can reach the athlete for a welfare
+  // check. Required to finish intake; authorized under the pilot crisis consent.
+  const [phone, setPhone] = useState('');
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [completedConsentIds, setCompletedConsentIds] = useState<string[]>([]);
   const [completedConsentVersions, setCompletedConsentVersions] = useState<Record<string, string>>({});
@@ -314,6 +318,7 @@ export default function PulseCheckAthleteOnboardingPage() {
             || currentUser.displayName
             || ''
         );
+        setPhone((nextMembership as { phone?: string })?.phone || '');
         setConsentAccepted(Boolean(nextMembership?.athleteOnboarding?.productConsentAccepted));
         const requiredConsents = nextMembership?.athleteOnboarding?.requiredConsents || [];
         const storedVersions = nextMembership?.athleteOnboarding?.completedConsentVersions || {};
@@ -389,6 +394,7 @@ export default function PulseCheckAthleteOnboardingPage() {
         completedConsentIds,
         completedConsentVersions,
         researchConsentStatus: requiresResearchConsent ? researchConsentStatus : undefined,
+        ...(normalizePhoneToE164(phone) ? { phone: normalizePhoneToE164(phone) } : {}),
         ...(intakeQuestions.length > 0
           ? { intakeResponses: intakeAnswers, intakeFormVersion }
           : {}),
@@ -407,6 +413,7 @@ export default function PulseCheckAthleteOnboardingPage() {
     intakeFormVersion,
     intakeQuestions.length,
     membership,
+    phone,
     progressHydrated,
     requiredConsentsComplete,
     requiresResearchConsent,
@@ -462,6 +469,10 @@ export default function PulseCheckAthleteOnboardingPage() {
     event.preventDefault();
     if (!currentUser || !membership) return;
     if (!displayName.trim()) { setMessage({ type: 'error', text: 'Tell us what name you would like us to use.' }); return; }
+    if (!isValidE164(normalizePhoneToE164(phone))) {
+      setMessage({ type: 'error', text: 'Add a phone number where your team can reach you (e.g. (301) 555-1234).' });
+      return;
+    }
     if (!consentAccepted) { setMessage({ type: 'error', text: 'Please agree before continuing.' }); return; }
     if (!requiredConsentsComplete) {
       setMessage({ type: 'error', text: 'Read each agreement and check the boxes before you continue.' });
@@ -501,7 +512,30 @@ export default function PulseCheckAthleteOnboardingPage() {
             : '',
         intakeResponses: intakeAnswers,
         intakeFormVersion,
+        phone: normalizePhoneToE164(phone),
       });
+
+      // Let the team's coaches/admins know this athlete finished onboarding.
+      // Fire-and-forget with keepalive so it survives the redirect and never
+      // blocks or fails the athlete's completion. Recipient resolution happens
+      // server-side (admin SDK) in the function.
+      try {
+        void fetch('/.netlify/functions/send-pulsecheck-athlete-onboarded-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          keepalive: true,
+          body: JSON.stringify({
+            organizationId,
+            teamId,
+            athleteUserId: currentUser.id,
+            athleteName: displayName.trim(),
+            athleteEmail: currentUser.email || '',
+          }),
+        }).catch(() => {});
+      } catch {
+        /* never block onboarding completion on the notification */
+      }
+
       setMessage({ type: 'success', text: 'You are set. Your team access is ready.' });
       router.push(`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`);
     } catch (error) {
@@ -736,6 +770,31 @@ export default function PulseCheckAthleteOnboardingPage() {
                     onBlur={(e) => { e.target.style.boxShadow = 'none'; }}
                     placeholder="Your name"
                   />
+                </motion.label>
+
+                {/* Phone — so a team clinician can reach the athlete for a welfare check */}
+                <motion.label
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="block space-y-2"
+                >
+                  <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Phone Number</span>
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition-all duration-300 focus:border-[#E0FE10]/50 focus:bg-[#E0FE10]/[0.04] placeholder:text-zinc-600 backdrop-blur-sm"
+                    style={{ boxShadow: 'none' }}
+                    onFocus={(e) => { e.target.style.boxShadow = '0 0 0 3px rgba(224,254,16,0.12)'; }}
+                    onBlur={(e) => { e.target.style.boxShadow = 'none'; }}
+                    placeholder="(301) 555-1234"
+                  />
+                  <span className="block text-[11px] leading-5 text-zinc-500">
+                    So a member of your team&apos;s support staff can reach you directly if they ever need to check in on you.
+                  </span>
                 </motion.label>
 
                 {/* Intake questions */}

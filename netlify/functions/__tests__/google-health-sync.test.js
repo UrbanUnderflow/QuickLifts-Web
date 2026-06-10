@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+let googleHealthApiRequestImpl = async () => ({});
+
 const firebaseConfigPath = require.resolve('../config/firebase');
 require.cache[firebaseConfigPath] = {
   id: firebaseConfigPath,
@@ -24,13 +26,14 @@ require.cache[googleHealthUtilsPath] = {
     buildGoogleHealthErrorResponse: () => ({ statusCode: 500, headers: {}, body: '{}' }),
     ensureFreshGoogleHealthConnection: async (_connectionRef, connection) => connection,
     getGoogleHealthIdentity: async () => ({ healthUserId: 'health_user_test' }),
-    googleHealthApiRequest: async () => ({}),
+    googleHealthApiRequest: (...args) => googleHealthApiRequestImpl(...args),
     parseJsonBody: () => ({}),
     verifyAuth: async () => ({ uid: 'user_test' }),
   },
 };
 
 const {
+  fetchPagedDataPoints,
   mapActivityPayload,
   mapBiometricsPayload,
   mapRecoveryPayload,
@@ -84,10 +87,27 @@ test('mapRecoveryPayload maps Fitbit sleep stages and daily recovery metrics', (
         },
       ],
     },
-    dailyRestingHeartRate: { dataPoints: [{ dailyRestingHeartRate: { bpm: '54' } }] },
-    dailyHeartRateVariability: { dataPoints: [{ dailyHeartRateVariability: { rmssdMillis: '71' } }] },
-    dailyOxygenSaturation: { dataPoints: [{ dailyOxygenSaturation: { percentage: '96.5' } }] },
-    dailyRespiratoryRate: { dataPoints: [{ dailyRespiratoryRate: { breathsPerMinute: '14.4' } }] },
+    dailyRestingHeartRate: {
+      dataPoints: [{ dailyRestingHeartRate: { date: { year: 2026, month: 3, day: 4 }, beatsPerMinute: '54' } }],
+    },
+    dailyHeartRateVariability: {
+      dataPoints: [{ dailyHeartRateVariability: { date: { year: 2026, month: 3, day: 4 }, averageHeartRateVariabilityMilliseconds: 71 } }],
+    },
+    dailyOxygenSaturation: {
+      dataPoints: [{ dailyOxygenSaturation: { date: { year: 2026, month: 3, day: 4 }, averagePercentage: 96.5 } }],
+    },
+    dailyRespiratoryRate: {
+      dataPoints: [{ dailyRespiratoryRate: { date: { year: 2026, month: 3, day: 4 }, breathsPerMinute: 14.4 } }],
+    },
+    dailySleepTemperatureDerivations: {
+      dataPoints: [{
+        dailySleepTemperatureDerivations: {
+          date: { year: 2026, month: 3, day: 4 },
+          nightlyTemperatureCelsius: 33.1,
+          baselineTemperatureCelsius: 33.4,
+        },
+      }],
+    },
   });
 
   assert.equal(payload.sleepDuration, 6.78);
@@ -99,20 +119,26 @@ test('mapRecoveryPayload maps Fitbit sleep stages and daily recovery metrics', (
   assert.equal(payload.heartRateVariability, 71);
   assert.equal(payload.oxygenSaturation, 96.5);
   assert.equal(payload.respiratoryRate, 14.4);
+  assert.equal(payload.sleepTemperatureDeviationCelsius, -0.3);
 });
 
 test('mapBiometricsPayload summarizes heart-rate samples and profile metrics', () => {
   const payload = mapBiometricsPayload({
     heartRate: {
       dataPoints: [
-        { heartRate: { bpm: '50' } },
-        { heartRate: { bpm: '66' } },
-        { heartRate: { bpm: '82' } },
+        { heartRate: { sampleTime: { physicalTime: '2026-03-04T08:00:00Z' }, beatsPerMinute: '50' } },
+        { heartRate: { sampleTime: { physicalTime: '2026-03-04T12:00:00Z' }, beatsPerMinute: '66' } },
+        { heartRate: { sampleTime: { physicalTime: '2026-03-04T18:00:00Z' }, beatsPerMinute: '82' } },
       ],
     },
-    dailyVo2Max: { dataPoints: [{ dailyVo2Max: { vo2MillilitersPerMinuteKilogram: '48.2' } }] },
-    weight: { dataPoints: [{ weight: { kilograms: '81.5' } }] },
-    bodyFat: { dataPoints: [{ bodyFat: { percentage: '13.4' } }] },
+    dailyVo2Max: { dataPoints: [{ dailyVo2Max: { date: { year: 2026, month: 3, day: 4 }, vo2Max: 48.2 } }] },
+    weight: {
+      dataPoints: [
+        { weight: { sampleTime: { physicalTime: '2026-03-03T07:00:00Z' }, weightGrams: 82100 } },
+        { weight: { sampleTime: { physicalTime: '2026-03-04T07:00:00Z' }, weightGrams: 81500 } },
+      ],
+    },
+    bodyFat: { dataPoints: [{ bodyFat: { sampleTime: { physicalTime: '2026-03-04T07:00:00Z' }, percentage: 13.4 } }] },
   });
 
   assert.equal(payload.heartRateAvg, 66);
@@ -165,4 +191,39 @@ test('shouldWriteDomain preserves stronger existing source winners', () => {
     shouldWriteDomain({ provenance: { domainWinners: { biometrics: 'health_kit' } } }, 'biometrics', true),
     false
   );
+});
+
+test('fetchPagedDataPoints follows page tokens until the API stops returning them', async () => {
+  const pages = [
+    { dataPoints: [{ heartRate: { beatsPerMinute: '60' } }], nextPageToken: 'page-2' },
+    { dataPoints: [{ heartRate: { beatsPerMinute: '62' } }], nextPageToken: 'page-3' },
+    { dataPoints: [{ heartRate: { beatsPerMinute: '64' } }] },
+  ];
+  const seenTokens = [];
+  googleHealthApiRequestImpl = async (_token, _path, options) => {
+    seenTokens.push(options?.query?.pageToken || null);
+    return pages.shift();
+  };
+
+  const result = await fetchPagedDataPoints('token', '/users/me/dataTypes/heart-rate/dataPoints:reconcile', { pageSize: 1 }, []);
+
+  assert.equal(result.dataPoints.length, 3);
+  assert.equal(result.truncated, false);
+  assert.deepEqual(seenTokens, [null, 'page-2', 'page-3']);
+});
+
+test('fetchPagedDataPoints flags truncation and records a warning when the page cap is hit', async () => {
+  googleHealthApiRequestImpl = async () => ({
+    dataPoints: [{ heartRate: { beatsPerMinute: '60' } }],
+    nextPageToken: 'more',
+  });
+
+  const warnings = [];
+  const result = await fetchPagedDataPoints('token', '/users/me/dataTypes/heart-rate/dataPoints:reconcile', { pageSize: 1 }, warnings, { maxPages: 3 });
+
+  assert.equal(result.dataPoints.length, 3);
+  assert.equal(result.truncated, true);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0].message, /pagination cap reached/);
+  assert.equal(warnings[0].path, '/users/me/dataTypes/heart-rate/dataPoints:reconcile');
 });

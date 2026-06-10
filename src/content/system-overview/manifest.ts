@@ -3,6 +3,7 @@ import { endToEndFlows } from './flows';
 import { quickliftsIosHandbook } from './products/quicklifts-ios';
 import { pulseAndroidHandbook } from './products/pulse-android';
 import { pulseCheckIosHandbook } from './products/pulsecheck-ios';
+import { pulseCheckAndroidHandbook } from './products/pulsecheck-android';
 import { quickliftsWebHandbook } from './products/quicklifts-web';
 import { macraIosHandbook } from './products/macra-ios';
 import { pulseRitualIosHandbook } from './products/pulse-ritual-ios';
@@ -11,7 +12,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Fit With Pulse consumer fitness, Pulse Check elite athlete service technology, Macra nutrition, shared data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-05-06',
+  lastUpdated: '2026-06-10',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -123,7 +124,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'system-design-language', label: 'System Design & Language', description: 'Voice, copy posture, and human-centered UI rules for how Pulse speaks to users across products.' },
     { id: 'pulse-education-offerings', label: 'Readiness Assessments & Training', description: 'Build spec for the Pulse Intelligence Labs education funnel: the $10 readiness assessments for parents, coaches, and athletic trainers and the audience-matched paid training they route into, with pricing and per-course outlines.' },
     { id: 'auntedna-integration-strategy', label: 'Integration Strategy', description: 'API layer, webhook contract, profile mirror model, and MCP positioning for the AuntEdna clinical bridge.' },
-    { id: 'auntedna-escalation-data-exchange-contract', label: 'Escalation Data Exchange Contract', description: 'Partner-facing data contract for what AuntEdna should expect from PulseCheck, what AuntEdna stores that PulseCheck does not, and which hybrid operational fields are shared.' },
+    { id: 'auntedna-escalation-data-exchange-contract', label: 'Escalation Data Exchange Contract', description: 'Engineering data contract for the escalation bridge: the case packet PulseCheck sends, the AuntEdna API surface and status webhooks, and the data each side stores.' },
     { id: 'auntedna-pilot-authorization-memo', label: 'Pilot Authorization Memo', description: 'Pre-contract, department-level memo template for a voluntary athletics pilot run by PulseCheck in partnership with AuntEdna.' },
     { id: 'auntedna-exhibit-a-data-architecture', label: 'Exhibit A - Data Architecture', description: 'Agreement-facing system-of-record boundary, minimum-necessary payload, limited reverse operational-status flow, and PHI handling rules for the AuntEdna bridge.' },
     { id: 'auntedna-exhibit-b-performance-standards', label: 'Exhibit B - Performance Standards', description: 'Agreement-facing Tier-based response standards, PulseCheck uptime and handoff obligations, reporting cadence, and remediation mechanics for the AuntEdna partnership.' },
@@ -139,6 +140,19 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Started the Pulse Check iOS unified Sports Intel screen: the Polar-only device detail surface ("Polar 360") is being generalized into one device-agnostic, aggregated read for any connected performance device (Polar, Fitbit Air via Google Health, Oura, Apple Watch). It renders from the canonical health-context snapshot the server assembler already merges per DOMAIN_PRECEDENCE, shows per-metric "via <device>" source tags with freshness, keeps the Polar live-HR overlay as the signature-device exception, and reuses the Sports Intelligence Reasoning Layer for the sport-aware Nora read. Spec: PulseCheck/docs/specs/sports-intel-generalization-spec.md; PolarDataDumpView entry points retire only after parity checks.',
+      'Closed out the Pulse Check Android tail (M7.5 + polish): RevenueCat subscription with a paywall + access gate (entitlement "plus"; dev bypasses when unconfigured), FCM push (token sync + notification display + channel), SpeechRecognizer voice input in the Nora chat, and Today-chat resume of the latest saved conversation. The remaining items are now resolved to a definitive status in the parity audit — server-orchestrator-owned (action cards, training load, proactive insights, readiness→check-in), iOS-only (3D sim / Vision Pro / admin), or config/polish (AppsFlyer, local reminders, Nora TTS, coach booking).',
+      'Built Pulse Check Android M6 + M3.5 for an end-to-end coach + athlete experience: coach connection by referral code (coachAthletes) and real-time coach↔athlete messaging (coach-athlete-conversations/-messages) from Profile; plus team/pilot athlete onboarding — a pulsecheck://invite/{token} deep link previews + redeems via the shared server transaction, then runs name→consent→research→baseline writing athleteOnboarding.* to pulsecheck-team-memberships, with a membership-driven gate in SignedInRoot that preempts the regular Nora onboarding.',
+      'Built Pulse Check Android M5.6 daily curriculum feed: a read-only "Today’s training" card on the Today tab (mirroring iOS DailyCurriculumReader) with a live feed of the curriculum engine’s protocol/simulation assignments (pulsecheck-daily-assignments), surfacing focus, why-this-today, practice progress, and the "same by design" intent. Protocol/sim playback stays iOS-only, so the Android surface is transparency-only.',
+      'Built Pulse Check Android M5.5 training assignments + streaks: the Training tab now shows an "Assigned to you" section (mental-exercise-assignments, pending/in-progress, with the coach reason) and a streak chip (mental-training-streaks); completing an exercise writes a completion, updates the streak with the iOS new-day/yesterday logic, and closes the assignment.',
+      'Built Pulse Check Android M7: the Profile tab is now real (identity header + overview + Settings: account, sign out, account-deletion request, version), and the Tier-3 crisis wall is wired — when the server sets crisisWallActive it overlays a full-screen wall with the canonical national resources (988 / Crisis Text Line 741741 / 911) as tap-to-call/text (the app never auto-dials), with acknowledgements written to pulsecheck-clinical-escalations. All four tabs are now functional; the RevenueCat paywall is deferred to M7.5 (needs keys + offerings).',
+      'Built Pulse Check Android M5 Mental Training: the Training tab now has a mental-exercise library grouped by category (reads mental-exercises with full exerciseConfig parsing), a guided breathing player (phase timer + expanding-circle animation, cycles), and a generic prompt/timer player for visualization/focus/mindset/confidence, with completions written to mental-exercise-completions. The 3D sim / Vision-Pro runtimes stay iOS-only.',
+      'Built Pulse Check Android M4.5 health-context source-record write: HealthContextSourceWriter batch-writes activity + recovery records to health-context-source-records and a source-status doc to health-context-source-status (sourceFamily "healthconnect") with byte-for-byte iOS HCSR schema + unit parity (distance km, sleep hours, kcal), fired after a granted Health Connect read so the shared server assembler can fold Android data into the canonical snapshots. Clients write source records + status only — never the canonical snapshot.',
+      'Built Pulse Check Android M4 Health Connect read + Today daily briefing: HealthConnectReader aggregates today’s steps/calories/exercise/distance/sleep (per-metric, so partial grants still return data), surfaced in a Today daily-briefing card with a readiness check-in (mirroring iOS ReadinessLevel) above the Nora chat. On-device read only; the M4.5 health-context source-record write (HCSRRecordWriter parity) will feed the shared server snapshot assembler.',
+      'Built Pulse Check Android M3 onboarding + gating: a multi-step Nora onboarding (welcome → profile → goal → wearables) that writes the user doc with exact iOS field parity (incl. pulseCheckOnboardingComplete), a SignedInRoot gate that keeps onboarding in front of the tabs via a live user listener, and the Health Connect manager + onboarding permission request (the Fitbit Air syncs into Health Connect; ingestion lands M4). Also corrected a User-model field-name drift (pulseCheckOnboardingComplete).',
+      'Built Pulse Check Android M2.6 mental notes: a live active-notes bar on the Today tab (category-colored pills) plus a detail sheet to review a note and change status or delete it, reading/writing user-mental-notes/{uid}/notes with full iOS field + enum parity.',
+      'Built the Pulse Check Android M2.5 Today tab: free-form Nora chat powered by the shared OpenAI proxy (openai-bridge, gpt-4o-mini, Nora persona, Firebase-ID-token auth, no client key) with a typing indicator, persisted to the conversations collection. Daily briefing, mental notes, action cards, and voice are tracked as M2.6.',
+      'Added Pulse Check Android as a first-class System Overview product: a native Kotlin/Compose parity port sharing the ecosystem Firebase. Locked the M1 foundation + chromatic nav shell, ported design system, Google Sign-In auth, and the M2 Nora conversation inbox/reply surface (reads pulsecheck-nora-conversations, replies via the shared nora-athlete-reply function). Parity is governed by the repo’s IOS_PARITY_AUDIT.md + FIRESTORE_CONTRACT.md; Today/free GPT chat/mental notes (M2.5) and Health Connect / Fitbit Air ingestion (M4) are tracked as planned. Also added Google Sign-In to Pulse Check iOS for cross-platform login.',
       'Added the Daily Curriculum assignment-intent contract so repeated sims/protocols can tell athletes “same by design,” show practice progress, explain why today, and name how they move forward across Today, Nora, and Training Room surfaces.',
       'Strengthened Visual Disruption Reset focus measurement with path-pattern confirmation: athletes now watch a moving target draw a pattern, then must match the drawn pattern after disruption before Recovery Time is scored.',
       'Removed the experimental handheld mobile camera gaze contract from Visual Disruption Reset after iPhone testing showed the estimates were not reliable enough for athlete-facing scoring; phone, web, iOS, and Android now use touch/click/tap recovery with concise Nora-read phase signals.',
@@ -268,6 +282,16 @@ export const systemOverviewManifest: SystemOverviewManifest = {
         owner: 'PulseCheck Team',
         x: 52,
         y: 16,
+      },
+      {
+        id: 'pulsecheck-android',
+        name: 'Pulse Check Android',
+        layer: 'surface',
+        status: 'beta',
+        description: 'Native Android parity port of Pulse Check (Kotlin/Compose), sharing the ecosystem Firebase. Foundation, Google auth, and the Nora inbox/reply surface are built; iOS is the source of truth.',
+        owner: 'PulseCheck Team + Android Squad',
+        x: 52,
+        y: 30,
       },
       {
         id: 'quicklifts-web',
@@ -407,6 +431,8 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       { from: 'pulse-android', to: 'cloud-firestore', type: 'data' },
       { from: 'pulsecheck-ios', to: 'firebase-auth', type: 'auth' },
       { from: 'pulsecheck-ios', to: 'cloud-firestore', type: 'data' },
+      { from: 'pulsecheck-android', to: 'firebase-auth', type: 'auth' },
+      { from: 'pulsecheck-android', to: 'cloud-firestore', type: 'data' },
       { from: 'quicklifts-web', to: 'firebase-auth', type: 'auth' },
       { from: 'quicklifts-web', to: 'cloud-firestore', type: 'data' },
       { from: 'quicklifts-web', to: 'netlify-functions', type: 'events' },
@@ -426,7 +452,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       { from: 'netlify-functions', to: 'instantly', type: 'events' },
     ],
   },
-  products: [quickliftsIosHandbook, pulseAndroidHandbook, pulseCheckIosHandbook, quickliftsWebHandbook, macraIosHandbook, pulseRitualIosHandbook],
+  products: [quickliftsIosHandbook, pulseAndroidHandbook, pulseCheckIosHandbook, pulseCheckAndroidHandbook, quickliftsWebHandbook, macraIosHandbook, pulseRitualIosHandbook],
   backendServices: [
     {
       id: 'svc-firebase-auth',

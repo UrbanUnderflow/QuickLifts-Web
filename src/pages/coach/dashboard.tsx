@@ -757,11 +757,21 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                   )}
                   {view === 'inbox' && <InboxSection athletes={athletes} loading={loadingAthletes} isDemo={isDemo} />}
                   {view === 'roster' && (
-                    <RosterSection
-                      athletes={athletes}
-                      loading={loadingAthletes}
-                      onSelectAthlete={setSelectedAthleteId}
-                    />
+                    <div className="space-y-5">
+                      <AthleteInviteSection
+                        isDemo={isDemo}
+                        coachId={coachId}
+                        coachName={coachName}
+                        coachEmail={coachEmail}
+                        canInvite={can('admin') || can('coaching') || can('administrative')}
+                        canRevoke={can('admin')}
+                      />
+                      <RosterSection
+                        athletes={athletes}
+                        loading={loadingAthletes}
+                        onSelectAthlete={setSelectedAthleteId}
+                      />
+                    </div>
                   )}
                   {view === 'staff' && (
                     <StaffSection
@@ -2847,6 +2857,442 @@ const AthleteProfileDrawer: React.FC<{
 // ---------------------------------------------------------------------------
 // Team Roster
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Athletes — invite control + pending invites (rendered above the roster table).
+// Athletes onboard via a team-access invite link with role 'athlete'; this is
+// the coach-facing entry point on the dashboard. Gated to Admin/Coach/Manager.
+// ---------------------------------------------------------------------------
+type AthleteInviteRow = {
+  id: string;
+  name: string;
+  email: string;
+  activationUrl: string;
+};
+
+const DEMO_ATHLETE_INVITES: AthleteInviteRow[] = [
+  {
+    id: 'demo-ath-1',
+    name: 'Jordan Lee',
+    email: 'jordan.lee@school.edu',
+    activationUrl: 'https://fitwithpulse.ai/PulseCheck/team-invite/demo-athlete-1',
+  },
+];
+
+const AthleteInviteSection: React.FC<{
+  isDemo?: boolean;
+  coachId?: string;
+  coachName?: string;
+  coachEmail?: string;
+  // Inviting athletes is allowed for Admin, Coach, and Manager capabilities.
+  canInvite?: boolean;
+  // Revoking a pending invite is admin-only.
+  canRevoke?: boolean;
+}> = ({ isDemo, coachId, coachName = '', coachEmail, canInvite = false, canRevoke = false }) => {
+  const [invites, setInvites] = useState<AthleteInviteRow[]>(isDemo ? DEMO_ATHLETE_INVITES : []);
+  const [loadingInvites, setLoadingInvites] = useState(!isDemo);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState('https://fitwithpulse.ai/PulseCheck/team-invite/demo-athlete');
+  const [busy, setBusy] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [team, setTeam] = useState<{
+    organizationId: string;
+    teamId: string;
+    organizationName: string;
+    teamName: string;
+  } | null>(null);
+
+  // Live: resolve the coach's active team, then pull active athlete invite links.
+  const loadInvites = useCallback(async () => {
+    if (isDemo || !coachId) {
+      setLoadingInvites(false);
+      return;
+    }
+    setLoadingInvites(true);
+    try {
+      const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(coachId);
+      const own = memberships.find((m) => m.role !== 'athlete');
+      if (!own) {
+        setInvites([]);
+        return;
+      }
+      const { teamId, organizationId } = own;
+      let teamName = 'your team';
+      let organizationName = 'your organization';
+      try {
+        const [t, org] = await Promise.all([
+          pulseCheckProvisioningService.getTeam(teamId),
+          pulseCheckProvisioningService.getOrganization(organizationId),
+        ]);
+        teamName = t?.displayName || teamName;
+        organizationName = org?.displayName || organizationName;
+      } catch {
+        /* names are cosmetic */
+      }
+      setTeam({ organizationId, teamId, organizationName, teamName });
+
+      const links = await pulseCheckProvisioningService
+        .listTeamInviteLinks(teamId)
+        .catch(() => [] as PulseCheckInviteLink[]);
+      const rows = links
+        .filter(
+          (l) => l.inviteType === 'team-access' && l.teamMembershipRole === 'athlete' && l.status === 'active'
+        )
+        .map((l) => ({
+          id: l.id,
+          name: (l.recipientName || '').trim() || (l.targetEmail || '').split('@')[0] || 'Invited athlete',
+          email: l.targetEmail || '',
+          activationUrl: l.activationUrl,
+        }));
+      setInvites(rows);
+    } catch (err) {
+      console.error('[CoachDashboard] failed to load athlete invites', err);
+    } finally {
+      setLoadingInvites(false);
+    }
+  }, [coachId, isDemo]);
+
+  useEffect(() => {
+    void loadInvites();
+  }, [loadInvites]);
+
+  const openInvite = () => {
+    setName('');
+    setEmail('');
+    setCopied(false);
+    setInviteOpen(true);
+  };
+
+  // Create + copy a reusable athlete link (anyone who redeems joins as an athlete).
+  const copyLink = async () => {
+    if (isDemo) {
+      try {
+        navigator.clipboard?.writeText(inviteLink);
+      } catch {}
+      setCopied(true);
+      setToast('Athlete invite link copied.');
+      return;
+    }
+    if (!team || !coachId) {
+      setToast('Still resolving your team — try again in a moment.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await pulseCheckProvisioningService.createTeamAccessInviteLink({
+        organizationId: team.organizationId,
+        teamId: team.teamId,
+        teamMembershipRole: 'athlete',
+        redemptionMode: 'general',
+        createdByUserId: coachId,
+        createdByEmail: coachEmail || '',
+      });
+      const links = await pulseCheckProvisioningService.listTeamInviteLinks(team.teamId);
+      const link = links.find(
+        (l) =>
+          l.inviteType === 'team-access' &&
+          l.teamMembershipRole === 'athlete' &&
+          !(l.targetEmail || '') &&
+          l.status === 'active'
+      );
+      if (link?.activationUrl) {
+        setInviteLink(link.activationUrl);
+        try {
+          navigator.clipboard?.writeText(link.activationUrl);
+        } catch {}
+        setCopied(true);
+        setToast('Athlete invite link copied — share it with your team.');
+        await loadInvites();
+      } else {
+        setToast('Created the link but could not read it back. Refresh and try again.');
+      }
+    } catch (err) {
+      console.error('[CoachDashboard] failed to create shareable athlete link', err);
+      setToast('Could not create the link. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Email a single-use athlete invite (mirrors the staff send + email flow).
+  const sendInvite = async () => {
+    const e = email.trim();
+    const n = name.trim();
+    if (!n) {
+      setToast("Add the athlete's name first.");
+      return;
+    }
+    if (!e) return;
+
+    if (isDemo) {
+      setInvites((prev) => [
+        { id: `demo-${prev.length + 1}-${e}`, name: n, email: e, activationUrl: inviteLink },
+        ...prev,
+      ]);
+      setToast(`Invite sent to ${n}.`);
+      setInviteOpen(false);
+      return;
+    }
+    if (!team || !coachId) {
+      setToast('Still resolving your team — try again in a moment.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await pulseCheckProvisioningService.createTeamAccessInviteLink({
+        organizationId: team.organizationId,
+        teamId: team.teamId,
+        teamMembershipRole: 'athlete',
+        redemptionMode: 'single-use',
+        targetEmail: e,
+        recipientName: n,
+        createdByUserId: coachId,
+        createdByEmail: coachEmail || '',
+      });
+
+      const links = await pulseCheckProvisioningService.listTeamInviteLinks(team.teamId);
+      const link = links.find(
+        (l) =>
+          l.inviteType === 'team-access' &&
+          l.teamMembershipRole === 'athlete' &&
+          (l.targetEmail || '').toLowerCase() === e.toLowerCase() &&
+          l.status === 'active'
+      );
+
+      let emailSent = false;
+      if (link?.activationUrl) {
+        try {
+          // Athlete-specific, app-first email template (distinct from staff invite).
+          const resp = await fetch('/.netlify/functions/send-pulsecheck-athlete-invite-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              toEmail: e,
+              activationUrl: link.activationUrl,
+              recipientName: n,
+              organizationName: team.organizationName,
+              teamName: team.teamName,
+              senderName: coachName,
+            }),
+          });
+          const result = await resp.json().catch(() => ({ success: false }));
+          emailSent = resp.ok && result?.success === true;
+          await pulseCheckProvisioningService.recordAdminActivationEmailResult({
+            token: link.token,
+            success: emailSent,
+            messageId: result?.messageId,
+            sentByUserId: coachId,
+            sentByEmail: coachEmail || '',
+            targetEmail: e,
+            organizationId: team.organizationId,
+            teamId: team.teamId,
+            errorMessage: emailSent ? '' : String(result?.error || 'Send failed'),
+          });
+        } catch (mailErr) {
+          console.error('[CoachDashboard] athlete invite email failed', mailErr);
+        }
+      }
+
+      setToast(
+        emailSent
+          ? `Invite sent to ${e}.`
+          : `Invite created for ${e} — email didn't send, share the link instead.`
+      );
+      setInviteOpen(false);
+      await loadInvites();
+    } catch (err) {
+      console.error('[CoachDashboard] failed to send athlete invite', err);
+      setToast('Could not send the invite. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const revokeInvite = async (row: AthleteInviteRow) => {
+    if (isDemo) {
+      setInvites((prev) => prev.filter((i) => i.id !== row.id));
+      setToast(`Revoked ${row.name}'s invite.`);
+      return;
+    }
+    setRevokingId(row.id);
+    try {
+      await pulseCheckProvisioningService.revokeInviteLink(row.id);
+      setToast(`Revoked ${row.name}'s invite.`);
+      await loadInvites();
+    } catch (err) {
+      console.error('[CoachDashboard] failed to revoke athlete invite', err);
+      setToast('Could not revoke the invite. Try again.');
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
+          Invite athletes {invites.length > 0 && <span className="text-zinc-600">({invites.length} pending)</span>}
+        </div>
+        {canInvite && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={copyLink}
+              disabled={busy}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-700/50 text-zinc-300 text-sm font-medium hover:bg-zinc-800/40 disabled:opacity-40"
+            >
+              <Link2 className="w-4 h-4" /> Copy link
+            </button>
+            <button
+              onClick={openInvite}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95"
+            >
+              <Plus className="w-4 h-4" /> Invite athlete
+            </button>
+          </div>
+        )}
+      </div>
+
+      {toast && (
+        <div className="text-xs text-[#E0FE10] bg-[#E0FE10]/10 border border-[#E0FE10]/25 rounded-lg px-3 py-2">
+          {toast}
+        </div>
+      )}
+
+      {/* Pending athlete invites — disappear from here once the athlete onboards. */}
+      {!loadingInvites && invites.length > 0 && (
+        <div className="rounded-xl border border-zinc-700/30 divide-y divide-zinc-800/50 overflow-hidden">
+          {invites.map((inv) => (
+            <div key={inv.id} className="flex items-center gap-3 px-3 py-2.5">
+              <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-zinc-800 text-[11px] font-semibold text-zinc-300 ring-1 ring-white/10">
+                {initialsOf(inv.name)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-white truncate">{inv.name}</span>
+                  <span className="text-[10px] uppercase tracking-wide text-amber-400/80 border border-amber-400/30 rounded-full px-1.5 py-0.5">
+                    Invited
+                  </span>
+                </div>
+                <div className="text-[11px] text-zinc-500 truncate">{inv.email || inv.activationUrl}</div>
+              </div>
+              <button
+                onClick={() => {
+                  try {
+                    navigator.clipboard?.writeText(inv.activationUrl);
+                  } catch {}
+                  setToast(`Copied ${inv.name}'s invite link.`);
+                }}
+                className="flex flex-none items-center gap-1.5 rounded-lg border border-zinc-700/50 px-2.5 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
+              >
+                <Copy className="h-3.5 w-3.5" /> Copy
+              </button>
+              {canRevoke && (
+                <button
+                  onClick={() => revokeInvite(inv)}
+                  disabled={revokingId === inv.id}
+                  className="flex flex-none items-center gap-1.5 rounded-lg border border-red-500/30 px-2.5 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/10 disabled:opacity-40"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> {revokingId === inv.id ? 'Revoking…' : 'Revoke'}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Invite modal — athlete name (required) + email (optional) */}
+      <AnimatePresence>
+        {inviteOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[55] flex items-center justify-center p-4"
+          >
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setInviteOpen(false)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              className="relative z-10 w-full max-w-md rounded-2xl border border-zinc-700/50 bg-[#0d0d12] shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
+                <div>
+                  <div className="text-base font-semibold text-white">Invite an athlete</div>
+                  <div className="text-xs text-zinc-500">They’ll get a link to join the team and onboard.</div>
+                </div>
+                <button
+                  onClick={() => setInviteOpen(false)}
+                  className="rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="px-5 py-4 space-y-4">
+                <div className="space-y-2">
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Athlete name (required)"
+                    className="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                    Invite by email
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') sendInvite();
+                      }}
+                      placeholder="athlete@school.edu"
+                      className="flex-1 bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
+                    />
+                    <button
+                      onClick={sendInvite}
+                      disabled={!email.trim() || !name.trim() || busy}
+                      className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {busy ? 'Sending…' : 'Send'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-zinc-600">
+                    Athletes get set up in the Pulse app. Email is optional — you can share a link instead.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-700/40 bg-zinc-800/30 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="text-xs font-medium text-zinc-300">Or share a link</div>
+                    <div className="truncate text-[11px] text-zinc-600">{inviteLink}</div>
+                  </div>
+                  <button
+                    onClick={copyLink}
+                    disabled={busy}
+                    className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-zinc-700/50 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {copied ? <Check className="h-3.5 w-3.5 text-[#E0FE10]" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copied ? 'Copied' : busy ? 'Creating…' : 'Copy link'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 const RosterSection: React.FC<{
   athletes: CoachAthlete[];

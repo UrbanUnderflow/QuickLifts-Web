@@ -78,6 +78,20 @@ const SCREEN_DEMOS: ScreenDemo[] = [
     status: 'live',
   },
   {
+    id: 'athlete-invite-email',
+    surface: 'Athlete invite → email template',
+    title: 'Athlete invite email (live template)',
+    description:
+      'The app-first email an athlete receives when a coach invites them from the dashboard roster. Unlike the staff invite, the copy points them to download the Pulse app and sign in to connect to the team. Renders the real template from the shared source of truth (src/lib/emails/pulsecheckAthleteInviteEmail), so it matches what lands in their inbox. Override sample copy via query params (?recipientName=…&teamName=…).',
+    launchUrl: '/api/pulsecheck/preview/athlete-invite-email',
+    steps: [
+      { label: 'Subject', detail: '“You’re invited to join {team} on PulseCheck.”' },
+      { label: 'Body', detail: 'Greeting by name, org/team context, and a JOIN YOUR TEAM button — app-first framing.' },
+      { label: 'Live source', detail: 'Rendered by the real send function — edits to the template show up here immediately.' },
+    ],
+    status: 'live',
+  },
+  {
     id: 'coach-dashboard',
     surface: 'Coach dashboard',
     title: 'Coach Dashboard (demo)',

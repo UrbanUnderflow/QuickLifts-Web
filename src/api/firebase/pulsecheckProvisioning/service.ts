@@ -3285,6 +3285,8 @@ export const pulseCheckProvisioningService = {
     await updateDoc(membershipRef, {
       athleteOnboarding: nextAthleteOnboarding,
       onboardingStatus: nextMembershipOnboardingStatus,
+      // E.164 contact phone for clinician welfare checks (collected at intake).
+      ...(normalizeString(input.phone) ? { phone: normalizeString(input.phone) } : {}),
       updatedAt: serverTimestamp(),
     });
 
@@ -3435,6 +3437,8 @@ export const pulseCheckProvisioningService = {
     await updateDoc(membershipRef, {
       athleteOnboarding: nextAthleteOnboarding,
       onboardingStatus: nextMembershipOnboardingStatus,
+      // E.164 contact phone for clinician welfare checks (collected at intake).
+      ...(normalizeString(input.phone) ? { phone: normalizeString(input.phone) } : {}),
       updatedAt: serverTimestamp(),
     });
 

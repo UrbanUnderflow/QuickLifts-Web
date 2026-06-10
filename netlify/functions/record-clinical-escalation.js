@@ -169,6 +169,22 @@ async function resolveDesignatedClinician(db, teamId) {
   return candidates[0];
 }
 
+// The athlete's own contact phone (collected at intake) so the clinician can
+// place a welfare call. Stored on the athlete's team membership (membership.phone).
+async function resolveAthletePhone(db, teamId, athleteUserId) {
+  const snap = await db
+    .collection(TEAM_MEMBERSHIPS_COLLECTION)
+    .where('teamId', '==', teamId)
+    .where('userId', '==', athleteUserId)
+    .get();
+  for (const docSnap of snap.docs) {
+    const data = docSnap.data() || {};
+    const phone = normalizeString(data.phone);
+    if (phone) return phone;
+  }
+  return null;
+}
+
 async function resolveTeamMeta(db, teamId) {
   const teamSnap = await db.collection(TEAMS_COLLECTION).doc(teamId).get();
   if (!teamSnap.exists) {
@@ -185,6 +201,7 @@ function buildClinicianEmail({
   escalationId,
   athleteUserId,
   athleteDisplayName,
+  athletePhone,
   teamName,
   evidence,
   detectedAt,
@@ -211,6 +228,11 @@ function buildClinicianEmail({
         <p>The athlete's app has been gated to a crisis-resource screen displaying 988, Crisis Text Line (741741), and 911.
         The athlete will be informed that you have been notified.</p>
         <p><strong>Athlete:</strong> ${escapeHtml(athleteDisplayName || athleteUserId)}<br/>
+        <strong>Athlete phone:</strong> ${
+          athletePhone
+            ? `<a href="tel:${escapeHtml(athletePhone)}">${escapeHtml(athletePhone)}</a>`
+            : 'not on file'
+        }<br/>
         <strong>Team:</strong> ${escapeHtml(teamName)}<br/>
         <strong>Detected at:</strong> ${escapeHtml(detectedAtIso)}<br/>
         <strong>Escalation id:</strong> ${escapeHtml(escalationId)}</p>
@@ -235,12 +257,13 @@ function buildClinicianEmail({
 function buildClinicianSms({
   athleteDisplayName,
   athleteUserId,
+  athletePhone,
   teamName,
   acknowledgeUrl,
 }) {
   return [
     'PULSE TIER 3 ALERT.',
-    `Athlete ${athleteDisplayName || athleteUserId} on ${teamName} flagged. Athlete prompted to call 988.`,
+    `Athlete ${athleteDisplayName || athleteUserId} on ${teamName} flagged.${athletePhone ? ` Reach them at ${athletePhone}.` : ''} Athlete prompted to call 988.`,
     'Apply clinical judgment per your protocol. Acknowledge:',
     acknowledgeUrl,
   ].join(' ');
@@ -378,6 +401,12 @@ exports.handler = async (event) => {
       }
     } catch (_) {}
 
+    // Athlete's own contact phone (intake) so the clinician can place a welfare call.
+    let athletePhone = null;
+    try {
+      athletePhone = await resolveAthletePhone(db, teamId, athleteUserId);
+    } catch (_) {}
+
     // 1. Write the immutable escalation doc
     const escalationDoc = {
       athleteUserId,
@@ -414,6 +443,7 @@ exports.handler = async (event) => {
       escalationId,
       athleteUserId,
       athleteDisplayName,
+      athletePhone,
       teamName: team.displayName,
       evidence,
       detectedAt,
@@ -453,6 +483,7 @@ exports.handler = async (event) => {
     const smsBody = buildClinicianSms({
       athleteDisplayName,
       athleteUserId,
+      athletePhone,
       teamName: team.displayName,
       acknowledgeUrl,
     });

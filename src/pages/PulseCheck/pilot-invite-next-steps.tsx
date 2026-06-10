@@ -5,7 +5,6 @@ import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { ArrowRight, CheckCircle2, Download, Smartphone, Users2 } from 'lucide-react';
 import { getFirestoreDocFallback } from '../../lib/server-firestore-fallback';
 import type { PulseCheckPilotInviteConfig } from '../../api/firebase/pulsecheckPilotDashboard/types';
-import { appLinks } from '../../utils/platformDetection';
 
 type InviteMode = 'new-account' | 'existing-account';
 
@@ -25,13 +24,23 @@ const PILOT_INVITE_CONFIGS_COLLECTION = 'pulsecheck-pilot-invite-configs';
 const TEAM_INVITE_DEFAULTS_COLLECTION = 'pulsecheck-team-invite-defaults';
 const ORGANIZATION_INVITE_DEFAULTS_COLLECTION = 'pulsecheck-organization-invite-defaults';
 const PULSECHECK_IOS_APP_STORE_URL = 'https://apps.apple.com/by/app/pulsecheck-mindset-coaching/id6747253393';
+// Placeholder until PulseCheck-Android is published — the listing goes live at this URL automatically.
+const PULSECHECK_ANDROID_PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.fitwithpulse.pulsecheck';
 const LEGACY_FIT_WITH_PULSE_IOS_APP_ID = 'id6451497729';
+const LEGACY_FIT_WITH_PULSE_ANDROID_PACKAGE = 'ai.fitwithpulse.pulse';
 
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const resolvePulseCheckIosAppUrl = (value: unknown) => {
   const normalizedValue = normalizeString(value);
   if (!normalizedValue || normalizedValue.includes(LEGACY_FIT_WITH_PULSE_IOS_APP_ID)) {
     return PULSECHECK_IOS_APP_STORE_URL;
+  }
+  return normalizedValue;
+};
+const resolvePulseCheckAndroidAppUrl = (value: unknown) => {
+  const normalizedValue = normalizeString(value);
+  if (!normalizedValue || normalizedValue.includes(LEGACY_FIT_WITH_PULSE_ANDROID_PACKAGE)) {
+    return PULSECHECK_ANDROID_PLAY_STORE_URL;
   }
   return normalizedValue;
 };
@@ -68,7 +77,7 @@ const buildFallbackConfig = (
   supportEmail: '',
   supportPhone: '',
   iosAppUrl: PULSECHECK_IOS_APP_STORE_URL,
-  androidAppUrl: appLinks.playStoreUrl,
+  androidAppUrl: PULSECHECK_ANDROID_PLAY_STORE_URL,
   createdAt: null,
   updatedAt: null,
 });
@@ -85,7 +94,7 @@ const applyConfigLayer = (base: PulseCheckPilotInviteConfig, data: Record<string
   supportEmail: normalizeString(data?.supportEmail) || base.supportEmail,
   supportPhone: normalizeString(data?.supportPhone) || base.supportPhone,
   iosAppUrl: resolvePulseCheckIosAppUrl(data?.iosAppUrl) || base.iosAppUrl,
-  androidAppUrl: normalizeString(data?.androidAppUrl) || base.androidAppUrl,
+  androidAppUrl: resolvePulseCheckAndroidAppUrl(data?.androidAppUrl) || base.androidAppUrl,
 });
 
 const PilotInviteNextStepsPage = ({
@@ -203,7 +212,7 @@ const PilotInviteNextStepsPage = ({
                   iPhone App Store
                 </a>
                 <a
-                  href={config.androidAppUrl || appLinks.playStoreUrl}
+                  href={resolvePulseCheckAndroidAppUrl(config.androidAppUrl)}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center justify-center gap-2 rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
