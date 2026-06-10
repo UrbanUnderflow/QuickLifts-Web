@@ -18,6 +18,7 @@ type SharedSystemOverviewPageProps = {
     sectionLabel: string;
     sectionDescription: string;
     snapshotText: string;
+    snapshotHtml: string;
     createdAt: string | null;
     passcodeProtected: boolean;
     isLocked: boolean;
@@ -730,7 +731,10 @@ function renderEnhancedText(text: string): React.ReactNode {
 const SharedSystemOverviewPage = ({ share, ogMeta }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
   const currentUser = useSelector((state: RootState) => state.user.currentUser);
   const isAdmin = currentUser?.role === 'admin';
-  const blocks = useMemo(() => (share.isLocked ? [] : parseSnapshotText(share.snapshotText)), [share.isLocked, share.snapshotText]);
+  const blocks = useMemo(
+    () => (share.isLocked || share.snapshotHtml ? [] : parseSnapshotText(share.snapshotText)),
+    [share.isLocked, share.snapshotHtml, share.snapshotText],
+  );
   const [copied, setCopied] = useState(false);
   const [passcode, setPasscode] = useState('');
   const [unlocking, setUnlocking] = useState(false);
@@ -1199,6 +1203,9 @@ const SharedSystemOverviewPage = ({ share, ogMeta }: InferGetServerSidePropsType
                   onDoubleClick={handleDoubleClick}
                   style={{ cursor: 'text' }}
                 >
+                  {share.snapshotHtml ? (
+                    <div className="text-zinc-300" dangerouslySetInnerHTML={{ __html: share.snapshotHtml }} />
+                  ) : null}
                   {blocks.map((block, idx) => {
                     switch (block.type) {
                       case 'section-header': {
@@ -1623,6 +1630,7 @@ export const getServerSideProps: GetServerSideProps<SharedSystemOverviewPageProp
           sectionLabel: data.sectionLabel || 'Shared System Overview Artifact',
           sectionDescription: data.sectionDescription || '',
           snapshotText: isUnlocked ? data.snapshotText || '' : '',
+          snapshotHtml: isUnlocked ? data.snapshotHtml || '' : '',
           createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
           passcodeProtected,
           isLocked,

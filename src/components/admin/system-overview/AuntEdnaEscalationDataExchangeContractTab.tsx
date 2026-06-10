@@ -11,26 +11,26 @@ const BOUNDARY_CARDS = [
   },
   {
     title: 'Escalation handoff payload',
-    owner: 'PulseCheck -> AuntEdna',
-    crosses: 'Yes',
+    owner: 'PulseCheck, sent to AuntEdna',
+    crosses: 'Yes — this is the case packet defined below',
     body: 'PulseCheck sends a focused case packet for the specific escalation: identity, routing, tier, reason, concise concern summary, consent state, and freshness-aware context.',
   },
   {
     title: 'AuntEdna clinical case data',
     owner: 'AuntEdna',
-    crosses: 'No, except limited status metadata back to PulseCheck',
+    crosses: 'No, except limited operational status returned to PulseCheck',
     body: 'Clinical intake, triage, notes, diagnosis, care plan, treatment detail, clinician messaging, EHR, billing, and PHI remain AuntEdna-side records.',
   },
   {
     title: 'Hybrid operational metadata',
     owner: 'Both systems, with different depth',
-    crosses: 'Yes, limited',
+    crosses: 'Yes, limited operational fields only',
     body: 'Shared ids, delivery timestamps, receipt status, status category, assignment label, appointment existence, crisis-pathway state, resolution state, and reconciliation metadata.',
   },
   {
     title: 'De-identified aggregate outcomes',
-    owner: 'AuntEdna -> PulseCheck when permitted',
-    crosses: 'Yes, aggregate only',
+    owner: 'AuntEdna, returned to PulseCheck when permitted',
+    crosses: 'Yes, aggregate buckets only',
     body: 'Pilot and system-improvement signals may return as de-identified buckets, never individual clinical detail.',
   },
 ];
@@ -278,21 +278,17 @@ const InlineCode: React.FC<{ text: string }> = ({ text }) => {
 
 const BoundaryCard: React.FC<(typeof BOUNDARY_CARDS)[number]> = ({ title, owner, crosses, body }) => (
   <article className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-4">
-    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-      <div>
-        <p className="text-sm font-semibold text-white">{title}</p>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-300">{body}</p>
-      </div>
-      <div className="grid min-w-[220px] gap-2 text-xs">
-        <div className="rounded-lg border border-zinc-800 bg-black/25 p-2">
-          <p className="uppercase tracking-wide text-zinc-500">Owner</p>
-          <p className="mt-1 text-zinc-200">{owner}</p>
-        </div>
-        <div className="rounded-lg border border-zinc-800 bg-black/25 p-2">
-          <p className="uppercase tracking-wide text-zinc-500">Crosses Boundary</p>
-          <p className="mt-1 text-zinc-200">{crosses}</p>
-        </div>
-      </div>
+    <p className="text-sm font-semibold text-white">{title}</p>
+    <p className="mt-2 text-sm leading-relaxed text-zinc-300">{body}</p>
+    <div className="mt-3 space-y-1 border-t border-zinc-800 pt-3 text-sm leading-relaxed">
+      <p className="text-zinc-300">
+        <span className="font-semibold text-zinc-500">Owned by: </span>
+        {owner}
+      </p>
+      <p className="text-zinc-300">
+        <span className="font-semibold text-zinc-500">Crosses the bridge: </span>
+        {crosses}
+      </p>
     </div>
   </article>
 );
@@ -306,7 +302,7 @@ const PayloadCard: React.FC<(typeof EXPECTED_PAYLOAD_CARDS)[number]> = ({ title,
         {note ? <p className="mt-2 text-xs leading-relaxed text-amber-200/80">{note}</p> : null}
       </div>
       <div className="w-full xl:max-w-[520px]">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Expected fields</p>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Expected fields:</p>
         <FieldChipList fields={fields} />
       </div>
     </div>
@@ -324,19 +320,15 @@ const ThreePartCardList: React.FC<{
         <p className="text-sm font-semibold text-white">
           <InlineCode text={title} />
         </p>
-        <div className="mt-3 grid gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{secondLabel}</p>
-            <p className="mt-1 text-sm leading-relaxed text-zinc-300">
-              <InlineCode text={second} />
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{thirdLabel}</p>
-            <p className="mt-1 text-sm leading-relaxed text-zinc-300">
-              <InlineCode text={third} />
-            </p>
-          </div>
+        <div className="mt-3 grid gap-2">
+          <p className="text-sm leading-relaxed text-zinc-300">
+            <span className="font-semibold text-zinc-500">{secondLabel}: </span>
+            <InlineCode text={second} />
+          </p>
+          <p className="text-sm leading-relaxed text-zinc-300">
+            <span className="font-semibold text-zinc-500">{thirdLabel}: </span>
+            <InlineCode text={third} />
+          </p>
         </div>
       </article>
     ))}
@@ -351,8 +343,10 @@ const TwoPartCardList: React.FC<{
     {rows.map(([title, body]) => (
       <article key={title} className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-4">
         <p className="text-sm font-semibold text-white">{title}</p>
-        <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">{bodyLabel}</p>
-        <p className="mt-1 text-sm leading-relaxed text-zinc-300">{body}</p>
+        <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+          <span className="font-semibold text-zinc-500">{bodyLabel}: </span>
+          {body}
+        </p>
       </article>
     ))}
   </div>
@@ -397,6 +391,11 @@ const AuntEdnaEscalationDataExchangeContractTab: React.FC = () => {
       />
 
       <SectionBlock icon={Database} title="System Boundary Summary">
+        <p className="max-w-4xl text-sm leading-relaxed text-zinc-300">
+          Every data category in this integration has one owning system of record and an explicit rule for whether it crosses
+          the bridge — that is, whether it is ever transmitted between PulseCheck and AuntEdna. The five categories below
+          cover everything the escalation bridge touches; the rest of this document details each one.
+        </p>
         <div className="space-y-3">
           {BOUNDARY_CARDS.map((card) => (
             <BoundaryCard key={card.title} {...card} />

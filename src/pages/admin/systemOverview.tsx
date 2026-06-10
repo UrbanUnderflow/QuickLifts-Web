@@ -872,6 +872,7 @@ const SystemOverviewPage: React.FC = () => {
 
   const handleCreateShareLink = async () => {
     const snapshotText = artifactContentRef.current?.innerText?.trim();
+    const snapshotHtml = artifactContentRef.current?.innerHTML?.trim() || "";
     if (!snapshotText || !activeSectionMeta) {
       setShareError("Nothing available to share.");
       return;
@@ -892,6 +893,7 @@ const SystemOverviewPage: React.FC = () => {
         sectionLabel: activeSectionMeta.label,
         sectionDescription: activeSectionMeta.description,
         snapshotText,
+        snapshotHtml,
         passcode: sharePasscodeEnabled ? sharePasscode.trim() : "",
       });
 

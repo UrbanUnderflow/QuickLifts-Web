@@ -8,6 +8,25 @@ const COLLECTION = 'systemOverviewShareLinks';
 
 const toIso = (value: FirebaseFirestore.Timestamp | null | undefined) => value?.toDate?.().toISOString?.() || null;
 
+// Firestore docs cap at 1MB; leave headroom for snapshotText + metadata.
+const MAX_SNAPSHOT_HTML_LENGTH = 700_000;
+
+// The HTML originates from our own admin-rendered React DOM, but strip active
+// content anyway since the share page renders it for unauthenticated visitors.
+const sanitizeSnapshotHtml = (raw: unknown): string => {
+  if (typeof raw !== 'string' || !raw.trim()) return '';
+  let html = raw;
+  for (const tag of ['script', 'style', 'iframe', 'object', 'embed']) {
+    html = html.replace(new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}>`, 'gi'), '');
+    html = html.replace(new RegExp(`<${tag}\\b[^>]*\\/?>`, 'gi'), '');
+  }
+  html = html.replace(/<(?:link|meta|base)\b[^>]*\/?>/gi, '');
+  html = html.replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+  html = html.replace(/\s(href|src|xlink:href)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, ' $1="#"');
+  if (html.length > MAX_SNAPSHOT_HTML_LENGTH) return '';
+  return html;
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const adminUser = await requireAdminRequest(req);
   if (!adminUser) {
@@ -48,13 +67,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (req.method === 'POST') {
-    const { sectionId, systemId, sectionLabel, sectionDescription, snapshotText, passcode } = req.body || {};
+    const { sectionId, systemId, sectionLabel, sectionDescription, snapshotText, snapshotHtml, passcode } = req.body || {};
 
     if (!sectionId || !systemId || !sectionLabel || !snapshotText) {
       return res.status(400).json({ error: 'sectionId, systemId, sectionLabel, and snapshotText are required.' });
     }
 
     try {
+      const safeSnapshotHtml = sanitizeSnapshotHtml(snapshotHtml);
       const token = randomBytes(24).toString('hex');
       const baseUrl =
         process.env.NEXT_PUBLIC_SITE_URL ||
@@ -69,6 +89,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sectionLabel,
         sectionDescription: sectionDescription || '',
         snapshotText,
+        snapshotHtml: safeSnapshotHtml,
         passcodeProtected: Boolean(passcodeHash),
         passcodeSalt: passcodeHash?.salt || null,
         passcodeHash: passcodeHash?.hash || null,

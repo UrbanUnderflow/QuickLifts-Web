@@ -253,7 +253,7 @@ export const pulseCheckAndroidHandbook: ProductHandbook = {
       name: 'Profile — UserProfileView Design Parity',
       persona: 'Athletes reviewing their mental-performance profile',
       outcome:
-        'The full Profile tab rebuilt to match iOS UserProfileView via a screenshot-driven design loop — EVERY scroll card ported in iOS order over the purple/lime/green blob backdrop: topBar ("Profile" + ⋮ settings) → identity hero (teal-rimmed avatar, 30sp name, sport/level hero chips, "Update your story" pill) → "WHAT NORA SEES IN YOU" mental-performance card (Composure/Focus/Decision pillars) → "Nora is pulling health data from these sources" (Health Connect / Fitbit Air, live permission state) → responsiveness card (Readiness + Pressure-Sensitivity summary cards + Strongest/Growing/Steadiest spotlight tiles) → first-scroll question cards (Strongest / Needs Support / Over Time / Under Pressure / Consistency / Right Now) → "WHAT WE\'RE WORKING ON NOW" program-pathway card → "TRIAL MILESTONES" (Baseline/Midpoint/Endpoint/Retention) → "HOW YOUR TREND IS FORMING" → rhythm & access cards (My focus / My biggest mental challenge / Where I train my mind / My team and coaching — coaches row opens the coach screen, subscription from user.subscriptionType). All cards render the exact iOS no-baseline EMPTY STATE (pillars "—", "still forming" headlines, "Baseline pending", milestones Pending/Later) because the baseline / ProfileMetricsService pipeline that computes live values is not yet ported — identical to a fresh iOS athlete. Apple Watch / Oura / Polar device lanes + the Oura recovery card are iOS-only hardware paths; Android represents devices via the Health Connect sources card. Dedicated edit/detail sheets are the remaining deferred piece.',
+        'The full Profile tab rebuilt to match iOS UserProfileView via a screenshot-driven design loop — EVERY scroll card ported in iOS order over the purple/lime/green blob backdrop: topBar ("Profile" + ⋮ settings) → identity hero (teal-rimmed avatar, 30sp name, sport/level hero chips, "Update your story" pill) → "WHAT NORA SEES IN YOU" mental-performance card (Composure/Focus/Decision pillars) → "Nora is pulling health data from these sources" (Health Connect / Fitbit Air, live permission state) → responsiveness card (Readiness + Pressure-Sensitivity summary cards + Strongest/Growing/Steadiest spotlight tiles) → first-scroll question cards (Strongest / Needs Support / Over Time / Under Pressure / Consistency / Right Now) → "WHAT WE\'RE WORKING ON NOW" program-pathway card → "TRIAL MILESTONES" (Baseline/Midpoint/Endpoint/Retention) → "HOW YOUR TREND IS FORMING" → rhythm & access cards (My focus / My biggest mental challenge / Where I train my mind / My team and coaching — coaches row opens the coach screen, subscription from user.subscriptionType). The Composure/Focus/Decision pillar scores and the teams chip are now LIVE-wired off Firestore (see "Profile metrics & teams — live-wired" feature); the remaining metric cards still render the exact iOS no-baseline EMPTY STATE ("still forming" headlines, "Baseline pending", milestones Pending/Later) because the responsiveness/trend/milestone slice of ProfileMetricsService is not yet ported — identical to a fresh iOS athlete. Apple Watch / Oura / Polar device lanes + the Oura recovery card are iOS-only hardware paths; Android represents devices via the Health Connect sources card. Dedicated edit sheets are the remaining deferred piece.',
       entryPoints: ['Profile tab'],
       dependentServices: ['AuthViewModel', 'DailyBriefingViewModel'],
       firestoreCollections: ['users', 'health-context-source-records'],
@@ -264,6 +264,27 @@ export const pulseCheckAndroidHandbook: ProductHandbook = {
       sourceRefs: [
         { label: 'Profile Screen (mirrors UserProfileView hero + mentalPerformanceCard + dataShapingCard)', path: '../PulseCheck-Android/app/src/main/java/com/fitwithpulse/pulsecheck/ui/profile/ProfileScreen.kt' },
         { label: 'Profile Tab host (profile ↔ settings ↔ coach)', path: '../PulseCheck-Android/app/src/main/java/com/fitwithpulse/pulsecheck/ui/profile/ProfileTab.kt' },
+      ],
+    },
+    {
+      id: 'pulsecheck-android-profile-metrics-live',
+      name: 'Profile Metrics & Teams — Live-Wired',
+      persona: 'Athletes reviewing their mental-performance profile',
+      outcome:
+        'The first real (non-empty-state) Profile data, read from the same Firestore documents iOS reads. (1) PILLAR SCORES: ProfileViewModel loads athlete-mental-progress/{uid}.baselineProbe (the doc iOS reads in refreshProfile); BaselineSnapshot computes Composure/Focus/Decision with the byte-identical iOS formulas (e.g. composure = clamp(10 − (recoveryMs−1500)/600, 1, 10)), rendered as score×10% with the score-banded subtitles and the dynamic "X is your clearest edge today, while y needs the most support" headline. No baseline → the honest "—" empty state, exactly like a fresh iOS athlete. (2) TEAMS CHIP + SHEETS: CoachRepository.loadAthleteTeamDetails lists every athlete membership (pulsecheck-team-memberships where userId+role=athlete) joined on pulsecheck-teams (displayName / sportOrProgram / status) + pulsecheck-organizations (displayName). The hero chip shows the single team name (1 team) / "Multiple teams" (2+) / hidden (0); tapping opens a ModalBottomSheet teams directory → team-detail sheet (Organization / Program / Role / Title / Status / Joined), mirroring iOS ProfileTeamsSheet + ProfileTeamDetailSheet with #D4EA04 accent and exact copy. The "MY TEAM AND COACHING" rhythm row is also live (Multiple / status / tappable into the same sheets). Verified live on emulator against the founder account (real pillar % + 4 real teams).',
+      entryPoints: ['Profile tab → "WHAT NORA SEES IN YOU" pillars', 'Profile tab → teams hero chip', 'Profile tab → MY TEAM AND COACHING row'],
+      dependentServices: ['ProfileViewModel', 'MentalTrainingRepository', 'CoachRepository', 'AuthRepository'],
+      firestoreCollections: ['athlete-mental-progress', 'pulsecheck-team-memberships', 'pulsecheck-teams', 'pulsecheck-organizations'],
+      integrations: ['Cloud Firestore'],
+      owner: 'PulseCheck Team + Android Squad',
+      releaseChannel: 'Internal dev (pre-release)',
+      status: 'beta',
+      sourceRefs: [
+        { label: 'BaselineSnapshot (pillar score formulas, mirrors UserProfileView.BaselineSnapshot)', path: '../PulseCheck-Android/app/src/main/java/com/fitwithpulse/pulsecheck/data/model/BaselineSnapshot.kt' },
+        { label: 'ProfileTeamDetail (teams model, mirrors UserProfileView.ProfileTeamDetail)', path: '../PulseCheck-Android/app/src/main/java/com/fitwithpulse/pulsecheck/data/model/ProfileTeamDetail.kt' },
+        { label: 'ProfileViewModel (loads baseline + teams for the signed-in athlete)', path: '../PulseCheck-Android/app/src/main/java/com/fitwithpulse/pulsecheck/ui/profile/ProfileViewModel.kt' },
+        { label: 'CoachRepository.loadAthleteTeamDetails (membership → team/org enrichment)', path: '../PulseCheck-Android/app/src/main/java/com/fitwithpulse/pulsecheck/data/repository/CoachRepository.kt' },
+        { label: 'ProfileScreen (pillar cards + teams chip + teams/detail ModalBottomSheets)', path: '../PulseCheck-Android/app/src/main/java/com/fitwithpulse/pulsecheck/ui/profile/ProfileScreen.kt' },
       ],
     },
     {
