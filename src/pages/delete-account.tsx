@@ -2,12 +2,14 @@ import React from 'react';
 import Head from 'next/head';
 
 const supportEmail = 'info@fitwithpulse.ai';
-const deleteAccountSubject = encodeURIComponent('Delete Account Request');
+const appName = 'PulseCheck: Mindset Coaching';
+const developerName = 'Pulse Intelligence Labs, Inc.';
+const deleteAccountSubject = encodeURIComponent('PulseCheck Account Deletion Request');
 const deleteAccountBody = encodeURIComponent(
   [
     'Hi Pulse Support,',
     '',
-    'I want to delete my Pulse account and associated data.',
+    'I want to delete my PulseCheck account and associated data.',
     '',
     'Account email:',
     'Username (if known):',
@@ -20,32 +22,32 @@ const DeleteAccountPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-zinc-900 text-white">
       <Head>
-        <title>Delete Account | Pulse</title>
+        <title>Delete PulseCheck Account | Pulse Intelligence Labs</title>
         <meta
           name="description"
-          content="Request deletion of your Pulse account and associated data."
+          content="Request deletion of your PulseCheck: Mindset Coaching account and associated data from Pulse Intelligence Labs, Inc."
         />
-        <meta property="og:title" content="Delete Account | Pulse" />
+        <meta property="og:title" content="Delete PulseCheck Account | Pulse Intelligence Labs" />
         <meta
           property="og:description"
-          content="Use this page to request deletion of your Pulse account and associated data."
+          content="Use this page to request deletion of your PulseCheck: Mindset Coaching account and associated data."
         />
       </Head>
 
       <main className="max-w-4xl mx-auto px-4 py-20">
         <h1 className="text-[#E0FE10] text-5xl sm:text-6xl font-bold mb-8">
-          Delete Account
+          Delete PulseCheck Account
         </h1>
 
         <p className="text-zinc-300 text-lg mb-8">
-          If you want to delete your Pulse account and associated data, submit a request to our
-          support team.
+          Use this page to request deletion of your {appName} account and associated data from
+          {` ${developerName}`}.
         </p>
 
         <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 sm:p-8 mb-8">
           <h2 className="text-2xl font-semibold mb-4">How to request deletion</h2>
           <ol className="list-decimal list-inside space-y-3 text-zinc-300">
-            <li>Send your request from the email address connected to your Pulse account.</li>
+            <li>Send your request from the email address connected to your PulseCheck account.</li>
             <li>Include your username (if available) so we can identify the account quickly.</li>
             <li>Our team will confirm receipt and process the request.</li>
           </ol>
@@ -65,9 +67,9 @@ const DeleteAccountPage: React.FC = () => {
         <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 sm:p-8">
           <h2 className="text-2xl font-semibold mb-4">Data handling details</h2>
           <ul className="list-disc list-inside space-y-3 text-zinc-300">
-            <li>We delete or anonymize account data associated with your user profile after validation.</li>
-            <li>Some records may be retained when required for legal, security, fraud-prevention, or compliance obligations.</li>
-            <li>Subscription and payment records may be retained by payment processors as required by law and provider policy.</li>
+            <li>We delete or anonymize account profile data, sign-in identifiers, saved preferences, app activity, check-ins, messages, and connected health or fitness data associated with your PulseCheck user profile after validation.</li>
+            <li>Some records may be retained when required for legal, security, fraud-prevention, accounting, or compliance obligations.</li>
+            <li>Subscription and payment records may be retained by Apple, Google, Stripe, RevenueCat, or other payment processors as required by law and provider policy.</li>
           </ul>
         </div>
       </main>

@@ -53,7 +53,7 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/morning-mobility-challenge': 'Morning Mobility — Pulse',
   '/mobility': 'Mobility — Pulse',
   '/terms': 'Terms — Pulse',
-  '/delete-account': 'Delete Account — Pulse',
+  '/delete-account': 'Delete PulseCheck Account — Pulse Intelligence Labs',
 };
 
 function humanizeSlug(slug: string): string {

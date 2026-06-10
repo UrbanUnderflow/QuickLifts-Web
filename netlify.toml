@@ -93,6 +93,21 @@
   status = 200
   force = true
 
+# Google Play account deletion review page for PulseCheck. Serve a plain static
+# page at the exact URL already entered in Play Console so crawlers see the app
+# and developer names without relying on client-side rendering.
+[[redirects]]
+  from = "/delete-account"
+  to = "/pulsecheck-delete-account.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/deleteAccount"
+  to = "/pulsecheck-delete-account.html"
+  status = 200
+  force = true
+
 # File browser API → Netlify function (keeps it out of Next.js build)
 [[redirects]]
   from = "/api/files/browse"
