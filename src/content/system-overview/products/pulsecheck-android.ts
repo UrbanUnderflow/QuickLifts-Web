@@ -21,8 +21,8 @@ export const pulseCheckAndroidHandbook: ProductHandbook = {
       name: 'Foundation + Navigation Shell (M1)',
       persona: 'All Pulse Check Android athletes',
       outcome:
-        'A buildable Kotlin/Compose foundation: splash -> Google sign-in -> 4-tab chromatic nav shell, dev/prod flavors on the shared Firebase, single-activity Compose architecture.',
-      entryPoints: ['App launch', 'MainActivity', 'PulseCheckApp root router', 'ChromaticTabBar'],
+        'A buildable Kotlin/Compose foundation: splash -> Google sign-in -> 4-tab nav shell, dev/prod flavors on the shared Firebase, single-activity Compose architecture. Nav redesigned 2026-06-10 (founder-directed) from the docked chromatic bar to a FLOATING PILL TAB BAR: dark stadium pill (#1A1A20 @ 0.97, 1dp white stroke, soft shadow) inset 14dp from the screen edges and floating 12dp above the gesture area, content scrolling behind it, white icons with a white@0.16 stadium highlight on the selected slot, and the athlete avatar initial as the Profile slot (white ring when selected). Android leads here — the iOS docked chromatic bar is pending the same redesign.',
+      entryPoints: ['App launch', 'MainActivity', 'PulseCheckApp root router', 'Floating pill tab bar'],
       dependentServices: ['Firebase Auth', 'Cloud Firestore', 'Hilt DI', 'Compose Navigation'],
       firestoreCollections: ['users'],
       integrations: ['Firebase Auth', 'Cloud Firestore', 'Google Sign-In'],
@@ -32,7 +32,7 @@ export const pulseCheckAndroidHandbook: ProductHandbook = {
       sourceRefs: [
         { label: 'App Module Build Config', path: '../PulseCheck-Android/app/build.gradle.kts' },
         { label: 'Root Router (mirrors iOS ContentView)', path: '../PulseCheck-Android/app/src/main/java/com/fitwithpulse/pulsecheck/ui/navigation/PulseCheckApp.kt' },
-        { label: 'Chromatic Tab Bar (mirrors iOS MainTabView)', path: '../PulseCheck-Android/app/src/main/java/com/fitwithpulse/pulsecheck/ui/navigation/ChromaticTabBar.kt' },
+        { label: 'Floating Pill Tab Bar (founder-directed redesign; iOS port pending)', path: '../PulseCheck-Android/app/src/main/java/com/fitwithpulse/pulsecheck/ui/navigation/ChromaticTabBar.kt' },
         { label: 'Priority-Modal Gate', path: '../PulseCheck-Android/app/src/main/java/com/fitwithpulse/pulsecheck/ui/navigation/PriorityModal.kt' },
       ],
     },

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRightLeft, ClipboardList, Database, Link2, Lock, Server, ShieldCheck, Stethoscope, Workflow } from 'lucide-react';
+import { ArrowRightLeft, ClipboardList, Database, LifeBuoy, Link2, Lock, Server, ShieldCheck, Stethoscope, Workflow } from 'lucide-react';
 import { BulletList, CardGrid, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
 
 const BOUNDARY_CARDS = [
@@ -26,6 +26,12 @@ const BOUNDARY_CARDS = [
     owner: 'Both systems, with different depth',
     crosses: 'Yes, limited operational fields only',
     body: 'Shared ids, delivery timestamps, receipt status, status category, assignment label, appointment existence, crisis-pathway state, resolution state, and reconciliation metadata.',
+  },
+  {
+    title: 'Watch-list and app-state directives',
+    owner: 'AuntEdna (clinical authority), mirrored by PulseCheck',
+    crosses: 'Yes — state signals, check-in cadence, and receipts only',
+    body: 'Tier 3 athletes are placed on a clinician-monitored watch list that drives a restricted app state inside PulseCheck. The state directives and check-in cadence cross the bridge; the clinical reasoning behind them does not.',
   },
   {
     title: 'De-identified aggregate outcomes',
@@ -153,6 +159,16 @@ const AUNTEDNA_API_ROWS = [
     '`{ resolved: true }`',
   ],
   [
+    '`GET /athletes/{pulseUserId}/care-state`',
+    'Authoritative watch-list and app-state read, called on app launch and as reconciliation alongside webhooks: whether the athlete is on the watch list, which app state applies, and the current clinician check-in cadence.',
+    '`{ watchListActive: boolean, appState: "crisis_support" | "guided_reentry" | "standard", checkInCadence?: { frequency, nextDueAt, channel }, lastCheckInAt?, updatedAt }`',
+  ],
+  [
+    '`POST /athletes/{pulseUserId}/check-ins`',
+    'Submit a clinician check-in initiated inside the PulseCheck app. The submission content becomes part of the AuntEdna clinical record; PulseCheck passes it through and does not persist responses.',
+    '`{ checkInId, receivedAt, nextDueAt? }`',
+  ],
+  [
     '`GET /clinician-profiles?search=`',
     'Search clinician, group, and provider-pool profiles that PulseCheck teams can attach for routing.',
     'Array of `{ id, displayName, organizationName?, email?, profileType: "individual" | "group" | "provider" }`',
@@ -183,6 +199,7 @@ const HYBRID_ROWS = [
   ['Receipt and delivery state', '`sent`, `received`, `accepted`, `failed`, `retrying`, `manual_fallback`', 'PulseCheck owns send attempts; AuntEdna owns receipt acknowledgment.'],
   ['Case status category', '`created`, `triage_requested`, `assigned`, `appointment_booked`, `crisis_invoked`, `resolved`, `closed`', 'Coarse status only. This drives UI and workflow suppression without exposing clinical notes.'],
   ['Assignment label', 'Display-safe provider pool, clinician lane, campus support lane, or external profile label', 'Useful for operators and dashboards; not a clinical note.'],
+  ['Watch-list and app-state directive', '`watchListActive` flag, `appState` (`crisis_support`, `guided_reentry`, `standard`), check-in cadence, check-in receipts', 'PulseCheck needs these to drive the in-app state machine; the clinical reasoning behind every transition stays in AuntEdna.'],
   ['Timing metrics', 'Received at, acknowledged at, triage requested at, first outreach attempted at, resolved at', 'Supports Exhibit B performance standards and speed-to-care reporting.'],
   ['Outcome bucket', 'De-identified aggregate outcome category, when permitted', 'Used for pilot review and system improvement, not individual-level clinical storytelling.'],
   ['Error and audit metadata', 'HTTP status, webhook status, retry count, signature validation result, operator fallback note', 'Operational debug data belongs in both systems where needed for incident review.'],
@@ -203,7 +220,50 @@ const WEBHOOK_ROWS = [
   ['`clinician.assigned`', 'A clinician or provider lane was assigned.', 'PulseCheck stores a display-safe assignment label and the assignment timestamp only.'],
   ['`appointment.booked`', 'A care appointment exists.', 'PulseCheck shows operational follow-up state; it does not store appointment notes or clinical content.'],
   ['`crisis.invoked`', 'A crisis pathway was invoked in AuntEdna.', 'PulseCheck stays in safety mode and suppresses inappropriate performance flows.'],
-  ['`case.resolved`', 'The acute handoff workflow ended or shifted to ongoing care.', 'PulseCheck updates status and relaxes acute banners where policy allows.'],
+  ['`case.resolved`', 'The acute handoff workflow ended or shifted to ongoing care.', 'PulseCheck updates status and relaxes acute banners where policy allows. Resolution does not return the athlete to training; only `watchlist.cleared_for_training` does.'],
+];
+
+const WATCHLIST_WEBHOOK_ROWS = [
+  ['`watchlist.entered`', 'AuntEdna confirmed the athlete is on the watch list (automatic at Tier 3 case creation).', 'PulseCheck reconciles its fail-safe crisis support state with the confirmed watch-list entry and timestamps.'],
+  ['`checkin.scheduled`', 'The clinician set or changed the required check-in cadence.', 'PulseCheck surfaces the cadence and next due time in the athlete app. It stores cadence metadata only.'],
+  ['`checkin.completed`', 'A clinician check-in was completed, in-app or directly with the clinician.', 'PulseCheck stores the receipt id and timestamp and clears the due prompt. Check-in content stays in AuntEdna.'],
+  ['`checkin.missed`', 'A required check-in window passed without completion.', 'PulseCheck raises the in-app prompt and staff visibility. Repeated misses follow the Exhibit B escalation rules.'],
+  ['`watchlist.cleared_for_training`', 'The clinician de-escalated and cleared the athlete to resume mental training. The athlete may remain on the watch list.', 'PulseCheck moves the athlete into guided re-entry and begins easing them back into protocol and simulation work.'],
+  ['`watchlist.removed`', 'The clinician is comfortable ending watch-list monitoring.', 'PulseCheck returns the athlete to the standard training state and ends watch-list restrictions.'],
+];
+
+const WATCHLIST_STATE_STEPS = [
+  {
+    title: 'Standard training',
+    body: 'The athlete runs the full cognitive training curriculum: protocols, simulations, and performance work. Watch list is off.',
+    owner: 'PulseCheck',
+  },
+  {
+    title: 'Crisis support state (entered at Tier 3)',
+    body: 'The moment a Tier 3 classification fires, PulseCheck suspends performance training and simulations, switches the athlete to a reduced, stabilization-focused curriculum, activates crisis resources, and places the athlete on the watch list. Entry is automatic and does not wait for AuntEdna acknowledgment.',
+    owner: 'PulseCheck, automatic',
+  },
+  {
+    title: 'Clinician check-ins on a set cadence',
+    body: 'While in crisis support, the athlete checks in with the assigned clinician on the cadence the clinician sets. Check-ins can run inside the PulseCheck app via the check-in endpoint; responses flow directly into the AuntEdna clinical record and PulseCheck keeps only receipts.',
+    owner: 'AuntEdna',
+  },
+  {
+    title: 'Clearance for training (guided re-entry)',
+    body: 'When the clinician de-escalates, AuntEdna sends watchlist.cleared_for_training. PulseCheck eases the athlete back into the cognitive training curriculum of protocol and simulation work on a ramp. The athlete can remain on the watch list throughout re-entry.',
+    owner: 'AuntEdna -> PulseCheck',
+  },
+  {
+    title: 'Watch-list removal',
+    body: 'The clinician continues monitoring until they are comfortable taking the athlete off the watch list. watchlist.removed returns the athlete to the standard state.',
+    owner: 'AuntEdna -> PulseCheck',
+  },
+];
+
+const WATCHLIST_DATA_RULES = [
+  'PulseCheck stores: the watch-list flag, the app-state directive, check-in cadence metadata, check-in receipt ids and timestamps, and re-entry ramp progress.',
+  'AuntEdna stores: the clinical rationale for watch-list entry and removal, check-in content and responses, clearance decisions, and clinician monitoring notes.',
+  'Check-in responses submitted through the PulseCheck app pass through to AuntEdna and are never persisted in PulseCheck.',
 ];
 
 const FLOW_STEPS = [
@@ -232,6 +292,11 @@ const FLOW_STEPS = [
     body: 'PulseCheck updates dashboards, safety mode, retry state, and non-clinical coordination from the limited operational mirror.',
     owner: 'PulseCheck',
   },
+  {
+    title: 'Tier 3 only: clinician-led return to training',
+    body: 'The crisis support state and watch list persist until the clinician clears the athlete. PulseCheck then runs guided re-entry back into the cognitive training curriculum, and watch-list monitoring ends only when AuntEdna sends watchlist.removed. The full state machine is defined in the watch-list section below.',
+    owner: 'AuntEdna -> PulseCheck',
+  },
 ];
 
 const DECISION_ROWS = [
@@ -240,6 +305,8 @@ const DECISION_ROWS = [
   ['Trend window defaults', 'Agree whether the default trend window is 24 hours, 7 days, 14 days, or deployment-specific.'],
   ['Webhook status vocabulary', 'Lock the shared enum so PulseCheck dashboards do not need to infer clinical workflow state.'],
   ['Webhook signing and retry policy', 'Agree on the signature scheme (for example an HMAC header), retry cadence, timeout, and idempotency key semantics.'],
+  ['Check-in modality and schema', 'Agree whether in-app check-ins are structured forms, free text, or a scheduled telehealth link, and lock the submission and receipt schema for POST /athletes/{id}/check-ins.'],
+  ['Re-entry constraints', 'Agree whether clearance can carry clinician constraints (for example, no simulation work for N days) or only signals the state change, leaving ramp design to PulseCheck.'],
   ['Aggregate outcomes', 'Define the de-identified outcome buckets AuntEdna may return for pilot reporting and product improvement.'],
 ];
 
@@ -358,8 +425,8 @@ const AuntEdnaEscalationDataExchangeContractTab: React.FC = () => {
       <DocHeader
         eyebrow="AuntEdna Integration"
         title="Escalation Data Exchange Contract"
-        version="Version 0.2 | June 10, 2026"
-        summary="Data contract for the PulseCheck to AuntEdna escalation bridge, written for the AuntEdna engineering team. It defines the case packet PulseCheck sends for each escalation, the API surface PulseCheck calls on the AuntEdna side, the status webhooks PulseCheck consumes in return, and the boundary rules for what each system stores."
+        version="Version 0.3 | June 10, 2026"
+        summary="Data contract for the PulseCheck to AuntEdna escalation bridge, written for the AuntEdna engineering team. It defines the case packet PulseCheck sends for each escalation, the API surface PulseCheck calls on the AuntEdna side, the status webhooks PulseCheck consumes in return, the Tier 3 watch-list lifecycle that governs how an athlete in crisis returns to training, and the boundary rules for what each system stores."
         highlights={[
           {
             title: 'Case Packet, Not Data Export',
@@ -379,7 +446,7 @@ const AuntEdnaEscalationDataExchangeContractTab: React.FC = () => {
       <RuntimeAlignmentPanel
         sectionLabel="Document Role"
         role="Engineering reference for the AuntEdna team implementing the escalation bridge. It defines what crosses the PulseCheck-AuntEdna boundary, in which direction, and what stays on each side."
-        sourceOfTruth="This document is authoritative for the escalation handoff payload, the AuntEdna API surface PulseCheck integrates against, the status webhooks PulseCheck consumes, and the data-residency boundaries between the two systems. Where it conflicts with older drafts, this document wins until superseded by a later version."
+        sourceOfTruth="This document is authoritative for the escalation handoff payload, the AuntEdna API surface PulseCheck integrates against, the status webhooks PulseCheck consumes, the Tier 3 watch-list and return-to-training lifecycle, and the data-residency boundaries between the two systems. Where it conflicts with older drafts, this document wins until superseded by a later version."
         masterReference="Master reference for the escalation data exchange: the data that arrives from PulseCheck, the data AuntEdna stores on its side, the data PulseCheck never mirrors, and how shared operational status is represented across both systems."
         relatedDocs={[
           'AuntEdna Integration Strategy',
@@ -478,6 +545,56 @@ const AuntEdnaEscalationDataExchangeContractTab: React.FC = () => {
           body="Each event is signed, carries a unique webhookEventId for idempotent processing, and is retried until PulseCheck acknowledges with a 2xx response. Events post to the PulseCheck callback URL included in each handoff packet (pulseApiCallback). The signature scheme and retry cadence are open decisions below."
         />
         <ThreePartCardList rows={WEBHOOK_ROWS} secondLabel="Meaning" thirdLabel="PulseCheck mirror behavior" />
+      </SectionBlock>
+
+      <SectionBlock icon={LifeBuoy} title="Tier 3 Watch List and Return to Training">
+        <p className="max-w-4xl text-sm leading-relaxed text-zinc-300">
+          A Tier 3 escalation does more than open a clinical case: it changes what the PulseCheck app is. The athlete is
+          automatically placed on a clinician-monitored watch list and the app moves from performance training to crisis
+          management — reduced curriculum, no simulations, crisis resources, and a direct check-in cadence with the assigned
+          clinician. The athlete returns to mental training only when the clinician clears them, and watch-list monitoring
+          continues until the clinician ends it. The states, signals, and endpoints below define that flow.
+        </p>
+        <StepRail steps={WATCHLIST_STATE_STEPS} />
+        <CardGrid columns="md:grid-cols-3">
+          <InfoCard
+            title="AuntEdna Decides When, PulseCheck Decides What"
+            accent="purple"
+            body="Every state transition is a clinician-owned signal from AuntEdna. What each state means inside the product — which curriculum runs, what is suppressed, how the re-entry ramp is shaped — is PulseCheck product logic. AuntEdna never prescribes training content, and PulseCheck never overrides a clinical state."
+          />
+          <InfoCard
+            title="Fail-Safe Entry, Explicit Exit"
+            accent="red"
+            body="Crisis support starts the moment Tier 3 classification fires, even while handoff delivery is still retrying. Exits happen only on explicit signed webhooks. If connectivity is lost, the athlete stays in the safer state."
+          />
+          <InfoCard
+            title="Resolution Is Not Clearance"
+            accent="amber"
+            body="case.resolved ends the acute case workflow but does not return the athlete to training. Only watchlist.cleared_for_training starts guided re-entry, and only watchlist.removed ends watch-list monitoring."
+          />
+        </CardGrid>
+        <ThreePartCardList rows={WATCHLIST_WEBHOOK_ROWS} secondLabel="Meaning" thirdLabel="PulseCheck mirror behavior" />
+        <CardGrid columns="md:grid-cols-2">
+          <InfoCard title="Data Boundary For This Flow" accent="blue" body={<BulletList items={WATCHLIST_DATA_RULES} />} />
+          <InfoCard
+            title="Supporting Endpoints"
+            accent="green"
+            body={
+              <p>
+                The <code className="rounded bg-black/40 px-1 py-0.5 font-mono text-[11px]">GET /athletes/{'{pulseUserId}'}/care-state</code> and{' '}
+                <code className="rounded bg-black/40 px-1 py-0.5 font-mono text-[11px]">POST /athletes/{'{pulseUserId}'}/check-ins</code> endpoints
+                in the API surface section above carry this flow: care-state is the authoritative read PulseCheck reconciles
+                against on app launch, and the check-in endpoint lets athletes complete clinician check-ins without leaving
+                the PulseCheck app while the content lands only in AuntEdna.
+              </p>
+            }
+          />
+        </CardGrid>
+        <InfoCard
+          title="Current Implementation Hooks"
+          accent="purple"
+          body="PulseCheck already operates the in-product side of this flow: a watch-list operational state (watchListActive with applied/cleared timestamps, reason codes, and review-due dates), per-athlete restriction flags (suppressAssignments, suppressSurveys, suppressNudges, excludeFromAdherence, manualHold), and a Tier 3 crisis wall (crisisWallActive). The AuntEdna-driven signals in this section attach clinician authority to those existing primitives."
+        />
       </SectionBlock>
 
       <SectionBlock icon={Stethoscope} title="What AuntEdna Stores That PulseCheck Does Not">
