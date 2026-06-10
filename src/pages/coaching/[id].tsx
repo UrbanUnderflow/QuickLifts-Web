@@ -102,18 +102,51 @@ export default function CoachingCheckoutPage() {
 
   // --- Success state -------------------------------------------------
   if (status === 'success') {
+    const step: React.CSSProperties = { display: 'flex', alignItems: 'flex-start', gap: 12, marginTop: 16 };
+    const num: React.CSSProperties = {
+      flex: '0 0 auto', width: 26, height: 26, borderRadius: 13, background: LIME,
+      color: '#000', fontWeight: 800, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center'
+    };
+    const stepText: React.CSSProperties = { color: 'rgba(255,255,255,0.8)', fontSize: 14, lineHeight: 1.4 };
     return (
       <Shell>
         <div style={card}>
           <div style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>✅</div>
           <h1 style={{ color: '#fff', fontSize: 22, fontWeight: 800, textAlign: 'center', margin: 0 }}>
-            You&apos;re in!
+            Payment complete!
           </h1>
-          <p style={{ color: 'rgba(255,255,255,0.65)', textAlign: 'center', marginTop: 8 }}>
-            Payment complete. Open the app to jump into your private training room.
+          <p style={{ color: 'rgba(255,255,255,0.6)', textAlign: 'center', marginTop: 8, fontSize: 14 }}>
+            One last thing to unlock your private training room:
           </p>
-          <button style={{ ...cta, marginTop: 20 }} onClick={() => id && openApp(String(id))}>
-            Open training room
+
+          <div style={step}>
+            <div style={num}>1</div>
+            <div style={stepText}><b style={{ color: '#fff' }}>Get the Fit With Pulse app</b> (free) if you don&apos;t have it yet.</div>
+          </div>
+          <div style={step}>
+            <div style={num}>2</div>
+            <div style={stepText}><b style={{ color: '#fff' }}>Create your account</b> (or sign in) — use the same email if you can.</div>
+          </div>
+          <div style={step}>
+            <div style={num}>3</div>
+            <div style={stepText}><b style={{ color: '#fff' }}>Tap your invite link again.</b> Now that you&apos;ve paid, it drops you straight into your training room with your plan.</div>
+          </div>
+
+          <a
+            href="https://apps.apple.com/app/id6451497729"
+            style={{ ...cta, marginTop: 22, display: 'block', textDecoration: 'none', textAlign: 'center', lineHeight: '20px' }}
+          >
+            Download Fit With Pulse
+          </a>
+          <button
+            style={{
+              width: '100%', padding: '13px 0', marginTop: 10, background: 'transparent',
+              color: LIME, fontWeight: 700, fontSize: 14, border: `1px solid rgba(224,254,16,0.4)`,
+              borderRadius: 12, cursor: 'pointer'
+            }}
+            onClick={() => id && openApp(String(id))}
+          >
+            I already have the app — open my room
           </button>
         </div>
       </Shell>
